@@ -93,7 +93,7 @@ Files under `fixtures/` and `dist/` are ignored by Git.
 
 Unit coverage: VFR stepping, fractional 30 fps boundaries, different-rate backward
 alignment, canceled seeks, replacement failures, resource release, mark lineage,
-input validation and the WebMCP action contract.
+input validation, per-class media load diagnostics and the WebMCP action contract.
 
 Manual browser regression using the generated files:
 
@@ -128,3 +128,17 @@ slot routing, file-list snapshotting, navigation prevention, overflow rejection,
 nested drag feedback and cleanup. The shared file-picker import path rendered a
 real fixture in the in-app browser. An OS Finder-to-page drag remains unverified:
 the available browser automation API has no external-file drag injection action.
+
+Sample compatibility, verified on 2026-09-05 against `resources/video/` (14
+files) via the file picker in the macOS Codex in-app browser: 8 loaded and
+rendered — H.264 (both 1080p samples), H.264 High 4:2:2, HEVC (`hev1` in MP4
+and MKV, including the full-range BT.709 sample), AV1 and VP9 in WebM. 6 failed:
+4 FFV1 MKV, 1 H.266/VVC MP4 and 1 MPEG-2 TS. The failures are codec/library
+gaps, not container gaps: Mediabunny identifies the MP4/MKV/WebM/TS containers,
+but exposes no decodable track for FFV1 or VVC, and skips the MPEG-2 TS video
+stream entirely. Whether these reach the decoder is browser-dependent; HEVC and
+4:2:2 H.264 decoded in this browser and may not elsewhere. `src/media.ts` now
+reports each case distinctly (unrecognized container, container recognized but
+no readable video track, known-but-unsupported codec, codec unsupported by the
+browser) instead of `unknown` or a blanket "no video track"; `test/media.test.ts`
+locks these diagnostics per failure class.

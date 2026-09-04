@@ -1,4 +1,4 @@
-import { Input, BlobSource, ALL_FORMATS, VideoSampleSink } from 'mediabunny';
+import { Input, BlobSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
 
 export interface DecodedFrame extends FrameInfo {
@@ -10,6 +10,24 @@ export interface MediaSource {
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   dispose(): void;
 }
+export async function inspectVideoTrack(input: Input) {
+  let format;
+  try { format = await input.getFormat(); }
+  catch (error) {
+    if (error instanceof UnsupportedInputFormatError) throw new Error('无法识别文件封装：当前原型不支持此格式，或文件已损坏。');
+    throw error;
+  }
+  const track = await input.getPrimaryVideoTrack();
+  if (!track) throw new Error(`已识别 ${format.name}，但未找到当前媒体库可读取的视频轨道。可能没有视频，也可能轨道编码尚不支持。`);
+  if (!await track.getCodec()) {
+    const id = await track.getInternalCodecId();
+    const names: Record<string, string> = { V_FFV1: 'FFV1', vvc1: 'H.266 / VVC', vvi1: 'H.266 / VVC' };
+    const codec = id == null ? '未识别的编码' : names[String(id)] ?? String(id);
+    throw new Error(`已识别 ${format.name}，但当前网页媒体库尚未接入 ${codec} 视频编码。`);
+  }
+  const codec = await track.getCodecParameterString() ?? (await track.getCodec())!;
+  return { track, codec, format: format.name };
+}
 export async function openMedia(file: File): Promise<MediaSource> {
   if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     throw new Error('当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
@@ -17,10 +35,8 @@ export async function openMedia(file: File): Promise<MediaSource> {
   if (!(file instanceof File) || file.size === 0) throw new Error('请选择非空的视频文件。');
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
-    const track = await input.getPrimaryVideoTrack();
-    if (!track) throw new Error('文件中没有可读取的视频轨道。');
-    const codec = await track.getCodecParameterString() ?? 'unknown';
-    if (!await track.canDecode()) throw new Error(`当前浏览器无法解码 ${codec}。原型不会转码或替换原片。`);
+    const { track, codec, format } = await inspectVideoTrack(input);
+    if (!await track.canDecode()) throw new Error(`已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
     const first = await track.getFirstTimestamp();
     const end = await track.computeDuration();
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new Error('无法确定视频的有效时间范围。');
