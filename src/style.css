@@ -34,6 +34,8 @@ main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .file-button { cursor: pointer; color: #bbb; font-size: 12px; white-space: nowrap; }
 .file-button input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
 .frame-stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.frame-stage.drop-target { position: relative; outline: 2px solid var(--accent); outline-offset: -2px; }
+.frame-stage.drop-target::after { content: '松开以打开视频'; position: absolute; top: 12px; padding: 5px 10px; border-radius: 6px; background: #007aff; color: white; font-size: 13px; pointer-events: none; }
 .empty { text-align: center; }
 .empty-open { display: inline-block; color: #aaa; cursor: pointer; padding: 10px; }
 .empty-open:hover { color: #eee; }

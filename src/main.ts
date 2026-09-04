@@ -4,6 +4,7 @@ import { ReviewSession } from './session.ts';
 import { formatTime } from './model.ts';
 import type { Region, Slot } from './model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
+import { bindFileDrop } from './file-drop.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const icon = (name: 'sidebar' | 'open' | 'export' | 'play' | 'pause' | 'previous' | 'next') => {
@@ -140,10 +141,30 @@ function render() {
     if (!state.marks.length) $('marks').innerHTML = '<div class="marks-empty">暂无标注</div>';
   }
 }
+let importRevision = 0;
+async function importFiles(files: File[], slots: Slot[]) {
+  const revision = ++importRevision;
+  for (let i = 0; i < files.length; i++) {
+    if (revision !== importRevision) return;
+    await session.load(slots[i], () => openMedia(files[i]));
+  }
+}
+const unbindDrop = bindFileDrop(document.body, {
+  target: event => {
+    const stage = event.target instanceof Element ? event.target.closest('.video-card')?.querySelector('.frame-stage') : null;
+    return stage?.id === 'stage-A' ? 'A' : stage?.id === 'stage-B' ? 'B' : undefined;
+  },
+  loaded: () => session.getState().tracks.map(track => track.slot),
+  hover: slots => {
+    for (const slot of ['A', 'B'] as Slot[]) $(`stage-${slot}`).classList.toggle('drop-target', slots.includes(slot));
+  },
+  load: (files, slots) => act(() => importFiles(files, slots)),
+  error: showError,
+});
 for (const slot of ['A', 'B'] as Slot[]) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';
-    if (file) void act(() => session.load(slot, () => openMedia(file)));
+    if (file) void act(() => importFiles([file], [slot]));
   };
   const image = $(`image-${slot}`);
   let start: { x: number; y: number; pointer: number } | null = null;
@@ -214,5 +235,5 @@ const api = {
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); resizeObserver.disconnect(); void session.dispose(); });
+import.meta.hot?.dispose(() => { unregister(); unbindDrop(); resizeObserver.disconnect(); void session.dispose(); });
 render();

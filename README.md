@@ -13,6 +13,10 @@ npm run dev -- --port 5178 --strictPort
 ```
 
 Open http://127.0.0.1:5178/. Choose video A, then B. Playback is silent.
+Drop one file onto a video pane to replace that track; elsewhere it fills A,
+then B. Drop two files together to load A and B in the supplied order. More than
+two files are rejected. Loading proceeds in order; if the second file fails,
+the successful first load remains and the old second source is preserved.
 Use the shared timeline, left/right arrows to step against A, and Space to play/pause.
 The sidebar button opens annotations; drag on a paused frame to select a region.
 Export before closing: annotations currently live only in memory.
@@ -35,6 +39,11 @@ session time zero. The comparison ends at the shorter track. Stepping uses the
 reference frame's duration and decoded timestamp, not an assumed frame rate.
 Rounding is handled at sub-microsecond boundaries. Other tracks are sampled at
 the selected reference frame's start, which matters when frame rates differ.
+This is reference-track stepping, not the native fair/greedy multi-track planner
+in `native/renderer/track/track_step_policy.cpp`. That planner considers candidate
+timestamps across tracks, maximizes the number that can step legally, and breaks
+ties by temporal proximity in the chosen direction. Its lookahead, offsets and
+presentation-commit semantics have not been ported to this browser experiment.
 
 Seek resolves after every loaded track decodes and draws its selected frame to
 canvas. `frameEvidence: decoded-and-drawn-to-canvas` does **not** certify OS display
@@ -47,6 +56,9 @@ and workers are follow-up performance work.
 Files are not uploaded or transcoded. There is no universal codec fallback.
 Browser-managed color, HDR, audio, 4K performance, large-file memory behavior,
 codec coverage and cross-browser equivalence are not certified by this prototype.
+The renderer requests a default Canvas 2D context; it does not configure an HDR
+output surface or implement the native HDR/color pipeline. Decoding an HDR input
+successfully must not be interpreted as validated HDR display output.
 
 Exports use `schema: voidplayer-web-review`, version 1. IDs are session UUIDs plus
 file metadata, **not content hashes**. A mark records its target media, source and
@@ -110,3 +122,9 @@ the in-app browser did not report a download event or save the file in Downloads
 The JSON returned by `export_review` was verified; this does not establish that
 the visible download action works in a regular browser. Safari/Chrome download,
 HDR, audio, large files and sustained performance still need separate verification.
+
+File-drop follow-up: all 14 tests and the build passed. Event-handler tests cover
+slot routing, file-list snapshotting, navigation prevention, overflow rejection,
+nested drag feedback and cleanup. The shared file-picker import path rendered a
+real fixture in the in-app browser. An OS Finder-to-page drag remains unverified:
+the available browser automation API has no external-file drag injection action.
