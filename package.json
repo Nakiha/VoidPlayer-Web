@@ -1,5 +1,5 @@
 {
-  "name": "voidplayer-browser-experiment",
+  "name": "voidplayer-web",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -18,5 +18,6 @@
     "playwright": "^1.63.0",
     "typescript": "7.0.2",
     "vite": "8.2.2"
-  }
+  },
+  "description": "VoidPlayer web: local-file and library video review in the browser (WebCodecs + trimmed FFmpeg WASM fallback)"
 }

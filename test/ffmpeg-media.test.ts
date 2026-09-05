@@ -32,7 +32,7 @@ async function nodeCoreDeps(): Promise<FallbackDeps> {
 }
 async function openSample(name: string): Promise<MediaSource> {
   const deps = await nodeCoreDeps();
-  const data = await readFile(new URL(`../../resources/video/${name}`, import.meta.url));
+  const data = await readFile(new URL(`../fixtures/video/${name}`, import.meta.url));
   return openFFmpegMedia(new File([data], name), deps);
 }
 
@@ -109,7 +109,7 @@ test('openMedia falls back to WASM decoding for tracks WebCodecs cannot handle',
   // track (FFV1) or the browser cannot decode it. The fallback loader is
   // injected because the default browser loader fetches public/ assets.
   const deps = await nodeCoreDeps();
-  const data = await readFile(new URL('../../resources/video/ffv1_yuv422p10le.mkv', import.meta.url));
+  const data = await readFile(new URL('../fixtures/video/ffv1_yuv422p10le.mkv', import.meta.url));
   const source = await openMedia(new File([data], 'ffv1_yuv422p10le.mkv'), f => openFFmpegMedia(f, deps));
   try {
     assert.equal(source.info.decoder, 'ffmpeg-wasm');

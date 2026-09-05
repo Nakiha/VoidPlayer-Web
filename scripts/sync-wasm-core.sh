@@ -8,7 +8,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BROWSER_ROOT="$(dirname "$SCRIPT_DIR")"
-DEFAULT_SRC="$(cd "$BROWSER_ROOT/../../.." && pwd)/VoidPlayer-FFmpeg-Build/dist/voidplayer-ffmpeg-wasm-n9.0.1"
+DEFAULT_SRC="$(cd "$BROWSER_ROOT/.." && pwd)/VoidPlayer-FFmpeg-Build/dist/voidplayer-ffmpeg-wasm-n9.0.1"
 SRC="${WASM_CORE_DIR:-${1:-$DEFAULT_SRC}}"
 DEST="$BROWSER_ROOT/public/vendor/voidplayer-core"
 

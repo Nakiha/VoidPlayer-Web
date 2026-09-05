@@ -1,6 +1,8 @@
-# VoidPlayer browser experiment
+# VoidPlayer Web
 
-Standalone, local-file video review prototype on `codex/web-version`.
+Local-file and library video review in the browser. Lives in the
+`Nakiha/VoidPlayer-Web` repository; it was migrated out of the VoidPlayer
+desktop repo's `codex/web-version` branch, which is now archived.
 It runs without Flutter or a local media service; unsupported browser codecs use
 the bundled FFmpeg WASM decoder in the page.
 The web bundle can be served as static files over HTTPS; localhost is for development.
@@ -8,8 +10,9 @@ The web bundle can be served as static files over HTTPS; localhost is for develo
 ## Run
 
 ```sh
-cd browser
 npm ci
+bash scripts/sync-wasm-core.sh   # vendored decoder core (see below)
+bash scripts/sync-samples.sh     # QA samples into fixtures/video/
 npm run dev -- --port 5178 --strictPort
 ```
 

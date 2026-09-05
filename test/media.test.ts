@@ -5,7 +5,7 @@ import { Input, BufferSource, ALL_FORMATS } from 'mediabunny';
 import { inspectVideoTrack, openMedia } from '../src/media.ts';
 
 async function sample(name: string) {
-  return new Input({ source: new BufferSource(await readFile(new URL(`../../resources/video/${name}`, import.meta.url))), formats: ALL_FORMATS });
+  return new Input({ source: new BufferSource(await readFile(new URL(`../fixtures/video/${name}`, import.meta.url))), formats: ALL_FORMATS });
 }
 
 test('known MP4 video reaches decoder capability checking with its actual profile', async () => {
@@ -42,7 +42,7 @@ test('input-stage failures skip the WASM fallback; decode-stage gaps use it', as
   await assert.rejects(openMedia(new File([], 'empty.mp4'), fallback), /非空的视频文件/);
   assert.equal(attempted, 0);
   // Node has no WebCodecs: that is a decode-stage gap and must reach the fallback.
-  const data = await readFile(new URL('../../resources/video/ci_h264_smoke.mp4', import.meta.url));
+  const data = await readFile(new URL('../fixtures/video/ci_h264_smoke.mp4', import.meta.url));
   await assert.rejects(openMedia(new File([data], 'ci_h264_smoke.mp4'), fallback), /WebCodecs/);
   assert.equal(attempted, 1);
 });
