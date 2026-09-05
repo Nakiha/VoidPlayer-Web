@@ -44,10 +44,11 @@ features are omitted rather than presented as nonfunctional controls.
   decoder-state continuation — sequential stepping decodes each frame once,
   backward/random steps pay at most a GOP re-decode, and a seek that overshoots
   retries from the start. Output is RGBA via swscale with the tagged
-  colorspace/range honored (BT.601/709 guess for untagged). Fallback limits:
-  the whole file is copied into WASM memory (512 MiB cap), output is 8-bit, no
-  10-bit/HDR fidelity, decode blocks the main thread, and no audio is decoded.
-  Fallback tracks show `WASM` next to the codec.
+  colorspace/range honored (BT.601/709 guess for untagged). The core runs in a
+  Web Worker (`src/ffmpeg-worker.ts`) with transferred pixel buffers, so decode
+  never blocks the UI thread. Fallback limits: the whole file is copied into
+  WASM memory (512 MiB cap), output is 8-bit, no 10-bit/HDR fidelity, and no
+  audio is decoded. Fallback tracks show `WASM` next to the codec.
 - `src/session.ts`: a shared session for UI and agents; newest-request-wins
   mutations, synchronized seek, actual frame stepping, annotations and exports.
 - `src/main.ts` / `src/style.css`: DOM controls, canvas viewports and region picking.
@@ -77,8 +78,9 @@ Playback pulls sequential presentation-order frames from each track's own stream
 (`MediaSource.framesFrom`: mediabunny's pre-decoding sample iterator, or the WASM
 core's decoder-state continuation), so each frame is decoded once. Presentation
 follows the wall clock and drops late frames in favor of the newest decoded one;
-it is still not a guaranteed real-time multi-track scheduler. Decode runs on the
-main JS thread; a worker-hosted decoder is follow-up performance work.
+it is still not a guaranteed real-time multi-track scheduler. WASM fallback
+decode runs in a worker; WebCodecs decode is threaded by the browser, but
+canvas presentation stays on the main thread.
 
 Files are not uploaded or transcoded for upload; fallback tracks are decoded
 locally by the WASM core. Browser-managed color, HDR, audio, 4K performance,
@@ -299,3 +301,12 @@ backed by `POST /api/logs` (off when the service runs with `--no-logs`), and
 the top-bar review export is now labeled 导出评审 to keep log actions inside
 the log panel. 53 tests and the production build pass; playback smoothness of
 the new pipeline still needs a real-browser pass.
+
+Worker decode follow-up (2026-09-05): the WASM core moved off the UI thread
+into a dedicated Web Worker per fallback track (`src/ffmpeg-worker.ts`), after
+a live session showed wall-clock 3 s advancing playback only 0.65 s — VVC's
+~38 ms/frame synchronous decode starved the loop entirely. Playback also no
+longer re-renders DOM without a new frame. The log panel can copy the uploaded
+log's server-side filename for handoff. 53 tests and the build pass; Node runs
+the same worker over worker_threads, so the fallback tests exercise the real
+threaded path.

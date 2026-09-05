@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { floorIndex, nextIndex, openFFmpegMedia } from '../src/ffmpeg-media.ts';
 import { openMedia } from '../src/media.ts';
-import type { FFmpegCoreModule } from '../src/ffmpeg-core.ts';
+import type { FallbackDeps } from '../src/ffmpeg-media.ts';
 import type { MediaSource } from '../src/media.ts';
 
 // --- pure index navigation ---
@@ -21,20 +21,19 @@ test('floorIndex and nextIndex resolve frame navigation boundaries', () => {
 
 // --- real WASM decode against the repository's sample files ---
 
-async function loadNodeCore() {
+async function nodeCoreDeps(): Promise<FallbackDeps> {
   const coreDir = new URL('../public/vendor/voidplayer-core/', import.meta.url);
   let wasmBinary;
   try { wasmBinary = await readFile(new URL('voidplayer-core.wasm', coreDir)); }
   catch {
     throw new Error('缺少 vendor 的 WASM core：先运行 scripts/sync-wasm-core.sh（需要 VoidPlayer-FFmpeg-Build 的构建产物）');
   }
-  const module = import(new URL('voidplayer-core.js', coreDir).href) as Promise<FFmpegCoreModule>;
-  return { module, wasmBinary };
+  return { glueURL: new URL('voidplayer-core.js', coreDir).href, wasmBinary };
 }
 async function openSample(name: string): Promise<MediaSource> {
-  const { module, wasmBinary } = await loadNodeCore();
+  const deps = await nodeCoreDeps();
   const data = await readFile(new URL(`../../resources/video/${name}`, import.meta.url));
-  return openFFmpegMedia(new File([data], name), () => module.then(m => m.default({ wasmBinary })));
+  return openFFmpegMedia(new File([data], name), deps);
 }
 
 test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', async () => {
@@ -109,10 +108,9 @@ test('openMedia falls back to WASM decoding for tracks WebCodecs cannot handle',
   // browser the same fallback is reached when mediabunny exposes no decodable
   // track (FFV1) or the browser cannot decode it. The fallback loader is
   // injected because the default browser loader fetches public/ assets.
-  const { module, wasmBinary } = await loadNodeCore();
+  const deps = await nodeCoreDeps();
   const data = await readFile(new URL('../../resources/video/ffv1_yuv422p10le.mkv', import.meta.url));
-  const source = await openMedia(new File([data], 'ffv1_yuv422p10le.mkv'),
-    f => openFFmpegMedia(f, () => module.then(m => m.default({ wasmBinary }))));
+  const source = await openMedia(new File([data], 'ffv1_yuv422p10le.mkv'), f => openFFmpegMedia(f, deps));
   try {
     assert.equal(source.info.decoder, 'ffmpeg-wasm');
     assert.equal(source.info.codec, 'ffv1');

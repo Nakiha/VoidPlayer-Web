@@ -62,7 +62,14 @@ export function installLogPanel(openButton: HTMLElement) {
       throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '。服务端未开启日志接收或未连接。'}`);
     }
     const body = await response.json();
-    result.textContent = `已上传到服务器：${body.name}`;
+    result.replaceChildren();
+    result.append(`已上传到服务器：${body.name} `);
+    const copyName = document.createElement('button');
+    copyName.textContent = '复制文件名';
+    copyName.onclick = () => void navigator.clipboard.writeText(body.name).then(
+      () => { copyName.textContent = '已复制'; },
+      () => { copyName.textContent = body.name; copyName.title = '浏览器未允许复制，请手动复制此文件名'; });
+    result.append(copyName);
   }));
   dialog.querySelector('[data-action="close"]')!.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { ++generation; log.info('ui', '关闭日志窗口'); });

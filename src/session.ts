@@ -253,6 +253,7 @@ export class ReviewSession {
     const scoped = contextLog();
     const active = () => this.playing && revision === this.revision;
     const readers = new Map<Slot, { gen: AsyncGenerator<DecodedFrame>; next: DecodedFrame | null }>();
+    let lastEmitMs = 0;
     try {
       for (const [slot, t] of this.tracks) {
         if (!t.frame) continue;
@@ -262,6 +263,7 @@ export class ReviewSession {
       }
       while (active()) {
         const target = Math.min(this.durationUs - 1, base + Math.round((performance.now() - start) * 1000));
+        let drew = false;
         for (const [slot, t] of this.tracks) {
           const reader = readers.get(slot);
           if (!reader) continue;
@@ -276,10 +278,14 @@ export class ReviewSession {
             this.draw(slot, frame);
             t.frame = this.frameInfo(frame);
             frame.close();
+            drew = true;
           }
         }
         this.positionUs = target;
-        this.emit();
+        // Render on new frames; the timeline text updates at ~7 Hz otherwise so
+        // DOM work cannot starve decoding.
+        const now = performance.now();
+        if (drew || now - lastEmitMs > 150) { lastEmitMs = now; this.emit(); }
         if (target >= this.durationUs - 1) {
           this.playing = false;
           scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });
