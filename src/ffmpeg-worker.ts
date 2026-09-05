@@ -26,7 +26,7 @@ const port: any = (() => {
 })();
 
 let core: any = null;
-const contexts = new Map<number, number>();
+const contexts = new Map<number, number[]>();
 
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file: ArrayBuffer }) {
   const mod = await import(payload.glueURL);
@@ -47,7 +47,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       ticks[i] = Number(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
       durations[i] = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]));
     }
-    contexts.set(ctx, ctx);
+    contexts.set(ctx, ticks);
     return {
       ctx, path, ticks, durations,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
@@ -63,7 +63,9 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
   }
 }
 
-function extract(ctx: number, ticks: number[], index: number, recycle?: ArrayBuffer) {
+function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
+  const ticks = contexts.get(ctx);
+  if (!ticks || !Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
   const target = BigInt(ticks[index]);
   const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, target]);
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
@@ -86,7 +88,7 @@ port.onmessage = async (event: { data: any }) => {
     if (type === 'init') {
       port.postMessage({ id, ok: true, data: await init(payload) });
     } else if (type === 'extract') {
-      const buffer = extract(payload.ctx, payload.ticks, payload.index, payload.recycle);
+      const buffer = extract(payload.ctx, payload.index, payload.recycle);
       port.postMessage({ id, ok: true, data: buffer }, [buffer]);
     } else if (type === 'dispose') {
       const ctx = payload.ctx;

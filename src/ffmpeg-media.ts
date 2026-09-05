@@ -65,24 +65,22 @@ async function createWorker(): Promise<Worker> {
   return new NodeWorker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' } as object) as unknown as Worker;
 }
 
-class WorkerRpc {
+export class WorkerRpc {
   private worker: Worker;
   private nextId = 1;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+  private failure: Error | null = null;
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   constructor(worker: Worker) {
     this.worker = worker;
     const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string }) => {
       const { id, ok, data: payload, error } = data;
       const entry = this.pending.get(id);
       if (!entry) return;
+      clearTimeout(entry.timer);
       this.pending.delete(id);
       if (ok) entry.resolve(payload); else entry.reject(new Error(error ?? 'WASM 解码器错误'));
     };
-    const fail = (message: string) => {
-      const error = new Error(`WASM 解码 worker 异常：${message}`);
-      for (const entry of this.pending.values()) entry.reject(error);
-      this.pending.clear();
-    };
+    const fail = (message: string) => this.terminate(new Error(`WASM 解码 worker 异常：${message}`));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const anyWorker = worker as any;
     if (typeof anyWorker.addEventListener === 'function') {
@@ -91,16 +89,26 @@ class WorkerRpc {
     } else {
       anyWorker.on('message', onMessage);
       anyWorker.on('error', (e: unknown) => fail(e instanceof Error ? e.message : String(e)));
+      anyWorker.on('exit', (code: number) => fail(`exit ${code}`));
     }
   }
-  call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = []): Promise<T> {
+  call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000): Promise<T> {
+    if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      this.worker.postMessage({ id, type, ...payload }, transfer);
+      const timer = setTimeout(() => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`)), timeoutMs);
+      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+      try { this.worker.postMessage({ id, type, ...payload }, transfer); }
+      catch (error) { this.terminate(error instanceof Error ? error : new Error(String(error))); }
     });
   }
-  terminate() { this.worker.terminate(); }
+  terminate(error = new Error('WASM worker 已释放。')) {
+    if (this.failure) return;
+    this.failure = error;
+    for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
+    this.pending.clear();
+    this.worker.terminate();
+  }
 }
 
 export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<MediaSource> {
@@ -118,7 +126,9 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
     if (globalThis.crossOriginIsolated) candidates.push(new URL(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin).href);
     candidates.push(new URL(`/${WASM_CORE_GLUE_PATH}`, location.origin).href);
   }
+  const scoped = contextLog();
   const fileBytes = await file.arrayBuffer();
+  let coreVariant: 'single-thread' | 'multi-thread' = 'single-thread';
   let init: InitResult | null = null;
   let rpc: WorkerRpc | null = null;
   let lastError: unknown = null;
@@ -129,18 +139,16 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
       const payload: Record<string, unknown> = { glueURL, name: file.name, file: fileBytes.slice(0) };
       const transfer: Transferable[] = [payload.file as ArrayBuffer];
       if (deps.wasmBinary) {
-        payload.wasmBinary = deps.wasmBinary.buffer as ArrayBuffer;
+        payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
         transfer.push(payload.wasmBinary as ArrayBuffer);
       }
-      init = await Promise.race([
-        rpc.call<InitResult>('init', payload, transfer),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('WASM core 初始化超时')), 5000)),
-      ]);
-      contextLog().info('media', 'WASM core 已就绪', { glueURL: glueURL.split('/').pop() });
+      init = await rpc.call<InitResult>('init', payload, transfer, 5000);
+      coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
+      scoped.info('media', 'WASM core 已就绪', { coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated });
       break;
     } catch (error) {
       lastError = error;
-      contextLog().warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
+      scoped.warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
       init = null;
     }
   }
@@ -161,7 +169,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   });
   const info: MediaInfo = {
     id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
-    codec: init.codec, decoder: 'ffmpeg-wasm', width: init.width, height: init.height,
+    codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
     firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
   };
 
@@ -171,11 +179,12 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   let spare: ArrayBuffer | null = null;
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
-    const payload: Record<string, unknown> = { ctx: init.ctx, ticks, index };
+    const payload: Record<string, unknown> = { ctx: init.ctx, index };
     const transfer: Transferable[] = [];
     if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
     const buffer = await rpc.call<ArrayBuffer>('extract', payload, transfer);
     const pixels = new Uint8ClampedArray(buffer);
+    let closed = false;
     return {
       pixels,
       ptsUs: relUs[index],
@@ -188,7 +197,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
         if (!ctx2d) throw new Error('浏览器无法创建画布。');
         ctx2d.putImageData(new ImageData(pixels, info.width, info.height), 0, 0);
       },
-      close() { spare = pixels.buffer as ArrayBuffer; },
+      close() { if (!closed) { closed = true; spare = pixels.buffer as ArrayBuffer; } },
     };
   };
 
@@ -208,7 +217,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
     dispose() {
       if (disposed) return;
       disposed = true;
-      void rpc.call('dispose', { ctx: init.ctx, path: init.path }).finally(() => rpc.terminate());
+      rpc.terminate();
     },
   };
 }

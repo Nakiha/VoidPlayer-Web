@@ -3,6 +3,7 @@ export type Region = { left: number; top: number; width: number; height: number 
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
 export type MediaInfo = {
   id: string; name: string; size: number; lastModified: number;
+  coreVariant?: 'single-thread' | 'multi-thread';
   codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;
 };
 export type Mark = {

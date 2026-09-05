@@ -1,3 +1,4 @@
+import { benchmarkPlayback } from './benchmark.ts';
 import './style.css';
 import { openMedia } from './media.ts';
 import { ReviewSession } from './session.ts';
@@ -43,7 +44,7 @@ $('app').innerHTML = `
     </section>
     <aside class="review-panel" aria-label="评审标注"><div class="panel-heading"><h2>标注</h2><span id="mark-count">0</span></div><form id="mark-form"><div class="field-row"><label>标注轨道<select id="mark-slot"><option>A · 参考视频</option><option>B · 对比视频</option></select></label><label>严重度<select id="severity"><option value="1">1 · 轻微</option><option value="2">2</option><option value="3" selected>3 · 明显</option><option value="4">4</option><option value="5">5 · 严重</option></select></label></div><label for="note">备注</label><textarea id="note" rows="3" maxlength="2000" placeholder="记录当前帧的问题…" required></textarea><div class="region-hint"><span id="region-hint">在画面上拖动框选</span><button type="button" id="clear-region" hidden>清除</button></div><button id="add-mark" class="primary full" disabled>＋ 添加标注</button></form><div id="marks" class="marks"><div class="marks-empty">暂无标注</div></div></aside>
   </div>
-</main><dialog id="help"><h2>浏览器实验版</h2><p>本地文件，不上传。首版仅支持静音、SDR 对比，HDR 与专业色彩一致性尚未验证。</p><p>← / →：以 A 为参考逐帧。空格：播放 / 暂停。暂停后可拖动框选。</p><p>标注仅保留在本次会话，关闭前请导出。导出格式与桌面版暂不互通。播放可能跳帧；时间戳表示已解码并绘制到画布，不表示屏幕已完成刷新。</p><button id="help-close">关闭</button></dialog>`;
+</main><dialog id="help"><h2>浏览器实验版</h2><p>本地文件，不上传。首版仅支持静音、SDR 对比，HDR 与专业色彩一致性尚未验证。</p><p>← / →：双轨协调逐帧。空格：播放 / 暂停。暂停后可拖动框选。</p><p>标注仅保留在本次会话，关闭前请导出。导出格式与桌面版暂不互通。播放可能跳帧；时间戳表示已解码并绘制到画布，不表示屏幕已完成刷新。</p><button id="benchmark">检查当前视频播放性能</button><button id="help-close">关闭</button></dialog>`;
 const canvases = { A: $<HTMLCanvasElement>('canvas-A'), B: $<HTMLCanvasElement>('canvas-B') };
 const session = new ReviewSession((slot, frame) => frame.draw(canvases[slot]));
 const removeLogPanel = installLogPanel($('export-log'));
@@ -123,7 +124,7 @@ function render() {
   $('position').textContent = formatTime(state.positionUs);
   $('duration').textContent = formatTime(state.durationUs);
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
-  $('decode').textContent = loaded ? `最近解码 ${state.lastDecodeMs} ms` : '—';
+  $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
   $('notice').hidden = !(message || state.error);
   $('notice').textContent = message || state.error;
   const times = state.tracks.map(t => t.frame?.ptsUs);
@@ -271,3 +272,27 @@ Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configu
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
 import.meta.hot?.dispose(() => { unregister(); unbindDrop(); removeLogPanel(); uiEvents.abort(); resizeObserver.disconnect(); void session.dispose().finally(stopLogging); });
 render();
+
+$('benchmark').addEventListener('click', () => {
+  $<HTMLDialogElement>('help').close();
+  void act(async () => {
+    const report = await benchmarkPlayback(session);
+    let dialog = document.getElementById('benchmark-result') as HTMLDialogElement | null;
+    if (!dialog) {
+      dialog = document.createElement('dialog'); dialog.id = 'benchmark-result';
+      const title = document.createElement('h2'); title.textContent = '播放性能检查'; dialog.append(title);
+      const result = document.createElement('p'); result.id = 'benchmark-summary'; dialog.append(result);
+      const json = document.createElement('textarea'); json.id = 'benchmark-json'; json.readOnly = true;
+      json.setAttribute('aria-label', '播放性能报告 JSON'); json.style.cssText = 'width:100%;height:240px'; dialog.append(json);
+      const close = document.createElement('button'); close.textContent = '关闭'; close.onclick = () => dialog!.close(); dialog.append(close);
+      document.body.append(dialog);
+    }
+    const reasons: Record<string, string> = { 'below-realtime': '播放速度不足', 'frame-lag': '画面落后',
+      'track-skew': '双轨不同步', 'insufficient-sample': '样本时长不足', 'page-not-visible': '测试期间页面不可见',
+      'pause-latency': '暂停响应慢', 'stale-frame-after-pause': '暂停后画面改变', 'premature-end': '画面未播完',
+      'playback-error': '播放出错', 'interrupted': '测试被中断', 'media-changed': '测试期间视频被替换', 'no-frames': '没有输出画面' };
+    $('benchmark-summary').textContent = report.passed ? '通过' : `未通过：${report.failures.map(f => reasons[f] ?? (f.endsWith('presentation-stall') ? `${f[0]} 轨画面卡顿` : f)).join('、')}`;
+    $<HTMLTextAreaElement>('benchmark-json').value = JSON.stringify(report, null, 2);
+    dialog.showModal();
+  }, 'ui.benchmark');
+});

@@ -99,7 +99,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['get_review_session', 'seek_review', 'step_review', 'pause_review', 'add_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'pause_review', 'add_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   await get('seek_review').execute({ ptsUs: 45000 });
   assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
   get('add_review_mark').execute({ slot: 'A', text: 'Agent note' });
@@ -235,4 +235,54 @@ test('pause during playback stops drawing and keeps the last frame', async () =>
   assert.equal(drawn.length, count);
   assert.equal(session.getState().playing, false);
   await session.dispose();
+});
+
+test('slow decode cannot finish playback before the final frame is drawn', async () => {
+  const starts = Array.from({ length: 10 }, (_, i) => i * 20000);
+  const m = media('A', starts, 200000);
+  m.source.framesFrom = async function* () {
+    for (const pts of starts) {
+      await new Promise(r => setTimeout(r, 55));
+      yield await m.source.frameAt(pts);
+    }
+  };
+  const session = new ReviewSession(() => {});
+  await session.load('A', async () => m.source);
+  await session.play();
+  for (let i = 0; i < 100 && session.getState().playing; i++) await new Promise(r => setTimeout(r, 10));
+  assert.equal(session.getState().playing, false);
+  assert.equal(session.getState().tracks[0].frame?.ptsUs, 180000);
+  await session.dispose();
+});
+
+test('pause while a decode is pending rejects late presentation and releases the iterator', async () => {
+  const m = media(); const started = deferred<void>(); const release = deferred<void>();
+  let returned = false; let draws = 0;
+  m.source.framesFrom = async function* () {
+    try {
+      yield await m.source.frameAt(0);
+      started.resolve(); await release.promise;
+      yield await m.source.frameAt(40000);
+    } finally { returned = true; }
+  };
+  const session = new ReviewSession(() => draws++);
+  await session.load('A', async () => m.source); await session.play();
+  await started.promise; session.pause(); const count = draws; release.resolve();
+  await new Promise(r => setTimeout(r, 30));
+  assert.equal(draws, count);
+  assert.equal(returned, true);
+  await session.dispose();
+});
+
+test('both track producers start independently and paused sleep releases their queues', async () => {
+  const a = media('A'), b = media('B');
+  const release = deferred<void>(); let bStarted = false;
+  a.source.framesFrom = async function* () { await release.promise; yield await a.source.frameAt(0); };
+  const original = b.source.framesFrom;
+  b.source.framesFrom = async function* (pts) { bStarted = true; yield* original(pts); };
+  const session = new ReviewSession(() => {});
+  await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+  await session.play(); await new Promise(r => setTimeout(r, 10));
+  assert.equal(bStarted, true, 'B is not blocked by an unresolved A decode');
+  session.pause(); release.resolve(); await session.dispose();
 });

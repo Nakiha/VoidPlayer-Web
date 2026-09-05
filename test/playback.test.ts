@@ -1,0 +1,53 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { FrameQueue } from '../src/playback.ts';
+import { assessPlayback } from '../src/benchmark.ts';
+import { WorkerRpc } from '../src/ffmpeg-media.ts';
+const turn = () => new Promise<void>(r => setTimeout(r, 0));
+
+test('prefetch is bounded and stopping a full queue releases every frame', async () => {
+  let produced = 0, closed = 0, returned = false;
+  async function* frames() {
+    try { for (let i = 0; i < 100; i++) {
+      produced++;
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, draw() {}, close() { closed++; } };
+    } } finally { returned = true; }
+  }
+  const q = new FrameQueue(frames()); await turn();
+  assert.equal(produced, 4); assert.equal(q.frames.length, 4);
+  const { frame, dropped } = q.take(2); frame!.close();
+  assert.equal(dropped, 2);
+  await turn(); assert.equal(q.frames.length, 4);
+  q.stop(); await q.done;
+  assert.equal(closed, produced); assert.equal(returned, true);
+});
+
+test('benchmark rejects slow playback and missing or stalled presentation, even with a healthy timeline', () => {
+  const healthy = { wallMs: 2000, mediaUs: 2000000, waitingMs: 0, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
+    tracks: { A: { drawn: 120, dropped: 0, fps: 60, p95GapMs: 17, maxGapMs: 20 } } };
+  assert.deepEqual(assessPlayback(healthy, 1, false), []);
+  assert.ok(assessPlayback({ ...healthy, speed: .5 }, 1, false).includes('below-realtime'));
+  assert.ok(assessPlayback({ ...healthy, maxFrameLagUs: 900000 }, 1, false).includes('frame-lag'));
+  assert.ok(assessPlayback({ ...healthy, tracks: {} }, 1, false).includes('no-frames'));
+  assert.ok(assessPlayback({ ...healthy, tracks: { A: { ...healthy.tracks.A, maxGapMs: 500 } } }, 1, false).includes('A:presentation-stall'));
+  assert.ok(assessPlayback(healthy, 1, true).includes('stale-frame-after-pause'));
+});
+
+function workerStub() {
+  const listeners: Record<string, (e: unknown) => void> = {};
+  let terminated = false;
+  const worker = { addEventListener(name: string, fn: (e: unknown) => void) { listeners[name] = fn; }, postMessage() {}, terminate() { terminated = true; } };
+  return { rpc: new WorkerRpc(worker as unknown as Worker), get terminated() { return terminated; } };
+}
+test('a silently wedged worker times out and rejects all pending and future work', async () => {
+  const w = workerStub();
+  const first = assert.rejects(w.rpc.call('extract', {}, [], 10), /超时/);
+  const second = assert.rejects(w.rpc.call('extract', {}, [], 1000), /超时/);
+  await Promise.all([first, second]);
+  assert.equal(w.terminated, true);
+  await assert.rejects(w.rpc.call('extract', {}), /超时/);
+});
+test('disposing a worker settles outstanding extraction promises', async () => {
+  const w = workerStub(); const waiting = assert.rejects(w.rpc.call('extract', {}), /释放/);
+  w.rpc.terminate(); await waiting; assert.equal(w.terminated, true);
+});

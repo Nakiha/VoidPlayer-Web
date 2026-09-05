@@ -1,3 +1,4 @@
+import { buildInfo } from './build-info.ts';
 import { contextLog, log, sessionLog } from './log.ts';
 import type { LogDocument, LogStorage } from './log.ts';
 
@@ -47,7 +48,7 @@ export function indexedDBLogStorage(): LogStorage {
 }
 export function environmentInfo() {
   return {
-    build: typeof __BUILD_INFO__ === 'undefined' ? 'test' : __BUILD_INFO__,
+    build: buildInfo ?? 'test',
     userAgent: navigator.userAgent, language: navigator.language,
     secureContext: globalThis.isSecureContext, webCodecs: typeof VideoDecoder !== 'undefined',
     hardwareConcurrency: navigator.hardwareConcurrency, devicePixelRatio: globalThis.devicePixelRatio,

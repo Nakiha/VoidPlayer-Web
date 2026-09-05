@@ -292,44 +292,76 @@ caps), id resolution refusing malformed/traversal ids, full/ranged/suffix/416
 responses, HEAD, read-only method enforcement, and a real end-to-end range
 stream of the 19 MB H.264 sample demuxed by mediabunny off the live server.
 
-Playback pipeline follow-up (2026-09-05): playback no longer decodes frames by
-sparse per-tick random access. Each track streams presentation-order frames
-(`framesFrom`), the wall clock picks the newest decoded frame and drops the
-rest; sequential decode is reused end to end (WASM continuation needs no GOP
-re-decode per step). The log panel gained an explicit "上传到服务器" action
-backed by `POST /api/logs` (off when the service runs with `--no-logs`), and
-the top-bar review export is now labeled 导出评审 to keep log actions inside
-the log panel. 53 tests and the production build pass; playback smoothness of
-the new pipeline still needs a real-browser pass.
+## Playback performance and acceptance
 
-Worker decode follow-up (2026-09-05): the WASM core moved off the UI thread
-into a dedicated Web Worker per fallback track (`src/ffmpeg-worker.ts`), after
-a live session showed wall-clock 3 s advancing playback only 0.65 s — VVC's
-~38 ms/frame synchronous decode starved the loop entirely. Playback also no
-longer re-renders DOM without a new frame. The log panel can copy the uploaded
-log's server-side filename for handoff. 53 tests and the build pass; Node runs
-the same worker over worker_threads, so the fallback tests exercise the real
-threaded path.
+Playback uses independent per-track decode producers with queues capped at four
+frames. Canvas presentation runs on requestAnimationFrame; DOM updates run at
+10 Hz. The common clock advances only through decoded coverage on both tracks.
+When decoding cannot sustain real time, playback slows honestly; it does not run
+the timeline to the end while showing stale frames. Exact paused stepping still
+uses the fair multi-track planner. Pause cancels scheduling, releases queued
+frames and discards pending decoder results without drawing them.
 
-Stability benchmark follow-up (2026-09-05): after the worker move, an offscreen
-Playwright benchmark (`browser/scripts/bench-playback.mjs`, chromium and
-webkit) plays four scenarios for 4 s each against the library service:
-HEVC 4K, VVC 1080p, VVC+HEVC 4K, MPEG-2 TS+H.264. With the SIMD128 core both
-engines hold position ratio ~1.0 with zero main-thread long tasks and no page
-crash; WebKit draws 43 fps on HEVC 4K (hardware WebCodecs), 47/47 fps on
-TS+H.264, and 8–13 fps on VVC (single-thread software decode bound — a compute
-limit, not a UI stall). The first playback attempt of this round had reproduced
-the user-reported freeze (position 0.74 s behind after 1.6 s) before the
-catch-up cap landed; the bench now guards that regression. Requires
-`playwright` (devDependency) and browsers under `PLAYWRIGHT_BROWSERS_PATH`.
+WASM runs in one worker per track. The frame index stays in the worker; extraction
+messages carry only an index and an optional recycled pixel buffer. Cross-origin
+isolation enables an attempted pthread core; initialization has a 5 s timeout and
+single-thread fallback. All subsequent RPCs have a 15 s timeout; failure or worker
+termination rejects pending work. `coreVariant` records the actual selected core.
 
-Multi-threaded core follow-up (2026-09-05): when the page is cross-origin
-isolated (the service and the vite dev server now send COOP/COEP headers), the
-fallback tries the pthreads `voidplayer-core-mt` build first and falls back to
-the single-threaded core on error or a 5 s init timeout — nested pthread
-workers can wedge silently in some WebKit builds, so a wedged attempt is
-terminated and replaced. VVC 1080p decodes at ~7 ms/frame with the mt core
-(Node harness), and the webkit bench draws 49 fps on VVC solo and 37/36 fps on
-VVC+HEVC 4K; chromium draws 50 fps on VVC (HEVC stays WASM-bound there). All
-four bench scenarios keep position ratio 1.0 with zero long tasks and no
-crashes on both engines.
+**The old offscreen position-ratio benchmark is not acceptance evidence.** It
+measured a wall-clock-driven timeline, selected the best FPS window and did not
+fail its exit status on slow/janky playback. Earlier numbers from that harness
+must not be used to claim smooth or synchronized playback.
+
+Use **? → 检查当前视频播放性能** on the actual page with the desired media loaded.
+The check includes a mid-playback pause/restart, then plays for eight seconds or
+to clip end. It leaves playback paused and shows a copyable JSON report. The same
+function is available through `benchmark_review({ durationMs: 8000 })` and the
+matrix runner; there is no separate synthetic playback implementation.
+
+Reports include actual canvas draw counts/full-run FPS, frame interval p95/max,
+media-time/wall-time speed, decoder waiting time, maximum frame lag and track
+skew, pause latency and stale presentation checks. They record the actual decoder
+variant, source metadata, viewport, page visibility, isolation capabilities and
+build source digest and WASM binary fingerprints. Unsupported Long Tasks observation is `null`, not zero.
+These are canvas presentation measurements, not physical display scanout proof.
+
+Default acceptance requires at least 1 s of evidence, speed >= 0.9x, frame lag
+and track skew <= 100 ms, p95 frame intervals <= 75 ms, maximum interval <= 250 ms,
+and pause <= 100 ms with no stale frames. Backgrounding, interruption, media
+replacement, premature end and playback errors fail the run. These are usability
+thresholds for the current 24–60 fps review samples, not an HDR or color guarantee.
+
+```sh
+# Existing service must serve a fresh dist build and the resources/video folder.
+npm run build
+node scripts/bench-playback.mjs chromium
+node scripts/bench-playback.mjs webkit
+# BASE_URL, BENCH_REPEATS (default 3), BENCH_DURATION_MS (default 8000).
+# --headless explicitly labels synthetic runs; do not equate them to the user's host.
+```
+
+The runner uses visible pages by default, repeats replacement/playback in the
+same page, and has a watchdog covering navigation, media load and playback. Any
+failed or missing scenario makes its exit code nonzero. Its standalone browser
+matrix must be rerun on the target browser; the tests below used the user's
+Codex in-app browser through Computer Use, not the standalone Playwright runner.
+
+Verified 2026-09-05, macOS in-app browser, visible viewport 613×797 at DPR 2:
+
+| Scenario | Repetitions | Actual FPS A/B | Playback speed | Max frame lag |
+| --- | --- | --- | --- | --- |
+| VVC 1080p + HEVC 4K | 3, to 3 s clip end; VVC replaced between runs | 59.16–59.32 / 59.16–59.32 | 0.990–0.993x | 20–25 ms |
+| MPEG-2 TS + H.264 | 3 × 8 s | 59.88–59.91 / 59.88–59.91 | 0.998–0.999x | <17 ms |
+| VVC 1080p, production build, visible Help button | 1 × 8 s | 59.90 / — | 0.999x | <17 ms |
+
+These runs selected the multi-thread WASM core for VVC/MPEG-2 and WebCodecs for
+H.264/HEVC, passed synchronization/pause checks, and rendered a nonblank VVC frame
+verified by screenshot. The dev and production reports shared source digest
+`30ccdc3f75d2eb9bb81e9030d155a9ab87f7722c6d3877c7d286ecc3c3817fef`
+(before final report labels/metadata adjustments). They do not establish results
+for other browsers, single-thread fallback, long-form media or hour-long sessions.
+
+Regression tests cover late decode after pause, final-frame completion under slow
+decode, independent producers, bounded queues and cleanup, wedged/terminated
+worker RPCs, and benchmark rejection of falsely healthy timelines/stalled frames.

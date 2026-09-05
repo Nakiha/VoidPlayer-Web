@@ -1,3 +1,4 @@
+import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
@@ -12,7 +13,8 @@ export class ReviewSession {
   private marks: Mark[] = [];
   private queue: Promise<unknown> = Promise.resolve();
   private revision = 0;
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private stopPlayback: (() => void) | undefined;
+  private measurements: PlaybackMeasurements | null = null;
   private busy = false;
   private playing = false;
   private positionUs = 0;
@@ -36,6 +38,7 @@ export class ReviewSession {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,
       durationUs: this.durationUs, error: this.error, lastDecodeMs: this.decodeMs,
+      playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
       tracks: [...this.tracks].map(([slot, t]) => ({ slot, ...t.source.info, frame: t.frame })),
       marks: this.marks,
@@ -45,7 +48,8 @@ export class ReviewSession {
   pause() {
     const wasPlaying = this.playing;
     ++this.revision;
-    clearTimeout(this.timer);
+    this.stopPlayback?.();
+    this.stopPlayback = undefined;
     this.playing = false;
     this.busy = false;
     if (wasPlaying) log.info('session', '暂停播放', { positionUs: this.positionUs });
@@ -244,83 +248,85 @@ export class ReviewSession {
     void this.playbackLoop(revision, base, start);
     return this.getState();
   }
-  // Playback pulls sequential frames from each track's own stream (the
-  // WebCodecs sink pre-decodes ahead; the WASM core continues its decoder
-  // state), so each frame is decoded once in presentation order. Presentation
-  // follows the wall clock: late frames are dropped in favor of the newest
-  // decoded frame at or before the target time.
+  // Decoders run independently. A bounded queue provides backpressure; the
+  // common clock waits for both tracks instead of leaving their frames behind.
   private async playbackLoop(revision: number, base: number, start: number) {
     const scoped = contextLog();
     const active = () => this.playing && revision === this.revision;
-    const readers = new Map<Slot, { gen: AsyncGenerator<DecodedFrame>; next: DecodedFrame | null }>();
-    let lastEmitMs = 0;
-    const drawn = new Map<Slot, number>();
-    let lastSampleMs = 0;
-    try {
-      for (const [slot, t] of this.tracks) {
-        if (!t.frame) continue;
-        const gen = t.source.framesFrom(t.frame.ptsUs);
-        const first = await gen.next();
-        readers.set(slot, { gen, next: first.done ? null : first.value });
+    const entries = [...this.tracks];
+    const readers = entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
+    const metrics = this.measurements = new PlaybackMeasurements();
+    let lastTick = start, lastEmit = start, lastSample = start, lastProgress = start;
+    let cancelTick: (() => void) | undefined;
+    const stop = () => { readers.forEach(r => r.stop()); cancelTick?.(); };
+    this.stopPlayback = stop;
+    const tick = () => new Promise<void>(resolve => {
+      const finish = () => { cancelTick = undefined; resolve(); };
+      if (typeof requestAnimationFrame === 'function') {
+        const id = requestAnimationFrame(finish);
+        cancelTick = () => { cancelAnimationFrame(id); finish(); };
+      } else {
+        const id = setTimeout(finish, 8);
+        cancelTick = () => { clearTimeout(id); finish(); };
       }
+    });
+    try {
       while (active()) {
-        const target = Math.min(this.durationUs - 1, base + Math.round((performance.now() - start) * 1000));
-        let drew = false;
-        for (const [slot, t] of this.tracks) {
-          const reader = readers.get(slot);
-          if (!reader) continue;
-          let frame: DecodedFrame | null = null;
-          // Bounded catch-up: never decode more than a few frames per tick,
-          // and stop immediately when the user pauses/seeks. Decoding every
-          // intermediate frame to catch up floods the worker and starves the
-          // page; late frames are dropped at presentation instead.
-          let pulled = 0;
-          while (active() && reader.next && reader.next.ptsUs <= target && pulled < 3) {
-            frame?.close();
-            frame = reader.next;
-            const next = await reader.gen.next();
-            reader.next = next.done ? null : next.value;
-            pulled++;
-          }
-          if (frame) {
-            this.draw(slot, frame);
-            t.frame = this.frameInfo(frame);
-            frame.close();
-            drew = true;
-            drawn.set(slot, (drawn.get(slot) ?? 0) + 1);
-          }
+        await tick();
+        if (!active()) break;
+        const now = performance.now();
+        const elapsed = now - lastTick; lastTick = now;
+        const failed = readers.find(r => r.error);
+        if (failed) throw failed.error;
+        // A future indexed frame proves coverage, including VFR timestamp gaps.
+        // Only a drained producer proves that the final frame covers the end.
+        const coverage = Math.min(...readers.map((r, i) => r.ended ? this.durationUs - 1
+          : r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs));
+        const target = Math.max(this.positionUs, Math.min(this.durationUs - 1,
+          this.positionUs + Math.round(elapsed * 1000), coverage));
+        const advance = target - this.positionUs;
+        metrics.waitingMs += Math.max(0, elapsed - advance / 1000);
+        if (advance > 0) lastProgress = now;
+        if (now - lastProgress > 15000) throw new Error('解码超过 15 秒没有推进，请重新载入视频。');
+        for (let i = 0; i < entries.length; i++) {
+          const [slot, track] = entries[i];
+          const { frame, dropped } = readers[i].take(target);
+          if (!frame) continue;
+          try {
+            if (frame.ptsUs !== track.frame?.ptsUs) {
+              this.draw(slot, frame);
+              track.frame = this.frameInfo(frame);
+              metrics.draw(slot, performance.now(), dropped);
+            }
+          } finally { frame.close(); }
         }
         this.positionUs = target;
-        // Render on new frames; the timeline text updates at ~7 Hz otherwise so
-        // DOM work cannot starve decoding.
-        const now = performance.now();
-        if (drew || now - lastEmitMs > 150) { lastEmitMs = now; this.emit(); }
-        if (now - lastSampleMs > 2000) {
-          lastSampleMs = now;
-          scoped.debug('session', '播放采样', {
-            positionUs: target,
-            drawnPerTrack: Object.fromEntries(drawn),
-          });
-          drawn.clear();
+        metrics.wallMs = performance.now() - start;
+        metrics.mediaUs = target - base;
+        const pts = entries.map(([, t]) => t.frame!.ptsUs);
+        metrics.maxFrameLagUs = Math.max(metrics.maxFrameLagUs, target - Math.min(...pts));
+        metrics.maxFrameSkewUs = Math.max(metrics.maxFrameSkewUs, Math.max(...pts) - Math.min(...pts));
+        // Canvas drawing is independent of the expensive DOM/state snapshot.
+        if (now - lastEmit >= 100) { lastEmit = now; this.emit(); }
+        if (now - lastSample >= 2000) {
+          lastSample = now;
+          scoped.debug('session', '播放采样', metrics.snapshot());
         }
         if (target >= this.durationUs - 1) {
           this.playing = false;
-          scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });
+          scoped.info('session', '播放到末尾结束', { positionUs: target });
         }
-        if (active()) await new Promise(resolve => { this.timer = setTimeout(resolve, 16); });
       }
     } catch (error) {
       if (active()) {
         this.playing = false;
-        this.error = error instanceof Error ? error.message : String(error);
+        this.error = errorText(error);
         scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
       }
     } finally {
-      for (const reader of readers.values()) {
-        reader.next?.close();
-        await reader.gen.return(undefined).catch(() => {});
-      }
-      if (revision === this.revision) this.emit();
+      stop();
+      scoped.info('session', '播放统计', metrics.snapshot());
+      if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
     }
   }
   addMark(input: { slot: unknown; text: unknown; severity?: unknown; origin?: unknown; region?: unknown }) {
