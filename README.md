@@ -428,3 +428,12 @@ profile 8.1):
   Known dispute: the core reports full range for the Dolby sample while
   ffprobe 8.1.2 reports tv — suspected DV-related upstream change in FFmpeg 9,
   pending reconciliation.
+
+HDR direction decision (2026-09-05): browser-native HDR, minimal custom code.
+The WebCodecs path needs nothing — Safari/Chrome present HLG/PQ VideoFrames
+natively (display-relative, EDR where available); the track bar marks such
+media "HDR". The WASM fallback stays SDR: swscale has no half-float RGB output
+and float16 canvas ImageData is not portable across engines yet (Chromium
+requires an rgba-float16 context, WebKit has none), so fallback HDR sources are
+marked "HDR 源（SDR 兜底显示）" instead of silently presenting wrong. Revisit
+fallback HDR only when float16 canvas support stabilizes.

@@ -105,7 +105,11 @@ function render() {
     $(`empty-${slot}`).hidden = !!t;
     $(`image-${slot}`).hidden = !t;
     $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? '参考视频' : '对比视频');
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec}${t.decoder === 'ffmpeg-wasm' ? ' · WASM' : ''}` : '尚未载入';
+    // HDR markers: WebCodecs presents HDR natively; the WASM fallback outputs
+    // SDR (its RGBA8 path carries no transfer headroom) — say so explicitly.
+    const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
+    const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR') : '';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec}${t.decoder === 'ffmpeg-wasm' ? ' · WASM' : ''}${hdrTag}` : '尚未载入';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     if (t) fitFrame(slot, t.width, t.height);
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
