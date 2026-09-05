@@ -1,5 +1,6 @@
 import type { DecodedFrame, MediaSource } from './media.ts';
 import type { MediaInfo } from './model.ts';
+import { contextLog } from './log.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
 // demux or decode (FFV1, MPEG-2 TS, H.266/VVC, H.264 4:2:2, ...). The
@@ -34,6 +35,7 @@ export function nextIndex(timesUs: number[], ptsUs: number): number {
 }
 
 export const WASM_CORE_GLUE_PATH = 'vendor/voidplayer-core/voidplayer-core.js';
+export const WASM_CORE_GLUE_PATH_MT = 'vendor/voidplayer-core/voidplayer-core-mt.js';
 export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm';
 
 export interface FallbackDeps {
@@ -105,21 +107,46 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   if (file.size > MAX_FALLBACK_FILE_BYTES) {
     throw new Error(`文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
   }
-  const worker = deps.workerFactory?.() ?? await createWorker();
-  const rpc = new WorkerRpc(worker);
-  let init: InitResult;
-  try {
-    const glueURL = deps.glueURL ?? new URL(`/${WASM_CORE_GLUE_PATH}`, location.origin).href;
-    const initPayload: Record<string, unknown> = { glueURL, name: file.name, file: await file.arrayBuffer() };
-    const transfer: Transferable[] = [initPayload.file as ArrayBuffer];
-    if (deps.wasmBinary) {
-      initPayload.wasmBinary = deps.wasmBinary.buffer as ArrayBuffer;
-      transfer.push(initPayload.wasmBinary as ArrayBuffer);
+  // In a cross-origin-isolated page, SharedArrayBuffer unlocks the
+  // multi-threaded core (pthreads); try it first and fall back to the
+  // single-threaded core when it is not vendored, cannot start, or hangs
+  // (nested pthread workers wedging in some WebKit builds) — a wedged worker
+  // is terminated and replaced.
+  const candidates: string[] = [];
+  if (deps.glueURL) candidates.push(deps.glueURL);
+  else {
+    if (globalThis.crossOriginIsolated) candidates.push(new URL(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin).href);
+    candidates.push(new URL(`/${WASM_CORE_GLUE_PATH}`, location.origin).href);
+  }
+  const fileBytes = await file.arrayBuffer();
+  let init: InitResult | null = null;
+  let rpc: WorkerRpc | null = null;
+  let lastError: unknown = null;
+  for (const glueURL of candidates) {
+    rpc?.terminate();
+    rpc = new WorkerRpc(deps.workerFactory?.() ?? await createWorker());
+    try {
+      const payload: Record<string, unknown> = { glueURL, name: file.name, file: fileBytes.slice(0) };
+      const transfer: Transferable[] = [payload.file as ArrayBuffer];
+      if (deps.wasmBinary) {
+        payload.wasmBinary = deps.wasmBinary.buffer as ArrayBuffer;
+        transfer.push(payload.wasmBinary as ArrayBuffer);
+      }
+      init = await Promise.race([
+        rpc.call<InitResult>('init', payload, transfer),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('WASM core 初始化超时')), 5000)),
+      ]);
+      contextLog().info('media', 'WASM core 已就绪', { glueURL: glueURL.split('/').pop() });
+      break;
+    } catch (error) {
+      lastError = error;
+      contextLog().warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
+      init = null;
     }
-    init = await rpc.call<InitResult>('init', initPayload, transfer);
-  } catch (error) {
-    rpc.terminate();
-    throw error;
+  }
+  if (!init || !rpc) {
+    rpc?.terminate();
+    throw lastError ?? new Error('WASM 解码 core 不可用。');
   }
 
   const { ticks, tbNum, tbDen } = init;

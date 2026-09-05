@@ -322,3 +322,14 @@ limit, not a UI stall). The first playback attempt of this round had reproduced
 the user-reported freeze (position 0.74 s behind after 1.6 s) before the
 catch-up cap landed; the bench now guards that regression. Requires
 `playwright` (devDependency) and browsers under `PLAYWRIGHT_BROWSERS_PATH`.
+
+Multi-threaded core follow-up (2026-09-05): when the page is cross-origin
+isolated (the service and the vite dev server now send COOP/COEP headers), the
+fallback tries the pthreads `voidplayer-core-mt` build first and falls back to
+the single-threaded core on error or a 5 s init timeout — nested pthread
+workers can wedge silently in some WebKit builds, so a wedged attempt is
+terminated and replaced. VVC 1080p decodes at ~7 ms/frame with the mt core
+(Node harness), and the webkit bench draws 49 fps on VVC solo and 37/36 fps on
+VVC+HEVC 4K; chromium draws 50 fps on VVC (HEVC stays WASM-bound there). All
+four bench scenarios keep position ratio 1.0 with zero long tasks and no
+crashes on both engines.

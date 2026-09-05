@@ -19,6 +19,7 @@ const results = [];
 const browser = await (browserName === 'webkit' ? webkit : chromium).launch();
 try {
   for (const [name, [fileA, fileB]] of Object.entries(SCENARIOS)) {
+    console.error(`[bench] scenario ${name} starting`);
     const page = await browser.newPage();
     const crashed = new Promise((_, reject) => page.once('crash', () => reject(new Error('page crashed'))));
     try {
@@ -36,7 +37,8 @@ try {
 
       // 4 s wall-clock playback; sample position; real draw counts come from
       // the session's 播放采样 debug events (polling getState is too coarse).
-      const probe = await Promise.race([page.evaluate(async () => {
+      const watchdog = new Promise((_, reject) => setTimeout(() => reject(new Error('scenario timeout')), 60000));
+      const probe = await Promise.race([watchdog, page.evaluate(async () => {
         const longTasks = [];
         new PerformanceObserver(list => { for (const e of list.entries()) longTasks.push(e.duration); }).observe({ entryTypes: ['longtask'] });
         const out = [];
@@ -78,7 +80,8 @@ try {
     } catch (error) {
       results.push({ scenario: name, error: String(error.message ?? error) });
     }
-    await page.close();
+    try { await page.close(); } catch {}
+    console.error(`[bench] scenario ${name} done`);
   }
 } finally {
   await browser.close();

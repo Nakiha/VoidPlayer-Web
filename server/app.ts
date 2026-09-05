@@ -26,9 +26,17 @@ const MIME: Record<string, string> = {
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   const payload = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...ISOLATION_HEADERS });
   res.end(payload);
 }
+
+// Cross-origin isolation headers enable SharedArrayBuffer for the
+// multi-threaded WASM decoder core. Everything we serve is same-origin, so
+// require-corp is safe here.
+const ISOLATION_HEADERS = {
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-embedder-policy': 'require-corp',
+};
 
 function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
   if (!header) return null;
@@ -54,7 +62,7 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: str
   if (!stat?.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
   const size = stat.size;
   const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-  const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
+  const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store', ...ISOLATION_HEADERS };
   const range = parseRange(req.headers.range, size);
   if (range === 'unsatisfiable') {
     res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
