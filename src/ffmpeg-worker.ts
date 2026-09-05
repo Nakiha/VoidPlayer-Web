@@ -26,20 +26,38 @@ const port: any = (() => {
 })();
 
 let core: any = null;
-const contexts = new Map<number, number[]>();
+const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string }>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file: ArrayBuffer; threads?: number }) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; threads?: number }) {
   const mod = await import(payload.glueURL);
   core = await mod.default({ wasmBinary: new Uint8Array(payload.wasmBinary) });
+  core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
   const path = `/vp-in-${crypto.randomUUID()}`;
+  let blobHandle = 0;
   try {
     // Player-assigned decode thread budget (no-op on the single-thread core).
     if (payload.threads) core.ccall('vp_set_threads', null, ['number'], [payload.threads]);
-    core.FS.writeFile(path, new Uint8Array(payload.file));
-    if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
-      throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
+    // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
+    // no whole-file copy ever enters WASM memory. Node workers lack
+    // FileReaderSync and buffer the bytes once (capped) into MEMFS.
+    let ioMode = 'memfs';
+    if (payload.blob && typeof FileReaderSync !== 'undefined') {
+      ioMode = 'blob';
+      blobHandle = ctx; // the ctx pointer is already a unique id per context
+      core.vpBlobs.set(blobHandle, { blob: payload.blob, reader: new FileReaderSync() });
+      if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
+        throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
+      }
+    } else {
+      const bytes = payload.file ?? await payload.blob?.arrayBuffer();
+      if (!bytes) throw new Error('缺少媒体数据。');
+      if (bytes.byteLength > 512 * 1024 * 1024) throw new Error('文件超过 WASM 回退解码的内存上限。');
+      core.FS.writeFile(path, new Uint8Array(bytes));
+      if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
+        throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
+      }
     }
     const indexStart = performance.now();
     const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
@@ -51,9 +69,9 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       ticks[i] = Number(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
       durations[i] = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]));
     }
-    contexts.set(ctx, ticks);
+    contexts.set(ctx, { ticks, blobHandle, path });
     return {
-      ctx, path, ticks, durations, indexMs,
+      ctx, path, ticks, durations, indexMs, ioMode,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
       width: core.ccall('vp_width', 'number', ['number'], [ctx]),
@@ -61,6 +79,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
     };
   } catch (error) {
+    if (blobHandle) core.vpBlobs.delete(blobHandle);
     try { core.FS.unlink(path); } catch { /* best effort */ }
     core.ccall('vp_destroy', null, ['number'], [ctx]);
     throw error;
@@ -68,7 +87,8 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
 }
 
 function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
-  const ticks = contexts.get(ctx);
+  const entry = contexts.get(ctx);
+  const ticks = entry?.ticks;
   if (!ticks || !Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
   const target = BigInt(ticks[index]);
   const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, target]);
@@ -96,7 +116,9 @@ port.onmessage = async (event: { data: any }) => {
       port.postMessage({ id, ok: true, data: buffer }, [buffer]);
     } else if (type === 'dispose') {
       const ctx = payload.ctx;
+      const entry = contexts.get(ctx);
       if (contexts.delete(ctx)) {
+        if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
         try { core.FS.unlink(payload.path); } catch { /* already gone */ }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
       }

@@ -57,6 +57,7 @@ interface InitResult {
   height: number;
   codec: string;
   indexMs?: number;
+  ioMode?: 'blob' | 'memfs';
 }
 
 // Player-side thread budget: fallback decoders share the host's cores, each
@@ -133,7 +134,11 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
 }
 
 async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: number): Promise<MediaSource> {
-  if (file.size > MAX_FALLBACK_FILE_BYTES) {
+  // The Blob crosses into the worker by reference; there the custom AVIO
+  // reads it in chunks via FileReaderSync, so the file never enters WASM
+  // memory at all. Environments without FileReaderSync (Node tests) buffer
+  // the whole file in the worker and enforce the byte cap there.
+  if (file.size > MAX_FALLBACK_FILE_BYTES && typeof File === 'undefined') {
     throw new Error(`文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
   }
   // In a cross-origin-isolated page, SharedArrayBuffer unlocks the
@@ -148,7 +153,6 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     candidates.push(new URL(`/${WASM_CORE_GLUE_PATH}`, location.origin).href);
   }
   const scoped = contextLog();
-  const fileBytes = await file.arrayBuffer();
   const readMs = Math.round(performance.now() - openStart);
   const threads = threadBudget();
   let coreVariant: 'single-thread' | 'multi-thread' = 'single-thread';
@@ -159,8 +163,8 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     rpc?.terminate();
     rpc = new WorkerRpc(deps.workerFactory?.() ?? await createWorker());
     try {
-      const payload: Record<string, unknown> = { glueURL, name: file.name, file: fileBytes.slice(0), threads };
-      const transfer: Transferable[] = [payload.file as ArrayBuffer];
+      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, blob: file };
+      const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
         transfer.push(payload.wasmBinary as ArrayBuffer);
@@ -169,7 +173,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
-        readMs, initIndexMs: init.indexMs, threads,
+        ioMode: init.ioMode, readMs, initIndexMs: init.indexMs, threads,
       });
       break;
     } catch (error) {

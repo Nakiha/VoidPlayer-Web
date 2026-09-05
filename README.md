@@ -390,3 +390,12 @@ Media-pipeline consolidation (2026-09-05), first round of the review's plan:
 Regression coverage added for staged fallback routing and the byte budget; all
 62 tests pass. WebKit benchmark after the refactor: VVC solo 59.9 fps on the
 mt core, VVC+HEVC-4K ~45–52 fps per track, TS+H.264 ~50 fps, zero long tasks.
+
+Chunked WASM input follow-up (2026-09-05): the fallback no longer copies whole
+files into WASM memory. The Blob crosses into the decode worker by reference
+and a custom AVIO reads it in 256 KiB chunks via `FileReaderSync`
+(`vp_open_blob` in the core). Verified live in WebKit: library items report
+`ioMode: "blob"` and all bench scenarios pass; the 512 MiB cap now applies
+only to environments without FileReaderSync (Node tests buffer once). Remote
+(library) fallback files still download whole before decoding — ranged reads
+need an async-capable AVIO bridge, which remains follow-up work.
