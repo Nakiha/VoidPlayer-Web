@@ -63,7 +63,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
   }
 }
 
-function extract(ctx: number, ticks: number[], index: number) {
+function extract(ctx: number, ticks: number[], index: number, recycle?: ArrayBuffer) {
   const target = BigInt(ticks[index]);
   const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, target]);
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
@@ -72,7 +72,12 @@ function extract(ctx: number, ticks: number[], index: number) {
   const width = core.ccall('vp_width', 'number', ['number'], [ctx]);
   const height = core.ccall('vp_height', 'number', ['number'], [ctx]);
   const ptr = core.ccall('vp_pixels', 'number', ['number'], [ctx]);
-  return core.HEAPU8.slice(ptr, ptr + width * height * 4).buffer;
+  const len = width * height * 4;
+  // Reuse the client's recycled buffer when it fits: at 60 fps an 8 MB frame
+  // allocation per extract is pure GC churn.
+  const out = recycle && recycle.byteLength === len ? new Uint8Array(recycle) : new Uint8Array(len);
+  out.set(core.HEAPU8.subarray(ptr, ptr + len));
+  return out.buffer;
 }
 
 port.onmessage = async (event: { data: any }) => {
@@ -81,7 +86,7 @@ port.onmessage = async (event: { data: any }) => {
     if (type === 'init') {
       port.postMessage({ id, ok: true, data: await init(payload) });
     } else if (type === 'extract') {
-      const buffer = extract(payload.ctx, payload.ticks, payload.index);
+      const buffer = extract(payload.ctx, payload.ticks, payload.index, payload.recycle);
       port.postMessage({ id, ok: true, data: buffer }, [buffer]);
     } else if (type === 'dispose') {
       const ctx = payload.ctx;

@@ -254,6 +254,8 @@ export class ReviewSession {
     const active = () => this.playing && revision === this.revision;
     const readers = new Map<Slot, { gen: AsyncGenerator<DecodedFrame>; next: DecodedFrame | null }>();
     let lastEmitMs = 0;
+    const drawn = new Map<Slot, number>();
+    let lastSampleMs = 0;
     try {
       for (const [slot, t] of this.tracks) {
         if (!t.frame) continue;
@@ -268,17 +270,24 @@ export class ReviewSession {
           const reader = readers.get(slot);
           if (!reader) continue;
           let frame: DecodedFrame | null = null;
-          while (reader.next && reader.next.ptsUs <= target) {
+          // Bounded catch-up: never decode more than a few frames per tick,
+          // and stop immediately when the user pauses/seeks. Decoding every
+          // intermediate frame to catch up floods the worker and starves the
+          // page; late frames are dropped at presentation instead.
+          let pulled = 0;
+          while (active() && reader.next && reader.next.ptsUs <= target && pulled < 3) {
             frame?.close();
             frame = reader.next;
-            const pulled = await reader.gen.next();
-            reader.next = pulled.done ? null : pulled.value;
+            const next = await reader.gen.next();
+            reader.next = next.done ? null : next.value;
+            pulled++;
           }
           if (frame) {
             this.draw(slot, frame);
             t.frame = this.frameInfo(frame);
             frame.close();
             drew = true;
+            drawn.set(slot, (drawn.get(slot) ?? 0) + 1);
           }
         }
         this.positionUs = target;
@@ -286,6 +295,14 @@ export class ReviewSession {
         // DOM work cannot starve decoding.
         const now = performance.now();
         if (drew || now - lastEmitMs > 150) { lastEmitMs = now; this.emit(); }
+        if (now - lastSampleMs > 2000) {
+          lastSampleMs = now;
+          scoped.debug('session', '播放采样', {
+            positionUs: target,
+            drawnPerTrack: Object.fromEntries(drawn),
+          });
+          drawn.clear();
+        }
         if (target >= this.durationUs - 1) {
           this.playing = false;
           scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });

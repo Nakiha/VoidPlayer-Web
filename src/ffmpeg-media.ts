@@ -139,9 +139,16 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   };
 
   let disposed = false;
+  // Drawn frames return their pixel buffer to the next extract (ping-pong),
+  // so playback does not allocate megabytes per frame.
+  let spare: ArrayBuffer | null = null;
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
-    const pixels = new Uint8ClampedArray(await rpc.call<ArrayBuffer>('extract', { ctx: init.ctx, ticks, index }));
+    const payload: Record<string, unknown> = { ctx: init.ctx, ticks, index };
+    const transfer: Transferable[] = [];
+    if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
+    const buffer = await rpc.call<ArrayBuffer>('extract', payload, transfer);
+    const pixels = new Uint8ClampedArray(buffer);
     return {
       pixels,
       ptsUs: relUs[index],
@@ -154,7 +161,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
         if (!ctx2d) throw new Error('浏览器无法创建画布。');
         ctx2d.putImageData(new ImageData(pixels, info.width, info.height), 0, 0);
       },
-      close() {},
+      close() { spare = pixels.buffer as ArrayBuffer; },
     };
   };
 
