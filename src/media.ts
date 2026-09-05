@@ -1,4 +1,5 @@
 import { Input, BlobSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
+import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
 
 export interface DecodedFrame extends FrameInfo {
@@ -8,6 +9,7 @@ export interface DecodedFrame extends FrameInfo {
 export interface MediaSource {
   info: MediaInfo;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
+  framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
   dispose(): void;
 }
 export async function inspectVideoTrack(input: Input) {
@@ -46,6 +48,19 @@ export async function openMedia(file: File): Promise<MediaSource> {
       codec, width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
     };
+    const wrap = (sample: VideoSample): DecodedFrame => ({
+      ptsUs: Math.round((sample.timestamp - first) * 1e6),
+      sourcePtsUs: Math.round(sample.timestamp * 1e6),
+      durationUs: Math.round(sample.duration * 1e6),
+      draw(canvas) {
+        if (canvas.width !== sample.displayWidth) canvas.width = sample.displayWidth;
+        if (canvas.height !== sample.displayHeight) canvas.height = sample.displayHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('浏览器无法创建画布。');
+        sample.draw(ctx, 0, 0, canvas.width, canvas.height);
+      },
+      close: () => sample.close(),
+    });
     return {
       info,
       async frameAt(ptsUs) {
@@ -53,19 +68,26 @@ export async function openMedia(file: File): Promise<MediaSource> {
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
         const sample = await sink.getSample(first + (ptsUs + 0.5) / 1e6);
         if (!sample) throw new Error(`时间 ${ptsUs} µs 没有可解码的画面。`);
-        return {
-          ptsUs: Math.round((sample.timestamp - first) * 1e6),
-          sourcePtsUs: Math.round(sample.timestamp * 1e6),
-          durationUs: Math.round(sample.duration * 1e6),
-          draw(canvas) {
-            if (canvas.width !== sample.displayWidth) canvas.width = sample.displayWidth;
-            if (canvas.height !== sample.displayHeight) canvas.height = sample.displayHeight;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) throw new Error('浏览器无法创建画布。');
-            sample.draw(ctx, 0, 0, canvas.width, canvas.height);
-          },
-          close: () => sample.close(),
-        };
+        return wrap(sample);
+      },
+      async framesAfter(ptsUs, count) {
+        // Iterate presentation order and keep true successors, so VFR and
+        // timestamp gaps cannot strand stepping on a duration-based guess.
+        // Start just before the current frame: its rounded start may sit a
+        // fraction of a microsecond below ptsUs.
+        const frames: DecodedFrame[] = [];
+        const iterator = sink.samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        try {
+          for await (const sample of iterator) {
+            const frame = wrap(sample);
+            if (frame.ptsUs <= ptsUs) { frame.close(); continue; }
+            frames.push(frame);
+            if (frames.length >= count) break;
+          }
+        } finally {
+          await iterator.return(undefined);
+        }
+        return frames;
       },
       dispose: () => input.dispose(),
     };

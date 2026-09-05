@@ -31,13 +31,73 @@ export function regionValue(value: unknown): Region | null {
   }
   return { left: r.left, top: r.top, width: r.width, height: r.height };
 }
-export function stepTarget(frame: FrameInfo, direction: number, limitUs: number): number {
-  if (direction !== -1 && direction !== 1) throw new Error('逐帧方向必须是 -1 或 1。');
-  if (direction < 0) return Math.max(0, frame.ptsUs - 1);
-  if (frame.durationUs <= 0) throw new Error('当前帧缺少时长，无法可靠地向后逐帧。');
-  // WebCodecs timestamps are rounded to microseconds. Step just beyond the
-  // rounded boundary so 30 fps (33,333.333… µs) cannot return the same frame.
-  return Math.min(Math.max(0, limitUs - 1), frame.ptsUs + frame.durationUs + 1);
+
+// Fair multi-track step planner ported from native/renderer/track/track_step_policy.cpp.
+// Every value is a session-relative frame start in integer microseconds; each file's
+// first timestamp maps to zero, so there are no per-track offsets.
+
+const FALLBACK_FRAME_DURATION_US = 33333;
+const MAX_TRUSTED_FRAME_DURATION_US = 100000;
+
+export function minFrameDurationUs(durationsUs: number[]): number {
+  let min = Infinity;
+  for (const duration of durationsUs) if (duration > 0) min = Math.min(min, duration);
+  return min <= MAX_TRUSTED_FRAME_DURATION_US ? min : FALLBACK_FRAME_DURATION_US;
+}
+
+export type ForwardStepTrack = { currentUs: number; nextUs: number | null; nextNextUs: number | null };
+
+// Candidate targets are the loaded tracks' next frame starts. A candidate is valid
+// when no track would skip an intermediate frame or jump a suspicious gap; among
+// valid candidates the planner maximizes the number of stepping tracks and breaks
+// ties toward the earliest target. Returns null when no track can step.
+export function planForwardStep(tracks: ForwardStepTrack[], frameDurationUs: number): number | null {
+  const maxStepGapUs = frameDurationUs + Math.floor(frameDurationUs / 2) + 2000;
+  const candidates = [...new Set(tracks.map(t => t.nextUs).filter((v): v is number => v != null))].sort((a, b) => a - b);
+  let selected: number | null = null;
+  let selectedCount = 0;
+  for (const target of candidates) {
+    let valid = true;
+    let stepped = 0;
+    for (const track of tracks) {
+      if (track.nextUs == null || target < track.nextUs) continue;
+      if (track.nextUs - track.currentUs > maxStepGapUs) { valid = false; break; }
+      if (track.nextNextUs != null && target >= track.nextNextUs) { valid = false; break; }
+      // nextNextUs == null means the next frame is the track's last one, so landing
+      // past its start cannot skip an unknown intermediate frame. The native planner
+      // invalidates this case because a missing next-next is only a lookahead miss.
+      stepped++;
+    }
+    if (valid && stepped > 0 && (selected == null || stepped > selectedCount)) {
+      selected = target;
+      selectedCount = stepped;
+    }
+  }
+  return selected;
+}
+
+export type BackwardStepTrack = { currentUs: number; previousUs: number | null };
+
+// Mirror of planForwardStep: candidates are the tracks' previous frame starts,
+// ties break toward the latest target.
+export function planBackwardStep(tracks: BackwardStepTrack[]): number | null {
+  const candidates = [...new Set(tracks.map(t => t.previousUs).filter((v): v is number => v != null))].sort((a, b) => b - a);
+  let selected: number | null = null;
+  let selectedCount = 0;
+  for (const target of candidates) {
+    let valid = true;
+    let stepped = 0;
+    for (const track of tracks) {
+      if (target >= track.currentUs) continue;
+      if (track.previousUs == null || target < track.previousUs) { valid = false; break; }
+      stepped++;
+    }
+    if (valid && stepped > 0 && (selected == null || stepped > selectedCount)) {
+      selected = target;
+      selectedCount = stepped;
+    }
+  }
+  return selected;
 }
 export function formatTime(us: number): string {
   const ms = Math.floor(Math.max(0, us) / 1000);

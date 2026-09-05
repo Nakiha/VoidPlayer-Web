@@ -227,7 +227,7 @@ const unregister = registerReviewTools(session);
 const api = {
   getState: () => session.getState(),
   loadFile: (slot: Slot, file: File) => session.load(slot, () => openMedia(file)),
-  seek: (ptsUs: number) => session.seek(ptsUs), step: (direction: number, slot: Slot = 'A') => session.step(direction, slot),
+  seek: (ptsUs: number) => session.seek(ptsUs), step: (direction: number) => session.step(direction),
   play: () => session.play(), pause: () => session.pause(),
   addMark: (input: Parameters<ReviewSession['addMark']>[0]) => session.addMark(input),
   deleteMark: (id: string) => session.deleteMark(id), exportReview: () => session.exportReview(),

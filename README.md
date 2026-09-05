@@ -17,7 +17,8 @@ Drop one file onto a video pane to replace that track; elsewhere it fills A,
 then B. Drop two files together to load A and B in the supplied order. More than
 two files are rejected. Loading proceeds in order; if the second file fails,
 the successful first load remains and the old second source is preserved.
-Use the shared timeline, left/right arrows to step against A, and Space to play/pause.
+Use the shared timeline, left/right arrows to step every track by one fair frame
+step, and Space to play/pause.
 The sidebar button opens annotations; drag on a paused frame to select a region.
 Export before closing: annotations currently live only in memory.
 
@@ -35,15 +36,21 @@ features are omitted rather than presented as nonfunctional controls.
 - `src/agent.ts`: feature-detected imperative WebMCP tools using the same session.
 
 Time values are integer microseconds. Each file's first video timestamp maps to
-session time zero. The comparison ends at the shorter track. Stepping uses the
-reference frame's duration and decoded timestamp, not an assumed frame rate.
-Rounding is handled at sub-microsecond boundaries. Other tracks are sampled at
-the selected reference frame's start, which matters when frame rates differ.
-This is reference-track stepping, not the native fair/greedy multi-track planner
-in `native/renderer/track/track_step_policy.cpp`. That planner considers candidate
-timestamps across tracks, maximizes the number that can step legally, and breaks
-ties by temporal proximity in the chosen direction. Its lookahead, offsets and
-presentation-commit semantics have not been ported to this browser experiment.
+session time zero. The comparison ends at the shorter track. Stepping ports the
+fair multi-track planner from `native/renderer/track/track_step_policy.cpp`:
+candidate targets are the loaded tracks' decoded successor (or predecessor) frame
+starts, a candidate is invalid when any track would skip an intermediate frame or
+jump a gap beyond 1.5× the minimum current frame duration plus 2 ms, and among
+valid candidates the planner maximizes the number of stepping tracks (ties break
+toward the earliest forward or latest backward target). Tracks the target does
+not move keep their current frame; it is never re-resolved by time. Successors
+are true presentation-order samples from Mediabunny's sample iterator, so VFR
+and timestamp gaps do not rely on duration arithmetic. One divergence from the
+native planner: the browser decodes lookahead on demand, so a missing next-next
+frame means the track's last frame and may still be landed on, where the native
+planner treats a lookahead miss as unprovable and rejects the candidate. The
+native lookahead budgeting, track offsets and presentation-commit semantics are
+not ported.
 
 Seek resolves after every loaded track decodes and draws its selected frame to
 canvas. `frameEvidence: decoded-and-drawn-to-canvas` does **not** certify OS display
@@ -69,7 +76,7 @@ This format is not claimed to be compatible with the desktop marks importer.
 ## Agent surface
 
 `window.voidPlayer` exposes `getState()`, `loadFile('A' | 'B', File)`, `seek(ptsUs)`,
-`step(-1 | 1, slot)`, `play()`, `pause()`, `addMark(input)`, `deleteMark(id)`, and
+`step(-1 | 1)`, `play()`, `pause()`, `addMark(input)`, `deleteMark(id)`, and
 `exportReview()`. File access requires user selection or an existing File object;
 an agent cannot load arbitrary local paths through the page.
 
@@ -78,7 +85,8 @@ these tools are registered: `get_review_session`, `seek_review`, `step_review`,
 `pause_review`, `add_review_mark`, `export_review`. Inputs are validated at execution;
 filenames and note text are untrusted data. Standard DOM controls remain usable
 when WebMCP is unavailable. Export tools return JSON without starting a download;
-the visible Export button downloads the same document.
+the visible Export button downloads the same document. `step_review` takes only
+`direction`; stepping is fair across all loaded tracks, not per reference track.
 
 ## Verification
 
@@ -91,15 +99,17 @@ python3 test/generate-fixtures.py
 The generator requires ffmpeg only for **development fixtures**, not for users.
 Files under `fixtures/` and `dist/` are ignored by Git.
 
-Unit coverage: VFR stepping, fractional 30 fps boundaries, different-rate backward
-alignment, canceled seeks, replacement failures, resource release, mark lineage,
-input validation, per-class media load diagnostics and the WebMCP action contract.
+Unit coverage: VFR stepping, the fair forward/backward step planners (multi-track
+preference, skip prevention, gap rejection, end-of-stream), canceled seeks,
+replacement failures, resource release, mark lineage, input validation, per-class
+media load diagnostics and the WebMCP action contract.
 
 Manual browser regression using the generated files:
 
 1. Load A=`a.mp4` (30 fps) and B=`b.mp4` (24 fps). Confirm actual nonblank frames.
-2. Seek to 1,000,000 µs, step forward on A: A=1,033,333 µs, B=1,000,000 µs.
-   Step backward: both frames and session position return to 1,000,000 µs.
+2. Seek to 1,000,000 µs, step forward: the fair target is 1,041,667 µs so both
+   tracks step — A shows its 1,033,333 µs frame, B its 1,041,667 µs frame.
+   Step backward: both frames and the session position return to 1,000,000 µs.
 3. Play/pause; verify time advances and remains still after pausing.
 4. Draw a region, add a human note, add an agent note, export and compare frame anchors.
 5. Invalid seek/slot/note parameters must fail without adding marks or changing media.
@@ -142,3 +152,12 @@ reports each case distinctly (unrecognized container, container recognized but
 no readable video track, known-but-unsupported codec, codec unsupported by the
 browser) instead of `unknown` or a blanket "no video track"; `test/media.test.ts`
 locks these diagnostics per failure class.
+
+Fair-step follow-up: the greedy multi-track step planner was ported from
+`native/renderer/track/track_step_policy.cpp` on 2026-09-05. All 26 unit tests
+and the production build passed, including planner-level coverage of multi-track
+preference, intermediate-frame skip prevention, gap rejection, end-of-stream
+no-ops and predecessor validation, plus session-level two-track stepping. The
+WebMCP `step_review` tool dropped its `slot` input; stepping is now fair across
+tracks. Real-file browser verification of the new stepping (manual regression
+steps 2 and 7) has not been rerun in this round.

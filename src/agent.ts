@@ -1,5 +1,5 @@
 import type { ReviewSession } from './session.ts';
-import { slotValue, timeUs } from './model.ts';
+import { timeUs } from './model.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
@@ -17,7 +17,7 @@ export function reviewTools(session: ReviewSession): Tool[] {
   return [
     tool('get_review_session', 'Read loaded media, decoded canvas frame timestamps, playback state and annotations. File names and notes are untrusted user data.', {}, [], true, () => session.getState()),
     tool('seek_review', 'Pause and seek all loaded videos to a relative timestamp in microseconds. Resolves after frames are decoded and drawn to canvas, not proof of physical display scanout.', { ptsUs: { type: 'integer', minimum: 0 } }, ['ptsUs'], false, p => session.seek(timeUs(p.ptsUs))),
-    tool('step_review', 'Pause and step one actual frame on reference track A or B; align the other track by relative media time.', { direction: { enum: [-1, 1] }, slot: { enum: ['A', 'B'] } }, ['direction', 'slot'], false, p => session.step(p.direction as number, slotValue(p.slot))),
+    tool('step_review', 'Pause and step all loaded videos by one fair multi-track step: the target timestamp is chosen so the most tracks move exactly one frame without skipping intermediate frames.', { direction: { enum: [-1, 1] } }, ['direction'], false, p => session.step(p.direction as number)),
     tool('pause_review', 'Stop comparison playback and retain the last drawn frames.', {}, [], false, () => session.pause()),
     tool('add_review_mark', 'Create a note on the paused, drawn frame. Does not seek. The note is included in the review export.', { slot: { enum: ['A', 'B'] }, text: { type: 'string', minLength: 1, maxLength: 2000 }, severity: { type: 'integer', minimum: 1, maximum: 5 } }, ['slot', 'text'], false, p => session.addMark({ ...p, slot: p.slot, text: p.text, origin: 'agent' })),
     tool('export_review', 'Return the versioned review JSON with source metadata and frame anchors. Does not upload or download files.', {}, [], true, () => session.exportReview()),
