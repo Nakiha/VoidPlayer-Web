@@ -91,7 +91,7 @@ test('media endpoint serves full, ranged and suffix requests with correct semant
 });
 
 test('mediabunny streams a library item over HTTP range requests', async () => {
-  const root = path.resolve(new URL('../../resources/video', import.meta.url).pathname);
+  const root = path.resolve(new URL('../fixtures/video', import.meta.url).pathname);
   await withServer([root], async base => {
     const library = await (await fetch(`${base}/api/library`)).json();
     const entry = library.entries.find((e: { name: string }) => e.name === 'h264_9s_1920x1080.mp4');
