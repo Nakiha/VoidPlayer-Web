@@ -141,14 +141,19 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
     const end = await track.computeDuration();
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new MediaOpenError('container', '无法确定视频的有效时间范围。');
     const sink = new VideoSampleSink(track);
+    // Color metadata comes from the container (mediabunny), not from decoded
+    // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
+    const color = await track.getColorSpace().catch(() => null);
     const info: MediaInfo = {
       id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
+      ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),
     };
     // Frames carry their resource and kind; the presenter (src/presenter.ts)
     // decides how to paint them.
-    const wrap = (sample: VideoSample): DecodedFrame => ({
+    const wrap = (sample: VideoSample): DecodedFrame => {
+      return {
       kind: 'video-sample',
       width: sample.displayWidth,
       height: sample.displayHeight,
@@ -158,7 +163,8 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
       sourcePtsUs: Math.round(sample.timestamp * 1e6),
       durationUs: Math.round(sample.duration * 1e6),
       close: () => sample.close(),
-    });
+      };
+    };
     return {
       info,
       async frameAt(ptsUs) {

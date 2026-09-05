@@ -407,3 +407,24 @@ below noise, so the fallback stays on Canvas 2D. The WebCodecs path is
 unaffected and already presents GPU-side VideoFrames (`sample.draw`), zero
 copies. A WebGPU/HDR presentation path remains open and should be justified by
 a real HDR pipeline (10-bit sources, color metadata), not by upload speed.
+
+HDR phase 0+1 (2026-09-05), with a real-world sample
+(`fixtures/video/dolby_hlg_1080p30.mp4`: HEVC Main10, HLG/BT.2020, Dolby Vision
+profile 8.1):
+
+- Baseline behavior measured on both engines: an HLG VideoFrame drawn to a
+  plain canvas is presented display-relative — no tone mapping to a 203-nit SDR
+  reference. Both paths (WebKit WebCodecs, Chromium via the WASM fallback)
+  produce near-identical, noticeably brighter output than the desktop color
+  contract's SDR conversion. Treating "browser plays it" as "HDR is correct"
+  is wrong for review use; an explicit color policy (desktop contract vs
+  browser-native EDR) is a pending product decision.
+- Color metadata is now part of `MediaInfo.color` (primaries/transfer/matrix/
+  range) and flows into state, logs and exports. WebCodecs-path metadata comes
+  from the container via mediabunny's `track.getColorSpace()` — Safari's
+  decoded `VideoFrame.colorSpace` reports presentation-resolved values and is
+  NOT source truth (measured: an untagged file and the HLG sample both claimed
+  bt709/sRGB/full-range). WASM-path metadata comes from the n9.0.1 core.
+  Known dispute: the core reports full range for the Dolby sample while
+  ffprobe 8.1.2 reports tv — suspected DV-related upstream change in FFmpeg 9,
+  pending reconciliation.

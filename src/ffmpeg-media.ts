@@ -58,7 +58,16 @@ interface InitResult {
   codec: string;
   indexMs?: number;
   ioMode?: 'blob' | 'memfs';
+  colorPrimaries?: number;
+  colorTransfer?: number;
+  colorSpace?: number;
+  colorRange?: number;
 }
+
+// FFmpeg enum ints to WebCodecs-style names (subset we actually meet).
+const PRIMARIES: Record<number, string> = { 1: 'bt709', 9: 'bt2020', 12: 'display-p3' };
+const TRANSFER: Record<number, string> = { 1: 'bt709', 6: 'smpte170m', 13: 'iec61966-2-1', 16: 'pq', 18: 'hlg' };
+const MATRIX: Record<number, string> = { 0: 'rgb', 1: 'bt709', 5: 'bt470bg', 6: 'smpte170m', 9: 'bt2020-ncl' };
 
 // Player-side thread budget: fallback decoders share the host's cores, each
 // live fallback track getting an equal share of (cores − 2), capped by the
@@ -201,6 +210,12 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
     firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
+    color: {
+      primaries: PRIMARIES[init.colorPrimaries ?? -1] ?? null,
+      transfer: TRANSFER[init.colorTransfer ?? -1] ?? null,
+      matrix: MATRIX[init.colorSpace ?? -1] ?? null,
+      fullRange: init.colorRange == null ? null : init.colorRange === 1,
+    },
   };
 
   let disposed = false;

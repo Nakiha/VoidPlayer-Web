@@ -1,10 +1,18 @@
 export type Slot = 'A' | 'B';
 export type Region = { left: number; top: number; width: number; height: number };
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
+/** Stream color metadata; null fields mean the container did not tag them. */
+export type ColorInfo = {
+  primaries: string | null;
+  transfer: string | null;
+  matrix: string | null;
+  fullRange: boolean | null;
+};
 export type MediaInfo = {
   id: string; name: string; size: number; lastModified: number;
   coreVariant?: 'single-thread' | 'multi-thread';
   codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;
+  color?: ColorInfo;
 };
 export type Mark = {
   id: string; text: string; severity: number; origin: 'human' | 'agent';
