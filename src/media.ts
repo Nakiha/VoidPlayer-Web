@@ -1,6 +1,7 @@
 import { Input, BlobSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
+import { openFFmpegMedia } from './ffmpeg-media.ts';
 
 export interface DecodedFrame extends FrameInfo {
   draw(canvas: HTMLCanvasElement): void;
@@ -30,11 +31,21 @@ export async function inspectVideoTrack(input: Input) {
   const codec = await track.getCodecParameterString() ?? (await track.getCodec())!;
   return { track, codec, format: format.name };
 }
-export async function openMedia(file: File): Promise<MediaSource> {
+export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+  if (!(file instanceof File) || file.size === 0) throw new Error('请选择非空的视频文件。');
+  try {
+    return await openWebCodecsMedia(file);
+  } catch (nativeError) {
+    // Tracks mediabunny cannot demux or WebCodecs cannot decode (FFV1,
+    // MPEG-2 TS, codec gaps) fall back to the synchronous FFmpeg WASM path.
+    try { return await openFallback(file); }
+    catch { throw nativeError; }
+  }
+}
+async function openWebCodecsMedia(file: File): Promise<MediaSource> {
   if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     throw new Error('当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
   }
-  if (!(file instanceof File) || file.size === 0) throw new Error('请选择非空的视频文件。');
   const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
     const { track, codec, format } = await inspectVideoTrack(input);
@@ -45,7 +56,7 @@ export async function openMedia(file: File): Promise<MediaSource> {
     const sink = new VideoSampleSink(track);
     const info: MediaInfo = {
       id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
-      codec, width: track.displayWidth, height: track.displayHeight,
+      codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
     };
     const wrap = (sample: VideoSample): DecodedFrame => ({

@@ -13,7 +13,7 @@ function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
     draw() {}, close() { closed++; },
   });
   const source: MediaSource = {
-    info: { id: name, name, size: 10, lastModified: 0, codec: 'test', width: 10, height: 10, firstPtsUs: 300000, durationUs: end },
+    info: { id: name, name, size: 10, lastModified: 0, codec: 'test', decoder: 'webcodecs', width: 10, height: 10, firstPtsUs: 300000, durationUs: end },
     async frameAt(time) {
       const i = Math.max(0, starts.findLastIndex(t => t <= time));
       return frame(starts[i]);

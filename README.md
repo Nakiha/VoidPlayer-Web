@@ -30,6 +30,19 @@ features are omitted rather than presented as nonfunctional controls.
 
 - `src/media.ts`: Mediabunny `BlobSource` (default 8 MiB byte cache), demuxing,
   WebCodecs capability detection, actual decoded samples and explicit release.
+  Tracks mediabunny cannot demux or WebCodecs cannot decode fall back to
+  `src/ffmpeg-media.ts`: a synchronous, single-threaded Emscripten FFmpeg core
+  (`@ffmpeg/core`, FFmpeg 5.1.4, GPL-2.0-or-later) fetched lazily on first need.
+  The fallback builds a frame index with a one-time full-decode `showinfo`
+  pass, then extracts frames on demand as RGBA rows through
+  `select=gte(pts,N)` under `-copyts`, verifying every produced PTS against the
+  index. Input seeking is trusted only for all-intra tracks (exact landing);
+  inter-frame tracks decode from the start on each window refill. A ≤64 MiB
+  lookahead window makes sequential stepping amortized-linear. Fallback limits:
+  the whole file is copied into WASM memory (512 MiB cap), output is 8-bit RGBA
+  via swscale (approximate color, no 10-bit/HDR fidelity), decode blocks the
+  main thread, and the FFmpeg 5.1 core has no H.266/VVC decoder. Fallback
+  tracks show `WASM` next to the codec.
 - `src/session.ts`: a shared session for UI and agents; newest-request-wins
   mutations, synchronized seek, actual frame stepping, annotations and exports.
 - `src/main.ts` / `src/style.css`: DOM controls, canvas viewports and region picking.
@@ -60,9 +73,10 @@ prototype, not a guaranteed real-time multi-track scheduler. Decoding currently
 runs through sparse sample retrieval on the main JS thread; sequential buffering
 and workers are follow-up performance work.
 
-Files are not uploaded or transcoded. There is no universal codec fallback.
-Browser-managed color, HDR, audio, 4K performance, large-file memory behavior,
-codec coverage and cross-browser equivalence are not certified by this prototype.
+Files are not uploaded or transcoded for upload; fallback tracks are decoded
+locally by the WASM core. Browser-managed color, HDR, audio, 4K performance,
+large-file memory behavior, codec coverage and cross-browser equivalence are
+not certified by this prototype.
 The renderer requests a default Canvas 2D context; it does not configure an HDR
 output surface or implement the native HDR/color pipeline. Decoding an HDR input
 successfully must not be interpreted as validated HDR display output.
@@ -102,7 +116,10 @@ Files under `fixtures/` and `dist/` are ignored by Git.
 Unit coverage: VFR stepping, the fair forward/backward step planners (multi-track
 preference, skip prevention, gap rejection, end-of-stream), canceled seeks,
 replacement failures, resource release, mark lineage, input validation, per-class
-media load diagnostics and the WebMCP action contract.
+media load diagnostics, the WebMCP action contract, and the FFmpeg WASM fallback
+(index parsing, extraction argument building, index/extraction matching, plus
+real-WASM decoding of the FFV1, 10-bit FFV1 and MPEG-2 TS samples and the
+H.266 rejection, run in Node against the same `@ffmpeg/core` build).
 
 Manual browser regression using the generated files:
 
@@ -151,7 +168,10 @@ stream entirely. Whether these reach the decoder is browser-dependent; HEVC and
 reports each case distinctly (unrecognized container, container recognized but
 no readable video track, known-but-unsupported codec, codec unsupported by the
 browser) instead of `unknown` or a blanket "no video track"; `test/media.test.ts`
-locks these diagnostics per failure class.
+locks these diagnostics per failure class. The 4 FFV1 samples and the MPEG-2 TS
+now load through the FFmpeg WASM fallback (see below); H.266/VVC remains
+unsupported because the FFmpeg 5.1.4 core has no VVC decoder — a newer WASM
+FFmpeg build (≥7.1) or a vvdec port is the path forward.
 
 Fair-step follow-up: the greedy multi-track step planner was ported from
 `native/renderer/track/track_step_policy.cpp` on 2026-09-05. All 26 unit tests
@@ -161,3 +181,14 @@ no-ops and predecessor validation, plus session-level two-track stepping. The
 WebMCP `step_review` tool dropped its `slot` input; stepping is now fair across
 tracks. Real-file browser verification of the new stepping (manual regression
 steps 2 and 7) has not been rerun in this round.
+
+FFmpeg WASM fallback follow-up (2026-09-05): tracks mediabunny/WebCodecs cannot
+handle now fall back to a lazily loaded `@ffmpeg/core` (FFmpeg 5.1.4). Verified
+in Node against the same core build the browser loads: all four FFV1 samples and
+the MPEG-2 TS index and decode frame-exactly (real PTS, dimensions and pixel
+counts asserted), 10-bit FFV1 converts to RGBA, and the H.266 sample still fails
+closed with the accurate load error. All 33 tests and the production build
+passed; the wasm stays a lazily fetched asset outside the main bundle. Browser
+rendering of a fallback track (putImageData path), main-thread decode latency on
+inter-frame codecs, and playback smoothness under the fallback remain unverified
+in a real browser.
