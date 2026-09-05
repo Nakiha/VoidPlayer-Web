@@ -2,3 +2,4 @@ node_modules/
 dist/
 fixtures/
 *.tsbuildinfo
+public/vendor/voidplayer-core/

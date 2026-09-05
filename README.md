@@ -31,18 +31,19 @@ features are omitted rather than presented as nonfunctional controls.
 - `src/media.ts`: Mediabunny `BlobSource` (default 8 MiB byte cache), demuxing,
   WebCodecs capability detection, actual decoded samples and explicit release.
   Tracks mediabunny cannot demux or WebCodecs cannot decode fall back to
-  `src/ffmpeg-media.ts`: a synchronous, single-threaded Emscripten FFmpeg core
-  (`@ffmpeg/core`, FFmpeg 5.1.4, GPL-2.0-or-later) fetched lazily on first need.
-  The fallback builds a frame index with a one-time full-decode `showinfo`
-  pass, then extracts frames on demand as RGBA rows through
-  `select=gte(pts,N)` under `-copyts`, verifying every produced PTS against the
-  index. Input seeking is trusted only for all-intra tracks (exact landing);
-  inter-frame tracks decode from the start on each window refill. A ≤64 MiB
-  lookahead window makes sequential stepping amortized-linear. Fallback limits:
-  the whole file is copied into WASM memory (512 MiB cap), output is 8-bit RGBA
-  via swscale (approximate color, no 10-bit/HDR fidelity), decode blocks the
-  main thread, and the FFmpeg 5.1 core has no H.266/VVC decoder. Fallback
-  tracks show `WASM` next to the codec.
+  `src/ffmpeg-media.ts`: the self-built trimmed FFmpeg WASM core (`n9.0.1`,
+  ~2.6 MB, from the `VoidPlayer-FFmpeg-Build` repo's `wasm` branch; synced into
+  `public/vendor/voidplayer-core/` by `scripts/sync-wasm-core.sh`, fetched
+  lazily on first need). The core links libavcodec/libavformat/libswscale
+  directly (no CLI) and exposes a `vp_*` API: a demux-only frame index (packets
+  carry pts/duration/keyframe flags), then exact-PTS extraction with
+  decoder-state continuation — sequential stepping decodes each frame once,
+  backward/random steps pay at most a GOP re-decode, and a seek that overshoots
+  retries from the start. Output is RGBA via swscale with the tagged
+  colorspace/range honored (BT.601/709 guess for untagged). Fallback limits:
+  the whole file is copied into WASM memory (512 MiB cap), output is 8-bit, no
+  10-bit/HDR fidelity, decode blocks the main thread, and no audio is decoded.
+  Fallback tracks show `WASM` next to the codec.
 - `src/session.ts`: a shared session for UI and agents; newest-request-wins
   mutations, synchronized seek, actual frame stepping, annotations and exports.
 - `src/main.ts` / `src/style.css`: DOM controls, canvas viewports and region picking.
@@ -110,6 +111,11 @@ npm run build
 python3 test/generate-fixtures.py
 ```
 
+The WASM integration tests need the vendored decoder core (gitignored);
+fetch it with `bash scripts/sync-wasm-core.sh` after building the
+`VoidPlayer-FFmpeg-Build` repo's `wasm` branch, or set `WASM_CORE_DIR` to an
+existing `voidplayer-ffmpeg-wasm-*` dist directory.
+
 The generator requires ffmpeg only for **development fixtures**, not for users.
 Files under `fixtures/` and `dist/` are ignored by Git.
 
@@ -117,9 +123,8 @@ Unit coverage: VFR stepping, the fair forward/backward step planners (multi-trac
 preference, skip prevention, gap rejection, end-of-stream), canceled seeks,
 replacement failures, resource release, mark lineage, input validation, per-class
 media load diagnostics, the WebMCP action contract, and the FFmpeg WASM fallback
-(index parsing, extraction argument building, index/extraction matching, plus
-real-WASM decoding of the FFV1, 10-bit FFV1 and MPEG-2 TS samples and the
-H.266 rejection, run in Node against the same `@ffmpeg/core` build).
+(index navigation, plus real-WASM decoding of the FFV1, 10-bit FFV1, MPEG-2 TS
+and H.266/VVC samples in Node against the vendored n9.0.1 core).
 
 Manual browser regression using the generated files:
 
@@ -168,10 +173,9 @@ stream entirely. Whether these reach the decoder is browser-dependent; HEVC and
 reports each case distinctly (unrecognized container, container recognized but
 no readable video track, known-but-unsupported codec, codec unsupported by the
 browser) instead of `unknown` or a blanket "no video track"; `test/media.test.ts`
-locks these diagnostics per failure class. The 4 FFV1 samples and the MPEG-2 TS
-now load through the FFmpeg WASM fallback (see below); H.266/VVC remains
-unsupported because the FFmpeg 5.1.4 core has no VVC decoder — a newer WASM
-FFmpeg build (≥7.1) or a vvdec port is the path forward.
+locks these diagnostics per failure class. The 4 FFV1 samples, the MPEG-2 TS and
+the H.266/VVC sample now load through the self-built WASM fallback (see below),
+so all 14 samples open; H.266 requires the n9.0.1 core's native VVC decoder.
 
 Fair-step follow-up: the greedy multi-track step planner was ported from
 `native/renderer/track/track_step_policy.cpp` on 2026-09-05. All 26 unit tests
@@ -192,3 +196,13 @@ passed; the wasm stays a lazily fetched asset outside the main bundle. Browser
 rendering of a fallback track (putImageData path), main-thread decode latency on
 inter-frame codecs, and playback smoothness under the fallback remain unverified
 in a real browser.
+
+Self-built core follow-up (2026-09-05): the fallback switched from the stock
+`@ffmpeg/core` (FFmpeg 5.1.4, 32 MB) to the trimmed self-built `n9.0.1` core
+(~2.6 MB) from `VoidPlayer-FFmpeg-Build` branch `wasm`, and from CLI emulation
+to the direct `vp_*` API. The frame index is demux-only (VVC indexing dropped
+from ~21 s to milliseconds) and extraction keeps decoder state for sequential
+steps. Measured in Node: MPEG-2 TS stepping ~2.6 ms/frame, H.266 ~34 ms/frame,
+mid-file random seek ~0.4 s (TS) / ~2.2 s (VVC). All 14 `resources/video/`
+samples now open, including H.266/VVC; 31 tests and the production build pass.
+Fallback rendering in a real browser (putImageData path) remains unverified.
