@@ -104,3 +104,36 @@ test('mediabunny streams a library item over HTTP range requests', async () => {
     } finally { input.dispose(); }
   });
 });
+
+test('log upload accepts shaped documents and rejects garbage', async () => {
+  await withFixture(async root => {
+    const logsDir = path.join(root, 'logs');
+    const server = createMediaServer({ roots: [root], logsDir, onLog: () => {} });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const base = `http://127.0.0.1:${port}`;
+      const doc = { schema: 'voidplayer-web-log', version: 1, sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [] };
+      const ok = await fetch(`${base}/api/logs`, { method: 'POST', body: JSON.stringify(doc) });
+      assert.equal(ok.status, 201);
+      const body = await ok.json();
+      assert.match(body.name, /^voidplayer-log-.*-66c47430\.json$/);
+      const written = JSON.parse(await fs.readFile(path.join(logsDir, body.name), 'utf8'));
+      assert.equal(written.sessionId, doc.sessionId);
+
+      const bad = await fetch(`${base}/api/logs`, { method: 'POST', body: '{"schema":"other"}' });
+      assert.equal(bad.status, 400);
+      const notJson = await fetch(`${base}/api/logs`, { method: 'POST', body: 'nope' });
+      assert.equal(notJson.status, 400);
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
+test('log upload stays disabled without a logs directory', async () => {
+  await withFixture(async root => {
+    await withServer([root], async base => {
+      const res = await fetch(`${base}/api/logs`, { method: 'POST', body: '{}' });
+      assert.equal(res.status, 404);
+    });
+  });
+});

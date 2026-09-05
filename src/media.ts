@@ -14,6 +14,8 @@ export interface MediaSource {
   info: MediaInfo;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
+  /** Sequential presentation-order frames starting at ptsUs, for playback. */
+  framesFrom(ptsUs: number): AsyncGenerator<DecodedFrame>;
   dispose(): void;
 }
 export async function inspectVideoTrack(input: Input) {
@@ -140,6 +142,16 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
           await iterator.return(undefined);
         }
         return frames;
+      },
+      async *framesFrom(ptsUs) {
+        // Sequential iterator: the sink pre-decodes ahead, so playback no
+        // longer pays a keyframe seek per frame like sparse getSample does.
+        const iterator = sink.samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        try {
+          for await (const sample of iterator) yield wrap(sample);
+        } finally {
+          await iterator.return(undefined);
+        }
       },
       dispose: () => input.dispose(),
     };

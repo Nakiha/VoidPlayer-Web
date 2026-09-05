@@ -241,28 +241,64 @@ export class ReviewSession {
     const base = this.positionUs;
     const start = performance.now();
     this.emit();
-    const tick = async () => {
-      if (revision !== this.revision || !this.playing) return;
-      const target = Math.min(this.durationUs - 1, base + Math.round((performance.now() - start) * 1000));
-      const pending = this.drawAt(target, () => revision === this.revision && this.playing);
-      this.queue = pending;
-      try {
-        await pending;
-        if (revision !== this.revision || !this.playing) return;
-        if (target >= this.durationUs - 1) this.playing = false;
-        this.emit();
-        if (this.playing) this.timer = setTimeout(() => void tick(), 16);
-        else scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });
-      } catch (e) {
-        if (revision !== this.revision) return;
-        this.playing = false;
-        this.error = e instanceof Error ? e.message : String(e);
-        scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
-        this.emit();
-      }
-    };
-    this.timer = setTimeout(() => void tick(), 0);
+    void this.playbackLoop(revision, base, start);
     return this.getState();
+  }
+  // Playback pulls sequential frames from each track's own stream (the
+  // WebCodecs sink pre-decodes ahead; the WASM core continues its decoder
+  // state), so each frame is decoded once in presentation order. Presentation
+  // follows the wall clock: late frames are dropped in favor of the newest
+  // decoded frame at or before the target time.
+  private async playbackLoop(revision: number, base: number, start: number) {
+    const scoped = contextLog();
+    const active = () => this.playing && revision === this.revision;
+    const readers = new Map<Slot, { gen: AsyncGenerator<DecodedFrame>; next: DecodedFrame | null }>();
+    try {
+      for (const [slot, t] of this.tracks) {
+        if (!t.frame) continue;
+        const gen = t.source.framesFrom(t.frame.ptsUs);
+        const first = await gen.next();
+        readers.set(slot, { gen, next: first.done ? null : first.value });
+      }
+      while (active()) {
+        const target = Math.min(this.durationUs - 1, base + Math.round((performance.now() - start) * 1000));
+        for (const [slot, t] of this.tracks) {
+          const reader = readers.get(slot);
+          if (!reader) continue;
+          let frame: DecodedFrame | null = null;
+          while (reader.next && reader.next.ptsUs <= target) {
+            frame?.close();
+            frame = reader.next;
+            const pulled = await reader.gen.next();
+            reader.next = pulled.done ? null : pulled.value;
+          }
+          if (frame) {
+            this.draw(slot, frame);
+            t.frame = this.frameInfo(frame);
+            frame.close();
+          }
+        }
+        this.positionUs = target;
+        this.emit();
+        if (target >= this.durationUs - 1) {
+          this.playing = false;
+          scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });
+        }
+        if (active()) await new Promise(resolve => { this.timer = setTimeout(resolve, 16); });
+      }
+    } catch (error) {
+      if (active()) {
+        this.playing = false;
+        this.error = error instanceof Error ? error.message : String(error);
+        scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
+      }
+    } finally {
+      for (const reader of readers.values()) {
+        reader.next?.close();
+        await reader.gen.return(undefined).catch(() => {});
+      }
+      if (revision === this.revision) this.emit();
+    }
   }
   addMark(input: { slot: unknown; text: unknown; severity?: unknown; origin?: unknown; region?: unknown }) {
     if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再标注。');

@@ -19,6 +19,9 @@ function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
       return frame(starts[i]);
     },
     async framesAfter(pts, count) { return starts.filter(t => t > pts).slice(0, count).map(frame); },
+    async *framesFrom(pts) {
+      for (let i = Math.max(0, starts.findLastIndex(t => t <= pts)); i < starts.length; i++) yield frame(starts[i]);
+    },
     dispose() { disposed++; },
   };
   return { source, get closed() { return closed; }, get disposed() { return disposed; } };
@@ -200,5 +203,36 @@ test('backward step picks the target that steps the most tracks and keeps the re
   state = session.getState();
   assert.equal(state.positionUs, 60000);
   assert.deepEqual(state.tracks.map(t => t.frame?.ptsUs), [40000, 60000]);
+  await session.dispose();
+});
+
+test('playback draws sequential frames in order and closes every one', async () => {
+  const drawn: number[] = [];
+  const session = new ReviewSession((_, frame) => drawn.push(frame.ptsUs));
+  const m = media('A', [0, 40000, 80000], 120000);
+  await session.load('A', async () => m.source);
+  await session.play();
+  for (let i = 0; i < 100 && session.getState().playing; i++) await new Promise(r => setTimeout(r, 25));
+  const state = session.getState();
+  assert.equal(state.playing, false);
+  assert.equal(state.positionUs, 119999);
+  // Consecutive duplicates are the current frame re-anchored at playback start.
+  assert.deepEqual(drawn.filter((v, i) => i === 0 || v !== drawn[i - 1]), [0, 40000, 80000]);
+  assert.ok(m.closed >= 4, 'every decoded frame is closed');
+  await session.dispose();
+});
+
+test('pause during playback stops drawing and keeps the last frame', async () => {
+  const drawn: number[] = [];
+  const session = new ReviewSession((_, frame) => drawn.push(frame.ptsUs));
+  const m = media('A', [0, 40000, 80000, 120000, 160000], 400000);
+  await session.load('A', async () => m.source);
+  await session.play();
+  await new Promise(r => setTimeout(r, 70));
+  session.pause();
+  const count = drawn.length;
+  await new Promise(r => setTimeout(r, 70));
+  assert.equal(drawn.length, count);
+  assert.equal(session.getState().playing, false);
   await session.dispose();
 });

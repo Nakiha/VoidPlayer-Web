@@ -12,6 +12,8 @@ import { resolveMediaPath, scanLibrary } from './library.ts';
 export interface ServerOptions {
   roots: string[];
   staticDir?: string;
+  /** Directory that receives user-submitted logs (POST /api/logs). */
+  logsDir?: string;
   onLog?: (entry: Record<string, unknown>) => void;
 }
 
@@ -80,6 +82,29 @@ export function createMediaServer(options: ServerOptions): Server {
     const finish = () => logLine({ t: new Date().toISOString(), method: req.method, url: req.url, status, ms: Math.round(performance.now() - started) });
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      // The single write endpoint: users explicitly submit a problem log from
+      // the log panel. Bounded body, JSON shape-checked, written to logsDir.
+      if (url.pathname === '/api/logs' && req.method === 'POST') {
+        if (!options.logsDir) { status = 404; sendJson(res, 404, { error: 'log upload not enabled' }); return; }
+        const chunks: Buffer[] = [];
+        let size = 0;
+        for await (const chunk of req) {
+          size += (chunk as Buffer).length;
+          if (size > 10 * 1024 * 1024) { status = 413; sendJson(res, 413, { error: '日志过大' }); req.destroy(); return; }
+          chunks.push(chunk as Buffer);
+        }
+        let doc: { schema?: unknown; sessionId?: unknown };
+        try { doc = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
+        catch { status = 400; sendJson(res, 400, { error: '不是有效的 JSON' }); return; }
+        if (doc?.schema !== 'voidplayer-web-log' || typeof doc.sessionId !== 'string' || !/^[0-9a-zA-Z-]{1,100}$/.test(doc.sessionId)) {
+          status = 400; sendJson(res, 400, { error: '不是有效的日志文档' }); return;
+        }
+        await fs.mkdir(options.logsDir, { recursive: true });
+        const name = `voidplayer-log-${new Date().toISOString().replace(/[:.]/g, '-')}-${doc.sessionId.slice(0, 8)}.json`;
+        await fs.writeFile(path.join(options.logsDir, name), JSON.stringify(doc));
+        status = 201; sendJson(res, 201, { ok: true, name });
+        return;
+      }
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         status = 405; sendJson(res, 405, { error: 'read only' }); return;
       }

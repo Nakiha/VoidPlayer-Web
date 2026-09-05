@@ -134,6 +134,11 @@ export async function openFFmpegMedia(file: File, loadCore: () => Promise<FFmpeg
       for (let i = start; i < Math.min(start + count, ticks.length); i++) frames.push(extract(i));
       return frames;
     },
+    async *framesFrom(ptsUs) {
+      // Sequential extraction reuses decoder state, so playback pays one
+      // forward decode per frame (a GOP re-decode only after seeks).
+      for (let idx = floorIndex(relUs, ptsUs); idx < ticks.length; idx++) yield extract(idx);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

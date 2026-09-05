@@ -2,7 +2,7 @@ import { exportLog, getLogSessions, log, sessionLog, traceOperation } from './lo
 
 export function installLogPanel(openButton: HTMLElement) {
   const dialog = document.createElement('dialog'); dialog.className = 'log-panel';
-  dialog.innerHTML = `<h2>问题日志</h2><p>仅保存在此浏览器，最近 3 次会话、最长 7 天。记录文件名与操作，不包含视频内容或备注正文。</p><label>会话 <select aria-label="日志会话"></select></label><p class="log-storage" role="status"></p><p class="log-result" role="status"></p><div class="log-actions"><button data-action="refresh">更新</button><button data-action="download">下载日志</button><button data-action="copy">复制日志</button><button data-action="close">关闭</button></div><details><summary>查看内容</summary><textarea aria-label="日志内容" readonly rows="10"></textarea></details>`;
+  dialog.innerHTML = `<h2>问题日志</h2><p>仅保存在此浏览器，最近 3 次会话、最长 7 天。记录文件名与操作，不包含视频内容或备注正文。「上传到服务器」会发送给当前页面的服务端，仅在你主动点击时发生。</p><label>会话 <select aria-label="日志会话"></select></label><p class="log-storage" role="status"></p><p class="log-result" role="status"></p><div class="log-actions"><button data-action="refresh">更新</button><button data-action="download">下载日志</button><button data-action="copy">复制日志</button><button data-action="upload">上传到服务器</button><button data-action="close">关闭</button></div><details><summary>查看内容</summary><textarea aria-label="日志内容" readonly rows="10"></textarea></details>`;
   document.body.append(dialog);
   const select = dialog.querySelector('select')!;
   const textarea = dialog.querySelector('textarea')!;
@@ -53,6 +53,16 @@ export function installLogPanel(openButton: HTMLElement) {
       log.warn('ui', '剪贴板复制失败', { error });
       result.textContent = '浏览器未允许自动复制，请复制下方已选中的内容。';
     }
+  }));
+  dialog.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
+    await snapshot();
+    const response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: textarea.value });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '。服务端未开启日志接收或未连接。'}`);
+    }
+    const body = await response.json();
+    result.textContent = `已上传到服务器：${body.name}`;
   }));
   dialog.querySelector('[data-action="close"]')!.addEventListener('click', () => dialog.close());
   dialog.addEventListener('close', () => { ++generation; log.info('ui', '关闭日志窗口'); });

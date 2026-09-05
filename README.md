@@ -73,10 +73,12 @@ not ported.
 Seek resolves after every loaded track decodes and draws its selected frame to
 canvas. `frameEvidence: decoded-and-drawn-to-canvas` does **not** certify OS display
 scanout. The requested timeline position may differ from a frame's start timestamp.
-Playback follows elapsed wall time and may skip frames; it is a correctness
-prototype, not a guaranteed real-time multi-track scheduler. Decoding currently
-runs through sparse sample retrieval on the main JS thread; sequential buffering
-and workers are follow-up performance work.
+Playback pulls sequential presentation-order frames from each track's own stream
+(`MediaSource.framesFrom`: mediabunny's pre-decoding sample iterator, or the WASM
+core's decoder-state continuation), so each frame is decoded once. Presentation
+follows the wall clock and drops late frames in favor of the newest decoded one;
+it is still not a guaranteed real-time multi-track scheduler. Decode runs on the
+main JS thread; a worker-hosted decoder is follow-up performance work.
 
 Files are not uploaded or transcoded for upload; fallback tracks are decoded
 locally by the WASM core. Browser-managed color, HDR, audio, 4K performance,
@@ -260,11 +262,14 @@ and Agent-readable historical logs were verified independently.
 ## Optional media-library service
 
 `browser/server/` is a small zero-dependency Node service (Node 22+) exposing
-whitelisted host folders over a narrow read-only API: `GET /api/library` lists
+whitelisted host folders over a narrow API: `GET /api/library` lists
 media files, `GET /api/media/<id>` streams bytes with HTTP Range support, and
-the built frontend in `dist/` is served when present. It never writes, never
-transcodes, binds localhost by default, and resolves media ids back through the
-whitelist with realpath checks.
+the built frontend in `dist/` is served when present. The single write
+endpoint is `POST /api/logs`: a problem log is stored under `logs/` only when
+the user explicitly clicks "上传到服务器" in the log panel (disable with
+`--no-logs`, relocate with `--logs-dir`). It never transcodes, binds localhost
+by default, and resolves media ids back through the whitelist with realpath
+checks.
 
 ```sh
 npm run build
@@ -284,3 +289,13 @@ Service coverage: library scanning (hidden/non-media skipped, depth and count
 caps), id resolution refusing malformed/traversal ids, full/ranged/suffix/416
 responses, HEAD, read-only method enforcement, and a real end-to-end range
 stream of the 19 MB H.264 sample demuxed by mediabunny off the live server.
+
+Playback pipeline follow-up (2026-09-05): playback no longer decodes frames by
+sparse per-tick random access. Each track streams presentation-order frames
+(`framesFrom`), the wall clock picks the newest decoded frame and drops the
+rest; sequential decode is reused end to end (WASM continuation needs no GOP
+re-decode per step). The log panel gained an explicit "上传到服务器" action
+backed by `POST /api/logs` (off when the service runs with `--no-logs`), and
+the top-bar review export is now labeled 导出评审 to keep log actions inside
+the log panel. 53 tests and the production build pass; playback smoothness of
+the new pipeline still needs a real-browser pass.
