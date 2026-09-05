@@ -256,3 +256,31 @@ metadata. Download did not produce a browser download event. Clipboard writing
 reported success, but the automation clipboard readback was empty; neither OS
 file delivery nor clipboard contents are claimed as verified. The visible JSON
 and Agent-readable historical logs were verified independently.
+
+## Optional media-library service
+
+`browser/server/` is a small zero-dependency Node service (Node 22+) exposing
+whitelisted host folders over a narrow read-only API: `GET /api/library` lists
+media files, `GET /api/media/<id>` streams bytes with HTTP Range support, and
+the built frontend in `dist/` is served when present. It never writes, never
+transcodes, binds localhost by default, and resolves media ids back through the
+whitelist with realpath checks.
+
+```sh
+npm run build
+npm run serve -- --folder /absolute/path/to/videos [--folder ...] [--port 5180]
+# then open http://127.0.0.1:5180/
+```
+
+During `npm run dev`, vite proxies `/api` to 127.0.0.1:5180, so run the service
+alongside the dev server. The app works fully without the service; the library
+button then reports that no service is connected. Library items play through
+mediabunny's `UrlSource` with range requests (no whole-file download) on the
+WebCodecs path; the WASM fallback still fetches the whole file into memory —
+streaming AVIO for the fallback is follow-up work. The Agent surface gains
+`list_library` and `load_library_item`.
+
+Service coverage: library scanning (hidden/non-media skipped, depth and count
+caps), id resolution refusing malformed/traversal ids, full/ranged/suffix/416
+responses, HEAD, read-only method enforcement, and a real end-to-end range
+stream of the 19 MB H.264 sample demuxed by mediabunny off the live server.

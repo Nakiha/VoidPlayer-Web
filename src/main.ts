@@ -8,6 +8,8 @@ import { bindFileDrop } from './file-drop.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
+import { installLibraryPanel } from './library-panel.ts';
+import { openLibraryItem } from './library.ts';
 
 const stopLogging = startBrowserLogging();
 
@@ -25,7 +27,7 @@ const icon = (name: 'sidebar' | 'open' | 'export' | 'play' | 'pause' | 'previous
   return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 };
 $('app').innerHTML = `
-<header class="topbar"><button id="toggle-marks" aria-label="显示或隐藏标注面板" aria-expanded="false" title="标注面板">${icon('sidebar')}</button><span class="mode">并排</span><span class="toolbar-spacer"></span><button id="open" aria-label="打开视频">${icon('open')}<span>打开</span></button><button id="export" disabled>${icon('export')}<span>导出</span></button><button id="export-log" title="导出会话日志（问题反馈用）">${icon('export')}<span>日志</span></button><button id="help-open" aria-label="实验范围与快捷键" title="实验范围与快捷键">?</button></header>
+<header class="topbar"><button id="toggle-marks" aria-label="显示或隐藏标注面板" aria-expanded="false" title="标注面板">${icon('sidebar')}</button><span class="mode">并排</span><span class="toolbar-spacer"></span><button id="open" aria-label="打开视频">${icon('open')}<span>打开</span></button><button id="library-open" title="服务器媒体库"><span>媒体库</span></button><button id="export" disabled>${icon('export')}<span>导出</span></button><button id="export-log" title="导出会话日志（问题反馈用）">${icon('export')}<span>日志</span></button><button id="help-open" aria-label="实验范围与快捷键" title="实验范围与快捷键">?</button></header>
 <main>
   <div id="notice" role="alert" hidden></div>
   <div class="workspace panel-hidden">
@@ -45,6 +47,8 @@ $('app').innerHTML = `
 const canvases = { A: $<HTMLCanvasElement>('canvas-A'), B: $<HTMLCanvasElement>('canvas-B') };
 const session = new ReviewSession((slot, frame) => frame.draw(canvases[slot]));
 const removeLogPanel = installLogPanel($('export-log'));
+installLibraryPanel($('library-open'), (entry, slot) =>
+  void act(() => session.load(slot, () => openLibraryItem(entry)), 'ui.library-load', { id: entry.id, name: entry.name, slot }));
 let inputTrigger = 'pointer';
 let draft: { slot: Slot; region: Region } | null = null;
 let lastFrames = '';

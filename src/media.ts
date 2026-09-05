@@ -1,4 +1,4 @@
-import { Input, BlobSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
+import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
 import { openFFmpegMedia } from './ffmpeg-media.ts';
@@ -34,11 +34,13 @@ export async function inspectVideoTrack(input: Input) {
   const codec = await track.getCodecParameterString() ?? (await track.getCodec())!;
   return { track, codec, format: format.name };
 }
+export interface MediaMeta { name: string; size: number; lastModified: number; }
+
 export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
   const log = contextLog();
   if (!(file instanceof File) || file.size === 0) throw new Error('请选择非空的视频文件。');
   try {
-    const source = await openWebCodecsMedia(file);
+    const source = await openWebCodecsInput(new Input({ source: new BlobSource(file), formats: ALL_FORMATS }), file);
     log.info('media', '使用 WebCodecs 解码路径', { name: file.name, codec: source.info.codec });
     return source;
   } catch (nativeError) {
@@ -55,11 +57,37 @@ export async function openMedia(file: File, openFallback: (file: File) => Promis
     }
   }
 }
-async function openWebCodecsMedia(file: File): Promise<MediaSource> {
+
+// Library items are read over HTTP range requests; mediabunny's UrlSource
+// streams them, so large files are never downloaded whole on the WebCodecs
+// path. The WASM fallback still reads the full file into memory (streaming
+// AVIO is follow-up work).
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+  const log = contextLog();
+  try {
+    const source = await openWebCodecsInput(new Input({ source: new UrlSource(url), formats: ALL_FORMATS }), meta);
+    log.info('media', '使用 WebCodecs 解码路径（网络媒体库）', { name: meta.name, codec: source.info.codec });
+    return source;
+  } catch (nativeError) {
+    log.info('media', 'WebCodecs 路径不可用，尝试 WASM 回退', { name: meta.name, reason: errorText(nativeError) });
+    const response = await fetch(url);
+    if (!response.ok) throw nativeError;
+    const file = new File([await response.arrayBuffer()], meta.name, { lastModified: meta.lastModified });
+    try {
+      const source = await openFallback(file);
+      log.info('media', 'WASM 回退解码已启用', { name: meta.name, codec: source.info.codec });
+      return source;
+    } catch (fallbackError) {
+      log.warn('media', 'WASM 回退也不支持', { name: meta.name, error: errorText(fallbackError) });
+      throw nativeError;
+    }
+  }
+}
+
+async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaSource> {
   if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     throw new Error('当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
   }
-  const input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS });
   try {
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new Error(`已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
@@ -68,7 +96,7 @@ async function openWebCodecsMedia(file: File): Promise<MediaSource> {
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new Error('无法确定视频的有效时间范围。');
     const sink = new VideoSampleSink(track);
     const info: MediaInfo = {
-      id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
+      id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
     };
