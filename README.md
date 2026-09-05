@@ -399,3 +399,9 @@ and a custom AVIO reads it in 256 KiB chunks via `FileReaderSync`
 only to environments without FileReaderSync (Node tests buffer once). Remote
 (library) fallback files still download whole before decoding — ranged reads
 need an async-capable AVIO bridge, which remains follow-up work.
+
+Renderer measurement (2026-09-05): 4K frame presentation costs 2.6 ms with
+`putImageData` vs 2.2 ms with a WebGL2 texture upload in WebKit (1.0 vs 1.8 ms
+in Chromium) — below noise for a migration, so the presenter stays on Canvas
+2D. A WebGPU/HDR presentation path remains open and should be justified by a
+real HDR pipeline (10-bit sources, color metadata), not by upload speed.
