@@ -1,7 +1,8 @@
 # VoidPlayer browser experiment
 
 Standalone, local-file video review prototype on `codex/web-version`.
-It does not build or call Flutter, native C++, a local media service, or WASM.
+It runs without Flutter or a local media service; unsupported browser codecs use
+the bundled FFmpeg WASM decoder in the page.
 The web bundle can be served as static files over HTTPS; localhost is for development.
 
 ## Run
@@ -97,7 +98,8 @@ an agent cannot load arbitrary local paths through the page.
 
 When the browser provides `document.modelContext` or `navigator.modelContext`,
 these tools are registered: `get_review_session`, `seek_review`, `step_review`,
-`pause_review`, `add_review_mark`, `export_review`. Inputs are validated at execution;
+`pause_review`, `add_review_mark`, `export_review`, `get_review_logs`, and
+`list_review_log_sessions`. Inputs are validated at execution;
 filenames and note text are untrusted data. Standard DOM controls remain usable
 when WebMCP is unavailable. Export tools return JSON without starting a download;
 the visible Export button downloads the same document. `step_review` takes only
@@ -206,3 +208,48 @@ steps. Measured in Node: MPEG-2 TS stepping ~2.6 ms/frame, H.266 ~34 ms/frame,
 mid-file random seek ~0.4 s (TS) / ~2.2 s (VVC). All 14 `resources/video/`
 samples now open, including H.266/VVC; 31 tests and the production build pass.
 Fallback rendering in a real browser (putImageData path) remains unverified.
+
+
+## Diagnostic logging
+
+The toolbar's **日志** button opens the current and retained diagnostic sessions.
+Select a session, then download its JSON or copy it; **查看内容** also exposes the
+full text for manual selection when the host browser blocks downloads or clipboard
+access. Export records a download request, not proof of a file being written.
+Nothing is uploaded automatically.
+
+- Structured events carry a monotonic sequence and relative time within a UUID
+  session, plus its start time, browser capabilities and build revision/timestamp.
+- UI/API/Agent requests get operation IDs, parent IDs, source, duration and a
+  completed/failed/cancelled outcome. Session transitions and media decoder
+  selection/fallback reasons use the same journal. File selection, drops,
+  cancelled pickers, keyboard actions, form changes and region gestures are
+  recorded. Input fields record committed changes; note bodies are omitted.
+  Pointer moves, individual keystrokes and every displayed frame are not logged.
+- Each session retains 2,000 events. IndexedDB keeps at most three sessions,
+  pruning records older than seven days when the page next saves. Payloads are
+  detached, depth/size limited and normalize errors, cycles and byte buffers.
+  File names and metadata are included; file bytes and note text are omitted.
+- Writes are coalesced for 250 ms and requested on errors, hiding or leaving the
+  page. This is best-effort durability: abrupt termination, main-thread blocking,
+  browser eviction or private-mode restrictions can lose unsaved tail events.
+  Storage failure is visible in the dialog; in-memory reading/export still works.
+  Persisting diagnostics does not restore media handles or annotations.
+- `list_review_log_sessions` returns session IDs, retention counts and storage
+  status. `get_review_logs({ sessionId, sinceSeq, level, limit })` returns events
+  in ascending order, `nextSeq`, `hasMore`, and `gap` for evicted history. Continue
+  with the same session ID and `sinceSeq: nextSeq`. Query arguments are validated
+  at execution. Successful read-only polling does not generate further events.
+- `window.voidPlayer` also exposes `getLogs(query)`, `listLogSessions()` and
+  `exportLog(sessionId?)`. Export schema: `voidplayer-web-log`, version 1.
+
+Verification for the logging follow-up: 44 tests pass, including chronological
+paging, filtering, eviction gaps, immutable payloads, operation correlation,
+redaction, retained-session recovery, quota failure/retry and overlapping writes.
+In the real in-app browser, file open, UI step and Agent seek emitted correlated
+records; repeated log polls stayed quiet; refreshing recovered the previous
+session from IndexedDB. The dialog showed the generated JSON and real build
+metadata. Download did not produce a browser download event. Clipboard writing
+reported success, but the automation clipboard readback was empty; neither OS
+file delivery nor clipboard contents are claimed as verified. The visible JSON
+and Agent-readable historical logs were verified independently.

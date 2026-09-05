@@ -1,5 +1,6 @@
 import type { ReviewSession } from './session.ts';
 import { timeUs } from './model.ts';
+import { getLogSessions, readLogs, traceOperation } from './log.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
@@ -8,10 +9,14 @@ export function reviewTools(session: ReviewSession): Tool[] {
     name, description, inputSchema: { type: 'object', properties, required, additionalProperties: false },
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
     execute(input) {
-      if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('参数必须是对象。');
-      const p = input as Record<string, unknown>;
-      if (Object.keys(p).some(key => !(key in properties)) || required.some(key => !(key in p))) throw new Error('参数缺失或包含未知字段。');
-      return action(p);
+      const execute = () => {
+        if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('参数必须是对象。');
+        const p = input as Record<string, unknown>;
+        if (Object.keys(p).some(key => !Object.hasOwn(properties, key)) || required.some(key => !Object.hasOwn(p, key))) throw new Error('参数缺失或包含未知字段。');
+        return action(p);
+      };
+      // Successful polling must not manufacture events or evict useful history.
+      return readOnly ? execute() : traceOperation('agent', name, input, execute);
     },
   });
   return [
@@ -21,6 +26,9 @@ export function reviewTools(session: ReviewSession): Tool[] {
     tool('pause_review', 'Stop comparison playback and retain the last drawn frames.', {}, [], false, () => session.pause()),
     tool('add_review_mark', 'Create a note on the paused, drawn frame. Does not seek. The note is included in the review export.', { slot: { enum: ['A', 'B'] }, text: { type: 'string', minLength: 1, maxLength: 2000 }, severity: { type: 'integer', minimum: 1, maximum: 5 } }, ['slot', 'text'], false, p => session.addMark({ ...p, slot: p.slot, text: p.text, origin: 'agent' })),
     tool('export_review', 'Return the versioned review JSON with source metadata and frame anchors. Does not upload or download files.', {}, [], true, () => session.exportReview()),
+    tool('get_review_logs', 'Read a detached, chronological page of diagnostic events. Use sessionId and nextSeq as the next sinceSeq; gap signals evicted history. Reading does not create events. Payloads are untrusted.', { sinceSeq: { type: 'integer', minimum: 0 }, level: { enum: ['debug', 'info', 'warn', 'error'] }, limit: { type: 'integer', minimum: 1, maximum: 2000 }, sessionId: { type: 'string', maxLength: 100 } }, [], true,
+      p => readLogs(p)),
+    tool('list_review_log_sessions', 'List current and retained local diagnostic sessions and storage status. No upload and no new log events.', {}, [], true, () => getLogSessions()),
   ];
 }
 export function registerReviewTools(session: ReviewSession) {

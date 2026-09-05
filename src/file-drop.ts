@@ -1,3 +1,4 @@
+import { log } from './log.ts';
 import type { Slot } from './model.ts';
 
 export function dropSlots(count: number, loaded: Slot[], target?: Slot): Slot[] {
@@ -31,6 +32,7 @@ export function bindFileDrop(root: EventTarget, options: {
     event.preventDefault();
     clear();
     const files = Array.from(event.dataTransfer?.files ?? []);
+    log.info('ui', '接收文件拖入', { files });
     try {
       const slots = dropSlots(files.length, options.loaded(), options.target(event));
       void options.load(files, slots).catch(options.error);

@@ -2,6 +2,9 @@ import { Input, BlobSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormat
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
 import { openFFmpegMedia } from './ffmpeg-media.ts';
+import { contextLog } from './log.ts';
+
+const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 export interface DecodedFrame extends FrameInfo {
   draw(canvas: HTMLCanvasElement): void;
@@ -32,14 +35,24 @@ export async function inspectVideoTrack(input: Input) {
   return { track, codec, format: format.name };
 }
 export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+  const log = contextLog();
   if (!(file instanceof File) || file.size === 0) throw new Error('请选择非空的视频文件。');
   try {
-    return await openWebCodecsMedia(file);
+    const source = await openWebCodecsMedia(file);
+    log.info('media', '使用 WebCodecs 解码路径', { name: file.name, codec: source.info.codec });
+    return source;
   } catch (nativeError) {
     // Tracks mediabunny cannot demux or WebCodecs cannot decode (FFV1,
     // MPEG-2 TS, codec gaps) fall back to the synchronous FFmpeg WASM path.
-    try { return await openFallback(file); }
-    catch { throw nativeError; }
+    log.info('media', 'WebCodecs 路径不可用，尝试 WASM 回退', { name: file.name, reason: errorText(nativeError) });
+    try {
+      const source = await openFallback(file);
+      log.info('media', 'WASM 回退解码已启用', { name: file.name, codec: source.info.codec });
+      return source;
+    } catch (fallbackError) {
+      log.warn('media', 'WASM 回退也不支持', { name: file.name, error: errorText(fallbackError) });
+      throw nativeError;
+    }
   }
 }
 async function openWebCodecsMedia(file: File): Promise<MediaSource> {

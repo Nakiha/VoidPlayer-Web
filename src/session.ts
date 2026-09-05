@@ -1,6 +1,9 @@
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
+import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
+
+const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 type Track = { source: MediaSource; frame: FrameInfo | null };
 export class ReviewSession {
@@ -19,7 +22,16 @@ export class ReviewSession {
   private draw: (slot: Slot, frame: DecodedFrame) => void;
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) { this.draw = draw; }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
-  private emit() { for (const listener of this.listeners) listener(); }
+  private lastTransition = '';
+  private emit() {
+    const state = { busy: this.busy, playing: this.playing, error: this.error, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
+    const signature = JSON.stringify(state);
+    if (signature !== this.lastTransition) {
+      log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
+      this.lastTransition = signature;
+    }
+    for (const listener of this.listeners) listener();
+  }
   getState() {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,
@@ -31,69 +43,106 @@ export class ReviewSession {
   }
   private get durationUs() { return this.tracks.size ? Math.min(...[...this.tracks.values()].map(t => t.source.info.durationUs)) : 0; }
   pause() {
+    const wasPlaying = this.playing;
     ++this.revision;
     clearTimeout(this.timer);
     this.playing = false;
     this.busy = false;
+    if (wasPlaying) log.info('session', '暂停播放', { positionUs: this.positionUs });
     this.emit();
     return this.getState();
   }
-  private run<T>(work: (current: () => boolean) => Promise<T>): Promise<T> {
-    this.pause();
-    const revision = this.revision;
-    this.busy = true;
-    this.error = null;
-    this.emit();
-    const current = () => revision === this.revision;
-    const operation = this.queue.catch(() => {}).then(async () => {
-      if (!current()) throw new Error('操作已被更新的请求取代。');
-      try {
-        const result = await work(current);
-        if (!current()) throw new Error('操作已被更新的请求取代。');
-        return result;
-      } catch (e) {
-        if (current()) this.error = e instanceof Error ? e.message : String(e);
-        throw e;
-      } finally {
-        if (current()) { this.busy = false; this.emit(); }
-      }
+  private run<T>(name: string, data: unknown, work: (current: () => boolean) => Promise<T>): Promise<T> {
+    return traceOperation('session', name, data, () => {
+      const context = operationContext();
+      this.pause();
+      const revision = this.revision;
+      this.busy = true;
+      this.error = null;
+      this.emit();
+      const current = () => revision === this.revision;
+      const operation = this.queue.catch(() => {}).then(async () => {
+        if (!current()) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
+        try {
+          const result = await withLogContext(context, () => work(current));
+          if (!current()) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
+          return result;
+        } catch (e) {
+          if (current()) this.error = e instanceof Error ? e.message : String(e);
+          throw e;
+        } finally {
+          if (current()) { this.busy = false; withLogContext(context, () => this.emit()); }
+        }
+      });
+      this.queue = operation;
+      return operation;
     });
-    this.queue = operation;
-    return operation;
   }
   async load(slot: Slot, open: () => Promise<MediaSource>) {
+    const scoped = contextLog();
     slotValue(slot);
-    await this.run(async current => {
-      const source = await open();
-      let committed = false;
-      try {
-        const next = new Map(this.tracks);
-        next.set(slot, { source, frame: null });
-        await this.drawAt(0, current, next, () => {
-          this.tracks.get(slot)?.source.dispose();
-          this.tracks = next;
-          this.catalog.set(source.info.id, source.info);
-          committed = true;
-        });
-      } finally { if (!committed) source.dispose(); }
+    const replacing = this.tracks.get(slot)?.source.info.name;
+    try {
+      await this.run('load', { slot }, async current => {
+        const source = await open();
+        let committed = false;
+        try {
+          const next = new Map(this.tracks);
+          next.set(slot, { source, frame: null });
+          await this.drawAt(0, current, next, () => {
+            this.tracks.get(slot)?.source.dispose();
+            this.tracks = next;
+            this.catalog.set(source.info.id, source.info);
+            committed = true;
+          });
+        } finally { if (!committed) source.dispose(); }
+      });
+    } catch (error) {
+      scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, error: errorText(error) });
+      throw error;
+    }
+    const info = this.tracks.get(slot)!.source.info;
+    scoped.info('media', `轨道 ${slot} 已载入`, {
+      name: info.name, size: info.size, codec: info.codec, decoder: info.decoder,
+      width: info.width, height: info.height, durationUs: info.durationUs, replacing,
     });
     return this.getState();
   }
   async seek(ptsUs: number) {
+    const scoped = contextLog();
     timeUs(ptsUs);
-    await this.run(async current => {
-      if (!this.tracks.size) throw new Error('请先打开视频。');
-      await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
+    try {
+      await this.run('seek', { ptsUs }, async current => {
+        if (!this.tracks.size) throw new Error('请先打开视频。');
+        await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
+      });
+    } catch (error) {
+      scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', '定位失败', { ptsUs, error: errorText(error) });
+      throw error;
+    }
+    scoped.info('session', '定位完成', {
+      requestedUs: ptsUs, positionUs: this.positionUs, decodeMs: this.decodeMs,
+      frames: Object.fromEntries([...this.tracks].map(([s, t]) => [s, t.frame?.ptsUs ?? null])),
     });
     return this.getState();
   }
   async step(direction: number) {
+    const scoped = contextLog();
     if (direction !== -1 && direction !== 1) throw new Error('逐帧方向必须是 -1 或 1。');
-    await this.run(async current => {
-      const entries = [...this.tracks];
-      if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
-      if (direction > 0) await this.stepForward(entries, current);
-      else await this.stepBackward(entries, current);
+    try {
+      await this.run('step', { direction }, async current => {
+        const entries = [...this.tracks];
+        if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
+        if (direction > 0) await this.stepForward(entries, current);
+        else await this.stepBackward(entries, current);
+      });
+    } catch (error) {
+      scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', '逐帧失败', { direction, error: errorText(error) });
+      throw error;
+    }
+    scoped.info('session', direction > 0 ? '前进一帧' : '后退一帧', {
+      positionUs: this.positionUs, decodeMs: this.decodeMs,
+      frames: Object.fromEntries([...this.tracks].map(([s, t]) => [s, t.frame?.ptsUs ?? null])),
     });
     return this.getState();
   }
@@ -109,7 +158,7 @@ export class ReviewSession {
     const closeGathered = () => { for (const frames of gathered.values()) for (const f of frames) f?.close(); };
     const failed = probed.find(r => r.status === 'rejected');
     if (failed?.status === 'rejected') { closeGathered(); throw failed.reason; }
-    if (!current()) { closeGathered(); throw new Error('定位已取消。'); }
+    if (!current()) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
     const target = planForwardStep(
       entries.map(([slot, t]) => {
         const [next, nextNext] = gathered.get(slot) ?? [];
@@ -140,7 +189,7 @@ export class ReviewSession {
     const closeGathered = () => { for (const f of gathered.values()) f?.close(); };
     const failed = probed.find(r => r.status === 'rejected');
     if (failed?.status === 'rejected') { closeGathered(); throw failed.reason; }
-    if (!current()) { closeGathered(); throw new Error('定位已取消。'); }
+    if (!current()) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
     const target = planBackwardStep(
       entries.map(([slot, t]) => ({ currentUs: t.frame!.ptsUs, previousUs: gathered.get(slot)?.ptsUs ?? null })));
     if (target == null) { closeGathered(); return; }
@@ -167,7 +216,7 @@ export class ReviewSession {
       return chosen ? Promise.resolve(chosen) : t.source.frameAt(ptsUs);
     }));
     try {
-      if (!current()) throw new Error('定位已取消。');
+      if (!current()) throw new DOMException('定位已取消。', 'AbortError');
       const failed = results.find(r => r.status === 'rejected');
       if (failed?.status === 'rejected') throw failed.reason;
       for (let i = 0; i < entries.length; i++) {
@@ -184,8 +233,10 @@ export class ReviewSession {
     }
   }
   async play() {
+    const scoped = contextLog();
     await this.seek(this.positionUs >= this.durationUs - 1 ? 0 : this.positionUs);
     this.playing = true;
+    scoped.info('session', '开始播放', { positionUs: this.positionUs });
     const revision = this.revision;
     const base = this.positionUs;
     const start = performance.now();
@@ -201,10 +252,12 @@ export class ReviewSession {
         if (target >= this.durationUs - 1) this.playing = false;
         this.emit();
         if (this.playing) this.timer = setTimeout(() => void tick(), 16);
+        else scoped.info('session', '播放到末尾结束', { positionUs: this.positionUs });
       } catch (e) {
         if (revision !== this.revision) return;
         this.playing = false;
         this.error = e instanceof Error ? e.message : String(e);
+        scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
         this.emit();
       }
     };
@@ -228,12 +281,14 @@ export class ReviewSession {
       comparison: [...this.tracks].filter(([, t]) => t.frame).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!) })),
     };
     this.marks.push(mark);
+    log.info('session', '添加标注', { id: mark.id, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
     this.emit();
     return structuredClone(mark);
   }
   deleteMark(id: string) {
     if (!this.marks.some(mark => mark.id === id)) throw new Error('标注不存在。');
     this.marks = this.marks.filter(mark => mark.id !== id);
+    log.info('session', '删除标注', { id });
     this.emit();
     return this.getState();
   }

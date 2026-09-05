@@ -5,6 +5,11 @@ import { formatTime } from './model.ts';
 import type { Region, Slot } from './model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import { bindFileDrop } from './file-drop.ts';
+import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
+import { startBrowserLogging } from './log-storage.ts';
+import { installLogPanel } from './log-panel.ts';
+
+const stopLogging = startBrowserLogging();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const icon = (name: 'sidebar' | 'open' | 'export' | 'play' | 'pause' | 'previous' | 'next') => {
@@ -20,7 +25,7 @@ const icon = (name: 'sidebar' | 'open' | 'export' | 'play' | 'pause' | 'previous
   return `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name]}</svg>`;
 };
 $('app').innerHTML = `
-<header class="topbar"><button id="toggle-marks" aria-label="显示或隐藏标注面板" aria-expanded="false" title="标注面板">${icon('sidebar')}</button><span class="mode">并排</span><span class="toolbar-spacer"></span><button id="open" aria-label="打开视频">${icon('open')}<span>打开</span></button><button id="export" disabled>${icon('export')}<span>导出</span></button><button id="help-open" aria-label="实验范围与快捷键" title="实验范围与快捷键">?</button></header>
+<header class="topbar"><button id="toggle-marks" aria-label="显示或隐藏标注面板" aria-expanded="false" title="标注面板">${icon('sidebar')}</button><span class="mode">并排</span><span class="toolbar-spacer"></span><button id="open" aria-label="打开视频">${icon('open')}<span>打开</span></button><button id="export" disabled>${icon('export')}<span>导出</span></button><button id="export-log" title="导出会话日志（问题反馈用）">${icon('export')}<span>日志</span></button><button id="help-open" aria-label="实验范围与快捷键" title="实验范围与快捷键">?</button></header>
 <main>
   <div id="notice" role="alert" hidden></div>
   <div class="workspace panel-hidden">
@@ -39,6 +44,8 @@ $('app').innerHTML = `
 </main><dialog id="help"><h2>浏览器实验版</h2><p>本地文件，不上传。首版仅支持静音、SDR 对比，HDR 与专业色彩一致性尚未验证。</p><p>← / →：以 A 为参考逐帧。空格：播放 / 暂停。暂停后可拖动框选。</p><p>标注仅保留在本次会话，关闭前请导出。导出格式与桌面版暂不互通。播放可能跳帧；时间戳表示已解码并绘制到画布，不表示屏幕已完成刷新。</p><button id="help-close">关闭</button></dialog>`;
 const canvases = { A: $<HTMLCanvasElement>('canvas-A'), B: $<HTMLCanvasElement>('canvas-B') };
 const session = new ReviewSession((slot, frame) => frame.draw(canvases[slot]));
+const removeLogPanel = installLogPanel($('export-log'));
+let inputTrigger = 'pointer';
 let draft: { slot: Slot; region: Region } | null = null;
 let lastFrames = '';
 let lastMarks = '';
@@ -53,9 +60,9 @@ function showError(error: unknown) {
   message = error instanceof Error ? error.message : String(error);
   render();
 }
-async function act(action: () => unknown | Promise<unknown>) {
+async function act(action: () => unknown | Promise<unknown>, name = 'ui.action', data: unknown = {}) {
   message = '';
-  try { await action(); } catch (e) { showError(e); }
+  try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
 function downloadReview() {
@@ -130,12 +137,12 @@ function render() {
       const anchor = document.createElement('button'); anchor.textContent = `${mark.slot} · ${formatTime(mark.frame.ptsUs)}`;
       anchor.title = '返回这一帧';
       anchor.disabled = !state.tracks.some(t => t.id === mark.mediaId);
-      anchor.onclick = () => void act(() => session.seek(mark.frame.ptsUs));
+      anchor.onclick = () => void act(() => session.seek(mark.frame.ptsUs), 'mark.seek', { id: mark.id, ptsUs: mark.frame.ptsUs });
       const severity = document.createElement('span'); severity.textContent = `严重度 ${mark.severity}`;
       heading.append(anchor, severity);
       const note = document.createElement('p'); note.textContent = mark.text;
       const remove = document.createElement('button'); remove.className = 'remove'; remove.textContent = '删除'; remove.setAttribute('aria-label', `删除标注 ${mark.text}`);
-      remove.onclick = () => void act(() => session.deleteMark(mark.id));
+      remove.onclick = () => void act(() => session.deleteMark(mark.id), 'mark.delete', { id: mark.id });
       item.append(heading, note, remove); $('marks').append(item);
     }
     if (!state.marks.length) $('marks').innerHTML = '<div class="marks-empty">暂无标注</div>';
@@ -143,10 +150,11 @@ function render() {
 }
 let importRevision = 0;
 async function importFiles(files: File[], slots: Slot[]) {
+  const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
-    if (revision !== importRevision) return;
-    await session.load(slots[i], () => openMedia(files[i]));
+    if (revision !== importRevision) throw new DOMException('文件导入已被新的请求取代。', 'AbortError');
+    await withLogContext(context, () => session.load(slots[i], () => openMedia(files[i])));
   }
 }
 const unbindDrop = bindFileDrop(document.body, {
@@ -158,19 +166,21 @@ const unbindDrop = bindFileDrop(document.body, {
   hover: slots => {
     for (const slot of ['A', 'B'] as Slot[]) $(`stage-${slot}`).classList.toggle('drop-target', slots.includes(slot));
   },
-  load: (files, slots) => act(() => importFiles(files, slots)),
-  error: showError,
+  load: (files, slots) => act(() => importFiles(files, slots), 'files.drop', { files, slots }),
+  error: error => { log.warn('ui', '拖入文件失败', { error }); showError(error); },
 });
 for (const slot of ['A', 'B'] as Slot[]) {
   $<HTMLInputElement>(`file-${slot}`).onchange = event => {
     const input = event.target as HTMLInputElement; const file = input.files?.[0]; input.value = '';
-    if (file) void act(() => importFiles([file], [slot]));
+    if (file) void act(() => importFiles([file], [slot]), 'files.select', { file, slot });
   };
+  $<HTMLInputElement>(`file-${slot}`).oncancel = () => log.info('ui', '取消文件选择', { slot });
   const image = $(`image-${slot}`);
   let start: { x: number; y: number; pointer: number } | null = null;
   const point = (e: PointerEvent) => { const r = image.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
   image.onpointerdown = e => {
     if (e.button !== 0 || session.getState().busy) return;
+    log.info('ui', '开始框选', { slot });
     session.pause(); clearRegion(); start = { ...point(e), pointer: e.pointerId }; image.setPointerCapture(e.pointerId);
     $<HTMLSelectElement>('mark-slot').selectedIndex = slot === 'A' ? 0 : 1;
   };
@@ -185,10 +195,11 @@ for (const slot of ['A', 'B'] as Slot[]) {
   image.onpointerup = e => {
     if (!start || start.pointer !== e.pointerId) return;
     start = null; image.releasePointerCapture(e.pointerId);
+    log.info('ui', '结束框选', { slot, region: draft?.region ?? null });
     if (!draft || draft.region.width < 0.005 || draft.region.height < 0.005) clearRegion();
     else { $('region-hint').textContent = `已框选视频 ${slot} 的区域`; $('clear-region').hidden = false; }
   };
-  image.onpointercancel = () => { start = null; clearRegion(); };
+  image.onpointercancel = () => { log.info('ui', '取消框选', { slot }); start = null; clearRegion(); };
 }
 $('toggle-marks').onclick = () => {
   const hidden = document.querySelector('.workspace')!.classList.toggle('panel-hidden');
@@ -200,40 +211,59 @@ $('open').onclick = () => {
 };
 $('help-open').onclick = () => $<HTMLDialogElement>('help').showModal();
 $('help-close').onclick = () => $<HTMLDialogElement>('help').close();
-$('play').onclick = () => void act(() => session.getState().playing ? session.pause() : session.play());
-$('previous').onclick = () => void act(() => session.step(-1));
-$('next').onclick = () => void act(() => session.step(1));
-$<HTMLInputElement>('timeline').onchange = e => void act(() => session.seek(Number((e.target as HTMLInputElement).value)));
-$('seek-form').onsubmit = e => { e.preventDefault(); void act(() => session.seek(Math.round(Number($<HTMLInputElement>('seek-seconds').value) * 1e6))); };
+$('play').onclick = () => void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle');
+$('previous').onclick = () => void act(() => session.step(-1), 'step.previous');
+$('next').onclick = () => void act(() => session.step(1), 'step.next');
+$<HTMLInputElement>('timeline').onchange = e => void act(() => session.seek(Number((e.target as HTMLInputElement).value)), 'seek.timeline', { ptsUs: Number((e.target as HTMLInputElement).value) });
+$('seek-form').onsubmit = e => { e.preventDefault(); void act(() => session.seek(Math.round(Number($<HTMLInputElement>('seek-seconds').value) * 1e6)), 'seek.time', { seconds: $<HTMLInputElement>('seek-seconds').value }); };
 $('mark-form').onsubmit = e => {
   e.preventDefault();
   void act(() => {
     const slot = $<HTMLSelectElement>('mark-slot').selectedIndex === 0 ? 'A' : 'B';
     session.addMark({ slot, text: $<HTMLTextAreaElement>('note').value, severity: Number($<HTMLSelectElement>('severity').value), region: draft?.slot === slot ? draft.region : null });
     $<HTMLTextAreaElement>('note').value = ''; clearRegion();
-  });
+  }, 'mark.add', { slot: $<HTMLSelectElement>('mark-slot').selectedIndex, noteLength: $<HTMLTextAreaElement>('note').value.length, region: draft?.region });
 };
 $('clear-region').onclick = clearRegion;
 $<HTMLSelectElement>('mark-slot').onchange = clearRegion;
-$('export').onclick = () => void act(downloadReview);
+$('export').onclick = () => void act(downloadReview, 'review.download');
 document.addEventListener('keydown', e => {
   if (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select,button') || e.target.isContentEditable)) return;
   if (!session.getState().tracks.length || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) $('play').click(); }
-  else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); $(e.code === 'ArrowLeft' ? 'previous' : 'next').click(); }
+  inputTrigger = 'keyboard';
+  try {
+    if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) $('play').click(); }
+    else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); $(e.code === 'ArrowLeft' ? 'previous' : 'next').click(); }
+  } finally { inputTrigger = 'pointer'; }
 });
+// Semantic inputs only: no per-keystroke text capture or pointer-move traffic.
+const uiEvents = new AbortController();
+for (const eventName of ['click', 'change', 'invalid'] as const) document.addEventListener(eventName, event => {
+  if (!(event.target instanceof Element)) return;
+  const control = event.target.closest<HTMLElement>('button, input, select, textarea, summary, label');
+  if (!control) return;
+  let value: unknown;
+  if (eventName === 'change') {
+    if (control instanceof HTMLTextAreaElement) value = { length: control.value.length };
+    else if (control instanceof HTMLInputElement && control.type === 'file') value = { count: control.files?.length ?? 0 };
+    else if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement) value = control.value;
+  }
+  log.info('ui', '界面操作', { event: eventName, control: control.id || control.dataset.action || control.tagName.toLowerCase(), trigger: inputTrigger, value });
+}, { capture: true, signal: uiEvents.signal });
 session.subscribe(() => { message = ''; render(); });
 const unregister = registerReviewTools(session);
+const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
-  loadFile: (slot: Slot, file: File) => session.load(slot, () => openMedia(file)),
-  seek: (ptsUs: number) => session.seek(ptsUs), step: (direction: number) => session.step(direction),
-  play: () => session.play(), pause: () => session.pause(),
-  addMark: (input: Parameters<ReviewSession['addMark']>[0]) => session.addMark(input),
-  deleteMark: (id: string) => session.deleteMark(id), exportReview: () => session.exportReview(),
+  loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, () => session.load(slot, () => openMedia(file))),
+  seek: (ptsUs: number) => apiCall('seek', { ptsUs }, () => session.seek(ptsUs)), step: (direction: number) => apiCall('step', { direction }, () => session.step(direction)),
+  play: () => apiCall('play', {}, () => session.play()), pause: () => apiCall('pause', {}, () => session.pause()),
+  addMark: (input: Parameters<ReviewSession['addMark']>[0]) => apiCall('addMark', input, () => session.addMark(input)),
+  deleteMark: (id: string) => apiCall('deleteMark', { id }, () => session.deleteMark(id)), exportReview: () => session.exportReview(),
+  getLogs: readLogs, listLogSessions: getLogSessions, exportLog,
   tools: reviewTools(session),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); unbindDrop(); resizeObserver.disconnect(); void session.dispose(); });
+import.meta.hot?.dispose(() => { unregister(); unbindDrop(); removeLogPanel(); uiEvents.abort(); resizeObserver.disconnect(); void session.dispose().finally(stopLogging); });
 render();
