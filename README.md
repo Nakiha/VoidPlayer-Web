@@ -365,3 +365,25 @@ for other browsers, single-thread fallback, long-form media or hour-long session
 Regression tests cover late decode after pause, final-frame completion under slow
 decode, independent producers, bounded queues and cleanup, wedged/terminated
 worker RPCs, and benchmark rejection of falsely healthy timelines/stalled frames.
+
+Media-pipeline consolidation (2026-09-05), first round of the review's plan:
+
+- Opening is staged: `MediaOpenError` carries `input | container | codec |
+  decode | resource`, and only container/codec/decode gaps reach the WASM
+  fallback — input and resource failures fail fast without a pointless retry.
+  Local files and library URLs share one open path (`openWithFallback`); the
+  URL fallback preflights the byte budget with HEAD before downloading.
+- Frames no longer paint themselves: `DecodedFrame` carries `kind`
+  (video-sample | rgba8), dimensions and an approximate byte size; painting
+  lives in `src/presenter.ts`, keeping a future HDR/GPU path out of the
+  decoders.
+- `FrameQueue` is bounded by frame count AND bytes (4K frames are ~33 MB each).
+- The WASM core takes a player-assigned thread budget (`vp_set_threads`,
+  allocated per live fallback track from `cores − 2`, pool-capped) instead of
+  claiming every logical core per decoder, and `vp_extract` binary-searches the
+  frame index instead of scanning it. WASM load logs phased timings
+  (file read, core init, index build) plus the chosen core variant.
+
+Regression coverage added for staged fallback routing and the byte budget; all
+62 tests pass. WebKit benchmark after the refactor: VVC solo 59.9 fps on the
+mt core, VVC+HEVC-4K ~45–52 fps per track, TS+H.264 ~50 fps, zero long tasks.

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Input, BufferSource, ALL_FORMATS } from 'mediabunny';
-import { inspectVideoTrack } from '../src/media.ts';
+import { inspectVideoTrack, openMedia } from '../src/media.ts';
 
 async function sample(name: string) {
   return new Input({ source: new BufferSource(await readFile(new URL(`../../resources/video/${name}`, import.meta.url))), formats: ALL_FORMATS });
@@ -34,4 +34,15 @@ test('unrecognized containers receive a format-level diagnostic', async () => {
   const input = new Input({ source: new BufferSource(new TextEncoder().encode('invalid file')), formats: ALL_FORMATS });
   try { await assert.rejects(inspectVideoTrack(input), /无法识别文件封装/); }
   finally { input.dispose(); }
+});
+
+test('input-stage failures skip the WASM fallback; decode-stage gaps use it', async () => {
+  let attempted = 0;
+  const fallback = async () => { attempted++; throw new Error('nope'); };
+  await assert.rejects(openMedia(new File([], 'empty.mp4'), fallback), /非空的视频文件/);
+  assert.equal(attempted, 0);
+  // Node has no WebCodecs: that is a decode-stage gap and must reach the fallback.
+  const data = await readFile(new URL('../../resources/video/ci_h264_smoke.mp4', import.meta.url));
+  await assert.rejects(openMedia(new File([data], 'ci_h264_smoke.mp4'), fallback), /WebCodecs/);
+  assert.equal(attempted, 1);
 });

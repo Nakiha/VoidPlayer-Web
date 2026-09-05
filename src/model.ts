@@ -104,3 +104,6 @@ export function formatTime(us: number): string {
   const ms = Math.floor(Math.max(0, us) / 1000);
   return `${Math.floor(ms / 60000).toString().padStart(2, '0')}:${Math.floor(ms / 1000 % 60).toString().padStart(2, '0')}.${(ms % 1000).toString().padStart(3, '0')}`;
 }
+
+/** Whole-file memory cap for the WASM fallback (the file lives in MEMFS). */
+export const MAX_FALLBACK_FILE_BYTES = 512 * 1024 * 1024;

@@ -11,6 +11,7 @@ import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
 import { installLibraryPanel } from './library-panel.ts';
 import { openLibraryItem } from './library.ts';
+import { paintFrame } from './presenter.ts';
 
 const stopLogging = startBrowserLogging();
 
@@ -46,7 +47,7 @@ $('app').innerHTML = `
   </div>
 </main><dialog id="help"><h2>浏览器实验版</h2><p>本地文件，不上传。首版仅支持静音、SDR 对比，HDR 与专业色彩一致性尚未验证。</p><p>← / →：双轨协调逐帧。空格：播放 / 暂停。暂停后可拖动框选。</p><p>标注仅保留在本次会话，关闭前请导出。导出格式与桌面版暂不互通。播放可能跳帧；时间戳表示已解码并绘制到画布，不表示屏幕已完成刷新。</p><button id="benchmark">检查当前视频播放性能</button><button id="help-close">关闭</button></dialog>`;
 const canvases = { A: $<HTMLCanvasElement>('canvas-A'), B: $<HTMLCanvasElement>('canvas-B') };
-const session = new ReviewSession((slot, frame) => frame.draw(canvases[slot]));
+const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 const removeLogPanel = installLogPanel($('export-log'));
 installLibraryPanel($('library-open'), (entry, slot) =>
   void act(() => session.load(slot, () => openLibraryItem(entry)), 'ui.library-load', { id: entry.id, name: entry.name, slot }));

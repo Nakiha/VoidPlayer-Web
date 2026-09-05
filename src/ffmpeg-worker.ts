@@ -28,19 +28,23 @@ const port: any = (() => {
 let core: any = null;
 const contexts = new Map<number, number[]>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file: ArrayBuffer }) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file: ArrayBuffer; threads?: number }) {
   const mod = await import(payload.glueURL);
   core = await mod.default({ wasmBinary: new Uint8Array(payload.wasmBinary) });
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
   const path = `/vp-in-${crypto.randomUUID()}`;
   try {
+    // Player-assigned decode thread budget (no-op on the single-thread core).
+    if (payload.threads) core.ccall('vp_set_threads', null, ['number'], [payload.threads]);
     core.FS.writeFile(path, new Uint8Array(payload.file));
     if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
       throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
     }
+    const indexStart = performance.now();
     const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
+    const indexMs = Math.round(performance.now() - indexStart);
     const ticks: number[] = new Array(count);
     const durations: number[] = new Array(count);
     for (let i = 0; i < count; i++) {
@@ -49,7 +53,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     contexts.set(ctx, ticks);
     return {
-      ctx, path, ticks, durations,
+      ctx, path, ticks, durations, indexMs,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
       width: core.ccall('vp_width', 'number', ['number'], [ctx]),

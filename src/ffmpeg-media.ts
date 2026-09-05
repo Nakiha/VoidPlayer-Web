@@ -1,5 +1,6 @@
 import type { DecodedFrame, MediaSource } from './media.ts';
 import type { MediaInfo } from './model.ts';
+import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
@@ -8,7 +9,6 @@ import { contextLog } from './log.ts';
 // synchronous CPU work and must stay off the UI thread. Pixels come back as
 // transferred buffers; the frame index travels once at open.
 
-const MAX_FALLBACK_FILE_BYTES = 512 * 1024 * 1024;
 
 export interface WasmDecodedFrame extends DecodedFrame {
   pixels: Uint8ClampedArray;
@@ -56,6 +56,16 @@ interface InitResult {
   width: number;
   height: number;
   codec: string;
+  indexMs?: number;
+}
+
+// Player-side thread budget: fallback decoders share the host's cores, each
+// live fallback track getting an equal share of (cores − 2), capped by the
+// pthread pool the mt core was built with.
+let liveFallbacks = 0;
+function threadBudget(): number {
+  const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
+  return Math.max(1, Math.min(4, Math.floor((cores - 2) / Math.max(1, liveFallbacks))));
 }
 
 async function createWorker(): Promise<Worker> {
@@ -112,6 +122,17 @@ export class WorkerRpc {
 }
 
 export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<MediaSource> {
+  const openStart = performance.now();
+  liveFallbacks++;
+  try {
+    return await openFFmpegMediaInner(file, deps, openStart);
+  } catch (error) {
+    liveFallbacks--;
+    throw error;
+  }
+}
+
+async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: number): Promise<MediaSource> {
   if (file.size > MAX_FALLBACK_FILE_BYTES) {
     throw new Error(`文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
   }
@@ -128,6 +149,8 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   }
   const scoped = contextLog();
   const fileBytes = await file.arrayBuffer();
+  const readMs = Math.round(performance.now() - openStart);
+  const threads = threadBudget();
   let coreVariant: 'single-thread' | 'multi-thread' = 'single-thread';
   let init: InitResult | null = null;
   let rpc: WorkerRpc | null = null;
@@ -136,7 +159,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
     rpc?.terminate();
     rpc = new WorkerRpc(deps.workerFactory?.() ?? await createWorker());
     try {
-      const payload: Record<string, unknown> = { glueURL, name: file.name, file: fileBytes.slice(0) };
+      const payload: Record<string, unknown> = { glueURL, name: file.name, file: fileBytes.slice(0), threads };
       const transfer: Transferable[] = [payload.file as ArrayBuffer];
       if (deps.wasmBinary) {
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
@@ -144,7 +167,10 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
       }
       init = await rpc.call<InitResult>('init', payload, transfer, 5000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
-      scoped.info('media', 'WASM core 已就绪', { coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated });
+      scoped.info('media', 'WASM core 已就绪', {
+        coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
+        readMs, initIndexMs: init.indexMs, threads,
+      });
       break;
     } catch (error) {
       lastError = error;
@@ -186,17 +212,14 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
     const pixels = new Uint8ClampedArray(buffer);
     let closed = false;
     return {
+      kind: 'rgba8',
+      width: init.width,
+      height: init.height,
+      byteSize: pixels.byteLength,
       pixels,
       ptsUs: relUs[index],
       sourcePtsUs: ticksToUs(ticks[index]),
       durationUs: durations[index],
-      draw(canvas) {
-        if (canvas.width !== info.width) canvas.width = info.width;
-        if (canvas.height !== info.height) canvas.height = info.height;
-        const ctx2d = canvas.getContext('2d');
-        if (!ctx2d) throw new Error('浏览器无法创建画布。');
-        ctx2d.putImageData(new ImageData(pixels, info.width, info.height), 0, 0);
-      },
       close() { if (!closed) { closed = true; spare = pixels.buffer as ArrayBuffer; } },
     };
   };
@@ -217,6 +240,7 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
     dispose() {
       if (disposed) return;
       disposed = true;
+      liveFallbacks--;
       rpc.terminate();
     },
   };

@@ -7,21 +7,25 @@ export class FrameQueue {
   error: unknown = null;
   private stopped = false;
   private wake: (() => void) | undefined;
+  private bytes = 0;
   readonly done: Promise<void>;
   private gen: AsyncGenerator<DecodedFrame>;
   readonly capacity: number;
-  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4) {
-    this.gen = gen; this.capacity = capacity;
+  readonly budgetBytes: number;
+  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes = 64 * 1024 * 1024) {
+    this.gen = gen; this.capacity = capacity; this.budgetBytes = budgetBytes;
     this.done = this.produce();
   }
   private async produce() {
     try {
       while (!this.stopped) {
-        if (this.frames.length >= this.capacity) await new Promise<void>(r => { this.wake = r; });
+        // Bounded by both count and bytes: four 4K RGBA frames are ~133 MB.
+        if (this.frames.length >= this.capacity || this.bytes >= this.budgetBytes) await new Promise<void>(r => { this.wake = r; });
         if (this.stopped) break;
         const next = await this.gen.next();
         if (next.done) { this.ended = true; break; }
         if (this.stopped) { next.value.close(); break; }
+        this.bytes += next.value.byteSize;
         this.frames.push(next.value);
       }
     } catch (error) { if (!this.stopped) this.error = error; }
@@ -30,8 +34,10 @@ export class FrameQueue {
   take(target: number): { frame: DecodedFrame | null; dropped: number } {
     let frame: DecodedFrame | null = null; let dropped = 0;
     while (this.frames.length && this.frames[0].ptsUs <= target) {
+      const shifted = this.frames.shift()!;
+      this.bytes -= shifted.byteSize;
       if (frame) { frame.close(); dropped++; }
-      frame = this.frames.shift()!;
+      frame = shifted;
     }
     this.wake?.(); this.wake = undefined;
     return { frame, dropped };

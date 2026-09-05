@@ -10,7 +10,7 @@ test('prefetch is bounded and stopping a full queue releases every frame', async
   async function* frames() {
     try { for (let i = 0; i < 100; i++) {
       produced++;
-      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, draw() {}, close() { closed++; } };
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'video-sample' as const, width: 10, height: 10, byteSize: 400, close() { closed++; } };
     } } finally { returned = true; }
   }
   const q = new FrameQueue(frames()); await turn();
@@ -50,4 +50,22 @@ test('a silently wedged worker times out and rejects all pending and future work
 test('disposing a worker settles outstanding extraction promises', async () => {
   const w = workerStub(); const waiting = assert.rejects(w.rpc.call('extract', {}), /释放/);
   w.rpc.terminate(); await waiting; assert.equal(w.terminated, true);
+});
+
+test('frame queue also honors its byte budget, not just the frame count', async () => {
+  let produced = 0, closed = 0;
+  async function* frames() {
+    for (let i = 0; i < 100; i++) {
+      produced++;
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'rgba8' as const, width: 10, height: 10, byteSize: 1000, close() { closed++; } };
+    }
+  }
+  const q = new FrameQueue(frames(), 4, 1000); // 4-frame cap OR 1000 bytes
+  await turn();
+  assert.equal(produced, 1); // second frame would exceed 1500 bytes
+  const { frame } = q.take(0); frame!.close();
+  await turn();
+  assert.equal(produced, 2);
+  q.stop(); await q.done;
+  assert.equal(closed, produced);
 });
