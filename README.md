@@ -310,3 +310,15 @@ longer re-renders DOM without a new frame. The log panel can copy the uploaded
 log's server-side filename for handoff. 53 tests and the build pass; Node runs
 the same worker over worker_threads, so the fallback tests exercise the real
 threaded path.
+
+Stability benchmark follow-up (2026-09-05): after the worker move, an offscreen
+Playwright benchmark (`browser/scripts/bench-playback.mjs`, chromium and
+webkit) plays four scenarios for 4 s each against the library service:
+HEVC 4K, VVC 1080p, VVC+HEVC 4K, MPEG-2 TS+H.264. With the SIMD128 core both
+engines hold position ratio ~1.0 with zero main-thread long tasks and no page
+crash; WebKit draws 43 fps on HEVC 4K (hardware WebCodecs), 47/47 fps on
+TS+H.264, and 8–13 fps on VVC (single-thread software decode bound — a compute
+limit, not a UI stall). The first playback attempt of this round had reproduced
+the user-reported freeze (position 0.74 s behind after 1.6 s) before the
+catch-up cap landed; the bench now guards that regression. Requires
+`playwright` (devDependency) and browsers under `PLAYWRIGHT_BROWSERS_PATH`.
