@@ -78,6 +78,19 @@ test('WASM fallback handles an MPEG-2 TS sample mediabunny cannot demux', async 
   } finally { source.dispose(); }
 });
 
+test('WASM fallback covers H.264 High 4:2:2, which browsers do not decode', async () => {
+  // avc1.7a000d (High 4:2:2) is rejected by WebCodecs on all mainstream
+  // browsers; the fallback must carry it like any other codec gap.
+  const source = await openSample('h264_high422p_1s_320x180.mp4');
+  try {
+    assert.equal(source.info.codec, 'h264');
+    assert.equal(source.info.width, 320); assert.equal(source.info.height, 180);
+    const first = await source.frameAt(0);
+    assert.equal(first.ptsUs, 0);
+    assert.ok(new Set((first as { pixels?: Uint8ClampedArray }).pixels!.slice(0, 4096)).size > 1, 'frame must not be blank');
+  } finally { source.dispose(); }
+});
+
 test('WASM fallback decodes H.266/VVC through the n9.0.1 core', async () => {
   const source = await openSample('h266_10s_1920x1080.mp4');
   try {

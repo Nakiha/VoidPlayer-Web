@@ -33,9 +33,12 @@ features are omitted rather than presented as nonfunctional controls.
   WebCodecs capability detection, actual decoded samples and explicit release.
   Tracks mediabunny cannot demux or WebCodecs cannot decode fall back to
   `src/ffmpeg-media.ts`: the self-built trimmed FFmpeg WASM core (`n9.0.1`,
-  ~2.6 MB, from the `VoidPlayer-FFmpeg-Build` repo's `wasm` branch; synced into
+  ~4.7 MB, from the `VoidPlayer-FFmpeg-Build` repo's `wasm` branch; synced into
   `public/vendor/voidplayer-core/` by `scripts/sync-wasm-core.sh`, fetched
-  lazily on first need). The core links libavcodec/libavformat/libswscale
+  lazily on first need). Besides FFV1/MPEG-2/VVC it also carries H.264, HEVC,
+  VP8 and VP9, because browsers support those codecs only in specific profiles
+  (e.g. H.264 High 4:2:2 fails WebCodecs everywhere and must fall back).
+  The core links libavcodec/libavformat/libswscale
   directly (no CLI) and exposes a `vp_*` API: a demux-only frame index (packets
   carry pts/duration/keyframe flags), then exact-PTS extraction with
   decoder-state continuation — sequential stepping decodes each frame once,
