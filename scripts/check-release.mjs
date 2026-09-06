@@ -70,7 +70,7 @@ try {
   const snapshotFiles = execFileSync(tar, ['-tzf', path.join(folder, 'source.tar.gz')], { encoding: 'utf8' }).replaceAll('\\', '/');
   assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
-  assert.match(run(['--version']), /VoidPlayer .*preview/); assert.match(run(['--help']), /--init/);
+  assert.equal(run(['--version']).trim(), `VoidPlayer ${manifest.appVersion} (${manifest.revision}${manifest.dirty ? '-dirty' : ''})`); assert.match(run(['--help']), /--init/);
   run(['--init', '--data-dir', data, '--folder', media]);
   const configPath = path.join(data, 'voidplayer.config.json'), original = await readFile(configPath, 'utf8');
   assert.equal(JSON.parse(original).staticDir, undefined, 'configuration must not pin old program assets');
