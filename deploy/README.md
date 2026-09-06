@@ -111,6 +111,18 @@ npm run service -- uninstall
 
 配置依据：[Caddy Basic Auth](https://caddyserver.com/docs/caddyfile/directives/basic_auth)、[反向代理请求头](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)、[自动 HTTPS 与本地 CA](https://caddyserver.com/docs/automatic-https)。
 
+### 从发布包运行浏览器验收
+
+在匹配目标平台的验收机上准备仓库测试依赖和 Playwright 浏览器、同步 QA 样片后运行：
+
+```sh
+npm run test:release:browser -- /path/to/voidplayer-package.tar.gz webkit
+npm run test:release:browser -- /path/to/voidplayer-package.tar.gz chromium
+RELEASE_BENCH=1 npm run test:release:browser -- /path/to/voidplayer-package.tar.gz webkit
+```
+
+脚本核验归档与逐文件 SHA-256，在临时目录解压包，用空 PATH、独立数据目录和空闲端口启动包内程序；不构建或使用仓库的 `dist/`，不重启已有服务。验证双轨真实解码、矢量标注、gzip 导出/导入、服务器保存、管理页检视和进程重启后的恢复。`RELEASE_BENCH=1` 额外运行四组播放基准。`VOIDPLAYER_SAMPLES` 可指定共享 QA 样片目录，默认读取 `fixtures/video`。这些本地浏览器工具属于验收机依赖，不是最终用户的运行依赖；也不替代真实网络挂载验收。
+
 ### 版本标签与 Release 草稿
 
 1. 将 `package.json` 与 lockfile 的版本更新为目标 `x.y.z`，并提交 `docs/releases/<版本>.md`，说明支持平台、改动、升级步骤和已知限制。正式标签使用 `vx.y.z`，候选标签可使用 `vx.y.z-rc.1`，候选版的说明文件相应为 `x.y.z-rc.1.md`。

@@ -32,7 +32,8 @@
     "test:workspace:browser": "npm run build && node scripts/check-workspace-browser.mjs",
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
     "test:saved-workspaces:browser": "npm run build && node scripts/check-saved-workspaces-browser.mjs",
-    "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs"
+    "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs",
+    "test:release:browser": "node scripts/check-release-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/core": "2.1.1",

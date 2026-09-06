@@ -42,6 +42,7 @@ npm run test:flv:browser # FLV WebKit 解码、Range、seek 和播放回归
 npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服务重启还原
 npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
+npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
 node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 ```
