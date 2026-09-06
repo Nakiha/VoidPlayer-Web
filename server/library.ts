@@ -33,6 +33,7 @@ export class MediaLibraryIndex {
   private cancelGeneration = 0;
   private stopped = false;
   private closed = false;
+  private configuring = false;
   private initialized: boolean;
   private refreshedAt = -Infinity;
   private options: IndexOptions;
@@ -91,6 +92,7 @@ export class MediaLibraryIndex {
     return { roots: this.definitions.map(r => r.name), entries: rows.slice(0, 5000).map(r => this.entry(r)), truncated: rows.length > 5000 };
   }
   refresh(): Promise<void> {
+    if (this.configuring) return Promise.reject(new Error('媒体目录配置正在更新。'));
     if (this.closed) return Promise.reject(new Error('媒体索引已关闭。'));
     if (this.pending) {
       const generation = this.cancelGeneration;
@@ -102,6 +104,7 @@ export class MediaLibraryIndex {
   /** Internal/admin callers use verified root IDs and relative directories.
    * Reconcile only these subtrees; overlapping requests are merged. */
   async refreshDirectories(scopes: DirectoryScope[]) {
+    if (this.configuring) throw new Error('媒体目录配置正在更新。');
     if (this.closed) throw new Error('媒体索引已关闭。');
     const generation = this.cancelGeneration;
     for (const scope of scopes) {
@@ -308,6 +311,26 @@ export class MediaLibraryIndex {
     if (this.closed) return;
     this.closed = true; this.stop();
     await this.pending?.catch(() => {}); this.store.close();
+  }
+  /** Serialize configuration with scans. Persist first; a failed DB switch rolls
+   * back the file before allowing scans again. Existing byte streams stay open. */
+  async reconfigure(roots: MediaRoot[], persist: () => Promise<() => Promise<void>>) {
+    if (this.closed || this.configuring) throw new Error('媒体目录配置正在更新或服务已关闭。');
+    const definitions = normalizeRoots(roots);
+    this.configuring = true;
+    const restart = !!this.timer;
+    this.stop();
+    try {
+      await this.pending;
+      const rollback = await persist();
+      try { this.store.configure(definitions); }
+      catch (error) { await rollback(); throw error; }
+      this.definitions.splice(0, this.definitions.length, ...definitions);
+      this.roots.splice(0, this.roots.length, ...definitions.map(r => r.path));
+    } finally {
+      this.configuring = false;
+      if (restart && !this.closed) this.start();
+    }
   }
 }
 

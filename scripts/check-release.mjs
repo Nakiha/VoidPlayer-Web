@@ -16,7 +16,7 @@ let child, output = '', successMessage = '';
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
 env.PATH = path.join(temp, 'empty-path');
-for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_PROXY_TOKEN', 'BUN_OPTIONS', 'BUN_INSPECT']) delete env[key];
+for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_PROXY_TOKEN', 'VOIDPLAYER_ADMIN_USERS', 'BUN_OPTIONS', 'BUN_INSPECT']) delete env[key];
 const cwd = path.join(temp, 'unrelated cwd'), data = path.join(temp, 'persistent data'), media = path.join(temp, 'nested media');
 const freePort = async () => { const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r)); return port; };
 let executable;
@@ -65,6 +65,8 @@ try {
   assert.equal(manifest.runtime.name, 'bun');
   for (const [file, hash] of Object.entries(manifest.files)) assert.equal(digest(await readFile(path.join(folder, file))), hash, file);
   assert.ok(!(await readdir(folder)).some(n => ['server', 'node_modules', 'package.json', 'logs'].includes(n)));
+  const snapshotFiles = execFileSync(tar, ['-tzf', path.join(folder, 'source.tar.gz')], { encoding: 'utf8' }).replaceAll('\\', '/');
+  assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
   assert.match(run(['--version']), /VoidPlayer .*preview/); assert.match(run(['--help']), /--init/);
   run(['--init', '--data-dir', data, '--folder', media]);
@@ -82,6 +84,10 @@ try {
   run(['--healthcheck', '--data-dir', data, '--port', String(port)]);
   const homepage = await fetch(base); assert.equal(homepage.status, 200); assert.match(await homepage.text(), /VoidPlayer/);
   assert.equal(homepage.headers.get('cross-origin-opener-policy'), 'same-origin'); assert.equal(homepage.headers.get('cross-origin-embedder-policy'), 'require-corp');
+  assert.match(await (await fetch(base + '/admin')).text(), /服务管理/);
+  assert.equal((await fetch(base + '/theme-init.js')).status, 200);
+  const adminStatus = await (await fetch(base + '/api/admin/status')).json();
+  assert.equal(adminStatus.version, manifest.appVersion); assert.equal(adminStatus.identity.id, 'local');
   const wasm = await fetch(base + '/vendor/voidplayer-core/voidplayer-core.wasm', { method: 'HEAD' }); assert.equal(wasm.status, 200); assert.match(wasm.headers.get('content-type'), /application\/wasm/);
   const listing = await (await fetch(base + '/api/library')).json(); assert.equal(listing.entries.length, 1);
   assert.match(listing.entries[0].version, /^[0-9a-f]{24}$/);
@@ -112,12 +118,24 @@ try {
   assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206, 'existing media remains readable during incremental updates');
   await rm(added);
   await waitForEntries(entries => entries.length === 1);
+  const adminRoots = await (await fetch(base + '/api/admin/roots')).json();
+  const saveRoots = (revision, roots) => fetch(base + '/api/admin/roots', { method: 'PUT', headers: { origin: base, 'x-voidplayer-action': 'admin', 'content-type': 'application/json' }, body: JSON.stringify({ revision, roots }) });
+  const renamedRoots = await saveRoots(adminRoots.revision, adminRoots.roots.map(r => ({ ...r, name: 'Released media' })));
+  assert.equal(renamedRoots.status, 200); const updatedRoots = await renamedRoots.json();
+  assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206, 'root name edits preserve existing media references');
+  assert.equal((await saveRoots(adminRoots.revision, adminRoots.roots)).status, 409, 'stale configuration revisions are refused');
+  assert.equal((await saveRoots(updatedRoots.revision, adminRoots.roots)).status, 200);
+  assert.equal(await readFile(configPath, 'utf8'), original, 'root edits preserve the rest of the release configuration');
   const suffix = await fetch(url, { headers: { range: 'bytes=-32' } }); assert.deepEqual(Buffer.from(await suffix.arrayBuffer()), bytes.subarray(-32));
   assert.equal((await fetch(url, { headers: { range: `bytes=${bytes.length}-` } })).status, 416);
   const controller = new AbortController(); const streaming = await fetch(url, { signal: controller.signal }); await streaming.body.getReader().read(); controller.abort();
   assert.equal((await fetch(base + '/api/ready')).status, 200);
   const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'release-test' }) }); assert.equal(uploaded.status, 201);
   assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
+  const receivedLogs = await (await fetch(base + '/api/admin/logs')).json();
+  assert.equal(receivedLogs.entries.length, 1);
+  const received = await (await fetch(base + '/api/admin/logs/' + receivedLogs.entries[0].name)).json();
+  assert.equal(received.document.serverReceipt.actorId, 'local');
   await stop();
   const upgraded = path.join(temp, 'upgraded program'); await renameReleased(folder, upgraded); executable = path.join(upgraded, manifest.executable);
   base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original); assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
@@ -141,10 +159,13 @@ try {
   assert.equal((await fetch(url)).status, 404, 'offline index cannot grant stale file access');
   await stop();
   await renameReleased(offlineMedia, media);
+  await writeFile(configPath, JSON.stringify({ ...JSON.parse(original), adminUsers: ['release.test'] }, null, 2) + '\n');
   const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
   assert.equal((await fetch(base + '/api/library')).status, 401);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);
+  assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'viewer', 'x-voidplayer-proxy-token': token } })).status, 403);
+  assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);
   await stop();
   if (process.env.RELEASE_BENCH === '1') {
     base = await start(port, {}, ['--folder', path.join(root, 'fixtures/video')]);
@@ -152,6 +173,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

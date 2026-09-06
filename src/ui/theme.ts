@@ -13,6 +13,21 @@ function readPreference(): ThemePreference {
   return 'system';
 }
 
+function applyRoot(preference: ThemePreference, accent: string, custom: ReturnType<typeof readCustom>) {
+  document.documentElement.dataset.theme = preference === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : preference;
+  document.documentElement.dataset.accent = accent;
+  document.documentElement.style.setProperty('--custom-accent-light', custom.light);
+  document.documentElement.style.setProperty('--custom-accent-dark', custom.dark);
+}
+/** Companion pages share appearance without mounting the player's settings UI. */
+export function observeTheme() {
+  const life = new AbortController();
+  const apply = () => applyRoot(readPreference(), readAccent(), readCustom());
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', apply, { signal: life.signal });
+  window.addEventListener('storage', apply, { signal: life.signal });
+  apply(); return () => life.abort();
+}
+
 /** Appearance is a UI preference, independent of review data and media presentation. */
 export function installThemeControls() {
   const system = matchMedia('(prefers-color-scheme: dark)');
@@ -34,10 +49,7 @@ export function installThemeControls() {
   }
   const accents = [...document.querySelectorAll<HTMLButtonElement>('[data-accent-choice]')];
   function apply() {
-    document.documentElement.dataset.theme = preference === 'system' ? (system.matches ? 'dark' : 'light') : preference;
-    document.documentElement.dataset.accent = accent;
-    document.documentElement.style.setProperty('--custom-accent-light', custom.light);
-    document.documentElement.style.setProperty('--custom-accent-dark', custom.dark);
+    applyRoot(preference, accent, custom);
     const customButton = document.querySelector<HTMLElement>('[data-accent-choice=custom]')!;
     customButton.style.setProperty('--swatch-light', custom.light); customButton.style.setProperty('--swatch-dark', custom.dark);
     document.getElementById('accent-current')!.textContent = accent === 'custom' ? `自定义 · ${custom.color.toUpperCase()}` : ACCENTS.find(c => c.id === accent)!.name;

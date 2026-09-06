@@ -8,6 +8,7 @@ services:
     init: true
     environment:
       VOIDPLAYER_PROXY_TOKEN: ${VOIDPLAYER_PROXY_TOKEN:?Set a gateway token in .env}
+      VOIDPLAYER_ADMIN_USERS: ${VOIDPLAYER_ADMIN_USERS:-}
     volumes:
       - app-data:/data
       - type: bind

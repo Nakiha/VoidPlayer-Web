@@ -1,0 +1,114 @@
+/* Administration uses the same material, density and neutral zebra surfaces as
+   the player's settings and source lists. Long content stays on solid surfaces. */
+#admin-app { height: 100%; }
+.admin-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); height: 100%; }
+.admin-navigation { display: flex; flex-direction: column; padding: 20px 10px; gap: 4px; background: var(--surface); }
+.admin-navigation a { color: var(--text); text-decoration: none; display: flex; gap: 9px; align-items: center; padding: 9px 10px; }
+.admin-brand { font-weight: 600; font-size: 15px; }
+.admin-nav-caption { color: var(--text-secondary); font-size: 11px; padding: 12px 10px 5px; }
+.admin-navigation button { justify-content: flex-start; height: 36px; gap: 9px; background: transparent; padding: 0 10px; }
+.admin-navigation button .icon { color: var(--text-secondary); }
+.admin-navigation button[aria-current=page] { background: var(--surface-selected); color: var(--accent); }
+.admin-navigation button[aria-current=page] .icon { color: inherit; }
+.admin-navigation .admin-back { margin-top: auto; font-size: 12px; color: var(--text-secondary); }
+.admin-navigation a:hover { color: var(--accent); }
+.admin-content { background: var(--surface-panel); min-width: 0; overflow: auto; padding: 30px 32px; }
+.admin-content > section { max-width: 1160px; margin: 0 auto; }
+.admin-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.admin-heading h1 { font-size: 24px; font-weight: 600; margin: 0 0 6px; }
+.admin-heading p { margin: 0; color: var(--text-secondary); }
+.admin-heading button, .admin-actions button { flex: 0 0 auto; white-space: nowrap; }
+.admin-content h2 { font-size: 13px; color: var(--text-secondary); font-weight: 600; margin: 26px 0 10px; }
+.admin-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-radius: 10px; overflow: hidden; background: var(--surface-stripe); }
+.admin-metrics > div { display: flex; flex-direction: column; gap: 8px; padding: 18px; }
+.admin-metrics > div:nth-child(even) { background: var(--surface-stripe); }
+.admin-metrics span { color: var(--text-secondary); font-size: 12px; }
+.admin-metrics strong { font-size: 22px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.admin-properties { border-radius: 9px; overflow: hidden; margin: 0; background: var(--surface-stripe); }
+.admin-properties > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 12px; padding: 11px 14px; }
+.admin-properties > div:nth-child(even), .admin-root-row:nth-child(even), .admin-error-row:nth-child(even), .admin-request-row:nth-child(even) { background: var(--surface-stripe); }
+.admin-properties dd { margin: 0; text-align: right; overflow-wrap: anywhere; color: var(--text-secondary); }
+.admin-caption { color: var(--text-secondary); font-size: 12px; line-height: 1.6; margin: 10px 0; overflow-wrap: anywhere; }
+#admin-message { max-width: 1132px; margin: 0 auto 16px; padding: 10px 14px; background: var(--surface-selected); border-radius: 8px; overflow-wrap: anywhere; }
+#admin-message[data-error=true] { background: var(--action-danger-fill); color: var(--action-danger); }
+.admin-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.admin-actions > span { flex: 1; min-width: 0; }
+.admin-root-head, .admin-root-row { display: grid; grid-template-columns: minmax(110px, .7fr) minmax(180px, 2fr) var(--button-size); gap: 12px; padding: 10px 12px; align-items: center; }
+.admin-root-head { color: var(--text-secondary); font-size: 12px; }
+.admin-root-editor { border-radius: 9px; background: var(--surface-stripe); overflow: hidden; }
+.admin-root-row > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.admin-root-row input { min-width: 0; width: 100%; box-sizing: border-box; }
+.admin-root-state { font-size: 11px; color: var(--text-secondary); }
+.admin-root-state[data-state=offline], .admin-root-state[data-state=error] { color: var(--connection-error); }
+.admin-danger:hover:not(:disabled), #confirm-delete-log { color: var(--action-danger); background: var(--action-danger-fill); }
+.admin-scan-actions { background: var(--surface-stripe); padding: 12px; border-radius: 9px; }
+.admin-error-list { border-radius: 8px; overflow: hidden; }
+.admin-error-row { display: flex; align-items: center; gap: 16px; padding: 9px 12px; }
+.admin-error-row strong { flex: 1; font-size: 12px; font-weight: 500; overflow-wrap: anywhere; }
+.admin-error-row span { color: var(--text-secondary); font: 11px var(--font-mono); }
+.admin-log-tabs { display: flex; background: var(--segment-fill); padding: 2px; border-radius: 8px; width: max-content; margin-bottom: 16px; }
+.admin-log-tabs button { background: transparent; }
+.admin-log-tabs button[aria-pressed=true] { background: var(--segment-selected-fill); }
+.admin-log-workspace { display: grid; grid-template-columns: 235px minmax(0, 1fr); min-height: 360px; height: calc(100dvh - 200px); gap: 18px; }
+.admin-log-sidebar { overflow: auto; }
+.admin-log-item { display: flex; flex-direction: column; align-items: flex-start; width: 100%; text-align: left; border-radius: 0; padding: 10px 12px; gap: 4px; background: transparent; }
+.admin-log-item:nth-child(even) { background: var(--surface-stripe); }
+.admin-log-item strong { font-size: 12px; font-weight: 500; }
+.admin-log-item span { font-size: 11px; color: var(--text-secondary); }
+.admin-log-item[aria-pressed=true] { background: var(--surface-selected); color: var(--accent); }
+.admin-log-detail { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.admin-log-detail .admin-actions { margin: 0 0 10px; }
+.admin-log-detail textarea { flex: 1; width: 100%; box-sizing: border-box; min-height: 180px; resize: none; border: 0; border-radius: 8px; padding: 12px; background: var(--surface); font: 11px/1.6 var(--font-mono); }
+.admin-inline-confirm { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 0; }
+.admin-inline-confirm span { flex: 1 1 200px; color: var(--text-secondary); font-size: 12px; }
+.admin-request-head, .admin-request-row { display: grid; grid-template-columns: minmax(130px, .6fr) minmax(150px, 2fr) 45px 65px; gap: 12px; padding: 10px 12px; }
+.admin-request-head { color: var(--text-secondary); font-size: 12px; }
+.admin-request-row { font-size: 11px; }
+.admin-request-row span { min-width: 0; overflow-wrap: anywhere; }
+.admin-request-row span:nth-last-child(-n+2) { font-family: var(--font-mono); text-align: right; }
+.admin-empty { padding: 16px 12px; color: var(--text-secondary); }
+.admin-content [hidden] { display: none !important; }
+@media (max-width: 850px) {
+  .admin-layout { grid-template-columns: 150px minmax(0, 1fr); }
+  .admin-content { padding: 24px 18px; }
+  .admin-metrics strong { font-size: 18px; }
+  .admin-metrics > div { padding: 14px 10px; }
+  .admin-log-workspace { grid-template-columns: 185px minmax(0, 1fr); gap: 12px; }
+}
+@media (max-width: 600px) {
+  .admin-layout { grid-template-columns: 1fr; grid-template-rows: auto minmax(0, 1fr); }
+  .admin-navigation { flex-direction: row; align-items: center; padding: 8px; overflow: auto; }
+  .admin-navigation .admin-brand, .admin-nav-caption, .admin-navigation .admin-back { display: none; }
+  .admin-navigation button { flex-shrink: 0; }
+  .admin-content { padding: 20px 14px; }
+  .admin-heading h1 { font-size: 21px; }
+  .admin-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-properties > div { grid-template-columns: 90px minmax(0, 1fr); }
+  .admin-root-head { display: none; }
+  .admin-root-row { grid-template-columns: minmax(0, 1fr) var(--button-size); gap: 8px; }
+  .admin-root-row > input { grid-column: 1; grid-row: 2; }
+  .admin-root-row > button { grid-column: 2; grid-row: 1 / 3; }
+  .admin-scan-actions { flex-wrap: wrap; }
+  .admin-scan-actions > span { flex-basis: 100%; }
+  .admin-log-workspace { display: flex; flex-direction: column; height: auto; }
+  .admin-log-sidebar { max-height: 220px; }
+  .admin-log-detail { min-height: 340px; }
+  .admin-request-head, .admin-request-row { grid-template-columns: 95px minmax(70px, 1fr) 30px 45px; gap: 6px; padding: 8px 4px; }
+}
+
+#admin-app[data-denied] .admin-content > section { display: none; }
+/* The shared player stylesheet has generic main/dl/textarea rules. Keep this
+   page's structure explicit so those rules cannot collapse a full-width pane. */
+.admin-content > section { width: 100%; flex: 0 0 auto; box-sizing: border-box; }
+.admin-properties { display: block; }
+.admin-properties dt, .admin-properties dd { padding: 0; }
+.admin-content > section.admin-logs { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.admin-logs .admin-heading, .admin-log-tabs { flex-shrink: 0; }
+.admin-log-workspace { flex: 1; height: auto; min-height: 320px; }
+.admin-log-detail textarea { max-height: none; }
+#requests-view { overflow: auto; }
+#admin-message { width: 100%; box-sizing: border-box; flex-shrink: 0; background: var(--surface-group); }
+@media (max-width: 600px) {
+  .admin-content > section.admin-logs { flex: 0 0 auto; }
+  .admin-log-workspace { flex: none; }
+}

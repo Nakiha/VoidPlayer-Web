@@ -21,7 +21,7 @@ await utimes(path.join(media, 'sample.mp4'), 1, 1);
 const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r));
 const port = socket.address().port; await new Promise(r => socket.close(r));
 const token = randomBytes(32).toString('hex'), password = randomBytes(18).toString('hex');
-const env = { ...process.env, VOIDPLAYER_SITE: 'https://localhost', VOIDPLAYER_MEDIA_DIR: media, VOIDPLAYER_PROXY_TOKEN: token };
+const env = { ...process.env, VOIDPLAYER_SITE: 'https://localhost', VOIDPLAYER_MEDIA_DIR: media, VOIDPLAYER_PROXY_TOKEN: token, VOIDPLAYER_ADMIN_USERS: 'qa.tester' };
 const files = ['-f', path.join(program, 'deploy/compose.yaml'), '-f', path.join(temp, 'qa.yaml')];
 const docker = (args, options = {}) => execFileSync('docker', args, { env, encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'], timeout: 240000, ...options });
 const compose = args => docker(['compose', '-p', project, ...files, ...args]);
@@ -37,11 +37,11 @@ try {
   const caFile = path.join(temp, 'root.crt');
   compose(['cp', 'gateway:/data/caddy/pki/authorities/local/root.crt', caFile]);
   const ca = await readFile(caFile);
-  const get = (url, headers = {}, trusted = true, method = 'GET') => new Promise((resolve, reject) => {
+  const get = (url, headers = {}, trusted = true, method = 'GET', body) => new Promise((resolve, reject) => {
     const req = request(`https://localhost:${port}${url}`, { method, family: 4, agent: false, ...(trusted ? { ca } : {}), headers, timeout: 5000 }, res => {
       const chunks = []; res.on('data', d => chunks.push(d)); res.on('error', reject);
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
-    }); req.on('error', reject); req.on('timeout', () => req.destroy(new Error('HTTPS request timed out'))); req.end();
+    }); req.on('error', reject); req.on('timeout', () => req.destroy(new Error('HTTPS request timed out'))); req.end(body);
   });
   await assert.rejects(get('/', {}, false), /certificate|issuer|self.signed/i, 'TLS requires trusting this deployment CA');
   assert.equal((await get('/')).status, 401);
@@ -69,6 +69,12 @@ try {
   assert.equal(app.Mounts.find(m => m.Destination === '/media').RW, false);
   assert.equal(app.Mounts.find(m => m.Destination === '/data').RW, true);
   compose(['exec', '-T', 'app', 'test', '-s', '/data/library.sqlite']);
+  assert.equal((await get('/admin', auth)).status, 200);
+  assert.equal(JSON.parse((await get('/api/admin/status', auth)).body).identity.id, 'qa.tester');
+  const rootConfig = JSON.parse((await get('/api/admin/roots', auth)).body);
+  assert.equal(rootConfig.writable, true); assert.equal(rootConfig.configFile, '/data/voidplayer.config.json');
+  const saved = await get('/api/admin/roots', { ...auth, origin: `https://localhost:${port}`, 'x-voidplayer-action': 'admin', 'content-type': 'application/json' }, true, 'PUT', JSON.stringify({ revision: rootConfig.revision, roots: rootConfig.roots.map(r => ({ ...r, name: 'QA archive' })) }));
+  assert.equal(saved.status, 200, saved.body.toString());
   const beforeScan = JSON.parse((await get('/api/library/scan', auth)).body).job.id;
   compose(['restart']);
   compose(['up', '-d', '--wait', '--wait-timeout', '120']);
@@ -83,11 +89,12 @@ try {
   assert.equal((await get(url, { ...auth, range: 'bytes=0-7' })).status, 206);
   const afterScan = JSON.parse((await get('/api/library/scan', auth)).body).job.id;
   assert.ok(afterScan > beforeScan, 'restart keeps scan history in the persistent data volume');
+  assert.equal(JSON.parse((await get('/api/admin/roots', auth)).body).roots[0].name, 'QA archive', 'entrypoint must not overwrite saved configuration after restart');
   compose(['cp', 'gateway:/data/caddy/pki/authorities/local/root.crt', caFile]);
   assert.deepEqual(await readFile(caFile), ca, 'Restart retains the trusted CA');
   const logs = compose(['logs', '--no-color', 'app']);
   assert.match(logs, /"actorId":"qa.tester"/); assert.ok(!logs.includes(token));
-  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, persistent index and CA after restart');
+  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, admin identity and writable configuration on /data, persistent configuration/index and CA after restart');
 } catch (error) {
   if (started) { try { console.error(compose(['logs', '--no-color', '--tail', '80'])); } catch {} }
   throw error;

@@ -29,6 +29,10 @@ Linux 为 `$XDG_DATA_HOME/voidplayer` 或 `~/.local/share/voidplayer`。
 长期运行应交给系统服务管理器或容器，服务的启动命令使用绝对路径并显式指定数据目录。Linux systemd、macOS LaunchAgent、Windows 计划任务及备份恢复步骤见 [后台运行与恢复](operations.md)。
 macOS 公网下载包的签名/公证尚待首发平台验收，不提供绕过系统信任检查的启动脚本。
 
+## 服务管理
+
+访问 `/admin` 或点击播放器的服务状态灯，管理媒体目录、扫描任务并检视运行状态与上传日志。远端需要配置 `adminUsers` 或 `VOIDPLAYER_ADMIN_USERS`。详见 [服务管理与权限](admin.md)。
+
 ## 升级与恢复
 
 1. 停止旧服务并备份独立数据目录，保留旧程序包。

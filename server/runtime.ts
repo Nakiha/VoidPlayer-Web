@@ -4,6 +4,7 @@ import path from 'node:path';
 import { MediaLibraryIndex } from './library.ts';
 import { createMediaServer } from './app.ts';
 import type { ServiceConfig } from './config.ts';
+import { AdminController } from './admin.ts';
 
 export async function validateServiceConfig(config: ServiceConfig, requireStatic = true, checkMedia = true) {
   for (const input of checkMedia ? config.mediaRoots : []) {
@@ -21,11 +22,12 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
   return { staticOk, proxyToken };
 }
 
-export async function startService(config: ServiceConfig, requireStatic = true) {
+export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
   const { staticOk, proxyToken } = await validateServiceConfig(config, requireStatic, false);
   const library = new MediaLibraryIndex(config.mediaRoots, { ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   library.start();
-  const server = createMediaServer({ proxyToken, library, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
+  const admin = new AdminController(config, library, build);
+  const server = createMediaServer({ proxyToken, library, admin, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
   });
   try { await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(config.port, config.host, () => { server.removeListener('error', reject); resolve(); }); }); }
@@ -34,5 +36,5 @@ export async function startService(config: ServiceConfig, requireStatic = true) 
   return { server, library, close: async () => { library.stop(); await new Promise<void>(resolve => {
     const force = setTimeout(() => server.closeAllConnections(), 5000); force.unref();
     server.close(() => { clearTimeout(force); resolve(); });
-  }); await library.close(); } };
+  }); await admin.close(); await library.close(); } };
 }

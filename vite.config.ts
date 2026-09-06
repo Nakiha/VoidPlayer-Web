@@ -20,7 +20,7 @@ function buildInfo() {
     }
   }
   hashSources(sourceDir);
-  hash.update(readFileSync(resolve(import.meta.dirname, 'package-lock.json')));
+  for (const file of ['package-lock.json', 'index.html', 'admin/index.html', 'public/theme-init.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
     catch { return [name, null]; }
@@ -28,6 +28,7 @@ function buildInfo() {
   return { revision, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
 export default defineConfig({
+  build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
   plugins: [{
     name: 'voidplayer-build-evidence',
     transform(code, id) {

@@ -77,3 +77,18 @@ test('directory watch hints can be disabled without disabling periodic calibrati
     await assert.rejects(loadConfig([], 'production', root), /indexWatch/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+
+test('explicit admin environment overrides JSON identities, including revoking all users', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-admin-config-'));
+  const original = process.env.VOIDPLAYER_ADMIN_USERS;
+  try {
+    await writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: ['media'], adminUsers: ['json-owner'] }));
+    process.env.VOIDPLAYER_ADMIN_USERS = 'team.admin, qa.tester';
+    assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, ['team.admin', 'qa.tester']);
+    process.env.VOIDPLAYER_ADMIN_USERS = '';
+    assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, []);
+    process.env.VOIDPLAYER_ADMIN_USERS = 'not a user';
+    await assert.rejects(loadConfig([], 'production', root), /adminUsers/);
+  } finally { if (original === undefined) delete process.env.VOIDPLAYER_ADMIN_USERS; else process.env.VOIDPLAYER_ADMIN_USERS = original; await rm(root, { recursive: true, force: true }); }
+});

@@ -1,5 +1,7 @@
 {
-  "mediaRoots": ["fixtures/video"],
+  "mediaRoots": [
+    "fixtures/video"
+  ],
   "host": "127.0.0.1",
   "port": 5180,
   "devPort": 5178,
@@ -7,5 +9,6 @@
   "logsDir": "logs",
   "allowLocalReveal": false,
   "indexTtlMs": 30000,
-  "indexWatch": true
+  "indexWatch": true,
+  "adminUsers": []
 }

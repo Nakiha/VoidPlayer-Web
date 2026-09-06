@@ -7,6 +7,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { allowReveal, localRequest, revealFile } from './reveal.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
+import { AdminError, adminIdentity, adminWriteAllowed, readAdminJson } from './admin.ts';
+import type { AdminController } from './admin.ts';
 
 // Narrow read-only HTTP API for the web player:
 //   GET /api/library        -> media list under the whitelisted folders
@@ -17,6 +19,7 @@ export interface ServerOptions {
   roots: string[];
   proxyToken?: string;
   library?: MediaLibraryIndex;
+  admin?: AdminController;
   allowLocalReveal?: boolean;
   reveal?: (absolutePath: string) => Promise<void>;
   staticDir?: string;
@@ -100,6 +103,9 @@ export function createMediaServer(options: ServerOptions): Server {
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
+  const sockets = new Set<import('node:net').Socket>();
+  let activeRequests = 0, completedRequests = 0, abortedRequests = 0;
+  const recentRequests: Record<string, unknown>[] = [];
 
   const server = createServer(async (req, res) => {
     const started = performance.now();
@@ -107,11 +113,15 @@ export function createMediaServer(options: ServerOptions): Server {
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
     let status = 200, logged = false;
+    activeRequests++;
     const finish = () => {
       if (logged) return; logged = true;
+      activeRequests--; completedRequests++; if (!res.writableFinished) abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
-      logLine({ t: new Date().toISOString(), requestId, actorId: actor?.id ?? null, method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) });
+      const entry = { t: new Date().toISOString(), requestId, actorId: actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
+      logLine(entry);
+      if (!pathname.startsWith('/api/admin/') || req.method !== 'GET') { recentRequests.push(entry); if (recentRequests.length > 200) recentRequests.shift(); }
     };
     res.once('finish', finish); res.once('close', finish);
     try {
@@ -119,11 +129,49 @@ export function createMediaServer(options: ServerOptions): Server {
       const healthRequest = ['/api/health', '/api/ready'].includes(url.pathname) && req.method === 'GET';
       if (options.proxyToken && !actor && !healthRequest) { status = 401; sendJson(res, 401, { error: '请通过团队登录入口访问。' }); return; }
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { reveal: !!options.allowLocalReveal && localRequest(req) } });
+        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
+      }
+      if (url.pathname.startsWith('/api/admin/')) {
+        const admin = options.admin;
+        if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
+        const identity = adminIdentity(req, options.proxyToken, admin.config.adminUsers);
+        if (!identity) { sendJson(res, 403, { error: options.proxyToken ? '当前网关用户没有管理权限，请在服务器配置的 adminUsers 中授权。' : '管理后台仅接受本机访问，远端请配置认证网关与管理员身份。' }); return; }
+        if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
+        try {
+          if (url.pathname === '/api/admin/status' && req.method === 'GET') {
+            sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests, connections: sockets.size, completedRequests, abortedRequests }, recentRequests }); return;
+          }
+          if (url.pathname === '/api/admin/roots') {
+            if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return; }
+            if (req.method === 'PUT') { sendJson(res, 200, await admin.saveRoots(await readAdminJson(req))); return; }
+          }
+          if (url.pathname === '/api/admin/scan') {
+            if (req.method === 'GET') {
+              const offset = Number(url.searchParams.get('offset') ?? 0);
+              if (!Number.isSafeInteger(offset) || offset < 0) throw new AdminError(400, '错误分页位置无效。');
+              sendJson(res, 200, { ...library.status(), errors: library.errors(100, offset), offset }); return;
+            }
+            if (req.method === 'POST') {
+              const body = await readAdminJson(req) as { action?: unknown } | null;
+              if (body?.action === 'refresh') void library.refresh().catch(() => {});
+              else if (body?.action === 'cancel') library.cancel();
+              else throw new AdminError(400, '未知扫描操作。');
+              sendJson(res, 202, library.status()); return;
+            }
+          }
+          if (url.pathname === '/api/admin/logs' && req.method === 'GET') { sendJson(res, 200, await admin.logs(url.searchParams.get('before') ?? '')); return; }
+          const log = /^\/api\/admin\/logs\/([^/]+)$/.exec(url.pathname);
+          if (log) {
+            const name = decodeURIComponent(log[1]);
+            if (req.method === 'GET') { sendJson(res, 200, await admin.readLog(name, url.searchParams.get('v'))); return; }
+            if (req.method === 'DELETE') { sendJson(res, 200, await admin.deleteLog(name, typeof req.headers['if-match'] === 'string' ? req.headers['if-match'].replace(/^"|"$/g, '') : null)); return; }
+          }
+          sendJson(res, 405, { error: '不支持的管理操作。' }); return;
+        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
       }
       if (url.pathname === '/api/library/scan' && req.method === 'GET') {
         sendJson(res, 200, { ...library.status(), errors: library.errors() }); return;
@@ -182,8 +230,9 @@ export function createMediaServer(options: ServerOptions): Server {
           status = 400; sendJson(res, 400, { error: '不是有效的日志文档' }); return;
         }
         await fs.mkdir(options.logsDir, { recursive: true });
-        const name = `voidplayer-log-${new Date().toISOString().replace(/[:.]/g, '-')}-${doc.sessionId.slice(0, 8)}.json`;
-        await fs.writeFile(path.join(options.logsDir, name), JSON.stringify(doc));
+        const receivedAt = new Date().toISOString();
+        const name = `voidplayer-log-${receivedAt.replace(/[:.]/g, '-')}-${requestId}-${doc.sessionId.slice(0, 8)}.json`;
+        await fs.writeFile(path.join(options.logsDir, name), JSON.stringify({ ...doc, serverReceipt: { id: requestId, receivedAt, actorId: actor?.id ?? (localRequest(req) ? 'local' : null) } }), { flag: 'wx', mode: 0o600 });
         status = 201; sendJson(res, 201, { ok: true, name });
         return;
       }
@@ -207,7 +256,7 @@ export function createMediaServer(options: ServerOptions): Server {
         return;
       }
       if (staticDir) {
-        const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : url.pathname);
+        const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : ['/admin', '/admin/'].includes(url.pathname) ? '/admin/index.html' : url.pathname);
         const root = await staticRoot;
         const candidate = root ? path.join(root, rel) : '';
         const real = await fs.realpath(candidate).catch(() => null);
@@ -225,6 +274,7 @@ export function createMediaServer(options: ServerOptions): Server {
       else res.end();
     }
   });
+  server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   if (!options.library) server.on('close', () => { void library.close(); });
   return server;
 }

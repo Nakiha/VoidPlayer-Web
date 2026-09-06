@@ -7,8 +7,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --chmod=755 voidplayer ./voidplayer
 COPY dist ./dist
-COPY deploy/container.config.json ./voidplayer.config.json
+COPY deploy/container.config.json ./voidplayer.config.example.json
+COPY --chmod=755 deploy/container-entrypoint.sh ./start.sh
 USER voidplayer
 EXPOSE 5180
-HEALTHCHECK --interval=20s --timeout=3s --start-period=30s --retries=3 CMD ["/app/voidplayer", "--config", "/app/voidplayer.config.json", "--healthcheck"]
-CMD ["/app/voidplayer", "--data-dir", "/data", "--config", "/app/voidplayer.config.json"]
+HEALTHCHECK --interval=20s --timeout=3s --start-period=30s --retries=3 CMD ["/app/voidplayer", "--data-dir", "/data", "--healthcheck"]
+ENTRYPOINT ["/app/start.sh"]

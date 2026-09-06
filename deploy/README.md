@@ -68,7 +68,7 @@ Basic Auth 暂无应用内账号管理、改密与登出界面；本轮适用于
 - `/api/health`：进程存活；`/api/ready`：已有可查询的媒体索引（可能来自上次运行，存储是否在线需另看扫描状态）。容器健康检查使用 ready。
 - 媒体索引保存在本地 SQLite，后台默认每 30 秒校准。Range 请求直接查索引，不等待全库扫描；仍检查文件版本和白名单边界。根目录离线时保留缓存，任务状态见 `/api/library/scan`。
 - 应用数据保存在 `app-data` 卷，媒体 `/media` 保持只读；迁移时保留该卷及配置。备份前停止应用，复制完整 `/data`，不能只复制正在写入的 SQLite 主文件。
-- `docker compose logs --tail=100 app gateway` 查看服务请求日志；默认每容器 10 MB × 3 轮转。这是短期排障记录，不是长期审计存档。浏览器诊断仍保存在本地，容器默认禁用上传。
+- `docker compose logs --tail=100 app gateway` 查看服务请求日志；默认每容器 10 MB × 3 轮转。这是短期排障记录，不是长期审计存档。浏览器诊断仍保存在本地，容器默认禁用上传。管理身份、持久化配置和启用方式见 [服务管理](admin.md)。
 - 修改账号文件后执行 `docker compose exec gateway caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`；网关密钥更新需重建两个容器的环境。
 - 更新时校验新包 `.sha256`，解压到新目录，只迁移实际 `.env`、`users.caddy`，执行 `docker compose up -d --build`。模板固定项目名为 `voidplayer`，避免新目录另建一套 CA 数据卷；同机多实例需各自指定并保留不同项目名。保留旧包便于回退。
 - `docker compose down` 停止；不要加 `-v`，否则会删除媒体索引和 CA 数据卷，客户端证书信任需要重新配置。备份 CA 私钥所在卷时按密钥管理要求保护。

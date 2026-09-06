@@ -69,7 +69,7 @@ async function main() {
     if (init) {
       await mkdir(dataDir, { recursive: true });
       // Resource paths remain release-relative so moving/upgrading the app works.
-      const { staticDir: _static, devPort: _dev, dataDir: _data, ...rest } = config;
+      const { staticDir: _static, devPort: _dev, dataDir: _data, origin: _origin, ...rest } = config;
       const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name }) => ({ id, path, name })), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
       if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
       await writeFile(configFile, JSON.stringify(stored, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
@@ -78,7 +78,7 @@ async function main() {
     return;
   }
   console.log(`VoidPlayer ${version} (${revision})\n数据目录: ${dataDir}`);
-  const service = await startService(config);
+  const service = await startService(config, true, { version, revision });
   let closing = false;
   const close = async () => { if (closing) return; closing = true; await service.close(); };
   process.on('SIGINT', close); process.on('SIGTERM', close);
