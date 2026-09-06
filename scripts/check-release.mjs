@@ -12,7 +12,7 @@ const archive = path.resolve(process.argv[2] ?? JSON.parse(await readFile(path.j
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 assert.equal(digest(await readFile(archive)), (await readFile(archive + '.sha256', 'utf8')).split(/\s+/)[0]);
 const temp = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-release-'));
-let child, output = '';
+let child, output = '', successMessage = '';
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
 env.PATH = path.join(temp, 'empty-path');
@@ -110,5 +110,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  console.log(`PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'} and upgrade/backup/restore preserving data`);
-} finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true }); }
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'} and upgrade/backup/restore preserving data`;
+} finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+console.log(successMessage);
