@@ -12,7 +12,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
   clip-path，不动解码路径）；`log.ts` / `log-panel.ts` / `log-storage.ts`
   本地诊断日志；`agent.ts` WebMCP 工具；`library.ts` / `ui/source-catalog.ts` / `ui/workbench.ts` 媒体库与工具区；`ui/track-drag.ts` 排序输入；`ui/seek-preview.ts` 时间预览/标注吸附；`ui/source-actions.ts` 服务连接和文件操作。
 - `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：Worker 内的 FLV 分块读取、索引及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
-- `server/`：零依赖 Node 24+ 服务（共享媒体索引 + Range + 静态网页 + 可信网关身份）；`config.ts` / `runtime.ts` 为开发与正式运行共享入口。
+- `server/`：基于 Node API 的零依赖服务（共享媒体索引 + Range + 静态网页 + 可信网关身份）；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为内网 HTTPS / 独立账号部署模板。
 - `test/`：node:test，无浏览器依赖；WASM 用例在 Node worker_threads 里跑真实 core。
 - `scripts/`：`sync-wasm-core.sh`（从 VoidPlayer-FFmpeg-Build 产物同步 core，可用
@@ -45,3 +45,9 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 
 改动播放/解码路径后必须跑 bench；改动载入路径后跑测试即可。
 改动视图尺寸调度、轨道操作或片源 UI 后跑 test:browser；需先同步样片/core 并安装 Playwright WebKit。
+
+## 独立发布
+
+- 正式打包走 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
+- `scripts/release-core.json` 固定上游修订，更新前先推送解码器源码；不要引用本地未提交改动或浮动版本。
+- `scripts/package-release.mjs` 生成独立程序、资源、来源清单与校验和；`npm run test:release` 校验解压产物，无需真实片源。仅上传预览 artifact，不自动公开发布 Release。
