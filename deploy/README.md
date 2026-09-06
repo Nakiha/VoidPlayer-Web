@@ -94,7 +94,15 @@ npm run service -- uninstall
 源码仓库安装 `.bun-version` 指定的 Bun 后执行 `npm run release`（可用 `BUN_BIN` 指定路径），产物在 `artifacts/`；`.tar.gz.sha256` 校验归档，包内 `release.json` 包含逐文件 SHA-256。发布不包含 node_modules 或真实片源。
 `node scripts/package-release.mjs --target bun-linux-x64` 可从已构建网页生成其他平台的包；交叉编译不代表已在该平台运行。`npm run test:release` 在当前平台校验并测试最新产物，也可显式传归档路径。
 
-GitHub Actions 的 `Build and verify standalone previews` 工作流在 Linux/macOS/Windows 原生 runner 上构建并测试，手动触发时提供 core 归档 HTTPS URL 和 SHA-256。归档根目录应直接包含单/多线程的四个 JS/WASM 文件及 `LICENSES/`；文件来自独立 core 构建仓库。本工作流只上传运行产物，不自动创建公开 release；目标平台的实际运行结果需在首发前检查。
+正式打包入口是 GitHub Actions 的 [Build and verify standalone previews](https://github.com/Nakiha/VoidPlayer-Web/actions/workflows/release-preview.yml)。推送代码到 `main` 自动运行（纯文档改动除外），也可在 Actions 页面点击 **Run workflow**，无需手工准备 core 下载地址。
+
+1. Linux 构建任务读取 `scripts/release-core.json`，检出固定修订的独立解码器构建仓库、FFmpeg 和 dav1d，使用固定 Emscripten/Meson/Ninja 构建单/多线程 core。裁剪和编译逻辑仍由解码器仓库维护。源码和构建工具锁定不变时复用缓存，缓存也重新校验接口、来源和逐文件 SHA-256。
+2. Linux x64（Ubuntu 24.04）、Windows x64（Windows Server 2022）、macOS ARM64（macOS 14）原生 runner 消费同一份 core，使用固定 Node/Bun 构建网页和独立程序，再验证解压产物。Node 仅用于构建与测试；被测程序运行时 PATH 为空。
+3. 运行成功后，在该次 Actions 页面的 **Artifacts** 下载 `voidplayer-linux-x64`、`voidplayer-windows-x64` 或 `voidplayer-darwin-arm64`。外层是 GitHub artifact ZIP，里面是发布包 `.tar.gz` 及 `.sha256`；解开发布包即可运行。预览包保留 30 天，尚未纳入 Linux ARM64、Windows ARM64 和 Intel Mac 的验收。
+
+包内 `release.json` 和 `BUILD-SOURCES.md` 记录应用修订、运行时版本、解码器精确源码修订和构建任务链接，core 自身的 `provenance.json` 记录其字节校验和。更新解码器时先提交并推送解码器仓库，再更新 lock；不引用本地未提交源码或浮动的 `latest`。
+
+本工作流只生成和测试预览产物，不自动创建公开 Release。Windows 控制台优雅退出、Docker/HTTPS 和真实网络存储仍需单独验收。
 
 开发机可运行 `CADDY_BIN=/path/to/caddy node scripts/check-gateway.mjs` 做独立的 HTTPS/鉴权/Range 验证；使用临时私有 CA，不安装到系统信任。
 

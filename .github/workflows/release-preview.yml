@@ -1,23 +1,107 @@
 name: Build and verify standalone previews
+
 on:
+  push:
+    branches: [main]
+    paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
-    inputs:
-      core_url:
-        description: 'HTTPS URL of flat core archive (both JS/WASM variants and LICENSES/)'
-        type: string
-        required: true
-      core_sha256:
-        description: 'SHA-256 of that exact archive'
-        type: string
-        required: true
+
 permissions:
   contents: read
+
+concurrency:
+  group: standalone-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  decoder:
+    name: Build pinned WASM decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Read decoder lock
+        id: core
+        run: |
+          node --input-type=module -e '
+          import { readFileSync, appendFileSync } from "node:fs";
+          const lock = JSON.parse(readFileSync("scripts/release-core.json", "utf8"));
+          for (const [key, value] of Object.entries(lock)) appendFileSync(process.env.GITHUB_OUTPUT, `${key}=${value}\n`);
+          '
+      - name: Restore exact decoder build
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: public/vendor/voidplayer-core
+          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs') }}
+      - name: Checkout decoder build source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.revision }}
+          path: .run/core-source
+      - name: Checkout FFmpeg source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.ffmpegRepository }}
+          ref: ${{ steps.core.outputs.ffmpegRevision }}
+          path: .run/core-source/.build/sources/ffmpeg-wasm
+      - name: Checkout dav1d source
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.core.outputs.dav1dRepository }}
+          ref: ${{ steps.core.outputs.dav1dRevision }}
+          path: .run/core-source/.build/sources/dav1d-wasm
+      - name: Setup Emscripten
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: ${{ steps.core.outputs.emscripten }}
+          actions-cache-folder: .run/emsdk-cache
+      - uses: actions/setup-python@v5
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          python-version: '3.12'
+      - name: Install decoder build tools
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          MESON_VERSION: ${{ steps.core.outputs.meson }}
+          NINJA_VERSION: ${{ steps.core.outputs.ninja }}
+        run: python -m pip install "meson==$MESON_VERSION" "ninja==$NINJA_VERSION"
+      - name: Build both decoder variants using upstream build script
+        if: steps.cache.outputs.cache-hit != 'true'
+        env:
+          FFMPEG_REF: ${{ steps.core.outputs.ffmpegRef }}
+        run: |
+          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package
+          bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package --mt
+          node scripts/prepare-release-core.mjs .run/core-source
+      - name: Verify decoder provenance and required interfaces
+        run: node scripts/check-release-core.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core/
+          if-no-files-found: error
+          retention-days: 14
+
   native-release:
+    name: Standalone ${{ matrix.platform }}
+    needs: decoder
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - { os: ubuntu-24.04, platform: linux-x64 }
+          - { os: windows-2022, platform: windows-x64 }
+          - { os: macos-14, platform: darwin-arm64 }
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -31,43 +115,25 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: actions/setup-python@v5
+      - uses: actions/download-artifact@v4
         with:
-          python-version: '3.12'
+          name: release-core
+          path: public/vendor/voidplayer-core
       - run: npm ci
-      - name: Download and verify decoder artifacts
-        env:
-          CORE_URL: ${{ inputs.core_url }}
-          CORE_SHA256: ${{ inputs.core_sha256 }}
-        run: |
-          curl --fail --location --proto '=https' --proto-redir '=https' --output core.tar.gz -- "$CORE_URL"
-          python - <<'PY'
-          import hashlib, os, pathlib, re, tarfile
-          archive = pathlib.Path('core.tar.gz')
-          expected = os.environ['CORE_SHA256'].lower()
-          assert re.fullmatch(r'[0-9a-f]{64}', expected), 'Invalid SHA-256'
-          assert hashlib.sha256(archive.read_bytes()).hexdigest() == expected, 'Core digest mismatch'
-          target = pathlib.Path('public/vendor/voidplayer-core')
-          target.mkdir(parents=True, exist_ok=True)
-          names = {'voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm'}
-          with tarfile.open(archive) as src:
-              for member in src.getmembers():
-                  rel = pathlib.PurePosixPath(member.name)
-                  assert not rel.is_absolute() and '..' not in rel.parts, 'Unsafe archive path'
-                  if member.isdir():
-                      continue
-                  assert member.isfile(), 'Core archive must contain regular files'
-                  assert str(rel) in names or rel.parts[0] == 'LICENSES', 'Unexpected core file'
-                  dest = target.joinpath(*rel.parts)
-                  dest.parent.mkdir(parents=True, exist_ok=True)
-                  dest.write_bytes(src.extractfile(member).read())
-          archive.unlink()
-          PY
+      - run: node scripts/check-release-core.mjs
       - run: node --test test/config.test.ts
-      - run: npm run release
+      - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
       - uses: actions/upload-artifact@v4
         with:
-          name: standalone-${{ matrix.os }}
+          name: voidplayer-${{ matrix.platform }}
           path: artifacts/*.tar.gz*
           if-no-files-found: error
+          retention-days: 30
+      - name: Write download summary
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          echo "### $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
+          echo '构建与独立运行测试通过。请下载本次运行的同名 artifact，解压后核验 .sha256。' >> "$GITHUB_STEP_SUMMARY"
+          echo '最终用户无需安装 Node/Bun；此流程生成预览产物，不自动发布公开 Release。' >> "$GITHUB_STEP_SUMMARY"
