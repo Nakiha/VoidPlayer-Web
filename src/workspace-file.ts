@@ -76,7 +76,8 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
     if (m.author) { const a = object(m.author); mark.author = { id: text(a.id, 200), name: text(a.name, 200) }; }
     return mark;
   });
-  if (new Set(marks.map(m => m.id)).size !== marks.length || marks.some(m => !m.id)) throw new Error('工作区标注 ID 重复或为空。');
+  const markIds = new Set(marks.map(m => m.id));
+  if (markIds.size !== marks.length || markIds.has('')) throw new Error('工作区标注 ID 重复或为空。');
   const viewport = new Viewport(); viewport.apply(object(d.viewport));
   let layout: WorkspaceLayout | undefined;
   if (d.layout) {
@@ -86,7 +87,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   }
   const thumbnails = array(d.thumbnails ?? [], 10000).map(value => {
     const t = object(value), url = text(t.url, 2 * 1024 * 1024), id = text(t.id, 200);
-    if (!marks.some(m => m.id === id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
+    if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
   return { schema: 'voidplayer-workspace', version: 1, generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };

@@ -117,3 +117,23 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
   .shortcut-row { gap: 6px; padding: 10px; font-size: 12px; }
   .shortcut-keys { flex-wrap: wrap; justify-content: flex-end; }
 }
+
+.saved-workspace-editor, .saved-workspace-search, .saved-workspace-pages { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.saved-workspace-editor { align-items: flex-end; flex-wrap: wrap; }
+.saved-workspace-editor label { display: flex; flex-direction: column; gap: 8px; flex: 1 1 180px; min-width: 0; font-size: var(--text-sm); color: var(--text-secondary); }
+.saved-workspace-editor input, .saved-workspace-search input { min-width: 0; flex: 1; border: 0; background: var(--search-fill); }
+.saved-workspace-editor button, .saved-workspace-search button { flex-shrink: 0; white-space: nowrap; }
+.saved-workspace-list { border-radius: var(--radius-medium); overflow: hidden; }
+.saved-workspace-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; background: var(--surface-group); }
+.saved-workspace-row:nth-child(even) { background: var(--surface-stripe); }
+.saved-workspace-open { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; text-align: left; background: transparent; gap: 5px; padding: 8px; }
+.saved-workspace-open strong { overflow-wrap: anywhere; font-weight: 600; }
+.saved-workspace-open span { color: var(--text-secondary); font-size: var(--text-xs); }
+.saved-workspace-danger:hover, #saved-workspace-delete-confirm { color: var(--action-danger); background: var(--action-danger-fill); }
+.saved-workspace-conflict { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 0; }
+.saved-workspace-conflict span { flex: 1 1 100%; color: var(--text-secondary); }
+#saved-workspace-message[data-error=true] { color: var(--action-danger); }
+
+.saved-workspace-row { padding-block: 0; }
+.saved-workspace-row:has(.saved-workspace-open[aria-pressed=true]) { background: var(--surface-selected); }
+.saved-workspace-open[aria-pressed=true] { background: transparent; }

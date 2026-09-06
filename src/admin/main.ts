@@ -6,6 +6,7 @@ import '../style.css';
 import './style.css';
 import { observeTheme } from '../ui/theme.ts';
 import { icon } from '../ui/icons.ts';
+import { installWorkspaceAdmin } from './workspaces.ts';
 import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
 import type { AdminController } from '../../server/admin.ts';
@@ -141,10 +142,12 @@ function renderRequests() {
     return row;
   }));
 }
+const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const measurements = installMeasurements(life.signal, notice, () => status?.identity.id);
 for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   pane = id; measurements.activate(id === 'measurements'); if (!app.dataset.denied) notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
+  if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'logs') void act(loadLogs);
 };
 $('add-root').onclick = () => { const row = rootRow({ id: crypto.randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };

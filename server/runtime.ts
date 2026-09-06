@@ -26,12 +26,13 @@ export async function startService(config: ServiceConfig, requireStatic = true, 
   const { staticOk, proxyToken } = await validateServiceConfig(config, requireStatic, false);
   const library = new MediaLibraryIndex(config.mediaRoots, { ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   library.start();
-  const admin = new AdminController(config, library, build);
+  let admin: AdminController;
+  try { admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
   const server = createMediaServer({ proxyToken, library, admin, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
   });
   try { await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(config.port, config.host, () => { server.removeListener('error', reject); resolve(); }); }); }
-  catch (error) { await library.close(); throw error; }
+  catch (error) { await admin.close(); await library.close(); throw error; }
   console.log(`媒体服务: http://${config.host}:${config.port} · ${config.mediaRoots.length} 个媒体目录`);
   return { server, library, close: async () => { library.stop(); await new Promise<void>(resolve => {
     const force = setTimeout(() => server.closeAllConnections(), 5000); force.unref();

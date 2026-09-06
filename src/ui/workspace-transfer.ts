@@ -6,6 +6,7 @@ import type { WorkspaceFile } from '../workspace-file.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { pinLibraryReference } from '../media-reference.ts';
 import { icon } from './icons.ts';
+import { installSavedWorkspaces } from './saved-workspaces.ts';
 
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 const matchesFile = (file: File, info: MediaInfo) => file.name === info.name.split('/').at(-1) && file.size === info.size && file.lastModified === info.lastModified;
@@ -50,6 +51,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
 }) {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
+  let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   function exportWorkspace() {
     const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture() };
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image ? [{ id: mark.id, ...image }] : []; });
@@ -63,7 +65,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
       const files = await resolveLocalFiles(active.filter(m => !m.source), supplied);
-      if (!files) return;
+      if (!files) return false;
       options.beforeRestore();
       await session.restoreWorkspace(document, async info => {
         if (!info.source) return openMedia(files.get(info.id)!);
@@ -72,10 +74,14 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       });
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      options.restore(document);
+      options.restore(document); saved?.detach(); return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  const unsubscribe = session.subscribe(() => saved?.update());
+  const savedId = new URL(location.href).searchParams.get('workspace');
+  if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void saved.open(savedId);
   document.getElementById('workspace-import')!.addEventListener('click', () => input.click(), { signal: lifetime.signal });
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
   document.getElementById('export')!.addEventListener('click', () => void options.act(async () => {
@@ -83,5 +89,5 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     const a = document.createElement('a'); a.href = url; a.download = `VoidPlayer-${new Date().toISOString().slice(0, 10)}.voidplayer`; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }, 'workspace.export'), { signal: lifetime.signal });
-  return { exportWorkspace, importWorkspace, importFile, dispose() { lifetime.abort(); } };
+  return { exportWorkspace, importWorkspace, importFile, dispose() { lifetime.abort(); unsubscribe(); } };
 }

@@ -1,6 +1,7 @@
+import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = [['overview', '概览', 'diagnostics'], ['library', '媒体库', 'open'], ['logs', '日志', 'note'], ['measurements', '测速', 'diagnostics']] as const;
+export const PANES = [['overview', '概览', 'diagnostics'], ['library', '媒体库', 'open'], ['workspaces', '工作区', 'film'], ['logs', '日志', 'note'], ['measurements', '测速', 'diagnostics']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation" aria-label="管理分类"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">服务管理</span>
@@ -14,6 +15,7 @@ export function adminShell() {
         <p class="admin-caption">CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。</p>
         <h2>媒体索引</h2><dl class="admin-properties"><div><dt>根目录</dt><dd id="root-summary">—</dd></div><div><dt>扫描任务</dt><dd id="scan-summary">—</dd></div><div><dt>目录监听</dt><dd id="watch-summary">—</dd></div></dl>
       </section>
+      ${workspaceAdminShell()}
       ${measurementShell()}
       <section id="pane-library" hidden><header class="admin-heading"><div><h1>媒体库</h1><p>配置服务器上的物理目录或已挂载的网络存储。</p></div><button id="add-root">${icon('plus')}添加目录</button></header>
         <form id="roots-form"><div class="admin-root-head"><span>名称</span><span>服务器路径</span><span></span></div><div id="root-editor" class="admin-root-editor"></div>

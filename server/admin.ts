@@ -14,13 +14,14 @@ import { localRequest } from './reveal.ts';
 export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
+import { WorkspaceStore } from './workspaces.ts';
 export function adminIdentity(req: IncomingMessage, proxyToken: string | undefined, users: string[]) {
   if (!proxyToken) return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
   const actor = requestActor(req, proxyToken);
   return actor && users.includes(actor.id) ? actor : null;
 }
-export function adminWriteAllowed(req: IncomingMessage, proxyToken?: string) {
-  if (req.headers['x-voidplayer-action'] !== 'admin') return false;
+export function adminWriteAllowed(req: IncomingMessage, proxyToken?: string, action = 'admin') {
+  if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
     const origin = new URL(req.headers.origin ?? '');
     return origin.host === req.headers.host && origin.protocol === `${proxyToken ? req.headers['x-forwarded-proto'] ?? 'https' : 'http'}:`;
@@ -49,12 +50,13 @@ export class AdminController {
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
   readonly measurements: Measurements;
+  readonly workspaces: WorkspaceStore;
   private build: { version: string; revision: string };
   private mutation: Promise<unknown> | null = null;
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); }
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); }
   status() {
     const now = performance.now(), elapsed = now - this.cpuAt;
     if (elapsed >= 500) {
@@ -138,5 +140,5 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); }
+  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); this.workspaces.close(); }
 }

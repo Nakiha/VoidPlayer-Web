@@ -1,3 +1,4 @@
+import { savedWorkspaceShell } from './saved-workspaces.ts';
 import { icon } from './icons.ts';
 import { ACCENTS } from './appearance.ts';
 export const SETTINGS_PANES = [
@@ -32,6 +33,7 @@ export function settingsShell() {
           <div class="settings-action-row"><div><h4>导出工作区</h4><p>视频引用、标注、播放位置和布局。</p></div><button id="export" disabled>${icon('export')}导出</button></div>
           <div class="settings-action-row"><div><h4>打开工作区</h4><p>支持 .voidplayer 与 JSON，也可直接拖入网页。</p></div><button id="workspace-import">${icon('open')}打开</button></div>
         </div>
+        ${savedWorkspaceShell()}
         <h4 class="settings-section-title">片源连接</h4><p class="settings-copy">工作区保存媒体服务地址，不打包视频。本地视频需要重新选择原文件；媒体库视频需要能访问记录的服务。</p>
         <p class="settings-caption">导入准备完成后才替换当前会话。片源不可用时会保留当前工作区。</p>
       </section>

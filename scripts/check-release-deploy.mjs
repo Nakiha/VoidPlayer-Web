@@ -1,3 +1,4 @@
+import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 // Exercise the shipped Linux Docker/Compose/Caddy templates, not a test-only server.
 import assert from 'node:assert/strict';
@@ -55,6 +56,8 @@ try {
   assert.equal(JSON.parse((await get('/api/health', auth)).body).actor.id, 'qa.tester');
   const listing = JSON.parse((await get('/api/library', auth)).body); assert.equal(listing.entries.length, 1);
   await verifyMeasurements((url, options) => get(url, { ...auth, ...options.headers, origin: `https://localhost:${port}` }, true, options.method, options.body), listing.entries[0]);
+  const workspaceTransport = (url, options) => get(url, { ...auth, ...options.headers, origin: `https://localhost:${port}` }, true, options.method, options.body);
+  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], `https://localhost:${port}/`, 'qa.tester');
   const url = `/api/media/${listing.entries[0].id}`;
   await Promise.all(Array.from({ length: 4 }, async (_, i) => {
     const start = i * 8192, end = start + 1023;
@@ -89,6 +92,7 @@ try {
   }
   assert.ok(ready, 'Restarted gateway must become ready');
   assert.equal((await get(url, { ...auth, range: 'bytes=0-7' })).status, 206);
+  await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
   const afterScan = JSON.parse((await get('/api/library/scan', auth)).body).job.id;
   assert.ok(afterScan > beforeScan, 'restart keeps scan history in the persistent data volume');
   assert.equal(JSON.parse((await get('/api/admin/roots', auth)).body).roots[0].name, 'QA archive', 'entrypoint must not overwrite saved configuration after restart');
@@ -96,7 +100,7 @@ try {
   assert.deepEqual(await readFile(caFile), ca, 'Restart retains the trusted CA');
   const logs = compose(['logs', '--no-color', 'app']);
   assert.match(logs, /"actorId":"qa.tester"/); assert.ok(!logs.includes(token));
-  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, four bounded measurements through TLS, admin identity and writable configuration on /data, persistent configuration/index and CA after restart');
+  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, four bounded measurements through TLS, admin identity and writable configuration on /data, persistent configuration/index/versioned workspaces and CA after restart');
 } catch (error) {
   if (started) { try { console.error(compose(['logs', '--no-color', '--tail', '80'])); } catch {} }
   throw error;

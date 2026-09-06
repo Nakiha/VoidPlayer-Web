@@ -130,3 +130,13 @@
 #pane-measurements label:has(> select)::after { content: ''; position: absolute; right: 12px; bottom: 14px; width: 6px; height: 6px; border-right: 1.5px solid var(--text-secondary); border-bottom: 1.5px solid var(--text-secondary); transform: rotate(45deg); pointer-events: none; }
 #pane-measurements select { padding-right: 30px; }
 @media (max-width: 850px) { .admin-measure-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+.admin-workspaces-search { display: flex; gap: 8px; margin-bottom: 16px; }
+.admin-workspaces-search input { flex: 1; min-width: 0; border: 0; background: var(--search-fill); }
+.admin-workspace-title { display: flex; align-items: flex-end; gap: 8px; }
+.admin-workspace-title label { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; color: var(--text-secondary); font-size: 12px; }
+.admin-workspace-title input { min-width: 0; width: 100%; box-sizing: border-box; border: 0; background: var(--search-fill); }
+.admin-workspace-title button { flex-shrink: 0; white-space: nowrap; }
+#admin-workspace-open { color: var(--text); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; margin-right: auto; }
+#admin-workspace-open:hover { color: var(--accent); }
+#admin-workspace-confirm-delete { color: var(--action-danger); background: var(--action-danger-fill); }

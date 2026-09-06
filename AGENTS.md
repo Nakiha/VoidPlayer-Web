@@ -39,6 +39,7 @@ npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/
 npm run test:annotations:rendering # DPR 2 双轨连续缩放、最终像素、图层与工具条约束
 npm run test:annotations:browser # 标注交互与实际采样像素回归
 npm run test:flv:browser # FLV WebKit 解码、Range、seek 和播放回归
+npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服务重启还原
 npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
