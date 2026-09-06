@@ -79,6 +79,9 @@ jobs:
         env:
           FFMPEG_REF: ${{ steps.core.outputs.ffmpegRef }}
         run: |
+          # Meson emits CommonJS probes with an .exe extension; do not inherit
+          # the web application's package.json type=module in the build tree.
+          printf '%s\n' '{"type":"commonjs"}' > .run/core-source/.build/package.json
           bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package
           bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package --mt
           node scripts/prepare-release-core.mjs .run/core-source
