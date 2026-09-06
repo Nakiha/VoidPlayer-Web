@@ -1,3 +1,4 @@
+import { verifyMeasurements } from './measurement-acceptance.mjs';
 // Exercise the shipped Linux Docker/Compose/Caddy templates, not a test-only server.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -53,6 +54,7 @@ try {
   assert.equal(wasm.status, 200); assert.match(wasm.headers['content-type'], /application\/wasm/); assert.equal(wasm.body.length, 0);
   assert.equal(JSON.parse((await get('/api/health', auth)).body).actor.id, 'qa.tester');
   const listing = JSON.parse((await get('/api/library', auth)).body); assert.equal(listing.entries.length, 1);
+  await verifyMeasurements((url, options) => get(url, { ...auth, ...options.headers, origin: `https://localhost:${port}` }, true, options.method, options.body), listing.entries[0]);
   const url = `/api/media/${listing.entries[0].id}`;
   await Promise.all(Array.from({ length: 4 }, async (_, i) => {
     const start = i * 8192, end = start + 1023;
@@ -94,7 +96,7 @@ try {
   assert.deepEqual(await readFile(caFile), ca, 'Restart retains the trusted CA');
   const logs = compose(['logs', '--no-color', 'app']);
   assert.match(logs, /"actorId":"qa.tester"/); assert.ok(!logs.includes(token));
-  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, admin identity and writable configuration on /data, persistent configuration/index and CA after restart');
+  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, four bounded measurements through TLS, admin identity and writable configuration on /data, persistent configuration/index and CA after restart');
 } catch (error) {
   if (started) { try { console.error(compose(['logs', '--no-color', '--tail', '80'])); } catch {} }
   throw error;

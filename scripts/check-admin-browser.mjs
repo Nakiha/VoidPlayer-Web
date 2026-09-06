@@ -11,7 +11,7 @@ const browserName = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(browserName));
 let service, browser;
 try {
-  const media = path.join(temporary, '本机媒体'); await mkdir(media); await writeFile(path.join(media, 'sample.mp4'), 'fixture');
+  const media = path.join(temporary, '本机媒体'); await mkdir(media); await writeFile(path.join(media, 'sample.mp4'), Buffer.alloc(4 * 1024 * 1024, 51));
   const extra = path.join(temporary, 'shared-storage', '嵌套的制作素材目录'); await mkdir(extra, { recursive: true }); await writeFile(path.join(extra, 'new.mp4'), 'new');
   const file = path.join(temporary, 'voidplayer.config.json');
   await writeFile(file, JSON.stringify({ mediaRoots: [{ id: 'local', name: '本机媒体', path: media }, { id: 'offline', name: '网络归档', path: path.join(temporary, 'offline-mount') }], staticDir: path.join(root, 'dist'), dataDir: 'data', logsDir: 'logs', indexWatch: false }));
@@ -30,7 +30,7 @@ try {
   page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '本机管理员' }).waitFor();
   assert.equal(await player.url(), base + '/');
-  assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('.admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
+  assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
   await page.getByRole('button', { name: '媒体库', exact: true }).click();
   await page.getByLabel('目录名称').first().waitFor();
@@ -62,9 +62,39 @@ try {
   await page.getByRole('button', { name: '删除选中日志', exact: true }).click(); await page.getByRole('button', { name: '删除日志', exact: true }).click();
   await page.locator('#log-list').filter({ hasText: '暂无上传日志' }).waitFor();
   assert.equal((await (await fetch(base + '/api/admin/logs')).json()).entries.length, 0);
+  await page.getByRole('button', { name: '测速', exact: true }).click();
+  assert.equal((await (await fetch(base + '/api/admin/measurements')).json()).job, null, 'opening the page cannot start traffic');
+  await page.locator('#measure-limit').selectOption('64'); await page.locator('#measure-seconds').selectOption('5');
+  for (const kind of ['download', 'upload', 'storage', 'concurrent']) {
+    await page.locator('#measure-kind').selectOption(kind);
+    if (['storage', 'concurrent'].includes(kind)) {
+      await page.waitForFunction(() => [...document.querySelector('#measure-media').options].some(option => option.text.includes('sample.mp4')));
+      await page.locator('#measure-media').selectOption(await page.locator('#measure-media').evaluate(select => [...select.options].find(option => option.text.includes('sample.mp4')).value));
+    }
+    await page.getByRole('button', { name: '开始测试', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#measure-state')?.textContent.includes('已完成') && !document.querySelector('#measure-start')?.disabled);
+    const result = (await (await fetch(base + '/api/admin/measurements')).json()).job;
+    assert.equal(result.kind, kind); assert.ok(['limit', 'duration'].includes(result.reason), `${kind}: ${result.reason}`); assert.equal(result.errors, 0);
+    assert.ok(result.bytes > 0 && result.bytes <= 64 * 1024 * 1024);
+    if (kind !== 'storage') { assert.ok(result.client.bytes > 0); assert.ok(result.client.elapsedMs > 0); }
+    assert.ok(!(await page.locator('#measure-rate').textContent()).includes('NaN'));
+  }
+  await page.screenshot({ path: `/tmp/voidplayer-admin-measure-dark-${browserName}.png` });
+  await player.evaluate(() => localStorage.setItem('voidplayer.theme', 'light'));
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+  await page.screenshot({ path: `/tmp/voidplayer-admin-measure-light-${browserName}.png` });
+  // Hold the first browser transfer so cancellation is exercised mid-task,
+  // independent of how quickly localhost can exhaust the byte budget.
+  await page.route('**/api/admin/measurements/*/transfer', async route => { await new Promise(r => setTimeout(r, 400)); await route.continue().catch(() => {}); });
+  await page.locator('#measure-kind').selectOption('download');
+  await page.getByRole('button', { name: '开始测试', exact: true }).click();
+  await page.getByRole('button', { name: '取消测试', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#measure-state')?.textContent.includes('已取消') && !document.querySelector('#measure-start')?.disabled);
+  assert.equal((await (await fetch(base + '/api/admin/measurements')).json()).job.activeRequests, 0);
+  await page.unroute('**/api/admin/measurements/*/transfer');
   for (const width of [720, 390]) {
     await page.setViewportSize({ width, height: 820 });
-    for (const name of ['概览', '媒体库', '日志']) {
+    for (const name of ['概览', '媒体库', '日志', '测速']) {
       await page.getByRole('button', { name, exact: true }).click();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.admin-content > section:not([hidden])')].every(e => e.scrollWidth <= e.clientWidth + 1));
       assert.equal(fits, true, `${name} overflows at ${width}px`);
@@ -74,5 +104,5 @@ try {
   await page.screenshot({ path: `/tmp/voidplayer-admin-library-narrow-${browserName}.png` });
   assert.deepEqual(errors, []);
   await context.close();
-  console.log(`PASS admin ${browserName}: new-tab entry, real status, offline roots, persistent root editing, cross-tab theme, JSON/download/delete and 390/720/1200 px layout`);
+  console.log(`PASS admin ${browserName}: new-tab entry, real status, offline roots, persistent root editing, cross-tab theme, JSON/download/delete, four bounded measurements and cancellation, and 390/720/1200 px layout`);
 } finally { await browser?.close(); await service?.close(); await rm(temporary, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }

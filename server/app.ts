@@ -142,6 +142,16 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!identity) { sendJson(res, 403, { error: options.proxyToken ? '当前网关用户没有管理权限，请在服务器配置的 adminUsers 中授权。' : '管理后台仅接受本机访问，远端请配置认证网关与管理员身份。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
         try {
+          if (url.pathname === '/api/admin/measurements') {
+            if (req.method === 'GET') { sendJson(res, 200, admin.measurements.status()); return; }
+            if (req.method === 'POST') { sendJson(res, 202, admin.measurements.start(await readAdminJson(req), identity.id)); return; }
+          }
+          const measurement = /^\/api\/admin\/measurements\/([a-f0-9-]{36})(?:\/(transfer|finish))?$/.exec(url.pathname);
+          if (measurement) {
+            if (req.method === 'POST' && measurement[2] === 'transfer') { await admin.measurements.transfer(req, res, measurement[1], identity.id); return; }
+            if (req.method === 'POST' && measurement[2] === 'finish') { sendJson(res, 200, admin.measurements.finish(measurement[1], identity.id, await readAdminJson(req))); return; }
+            if (req.method === 'DELETE' && !measurement[2]) { sendJson(res, 200, admin.measurements.cancel(measurement[1], identity.id)); return; }
+          }
           if (url.pathname === '/api/admin/status' && req.method === 'GET') {
             sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests, connections: sockets.size, completedRequests, abortedRequests }, recentRequests }); return;
           }
@@ -171,7 +181,7 @@ export function createMediaServer(options: ServerOptions): Server {
             if (req.method === 'DELETE') { sendJson(res, 200, await admin.deleteLog(name, typeof req.headers['if-match'] === 'string' ? req.headers['if-match'].replace(/^"|"$/g, '') : null)); return; }
           }
           sendJson(res, 405, { error: '不支持的管理操作。' }); return;
-        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
+        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); else if (!res.destroyed) res.destroy(); return; }
       }
       if (url.pathname === '/api/library/scan' && req.method === 'GET') {
         sendJson(res, 200, { ...library.status(), errors: library.errors() }); return;

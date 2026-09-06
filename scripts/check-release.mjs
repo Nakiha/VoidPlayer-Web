@@ -1,3 +1,4 @@
+import { verifyMeasurements } from './measurement-acceptance.mjs';
 // Test the extracted release itself. Its server gets an empty PATH and an unrelated cwd.
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm, cp, utimes } from 'node:fs/promises';
@@ -93,6 +94,10 @@ try {
   assert.match(listing.entries[0].version, /^[0-9a-f]{24}$/);
   assert.equal((await readFile(path.join(data, 'library.sqlite'))).subarray(0, 16).toString(), 'SQLite format 3\0');
   assert.throws(() => run(['--data-dir', data, '--port', String(port)]), /另一个实例/, 'second process cannot write the same index');
+  await verifyMeasurements(async (url, options) => {
+    const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } });
+    return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
+  }, listing.entries[0]);
   const url = base + '/api/media/' + listing.entries[0].id + '?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
@@ -173,6 +178,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

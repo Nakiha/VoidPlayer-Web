@@ -11,10 +11,9 @@ import { MediaLibraryIndex, fileVersion } from './library.ts';
 import { requestActor } from './identity.ts';
 import { localRequest } from './reveal.ts';
 
-export class AdminError extends Error {
-  status: number;
-  constructor(status: number, message: string) { super(message); this.status = status; }
-}
+export { AdminError } from './admin-error.ts';
+import { AdminError } from './admin-error.ts';
+import { Measurements } from './measurement.ts';
 export function adminIdentity(req: IncomingMessage, proxyToken: string | undefined, users: string[]) {
   if (!proxyToken) return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
   const actor = requestActor(req, proxyToken);
@@ -49,12 +48,13 @@ const logName = (name: string) => /^voidplayer-log-[A-Za-z0-9_.-]{1,180}\.json$/
 export class AdminController {
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
+  readonly measurements: Measurements;
   private build: { version: string; revision: string };
   private mutation: Promise<unknown> | null = null;
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; }
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); }
   status() {
     const now = performance.now(), elapsed = now - this.cpuAt;
     if (elapsed >= 500) {
@@ -138,5 +138,5 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.mutation?.catch(() => {}); }
+  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); }
 }

@@ -6,6 +6,7 @@ import '../style.css';
 import './style.css';
 import { observeTheme } from '../ui/theme.ts';
 import { icon } from '../ui/icons.ts';
+import { installMeasurements } from './measurement.ts';
 import { adminShell, PANES } from './shell.ts';
 import type { AdminController } from '../../server/admin.ts';
 import type { MediaLibraryIndex } from '../../server/library.ts';
@@ -140,8 +141,9 @@ function renderRequests() {
     return row;
   }));
 }
+const measurements = installMeasurements(life.signal, notice, () => status?.identity.id);
 for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
-  pane = id; if (!app.dataset.denied) notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  pane = id; measurements.activate(id === 'measurements'); if (!app.dataset.denied) notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
   if (id === 'logs') void act(loadLogs);
 };
