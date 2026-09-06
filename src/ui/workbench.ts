@@ -11,12 +11,15 @@ import type { Slot } from '../model.ts';
 import { formatTime } from '../model.ts';
 import { colorLabel, rangeLabel } from '../media-metadata.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
-import { fetchLibrary, openLibraryItem } from '../library.ts';
+import { referenceVersion } from '../media-reference.ts';
+import { fetchLibraryItem, openLibraryItem } from '../library.ts';
 import { openMedia } from '../media.ts';
 import { seekTarget, showSeekPreview } from './seek-preview.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
 import { WorkspaceState, marksForTrack, trackTiming } from './workspace-state.ts';
 import type { Panel, ReviewTrack } from './workspace-state.ts';
+import { installLibraryBrowser } from './library-browser.ts';
+import { icon } from './icons.ts';
 import { SourceCatalog, sourceInUse } from './source-catalog.ts';
 import type { SourceItem } from './source-catalog.ts';
 
@@ -43,8 +46,25 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   let dockSignature = '';
   let annotationSignature = '';
   let currentIds = '';
+  let sourceSignature = '';
+  let recentRevision = -1;
+  let recentRequest = 0;
 
   const lifecyle = new AbortController();
+  const libraryBrowser = installLibraryBrowser((page, status) => {
+    catalog.setLibrary(page?.entries ?? []); libraryStatus = status;
+    if (page && recentRevision !== page.revision) { recentRevision = page.revision; void refreshRecent(); }
+    renderSources();
+  }, lifecyle.signal);
+  async function refreshRecent() {
+    const ticket = ++recentRequest;
+    const ids = [...new Set(catalog.serializable().flatMap(item => item.libraryId ? [item.libraryId] : []))];
+    const entries = await Promise.all(ids.map(async id => {
+      try { const entry = await fetchLibraryItem(id, AbortSignal.any([lifecyle.signal, AbortSignal.timeout(5000)])); return entry ? [id, entry] as [string, import('../library.ts').LibraryEntry] : null; } catch { return null; }
+    }));
+    if (disposed || ticket !== recentRequest) return;
+    catalog.setRecentLibrary(entries.filter((item): item is [string, import('../library.ts').LibraryEntry] => item !== null)); save(); renderSources();
+  }
   const workspace = $('workspace');
   const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
   const cursors = new Map<Slot, { current: HTMLElement; hover: HTMLElement; startUs: number; endUs: number }>();
@@ -263,7 +283,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const ids = state.tracks.map(t => `${t.slot}:${t.id}`).join('/');
     if (ids !== currentIds) {
       currentIds = ids;
-      for (const track of state.tracks) catalog.remember(track, track.source?.id);
+      for (const track of state.tracks) catalog.remember(track, track.source?.id, referenceVersion(track.source?.url));
       save();
       if (view.panels.sources) renderSources();
       else renderStartLibrary();
@@ -283,7 +303,10 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const info = document.createElement('div'); info.className = 'source-info';
       const name = text('span', item.name, 'filename');
       const origin = item.library ? ` · ${item.library.root}` : '';
-      info.append(name, text('span', `${sizeText(item.size)} · ${used ? '使用中' : item.library ? '媒体库' : item.file ? '本次添加' : '需重新选择'}${origin}`, 'source-meta'));
+      name.title = item.name;
+      const pending = item.library?.state === 'pending';
+      const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
+      info.append(name, text('span', `${sizeText(item.size)} · ${used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : item.library ? '媒体库' : item.file ? '本次添加' : item.libraryId ? '内容已改变或不可用' : '需重新选择'}${origin}`, 'source-meta'));
       const actions = document.createElement('div'); actions.className = 'source-actions';
       if (used) {
         const button = createIconButton({ glyph: 'close', label: '从视图移除' });
@@ -303,7 +326,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       }
       else if (item.library || item.file) {
         const button = createIconButton({ glyph: 'plus', label: '添加到视图' });
-        button.title = '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
+        button.disabled = !!pending || !!offline;
+        button.title = offline ? '媒体存储离线，请等待重新连接' : pending ? '片源仍在写入，请稍后重试' : '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
         button.onclick = () => {
           const tracks = session.getState().tracks;
           if (sourceInUse(item, tracks)) return;
@@ -318,6 +342,9 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
           }
           dialog.showModal();
         }; actions.append(button);
+      } else if (item.libraryId) {
+        const button = createIconButton({ glyph: 'refresh', label: '检查媒体引用' });
+        button.title = '内容已改变或不可用，请在媒体库中重新选择'; button.onclick = () => void refreshLibrary(); actions.append(button);
       } else {
         const button = createIconButton({ glyph: 'filePlus', label: '重新选择本地文件' }); button.title = '重新选择本地文件';
         button.setAttribute('aria-label', `重新选择 ${item.name}`); button.onclick = () => $<HTMLInputElement>('source-files').click(); actions.append(button);
@@ -335,24 +362,32 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const items = (sourceTab === 'recent' ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
     $('source-status').textContent = libraryStatus;
     $('source-status').hidden = !libraryStatus;
-    const list = $('source-list'); list.replaceChildren();
-    for (const item of items) list.append(sourceRow(item));
+    libraryBrowser.visible(sourceTab === 'available');
+    const page = libraryBrowser.page();
+    const folders = sourceTab === 'available' ? page?.directories ?? [] : [];
+    const signature = JSON.stringify([sourceTab, query, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
+    const list = $('source-list');
+    if (signature !== sourceSignature) {
+      sourceSignature = signature; list.replaceChildren();
+      for (const folder of folders) {
+        const row = document.createElement('button'); row.className = 'source-row library-folder';
+        const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
+        const info = text('span', '', 'source-info');
+        info.append(text('span', folder.name, 'filename'), text('span', page?.roots.find(root => root.id === folder.rootId)?.name ?? '', 'source-meta'));
+        row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); list.append(row);
+      }
+      for (const item of items) list.append(sourceRow(item));
+      if (!items.length && !folders.length) list.append(text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+    }
     renderStartLibrary();
-    if (!items.length) list.append(text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '添加文件，或刷新媒体库', 'panel-empty'));
   }
   function refreshLibrary(force = false) {
     if (refreshing) return refreshing;
-    libraryStatus = '正在刷新…'; renderSources();
-    refreshing = (async () => {
-      const listing = await fetchLibrary(force);
-      if (disposed) return;
-      libraryChecked = true;
-      catalog.setLibrary(listing?.entries ?? []);
-      libraryStatus = listing ? listing.truncated ? '仅显示部分媒体库文件' : '' : '媒体库未连接，仍可添加本地文件';
-      renderSources();
-    })().finally(() => { refreshing = undefined; });
+    libraryChecked = true;
+    refreshing = Promise.all([force ? libraryBrowser.refresh() : libraryBrowser.load(), refreshRecent()]).then(() => {}).finally(() => { refreshing = undefined; });
     return refreshing;
   }
+
   $('start-library-more').onclick = () => setPanel('sources', true);
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-start-tab]')) button.onclick = () => {
     startTab = button.dataset.startTab!;
@@ -361,7 +396,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   };
   $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
   $('sources-refresh').onclick = () => void refreshLibrary(true);
-  $('source-search').oninput = renderSources;
+  $('source-search').oninput = () => { if (sourceTab === 'available') libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
   $('sources-import').onclick = () => $<HTMLInputElement>('source-files').click();
   $('source-files').onchange = () => {
     const input = $<HTMLInputElement>('source-files');
@@ -370,6 +405,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   };
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-source-tab]')) button.onclick = () => {
     sourceTab = button.dataset.sourceTab!;
+    if (sourceTab === 'available') libraryBrowser.search($<HTMLInputElement>('source-search').value);
+    else void refreshRecent();
     for (const tab of document.querySelectorAll('[data-source-tab]')) tab.setAttribute('aria-pressed', String((tab as HTMLElement).dataset.sourceTab === sourceTab));
     renderSources();
   };

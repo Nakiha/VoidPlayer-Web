@@ -96,6 +96,7 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: str
 export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots);
+  if (!options.library) library.start();
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
@@ -139,13 +140,20 @@ export function createMediaServer(options: ServerOptions): Server {
       if (url.pathname === '/api/library/browse' && req.method === 'GET') {
         const limit = Number(url.searchParams.get('limit') ?? 100), offset = Number(url.searchParams.get('offset') ?? 0);
         if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) { sendJson(res, 400, { error: '无效分页参数。' }); return; }
-        try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset })); }
-        catch (error) { sendJson(res, 400, { error: (error as Error).message }); }
+        const revision = url.searchParams.has('revision') ? Number(url.searchParams.get('revision')) : undefined;
+        if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 0)) { sendJson(res, 400, { error: '无效版本参数。' }); return; }
+        try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision })); }
+        catch (error) { sendJson(res, (error as {code?: string}).code === 'INDEX_CHANGED' ? 409 : 400, { error: (error as Error).message }); }
         return;
       }
-      const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal)$/.exec(url.pathname);
+      const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal|metadata)$/.exec(url.pathname);
       if (actionMatch) {
         const action = actionMatch[2];
+        if (action === 'metadata') {
+          if (req.method !== 'GET') { sendJson(res, 405, { error: 'method not allowed' }); return; }
+          const entry = library.metadata(actionMatch[1]);
+          sendJson(res, entry ? 200 : 404, entry ?? { error: 'unknown media id' }); return;
+        }
         if (action === 'reveal' && (req.method !== 'POST' || !options.allowLocalReveal || !allowReveal(req))) {
           status = 403; sendJson(res, 403, { error: '仅本机页面可请求文件定位。' }); return;
         }

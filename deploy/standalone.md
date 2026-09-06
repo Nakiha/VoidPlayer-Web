@@ -15,6 +15,8 @@ Windows 可在 PowerShell 中用 `& 'C:\VoidPlayer\voidplayer.exe'` 替换程序
 `--folder` 可重复；`--init` 只创建配置并退出，已有配置不会覆盖。打开 http://127.0.0.1:5180/。
 也可直接用 `--folder /media` 临时启动，不写配置。
 
+首次配置为每个媒体根目录生成固定 `id`。之后可在 `mediaRoots` 中修改 `name` 和 `path`；移动存储挂载点时保留 `id` 与数据目录，已有媒体引用才能延续。旧路径字符串配置仍兼容；若同时改为对象和移动路径，应先在原路径完成一次索引。媒体列表支持目录、面包屑、分页及当前目录/全库搜索。工作区记录媒体版本，文件被替换后拒绝静默套用旧标注；旧工作区按原大小和修改时间核对后迁移。
+
 未指定 `--data-dir` 时使用 `VOIDPLAYER_DATA_DIR`，否则使用系统用户数据目录：
 macOS 为 `~/Library/Application Support/VoidPlayer`，Windows 为 `%LOCALAPPDATA%\VoidPlayer`，
 Linux 为 `$XDG_DATA_HOME/voidplayer` 或 `~/.local/share/voidplayer`。

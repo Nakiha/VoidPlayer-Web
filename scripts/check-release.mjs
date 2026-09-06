@@ -60,6 +60,8 @@ try {
   const configPath = path.join(data, 'voidplayer.config.json'), original = await readFile(configPath, 'utf8');
   assert.equal(JSON.parse(original).staticDir, undefined, 'configuration must not pin old program assets');
   assert.equal(JSON.parse(original).logsDir, 'logs', 'backup can relocate the data directory');
+  assert.equal(JSON.parse(original).mediaRoots[0].path, media);
+  assert.match(JSON.parse(original).mediaRoots[0].id, /^[0-9a-f]{24}$/, 'init writes a stable root identity');
   assert.throws(() => run(['--init', '--data-dir', data, '--folder', media]), /EEXIST/);
   assert.equal(await readFile(configPath, 'utf8'), original);
   run(['--check', '--data-dir', data]);

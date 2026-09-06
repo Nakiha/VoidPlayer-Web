@@ -1,6 +1,7 @@
 import { SLOTS } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../model.ts';
+import { mediaActionUrl } from '../media-reference.ts';
 import { icon } from './icons.ts';
 
 type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
@@ -44,7 +45,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
       const copy = document.getElementById(`copy-path-${slot}`) as HTMLButtonElement;
       const action = document.getElementById(`source-action-${slot}`) as HTMLButtonElement;
       const source = track?.source;
-      const loc = source && locations.get(source.id);
+      const loc = source && locations.get(source.url);
       copy.disabled = !loc;
       copy.title = copy.dataset.copied === 'true' ? '绝对路径已拷贝' : !source ? '浏览器未提供本地绝对路径；从本机媒体库打开可使用路径和定位' : loc ? '拷贝绝对路径' : '正在获取路径；服务需支持文件位置接口';
       const reveal = !!loc?.reveal && canReveal;
@@ -58,19 +59,19 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
       action.onclick = () => {
         if (!source) return;
         if (!reveal) {
-          const a = document.createElement('a'); a.href = `${source.url}?download=1`; a.download = track!.name.split('/').at(-1)!; a.click(); return;
+          const a = document.createElement('a'); a.href = mediaActionUrl(source.url, 'download', location.href); a.download = track!.name.split('/').at(-1)!; a.click(); return;
         }
         void act(async () => {
-          const response = await fetch(`${source.url}/reveal`, { method: 'POST', headers: { 'x-voidplayer-action': 'reveal' }, signal: signal() });
+          const response = await fetch(mediaActionUrl(source.url, 'reveal', location.href), { method: 'POST', headers: { 'x-voidplayer-action': 'reveal' }, signal: signal() });
           if (!response.ok) throw new Error((await response.json()).error ?? '文件定位失败');
         }, 'ui.reveal-file');
       };
-      if (source && !loc && !pending.has(source.id) && status.dataset.state === 'connected') {
-        pending.add(source.id);
-        void fetch(`${source.url}/location`, { signal: signal(), cache: 'no-store' }).then(async response => {
+      if (source && !loc && !pending.has(source.url) && status.dataset.state === 'connected') {
+        pending.add(source.url);
+        void fetch(mediaActionUrl(source.url, 'location', location.href), { signal: signal(), cache: 'no-store' }).then(async response => {
           if (!response.ok) return;
           const body = await response.json();
-          if (typeof body.absolutePath === 'string') locations.set(source.id, body);
+          if (typeof body.absolutePath === 'string') locations.set(source.url, body);
         }).catch(() => {}).finally(() => { if (!disposed) render(); });
       }
     }

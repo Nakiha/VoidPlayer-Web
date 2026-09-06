@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { loadConfig } from './config.ts';
 import { startService, validateServiceConfig } from './runtime.ts';
+import { normalizeRoots } from './library-store.ts';
 
 // Replaced by the release builder; the source entry can also run under Bun.
 declare const VOIDPLAYER_COMPILED: boolean;
@@ -69,7 +70,7 @@ async function main() {
       await mkdir(dataDir, { recursive: true });
       // Resource paths remain release-relative so moving/upgrading the app works.
       const { staticDir: _static, devPort: _dev, dataDir: _data, ...rest } = config;
-      const stored = { ...rest, ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
+      const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name }) => ({ id, path, name })), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
       if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
       await writeFile(configFile, JSON.stringify(stored, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
       console.log(`配置已创建: ${configFile}\n再次运行相同程序和 --data-dir 即可启动。`);

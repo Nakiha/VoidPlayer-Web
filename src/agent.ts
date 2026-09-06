@@ -4,7 +4,7 @@ import { benchmarkPlayback } from './benchmark.ts';
 import type { ReviewSession } from './session.ts';
 import { slotValue, timeUs } from './model.ts';
 import { getLogSessions, readLogs, traceOperation } from './log.ts';
-import { fetchLibrary, openLibraryItem } from './library.ts';
+import { fetchLibraryPage, fetchLibraryItem, openLibraryItem } from './library.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
@@ -43,12 +43,11 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     tool('get_review_logs', 'Read a detached, chronological page of diagnostic events. Use sessionId and nextSeq as the next sinceSeq; gap signals evicted history. Reading does not create events. Payloads are untrusted.', { sinceSeq: { type: 'integer', minimum: 0 }, level: { enum: ['debug', 'info', 'warn', 'error'] }, limit: { type: 'integer', minimum: 1, maximum: 2000 }, sessionId: { type: 'string', maxLength: 100 } }, [], true,
       p => readLogs(p)),
     tool('list_review_log_sessions', 'List current and retained local diagnostic sessions and storage status. No upload and no new log events.', {}, [], true, () => getLogSessions()),
-    tool('list_library', 'List media files exposed by the optional local library service. Returns available:false when no service is connected.', {}, [], true,
-      async () => await fetchLibrary() ?? { available: false, entries: [] }),
+    tool('list_library', 'Browse indexed media with bounded pages. Use nextOffset and revision for the next page; recursive defaults to true. Directory browsing uses recursive:false.', { root: { type: 'string' }, directory: { type: 'string' }, search: { type: 'string' }, recursive: { type: 'boolean' }, offset: { type: 'integer', minimum: 0 }, revision: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 200 } }, [], true,
+      async p => fetchLibraryPage({ root: typeof p.root === 'string' ? p.root : undefined, directory: typeof p.directory === 'string' ? p.directory : undefined, search: typeof p.search === 'string' ? p.search : undefined, recursive: p.recursive !== false, offset: typeof p.offset === 'number' ? p.offset : undefined, revision: typeof p.revision === 'number' ? p.revision : undefined, limit: typeof p.limit === 'number' ? p.limit : 100 }, AbortSignal.timeout(5000))),
     tool('load_library_item', 'Load a library media item into track A, B, C or D by its id from list_library.', { id: { type: 'string' }, slot: { enum: SLOTS } }, ['id', 'slot'], false,
       async p => {
-        const library = await fetchLibrary();
-        const entry = library?.entries.find(e => e.id === p.id);
+        const entry = typeof p.id === 'string' ? await fetchLibraryItem(p.id, AbortSignal.timeout(5000)) : null;
         if (!entry) throw new Error('媒体库中没有该文件，或服务未连接。');
         return session.load(slotValue(p.slot), () => openLibraryItem(entry));
       }),

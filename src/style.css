@@ -578,3 +578,17 @@ button.icon-button[aria-pressed=true] {
 .relink-continue { margin-top: 12px; color: var(--accent); }
 
 .workspace-relink { background: var(--surface-panel); }
+
+.library-navigation { flex-shrink: 0; padding: 0 var(--panel-padding-inline) var(--space-2); min-width: 0; }
+.library-navigation select { width: 100%; min-width: 0; height: var(--control-small-height); font-size: var(--text-sm); background: var(--search-fill); border: 0; }
+.library-breadcrumbs { display: flex; align-items: center; gap: var(--space-1); overflow-x: auto; white-space: nowrap; scrollbar-width: thin; padding-top: var(--space-1); color: var(--text-secondary); }
+.library-breadcrumbs button { flex-shrink: 0; min-height: var(--control-small-height); padding: 0 var(--space-1); border: 0; background: transparent; color: var(--text-secondary); font-size: var(--text-xs); }
+.library-breadcrumbs button[aria-current=location] { color: var(--text); }
+.library-scope { flex-shrink: 0; margin: 0 var(--panel-padding-inline) var(--space-2); }
+.library-scope button { flex: 1; min-height: var(--control-small-height); font-size: var(--text-xs); }
+.library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 400; }
+.library-folder > span:first-child { color: var(--text-secondary); }
+.library-pagination { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--panel-padding-inline); color: var(--text-secondary); font-size: var(--text-xs); }
+.library-pagination > span { flex: 1; text-align: center; white-space: nowrap; }
+.library-pagination .icon-button { width: var(--control-small-height); height: var(--control-small-height); min-height: var(--control-small-height); background: transparent; }
+.library-cancel { width: 100%; min-height: var(--control-small-height); font-size: var(--text-xs); background: transparent; }

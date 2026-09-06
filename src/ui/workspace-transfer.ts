@@ -4,6 +4,7 @@ import { openMedia, openMediaFromUrl } from '../media.ts';
 import { compressWorkspace, parseWorkspace, readWorkspaceFile } from '../workspace-file.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
+import { pinLibraryReference } from '../media-reference.ts';
 import { icon } from './icons.ts';
 
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
@@ -66,11 +67,8 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       options.beforeRestore();
       await session.restoreWorkspace(document, async info => {
         if (!info.source) return openMedia(files.get(info.id)!);
-        const response = await fetch(info.source.url, { method: 'HEAD', signal: AbortSignal.timeout(10000) }).catch(() => { throw new Error(`无法连接片源服务 ${new URL(info.source!.url).origin}。请检查网络和服务的跨域访问设置。`); });
-        if (!response.ok) throw new Error(`片源 ${info.name} 无法打开（HTTP ${response.status}）。`);
-        const size = response.headers.get('content-length');
-        if (size !== null && Number(size) !== info.size) throw new Error(`片源 ${info.name} 已发生变化，无法按原工作区还原。`);
-        const source = await openMediaFromUrl(info.source.url, info); source.info.source = { ...info.source }; return source;
+        const reference = await pinLibraryReference(info, location.href);
+        const source = await openMediaFromUrl(reference.url, info); source.info.source = reference; return source;
       });
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);

@@ -1,0 +1,78 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, writeFile, copyFile, readFile, rm, utimes, rename } from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+import { webkit, chromium } from 'playwright';
+import { MediaLibraryIndex } from '../server/library.ts';
+import { createMediaServer } from '../server/app.ts';
+const directory = await mkdtemp(path.join(os.tmpdir(), 'vp-library-ui-'));
+const media = path.join(directory, 'archive'), clips = path.join(media, '实验一');
+await mkdir(path.join(clips, 'nested'), { recursive: true });
+for (let i = 0; i < 70; i++) await writeFile(path.join(clips, `clip-${String(i).padStart(3, '0')}.mp4`), 'browse fixture');
+await writeFile(path.join(clips, 'nested/deep-clip.mp4'), 'deep fixture');
+await copyFile('fixtures/video/ci_h264_smoke.mp4', path.join(clips, 'clip-069.mp4'));
+const sample = path.join(media, 'sample.mp4'); await copyFile('fixtures/video/ci_h264_smoke.mp4', sample); await utimes(sample, 1000, 1000);
+const library = new MediaLibraryIndex([{ id: 'archive', path: media, name: '项目归档' }]); await library.refresh();
+const server = createMediaServer({ library, roots: library.roots, staticDir: path.resolve('dist'), onLog() {} });
+await new Promise(r => server.listen(0, '127.0.0.1', r));
+const base = `http://127.0.0.1:${server.address().port}`;
+const engine = process.argv[2] ?? 'webkit'; const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
+try {
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'light' });
+  const page = await context.newPage(); const errors = [], legacy = [];
+  page.on('pageerror', e => errors.push(e.message)); page.on('request', r => { if (new URL(r.url()).pathname === '/api/library') legacy.push(r.url()); });
+  await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
+  await page.locator('#toggle-sources').click();
+  await page.locator('#library-root').selectOption('archive');
+  await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 60);
+  await page.getByRole('button', { name: '下一页片源', exact: true }).click();
+  await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 10);
+  // Index mutations invalidate the next page, rather than silently shifting rows.
+  await writeFile(path.join(clips, 'aaa-new.mp4'), 'new'); await library.refresh();
+  await page.getByRole('button', { name: '上一页片源', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('#source-status').textContent.includes('已返回第一页'));
+  await page.locator('#source-search').fill('clip-069');
+  await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 1);
+  assert.match(await page.locator('#source-list').innerText(), /clip-069/);
+  await page.locator('#source-list').getByRole('button', { name: '添加到视图：实验一/clip-069.mp4', exact: true }).click();
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
+  await page.reload(); await page.locator('[data-start-tab=recent]').click();
+  await page.locator('#start-library-list').getByRole('button', { name: '添加到视图：实验一/clip-069.mp4', exact: true }).waitFor();
+  await page.locator('#toggle-sources').click(); await page.locator('#library-root').selectOption('archive');
+  await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
+  await page.locator('[data-library-scope=all]').click(); await page.locator('#source-search').fill('deep');
+  await page.waitForFunction(() => document.querySelector('#source-list').textContent.includes('nested/deep-clip.mp4'));
+  await page.locator('#source-search').fill(''); await page.locator('[data-library-scope=directory]').click();
+  await page.locator('.library-breadcrumbs button').first().click();
+  await page.waitForFunction(() => document.querySelector('#source-list').textContent.includes('sample.mp4'));
+  await rename(media, media + '-offline'); await library.refresh();
+  await page.locator('#source-search').focus();
+  await page.waitForFunction(() => document.querySelector('#source-list [aria-label="添加到视图：sample.mp4"]')?.disabled);
+  assert.match(await page.locator('#source-list').innerText(), /存储离线/);
+  await rename(media + '-offline', media); await library.refresh();
+  await page.waitForFunction(() => document.querySelector('#source-list [aria-label="添加到视图：sample.mp4"]')?.disabled === false);
+  const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
+  const entry = library.browse().entries.find(e => e.name === 'sample.mp4');
+  await call('load_library_item', { slot: 'A', id: entry.id });
+  await call('add_review_mark', { slot: 'A', text: 'Version anchor' });
+  const saved = await call('export_workspace');
+  assert.ok(saved.media[0].source.url.includes('?v='));
+  // Download URLs and file-location URLs must still work with the version query.
+  const download = await page.evaluate(() => document.querySelector('#source-action-A').getAttribute('data-action')); assert.equal(download, 'download');
+  const downloaded = page.waitForEvent('download'); await page.locator('#source-action-A').click(); assert.equal((await downloaded).suggestedFilename(), 'sample.mp4');
+  const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
+  const failure = await page.evaluate(async value => { try { await window.voidPlayer.importWorkspace(value); return ''; } catch (e) { return e.message; } }, saved);
+  assert.match(failure, /已发生变化/); assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
+  // A legacy reference with matching recorded metadata is migrated to a version URL.
+  const legacyWorkspace = structuredClone(saved); for (const media of legacyWorkspace.media) media.source.url = media.source.url.split('?')[0];
+  await page.evaluate(value => window.voidPlayer.importWorkspace(value), legacyWorkspace);
+  assert.ok((await call('export_workspace')).media[0].source.url.includes('?v='));
+  await page.screenshot({ path: `/tmp/voidplayer-library-light-${engine}.png` });
+  await page.locator('#settings-open').click(); await page.locator('[data-theme-choice=dark]').click(); await page.locator('#settings-close').click();
+  await page.waitForFunction(() => !document.querySelector('#settings').open); await page.screenshot({ path: `/tmp/voidplayer-library-dark-${engine}.png` });
+  assert.deepEqual(legacy, [], 'UI and Agent must not fetch the capped flat listing'); assert.deepEqual(errors, []);
+  console.log(`PASS ${engine}: directory navigation, bounded pages, index invalidation, scoped search, versioned download, same-metadata replacement refusal and legacy workspace migration`);
+} finally {
+  await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });
+}

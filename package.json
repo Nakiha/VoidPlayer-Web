@@ -15,6 +15,7 @@
     "service": "node scripts/service.mjs",
     "release": "npm run build && node scripts/package-release.mjs",
     "test:release": "node scripts/check-release.mjs",
+    "test:library:browser": "npm run build && node scripts/check-library-browser.mjs",
     "test:browser": "npm run build && node scripts/check-browser.mjs",
     "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
     "fixtures:flv": "python3 scripts/make-flv-fixtures.py",

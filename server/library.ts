@@ -10,7 +10,7 @@ export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts',
 export interface LibraryEntry { id: string; name: string; root: string; rootIndex: number; size: number; lastModified: number; rootId?: string; version?: string; state?: string }
 export interface Library { roots: string[]; entries: LibraryEntry[]; truncated: boolean }
 interface IndexOptions { database?: string; ttlMs?: number; settleMs?: number; ioTimeoutMs?: number; scan?: typeof scanLibrary; now?: () => number }
-export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number }
+export interface BrowseQuery { rootId?: string; directory?: string; search?: string; recursive?: boolean; limit?: number; offset?: number; revision?: number }
 export function fileVersion(stat: Stats) { return createHash('sha256').update(`${stat.size}:${Math.round(stat.mtimeMs)}:${Math.round(stat.ctimeMs)}:${stat.ino}`).digest('hex').slice(0, 24); }
 const parent = (name: string) => path.posix.dirname(name) === '.' ? '' : path.posix.dirname(name);
 
@@ -54,6 +54,8 @@ export class MediaLibraryIndex {
     return { id: row.id, name: row.path, root: root.name, rootIndex: root.index, rootId: root.id, size: row.size, lastModified: row.modified, version: row.version, state: row.state };
   }
   browse(query: BrowseQuery = {}) {
+    const revision = Number(this.store.db.prepare('SELECT revision FROM library_revision WHERE id=1').get()!.revision);
+    if (query.revision !== undefined && query.revision !== revision) throw Object.assign(new Error('媒体库已更新，请从第一页重新浏览。'), { code: 'INDEX_CHANGED' });
     const limit = Math.min(200, Math.max(1, query.limit ?? 100)), offset = Math.max(0, query.offset ?? 0);
     const directory = query.directory ?? '';
     if (directory.startsWith('/') || directory.split('/').some(p => p === '..') || directory.includes('\\')) throw new Error('无效的媒体目录。');
@@ -67,8 +69,8 @@ export class MediaLibraryIndex {
     const total = (this.store.db.prepare(`SELECT COUNT(*) AS total FROM media m JOIN roots r ON r.id=m.root_id WHERE ${where}`).get(...values) as { total: number }).total;
     const rows = this.store.db.prepare(`SELECT m.* FROM media m JOIN roots r ON r.id=m.root_id WHERE ${where} ORDER BY m.path COLLATE NOCASE,m.path,m.root_id LIMIT ? OFFSET ?`).all(...values, limit, offset) as unknown as StoredMedia[];
     // Folders have their own page so a large directory cannot bypass the media limit.
-    const folders = query.recursive ? [] : this.store.db.prepare(`SELECT d.root_id AS rootId,d.path,d.name FROM directories d JOIN roots r ON r.id=d.root_id WHERE r.active=1 AND d.path!='' AND d.parent=? ${query.rootId ? 'AND d.root_id=?' : ''} ORDER BY d.name COLLATE NOCASE,d.path,d.root_id LIMIT ? OFFSET ?`).all(directory, ...(query.rootId ? [query.rootId] : []), limit + 1, offset);
-    return { entries: rows.map(r => this.entry(r)), directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, ...this.status() };
+    const folders = query.recursive ? [] : this.store.db.prepare(`SELECT d.root_id AS rootId,d.path,d.name FROM directories d JOIN roots r ON r.id=d.root_id WHERE r.active=1 AND d.path!='' AND d.parent=? ${query.rootId ? 'AND d.root_id=?' : ''} ${query.search ? 'AND instr(lower(d.name),lower(?))>0' : ''} ORDER BY d.name COLLATE NOCASE,d.path,d.root_id LIMIT ? OFFSET ?`).all(directory, ...(query.rootId ? [query.rootId] : []), ...(query.search ? [query.search.slice(0, 300)] : []), limit + 1, offset);
+    return { entries: rows.map(r => this.entry(r)), directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, ...this.status() };
   }
   async list(force = false): Promise<Library> {
     if (force || !this.ready || this.now() - this.refreshedAt >= (this.options.ttlMs ?? 30000)) await this.refresh();

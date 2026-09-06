@@ -44,6 +44,13 @@ export class LibraryStore {
         CREATE TABLE IF NOT EXISTS aliases (id TEXT PRIMARY KEY, media_id TEXT NOT NULL REFERENCES media(id));
         CREATE TABLE IF NOT EXISTS scan_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, visited INTEGER NOT NULL DEFAULT 0, files INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, current_root TEXT, current_path TEXT);
         CREATE TABLE IF NOT EXISTS scan_errors (job_id INTEGER NOT NULL REFERENCES scan_jobs(id), root_id TEXT NOT NULL, path TEXT NOT NULL, code TEXT NOT NULL, message TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS library_revision (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
+        INSERT OR IGNORE INTO library_revision VALUES(1,0);
+        CREATE TRIGGER IF NOT EXISTS media_added AFTER INSERT ON media BEGIN UPDATE library_revision SET revision=revision+1; END;
+        CREATE TRIGGER IF NOT EXISTS media_changed AFTER UPDATE ON media WHEN old.version!=new.version OR old.state!=new.state BEGIN UPDATE library_revision SET revision=revision+1; END;
+        CREATE TRIGGER IF NOT EXISTS directory_added AFTER INSERT ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
+        CREATE TRIGGER IF NOT EXISTS directory_removed AFTER DELETE ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
+        CREATE TRIGGER IF NOT EXISTS root_changed AFTER UPDATE ON roots WHEN old.active!=new.active OR old.path!=new.path OR old.name!=new.name BEGIN UPDATE library_revision SET revision=revision+1; END;
         PRAGMA user_version=1;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());

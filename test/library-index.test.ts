@@ -90,6 +90,18 @@ test('legacy path-based workspace IDs survive adopting an explicit root ID', asy
   } finally { await index.close(); }
 }));
 
+test('page revisions remain stable across unchanged scans and invalidate changed results', async () => fixture(async (root, media) => {
+  await writeFile(path.join(media, 'one.mp4'), 'video');
+  const index = new MediaLibraryIndex([media]);
+  try {
+    await index.refresh(); const page = index.browse();
+    await index.refresh(); assert.equal(index.browse({ revision: page.revision }).revision, page.revision);
+    await writeFile(path.join(media, 'two.mp4'), 'video'); await index.refresh();
+    assert.throws(() => index.browse({ revision: page.revision }), /媒体库已更新/);
+    assert.equal(index.browse().entries.length, 2);
+  } finally { await index.close(); }
+}));
+
 test('Range lookup remains available during an unfinished scan and cancellation preserves prior entries', async () => fixture(async (root, media) => {
   await writeFile(path.join(media, 'one.mp4'), 'original');
   let scanning = false, release: () => void = () => {};
