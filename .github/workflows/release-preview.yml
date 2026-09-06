@@ -127,6 +127,12 @@ jobs:
       - run: node --test test/config.test.ts
       - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
+      - name: Verify packaged Docker and HTTPS deployment
+        if: runner.os == 'Linux'
+        run: node scripts/check-release-deploy.mjs
+      - name: Verify Windows console shutdown
+        if: runner.os == 'Windows'
+        run: python scripts/check-windows-console.py
       - uses: actions/upload-artifact@v4
         with:
           name: voidplayer-${{ matrix.platform }}
