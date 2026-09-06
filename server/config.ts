@@ -4,7 +4,7 @@ import type { MediaRoot } from './library-store.ts';
 
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
-  staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number;
+  staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean;
 }
 /** Paths in a JSON config are relative to that file; CLI paths are relative to cwd. */
 export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd = process.cwd(), paths: { configFile?: string; staticDir?: string; logsDir?: string; dataDir?: string } = {}): Promise<ServiceConfig> {
@@ -29,7 +29,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   let data: Record<string, unknown> = {};
   try { data = JSON.parse(await readFile(file, 'utf8')); }
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000 };
+  const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
   for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key)) throw new Error(`未知配置项: ${key}`);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
@@ -40,6 +40,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (typeof config.host !== 'string' || !config.host.trim()) throw new Error('host 无效。');
   if (mode === 'dev' && !['127.0.0.1', 'localhost', '::1'].includes(config.host)) throw new Error('开发服务仅监听本机；远端使用构建后的正式服务。');
   if (typeof config.allowLocalReveal !== 'boolean') throw new Error('allowLocalReveal 必须是布尔值。');
+  if (typeof config.indexWatch !== 'boolean') throw new Error('indexWatch 必须是布尔值。');
   if (!Number.isInteger(config.indexTtlMs) || config.indexTtlMs < 1000 || config.indexTtlMs > 3600000) throw new Error('indexTtlMs 必须是 1000–3600000 毫秒。');
   if (typeof config.staticDir !== 'string' || !config.staticDir || (config.logsDir !== null && (typeof config.logsDir !== 'string' || !config.logsDir))) throw new Error('staticDir / logsDir 配置无效。');
   if (typeof config.dataDir !== 'string' || !config.dataDir.trim()) throw new Error('dataDir 无效。');

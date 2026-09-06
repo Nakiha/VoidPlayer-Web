@@ -93,6 +93,25 @@ try {
     const start = i * 10007, end = start + 1023;
     const r = await fetch(url, { headers: { range: `bytes=${start}-${end}` } }); assert.equal(r.status, 206); assert.equal(r.headers.get('content-range'), `bytes ${start}-${end}/${bytes.length}`); assert.deepEqual(Buffer.from(await r.arrayBuffer()), bytes.subarray(start, end + 1));
   }));
+  // Exercise the compiled runtime's real watcher before the 30 s full scan.
+  // Querying browse must not itself trigger a refresh.
+  const waitForEntries = async predicate => {
+    const deadline = Date.now() + 8000;
+    while (Date.now() < deadline) {
+      const page = await (await fetch(base + '/api/library/browse?recursive=1')).json();
+      if (predicate(page.entries)) return;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    throw new Error('Packaged directory watcher did not reconcile changes: ' + output);
+  };
+  const watchState = await (await fetch(base + '/api/library/scan')).json();
+  assert.ok(watchState.watch?.active >= 2, 'packaged runtime registered directory watchers');
+  const added = path.join(media, '子目录', 'added.mp4');
+  await writeFile(added, 'watch-test'); await utimes(added, 1, 1);
+  await waitForEntries(entries => entries.some(e => e.name.endsWith('/added.mp4') && e.state === 'ready'));
+  assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206, 'existing media remains readable during incremental updates');
+  await rm(added);
+  await waitForEntries(entries => entries.length === 1);
   const suffix = await fetch(url, { headers: { range: 'bytes=-32' } }); assert.deepEqual(Buffer.from(await suffix.arrayBuffer()), bytes.subarray(-32));
   assert.equal((await fetch(url, { headers: { range: `bytes=${bytes.length}-` } })).status, 416);
   const controller = new AbortController(); const streaming = await fetch(url, { signal: controller.signal }); await streaming.body.getReader().read(); controller.abort();
@@ -133,6 +152,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, SQLite process lock and upgrade/backup/restore preserving offline index`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

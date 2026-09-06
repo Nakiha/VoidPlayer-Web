@@ -13,6 +13,7 @@ test('shared configuration resolves file-relative paths and explicit CLI overrid
     const config = await loadConfig(['--config', 'config/settings.json', '--port', '5191'], 'dev', root);
     assert.deepEqual(config.mediaRoots, [path.join(root, 'media')]);
     assert.equal(config.staticDir, path.join(root, 'web')); assert.equal(config.logsDir, null);
+    assert.equal(config.indexWatch, true);
     assert.equal(config.port, 5190); assert.equal(config.devPort, 5191);
     const override = await loadConfig(['--config=config/settings.json', '--folder', 'another', '--port', '5192'], 'production', root);
     assert.deepEqual(override.mediaRoots, [path.join(root, 'another')]); assert.equal(override.port, 5192);
@@ -61,5 +62,18 @@ test('stable root definitions preserve IDs and resolve paths independently of da
     assert.equal(standalone.dataDir, path.join(root, 'external-state'));
     await writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: '../invalid', path: 'media' }] }));
     await assert.rejects(loadConfig([], 'production', root), /mediaRoots/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+
+test('directory watch hints can be disabled without disabling periodic calibration', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-watch-config-'));
+  try {
+    const file = path.join(root, 'voidplayer.config.json');
+    await writeFile(file, JSON.stringify({ mediaRoots: ['media'], indexWatch: false, indexTtlMs: 1000 }));
+    const config = await loadConfig([], 'production', root);
+    assert.equal(config.indexWatch, false); assert.equal(config.indexTtlMs, 1000);
+    await writeFile(file, JSON.stringify({ mediaRoots: ['media'], indexWatch: 'false' }));
+    await assert.rejects(loadConfig([], 'production', root), /indexWatch/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

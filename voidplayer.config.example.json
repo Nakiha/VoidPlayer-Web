@@ -6,5 +6,6 @@
   "staticDir": "dist",
   "logsDir": "logs",
   "allowLocalReveal": false,
-  "indexTtlMs": 30000
+  "indexTtlMs": 30000,
+  "indexWatch": true
 }

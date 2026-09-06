@@ -125,9 +125,9 @@ jobs:
       - run: npm ci
       - run: node scripts/check-release-core.mjs
       - name: Verify configuration and persistent index on Node
-        run: node --test test/config.test.ts test/library-index.test.ts test/media-reference.test.ts
+        run: node --test test/config.test.ts test/library-index.test.ts test/library-incremental.test.ts test/media-reference.test.ts
       - name: Verify persistent index on packaged runtime
-        run: bun test --timeout 60000 ./test/library-index.test.ts
+        run: bun test --timeout 60000 ./test/library-index.test.ts ./test/library-incremental.test.ts
       - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
       - name: Verify packaged Docker and HTTPS deployment

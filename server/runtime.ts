@@ -23,7 +23,7 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
 
 export async function startService(config: ServiceConfig, requireStatic = true) {
   const { staticOk, proxyToken } = await validateServiceConfig(config, requireStatic, false);
-  const library = new MediaLibraryIndex(config.mediaRoots, { ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000 });
+  const library = new MediaLibraryIndex(config.mediaRoots, { ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   library.start();
   const server = createMediaServer({ proxyToken, library, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
