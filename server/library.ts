@@ -159,6 +159,21 @@ export class MediaLibraryIndex {
       })]);
     } finally { clearTimeout(timer!); signal?.removeEventListener('abort', stop); }
   }
+  /** A disconnected mount can expose a readable, empty directory underneath.
+   * Persist the filesystem type, not st_dev: remounting can change device IDs.
+   * The numeric type is OS-specific and is never compared across platforms. */
+  private async checkStorage(root: RootRecord, signal?: AbortSignal, learn = false) {
+    const prior = this.store.db.prepare('SELECT path,platform,fs_type FROM root_storage WHERE root_id=?').get(root.id) as { path: string; platform: string; fs_type: string } | undefined;
+    const current = await this.io(fs.statfs(root.path), signal);
+    const bound = !!prior?.fs_type && prior.path === root.path;
+    if (bound && (prior.platform !== process.platform || prior.fs_type !== String(current.type))) {
+      throw Object.assign(new Error('媒体根目录的文件系统已改变，请恢复原存储挂载'), { code: 'ESTORAGECHANGED' });
+    }
+    if (learn && !bound) {
+      this.store.db.prepare('INSERT INTO root_storage(root_id,path,platform,fs_type) VALUES(?,?,?,?) ON CONFLICT(root_id) DO UPDATE SET path=excluded.path,platform=excluded.platform,fs_type=excluded.fs_type').run(root.id, root.path, process.platform, String(current.type));
+    }
+    return learn || bound;
+  }
   private async scan(signal: AbortSignal, scopes?: DirectoryScope[]) {
     const db = this.store.db;
     const job = Number(db.prepare("INSERT INTO scan_jobs(state,started_at) VALUES('running',?)").run(this.now()).lastInsertRowid);
@@ -189,7 +204,7 @@ export class MediaLibraryIndex {
     const errorAt = (root: RootRecord, relative: string, error: unknown) => {
       if (signal.aborted) throw new DOMException('扫描已取消', 'AbortError');
       const code = String((error as NodeJS.ErrnoException).code ?? 'IO_ERROR'); errors++;
-      if (errors <= 1000) db.prepare('INSERT INTO scan_errors(job_id,root_id,path,code,message) VALUES(?,?,?,?,?)').run(job, root.id, relative, code, '无法读取媒体存储');
+      if (errors <= 1000) db.prepare('INSERT INTO scan_errors(job_id,root_id,path,code,message) VALUES(?,?,?,?,?)').run(job, root.id, relative, code, code === 'ESTORAGECHANGED' ? '文件系统已改变，保留索引并等待原存储挂载恢复' : code === 'ESTORAGEUNVERIFIED' ? '升级后尚未核对到原媒体，保留索引并等待存储恢复' : '无法读取媒体存储');
     };
     try {
       if (this.options.scan) {
@@ -213,10 +228,14 @@ export class MediaLibraryIndex {
         if (wholeRoot) this.watchers?.beginRoot(root.id);
         let offline = false;
         let rootReal = '';
-        try { rootReal = await this.io(fs.realpath(root.path), signal); }
+        let storageVerified = false;
+        const bound = db.prepare('SELECT path FROM root_storage WHERE root_id=?').get(root.id);
+        const mayBindEmpty = !!bound && bound.path !== root.path || !db.prepare("SELECT 1 FROM media WHERE root_id=? AND state!='missing' LIMIT 1").get(root.id);
+        try { rootReal = await this.io(fs.realpath(root.path), signal); storageVerified = await this.checkStorage(root, signal); }
         catch (error) { errorAt(root, '', error); offline = true; this.watchers?.resetRoot(root.id); }
         for (const directory of offline ? [] : directories) {
           const scopeErrorsBefore = errors;
+          let unverifiedFiles = false;
           const stack = [directory];
           while (stack.length) {
             const relative = stack.pop()!;
@@ -231,7 +250,8 @@ export class MediaLibraryIndex {
                 this.watchers.add({ rootId: root.id, directory: relative }, absolute, `${absolute}:${stat.dev}:${stat.ino}`);
               }
               children = await this.io(fs.readdir(absolute, { withFileTypes: true }), signal);
-            } catch (error) { errorAt(root, relative, error); if (!relative) offline = true; continue; }
+              storageVerified = await this.checkStorage(root, signal, mayBindEmpty);
+            } catch (error) { errorAt(root, relative, error); if (!relative || (error as NodeJS.ErrnoException).code === 'ESTORAGECHANGED') offline = true; continue; }
             visited++;
             db.prepare('INSERT INTO directories(root_id,path,parent,name,generation) VALUES(?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET generation=excluded.generation').run(root.id, relative, parent(relative), path.posix.basename(relative), job);
             for (const child of children) {
@@ -246,6 +266,10 @@ export class MediaLibraryIndex {
               if (!stat.isFile() || stat.isSymbolicLink()) continue;
               const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
               const prior = priorVersion.get(root.id, name) as { version: string; state: string; observed_at: number } | undefined;
+              // Schema 1 had no filesystem binding. Require one unchanged known
+              // file before accepting a first binding for an existing library.
+              if (!storageVerified && prior?.version === version) storageVerified = await this.checkStorage(root, signal, true);
+              if (!storageVerified) { unverifiedFiles = true; continue; }
               const pending = settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
               if (pending) this.settling.add({ rootId: root.id, directory: relative });
               // Database errors fail the job, rather than being treated as a bad file.
@@ -254,6 +278,12 @@ export class MediaLibraryIndex {
             }
           }
           flush();
+          try { if (!await this.checkStorage(root, signal)) throw Object.assign(new Error('尚未核对原媒体存储'), { code: 'ESTORAGEUNVERIFIED' }); }
+          catch (error) { errorAt(root, directory, error); offline = true; }
+          if (unverifiedFiles && storageVerified) {
+            errorAt(root, directory, { code: 'ERECHECK' });
+            this.changes.add({ rootId: root.id, directory });
+          }
           // Reconcile only successfully inspected subtrees. An incomplete scope
           // must not delete old records, and an incremental scan cannot touch its siblings.
           if (errors === scopeErrorsBefore) {
@@ -299,6 +329,7 @@ export class MediaLibraryIndex {
     const root = this.definitions.find(r => r.id === entry.root_id);
     if (!root) return null;
     try {
+      await this.checkStorage(root);
       const rootReal = await this.io(fs.realpath(root.path));
       const real = await this.io(fs.realpath(path.join(rootReal, entry.path)));
       if (!real.startsWith(rootReal + path.sep)) return null;

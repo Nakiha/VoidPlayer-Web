@@ -34,9 +34,10 @@ export class LibraryStore {
       this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 1) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      if (version.user_version > 2) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
       this.db.exec('PRAGMA journal_mode=WAL');
       this.db.exec(`
+        BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS roots (id TEXT PRIMARY KEY, path TEXT NOT NULL, name TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, state TEXT NOT NULL DEFAULT 'unscanned', error TEXT, scanned_at INTEGER);
         CREATE TABLE IF NOT EXISTS directories (root_id TEXT NOT NULL REFERENCES roots(id), path TEXT NOT NULL, parent TEXT NOT NULL, name TEXT NOT NULL, generation INTEGER NOT NULL, PRIMARY KEY(root_id,path));
         CREATE INDEX IF NOT EXISTS directory_parent ON directories(root_id,parent,name);
@@ -46,13 +47,16 @@ export class LibraryStore {
         CREATE TABLE IF NOT EXISTS scan_jobs (id INTEGER PRIMARY KEY AUTOINCREMENT, state TEXT NOT NULL, started_at INTEGER NOT NULL, finished_at INTEGER, visited INTEGER NOT NULL DEFAULT 0, files INTEGER NOT NULL DEFAULT 0, errors INTEGER NOT NULL DEFAULT 0, current_root TEXT, current_path TEXT);
         CREATE TABLE IF NOT EXISTS scan_errors (job_id INTEGER NOT NULL REFERENCES scan_jobs(id), root_id TEXT NOT NULL, path TEXT NOT NULL, code TEXT NOT NULL, message TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS library_revision (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS root_storage (root_id TEXT PRIMARY KEY REFERENCES roots(id), path TEXT NOT NULL, platform TEXT NOT NULL, fs_type TEXT NOT NULL);
+        ${version.user_version < 2 ? "INSERT OR IGNORE INTO root_storage(root_id,path,platform,fs_type) SELECT id,path,'','' FROM roots;" : ''}
         INSERT OR IGNORE INTO library_revision VALUES(1,0);
         CREATE TRIGGER IF NOT EXISTS media_added AFTER INSERT ON media BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS media_changed AFTER UPDATE ON media WHEN old.version!=new.version OR old.state!=new.state BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS directory_added AFTER INSERT ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS directory_removed AFTER DELETE ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS root_changed AFTER UPDATE ON roots WHEN old.active!=new.active OR old.path!=new.path OR old.name!=new.name BEGIN UPDATE library_revision SET revision=revision+1; END;
-        PRAGMA user_version=1;
+        PRAGMA user_version=2;
+        COMMIT;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());
     } catch (error) { try { connection?.close(); } catch {} this.unlock(); throw error; }

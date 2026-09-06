@@ -1,5 +1,6 @@
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
+import { openIndexDatabase } from '../server/sqlite.ts';
 // Test the extracted release itself. Its server gets an empty PATH and an unrelated cwd.
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm, cp, utimes } from 'node:fs/promises';
@@ -145,10 +146,36 @@ try {
   const received = await (await fetch(base + '/api/admin/logs/' + receivedLogs.entries[0].name)).json();
   assert.equal(received.document.serverReceipt.actorId, 'local');
   await stop();
+  // Exercise the compiled runtime's actual schema 1 -> 2 migration. The old
+  // mount now exposes an empty directory instead of returning ENOENT.
+  const legacyIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
+  legacyIndex.exec('DROP TABLE root_storage; PRAGMA user_version=1;'); legacyIndex.close();
+  const migrationOffline = media + '-migration-offline';
+  await renameReleased(media, migrationOffline); await mkdir(media);
   const upgraded = path.join(temp, 'upgraded program'); await renameReleased(folder, upgraded); executable = path.join(upgraded, manifest.executable);
   base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original); assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
+  async function waitForStorage(state) {
+    for (let i = 0; i < 100; i++) {
+      const scan = await (await fetch(base + '/api/library/scan')).json();
+      if (!scan.scanning && scan.roots.every(root => root.state === state)) return scan;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    throw new Error('Storage state did not settle to ' + state);
+  }
+  const unverified = await waitForStorage('offline');
+  assert.ok(unverified.errors.some(error => error.code === 'ESTORAGEUNVERIFIED'));
+  assert.equal((await (await fetch(base + '/api/library')).json()).entries[0].id, listing.entries[0].id);
+  assert.equal((await fetch(url)).status, 404);
   await verifyWorkspaceRestore(workspaceTransport, savedWorkspace);
   await stop();
+  await rm(media, { recursive: true }); await renameReleased(migrationOffline, media);
+  base = await start(port); await waitForStorage('ready');
+  assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206);
+  await stop();
+  const migratedIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
+  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 2);
+  assert.ok(migratedIndex.prepare('SELECT fs_type FROM root_storage').get()?.fs_type);
+  migratedIndex.close();
   // A stopped full-data backup must restore into a fresh directory, not only
   // survive a program-directory rename. Keep the original for comparison.
   const backup = path.join(temp, 'data backup');
@@ -183,6 +210,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and upgrade/backup/restore preserving offline index and versioned workspaces`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-2 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);
