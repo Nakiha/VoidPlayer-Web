@@ -1,0 +1,203 @@
+{
+  "environment": {
+    "build": {
+      "builtAt": "2026-09-06T04:29:11.717Z",
+      "revision": "f5b4abe-dirty",
+      "sourceDigest": "d5ec77a8f0e34db76748cb21e0bf134990ba151dfd16742490efb39fbafcda02",
+      "wasmDigests": {
+        "voidplayer-core-mt.wasm": "ece909b94bcb9f5db50ea7593be1eef51ac8663aa7c0213ba9f99739764546e2",
+        "voidplayer-core.wasm": "44ffb7d7e2b6bbff0e023225469bac09418014fd690b227450d17cf69d5cf661"
+      }
+    },
+    "crossOriginIsolated": true,
+    "page": "http://127.0.0.1:5178/",
+    "sharedArrayBuffer": true,
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+    "viewport": {
+      "devicePixelRatio": 2,
+      "height": 791,
+      "width": 721
+    },
+    "visibility": "visible"
+  },
+  "error": null,
+  "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+  "failures": [],
+  "limits": {
+    "maxFrameLagUs": 100000,
+    "maxFrameSkewUs": 100000,
+    "maxGapMs": 250,
+    "maxP95GapMs": 75,
+    "maxPauseMs": 100,
+    "minSpeed": 0.9,
+    "minWallMs": 1000
+  },
+  "longTasks": {
+    "count": 0,
+    "totalMs": 0
+  },
+  "measurements": {
+    "maxFrameLagUs": 16666,
+    "maxFrameSkewUs": 16654,
+    "mediaUs": 3024350,
+    "speed": 0.9916291788544888,
+    "tracks": {
+      "A": {
+        "drawn": 181,
+        "dropped": 0,
+        "fps": 59.34659724326301,
+        "maxGapMs": 41.65499997138977,
+        "p95GapMs": 24.975000023841854
+      },
+      "B": {
+        "drawn": 181,
+        "dropped": 0,
+        "fps": 59.34659724326301,
+        "maxGapMs": 41.7150000333786,
+        "p95GapMs": 24.990000009536743
+      },
+      "C": {
+        "drawn": 181,
+        "dropped": 0,
+        "fps": 59.34659724326301,
+        "maxGapMs": 41.78999996185303,
+        "p95GapMs": 24.975000023841854
+      },
+      "D": {
+        "drawn": 181,
+        "dropped": 0,
+        "fps": 59.34659724326301,
+        "maxGapMs": 41.85000002384186,
+        "p95GapMs": 24.97499990463257
+      }
+    },
+    "waitingMs": 25.34000753879549,
+    "wallMs": 3049.8799999952316
+  },
+  "passed": true,
+  "pauseMs": 3.205000042915344,
+  "reachedEnd": false,
+  "requestedWallMs": 3000,
+  "schema": "voidplayer-playback-benchmark",
+  "staleAfterPause": false,
+  "startupMs": 23.05999994277954,
+  "tracks": [
+    {
+      "codec": "avc1.64002a",
+      "color": {
+        "fullRange": false,
+        "matrix": null,
+        "primaries": null,
+        "transfer": null
+      },
+      "decoder": "webcodecs",
+      "durationUs": 9999956,
+      "firstPtsUs": 0,
+      "frame": {
+        "durationUs": 16667,
+        "ptsUs": 3016644,
+        "sourcePtsUs": 3016644
+      },
+      "height": 1080,
+      "id": "03949793-92ba-41bb-8aca-9449d6e0fc59",
+      "lastModified": 1788613262817,
+      "name": "h264_9s_1920x1080.mp4",
+      "size": 19334432,
+      "slot": "A",
+      "source": {
+        "id": "56ba6df178e4da0a5f7ade27",
+        "kind": "library",
+        "url": "/api/media/56ba6df178e4da0a5f7ade27"
+      },
+      "width": 1920
+    },
+    {
+      "codec": "avc1.64002a",
+      "color": {
+        "fullRange": false,
+        "matrix": null,
+        "primaries": null,
+        "transfer": null
+      },
+      "decoder": "webcodecs",
+      "durationUs": 9999956,
+      "firstPtsUs": 0,
+      "frame": {
+        "durationUs": 16667,
+        "ptsUs": 3016644,
+        "sourcePtsUs": 3016644
+      },
+      "height": 1080,
+      "id": "a07f457a-c45e-40eb-b3c0-53018c3140d3",
+      "lastModified": 1788613262817,
+      "name": "h264_9s_1920x1080.mp4",
+      "size": 19334432,
+      "slot": "B",
+      "source": {
+        "id": "56ba6df178e4da0a5f7ade27",
+        "kind": "library",
+        "url": "/api/media/56ba6df178e4da0a5f7ade27"
+      },
+      "width": 1920
+    },
+    {
+      "codec": "hev1.1.2.L123.80",
+      "color": {
+        "fullRange": false,
+        "matrix": null,
+        "primaries": null,
+        "transfer": null
+      },
+      "decoder": "webcodecs",
+      "durationUs": 9999600,
+      "firstPtsUs": -50000,
+      "frame": {
+        "durationUs": 16665,
+        "ptsUs": 3016546,
+        "sourcePtsUs": 2966546
+      },
+      "height": 1080,
+      "id": "e800273c-d628-4441-8e1c-143095603ff4",
+      "lastModified": 1788613262827,
+      "name": "h265_10s_1920x1080.mp4",
+      "size": 10179949,
+      "slot": "C",
+      "source": {
+        "id": "fff66c848bd9864eaab1df36",
+        "kind": "library",
+        "url": "/api/media/fff66c848bd9864eaab1df36"
+      },
+      "width": 1920
+    },
+    {
+      "codec": "hev1.1.2.L123.80",
+      "color": {
+        "fullRange": false,
+        "matrix": null,
+        "primaries": null,
+        "transfer": null
+      },
+      "decoder": "webcodecs",
+      "durationUs": 9999600,
+      "firstPtsUs": -50000,
+      "frame": {
+        "durationUs": 16665,
+        "ptsUs": 3016546,
+        "sourcePtsUs": 2966546
+      },
+      "height": 1080,
+      "id": "c4887e50-0f8d-4f29-a8e9-d0f415219781",
+      "lastModified": 1788613262827,
+      "name": "h265_10s_1920x1080.mp4",
+      "size": 10179949,
+      "slot": "D",
+      "source": {
+        "id": "fff66c848bd9864eaab1df36",
+        "kind": "library",
+        "url": "/api/media/fff66c848bd9864eaab1df36"
+      },
+      "width": 1920
+    }
+  ],
+  "version": 1
+}

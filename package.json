@@ -12,7 +12,8 @@
     "dev:web": "vite --host 127.0.0.1",
     "start": "node server/main.ts",
     "service": "node scripts/service.mjs",
-    "release": "npm run build && node scripts/package-release.mjs"
+    "release": "npm run build && node scripts/package-release.mjs",
+    "test:browser": "npm run build && node scripts/check-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/core": "2.1.1",

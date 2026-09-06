@@ -13,22 +13,46 @@ The web bundle can be served as static files over HTTPS; localhost is for develo
 npm ci
 bash scripts/sync-wasm-core.sh   # vendored decoder core (see below)
 bash scripts/sync-samples.sh     # QA samples into fixtures/video/
-npm run dev -- --port 5178 --strictPort
+cp voidplayer.config.example.json voidplayer.config.json
+npm run dev   # starts both the webpage and media API in one process
 ```
 
-Open http://127.0.0.1:5178/. Choose video A, then B. Playback is silent.
-Drop one file onto a video pane to replace that track; elsewhere it fills A,
-then B. Drop two files together to load A and B in the supplied order. More than
-two files are rejected. Loading proceeds in order; if the second file fails,
-the successful first load remains and the old second source is preserved.
+Requires Node 24+. Open http://127.0.0.1:5178/. Add up to four videos (A–D). Playback is silent.
+Drop a file onto a video pane to replace that track; elsewhere it fills an empty slot.
+Drop up to four files in the supplied order; requests exceeding available capacity
+are rejected before loading. If a later file fails, earlier successful loads remain
+and the failed replacement preserves its previous source.
 Use the shared timeline, left/right arrows to step every track by one fair frame
 step, and Space to play/pause.
-The sidebar button opens annotations; drag on a paused frame to select a region.
+The subtrack panel contains annotations; drag on a paused frame to start drawing.
 Export before closing: annotations currently live only in memory.
 
 The interface follows the desktop player's edge-to-edge layout, with compact
-macOS-style controls and the system light/dark preference. Unsupported desktop
+macOS-style controls and the current light theme. Unsupported desktop
 features are omitted rather than presented as nonfunctional controls.
+
+## Regression checks
+
+After syncing the decoder core and samples:
+
+```sh
+npm test
+npm run build
+npx playwright install webkit  # once per Playwright browser version
+npm run test:browser
+```
+
+`test:browser` builds the current page and starts its own temporary local server;
+it does not require or restart the background service. It checks window resizing,
+four-track/grid/wipe layouts, panel transitions, focus recovery, and distinct
+same-metadata library sources through load and history restore. Browser errors,
+including ResizeObserver warnings, fail the check. It saves no screenshots and
+cleans up its browser, server and temporary files. An optional `chromium` argument
+selects that installed browser: `npm run test:browser -- chromium`.
+
+Playback changes also require `node scripts/bench-playback.mjs webkit --headless`
+against a running service; `BASE_URL` selects its address. See the benchmark section
+below for scenarios and measurement limits.
 
 ## Implementation and boundaries
 
@@ -102,7 +126,7 @@ This format is not claimed to be compatible with the desktop marks importer.
 ## Agent surface
 
 `window.voidPlayer` exposes `getState()`, `loadFile('A' | 'B', File)`, `seek(ptsUs)`,
-`step(-1 | 1)`, `play()`, `pause()`, `addMark(input)`, `deleteMark(id)`, and
+`step(-1 | 1)`, `play()`, `pause()`, `removeTrack('A' | 'B')`, `addMark(input)`, `deleteMark(id)`, and
 `exportReview()`. File access requires user selection or an existing File object;
 an agent cannot load arbitrary local paths through the page.
 
@@ -266,7 +290,7 @@ and Agent-readable historical logs were verified independently.
 
 ## Optional media-library service
 
-`browser/server/` is a small zero-dependency Node service (Node 22+) exposing
+`server/` is a small zero-dependency Node service (Node 24+) exposing
 whitelisted host folders over a narrow API: `GET /api/library` lists
 media files, `GET /api/media/<id>` streams bytes with HTTP Range support, and
 the built frontend in `dist/` is served when present. The single write
@@ -282,8 +306,9 @@ npm run serve -- --folder /absolute/path/to/videos [--folder ...] [--port 5180]
 # then open http://127.0.0.1:5180/
 ```
 
-During `npm run dev`, vite proxies `/api` to 127.0.0.1:5180, so run the service
-alongside the dev server. The app works fully without the service; the library
+During `npm run dev`, one process starts Vite on 5178 and the API on 5180;
+Vite proxies `/api` to the API. Both close together. Local-file playback
+works without the service; the library
 button then reports that no service is connected. Library items play through
 mediabunny's `UrlSource` with range requests (no whole-file download) on the
 WebCodecs path; the WASM fallback still fetches the whole file into memory —
@@ -437,3 +462,92 @@ and float16 canvas ImageData is not portable across engines yet (Chromium
 requires an rgba-float16 context, WebKit has none), so fallback HDR sources are
 marked "HDR 源（SDR 兜底显示）" instead of silently presenting wrong. Revisit
 fallback HDR only when float16 canvas support stabilizes.
+
+Comparison viewport (2026-09-05): ported the desktop viewer's comparison
+surface — side-by-side vs split-screen layout (M key or the topbar segmented
+control), a draggable split divider (5% keyboard step, unclamped while
+dragging, clamped on release), cursor-anchored zoom (1x..50x, re-centers at
+1x, 120 wheel units = 1.1x), unbounded shared pan, and the uniform-pixel
+display mode (default; the track with the most pixels fills its slot, the
+rest show at the same screen size per video pixel). Right-drag pans, mouse
+wheel zooms, trackpad two-finger scroll pans and pinch zooms (Safari gesture
+events; ctrl+wheel on Chromium/Firefox; elsewhere a documented large-integer
+-notch heuristic separates wheel from trackpad). Geometry and classification
+live in `src/viewport.ts` (pure, node:test covered); presentation is CSS
+`transform` + `clip-path` on the existing per-track canvases, so
+`presenter.ts` and both decode paths are untouched and WebCodecs frames stay
+zero-copy. Pan offset rescales by the primary track's display-size ratio on
+resize / mode / pixel-size changes, keeping the view center stable (desktop
+`_rescaleViewOffsetForResize` parity). Automation surface:
+`window.voidPlayer.getViewport()` / `setViewport(patch)`.
+
+Verified: 73 node tests (11 new viewport math/classification cases); a
+WebKit Playwright smoke driving the real UI (two tracks — 4K HEVC WebCodecs
++ 720p MPEG-2 TS WASM — uniform vs fill sizing, split toggle, divider drag,
+wheel zoom, right-drag pan, M toggle, preset reset, region annotation under
+zoom) all passed with zero page errors; playback bench 4/4 PASS afterwards.
+Not verified: real-hardware trackpad pinch (synthetic events cannot emit
+Safari gesture events or `webkitDirectionInvertedFromDevice`), the Chromium
+wheel/trackpad heuristic on Windows, touch input, and split-mode behavior
+during active playback beyond the bench scenarios.
+
+Viewport follow-ups (2026-09-05, second pass):
+
+- Trackpad pan no longer coasts: macOS sends synthetic momentum wheel events
+  after lift-off and no web API flags them, so `PanMomentumFilter`
+  (src/viewport.ts) recognizes the decay-tail signature (same direction,
+  frame cadence, near-constant shrink ratio) and cuts it after the first two
+  decaying steps. Deliberate slow/steady scrolls and direction changes pass
+  through untouched (unit-tested).
+- Log upload failures now say what actually happened: a fetch-level error
+  (e.g. Safari's bare "Load failed") is reported as "cannot reach the local
+  server, the upload was never sent" instead of surfacing the raw TypeError.
+- Plain clicks on the video no longer log a bogus region-select pair; drag
+  start/end are only logged once the selection actually exceeds the 0.5%
+  threshold.
+- Paint-trail investigation: a user-provided screenshot showed bar-colored
+  streaks in the letterbox area after zoom/pan in Safari 27. The canvas
+  backing store reads back clean and the artifacts were NOT reproducible in
+  Playwright WebKit (dpr 1 and 2, zoom/pan/left-top sweeps) — consistent with
+  a Safari.app compositing issue with transformed canvases. Mitigation
+  shipped: the view is forced to re-composite once when a gesture settles
+  (`flushView`). Needs real-Safari confirmation; if trails persist, capture
+  whether a window resize clears them and export the session log.
+
+### 媒体服务连接与本机定位
+
+右上角状态灯每 10 秒检查轻量 `/api/health`，点击可立即重试；从离线恢复连接时自动刷新一次媒体库和启动片源列表，不在每次心跳中扫描目录。无服务时浏览器本地文件播放仍可用。媒体条目的 `/api/media/:id/location` 返回白名单文件的绝对路径，`?download=1` 返回附件下载。
+
+Finder / Explorer 定位是服务端可选能力，默认关闭。只有服务器确实运行在本机时才启用：
+
+```sh
+node server/main.ts --folder fixtures/video --port 5180 --allow-local-reveal
+```
+
+定位接口仅接受本机来源页面的 POST 和专用请求头，再按白名单 ID 解析文件；不接受任意路径。远端部署和端口转发不应启用该选项。纯浏览器选择/拖入的文件无法获取绝对路径或唤起 Finder，需从本机媒体库打开才能使用这两项功能。
+
+
+### 开发与部署进程
+
+`npm run dev` 在一个进程中启动网页热更新入口 `5178` 和媒体 API `5180`，统一配置来自 `voidplayer.config.json`，任一端口冲突会直接失败。macOS 可用 `npm run service -- install` 安装用户后台服务，登录启动、异常退出恢复，避免随 Codex 退出。修改后端或配置后用 `stop` / `start` 重启；`uninstall` 移除自动启动。
+
+| 操作 | macOS 用户服务命令 |
+| --- | --- |
+| 状态 | `npm run service -- status` |
+| 停止网页和 API | `npm run service -- stop` |
+| 再次启动 | `npm run service -- start` |
+| 停止并取消登录自启 | `npm run service -- uninstall` |
+
+`stop` 卸载当前登录会话中的服务，下次登录仍会自启；`uninstall` 同时删除自启配置。修改后端或配置需先 stop 再 start，单独 start 不会重启正在运行的进程。管理正式服务时在命令末尾加 `--production`。在终端前台运行的 `npm run dev` / `npm run serve` 用该终端的 Ctrl+C 停止；关闭 Codex 或浏览器不会停止 launchd 托管服务。
+
+正式包只运行一个 Node 服务，同时提供网页、WASM 和 API。`npm run release` 生成带 SHA-256 清单的发布包；内网团队部署另配 Caddy HTTPS 和每人独立账号。媒体索引按 30 秒 TTL 复用，手动刷新立即更新，Range 请求不再逐次扫描媒体目录。
+
+状态灯已并入右上角工作区按钮组，悬浮或键盘聚焦显示连接情况、当前账号（团队登录时）及重试说明。新标注可记录账号作者，但评审仍需导出；完整服务端评审保存和操作历史尚未实现。
+
+启动、部署、账号、证书信任和更新步骤见 [deploy/README.md](deploy/README.md)。
+
+### Four-track workbench
+
+The shared review session now accepts tracks A–D. The top-left arrangement button switches horizontal/2×2 layout; bottom-row grid captions sit below the videos. Wipe comparison remains a two-track mode. Sidebars can be resized from their inner edges, and track sorting accepts the trailing blank area in the subtrack list. Narrow captions keep their actions in a compact menu.
+
+For the current recursive library scan limits and the proposed directory/index evolution for team experiments, see [media library evolution](docs/media-library-evolution.md). This document distinguishes current behavior from the next implementation steps.
