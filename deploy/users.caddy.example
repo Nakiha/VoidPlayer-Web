@@ -1,0 +1,4 @@
+# One immutable account ID and bcrypt hash per person. Never share accounts.
+# Generate the hash interactively: docker run --rm -it caddy:2.11.4 caddy hash-password
+# Add lines in the following format (without comment markers):
+# account_id <bcrypt hash>

@@ -137,3 +137,102 @@ test('log upload stays disabled without a logs directory', async () => {
     });
   });
 });
+
+test('health, media location, attachment and guarded local reveal share the whitelist', async () => {
+  await withFixture(async root => {
+    const revealed: string[] = [];
+    const server = createMediaServer({ roots: [root], allowLocalReveal: true, reveal: async p => { revealed.push(p); }, onLog: () => {} });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    const id = mediaId(root, 'a.mp4');
+    try {
+      const health = await (await fetch(`${base}/api/health`)).json();
+      assert.equal(health.service, 'voidplayer-media'); assert.equal(health.capabilities.reveal, true);
+      const location = await (await fetch(`${base}/api/media/${id}/location`)).json();
+      assert.equal(location.absolutePath, await fs.realpath(path.join(root, 'a.mp4')));
+      const attachment = await fetch(`${base}/api/media/${id}?download=1`);
+      assert.match(attachment.headers.get('content-disposition')!, /^attachment;/); await attachment.arrayBuffer();
+      const url = `${base}/api/media/${id}/reveal`;
+      assert.equal((await fetch(url, { method: 'POST' })).status, 403);
+      assert.equal((await fetch(url, { method: 'POST', headers: { origin: 'https://example.com', 'x-voidplayer-action': 'reveal' } })).status, 403);
+      assert.equal((await fetch(url, { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'reveal' } })).status, 200);
+      assert.deepEqual(revealed, [location.absolutePath]);
+      assert.equal((await fetch(`${base}/api/media/${'a'.repeat(24)}/location`)).status, 404);
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
+test('shared media index coalesces scans and revalidates changed or escaped files', async () => {
+  await withFixture(async root => {
+    let scans = 0, now = 0;
+    const { MediaLibraryIndex } = await import('../server/library.ts');
+    const index = new MediaLibraryIndex([root], { ttlMs: 1000, now: () => now, scan: async roots => { scans++; return scanLibrary(roots); } });
+    const lists = await Promise.all(Array.from({ length: 8 }, () => index.list()));
+    assert.equal(scans, 1);
+    lists[0].entries[0].name = 'mutated';
+    const id = mediaId(root, 'a.mp4');
+    await Promise.all(Array.from({ length: 20 }, () => index.resolve(id)));
+    assert.equal(scans, 1);
+    assert.equal((await index.list()).entries[0].name, 'a.mp4');
+    await fs.writeFile(path.join(root, 'new.mp4'), 'new');
+    assert.equal((await index.list()).entries.length, 2);
+    assert.equal((await index.list(true)).entries.length, 3); assert.equal(scans, 2);
+    now = 1001; await Promise.all([index.list(), index.list(), index.resolve(id)]); assert.equal(scans, 3);
+    await fs.writeFile(path.join(root, 'a.mp4'), 'changed');
+    assert.equal(await index.resolve(id), null);
+    await index.list(true); assert.ok(await index.resolve(id));
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-outside-'));
+    try {
+      await fs.writeFile(path.join(outside, 'secret.mp4'), 'changed');
+      await fs.unlink(path.join(root, 'a.mp4')); await fs.symlink(path.join(outside, 'secret.mp4'), path.join(root, 'a.mp4'));
+      assert.equal(await index.resolve(id), null);
+    } finally { await fs.rm(outside, { recursive: true, force: true }); }
+  });
+});
+
+test('Range traffic shares one index and an explicit library refresh discovers additions', async () => {
+  await withFixture(async root => {
+    let scans = 0;
+    const { MediaLibraryIndex } = await import('../server/library.ts');
+    const library = new MediaLibraryIndex([root], { scan: async roots => { scans++; return scanLibrary(roots); } });
+    const server = createMediaServer({ roots: [root], library, onLog: () => {} });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+    try {
+      assert.equal((await fetch(`${base}/api/ready`)).status, 503);
+      await fetch(`${base}/api/library`);
+      assert.equal((await fetch(`${base}/api/ready`)).status, 200);
+      for (let i = 0; i < 12; i++) {
+        const response = await fetch(`${base}/api/media/${mediaId(root, 'a.mp4')}`, { headers: { range: `bytes=${i}-${i + 5}` } });
+        assert.equal(response.status, 206); await response.arrayBuffer();
+      }
+      assert.equal(scans, 1);
+      await fs.writeFile(path.join(root, 'new.mp4'), 'new');
+      assert.equal((await (await fetch(`${base}/api/library?refresh=1`)).json()).entries.length, 3);
+      assert.equal(scans, 2);
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
+test('gateway identity requires a secret and audit records the authenticated actor, never the secret', async () => {
+  await withFixture(async root => {
+    const token = 'a'.repeat(64), audit: Record<string, unknown>[] = [];
+    const server = createMediaServer({ roots: [root], proxyToken: token, onLog: entry => audit.push(entry) });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+    const headers = { 'x-voidplayer-proxy-token': token, 'x-voidplayer-user': 'tester.one' };
+    try {
+      assert.equal((await fetch(`${base}/api/library`)).status, 401);
+      assert.equal((await fetch(`${base}/api/library`, { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
+      assert.equal((await fetch(`${base}/api/library`, { headers: { ...headers, 'x-voidplayer-proxy-token': 'wrong' } })).status, 401);
+      assert.equal((await fetch(`${base}/api/library`, { headers })).status, 200);
+      assert.deepEqual((await (await fetch(`${base}/api/health`, { headers })).json()).actor, { id: 'tester.one', name: 'tester.one' });
+      assert.equal((await (await fetch(`${base}/api/health`)).json()).actor, null);
+      const range = await fetch(`${base}/api/media/${mediaId(root, 'a.mp4')}`, { headers: { ...headers, range: 'bytes=0-9' } });
+      await range.arrayBuffer();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.ok(audit.some(e => e.actorId === 'tester.one' && e.status === 206 && e.completed === true));
+      assert.ok(!JSON.stringify(audit).includes(token));
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});

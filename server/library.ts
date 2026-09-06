@@ -60,20 +60,47 @@ export async function scanLibrary(roots: string[]): Promise<Library> {
   return { roots: roots.map(r => path.basename(r)), entries, truncated };
 }
 
-/** Resolve an id back to an absolute path, refusing anything outside the whitelist. */
+/** A per-service snapshot shared by listing, Range reads and source actions. */
+export class MediaLibraryIndex {
+  private snapshot: Library | null = null;
+  private entries = new Map<string, LibraryEntry>();
+  private refreshedAt = -Infinity;
+  private pending: Promise<Library> | null = null;
+  readonly roots: string[];
+  private options: { ttlMs?: number; scan?: typeof scanLibrary; now?: () => number };
+  constructor(roots: string[], options: { ttlMs?: number; scan?: typeof scanLibrary; now?: () => number } = {}) {
+    this.options = options;
+    this.roots = roots.map(root => path.resolve(root));
+  }
+  get ready() { return this.snapshot !== null; }
+  async list(force = false): Promise<Library> {
+    const now = this.options.now ?? Date.now;
+    if (this.pending) return this.pending.then(value => structuredClone(value));
+    if (!force && this.snapshot && now() - this.refreshedAt < (this.options.ttlMs ?? 30000)) return structuredClone(this.snapshot);
+    this.pending = (this.options.scan ?? scanLibrary)(this.roots).then(library => {
+      this.snapshot = structuredClone(library);
+      this.entries = new Map(this.snapshot.entries.map(entry => [entry.id, entry]));
+      this.refreshedAt = now(); return this.snapshot;
+    }).finally(() => { this.pending = null; });
+    return this.pending.then(value => structuredClone(value));
+  }
+  async resolve(id: string): Promise<string | null> {
+    if (!/^[0-9a-f]{24}$/.test(id)) return null;
+    // Do not clone the potentially large listing on every Range request.
+    if (this.pending || !this.snapshot || (this.options.now ?? Date.now)() - this.refreshedAt >= (this.options.ttlMs ?? 30000)) await this.list();
+    const entry = this.entries.get(id);
+    if (!entry) return null;
+    const rootReal = await fs.realpath(this.roots[entry.rootIndex]).catch(() => null);
+    if (!rootReal) return null;
+    const real = await fs.realpath(path.join(rootReal, entry.name)).catch(() => null);
+    if (!real || (real !== rootReal && !real.startsWith(rootReal + path.sep))) return null;
+    const stat = await fs.stat(real).catch(() => null);
+    if (!stat?.isFile() || stat.size !== entry.size || Math.round(stat.mtimeMs) !== entry.lastModified) return null;
+    return real;
+  }
+}
+
+/** Standalone resolution helper; servers should keep one MediaLibraryIndex. */
 export async function resolveMediaPath(roots: string[], id: string): Promise<string | null> {
-  if (!/^[0-9a-f]{24}$/.test(id)) return null;
-  const library = await scanLibrary(roots);
-  const entry = library.entries.find(e => e.id === id);
-  if (!entry) return null;
-  // Defense in depth: the id maps to a scanned entry, but re-verify the real
-  // path still sits under the same whitelisted root before opening it.
-  // (realpath both sides: e.g. macOS /tmp is a symlink to /private/tmp.)
-  const rootReal = await fs.realpath(roots[entry.rootIndex]).catch(() => null);
-  if (!rootReal) return null;
-  const real = await fs.realpath(path.join(rootReal, entry.name)).catch(() => null);
-  if (!real || (real !== rootReal && !real.startsWith(rootReal + path.sep))) return null;
-  const stat = await fs.stat(real).catch(() => null);
-  if (!stat?.isFile() || stat.size !== entry.size) return null;
-  return real;
+  return new MediaLibraryIndex(roots).resolve(id);
 }

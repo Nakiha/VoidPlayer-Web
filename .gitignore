@@ -4,3 +4,9 @@ fixtures/
 *.tsbuildinfo
 public/vendor/voidplayer-core/
 logs/
+
+voidplayer.config.json
+artifacts/
+.run/
+deploy/.env
+deploy/users.caddy

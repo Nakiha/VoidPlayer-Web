@@ -1,0 +1,9 @@
+{
+  "mediaRoots": ["/media"],
+  "host": "0.0.0.0",
+  "port": 5180,
+  "staticDir": "/app/dist",
+  "logsDir": null,
+  "allowLocalReveal": false,
+  "indexTtlMs": 30000
+}

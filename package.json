@@ -4,13 +4,18 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "node scripts/dev.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test test/*.test.ts",
-    "serve": "node server/main.ts"
+    "serve": "node server/main.ts",
+    "dev:web": "vite --host 127.0.0.1",
+    "start": "node server/main.ts",
+    "service": "node scripts/service.mjs",
+    "release": "npm run build && node scripts/package-release.mjs"
   },
   "dependencies": {
+    "@phosphor-icons/core": "2.1.1",
     "mediabunny": "1.55.7"
   },
   "devDependencies": {
@@ -19,5 +24,8 @@
     "typescript": "7.0.2",
     "vite": "8.2.2"
   },
-  "description": "VoidPlayer web: local-file and library video review in the browser (WebCodecs + trimmed FFmpeg WASM fallback)"
+  "description": "VoidPlayer web: local-file and library video review in the browser (WebCodecs + trimmed FFmpeg WASM fallback)",
+  "engines": {
+    "node": ">=24"
+  }
 }

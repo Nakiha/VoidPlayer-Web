@@ -1,0 +1,10 @@
+{
+  "mediaRoots": ["fixtures/video"],
+  "host": "127.0.0.1",
+  "port": 5180,
+  "devPort": 5178,
+  "staticDir": "dist",
+  "logsDir": "logs",
+  "allowLocalReveal": false,
+  "indexTtlMs": 30000
+}
