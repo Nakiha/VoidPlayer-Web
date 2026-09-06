@@ -1,10 +1,12 @@
 import { log } from './log.ts';
+import { SLOTS } from './model.ts';
 import type { Slot } from './model.ts';
 
 export function dropSlots(count: number, loaded: Slot[], target?: Slot): Slot[] {
-  if (count < 1 || count > 2) throw new Error('请拖入一到两个视频文件。');
-  if (count === 2) return ['A', 'B'];
-  return [target ?? (loaded.includes('A') ? 'B' : 'A')];
+  if (!Number.isInteger(count) || count < 1 || count > SLOTS.length) throw new Error('请拖入一到四个视频文件。');
+  // Explicit target first; otherwise use vacant tracks before replacing any.
+  const candidates = [...(target ? [target] : []), ...SLOTS.filter(slot => !loaded.includes(slot)), ...SLOTS];
+  return [...new Set(candidates)].slice(0, count);
 }
 
 /** Keep File access inside the drop event, before the browser protects it again. */
@@ -23,7 +25,7 @@ export function bindFileDrop(root: EventTarget, options: {
     event.preventDefault();
     if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
     const count = Array.from(event.dataTransfer?.items ?? []).filter(item => item.kind === 'file').length;
-    options.hover(count > 2 ? [] : dropSlots(Math.max(1, count), options.loaded(), options.target(event)));
+    options.hover(count > SLOTS.length ? [] : dropSlots(Math.max(1, count), options.loaded(), options.target(event)));
   };
   const enter = (event: DragEvent) => { if (isFile(event)) { depth++; over(event); } };
   const leave = (event: DragEvent) => { if (isFile(event) && --depth <= 0) clear(); };

@@ -85,7 +85,7 @@ export async function benchmarkPlayback(session: ReviewSession, durationMs = 800
       if (ending.tracks.map(t => t.id).join() !== before.tracks.map(t => t.id).join()) failures.push('media-changed');
       const reachedEnd = ending.positionUs >= ending.durationUs - 1;
       if (!ending.playing && !reachedEnd && !ending.error) failures.push('interrupted');
-      if (reachedEnd && ending.tracks.some(t => !t.frame || t.frame.ptsUs + t.frame.durationUs < ending.durationUs - 1000)) failures.push('premature-end');
+      if (reachedEnd && ending.tracks.some(t => !t.frame || t.frame.ptsUs + t.offsetUs + t.frame.durationUs < ending.durationUs - 1000)) failures.push('premature-end');
       const report = { schema: 'voidplayer-playback-benchmark', version: 1, passed: failures.length === 0,
         failures, limits: PLAYBACK_LIMITS, environment, startupMs, requestedWallMs: durationMs,
         reachedEnd, error: ending.error, pauseMs, staleAfterPause,

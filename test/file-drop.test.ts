@@ -8,9 +8,13 @@ test('file drop targets explicit tracks, fills empty slots, and rejects overflow
   assert.deepEqual(dropSlots(1, ['A']), ['B']);
   assert.deepEqual(dropSlots(1, ['B']), ['A']);
   assert.deepEqual(dropSlots(1, ['A', 'B'], 'A'), ['A']);
-  assert.deepEqual(dropSlots(2, ['A'], 'B'), ['A', 'B']);
+  assert.deepEqual(dropSlots(2, ['A'], 'B'), ['B', 'C']);
+  assert.deepEqual(dropSlots(4, []), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(dropSlots(1, ['A', 'B']), ['C']);
+  assert.deepEqual(dropSlots(2, ['A', 'B', 'C']), ['D', 'A']);
+  assert.deepEqual(dropSlots(1, ['A', 'B', 'C', 'D'], 'D'), ['D']);
   assert.throws(() => dropSlots(0, []));
-  assert.throws(() => dropSlots(3, []));
+  assert.throws(() => dropSlots(5, []));
 });
 
 function harness() {
@@ -38,12 +42,12 @@ test('file drag prevents browser navigation, clears feedback, and snapshots drop
   const h = harness(); const files = [new File(['a'], 'a.mp4'), new File(['b'], 'b.mp4')];
   const over = h.send('dragover', files);
   assert.equal(over.event.defaultPrevented, true); assert.equal(over.dataTransfer.dropEffect, 'copy');
-  assert.deepEqual(h.hover, ['A', 'B']);
+  assert.deepEqual(h.hover, ['B', 'C']);
   const drop = h.send('drop', files);
   assert.equal(drop.event.defaultPrevented, true); assert.deepEqual(h.hover, []);
   files.length = 0; // Real DataTransfer access is protected after dispatch.
   assert.deepEqual(h.loads[0].files.map(file => file.name), ['a.mp4', 'b.mp4']);
-  assert.deepEqual(h.loads[0].slots, ['A', 'B']);
+  assert.deepEqual(h.loads[0].slots, ['B', 'C']);
   h.dispose();
 });
 
@@ -51,7 +55,7 @@ test('text drags stay native; empty and oversized file drops do not load anythin
   const h = harness();
   assert.equal(h.send('drop', [], ['text/plain']).event.defaultPrevented, false);
   h.send('drop', []);
-  h.send('drop', [1, 2, 3].map(i => new File(['a'], `${i}.mp4`)));
+  h.send('drop', [1, 2, 3, 4, 5].map(i => new File(['a'], `${i}.mp4`)));
   assert.equal(h.loads.length, 0); assert.equal(h.errors.length, 2);
   h.dispose();
 });

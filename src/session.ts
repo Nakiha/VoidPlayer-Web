@@ -1,3 +1,5 @@
+import { SLOTS } from './model.ts';
+import { drawingsValue } from './annotation.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
@@ -6,11 +8,14 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { source: MediaSource; frame: FrameInfo | null };
+type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number };
 export class ReviewSession {
+  private order: Slot[] = [...SLOTS];
   private tracks = new Map<Slot, Track>();
   private catalog = new Map<string, MediaInfo>();
   private marks: Mark[] = [];
+  private actor: { id: string; name: string } | null = null;
+  setActor(actor: { id: string; name: string } | null) { this.actor = actor ? { id: actor.id, name: actor.name } : null; }
   private queue: Promise<unknown> = Promise.resolve();
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
@@ -40,11 +45,18 @@ export class ReviewSession {
       durationUs: this.durationUs, error: this.error, lastDecodeMs: this.decodeMs,
       playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
-      tracks: [...this.tracks].map(([slot, t]) => ({ slot, ...t.source.info, frame: t.frame })),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs }] : []; }),
       marks: this.marks,
     });
   }
-  private get durationUs() { return this.tracks.size ? Math.min(...[...this.tracks.values()].map(t => t.source.info.durationUs)) : 0; }
+  reorderTracks(order: Slot[]) {
+    if (!Array.isArray(order) || order.length !== this.tracks.size || new Set(order).size !== order.length || order.some(slot => !this.tracks.has(slot))) throw new Error('排序必须包含每个已载入轨道且不重复。');
+    this.order = [...order, ...SLOTS.filter(slot => !order.includes(slot))];
+    log.info('session', '调整轨道顺序', { order });
+    this.emit();
+    return this.getState();
+  }
+  private get durationUs() { return this.tracks.size ? Math.min(...[...this.tracks.values()].map(t => t.source.info.durationUs + t.offsetUs)) : 0; }
   pause() {
     const wasPlaying = this.playing;
     ++this.revision;
@@ -91,8 +103,9 @@ export class ReviewSession {
         const source = await open();
         let committed = false;
         try {
+          if (source.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === source.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
           const next = new Map(this.tracks);
-          next.set(slot, { source, frame: null });
+          next.set(slot, { source, frame: null, offsetUs:0 });
           await this.drawAt(0, current, next, () => {
             this.tracks.get(slot)?.source.dispose();
             this.tracks = next;
@@ -109,6 +122,30 @@ export class ReviewSession {
     scoped.info('media', `轨道 ${slot} 已载入`, {
       name: info.name, size: info.size, codec: info.codec, decoder: info.decoder,
       width: info.width, height: info.height, durationUs: info.durationUs, replacing,
+    });
+    return this.getState();
+  }
+  async removeTrack(slot: Slot) {
+    slotValue(slot);
+    await this.run('removeTrack', { slot }, async () => {
+      const track = this.tracks.get(slot);
+      this.tracks.delete(slot);
+      track?.source.dispose();
+      if (!this.tracks.size) { this.positionUs = 0; this.measurements = null; }
+      log.info('session', '关闭轨道', { slot, mediaId: track?.source.info.id });
+    });
+    return this.getState();
+  }
+  async setTrackOffset(slot:Slot, offsetUs:number) {
+    slotValue(slot);
+    if(!Number.isSafeInteger(offsetUs)) throw new Error('偏移必须是整数微秒。');
+    await this.run('setTrackOffset',{slot,offsetUs},async current=>{
+      const old=this.tracks.get(slot); if(!old)throw new Error('轨道尚未载入。');
+      if(!Number.isSafeInteger(old.source.info.durationUs+offsetUs))throw new Error('偏移超出可用时间范围。');
+      const next=new Map(this.tracks);next.set(slot,{...old,offsetUs});
+      const duration=Math.min(...[...next.values()].map(t=>t.source.info.durationUs+t.offsetUs));
+      if(duration<=0 || !Number.isSafeInteger(duration))throw new Error('偏移后没有可播放的时间范围。');
+      await this.drawAt(Math.min(this.positionUs,duration-1),current,next,()=>{this.tracks=next;});
     });
     return this.getState();
   }
@@ -166,14 +203,14 @@ export class ReviewSession {
     const target = planForwardStep(
       entries.map(([slot, t]) => {
         const [next, nextNext] = gathered.get(slot) ?? [];
-        return { currentUs: t.frame!.ptsUs, nextUs: next?.ptsUs ?? null, nextNextUs: nextNext?.ptsUs ?? null };
+        return { currentUs: t.frame!.ptsUs+t.offsetUs, nextUs: next ? next.ptsUs+t.offsetUs : null, nextNextUs: nextNext ? nextNext.ptsUs+t.offsetUs : null };
       }),
       minFrameDurationUs(entries.map(([, t]) => t.frame!.durationUs)));
-    if (target == null) { closeGathered(); return; }
+    if (target == null || target < 0 || target >= this.durationUs) { closeGathered(); return; }
     const selected = new Map<Slot, DecodedFrame>();
-    for (const [slot] of entries) {
+    for (const [slot,t] of entries) {
       const next = gathered.get(slot)?.[0];
-      if (next && target >= next.ptsUs) selected.set(slot, next);
+      if (next && target >= next.ptsUs+t.offsetUs) selected.set(slot, next);
     }
     const chosen = new Set(selected.values());
     for (const frames of gathered.values()) for (const f of frames) if (f && !chosen.has(f)) f.close();
@@ -195,12 +232,12 @@ export class ReviewSession {
     if (failed?.status === 'rejected') { closeGathered(); throw failed.reason; }
     if (!current()) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
     const target = planBackwardStep(
-      entries.map(([slot, t]) => ({ currentUs: t.frame!.ptsUs, previousUs: gathered.get(slot)?.ptsUs ?? null })));
-    if (target == null) { closeGathered(); return; }
+      entries.map(([slot, t]) => { const previous=gathered.get(slot); return {currentUs:previous ? Math.max(0,t.frame!.ptsUs+t.offsetUs) : 0,previousUs:previous ? Math.max(0,previous.ptsUs+t.offsetUs) : null}; }));
+    if (target == null || target < 0 || target >= this.durationUs) { closeGathered(); return; }
     const selected = new Map<Slot, DecodedFrame>();
     for (const [slot, t] of entries) {
       const previous = gathered.get(slot);
-      if (previous && target < t.frame!.ptsUs) selected.set(slot, previous);
+      if (previous && target < t.frame!.ptsUs+t.offsetUs) selected.set(slot, previous);
     }
     for (const [slot, f] of gathered) if (f && !selected.has(slot)) f.close();
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
@@ -217,7 +254,7 @@ export class ReviewSession {
     const results = await Promise.allSettled(entries.map(([slot, t]) => {
       if (kept?.has(slot)) return Promise.resolve(null);
       const chosen = selected?.get(slot);
-      return chosen ? Promise.resolve(chosen) : t.source.frameAt(ptsUs);
+      return chosen ? Promise.resolve(chosen) : t.source.frameAt(Math.max(0,Math.min(t.source.info.durationUs-1,ptsUs-t.offsetUs)));
     }));
     try {
       if (!current()) throw new DOMException('定位已取消。', 'AbortError');
@@ -281,7 +318,7 @@ export class ReviewSession {
         // A future indexed frame proves coverage, including VFR timestamp gaps.
         // Only a drained producer proves that the final frame covers the end.
         const coverage = Math.min(...readers.map((r, i) => r.ended ? this.durationUs - 1
-          : r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs));
+          : (r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs) + entries[i][1].offsetUs));
         const target = Math.max(this.positionUs, Math.min(this.durationUs - 1,
           this.positionUs + Math.round(elapsed * 1000), coverage));
         const advance = target - this.positionUs;
@@ -290,7 +327,8 @@ export class ReviewSession {
         if (now - lastProgress > 15000) throw new Error('解码超过 15 秒没有推进，请重新载入视频。');
         for (let i = 0; i < entries.length; i++) {
           const [slot, track] = entries[i];
-          const { frame, dropped } = readers[i].take(target);
+          if(target < track.offsetUs) metrics.holdBeforeStart(slot,now);
+          const { frame, dropped } = readers[i].take(target-track.offsetUs);
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
@@ -303,7 +341,7 @@ export class ReviewSession {
         this.positionUs = target;
         metrics.wallMs = performance.now() - start;
         metrics.mediaUs = target - base;
-        const pts = entries.map(([, t]) => t.frame!.ptsUs);
+        const pts = entries.map(([, t]) => Math.min(target,Math.max(0,t.frame!.ptsUs+t.offsetUs)));
         metrics.maxFrameLagUs = Math.max(metrics.maxFrameLagUs, target - Math.min(...pts));
         metrics.maxFrameSkewUs = Math.max(metrics.maxFrameSkewUs, Math.max(...pts) - Math.min(...pts));
         // Canvas drawing is independent of the expensive DOM/state snapshot.
@@ -329,24 +367,26 @@ export class ReviewSession {
       if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
     }
   }
-  addMark(input: { slot: unknown; text: unknown; severity?: unknown; origin?: unknown; region?: unknown }) {
+  addMark(input: { slot: unknown; text: unknown; severity?: unknown; origin?: unknown; region?: unknown; drawings?: unknown }) {
     if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再标注。');
     const slot = slotValue(input.slot);
     const track = this.tracks.get(slot);
     if (!track?.frame) throw new Error('当前轨道没有可标注的画面。');
-    if (typeof input.text !== 'string' || !input.text.trim() || input.text.length > 2000) throw new Error('请填写 1–2000 字的标注。');
+    const drawings = drawingsValue(input.drawings);
+    if (typeof input.text !== 'string' || input.text.length > 2000 || (!input.text.trim() && !drawings.length)) throw new Error('写点文字或在画面上画一笔即可保存。');
     const severity = input.severity ?? 3;
     if (!Number.isInteger(severity) || Number(severity) < 1 || Number(severity) > 5) throw new Error('严重度必须是 1–5。');
     const origin = input.origin ?? 'human';
     if (origin !== 'human' && origin !== 'agent') throw new Error('标注来源无效。');
     const mark: Mark = {
+      ...(this.actor ? { author: { ...this.actor } } : {}),
       id: crypto.randomUUID(), text: input.text.trim(), severity: Number(severity), origin,
       createdAt: new Date().toISOString(), slot, mediaId: track.source.info.id,
-      frame: this.frameInfo(track.frame), region: regionValue(input.region),
-      comparison: [...this.tracks].filter(([, t]) => t.frame).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!) })),
+      frame: this.frameInfo(track.frame), offsetUs:track.offsetUs, sessionPtsUs:this.positionUs, region: regionValue(input.region), ...(drawings.length ? { drawings } : {}),
+      comparison: [...this.tracks].filter(([, t]) => t.frame).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
     };
     this.marks.push(mark);
-    log.info('session', '添加标注', { id: mark.id, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
+    log.info('session', '添加标注', { id: mark.id, authorId: this.actor?.id ?? null, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
     this.emit();
     return structuredClone(mark);
   }
@@ -361,6 +401,8 @@ export class ReviewSession {
     return structuredClone({ schema: 'voidplayer-web-review', version: 1, generatedAt: new Date().toISOString(),
       mediaIdentity: 'session-uuid-and-file-metadata-not-content-hash',
       frameEvidence: 'decoded-and-drawn-to-canvas', color: 'browser-managed-unverified',
+      alignment: [...this.tracks].map(([slot,t])=>({slot,mediaId:t.source.info.id,offsetUs:t.offsetUs})),
+      timeMapping:'sessionUs = normalizedMediaUs + offsetUs; source PTS retained separately',
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {

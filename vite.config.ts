@@ -10,9 +10,16 @@ function buildInfo() {
   let revision = 'unknown';
   try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { encoding: 'utf8' }).trim(); } catch { /* Archive without Git. */ }
   const hash = createHash('sha256');
-  for (const name of readdirSync(sourceDir).sort()) {
-    if (/\.(ts|css)$/.test(name)) hash.update(name).update(readFileSync(resolve(sourceDir, name)));
+  // UI and themes now live in subdirectories. Build evidence must include
+  // them as well as the top-level decoding/session modules.
+  function hashSources(directory: string, prefix = '') {
+    for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+      const relative = `${prefix}${entry.name}`;
+      if (entry.isDirectory()) hashSources(resolve(directory, entry.name), `${relative}/`);
+      else if (/\.(ts|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
+    }
   }
+  hashSources(sourceDir);
   hash.update(readFileSync(resolve(import.meta.dirname, 'package-lock.json')));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }

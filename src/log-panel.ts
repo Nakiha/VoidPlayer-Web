@@ -56,7 +56,13 @@ export function installLogPanel(openButton: HTMLElement) {
   }));
   dialog.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
     await snapshot();
-    const response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: textarea.value });
+    let response: Response;
+    try {
+      response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: textarea.value });
+    } catch (error) {
+      // fetch itself failed (e.g. Safari "Load failed") = the server is unreachable.
+      throw new Error(`连不上当前页面的服务端，上传未发出（${error instanceof Error ? error.message : error}）。日志仍只保存在此浏览器；请先确认本地服务在运行，或改用下载/复制。`);
+    }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
       throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '。服务端未开启日志接收或未连接。'}`);

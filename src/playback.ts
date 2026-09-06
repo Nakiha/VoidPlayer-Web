@@ -57,8 +57,10 @@ export class PlaybackMeasurements {
   maxFrameLagUs = 0;
   maxFrameSkewUs = 0;
   private tracks = new Map<string, { drawn: number; dropped: number; lastMs: number; maxGapMs: number; intervals: number[] }>();
+  private heldUntil = new Map<string,number>();
+  holdBeforeStart(slot:string, now:number) { this.heldUntil.set(slot,now); }
   draw(slot: string, now: number, dropped: number) {
-    const t = this.tracks.get(slot) ?? { drawn: 0, dropped: 0, lastMs: this.startedMs, maxGapMs: 0, intervals: [] };
+    const t = this.tracks.get(slot) ?? { drawn: 0, dropped: 0, lastMs: this.heldUntil.get(slot) ?? this.startedMs, maxGapMs: 0, intervals: [] };
     const gap = now - t.lastMs;
     t.maxGapMs = Math.max(t.maxGapMs, gap);
     if (t.intervals.length < 4096) t.intervals.push(gap);

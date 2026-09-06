@@ -1,4 +1,6 @@
-export type Slot = 'A' | 'B';
+import type { Drawing } from './annotation.ts';
+export const SLOTS = ['A', 'B', 'C', 'D'] as const;
+export type Slot = typeof SLOTS[number];
 export type Region = { left: number; top: number; width: number; height: number };
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
 /** Stream color metadata; null fields mean the container did not tag them. */
@@ -10,15 +12,18 @@ export type ColorInfo = {
 };
 export type MediaInfo = {
   id: string; name: string; size: number; lastModified: number;
+  source?: { kind: 'library'; id: string; url: string };
   coreVariant?: 'single-thread' | 'multi-thread';
   codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;
   color?: ColorInfo;
 };
 export type Mark = {
+  author?: { id: string; name: string };
   id: string; text: string; severity: number; origin: 'human' | 'agent';
-  createdAt: string; slot: Slot; mediaId: string; frame: FrameInfo;
-  comparison: { slot: Slot; mediaId: string; frame: FrameInfo }[];
+  createdAt: string; slot: Slot; mediaId: string; frame: FrameInfo; offsetUs?:number; sessionPtsUs?:number;
+  comparison: { slot: Slot; mediaId: string; frame: FrameInfo; offsetUs?:number }[];
   region: Region | null;
+  drawings?: Drawing[];
 };
 export function timeUs(value: unknown): number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) {
@@ -27,8 +32,8 @@ export function timeUs(value: unknown): number {
   return value;
 }
 export function slotValue(value: unknown): Slot {
-  if (value !== 'A' && value !== 'B') throw new Error('轨道必须是 A 或 B。');
-  return value;
+  if (!SLOTS.includes(value as Slot)) throw new Error('轨道必须是 A、B、C 或 D。');
+  return value as Slot;
 }
 export function regionValue(value: unknown): Region | null {
   if (value == null) return null;
@@ -43,7 +48,7 @@ export function regionValue(value: unknown): Region | null {
 
 // Fair multi-track step planner ported from native/renderer/track/track_step_policy.cpp.
 // Every value is a session-relative frame start in integer microseconds; each file's
-// first timestamp maps to zero, so there are no per-track offsets.
+// first timestamp maps to zero; the session projects explicit offsets before planning.
 
 const FALLBACK_FRAME_DURATION_US = 33333;
 const MAX_TRUSTED_FRAME_DURATION_US = 100000;

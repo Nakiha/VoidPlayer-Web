@@ -20,9 +20,9 @@ export interface LibraryListing {
 }
 
 /** Returns null when no media-library service is reachable. */
-export async function fetchLibrary(): Promise<LibraryListing | null> {
+export async function fetchLibrary(refresh = false): Promise<LibraryListing | null> {
   try {
-    const response = await fetch('/api/library');
+    const response = await fetch(refresh ? '/api/library?refresh=1' : '/api/library', { signal: AbortSignal.timeout(5000), cache: 'no-store' });
     if (!response.ok) return null;
     const body = await response.json();
     if (!body || !Array.isArray(body.entries)) return null;
@@ -36,7 +36,9 @@ export function mediaUrl(id: string): string {
   return `/api/media/${encodeURIComponent(id)}`;
 }
 
-export function openLibraryItem(entry: LibraryEntry): Promise<MediaSource> {
+export async function openLibraryItem(entry: LibraryEntry): Promise<MediaSource> {
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
-  return openMediaFromUrl(mediaUrl(entry.id), entry);
+  const source = await openMediaFromUrl(mediaUrl(entry.id), entry);
+  source.info.source = { kind: 'library', id: entry.id, url: mediaUrl(entry.id) };
+  return source;
 }
