@@ -12,7 +12,20 @@ import { createMediaServer } from '../server/app.ts';
 async function fixture(run: (root: string, media: string) => Promise<void>) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-index-'));
   const media = path.join(root, 'media'); await mkdir(media);
-  try { await run(root, media); } finally { await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
+  let failure: unknown;
+  try { await run(root, media); } catch (error) { failure = error; }
+  try {
+    // Bun's Windows rm does not apply Node's retry options consistently.
+    // Retry explicitly, after all owned SQLite connections have been closed.
+    for (let attempt = 0; ; attempt++) {
+      try { await rm(root, { recursive: true, force: true }); break; }
+      catch (error) {
+        if (attempt === 10 || !['EBUSY', 'EPERM', 'ENOTEMPTY'].includes((error as NodeJS.ErrnoException).code ?? '')) throw error;
+        await new Promise(r => setTimeout(r, (attempt + 1) * 100));
+      }
+    }
+  } catch (error) { if (failure) throw new AggregateError([failure, error], 'Index test and cleanup failed'); throw error; }
+  if (failure) throw failure;
 }
 
 test('persistent index reopens offline, preserves identities on root relocation and rejects a second writer', async () => fixture(async (root, media) => {

@@ -108,10 +108,26 @@ export class MediaLibraryIndex {
     let visited = 0, files = 0, errors = 0, needsSettle = false;
     const progress = (root?: string, directory?: string) => db.prepare('UPDATE scan_jobs SET visited=?,files=?,errors=?,current_root=?,current_path=? WHERE id=?').run(visited, files, errors, root ?? null, directory ?? null, job);
     const upsert = db.prepare(`INSERT INTO media(id,root_id,path,parent,size,modified,version,state,generation,observed_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(root_id,path) DO UPDATE SET size=excluded.size,modified=excluded.modified,version=excluded.version,state=excluded.state,generation=excluded.generation,observed_at=CASE WHEN media.version=excluded.version THEN media.observed_at ELSE excluded.observed_at END`);
+    const findId = db.prepare('SELECT id FROM media WHERE root_id=? AND path=?');
+    const alias = db.prepare('INSERT INTO aliases(id,media_id) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET media_id=excluded.media_id');
+    const priorVersion = db.prepare('SELECT version,state,observed_at FROM media WHERE root_id=? AND path=?');
+    // Keep disk commits bounded, without holding a transaction over network I/O.
+    // FULL durability is retained; one commit covers up to 64 media records.
+    const writes: (() => void)[] = [];
+    const flush = () => {
+      if (!writes.length) return;
+      db.exec('BEGIN IMMEDIATE');
+      try { for (const write of writes) write(); db.exec('COMMIT'); writes.length = 0; }
+      catch (error) { db.exec('ROLLBACK'); throw error; }
+    };
     const put = (root: RootRecord, relative: string, size: number, modified: number, version: string, state: string) => {
-      upsert.run(mediaId(root.seed, relative), root.id, relative, parent(relative), size, modified, version, state, job, this.now());
-      const record = db.prepare('SELECT id FROM media WHERE root_id=? AND path=?').get(root.id, relative) as { id: string };
-      db.prepare('INSERT INTO aliases(id,media_id) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET media_id=excluded.media_id').run(mediaId(root.path, relative), record.id);
+      const observedAt = this.now();
+      writes.push(() => {
+        upsert.run(mediaId(root.seed, relative), root.id, relative, parent(relative), size, modified, version, state, job, observedAt);
+        const record = findId.get(root.id, relative) as { id: string };
+        alias.run(mediaId(root.path, relative), record.id);
+      });
+      if (writes.length >= 64) flush();
     };
     const errorAt = (root: RootRecord, relative: string, error: unknown) => {
       if (signal.aborted) throw new DOMException('扫描已取消', 'AbortError');
@@ -126,6 +142,7 @@ export class MediaLibraryIndex {
           const stat = await this.io(fs.stat(path.join(root.path, entry.name)), signal);
           put(root, entry.name, stat.size, Math.round(stat.mtimeMs), fileVersion(stat), 'ready'); files++;
         }
+        flush();
         for (const root of this.definitions) db.prepare("UPDATE roots SET state='ready',error=NULL,scanned_at=? WHERE id=?").run(this.now(), root.id);
         db.prepare("UPDATE media SET state='missing' WHERE generation!=?").run(job);
       } else for (const root of this.definitions) {
@@ -154,18 +171,20 @@ export class MediaLibraryIndex {
             const name = relative ? relative + '/' + child.name : child.name;
             if (child.isDirectory()) { stack.push(name); continue; }
             if (!child.isFile() || !MEDIA_EXTENSIONS.includes(path.extname(name).toLowerCase())) continue;
-            try {
-              const stat = await this.io(fs.lstat(path.join(rootReal, name)), signal);
-              if (!stat.isFile() || stat.isSymbolicLink()) continue;
-              const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
-              const prior = db.prepare('SELECT version,state,observed_at FROM media WHERE root_id=? AND path=?').get(root.id, name) as { version: string; state: string; observed_at: number } | undefined;
-              const pending = settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
-              needsSettle ||= pending;
-              put(root, name, stat.size, Math.round(stat.mtimeMs), version, pending ? 'pending' : 'ready'); files++;
-            } catch (error) { errorAt(root, name, error); }
+            let stat: Stats;
+            try { stat = await this.io(fs.lstat(path.join(rootReal, name)), signal); }
+            catch (error) { errorAt(root, name, error); continue; }
+            if (!stat.isFile() || stat.isSymbolicLink()) continue;
+            const version = fileVersion(stat), settleMs = this.options.settleMs ?? 0;
+            const prior = priorVersion.get(root.id, name) as { version: string; state: string; observed_at: number } | undefined;
+            const pending = settleMs > 0 && (prior?.version === version ? prior.state === 'pending' && this.now() - prior.observed_at < settleMs : !!prior || this.now() - stat.mtimeMs < settleMs);
+            needsSettle ||= pending;
+            // Database errors fail the job, rather than being treated as a bad file.
+            put(root, name, stat.size, Math.round(stat.mtimeMs), version, pending ? 'pending' : 'ready'); files++;
             if (files % 64 === 0) { progress(root.id, relative); await new Promise<void>(r => setImmediate(r)); }
           }
         }
+        flush();
         // Never infer deletion from an incomplete, cancelled or offline scan.
         if (errors === errorsBefore) {
           db.prepare("UPDATE media SET state='missing' WHERE root_id=? AND generation!=?").run(root.id, job);

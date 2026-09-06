@@ -21,7 +21,7 @@ const config = '{\n admin off\n auto_https disable_redirects\n skip_install_trus
 await writeFile(path.join(directory, 'Caddyfile'), config);
 const env = { ...process.env, VOIDPLAYER_SITE: `https://localhost:${tlsPort}`, VOIDPLAYER_PROXY_TOKEN: token, XDG_DATA_HOME: directory, XDG_CONFIG_HOME: directory };
 let appOutput = '', gatewayOutput = '';
-const app = spawn(process.execPath, ['server/main.ts','--folder','fixtures/video','--port',String(apiPort),'--no-logs'], { env, stdio: ['ignore','pipe','pipe'] });
+const app = spawn(process.execPath, ['server/main.ts','--folder','fixtures/video','--data-dir',path.join(directory,'app-data'),'--port',String(apiPort),'--no-logs'], { env, stdio: ['ignore','pipe','pipe'] });
 app.stdout.on('data', d => { appOutput += d; }); app.stderr.on('data', d => { appOutput += d; });
 let gateway;
 const pause = () => new Promise(r => setTimeout(r, 100));
