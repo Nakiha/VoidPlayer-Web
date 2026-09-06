@@ -110,5 +110,5 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  console.log(`PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (graceful Windows console shutdown remains unverified)' : 'graceful stop'} and upgrade/backup/restore preserving data`);
+  console.log(`PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'} and upgrade/backup/restore preserving data`);
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true }); }

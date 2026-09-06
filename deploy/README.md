@@ -104,7 +104,7 @@ npm run service -- uninstall
 
 包内 `release.json` 和 `BUILD-SOURCES.md` 记录应用修订、运行时版本、解码器精确源码修订和构建任务链接，core 自身的 `provenance.json` 记录其字节校验和。更新解码器时先提交并推送解码器仓库，再更新 lock；不引用本地未提交源码或浮动的 `latest`。
 
-本工作流只生成和测试预览产物，不自动创建公开 Release。Windows 控制台优雅退出、Docker/HTTPS 和真实网络存储仍需单独验收。
+本工作流只生成和测试预览产物，不自动创建公开 Release。Windows 额外测试独立控制台 Ctrl+C 正常退出；Linux 额外运行随包 Docker/Compose/Caddy 模板，验证可信 TLS、鉴权、并发 Range 和重启保留 CA。三平台均测试停机备份恢复。真实网络存储仍需独立验收，进度见项目 Roadmap。
 
 开发机可运行 `CADDY_BIN=/path/to/caddy node scripts/check-gateway.mjs` 做独立的 HTTPS/鉴权/Range 验证；使用临时私有 CA，不安装到系统信任。
 

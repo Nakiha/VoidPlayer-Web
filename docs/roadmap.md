@@ -14,14 +14,14 @@
 
 目标：脱离开发仓库，在实际服务器或本地机器上解压并启动，先发布 prerelease。
 
-- [x] 验证 Bun 下的 HTTP/HEAD/Range、流式读取与中断、文件系统、进程信号及正常退出；保留现有会话和解码架构。当前已在 macOS ARM64 独立产物通过。
+- [x] 验证 Bun 下的 HTTP/HEAD/Range、流式读取与中断、文件系统、进程信号及正常退出；保留现有会话和解码架构。三平台独立产物已通过；Linux/macOS 验证 SIGTERM，Windows 额外验证独立控制台 Ctrl+C 正常退出。
 - [x] 固定 Bun 1.4.2 并生成服务端可执行文件，明确程序目录、资源目录、配置路径和数据目录，支持从任意工作目录启动。
 - [x] 完成首次配置、目录权限和启动错误提示，以及健康/就绪检查。
-- [ ] 验证本地访问、远端认证入口、HTTPS、视频所需响应头和媒体读取。
+- [x] 验证本地访问、远端认证入口、HTTPS、视频所需响应头和媒体读取；Linux 从随包 Docker/Compose/Caddy 模板验收。
 - [x] 打包网页与两种 WASM core，携带本项目和依赖许可证、应用源码快照与精确构建来源说明。
 - [x] 生成可追溯的版本信息、产物清单和校验和，建立 GitHub Actions 自动构建与产物测试流程。
-- [ ] 明确启动、停止、后台运行、升级、备份和恢复方式；验证升级保留配置及数据。
-- [ ] 在没有 Node/Bun、没有源码与 node_modules 的干净环境验收，并部署到真实媒体存储环境。
+- [x] 明确启动、停止、后台运行、升级、备份和恢复方式；三平台验收升级保留配置/日志、完整数据目录备份恢复及缺失资源的升级拒绝。见 [后台运行与恢复](../deploy/operations.md)。
+- [ ] 在没有 Node/Bun、没有源码与 node_modules 的干净环境验收，并部署到真实媒体存储环境。前半项已通过 Linux 镜像和三平台空 PATH 测试，真实存储路径待提供后验收。
 
 本阶段先使用现有媒体库能力验证部署。只预留管理入口，不提前铺开完整 admin 页面。
 
@@ -64,4 +64,4 @@
 
 阶段 3 已开始，发布脚本已改为独立可执行文件加资源目录。macOS ARM64 预览产物通过空 PATH、与源码无关的工作目录、归档校验、初始化、并发 Range、中断、网关身份和更换程序目录保留配置/日志测试；独立服务上的四组 WebKit 播放基准通过。
 
-正式打包入口已切换为 GitHub Actions：主分支代码推送或手动触发，固定 core 构建仓库、FFmpeg、dav1d 修订和工具链，从源码准备同一份解码器，再由 Linux x64、Windows x64、macOS ARM64 原生 runner 打包并测试。预览产物与校验和保留 30 天，不自动创建公开 release。详见 [发布与校验](../deploy/README.md#发布与校验)。[三平台原生构建与独立产物验证已通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34052388960)，对应应用修订 `2af9a5e`：空 PATH、异地工作目录、初始化/检查、HTTP/HEAD/并发 Range/中断、显式日志上传、网关鉴权、升级保留数据。Linux/macOS 验证了正常退出；Windows 验证进程终止，控制台优雅退出仍待验证。Docker/HTTPS 集成、签名与公证及真实网络存储部署也仍待验收，因此不标记阶段 3 完成。
+正式打包入口已切换为 GitHub Actions：主分支代码推送或手动触发，固定 core 构建仓库、FFmpeg、dav1d 修订和工具链，从源码准备同一份解码器，再由 Linux x64、Windows x64、macOS ARM64 原生 runner 打包并测试。预览产物与校验和保留 30 天，不自动创建公开 release。详见 [发布与校验](../deploy/README.md#发布与校验)。[三平台独立产物、备份恢复及部署验证已通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34053431731)，对应应用修订 `7dd9f07`。Linux 额外验证随包 Docker/Compose/Caddy 的非 root、只读运行、无 Node/Bun、可信 TLS、认证边界、并发 Range 与重启后保留 CA；Windows 已验证真实独立控制台 Ctrl+C 正常退出。签名与公证、真实网络存储以及后续媒体库/管理后台仍待验收，不标记整个 roadmap 完成。

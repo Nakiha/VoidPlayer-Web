@@ -23,7 +23,7 @@ Linux 为 `$XDG_DATA_HOME/voidplayer` 或 `~/.local/share/voidplayer`。
 程序不自动读取当前目录中的 `.env` 或 `bunfig.toml`。
 
 `--version` 显示产物版本，`--healthcheck` 检查运行实例就绪状态，`--help` 显示选项。
-默认前台运行；Ctrl+C / SIGTERM 正常退出，未结束的连接最多等待 5 秒后关闭。
+默认前台运行；Ctrl+C 正常退出，Linux/macOS 也支持 SIGTERM，未结束的连接最多等待 5 秒后关闭。Windows 控制台 Ctrl+C 和计划任务的强制停止不同，具体见后台运行说明。
 长期运行应交给系统服务管理器或容器，服务的启动命令使用绝对路径并显式指定数据目录。Linux systemd、macOS LaunchAgent、Windows 计划任务及备份恢复步骤见 [后台运行与恢复](operations.md)。
 macOS 公网下载包的签名/公证尚待首发平台验收，不提供绕过系统信任检查的启动脚本。
 
