@@ -546,3 +546,33 @@ test('playback continues after a short track ends and publishes actual progress 
     unsubscribe();
   } finally { await session.dispose(); }
 });
+
+test('workspace round trip retains track order, offsets, media anchors and mark identities', async () => {
+  const session = new ReviewSession(() => {}); const a = media('workspace-A'), b = media('workspace-B');
+  await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+  await session.setTrackOffset('B', 40000); await session.seek(120000);
+  const mark = session.addMark({ slot: 'A', text: 'retain me' }); session.reorderTracks(['B','A']);
+  const document = session.exportWorkspace('http://localhost:5180/');
+  const reopened = [] as ReturnType<typeof media>[];
+  await session.restoreWorkspace(document, async info => { const m = media('new-decoder-id'); reopened.push(m); return m.source; });
+  const state = session.getState();
+  assert.deepEqual(state.tracks.map(t => [t.slot,t.id,t.offsetUs]), [['B','workspace-B',40000],['A','workspace-A',0]]);
+  assert.equal(state.positionUs,120000); assert.equal(state.playing,false); assert.deepEqual(state.marks,[{...mark,drawings:[]}]);
+  assert.equal(a.disposed,1); assert.equal(b.disposed,1); assert.ok(reopened.every(m=>m.closed===1));
+  await session.dispose(); assert.ok(reopened.every(m=>m.disposed===1));
+});
+
+test('workspace decode failure and cancellation preserve the prior session and release prepared sources', async () => {
+  const session = new ReviewSession(() => {}); const original = media('original');
+  await session.load('A',async()=>original.source); await session.seek(40000); const mark=session.addMark({slot:'A',text:'keep'});
+  const document=session.exportWorkspace('http://localhost/');
+  document.media.push({...document.media[0],id:'second'}); document.tracks.push({slot:'B',mediaId:'second',offsetUs:0});
+  const good=media('new'), bad=media('bad');bad.source.frameAt=async()=>{throw new Error('decode failed');};
+  await assert.rejects(session.restoreWorkspace(document,async info=>info.id==='second'?bad.source:good.source),/decode failed/);
+  assert.equal(good.disposed,1);assert.equal(bad.disposed,1);assert.equal(good.closed,1);assert.equal(original.disposed,0);
+  assert.equal(session.getState().positionUs,40000);assert.deepEqual(session.getState().marks,[mark]);
+  const pending=deferred<MediaSource>(), cancelled=media('cancelled');
+  const operation=session.restoreWorkspace(document,()=>pending.promise);await new Promise(r=>setTimeout(r,0));session.pause();pending.resolve(cancelled.source);
+  await assert.rejects(operation,{name:'AbortError'});assert.equal(cancelled.disposed,1);assert.equal(original.disposed,0);
+  await session.dispose();
+});

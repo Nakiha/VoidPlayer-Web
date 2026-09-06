@@ -1,0 +1,35 @@
+/* Palette only: share component geometry, opacity and blur with the light theme. */
+:root[data-theme=dark] {
+  color-scheme: dark;
+  --surface: #202125; --surface-panel: #27292e; --surface-table: #222429;
+  --surface-control: #ffffff0d; --surface-group: #34363c;
+  --surface-input: #14161bb8; --surface-input-solid: #191b20;
+  --surface-hover: #3b3e46; --surface-selected: #263e5b; --surface-stripe: #ffffff06;
+  --segment-fill: #ffffff06; --segment-selected-fill: #ffffff14; --segment-selected-solid: #3b3f46;
+  --search-fill: #ffffff0b; --search-solid: #30343b;
+  --text: #eceef2; --text-secondary: #b0b6c0; --text-subtle: #9ba3af;
+  --accent: #6aaeff; --accent-on: #102239;
+  --border: #494d57; --border-soft: #3c4048; --divider: #e3eaff14;
+  --viewport-chrome-fill: color-mix(in srgb, var(--surface) 70%, transparent);
+  --transport-muted: #dce1e9;
+  --glass-highlight: #ffffff12;
+  --glass-shadow: 0 1px 2px #0003, inset 0 1px 0 var(--glass-highlight);
+  --control-shadow: 0 1px 2px #0003, inset 0 1px 0 #ffffff12;
+  --popover-shadow: 0 12px 36px #0006, inset 0 1px 0 #ffffff16;
+  --preview-fill: #303239; --timeline-track: #555b66;
+  --action-danger: #ff8a85; --action-danger-fill: #ff8a851a;
+  --connection-ok: #72c69a; --connection-error: #f68c8c; --connection-waiting: #dcb970;
+  --viewport-background: #1c1e23; --viewport-text: #e2e6ed; --viewport-muted: #b0b8c4;
+  --viewport-border: #e3eaff22; --viewport-grid-line: #7b879724; --viewport-grid-label: #a2adbc;
+  /* Slot badges keep a light foreground on their stable, darker identity colors. */
+  --slot-text: #ffffff;
+  --track-playhead: #a4a9b3; --track-fill: #393e48; --track-active: #304c70;
+  --notice-fill: #443620; --notice-text: #f0c686; --backdrop: #0009;
+  --mark-red: #f0837d; --mark-ochre: #dbad62; --mark-green: #9dc66b; --mark-teal: #69c5b6;
+  --mark-blue: #76b0f2; --mark-indigo: #a2aafa; --mark-purple: #c197ef; --mark-rose: #e58fb9;
+  --annotation-edit-outline: #80b6ff; --annotation-toolbar-shadow: 0 8px 24px #0005;
+  --swatch-border: #0006; --swatch-highlight: #ffffff33;
+  --swatch-selection-fill: #e8ecf2; --swatch-selection-shadow: 0 1px 4px #0008; --swatch-selection-border: #0005;
+  --contrast-border: #a7afbc; --contrast-border-soft: #8f98a6;
+  --contrast-text-secondary: #e1e5ec; --contrast-text-subtle: #d1d8e2;
+}

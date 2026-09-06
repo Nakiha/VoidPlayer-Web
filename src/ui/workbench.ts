@@ -1,3 +1,5 @@
+import { installTrackColumnResize } from './track-column-resize.ts';
+import { trackTimelineRatio } from './track-timeline.ts';
 import { installTimeInput, parseTimeInput } from '../time-input.ts';
 import { installResizeGesture } from './resize-gesture.ts';
 import { installPanelMotion, animatePanelLayout } from './panel-motion.ts';
@@ -44,6 +46,14 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
 
   const lifecyle = new AbortController();
   const workspace = $('workspace');
+  const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
+  const cursors = new Map<Slot, { current: HTMLElement; hover: HTMLElement; startUs: number; endUs: number }>();
+  function hideSeekPreview() { $('subtrack-preview').hidden = true; for (const c of cursors.values()) c.hover.hidden = true; }
+  function previewPosition(ptsUs: number, durationUs: number) {
+    for (const c of cursors.values()) { c.hover.style.left = `${trackTimelineRatio(ptsUs, c.startUs, c.endUs, durationUs) * 100}%`; c.hover.hidden = false; }
+  }
+  window.addEventListener('resize', hideSeekPreview, { signal: lifecyle.signal });
+  document.querySelector('.subtrack-scroll')!.addEventListener('scroll', hideSeekPreview, { signal: lifecyle.signal });
   const panelMotion = installPanelMotion(workspace, lifecyle.signal);
   const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {
     setPanel(panel, false); $(`toggle-${panel}`).focus();
@@ -70,7 +80,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     view.setPanel(panel, open, window.innerWidth);
     syncPanels();
     panelResize.refresh();
-    if (!open) { $('subtrack-preview').hidden = true; annotations.hidePreview(); }
+    if (!open) { hideSeekPreview(); annotations.hidePreview(); }
     render(session.getState());
     if (panel === 'sources' && open) {
       renderSources();
@@ -152,6 +162,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     if (signature !== dockSignature) {
       dockSignature = signature;
       $('subtrack-count').textContent = String(state.tracks.length);
+      hideSeekPreview(); cursors.clear();
       const list = $('subtrack-list'); list.replaceChildren();
       const maxDuration = Math.max(1, ...state.tracks.map(t => t.durationUs+t.offsetUs));
       const ruler = $('subtrack-ruler'); ruler.replaceChildren();
@@ -177,11 +188,20 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         seek.setAttribute('aria-label', `定位轨道 ${track.slot}`);
         const trackMarks = marksForTrack(track, state.marks).map(m=>({...m,frame:{...m.frame,ptsUs:m.frame.ptsUs+track.offsetUs}})).filter(m=>m.frame.ptsUs>=0);
         const preview = $('subtrack-preview'); preview.hidden = true;
-        const targetAt = (x: number) => { const r = lane.getBoundingClientRect(); const target = seekTarget(x - r.left, r.width, maxDuration, trackMarks.filter(m => m.frame.ptsUs < session.getState().durationUs)); return { ...target, ptsUs: Math.min(target.ptsUs, session.getState().durationUs - 1) }; };
-        seek.onpointermove = e => { const target = targetAt(e.clientX); showSeekPreview(preview, e.clientX - lane.getBoundingClientRect().left, target.ptsUs, target.nearby, lane); };
-        lane.onpointerleave = () => { preview.hidden = true; };
-        seek.onblur = () => { preview.hidden = true; };
-        seek.onclick = e => {
+        const targetAt = (x: number) => { const r = lane.getBoundingClientRect(); const target = seekTarget(x - r.left, r.width, maxDuration, trackMarks.filter(m => m.frame.ptsUs < maxDuration)); return { ...target, ptsUs: Math.max(0, Math.min(target.ptsUs, maxDuration - 1)) }; };
+        const showTarget = (target: ReturnType<typeof targetAt>) => {
+          previewPosition(target.ptsUs, maxDuration);
+          showSeekPreview(preview, target.ptsUs / maxDuration * lane.clientWidth, target.ptsUs, target.nearby, lane);
+        };
+        lane.onpointerdown = e => e.stopPropagation(); // Empty time beyond EOF is a seek surface, not a track drag.
+        lane.onpointermove = e => {
+          const marker = (e.target as Element).closest<HTMLElement>('.track-marker');
+          const mark = marker && trackMarks.find(m => m.id === marker.dataset.markId);
+          showTarget(mark ? { ptsUs: mark.frame.ptsUs, nearby: trackMarks.filter(m => m.frame.ptsUs === mark.frame.ptsUs) } : targetAt(e.clientX));
+        };
+        lane.onpointerleave = hideSeekPreview;
+        seek.onblur = hideSeekPreview;
+        lane.onclick = e => {
           const ptsUs = e.detail === 0 ? session.getState().positionUs : targetAt(e.clientX).ptsUs;
           void act(() => session.seek(ptsUs), 'ui.subtrack-seek', { slot: track.slot, ptsUs });
         };
@@ -192,13 +212,15 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
           marker.style.left = `${Math.max(0, Math.min(100, mark.frame.ptsUs / maxDuration * 100))}%`;
           marker.title = `${formatTime(mark.frame.ptsUs)} · ${mark.text}`;
           marker.setAttribute('aria-label', `标记 ${track.slot} ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
-          marker.onpointerenter = () => showSeekPreview(preview, mark.frame.ptsUs / maxDuration * lane.clientWidth, mark.frame.ptsUs, trackMarks.filter(m => m.frame.ptsUs === mark.frame.ptsUs), lane);
-          marker.onfocus = () => showSeekPreview(preview, mark.frame.ptsUs / maxDuration * lane.clientWidth, mark.frame.ptsUs, [mark], lane);
-          marker.onblur = () => { preview.hidden = true; };
-          marker.onclick = () => void act(() => session.seek(mark.frame.ptsUs), 'ui.subtrack-mark', { id: mark.id });
+          marker.onpointerenter = () => showTarget({ ptsUs: mark.frame.ptsUs, nearby: trackMarks.filter(m => m.frame.ptsUs === mark.frame.ptsUs) });
+          marker.onfocus = () => showTarget({ ptsUs: mark.frame.ptsUs, nearby: [mark] });
+          marker.onblur = hideSeekPreview;
+          marker.onclick = e => { e.stopPropagation(); void act(() => session.seek(mark.frame.ptsUs), 'ui.subtrack-mark', { id: mark.id }); };
           lane.append(marker);
         }
         const cursor = document.createElement('span'); cursor.className = 'track-playhead'; cursor.id = `subtrack-playhead-${track.slot}`; lane.append(cursor);
+        const hover = document.createElement('span'); hover.className = 'track-playhead track-seek-preview'; hover.hidden = true; lane.append(hover);
+        cursors.set(track.slot, { current: cursor, hover, startUs: Math.max(0, track.offsetUs), endUs: track.durationUs + track.offsetUs });
         const offset = document.createElement('input'); offset.type='text';offset.className='track-offset offset-input';
         offset.setAttribute('aria-label',`轨道 ${track.slot} 偏移，毫秒`);offset.dataset.tooltip='同步偏移：正值延后，负值提前（毫秒）';
         installTimeInput(offset,{
@@ -228,8 +250,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   }
   function renderProgress(positionUs: number, durationUs: number) {
     if (!view.panels.subtracks) return;
-    const left = `${Math.min(100, positionUs / Math.max(1, durationUs) * 100)}%`;
-    for (const cursor of $('subtrack-list').querySelectorAll<HTMLElement>('.track-playhead')) cursor.style.left = left;
+    for (const c of cursors.values()) c.current.style.left = `${trackTimelineRatio(positionUs, c.startUs, c.endUs, durationUs) * 100}%`;
   }
   function render(state: State) {
     view.reconcile(state.tracks);
@@ -264,7 +285,22 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const origin = item.library ? ` · ${item.library.root}` : '';
       info.append(name, text('span', `${sizeText(item.size)} · ${used ? '使用中' : item.library ? '媒体库' : item.file ? '本次添加' : '需重新选择'}${origin}`, 'source-meta'));
       const actions = document.createElement('div'); actions.className = 'source-actions';
-      if (used) { /* Keep active sources visible, without a redundant add action. */ }
+      if (used) {
+        const button = createIconButton({ glyph: 'close', label: '从视图移除' });
+        button.classList.add('remove-track');
+        button.setAttribute('aria-label', `从视图移除：${item.name}`);
+        button.onclick = () => void act(async () => {
+          button.disabled = true;
+          try {
+            const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
+            for (const track of tracks) {
+              // Do not remove a replacement loaded into this slot while awaiting.
+              if (session.getState().tracks.some(current => current.slot === track.slot && current.id === track.id)) await session.removeTrack(track.slot);
+            }
+          } finally { button.disabled = false; }
+        }, 'ui.source-remove', { name: item.name });
+        actions.append(button);
+      }
       else if (item.library || item.file) {
         const button = createIconButton({ glyph: 'plus', label: '添加到视图' });
         button.title = '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
@@ -363,7 +399,14 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), marksWidth: annotations.width() }),
+    restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
+      view.panels = { ...layout.panels }; view.selected = layout.selected; resize(layout.dockHeight);
+      annotations.setExpanded(layout.marksExpanded);
+      if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
+      if (layout.marksWidth !== undefined) annotations.resize(layout.marksWidth);
+      dockSignature = ''; trackSignature = ''; annotationSignature = ''; syncPanels(); panelResize.refresh(); render(session.getState());
+    },
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },
   };
 }

@@ -11,6 +11,7 @@ export function dropSlots(count: number, loaded: Slot[], target?: Slot): Slot[] 
 
 /** Keep File access inside the drop event, before the browser protects it again. */
 export function bindFileDrop(root: EventTarget, options: {
+  document?: { accepts(files: File[]): boolean; load(files: File[]): Promise<void> };
   target(event: DragEvent): Slot | undefined;
   loaded(): Slot[];
   hover(slots: Slot[]): void;
@@ -36,6 +37,7 @@ export function bindFileDrop(root: EventTarget, options: {
     const files = Array.from(event.dataTransfer?.files ?? []);
     log.info('ui', '接收文件拖入', { files });
     try {
+      if (options.document?.accepts(files)) { void options.document.load(files).catch(options.error); return; }
       const slots = dropSlots(files.length, options.loaded(), options.target(event));
       void options.load(files, slots).catch(options.error);
     } catch (error) { options.error(error); }

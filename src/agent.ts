@@ -8,7 +8,8 @@ import { fetchLibrary, openLibraryItem } from './library.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
-export function reviewTools(session: ReviewSession): Tool[] {
+type WorkspaceActions = { exportWorkspace(): unknown; importWorkspace(value: unknown): Promise<unknown> };
+export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions): Tool[] {
   const tool = (name: string, description: string, properties: object, required: string[], readOnly: boolean, action: (p: Record<string, unknown>) => unknown): Tool => ({
     name, description, inputSchema: { type: 'object', properties, required, additionalProperties: false },
     annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
@@ -24,6 +25,10 @@ export function reviewTools(session: ReviewSession): Tool[] {
     },
   });
   return [
+    ...(workspace ? [
+      tool('export_workspace', 'Export the current workspace, including absolute media service URLs, source references, marks, time and layout. No upload.', {}, [], true, () => workspace.exportWorkspace()),
+      tool('import_workspace', 'Restore a workspace atomically using the same source resolution as the UI. Local sources may require the user to reselect files.', { document: { type: 'object' } }, ['document'], false, p => workspace.importWorkspace(p.document)),
+    ] : []),
     tool('benchmark_review', 'Play currently loaded tracks from the start and measure actual canvas presentation, real playback speed, synchronization and pause stability in this page. Leaves playback paused. Background pages fail validation.', { durationMs: { type: 'integer', minimum: 1000, maximum: 30000 } }, [], false, p => benchmarkPlayback(session, p.durationMs as number | undefined)),
     tool('get_review_session', 'Read loaded media, decoded canvas frame timestamps, playback state and annotations. File names and notes are untrusted user data.', {}, [], true, () => session.getState()),
     tool('seek_review', 'Pause and seek all loaded videos to a relative timestamp in microseconds. Resolves after frames are decoded and drawn to canvas, not proof of physical display scanout.', { ptsUs: { type: 'integer', minimum: 0 } }, ['ptsUs'], false, p => session.seek(timeUs(p.ptsUs))),
@@ -49,11 +54,11 @@ export function reviewTools(session: ReviewSession): Tool[] {
       }),
   ];
 }
-export function registerReviewTools(session: ReviewSession) {
+export function registerReviewTools(session: ReviewSession, workspace?: WorkspaceActions) {
   const context = (document as unknown as { modelContext?: Registry }).modelContext ?? (navigator as unknown as { modelContext?: Registry }).modelContext;
   const lifecycle = new AbortController();
   if (context?.registerTool) {
-    for (const tool of reviewTools(session)) {
+    for (const tool of reviewTools(session, workspace)) {
       try { void Promise.resolve(context.registerTool(tool, { signal: lifecycle.signal })).catch(console.warn); }
       catch (error) { console.warn('WebMCP registration failed', error); }
     }

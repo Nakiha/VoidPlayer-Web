@@ -47,6 +47,8 @@ try{
  assert.equal(await page.locator('.marks-empty').isVisible(),false,'collapsed empty annotations have no placeholder');
  await page.locator('#toggle-marks').click();assert.equal(await page.locator('.marks-empty').isVisible(),true);
  assert.equal(await page.locator('.marks-empty .icon').count(),0);
+ await page.waitForTimeout(250);
+ assert.equal(Math.round((await page.locator('.subtrack-tools').boundingBox()).width),160,'annotation panel opens at its minimum width');
  await page.locator('#toggle-marks').click();
  await seek(500000);
  await page.locator('#subtrack-add-mark').hover();
@@ -69,11 +71,51 @@ try{
    const selected=page.locator(`.subtrack-row[data-track-drag=${slot}]`);
    const duration=selected.locator('.track-duration');const color=await duration.evaluate(e=>getComputedStyle(e).backgroundColor);
    await duration.hover();assert.equal(await duration.evaluate(e=>getComputedStyle(e).backgroundColor),color,'hover preserves selected track color');
-   const playhead=selected.locator('.track-playhead');assert.equal(await playhead.evaluate(e=>getComputedStyle(e).width),'2px');
+   const playhead=selected.locator('.track-playhead:not(.track-seek-preview)');assert.equal(await playhead.evaluate(e=>getComputedStyle(e).width),'2px');
    assert.equal(await playhead.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 122, 255)');
-   assert.equal(await page.locator('.subtrack-row:not(.selected) .track-playhead').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(142, 142, 147)');
+   assert.equal(await page.locator('.subtrack-row:not(.selected) .track-playhead:not(.track-seek-preview)').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(142, 142, 147)');
    await label.hover();await page.waitForTimeout(400);assert.equal(await page.locator('#control-tooltip').isVisible(),false,'filename has no generic tooltip');
  }
+ // Resize the shared header/row column without rebuilding tracks or stealing timeline space.
+ const splitter=page.locator('#track-label-resize');
+ const columnWidth=()=>page.locator('.subtrack-name-heading').evaluate(e=>e.getBoundingClientRect().width);
+ const originalWidth=await columnWidth(), splitBox=await splitter.boundingBox();
+ await page.mouse.move(splitBox.x+splitBox.width/2,splitBox.y+splitBox.height/2);await page.mouse.down();
+ await page.mouse.move(splitBox.x+splitBox.width/2+100,splitBox.y+splitBox.height/2);await page.mouse.up();
+ assert.ok(Math.abs(await columnWidth()-originalWidth-100)<1,'header splitter adjusts filename width');
+ const aligned=await page.evaluate(()=>{const ruler=document.querySelector('#subtrack-ruler').getBoundingClientRect();return [...document.querySelectorAll('.track-lane')].every(e=>Math.abs(e.getBoundingClientRect().left-ruler.left)<1 && Math.abs(e.getBoundingClientRect().width-ruler.width)<1);});
+ assert.equal(aligned,true,'ruler and all tracks retain the same time geometry');
+ assert.equal(await page.evaluate(()=>window.dockNodes.every(n=>n.isConnected)),true,'resizing preserves track nodes');
+ await splitter.focus();await page.keyboard.press('Home');assert.equal(await columnWidth(),96);
+ await page.keyboard.press('End');assert.ok((await page.locator('.track-lane').first().boundingBox()).width>=159,'splitter leaves timeline space');
+ await splitter.dblclick();assert.equal(await columnWidth(),originalWidth);
+ const cancelBox=await splitter.boundingBox();
+ await page.mouse.move(cancelBox.x+cancelBox.width/2,cancelBox.y+cancelBox.height/2);await page.mouse.down();
+ await page.mouse.move(cancelBox.x+cancelBox.width/2+80,cancelBox.y+cancelBox.height/2);await page.keyboard.press('Escape');await page.mouse.up();
+ assert.equal(await columnWidth(),originalWidth,'Escape restores column width');
+ // Both current and preview lines clamp at each track's own boundaries, including offsets.
+ const setOffset=offsetUs=>page.evaluate(offsetUs=>window.voidPlayer.tools.find(t=>t.name==='set_review_track_offset').execute({slot:'B',offsetUs}),offsetUs);
+ const laneB=page.locator('.subtrack-row[data-track-drag=B] .track-lane');
+ for(const offsetUs of [0,1000000,-500000]){
+   await setOffset(offsetUs);await seek(0);await settle();
+   const start=await page.locator('#subtrack-playhead-B').evaluate(e=>parseFloat(e.style.left));
+   assert.ok(Math.abs(start-Math.max(0,offsetUs)/Math.max(...durations)*100)<.001,'current line clamps to the first visible frame for delayed tracks');
+   const lane=await laneB.boundingBox(),before=await page.evaluate(()=>window.voidPlayer.getState().positionUs);
+   await page.mouse.move(lane.x+lane.width*.8,lane.y+lane.height/2);
+   const geometry=await laneB.evaluate(e=>{const box=e.getBoundingClientRect(),bar=e.querySelector('.track-duration').getBoundingClientRect(),hover=e.querySelector('.track-seek-preview').getBoundingClientRect();return {end:bar.right,x:hover.x+hover.width/2,hidden:e.querySelector('.track-seek-preview').hidden};});
+   assert.equal(geometry.hidden,false);assert.ok(Math.abs(geometry.x-geometry.end)<1,'hover line stops exactly at the short track EOF');
+   assert.equal(await page.evaluate(()=>window.voidPlayer.getState().positionUs),before,'hover never seeks the decoder');
+   const expected=await page.locator('.subtrack-row[data-track-drag=A] .track-seek-preview').evaluate(e=>parseFloat(e.style.left)/100);
+   await page.mouse.click(lane.x+lane.width*.8,lane.y+lane.height/2);await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+   const state=await page.evaluate(()=>window.voidPlayer.getState());
+   assert.ok(Math.abs(state.positionUs/Math.max(...durations)-expected)<.001,'clicking beyond short EOF seeks the common preview time');
+   assert.ok(state.tracks.find(t=>t.slot==='B').frame.ptsUs>1900000,'short track keeps its last frame after the common seek');
+   const actual=await laneB.evaluate(e=>{const bar=e.querySelector('.track-duration').getBoundingClientRect(),cursor=e.querySelector('.track-playhead:not(.track-seek-preview)').getBoundingClientRect();return {end:bar.right,x:cursor.x+cursor.width/2};});
+   assert.ok(Math.abs(actual.x-actual.end)<1,'actual playhead stops at the duration bar EOF, even with offsets');
+   if(process.env.TIMELINE_SCREENSHOT && offsetUs===0)await page.locator('.subtracks-panel').screenshot({path:`/tmp/voidplayer-subtrack-eof-${name}.png`});
+   await page.mouse.move(5,5);assert.equal(await laneB.locator('.track-seek-preview').isVisible(),false);
+ }
+ await setOffset(0);
  // Cross the short track's EOF while the long track and the presentation clock keep going.
  await seek(1850000);await timeline.focus();await page.keyboard.press('Space');
  await page.waitForFunction(()=>window.voidPlayer.getState().playing);
@@ -100,5 +142,5 @@ try{
  const surfaces=await page.locator('.frame-presentation').evaluateAll(nodes=>nodes.filter(e=>!e.hidden).map(e=>({width:e.width,height:e.height,rect:e.getBoundingClientRect().toJSON()})));
  assert.ok(surfaces.length>0);for(const surface of surfaces){assert.ok(surface.width<=Math.ceil(surface.rect.width*2)+1);assert.ok(surface.height<=Math.ceil(surface.rect.height*2)+1);}
  if(process.env.TIMELINE_SCREENSHOT)await page.screenshot({path:'/tmp/voidplayer-timeline.png'});
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: longest-track end and last-frame hold, presentation-cadence progress, stable annotation button, empty compact rail, full-width seek/hover, stable dock selection and color, bounded 500x surface`);
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: resizable filename column, compact annotation panel, per-track EOF/offset current and hover clamps, longest-track end and last-frame hold, presentation-cadence progress, stable annotation button, empty compact rail, full-width seek/hover, stable dock selection and color, bounded 500x surface`);
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

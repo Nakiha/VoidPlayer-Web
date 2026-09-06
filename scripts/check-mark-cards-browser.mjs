@@ -44,6 +44,17 @@ try {
  }
  await page.locator('#toggle-marks').click();await page.waitForTimeout(300);
  if(process.env.MARK_CARDS_SCREENSHOT)await page.screenshot({path:`/tmp/voidplayer-mark-cards-${name}.png`});
+ assert.equal(await page.locator('.annotation-edit').count(),0);
+ for(const width of [160,240,400]) {
+  await page.locator('#subtracks-panel').evaluate((e,width)=>e.style.setProperty('--marks-user-width',`${width}px`),width);
+  await page.waitForTimeout(260);
+  const buttons=await page.locator('#toggle-marks,#subtrack-add-mark,.annotation-remove').evaluateAll(nodes=>nodes.map(e=>{const r=e.getBoundingClientRect(),i=e.querySelector('.icon').getBoundingClientRect(),s=getComputedStyle(e);return {x:r.x+r.width/2,width:r.width,height:r.height,iconWidth:i.width,iconHeight:i.height,padding:s.padding};}));
+  assert.ok(buttons.every(b=>Math.abs(b.x-buttons[0].x)<.5 && b.width===28 && b.height===28 && b.iconWidth===18 && b.iconHeight===18 && b.padding===buttons[0].padding),JSON.stringify(buttons));
+ }
+ await page.locator('#subtracks-panel').evaluate(e=>e.style.removeProperty('--marks-user-width'));
+ await page.waitForTimeout(260);
+ assert.equal(await page.locator('#subtrack-add-mark .icon').getAttribute('data-icon'),'plusRegular');
+ assert.ok((await page.locator('.annotation-remove .icon').evaluateAll(nodes=>nodes.map(e=>e.dataset.icon))).every(icon=>icon==='trash'));
  await page.mouse.move(1195, 5);
  const backgrounds=await page.locator('.annotation-row').evaluateAll(rows=>rows.map(e=>getComputedStyle(e).backgroundColor));
  assert.equal(backgrounds[0],backgrounds[2]);assert.notEqual(backgrounds[0],backgrounds[1]);
@@ -59,7 +70,7 @@ try {
  assert.equal((await call('get_review_session')).positionUs,1083000);
  const mark=(await call('get_review_session')).marks.find(m=>m.id===id);
  await call('update_review_mark',{id,text:'检查边缘细节',drawings:mark.drawings});assert.deepEqual(await identities(),before);
- await page.locator(`.annotation-row[data-mark-id="${id}"] .annotation-edit`).click();await page.locator('#mark-close').waitFor({state:'visible'});await page.locator('#mark-close').click();
+ await page.locator(`.annotation-row[data-mark-id="${id}"] .mark-entry`).dblclick();await page.locator('#mark-close').waitFor({state:'visible'});await page.locator('#mark-close').click();
  if(process.env.MARK_CARDS_SCREENSHOT) {
   const grip=page.locator('#dock-resize');const b=await grip.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y-220,{steps:8});await page.mouse.up();
   await page.locator('#selected-marks').evaluate(e=>e.scrollTop=0);await page.mouse.move(1195,5);

@@ -1,3 +1,4 @@
+import { settingsShell } from './settings-shell.ts';
 import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
 import { SLOTS } from '../model.ts';
 import { iconButton } from './controls.ts';
@@ -23,11 +24,9 @@ export function shell() {
       <span class="connection-control"><button id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接" data-tooltip="媒体库连接：正在检查…"><span class="connection-dot" aria-hidden="true"></span></button></span>
       ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}
     </div>
-    <button id="more-actions" class="icon-button" aria-label="更多操作">${icon('more')}</button><div id="more-actions-menu" class="action-menu" popover="auto">
-      <button role="menuitem" id="export" disabled>${icon('export')}导出评审</button><button role="menuitem" id="export-log">${icon('rows')}诊断日志</button><button role="menuitem" id="help-open">${icon('more')}快捷键与说明</button>
-    </div>
+    <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
   </header>
-<output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
+<output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" class="icon-button" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
   <main><div id="notice" role="alert" hidden></div>
     <div class="workspace" id="workspace"><div id="sources-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整片源宽度" aria-orientation="vertical" aria-controls="sources-panel"></div><div id="inspector-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整轨道检查宽度" aria-orientation="vertical" aria-controls="inspector-panel"></div>
       <aside id="inspector-panel" class="side-panel inspector-panel glass" aria-label="轨道检查" hidden>
@@ -87,12 +86,13 @@ export function shell() {
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="子轨道" hidden>
         <div id="dock-resize" class="dock-resize" role="separator" tabindex="0" aria-label="调整子轨道高度" aria-orientation="horizontal" aria-valuemin="128" aria-valuemax="420" aria-valuenow="180"></div>
-        <div class="subtrack-tools-clip"><aside class="subtrack-tools" aria-label="子轨道工具"><header class="panel-heading"><h2>子轨道</h2><span id="subtrack-count" class="muted"></span><span class="toolbar-spacer"></span><button id="toggle-marks" class="icon-button" aria-label="展开标注面板" aria-expanded="false" aria-controls="selected-marks" title="展开标注面板">${icon('sidebar')}</button></header><div class="mark-tools"><span id="selected-mark-label">标注</span><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="在当前帧添加标注">${icon('plus')}</button></div><div id="selected-marks" class="selected-marks"></div></aside></div><div id="marks-resize" class="marks-resize" role="separator" tabindex="0" aria-label="调整标注面板宽度" aria-orientation="vertical" aria-controls="selected-marks" hidden></div>
-        <div class="subtrack-scroll"><div class="subtrack-columns"><span>轨道</span><span class="track-offset">偏移</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="时间标尺"></div><span></span></div><div id="subtrack-list"></div></div>
+        <div class="subtrack-tools-clip"><aside class="subtrack-tools" aria-label="子轨道工具"><header class="panel-heading"><h2>子轨道</h2><span id="subtrack-count" class="muted"></span><span class="toolbar-spacer"></span><button id="toggle-marks" class="icon-button" aria-label="展开标注面板" aria-expanded="false" aria-controls="selected-marks" title="展开标注面板">${icon('sidebar')}</button></header><div class="mark-tools"><span id="selected-mark-label">标注</span><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="在当前帧添加标注">${icon('plusRegular')}</button></div><div id="selected-marks" class="selected-marks"></div></aside></div><div id="marks-resize" class="marks-resize" role="separator" tabindex="0" aria-label="调整标注面板宽度" aria-orientation="vertical" aria-controls="selected-marks" hidden></div>
+        <div class="subtrack-scroll"><div class="subtrack-columns"><span class="subtrack-name-heading">轨道<span id="track-label-resize" role="separator" tabindex="0" aria-label="调整文件名列宽度" aria-orientation="vertical"></span></span><span class="track-offset">偏移</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="时间标尺"></div><span></span></div><div id="subtrack-list"></div></div>
       </section>
     </div>
   </main>
 
 
-  <dialog id="help"><header class="dialog-heading"><h2>快捷键与说明</h2><button id="help-close" class="icon-button" aria-label="关闭说明">${icon('close')}</button></header><p>← / → 逐帧 · 空格播放 / 暂停（输入文字时除外）· M 切换并排 / 分屏。</p><p>滚轮或捏合缩放；右键拖动或双指滚动平移。暂停后可框选并标注。</p><p>本地文件不上传。标注保留在本次会话，关闭前请导出。最近片源保留文件信息，重新打开本地文件需要再次选择。</p><p>当前静音播放。HDR 来源会单独标识，浏览器最终色彩输出尚未验证，WASM 路径为 SDR。</p><details><summary>呈现诊断</summary><p class="evidence"><span id="alignment"></span><span id="decode"></span></p><button id="benchmark">检查当前视频播放性能</button></details></dialog>`;
+  <input id="workspace-file" type="file" accept=".voidplayer,.json,.gz" hidden>
+  ${settingsShell()}`;
 }

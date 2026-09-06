@@ -132,6 +132,18 @@ try {
     }));
     assert.deepEqual(state.ids, entries.map(entry => entry.id));
     assert.deepEqual(new Set(state.history), new Set(state.ids));
+    const firstRow = page.locator('#source-list .source-row').filter({ hasText: entries[0].root }).filter({ hasText: 'same.mp4' });
+    await firstRow.getByRole('button', { name: '从视图移除：same.mp4', exact: true }).click();
+    await page.waitForFunction(id => !window.voidPlayer.getState().tracks.some(t => t.source.id === id), entries[0].id);
+    assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.source.id)), [entries[1].id], 'removing a source preserves the same-named file from another root');
+    assert.equal(await firstRow.getByRole('button', { name: '添加到视图：same.mp4', exact: true }).isVisible(), true, 'removed source remains available to add');
+    // Re-add, then remove the same source from the recent list.
+    await firstRow.getByRole('button', { name: '添加到视图：same.mp4', exact: true }).click();
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
+    await page.locator('[data-source-tab="recent"]').click();
+    await firstRow.getByRole('button', { name: '从视图移除：same.mp4', exact: true }).click();
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
+    assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.source.id)), [entries[1].id]);
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
     await page.locator('[data-start-tab="recent"]').click();
     await page.waitForFunction(() => document.querySelectorAll('#start-library-list .source-row').length === 2);
@@ -142,7 +154,7 @@ try {
     const id=listing.entries.find(e=>e.name==='ci_h264_smoke.mp4').id;
     await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id}),id);
     await page.emulateMedia({colorScheme:'light'});
-    await page.addStyleTag({content:'@media (prefers-color-scheme: dark) { :root { --viewport-grid-line: #c0d0e0; } }'});
+    await page.addStyleTag({content:'@media (prefers-color-scheme: dark) { :root[data-theme] { --viewport-grid-line: #c0d0e0; } }'});
     await settle(page);
     const count=await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws));
     assert.ok(count>0);

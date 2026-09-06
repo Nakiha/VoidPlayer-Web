@@ -67,7 +67,8 @@ try {
     await page.keyboard.press('Escape'); assert.equal(await button.evaluate(e => e === document.activeElement), true);
   }
   for (const id of ['pixel-size', 'zoom-select']) await toggle(id);
-  await toggle('more-actions', 'more-actions-menu');
+  assert.equal(await page.locator('#more-actions').count(),0);
+  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);await page.keyboard.press('Escape');
   await page.locator('.brand').click(); await page.keyboard.press('n'); await page.locator('[data-drawing-tool=rect]').click();
   assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).padding),'4px','compact wrapper preserves button targets');
   await page.mouse.move(280,240); await page.mouse.down(); await page.mouse.move(500,420,{steps:8}); await page.mouse.up();

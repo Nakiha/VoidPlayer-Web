@@ -4,7 +4,7 @@ export function installTooltips() {
   const options = { capture: true, signal: lifecycle.signal };
   const selector = 'button, summary, select, label[for], [role="separator"], [data-tooltip]';
   // These controls already expose a richer frame/annotation preview.
-  const rich = '.mark-entry, .track-marker, .track-duration, #timeline, #more-actions, [role="separator"]';
+  const rich = '.mark-entry, .track-marker, .track-duration, #timeline, [role="separator"]';
   const popup = document.createElement('div');
   popup.id = 'control-tooltip'; popup.className = 'ui-tooltip'; popup.role = 'tooltip';
   popup.setAttribute('popover', 'manual'); popup.hidden = true; document.body.append(popup);

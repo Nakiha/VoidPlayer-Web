@@ -1,0 +1,27 @@
+/* UI accent overrides; keep blue defaults in the base palettes. */
+:root[data-accent=purple] { --accent: #8050c8; }
+:root[data-theme=dark][data-accent=purple] { --accent: #bd9aff; }
+:root[data-accent=rose] { --accent: #bf3b72; }
+:root[data-theme=dark][data-accent=rose] { --accent: #f18bb4; }
+:root[data-accent=orange] { --accent: #b75b0a; }
+:root[data-theme=dark][data-accent=orange] { --accent: #ffb269; }
+:root[data-accent=green] { --accent: #25834f; }
+:root[data-theme=dark][data-accent=green] { --accent: #70cc99; }
+:root[data-accent=teal] { --accent: #087f8c; }
+:root[data-theme=dark][data-accent=teal] { --accent: #63cbd5; }
+:root[data-accent]:not([data-accent=blue]) { --surface-selected: color-mix(in srgb, var(--accent) 15%, var(--surface-panel)); --track-active: color-mix(in srgb, var(--accent) 27%, var(--surface-table)); }
+
+:root[data-accent=indigo] { --accent: #5552b8; }
+:root[data-theme=dark][data-accent=indigo] { --accent: #aaa7ff; }
+:root[data-accent=red] { --accent: #c43d3d; }
+:root[data-theme=dark][data-accent=red] { --accent: #ff9690; }
+:root[data-accent=amber] { --accent: #936b00; }
+:root[data-theme=dark][data-accent=amber] { --accent: #e9c567; }
+:root[data-accent=lime] { --accent: #608021; }
+:root[data-theme=dark][data-accent=lime] { --accent: #b1d478; }
+:root[data-accent=mint] { --accent: #168169; }
+:root[data-theme=dark][data-accent=mint] { --accent: #78d5b8; }
+:root[data-accent=sky] { --accent: #087fa9; }
+:root[data-theme=dark][data-accent=sky] { --accent: #7acded; }
+:root[data-accent=custom] { --accent: var(--custom-accent-light); }
+:root[data-theme=dark][data-accent=custom] { --accent: var(--custom-accent-dark); }

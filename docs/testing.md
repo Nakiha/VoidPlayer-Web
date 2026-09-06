@@ -27,6 +27,9 @@ npm run test:browser
 | 改动 | 补充验证 |
 | --- | --- |
 | 标注交互、采样与图层 | `npm run test:annotations:browser`、`npm run test:annotations:rendering` |
+| 设置窗口、分类导航、焦点、日志及窄屏布局 | `npm run test:settings:browser` |
+| 工作区导入导出、失败回滚、外观设置及进度回跳 | `npm run test:workspace:browser` |
+| 亮暗主题、系统跟随、外观持久化 | `npm run test:theme:browser` |
 | 菜单、色盘、工具条 | `npm run test:menus:browser` |
 | 标记身份、卡片、缩略图 | `npm run test:mark-cards:browser` |
 | 快捷键与 tooltip | `npm run test:shortcuts:browser`、`npm run test:feedback:browser` |

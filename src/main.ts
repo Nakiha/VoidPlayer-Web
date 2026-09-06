@@ -1,6 +1,8 @@
+import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
+import { installThemeControls } from './ui/theme.ts';
 import { setAnnotationViewport } from './ui/annotation-svg.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
-import { installMenu } from './ui/menu.ts';
+import { installSettings } from './ui/settings.ts';
 import { createFrameTask } from './ui/frame-task.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
@@ -9,8 +11,11 @@ import { installTooltips } from './ui/tooltips.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
 import './themes/silver-glass.css';
+import './themes/dark.css';
+import './themes/accents.css';
 import './themes/accessibility.css';
 import './style.css';
+import './themes/settings.css';
 import { shell } from './ui/shell.ts';
 import { icon } from './ui/icons.ts';
 import { installWorkbench } from './ui/workbench.ts';
@@ -38,32 +43,38 @@ const uiEvents = new AbortController();
 
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
 $('app').innerHTML = shell();
+const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
-const actionMenu = installMenu($<HTMLButtonElement>('more-actions'), $('more-actions-menu'), { align: 'end' });
+const settings = installSettings();
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
-const removeLogPanel = installLogPanel($('export-log'));
+const removeLogPanel = installLogPanel($('diagnostic-logs'));
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
 let message = '';
+let benchmarkRunning = false;
 const drawingEditor = installDrawingEditor(session, canvases);
 const workbench = installWorkbench(session, act, openMarkDialog);
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); });
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
 let timelineDragging = false;
+let pendingTimelineUs: number | null = null;
+let timelineRequest = 0;
+$('timeline').addEventListener('input', () => { pendingTimelineUs = Number($<HTMLInputElement>('timeline').value); }, { signal: uiEvents.signal });
 $('timeline').addEventListener('pointerdown', () => { timelineDragging = true; }, { signal: uiEvents.signal });
-for (const event of ['pointerup', 'pointercancel']) window.addEventListener(event, () => { timelineDragging = false; }, { signal: uiEvents.signal });
+window.addEventListener('pointerup', () => { timelineDragging = false; }, { signal: uiEvents.signal });
+window.addEventListener('pointercancel', () => { timelineDragging = false; pendingTimelineUs = null; renderProgress(session.getState().positionUs, session.getState().durationUs); }, { signal: uiEvents.signal });
 function renderProgress(positionUs: number, durationUs: number) {
   const timeline = $<HTMLInputElement>('timeline');
   timeline.max = String(Math.max(1, durationUs - 1));
-  if (!timelineDragging) {
+  if (!timelineDragging && pendingTimelineUs === null) {
     timeline.value = String(positionUs);
     syncTimelineProgress(timeline);
   }
   const position = $<HTMLInputElement>('position');
   if (document.activeElement !== position) {
-    const label = formatTime(positionUs);
+    const label = formatTime(pendingTimelineUs ?? positionUs);
     position.style.setProperty('--time-input-chars', String(label.length));
     position.value = label;
   }
@@ -84,13 +95,12 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
-function downloadReview() {
-  const blob = new Blob([JSON.stringify(session.exportReview(), null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `voidplayer-review-${new Date().toISOString().slice(0, 10)}.json`; a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
 const viewport = new Viewport();
+const workspaceTransfer = installWorkspaceTransfer(session, {
+  act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
+  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
+  restore(document) { viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
+});
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
@@ -231,6 +241,7 @@ function render() {
   }
   document.querySelector('.transport')!.setAttribute('aria-busy', String(state.busy));
   $<HTMLInputElement>('position').disabled = !loaded;
+  $<HTMLButtonElement>('benchmark').disabled = benchmarkRunning || !loaded || state.busy || state.playing;
   $<HTMLButtonElement>('export').disabled = !loaded && !state.marks.length;
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
@@ -238,7 +249,8 @@ function render() {
   const playLabel = state.playing ? '暂停' : '播放';
   if ($('play').getAttribute('aria-label') !== playLabel) $('play').setAttribute('aria-label', playLabel);
   const timeline = $<HTMLInputElement>('timeline');
-  timeline.disabled = !loaded || state.busy;
+  timeline.disabled = !loaded;
+  timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
@@ -272,6 +284,10 @@ async function importFiles(files: File[], slots: Slot[]) {
   }
 }
 const unbindDrop = bindFileDrop(document.body, {
+  document: {
+    accepts: files => files.some(isWorkspaceFile),
+    load: files => act(async () => { const documents = files.filter(isWorkspaceFile); if (documents.length !== 1) throw new Error('每次请打开一个工作区文件。'); await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f))); }, 'workspace.drop'),
+  },
   target: event => {
     const stage = event.target instanceof Element ? event.target.closest('.video-card')?.querySelector('.frame-stage') : null;
     return stage?.closest<HTMLElement>('[data-slot]')?.dataset.slot as Slot | undefined;
@@ -471,14 +487,19 @@ $('open').onclick = () => {
   const slot = SLOTS.find(slot => !state.tracks.some(t => t.slot === slot)) ?? workbench.selected();
   $<HTMLInputElement>(`file-${slot}`).click();
 };
-$('help-open').onclick = () => $<HTMLDialogElement>('help').showModal();
-$('help-close').onclick = () => $<HTMLDialogElement>('help').close();
 $('play').onclick = () => { if (!session.getState().busy) void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle'); };
 $('previous').onclick = () => { if (!session.getState().busy) void act(() => session.step(-1), 'step.previous'); };
 $('next').onclick = () => { if (!session.getState().busy) void act(() => session.step(1), 'step.next'); };
-$<HTMLInputElement>('timeline').onchange = e => void act(() => session.seek(Number((e.target as HTMLInputElement).value)), 'seek.timeline', { ptsUs: Number((e.target as HTMLInputElement).value) });
+$<HTMLInputElement>('timeline').onchange = async e => {
+  const ptsUs = Number((e.target as HTMLInputElement).value), request = ++timelineRequest;
+  pendingTimelineUs = ptsUs;
+  try { await act(async () => { try { await session.seek(ptsUs); } catch (error) { if (!(error instanceof Error && error.name === 'AbortError')) throw error; } }, 'seek.timeline', { ptsUs }); }
+  finally {
+    if (request === timelineRequest) { pendingTimelineUs = null; const state = session.getState(); renderProgress(state.positionUs, state.durationUs); }
+  }
+};
 
-$('export').onclick = () => void act(downloadReview, 'review.download');
+
 // Space owns transport even when a button, menu, slider or drawing layer has
 // focus. Capture prevents the focused control's native Space activation.
 document.addEventListener('keydown', e => {
@@ -532,7 +553,7 @@ for (const eventName of ['click', 'change', 'invalid'] as const) document.addEve
 }, { capture: true, signal: uiEvents.signal });
 session.subscribe(() => { message = ''; render(); });
 session.subscribeProgress(renderProgress);
-const unregister = registerReviewTools(session);
+const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
@@ -540,6 +561,7 @@ const api = {
     const result = await session.load(slot, () => openMedia(file)); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
+  exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
   removeTrack: (slot: Slot) => apiCall('removeTrack', { slot }, () => session.removeTrack(slot)),
   reorderTracks: (order: Slot[]) => apiCall('reorderTracks', { order }, () => session.reorderTracks(order)),
   seek: (ptsUs: number) => apiCall('seek', { ptsUs }, () => session.seek(ptsUs)), step: (direction: number) => apiCall('step', { direction }, () => session.step(direction)),
@@ -550,33 +572,29 @@ const api = {
   getLogs: readLogs, listLogSessions: getLogSessions, exportLog,
   getViewport: (): ViewportSnapshot => viewport.snapshot(),
   setViewport: (patch: Partial<ViewportSnapshot>) => apiCall('setViewport', patch, () => { viewport.apply(patch); render(); }),
-  tools: reviewTools(session),
+  tools: reviewTools(session, workspaceTransfer),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); actionMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 
 $('benchmark').addEventListener('click', () => {
-  $<HTMLDialogElement>('help').close();
   void act(async () => {
-    const report = await benchmarkPlayback(session);
-    let dialog = document.getElementById('benchmark-result') as HTMLDialogElement | null;
-    if (!dialog) {
-      dialog = document.createElement('dialog'); dialog.id = 'benchmark-result';
-      const title = document.createElement('h2'); title.textContent = '播放性能检查'; dialog.append(title);
-      const result = document.createElement('p'); result.id = 'benchmark-summary'; dialog.append(result);
-      const json = document.createElement('textarea'); json.id = 'benchmark-json'; json.readOnly = true;
-      json.setAttribute('aria-label', '播放性能报告 JSON'); json.style.cssText = 'width:100%;height:240px'; dialog.append(json);
-      const close = document.createElement('button'); close.textContent = '关闭'; close.onclick = () => dialog!.close(); dialog.append(close);
-      document.body.append(dialog);
-    }
+    const button = $<HTMLButtonElement>('benchmark');
+    benchmarkRunning = true; button.disabled = true;
+    $('benchmark-result').removeAttribute('hidden');
+    $('benchmark-summary').textContent = '正在检查播放性能…';
+    let report;
+    try { report = await benchmarkPlayback(session); }
+    catch (error) { $('benchmark-summary').textContent = error instanceof Error ? error.message : String(error); throw error; }
+    finally { benchmarkRunning = false; }
     const reasons: Record<string, string> = { 'below-realtime': '播放速度不足', 'frame-lag': '画面落后',
       'track-skew': '双轨不同步', 'insufficient-sample': '样本时长不足', 'page-not-visible': '测试期间页面不可见',
       'pause-latency': '暂停响应慢', 'stale-frame-after-pause': '暂停后画面改变', 'premature-end': '画面未播完',
       'playback-error': '播放出错', 'interrupted': '测试被中断', 'media-changed': '测试期间视频被替换', 'no-frames': '没有输出画面' };
     $('benchmark-summary').textContent = report.passed ? '通过' : `未通过：${report.failures.map(f => reasons[f] ?? (f.endsWith('presentation-stall') ? `${f[0]} 轨画面卡顿` : f)).join('、')}`;
     $<HTMLTextAreaElement>('benchmark-json').value = JSON.stringify(report, null, 2);
-    dialog.showModal();
+
   }, 'ui.benchmark');
 });

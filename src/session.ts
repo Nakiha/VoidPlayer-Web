@@ -1,3 +1,6 @@
+import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
+import type { WorkspaceFile } from './workspace-file.ts';
+import { Viewport } from './viewport.ts';
 import { SLOTS } from './model.ts';
 import { drawingsValue } from './annotation.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
@@ -421,6 +424,39 @@ export class ReviewSession {
     this.marks = this.marks.filter(mark => mark.id !== id);
     log.info('session', '删除标注', { id });
     this.emit();
+    return this.getState();
+  }
+  exportWorkspace(serverUrl: string): WorkspaceFile {
+    const media = [...this.catalog.values()].map(info => ({ ...info, ...(info.source ? { source: { ...info.source, url: workspaceUrl(info.source.url, serverUrl) } } : {}) }));
+    return structuredClone({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: workspaceUrl(serverUrl), positionUs: this.positionUs,
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, mediaId: t.source.info.id, offsetUs: t.offsetUs }] : []; }),
+      media, marks: this.marks, viewport: new Viewport().snapshot() });
+  }
+  /** Prepare all sources and frames before swapping the active session. UI and agents share this transaction. */
+  async restoreWorkspace(value: unknown, open: (info: MediaInfo) => Promise<MediaSource>) {
+    const document = parseWorkspace(value);
+    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async current => {
+      const next = new Map<Slot, Track>(); let committed = false;
+      try {
+        for (const track of document.tracks) {
+          if (!current()) throw new DOMException('工作区导入已取消。', 'AbortError');
+          const info = document.media.find(m => m.id === track.mediaId)!;
+          const source = await open(info);
+          next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs });
+          const end = source.info.durationUs + track.offsetUs;
+          if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
+          source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.
+        }
+        const duration = Math.max(0, ...[...next.values()].map(t => t.source.info.durationUs + t.offsetUs));
+        await this.drawAt(Math.min(document.positionUs, Math.max(0, duration - 1)), current, next, () => {
+          for (const track of this.tracks.values()) track.source.dispose();
+          this.tracks = next; this.order = [...next.keys(), ...SLOTS.filter(slot => !next.has(slot))];
+          this.catalog = new Map(document.media.map(info => [info.id, info]));
+          for (const track of next.values()) this.catalog.set(track.source.info.id, track.source.info);
+          this.marks = document.marks; this.measurements = null; committed = true;
+        });
+      } finally { if (!committed) for (const track of next.values()) track.source.dispose(); }
+    });
     return this.getState();
   }
   exportReview() {

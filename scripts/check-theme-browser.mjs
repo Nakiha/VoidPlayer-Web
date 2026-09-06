@@ -1,0 +1,120 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { webkit, chromium } from 'playwright';
+import { createMediaServer } from '../server/app.ts';
+const root=path.resolve(import.meta.dirname,'..');
+const server=createMediaServer({roots:[path.join(root,'fixtures/video')],staticDir:path.join(root,'dist'),onLog(){}});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const name=process.argv[2]??'webkit';
+const browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
+try {
+ const context=await browser.newContext({viewport:{width:1280,height:900},deviceScaleFactor:2,colorScheme:'light'});
+ const page=await context.newPage(), errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const base=`http://127.0.0.1:${server.address().port}/`;
+ await page.goto(base);
+ const theme=()=>page.locator('html').getAttribute('data-theme');
+ const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
+ const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
+ assert.equal(await theme(),'light');
+ await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+ assert.equal(await page.locator('[data-theme-choice=system]').getAttribute('aria-checked'),'true');
+ await choose('light');assert.equal(await theme(),'light');
+ await page.emulateMedia({colorScheme:'light'});await page.emulateMedia({colorScheme:'dark'});assert.equal(await theme(),'light');
+ // Inline bootstrap must resolve the stored choice even before the app module runs.
+ const boot=await context.newPage();await boot.emulateMedia({colorScheme:'dark'});
+ await boot.route('**/assets/*.js',route=>route.abort());await boot.goto(base);
+ assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');await boot.close();
+ await page.reload();assert.equal(await theme(),'light');
+ const lib=await call('list_library');
+ for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','h264_9s_1920x1080.mp4']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
+ for(const id of ['toggle-inspector','toggle-sources','toggle-subtracks'])await page.locator(`#${id}`).click();
+ await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
+ const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.5,stage.y+stage.height*.55,{steps:5});await page.mouse.up();
+ await page.waitForTimeout(220);await page.locator('#mark-close').click();await page.locator('#toggle-marks').click();
+ const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:document.querySelector('#canvas-A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
+ const before=await evidence();
+ const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
+ await choose('dark');assert.equal(await theme(),'dark');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const surfaces=await page.evaluate(()=>{
+  const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
+  return {segment:bg('.source-tools .segmented [aria-pressed=true]'),search:bg('.search-field'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+ });
+ assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay');
+ assert.match(surfaces.search,/rgba\(255, 255, 255,/,'search uses a light overlay');
+ assert.equal(surfaces.placeholder,'rgb(176, 182, 192)');
+ assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');
+
+ const after=await evidence();assert.deepEqual(after,before,'theme changes preserve session, pixels, mark shape and geometry');
+ assert.notEqual(await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color),lightMark);
+ const contrast=await page.evaluate(()=>{
+  const root=getComputedStyle(document.documentElement),rgb=value=>value.match(/[\d.]+/g).slice(0,3).map(Number);
+  const probe=document.createElement('span');document.body.append(probe);
+  const color=token=>{probe.style.color=`var(${token})`;return rgb(getComputedStyle(probe).color);};
+  const luminance=v=>v.map(c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((s,c,i)=>s+c*[.2126,.7152,.0722][i],0);
+  const ratio=(a,b)=>{const x=luminance(a),y=luminance(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+  const results=['--surface','--surface-panel','--preview-fill'].flatMap(bg=>['--text','--text-secondary'].map(fg=>({bg,fg,ratio:ratio(color(bg),color(fg))})));
+  probe.remove();return results;
+ });assert.ok(contrast.every(c=>c.ratio>=4.5),JSON.stringify(contrast));
+ const screenshots=async mode=>{
+  await choose(mode);await page.mouse.move(1260,890);await page.waitForTimeout(250);
+  await page.screenshot({path:`/tmp/voidplayer-theme-${mode}-${name}.png`});
+ };
+ await screenshots('light');await screenshots('dark');
+ await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('#drawing-color-choice').click();
+ await page.screenshot({path:`/tmp/voidplayer-theme-palette-${name}.png`});
+ assert.equal(await page.locator('#drawing-color-choice-menu').evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'blur(8px)');
+ await page.keyboard.press('Escape');await page.locator('#mark-close').click();
+ await page.emulateMedia({contrast:'more'});
+ const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
+ assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(32, 33, 37)');
+ assert.equal(await page.locator('.source-tools .segmented [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
+ assert.equal(await page.locator('.search-field').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(48, 52, 59)');
+ await page.emulateMedia({contrast:'no-preference'});
+ // Compact presets and custom colors stay independent of the review.
+ const reviewBefore=await evidence();
+ await page.locator('#settings-open').click();
+ assert.equal(await page.locator('.accent-choices [role=radio]').count(),12);
+ await page.locator('[data-accent-choice=sky]').click();assert.equal(await page.locator('html').getAttribute('data-accent'),'sky');
+ const hex=page.locator('#accent-hex');await hex.fill('#E048B8');await hex.press('Enter');
+ assert.equal(await page.locator('html').getAttribute('data-accent'),'custom');
+ const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent')));
+ assert.equal(stored.color,'#e048b8');assert.notEqual(stored.light,stored.dark);
+ await hex.fill('#oops');await hex.press('Enter');assert.equal(await hex.getAttribute('aria-invalid'),'true');
+ assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent'))),stored,'invalid input never changes the active color');
+ await hex.press('Escape');assert.equal(await hex.inputValue(),'#E048B8');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
+ await page.locator('[data-accent-choice=green]').click();await page.locator('[data-accent-choice=custom]').click();
+ assert.equal(await hex.inputValue(),'#E048B8','custom color survives switching to a preset');
+ await page.locator('#accent-picker').evaluate(e=>{e.value='#2148ab';e.dispatchEvent(new Event('input',{bubbles:true}));});
+ assert.equal(await hex.inputValue(),'#2148AB');
+ assert.deepEqual(await evidence(),reviewBefore,'accent edits preserve video, marks and layout');
+ for (const mode of ['light','dark']) {
+  await page.locator(`[data-theme-choice=${mode}]`).click();await page.locator('#settings').screenshot({path:`/tmp/voidplayer-accent-${mode}-${name}.png`});
+ }
+ const customBoot=await context.newPage();await customBoot.route('**/assets/*.js',route=>route.abort());await customBoot.goto(base);
+ assert.equal(await customBoot.locator('html').getAttribute('data-accent'),'custom');
+ assert.equal(await customBoot.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),await page.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),'custom first paint matches the loaded app');
+ await customBoot.close();
+ await page.setViewportSize({width:390,height:700});await page.locator('#settings').screenshot({path:`/tmp/voidplayer-accent-mobile-${name}.png`});
+ assert.equal(await page.locator('#settings-pane-appearance').evaluate(e=>e.scrollWidth>e.clientWidth),false);
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
+ const peer=await context.newPage();await peer.goto(base);assert.equal(await peer.locator('html').getAttribute('data-theme'),'dark');
+ await choose('system');await page.waitForFunction(()=>localStorage.getItem('voidplayer.theme')===null);
+ await peer.waitForFunction(()=>document.querySelector('[data-theme-choice=system]').getAttribute('aria-checked')==='true');
+ await page.emulateMedia({colorScheme:'light'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+ await page.locator('#settings-open').click();await hex.fill('#ABC');await hex.press('Enter');
+ await peer.waitForFunction(()=>document.querySelector('#accent-hex').value==='#AABBCC');
+ await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open);
+ await peer.close();assert.deepEqual(errors,[]);
+ // Blocked storage still permits an in-memory explicit selection.
+ const isolated=await browser.newContext({colorScheme:'dark'});
+ await isolated.addInitScript(()=>{Object.defineProperty(Storage.prototype,'getItem',{value(){throw new Error('blocked');}});Object.defineProperty(Storage.prototype,'setItem',{value(){throw new Error('blocked');}});Object.defineProperty(Storage.prototype,'removeItem',{value(){throw new Error('blocked');}});});
+ const restricted=await isolated.newPage();await restricted.goto(base);assert.equal(await restricted.locator('html').getAttribute('data-theme'),'dark');
+ await restricted.locator('#settings-open').click();await restricted.locator('[data-theme-choice=light]').click();assert.equal(await restricted.locator('html').getAttribute('data-theme'),'light');
+ await restricted.locator('#accent-hex').fill('#246ABC');await restricted.locator('#accent-hex').press('Enter');
+ assert.equal(await restricted.locator('html').getAttribute('data-accent'),'custom');
+ await isolated.close();
+ console.log(`PASS ${name}: system/manual/reload/early paint/storage sync, blocked storage, contrast, unchanged video/marks/layout, dark palette and high contrast`);
+} finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

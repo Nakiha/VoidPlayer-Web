@@ -38,12 +38,12 @@ try {
   assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().pixelSize),pixelMode);
   await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
   await page.keyboard.press('Escape');
-  await page.locator('#more-actions').click();await page.locator('#help-open').click();
-  await page.locator('#help-close').focus();
+  await page.locator('#settings-open').click();await page.locator('#settings-tab-shortcuts').click();
+  await page.locator('#settings-close').focus();
   await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
-  assert.equal(await page.locator('#help').evaluate(e=>e.open),true,'Space in dialog does not activate close');
+  assert.equal(await page.locator('#settings').evaluate(e=>e.open),true,'Space in dialog does not activate close');
   await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
-  await page.locator('#help-close').click();
+  await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
   await page.locator('#position').fill('00:01.000');await page.keyboard.press('Space');
   assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
   await page.keyboard.press('Escape');

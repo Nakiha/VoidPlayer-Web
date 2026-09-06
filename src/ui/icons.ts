@@ -1,6 +1,12 @@
+import appearance from '@phosphor-icons/core/assets/regular/palette.svg?raw';
+import keyboard from '@phosphor-icons/core/assets/regular/keyboard.svg?raw';
+import diagnostics from '@phosphor-icons/core/assets/regular/pulse.svg?raw';
+import info from '@phosphor-icons/core/assets/regular/info.svg?raw';
+import check from '@phosphor-icons/core/assets/regular/check.svg?raw';
 // Phosphor's regular weight matches the compact optical-glass chrome. Import
 // Plus and refresh use bold for optical balance at small sizes. Import
 // only the icons we use; no icon font, CDN, or entire catalog enters the bundle.
+import settings from '@phosphor-icons/core/assets/regular/gear-six.svg?raw';
 import eye from '@phosphor-icons/core/assets/regular/eye.svg?raw';
 import eyeClosed from '@phosphor-icons/core/assets/regular/eye-slash.svg?raw';
 import sidebar from '@phosphor-icons/core/assets/regular/sidebar-simple.svg?raw';
@@ -12,6 +18,7 @@ import play from '@phosphor-icons/core/assets/regular/play.svg?raw';
 import pause from '@phosphor-icons/core/assets/regular/pause.svg?raw';
 import previous from '@phosphor-icons/core/assets/regular/skip-back.svg?raw';
 import next from '@phosphor-icons/core/assets/regular/skip-forward.svg?raw';
+import plusRegular from '@phosphor-icons/core/assets/regular/plus.svg?raw';
 import plus from '@phosphor-icons/core/assets/bold/plus-bold.svg?raw';
 import close from '@phosphor-icons/core/assets/regular/x.svg?raw';
 import more from '@phosphor-icons/core/assets/regular/dots-three.svg?raw';
@@ -43,7 +50,7 @@ import select from '@phosphor-icons/core/assets/regular/cursor.svg?raw';
 import eraser from '@phosphor-icons/core/assets/regular/eraser.svg?raw';
 import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
-const icons = { select, eraser, redo, trash, filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, film, fit, marker };
+const icons = { appearance, keyboard, diagnostics, info, check, settings, plusRegular, select, eraser, redo, trash, filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

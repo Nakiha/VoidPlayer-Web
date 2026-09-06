@@ -2,7 +2,7 @@ import { installResizeGesture } from './resize-gesture.ts';
 import type { Mark, Slot } from '../model.ts';
 import { formatTime } from '../model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
-import { icon } from './icons.ts';
+import { createIconButton } from './controls.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 
 /** One content template for the compact rail's popover and expanded list. */
@@ -81,7 +81,8 @@ export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (i
     if (event.key === 'Escape' && !preview.hidden) { hidePreview(); event.stopPropagation(); }
   }, { capture: true, signal: lifecycle.signal });
   return {
-    expanded: () => expanded,
+    expanded: () => expanded, setExpanded,
+    width: () => Math.round(preferredWidth), resize,
     hidePreview,
     render(marks: Mark[], slot?: Slot, offsetUs=0) {
       hidePreview(); list.replaceChildren();
@@ -103,12 +104,11 @@ export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (i
         button.onfocus = () => showPreview(button, mark);
         button.onblur = hidePreview;
         const row = document.createElement('div'); row.className = 'annotation-row'; identifyMark(row, mark.id);
-        const removeButton = document.createElement('button'); removeButton.className = 'annotation-remove icon-button'; removeButton.innerHTML = icon('close');
-        removeButton.setAttribute('aria-label', `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`); removeButton.title = '删除标注'; removeButton.onclick = () => remove(mark.id);
-        const editButton = document.createElement('button'); editButton.className = 'annotation-edit icon-button'; editButton.innerHTML = icon('pen'); editButton.setAttribute('aria-label', '编辑标注'); editButton.title = '编辑标注'; editButton.disabled = mark.frame.ptsUs < 0; editButton.onclick = () => edit(mark.id, Math.max(0, mark.frame.ptsUs));
+        const removeButton = createIconButton({ glyph: 'trash', className: 'annotation-remove', label: `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`, tooltip: '删除标注' });
+        removeButton.onclick = () => remove(mark.id);
         button.ondblclick = () => edit(mark.id, Math.max(0, mark.frame.ptsUs));
         const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
-        actions.append(editButton, removeButton); row.append(button, actions); list.append(row);
+        actions.append(removeButton); row.append(button, actions); list.append(row);
       }
     },
     dispose() { hidePreview(); lifecycle.abort(); preview.remove(); toggle.onclick = null; },

@@ -1,6 +1,6 @@
 # 实验视频媒体库：现状与建议
 
-备选设计，尚未实施，也不是亮暗主题阶段的任务清单。现状以 `server/library.ts` 和 `server/config.ts` 为准。
+候选设计，尚未实施。媒体库重做已列入 [Roadmap](roadmap.md)，安排在部署基础之后、完整管理后台之前；具体范围以 Roadmap 为准。现状以 `server/library.ts` 和 `server/config.ts` 为准。
 
 ## 当前行为
 

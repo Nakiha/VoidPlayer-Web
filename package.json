@@ -1,6 +1,7 @@
 {
   "name": "voidplayer-web",
   "private": true,
+  "license": "LGPL-2.1-or-later",
   "version": "0.1.0",
   "type": "module",
   "scripts": {
@@ -24,7 +25,10 @@
     "test:stepping:browser": "npm run build && node scripts/check-stepping-browser.mjs",
     "test:timeline:browser": "npm run build && node scripts/check-timeline-browser.mjs",
     "test:metadata:browser": "npm run build && node scripts/check-metadata-browser.mjs",
-    "test:mark-cards:browser": "npm run build && node scripts/check-mark-cards-browser.mjs"
+    "test:mark-cards:browser": "npm run build && node scripts/check-mark-cards-browser.mjs",
+    "test:theme:browser": "npm run build && node scripts/check-theme-browser.mjs",
+    "test:workspace:browser": "npm run build && node scripts/check-workspace-browser.mjs",
+    "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/core": "2.1.1",
