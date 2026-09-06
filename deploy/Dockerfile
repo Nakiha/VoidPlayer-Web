@@ -1,10 +1,13 @@
-FROM node:24.15.0-bookworm-slim
+# Build from an extracted Linux release package, matching the target architecture.
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libstdc++6 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --gid 1000 voidplayer && useradd --uid 1000 --gid 1000 --create-home voidplayer
 WORKDIR /app
-COPY package.json ./
-COPY server ./server
+COPY --chmod=755 voidplayer ./voidplayer
 COPY dist ./dist
 COPY deploy/container.config.json ./voidplayer.config.json
-USER node
+USER voidplayer
 EXPOSE 5180
-HEALTHCHECK --interval=20s --timeout=3s --start-period=30s --retries=3 CMD node -e "fetch('http://127.0.0.1:5180/api/ready').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "server/main.ts", "--config", "voidplayer.config.json"]
+HEALTHCHECK --interval=20s --timeout=3s --start-period=30s --retries=3 CMD ["/app/voidplayer", "--config", "/app/voidplayer.config.json", "--healthcheck"]
+CMD ["/app/voidplayer", "--data-dir", "/data", "--config", "/app/voidplayer.config.json"]

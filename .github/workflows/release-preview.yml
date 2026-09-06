@@ -1,0 +1,73 @@
+name: Build and verify standalone previews
+on:
+  workflow_dispatch:
+    inputs:
+      core_url:
+        description: 'HTTPS URL of flat core archive (both JS/WASM variants and LICENSES/)'
+        type: string
+        required: true
+      core_sha256:
+        description: 'SHA-256 of that exact archive'
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  native-release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: npm ci
+      - name: Download and verify decoder artifacts
+        env:
+          CORE_URL: ${{ inputs.core_url }}
+          CORE_SHA256: ${{ inputs.core_sha256 }}
+        run: |
+          curl --fail --location --proto '=https' --proto-redir '=https' --output core.tar.gz -- "$CORE_URL"
+          python - <<'PY'
+          import hashlib, os, pathlib, re, tarfile
+          archive = pathlib.Path('core.tar.gz')
+          expected = os.environ['CORE_SHA256'].lower()
+          assert re.fullmatch(r'[0-9a-f]{64}', expected), 'Invalid SHA-256'
+          assert hashlib.sha256(archive.read_bytes()).hexdigest() == expected, 'Core digest mismatch'
+          target = pathlib.Path('public/vendor/voidplayer-core')
+          target.mkdir(parents=True, exist_ok=True)
+          names = {'voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm'}
+          with tarfile.open(archive) as src:
+              for member in src.getmembers():
+                  rel = pathlib.PurePosixPath(member.name)
+                  assert not rel.is_absolute() and '..' not in rel.parts, 'Unsafe archive path'
+                  if member.isdir():
+                      continue
+                  assert member.isfile(), 'Core archive must contain regular files'
+                  assert str(rel) in names or rel.parts[0] == 'LICENSES', 'Unexpected core file'
+                  dest = target.joinpath(*rel.parts)
+                  dest.parent.mkdir(parents=True, exist_ok=True)
+                  dest.write_bytes(src.extractfile(member).read())
+          archive.unlink()
+          PY
+      - run: node --test test/config.test.ts
+      - run: npm run release
+      - run: npm run test:release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: standalone-${{ matrix.os }}
+          path: artifacts/*.tar.gz*
+          if-no-files-found: error

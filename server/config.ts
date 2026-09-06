@@ -6,7 +6,7 @@ export interface ServiceConfig {
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number;
 }
 /** Paths in a JSON config are relative to that file; CLI paths are relative to cwd. */
-export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd = process.cwd()): Promise<ServiceConfig> {
+export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd = process.cwd(), paths: { configFile?: string; staticDir?: string; logsDir?: string } = {}): Promise<ServiceConfig> {
   let configFile = process.env.VOIDPLAYER_CONFIG;
   const overrides: Record<string, unknown> = {}, folders: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -23,11 +23,11 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
     else if (flag === '--allow-local-reveal') overrides.allowLocalReveal = true;
     else if (flag !== '--strictPort' || mode !== 'dev') throw new Error(`未知参数: ${args[i]}`);
   }
-  const file = path.resolve(cwd, configFile ?? 'voidplayer.config.json');
+  const file = path.resolve(cwd, configFile ?? paths.configFile ?? 'voidplayer.config.json');
   let data: Record<string, unknown> = {};
   try { data = JSON.parse(await readFile(file, 'utf8')); }
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
-  const defaults: ServiceConfig = { mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: path.resolve(cwd, 'dist'), logsDir: path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000 };
+  const defaults: ServiceConfig = { mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000 };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
   for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key)) throw new Error(`未知配置项: ${key}`);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;

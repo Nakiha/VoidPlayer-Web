@@ -1,31 +1,31 @@
 # 运行与内网部署
 
-发布包包含构建后的网页、单/多线程 WASM、零运行时依赖的 Node 服务及部署配置。
-媒体文件、真实配置、账号、日志不进包。运行要求 Node 24+；正式运行不需要 Vite、npm install 或本机 FFmpeg。
+预览发布包包含 Bun 独立可执行程序、构建后的网页、单/多线程 WASM、应用源码快照及部署配置。
+媒体文件、真实配置、账号、日志不进包。运行不需要预装 Node、Bun、Vite、npm 依赖或本机 FFmpeg。开发与构建仍使用 Node 24+，构建可执行程序需要 `.bun-version` 指定的 Bun。
 
 ## 本机：一个服务提供网页和媒体库
 
 解压发布包，进入包目录：
 
 ```sh
-node server/main.ts --folder /absolute/path/to/media --port 5180 --no-logs
+./voidplayer --folder /absolute/path/to/media --port 5180 --no-logs
 ```
 
 打开 `http://127.0.0.1:5180/`。可重复传入 `--folder` 添加白名单目录。
-复制 `voidplayer.config.example.json` 为 `voidplayer.config.json` 后，也可使用 `npm start`。
+持久化配置请执行 `./voidplayer --init --folder /absolute/path/to/media --data-dir /absolute/path/to/data`，然后用相同 `--data-dir` 启动。详细路径、检查和升级约定见 [独立运行说明](standalone.md)。
 配置文件内的相对路径以配置文件所在目录为基准。`logsDir` 控制用户主动上传的诊断日志；设为 `null` 禁用上传。
 本机 Finder/Explorer 定位需要显式启用 `allowLocalReveal`，不要用于远端或端口转发。
 
 ## 内网小团队：HTTPS + 每人独立账号
 
-应用自身仍为单个 Node 服务；Caddy 只负责 HTTPS 和登录入口。
-下列步骤在有 Docker Engine / Compose 的目标服务器执行。先为服务器配置内网域名及 DNS。
+应用自身仍为单个独立服务程序；Caddy 只负责 HTTPS 和登录入口。
+下列步骤从与服务器架构匹配的 Linux 发布包执行，目标服务器需有 Docker Engine / Compose。源码目录及 macOS/Windows 包不能直接作为该 Dockerfile 的构建上下文。先为服务器配置内网域名及 DNS。
 
-1. 进入发布包的 `deploy/`，复制 `.env.example` 为 `.env`，设置 `VOIDPLAYER_SITE` 为实际内网域名，`VOIDPLAYER_MEDIA_DIR` 为服务器媒体目录的绝对路径。目录需允许容器内 UID 1000 读取；挂载只读，应用不能改源文件。
+1. 进入 Linux 发布包的 `deploy/`，复制 `.env.example` 为 `.env`，设置 `VOIDPLAYER_SITE` 为实际内网域名，`VOIDPLAYER_MEDIA_DIR` 为服务器媒体目录的绝对路径。目录需允许容器内 UID 1000 读取；挂载只读，应用不能改源文件。
 2. 用下面的命令生成网关密钥，将输出写入 `.env` 的 `VOIDPLAYER_PROXY_TOKEN`，不要提交配置或把密钥发到聊天中：
 
    ```sh
-   node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+   openssl rand -hex 32
    ```
 
 3. 复制 `users.caddy.example` 为 `users.caddy`。每人一个固定账号 ID（字母、数字、`_.@-`，最多 128 字符），不要共用。交互式生成密码哈希，文件中每行写 `账号ID 哈希`，不要写明文密码：
@@ -91,7 +91,11 @@ npm run service -- uninstall
 
 ## 发布与校验
 
-源码仓库执行 `npm run release`，产物在 `artifacts/`；`.tar.gz.sha256` 校验归档，包内 `release.json` 包含逐文件 SHA-256。发布不包含 node_modules 或真实片源。
+源码仓库安装 `.bun-version` 指定的 Bun 后执行 `npm run release`（可用 `BUN_BIN` 指定路径），产物在 `artifacts/`；`.tar.gz.sha256` 校验归档，包内 `release.json` 包含逐文件 SHA-256。发布不包含 node_modules 或真实片源。
+`node scripts/package-release.mjs --target bun-linux-x64` 可从已构建网页生成其他平台的包；交叉编译不代表已在该平台运行。`npm run test:release` 在当前平台校验并测试最新产物，也可显式传归档路径。
+
+GitHub Actions 的 `Build and verify standalone previews` 工作流在 Linux/macOS/Windows 原生 runner 上构建并测试，手动触发时提供 core 归档 HTTPS URL 和 SHA-256。归档根目录应直接包含单/多线程的四个 JS/WASM 文件及 `LICENSES/`；文件来自独立 core 构建仓库。本工作流只上传运行产物，不自动创建公开 release；目标平台的实际运行结果需在首发前检查。
+
 开发机可运行 `CADDY_BIN=/path/to/caddy node scripts/check-gateway.mjs` 做独立的 HTTPS/鉴权/Range 验证；使用临时私有 CA，不安装到系统信任。
 
 配置依据：[Caddy Basic Auth](https://caddyserver.com/docs/caddyfile/directives/basic_auth)、[反向代理请求头](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)、[自动 HTTPS 与本地 CA](https://caddyserver.com/docs/automatic-https)。

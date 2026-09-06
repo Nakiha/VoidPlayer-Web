@@ -29,3 +29,22 @@ test('configuration rejects missing values, collisions and unsafe development li
     await assert.rejects(loadConfig([], 'dev', root), /未知配置项/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+
+test('standalone defaults keep resources beside the executable and data outside cwd', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-standalone-config-'));
+  try {
+    const cwd = path.join(root, 'cwd'), data = path.join(root, 'data'), app = path.join(root, 'app');
+    await mkdir(cwd); await mkdir(data);
+    await writeFile(path.join(cwd, 'voidplayer.config.json'), '{"wrong":true}');
+    const paths = { configFile: path.join(data, 'voidplayer.config.json'), staticDir: path.join(app, 'dist'), logsDir: path.join(data, 'logs') };
+    const temporary = await loadConfig(['--folder', 'media'], 'production', cwd, paths);
+    assert.equal(temporary.staticDir, paths.staticDir); assert.equal(temporary.logsDir, paths.logsDir);
+    assert.deepEqual(temporary.mediaRoots, [path.join(cwd, 'media')]);
+    await writeFile(paths.configFile, JSON.stringify({ mediaRoots: ['../media'], logsDir: 'logs' }));
+    const persistent = await loadConfig([], 'production', cwd, paths);
+    assert.equal(persistent.staticDir, paths.staticDir); assert.equal(persistent.logsDir, paths.logsDir);
+    assert.deepEqual(persistent.mediaRoots, [path.join(root, 'media')]);
+    await assert.rejects(loadConfig(['--config', 'absent.json'], 'production', cwd, paths), /ENOENT/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

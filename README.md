@@ -4,7 +4,9 @@
 
 ## 启动
 
-需要 Node.js 24+。首次运行：
+独立预览包运行无需安装 Node/Bun，见 [独立运行说明](deploy/standalone.md)。
+
+以下为源码开发方式，需要 Node.js 24+。首次运行：
 
 ```sh
 npm ci
