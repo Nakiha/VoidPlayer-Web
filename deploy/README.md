@@ -89,6 +89,8 @@ npm run service -- uninstall
 后台服务由 macOS 用户 LaunchAgent 管理，登录自动启动、异常退出重启，与 Codex 进程独立。`stop` 仅停止本次运行，下次登录仍启动；`uninstall` 删除自动启动配置。Node 安装路径或仓库位置改变后重新安装服务。前端有热更新；修改后端或服务配置后需要 stop/start。日志在 `.run/`，开发日志目前不自动轮转。
 `--production` 管理独立的生产模式用户服务，使用前必须构建，并避免与开发服务占用同一媒体端口。
 
+独立程序的 systemd、LaunchAgent、Windows 计划任务与停机备份/回退步骤见 [后台运行与恢复](operations.md)。
+
 ## 发布与校验
 
 源码仓库安装 `.bun-version` 指定的 Bun 后执行 `npm run release`（可用 `BUN_BIN` 指定路径），产物在 `artifacts/`；`.tar.gz.sha256` 校验归档，包内 `release.json` 包含逐文件 SHA-256。发布不包含 node_modules 或真实片源。

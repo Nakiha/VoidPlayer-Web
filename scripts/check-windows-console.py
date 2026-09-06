@@ -24,6 +24,10 @@ with tempfile.TemporaryDirectory(prefix='vp-console-') as folder:
         port = probe.getsockname()[1]
     env = {k: v for k, v in os.environ.items() if k.upper() not in ('PATH', 'VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_PROXY_TOKEN')}
     env['PATH'] = str(root / 'empty-path')
+    # CI shells may ignore Ctrl+C; this flag is inherited across CreateProcess.
+    # Reset it in this helper before creating the isolated console child.
+    if not kernel.SetConsoleCtrlHandler(None, False):
+        raise ctypes.WinError(ctypes.get_last_error())
     child = subprocess.Popen([exe, '--folder', str(media), '--data-dir', str(root / 'data'), '--port', str(port), '--no-logs'], cwd=root, env=env, creationflags=subprocess.CREATE_NEW_CONSOLE)
     try:
         ready = False

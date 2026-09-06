@@ -27,16 +27,16 @@ const executable = target.includes('windows') ? 'voidplayer.exe' : 'voidplayer';
 execFileSync(bun, ['build', 'server/standalone.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
 await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
-await cp(path.join(root, 'deploy/standalone.md'), path.join(out, 'README.md'));
+await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'deploy/standalone.md'), 'utf8')).replace('(operations.md)', '(deploy/operations.md)'));
 await mkdir(path.join(out, 'deploy/licenses'), { recursive: true });
-for (const file of ['Dockerfile', 'container.config.json', 'compose.yaml', 'Caddyfile', '.env.example', 'users.caddy.example', 'README.md', 'standalone.md']) await cp(path.join(root, 'deploy', file), path.join(out, 'deploy', file));
+for (const file of ['Dockerfile', 'container.config.json', 'compose.yaml', 'Caddyfile', '.env.example', 'users.caddy.example', 'README.md', 'standalone.md', 'operations.md']) await cp(path.join(root, 'deploy', file), path.join(out, 'deploy', file));
 await cp(path.join(root, `deploy/licenses/Bun-${bunVersion}.md`), path.join(out, `deploy/licenses/Bun-${bunVersion}.md`));
 await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: ['/absolute/path/to/media'], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000 }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json']);
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
-const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|scripts|test|docs|public\/licenses|\.github)\//.test(f) || /^deploy\/(Dockerfile|container\.config\.json|compose\.yaml|Caddyfile|\.env\.example|users\.caddy\.example|README\.md|standalone\.md|licenses\/[^/]+)$/.test(f));
+const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|scripts|test|docs|public\/licenses|\.github)\//.test(f) || /^deploy\/(Dockerfile|container\.config\.json|compose\.yaml|Caddyfile|\.env\.example|users\.caddy\.example|README\.md|standalone\.md|operations\.md|licenses\/[^/]+)$/.test(f));
 const sourceDir = path.join(out, '.source');
 for (const file of sourceFiles) { await mkdir(path.dirname(path.join(sourceDir, file)), { recursive: true }); await cp(path.join(root, file), path.join(sourceDir, file)); }
 execFileSync(tar, ['-czf', path.join(out, 'source.tar.gz'), '-C', sourceDir, '.']);

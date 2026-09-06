@@ -37,7 +37,7 @@ try {
   compose(['cp', 'gateway:/data/caddy/pki/authorities/local/root.crt', caFile]);
   const ca = await readFile(caFile);
   const get = (url, headers = {}, trusted = true, method = 'GET') => new Promise((resolve, reject) => {
-    const req = request(`https://localhost:${port}${url}`, { method, family: 4, ...(trusted ? { ca } : {}), headers, timeout: 5000 }, res => {
+    const req = request(`https://localhost:${port}${url}`, { method, family: 4, agent: false, ...(trusted ? { ca } : {}), headers, timeout: 5000 }, res => {
       const chunks = []; res.on('data', d => chunks.push(d)); res.on('error', reject);
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
     }); req.on('error', reject); req.on('timeout', () => req.destroy(new Error('HTTPS request timed out'))); req.end();
@@ -68,6 +68,14 @@ try {
   assert.equal(app.Mounts.find(m => m.Destination === '/media').RW, false);
   compose(['restart']);
   compose(['up', '-d', '--wait', '--wait-timeout', '120']);
+  // Compose waits for app health; wait separately for the restarted TLS listener.
+  let ready = false;
+  for (let i = 0; i < 100; i++) {
+    try { ready = (await get('/')).status === 401; } catch {}
+    if (ready) break;
+    await new Promise(r => setTimeout(r, 100));
+  }
+  assert.ok(ready, 'Restarted gateway must become ready');
   assert.equal((await get(url, { ...auth, range: 'bytes=0-7' })).status, 206);
   compose(['cp', 'gateway:/data/caddy/pki/authorities/local/root.crt', caFile]);
   assert.deepEqual(await readFile(caFile), ca, 'Restart retains the trusted CA');
