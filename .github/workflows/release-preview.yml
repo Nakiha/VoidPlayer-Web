@@ -1,22 +1,39 @@
-name: Build and verify standalone previews
+name: Build and verify standalone releases
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
 
 permissions:
   contents: read
 
+env:
+  VOIDPLAYER_RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
+
 concurrency:
   group: standalone-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
+  identity:
+    name: Verify release version and automation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - run: node scripts/release-version.mjs
+      - run: node --test test/release-pipeline.test.mjs
+
   decoder:
     name: Build pinned WASM decoder
     runs-on: ubuntu-24.04
+    needs: identity
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -148,4 +165,49 @@ jobs:
         run: |
           echo "### $PLATFORM" >> "$GITHUB_STEP_SUMMARY"
           echo '构建与独立运行测试通过。请下载本次运行的同名 artifact，解压后核验 .sha256。' >> "$GITHUB_STEP_SUMMARY"
-          echo '最终用户无需安装 Node/Bun；此流程生成预览产物，不自动发布公开 Release。' >> "$GITHUB_STEP_SUMMARY"
+          echo '最终用户无需安装 Node/Bun。分支构建提供预览产物；版本标签在全平台验证通过后生成 Release 草稿。' >> "$GITHUB_STEP_SUMMARY"
+
+  release-set:
+    name: Verify complete platform release set
+    needs: native-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: voidplayer-*
+          merge-multiple: true
+          path: artifacts/release-set
+      - run: node scripts/check-release-set.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: verified-release-set
+          path: artifacts/release-set/
+          if-no-files-found: error
+          retention-days: 30
+
+  release-draft:
+    name: Stage verified release draft
+    if: github.ref_type == 'tag'
+    needs: release-set
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - uses: actions/download-artifact@v4
+        with:
+          name: verified-release-set
+          path: artifacts/release-set
+      - name: Reverify archives and stage unpublished draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/stage-release.mjs

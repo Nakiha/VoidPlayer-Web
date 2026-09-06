@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { readReleaseIdentity } from './release-version.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 if (argv.length && (argv.length !== 2 || argv[0] !== '--target')) throw new Error('用法: node scripts/package-release.mjs [--target bun-linux-x64]');
@@ -15,14 +16,12 @@ const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).tri
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
 const required = ['index.html', 'admin/index.html', 'theme-init.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
-const pkg = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
-const revision = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
-const dirty = !!execFileSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8' }).trim();
-const version = `${pkg.version}-preview.${revision.slice(0, 8)}${dirty ? '.dirty' : ''}`;
+const { revision, dirty, version, tag } = await readReleaseIdentity(root);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const name = `voidplayer-${version}-${target.slice(4)}-${stamp}`;
+const name = `voidplayer-${version}-${target.slice(4)}${tag ? '' : `-${stamp}`}`;
 const out = path.join(root, 'artifacts', name);
-await mkdir(out, { recursive: true });
+await mkdir(path.dirname(out), { recursive: true });
+await mkdir(out); // Never silently mix a previous package with a new build.
 const executable = target.includes('windows') ? 'voidplayer.exe' : 'voidplayer';
 execFileSync(bun, ['build', 'server/standalone.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
 await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });

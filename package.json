@@ -8,7 +8,7 @@
     "dev": "node scripts/dev.ts",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test": "node --experimental-strip-types --test test/*.test.ts test/*.test.mjs",
     "serve": "node server/main.ts",
     "dev:web": "vite --host 127.0.0.1",
     "start": "node server/main.ts",
