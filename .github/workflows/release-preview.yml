@@ -124,7 +124,10 @@ jobs:
           path: public/vendor/voidplayer-core
       - run: npm ci
       - run: node scripts/check-release-core.mjs
-      - run: node --test test/config.test.ts
+      - name: Verify configuration and persistent index on Node
+        run: node --test test/config.test.ts test/library-index.test.ts
+      - name: Verify persistent index on packaged runtime
+        run: bun test --timeout 60000 ./test/library-index.test.ts
       - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
       - name: Verify packaged Docker and HTTPS deployment

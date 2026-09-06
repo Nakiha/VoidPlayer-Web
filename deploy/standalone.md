@@ -18,7 +18,7 @@ Windows 可在 PowerShell 中用 `& 'C:\VoidPlayer\voidplayer.exe'` 替换程序
 未指定 `--data-dir` 时使用 `VOIDPLAYER_DATA_DIR`，否则使用系统用户数据目录：
 macOS 为 `~/Library/Application Support/VoidPlayer`，Windows 为 `%LOCALAPPDATA%\VoidPlayer`，
 Linux 为 `$XDG_DATA_HOME/voidplayer` 或 `~/.local/share/voidplayer`。
-配置文件为该目录下的 `voidplayer.config.json`；用户主动上传的日志保存在 `logs/`。
+配置文件为该目录下的 `voidplayer.config.json`，媒体索引为 `library.sqlite`；用户主动上传的日志保存在 `logs/`。数据目录应位于本机可写磁盘，不能与其他实例共用。
 可用 `--config` / `VOIDPLAYER_CONFIG` 指定其他配置，文件内相对路径以配置文件所在目录为基准。
 程序不自动读取当前目录中的 `.env` 或 `bunfig.toml`。
 
@@ -32,7 +32,7 @@ macOS 公网下载包的签名/公证尚待首发平台验收，不提供绕过�
 1. 停止旧服务并备份独立数据目录，保留旧程序包。
 2. 校验新包并解压到新目录，不覆盖数据目录。
 3. 用同一个 `--data-dir` 执行新程序的 `--check`，再启动并检查媒体读取。
-4. 本阶段没有数据库迁移；失败时停止新程序，使用旧程序和原数据目录恢复。未来数据库升级需按对应版本迁移说明处理。
+4. 当前首次引入 SQLite schema 1；从 preview.1 升级会新建索引并扫描，原媒体与工作区不变。遇到更新的数据库版本会拒绝启动。回退时停止新程序，恢复旧程序及升级前的完整数据备份。
 
 媒体原文件由存储系统备份，不在程序包或工作区文件中。更新程序不删除视频、用户配置或日志。
 

@@ -48,3 +48,18 @@ test('standalone defaults keep resources beside the executable and data outside 
     await assert.rejects(loadConfig(['--config', 'absent.json'], 'production', cwd, paths), /ENOENT/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+
+test('stable root definitions preserve IDs and resolve paths independently of data storage', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-root-config-'));
+  try {
+    await writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'archive-a', path: 'media', name: 'Archive' }], dataDir: 'state' }));
+    const config = await loadConfig([], 'production', root);
+    assert.deepEqual(config.mediaRoots, [{ id: 'archive-a', path: path.join(root, 'media'), name: 'Archive' }]);
+    assert.equal(config.dataDir, path.join(root, 'state'));
+    const standalone = await loadConfig([], 'production', root, { dataDir: path.join(root, 'external-state') });
+    assert.equal(standalone.dataDir, path.join(root, 'external-state'));
+    await writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: '../invalid', path: 'media' }] }));
+    await assert.rejects(loadConfig([], 'production', root), /mediaRoots/);
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

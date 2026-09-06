@@ -3,10 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { requestActor } from './identity.ts';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
-import { promises as fs, createReadStream } from 'node:fs';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { allowReveal, localRequest, revealFile } from './reveal.ts';
-import { MediaLibraryIndex } from './library.ts';
+import { MediaLibraryIndex, fileVersion } from './library.ts';
 
 // Narrow read-only HTTP API for the web player:
 //   GET /api/library        -> media list under the whitelisted folders
@@ -65,27 +65,32 @@ function parseRange(header: string | undefined, size: number): { start: number; 
   return { start, end };
 }
 
-async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: string, contentType?: string) {
-  const stat = await fs.stat(absPath).catch(() => null);
-  if (!stat?.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
-  const size = stat.size;
-  const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-  const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store', ...ISOLATION_HEADERS };
-  const range = parseRange(req.headers.range, size);
-  if (range === 'unsatisfiable') {
-    res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
-    res.end();
-    return;
-  }
-  const { start, end } = range ?? { start: 0, end: size - 1 };
-  res.writeHead(range ? 206 : 200, {
-    ...base,
-    'content-length': end - start + 1,
-    ...(range ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
-  });
-  if (req.method === 'HEAD') { res.end(); return; }
-  if (size === 0) { res.end(); return; }
-  await pipeline(createReadStream(absPath, { start, end }), res);
+async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: string, contentType?: string, expectedVersion?: string) {
+  const handle = await fs.open(absPath, 'r').catch(() => null);
+  if (!handle) { sendJson(res, 404, { error: 'not found' }); return; }
+  try {
+    const stat = await handle.stat().catch(() => null);
+    if (!stat?.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
+    if (expectedVersion && fileVersion(stat) !== expectedVersion) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
+    const size = stat.size;
+    const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
+    const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store', ...ISOLATION_HEADERS };
+    const range = parseRange(req.headers.range, size);
+    if (range === 'unsatisfiable') {
+      res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
+      res.end();
+      return;
+    }
+    const { start, end } = range ?? { start: 0, end: size - 1 };
+    res.writeHead(range ? 206 : 200, {
+      ...base,
+      'content-length': end - start + 1,
+      ...(range ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
+    });
+    if (req.method === 'HEAD') { res.end(); return; }
+    if (size === 0) { res.end(); return; }
+    await pipeline(handle.createReadStream({ start, end, autoClose: false }), res);
+  } finally { await handle.close(); }
 }
 
 export function createMediaServer(options: ServerOptions): Server {
@@ -95,7 +100,7 @@ export function createMediaServer(options: ServerOptions): Server {
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
 
-  return createServer(async (req, res) => {
+  const server = createServer(async (req, res) => {
     const started = performance.now();
     const actor = requestActor(req, options.proxyToken);
     const requestId = randomUUID();
@@ -118,6 +123,25 @@ export function createMediaServer(options: ServerOptions): Server {
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
+      }
+      if (url.pathname === '/api/library/scan' && req.method === 'GET') {
+        sendJson(res, 200, { ...library.status(), errors: library.errors() }); return;
+      }
+      if (url.pathname === '/api/library/scan' && req.method === 'POST') {
+        let sameOrigin = false;
+        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === `${options.proxyToken ? req.headers['x-forwarded-proto'] ?? 'https' : 'http'}:`; } catch {}
+        if (!sameOrigin || req.headers['x-voidplayer-action'] !== 'scan') { sendJson(res, 403, { error: '请从播放器或管理页面操作扫描。' }); return; }
+        if (url.searchParams.get('action') === 'cancel') library.cancel();
+        else if (!url.searchParams.has('action') || url.searchParams.get('action') === 'refresh') void library.refresh().catch(() => {});
+        else { sendJson(res, 400, { error: '未知扫描操作。' }); return; }
+        sendJson(res, 202, library.status()); return;
+      }
+      if (url.pathname === '/api/library/browse' && req.method === 'GET') {
+        const limit = Number(url.searchParams.get('limit') ?? 100), offset = Number(url.searchParams.get('offset') ?? 0);
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) { sendJson(res, 400, { error: '无效分页参数。' }); return; }
+        try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset })); }
+        catch (error) { sendJson(res, 400, { error: (error as Error).message }); }
+        return;
       }
       const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal)$/.exec(url.pathname);
       if (actionMatch) {
@@ -165,10 +189,13 @@ export function createMediaServer(options: ServerOptions): Server {
       }
       const mediaMatch = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname);
       if (mediaMatch) {
-        const abs = await library.resolve(mediaMatch[1]);
+        const requestedVersion = url.searchParams.get('v') ?? undefined;
+        const metadata = library.metadata(mediaMatch[1]);
+        if (requestedVersion && metadata && requestedVersion !== metadata.version) { status = 409; sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
+        const abs = await library.resolve(mediaMatch[1], requestedVersion);
         if (!abs) { status = 404; sendJson(res, 404, { error: 'unknown media id' }); return; }
         if (url.searchParams.has('download')) res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(abs))}`);
-        await serveFile(req, res, abs);
+        await serveFile(req, res, abs, undefined, metadata?.version);
         return;
       }
       if (staticDir) {
@@ -190,4 +217,6 @@ export function createMediaServer(options: ServerOptions): Server {
       else res.end();
     }
   });
+  if (!options.library) server.on('close', () => { void library.close(); });
+  return server;
 }

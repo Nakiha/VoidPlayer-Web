@@ -1,6 +1,6 @@
 // Test the extracted release itself. Its server gets an empty PATH and an unrelated cwd.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm, cp } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm, cp, utimes } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
@@ -45,6 +45,7 @@ try {
   await writeFile(path.join(cwd, '.env'), 'VOIDPLAYER_CONFIG=must-not-autoload.json\n');
   const bytes = Buffer.alloc(4 * 1024 * 1024); for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
   await writeFile(path.join(media, '子目录', 'sample.mp4'), bytes);
+  await utimes(path.join(media, '子目录', 'sample.mp4'), 1, 1);
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
   execFileSync(tar, ['-xzf', archive, '-C', temp]);
   const folder = path.join(temp, path.basename(archive, '.tar.gz'));
@@ -70,7 +71,10 @@ try {
   assert.equal(homepage.headers.get('cross-origin-opener-policy'), 'same-origin'); assert.equal(homepage.headers.get('cross-origin-embedder-policy'), 'require-corp');
   const wasm = await fetch(base + '/vendor/voidplayer-core/voidplayer-core.wasm', { method: 'HEAD' }); assert.equal(wasm.status, 200); assert.match(wasm.headers.get('content-type'), /application\/wasm/);
   const listing = await (await fetch(base + '/api/library')).json(); assert.equal(listing.entries.length, 1);
-  const url = base + '/api/media/' + listing.entries[0].id;
+  assert.match(listing.entries[0].version, /^[0-9a-f]{24}$/);
+  assert.equal((await readFile(path.join(data, 'library.sqlite'))).subarray(0, 16).toString(), 'SQLite format 3\0');
+  assert.throws(() => run(['--data-dir', data, '--port', String(port)]), /另一个实例/, 'second process cannot write the same index');
+  const url = base + '/api/media/' + listing.entries[0].id + '?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
     const start = i * 10007, end = start + 1023;
@@ -94,11 +98,17 @@ try {
   await cp(backup, data, { recursive: true });
   assert.throws(() => run(['--check', '--data-dir', data, '--static', path.join(temp, 'broken upgrade')]), /缺少构建后的网页/);
   run(['--check', '--data-dir', data]);
+  const offlineMedia = media + '-offline'; await rename(media, offlineMedia);
   base = await start(port);
   assert.equal(await readFile(configPath, 'utf8'), original);
   assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
-  assert.equal((await (await fetch(base + '/api/library')).json()).entries.length, 1);
+  const restored = await (await fetch(base + '/api/library')).json();
+  assert.equal(restored.entries.length, 1, 'restored index stays queryable while storage is offline');
+  assert.equal(restored.entries[0].id, listing.entries[0].id);
+  assert.equal(restored.entries[0].version, listing.entries[0].version);
+  assert.equal((await fetch(url)).status, 404, 'offline index cannot grant stale file access');
   await stop();
+  await rename(offlineMedia, media);
   const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
   assert.equal((await fetch(base + '/api/library')).status, 401);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
@@ -110,6 +120,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'} and upgrade/backup/restore preserving data`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, SQLite process lock and upgrade/backup/restore preserving offline index`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

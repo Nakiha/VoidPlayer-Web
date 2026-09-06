@@ -9,6 +9,7 @@ services:
     environment:
       VOIDPLAYER_PROXY_TOKEN: ${VOIDPLAYER_PROXY_TOKEN:?Set a gateway token in .env}
     volumes:
+      - app-data:/data
       - type: bind
         source: ${VOIDPLAYER_MEDIA_DIR:?Set the media folder in .env}
         target: /media
@@ -55,5 +56,6 @@ services:
         max-size: 10m
         max-file: '3'
 volumes:
+  app-data:
   caddy-data:
   caddy-config:

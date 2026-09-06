@@ -148,6 +148,7 @@ test('health, media location, attachment and guarded local reveal share the whit
     try {
       const health = await (await fetch(`${base}/api/health`)).json();
       assert.equal(health.service, 'voidplayer-media'); assert.equal(health.capabilities.reveal, true);
+      await fetch(`${base}/api/library`);
       const location = await (await fetch(`${base}/api/media/${id}/location`)).json();
       assert.equal(location.absolutePath, await fs.realpath(path.join(root, 'a.mp4')));
       const attachment = await fetch(`${base}/api/media/${id}?download=1`);
@@ -234,5 +235,34 @@ test('gateway identity requires a secret and audit records the authenticated act
       assert.ok(audit.some(e => e.actorId === 'tester.one' && e.status === 206 && e.completed === true));
       assert.ok(!JSON.stringify(audit).includes(token));
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
+
+test('paginated browse, versioned media and guarded scan controls use the shared index', async () => {
+  await withFixture(async root => {
+    const { MediaLibraryIndex } = await import('../server/library.ts');
+    const library = new MediaLibraryIndex([{ id: 'archive', path: root }]); await library.refresh();
+    const server = createMediaServer({ roots: library.roots, library, onLog: () => {} });
+    await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
+    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+    try {
+      const page = await (await fetch(base + '/api/library/browse?root=archive&limit=1')).json();
+      assert.equal(page.entries.length, 1); assert.equal(page.directories[0].name, 'sub');
+      const entry = page.entries[0];
+      const pinned = `${base}/api/media/${entry.id}?v=${entry.version}`;
+      assert.equal((await fetch(pinned, { method: 'HEAD' })).status, 200);
+      await fs.writeFile(path.join(root, 'a.mp4'), 'changed'); await library.refresh();
+      assert.equal((await fetch(pinned)).status, 409);
+      assert.equal((await fetch(`${base}/api/media/${mediaId(root, 'a.mp4')}`, { method: 'HEAD' })).status, 200, 'legacy workspace aliases still resolve');
+      assert.equal((await fetch(base + '/api/library/browse?offset=-1')).status, 400);
+      assert.equal((await fetch(base + '/api/library/browse?directory=../')).status, 400);
+      const action = base + '/api/library/scan';
+      assert.equal((await fetch(action, { method: 'POST' })).status, 403);
+      assert.equal((await fetch(action, { method: 'POST', headers: { origin: 'https://elsewhere.example', 'x-voidplayer-action': 'scan' } })).status, 403);
+      assert.equal((await fetch(action, { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'scan' } })).status, 202);
+      await library.refresh();
+      const status = await (await fetch(action)).json(); assert.equal(status.job.state, 'completed');
+    } finally { await new Promise<void>(r => server.close(() => r())); await library.close(); }
   });
 });

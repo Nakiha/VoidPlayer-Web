@@ -26,7 +26,7 @@ async function main() {
     console.log(`VoidPlayer ${version}
 用法: voidplayer [选项]
   --init --folder /media       创建配置（不会覆盖已有文件），然后退出
-  --data-dir /data             配置和上传日志的数据目录
+  --data-dir /data             配置、媒体索引和上传日志的数据目录
   --config /path/config.json   使用指定配置；相对路径以该配置为基准
   --folder /media              媒体白名单目录，可重复指定
   --port 5180 --host 127.0.0.1  监听地址；远端访问需要认证网关
@@ -56,7 +56,7 @@ async function main() {
   if (init && (process.env.VOIDPLAYER_CONFIG || args.some(a => a === '--config' || a.startsWith('--config=')))) throw new Error('--init 请使用 --data-dir 指定位置，不要同时指定 --config / VOIDPLAYER_CONFIG。');
   const configFile = path.join(dataDir, 'voidplayer.config.json');
   const appDir = compiled ? path.dirname(process.execPath) : path.resolve(import.meta.dirname, '..');
-  const config = await loadConfig(args, 'production', process.cwd(), { configFile, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs') });
+  const config = await loadConfig(args, 'production', process.cwd(), { configFile, dataDir, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs') });
   if (healthcheck) {
     const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host === '::' ? '[::1]' : config.host.includes(':') ? `[${config.host}]` : config.host;
     const response = await fetch(`http://${host}:${config.port}/api/ready`, { signal: AbortSignal.timeout(2500) });
@@ -68,7 +68,7 @@ async function main() {
     if (init) {
       await mkdir(dataDir, { recursive: true });
       // Resource paths remain release-relative so moving/upgrading the app works.
-      const { staticDir: _static, devPort: _dev, ...rest } = config;
+      const { staticDir: _static, devPort: _dev, dataDir: _data, ...rest } = config;
       const stored = { ...rest, ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
       if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
       await writeFile(configFile, JSON.stringify(stored, null, 2) + '\n', { flag: 'wx', mode: 0o600 });

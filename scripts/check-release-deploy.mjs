@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { mkdtemp, mkdir, cp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, readFile, writeFile, rm, utimes } from 'node:fs/promises';
 import { request } from 'node:https';
 import { createServer } from 'node:net';
 import path from 'node:path';
@@ -17,6 +17,7 @@ await cp(release.directory, program, { recursive: true });
 await mkdir(media, { mode: 0o755 });
 const bytes = Buffer.alloc(1024 * 1024); for (let i = 0; i < bytes.length; i++) bytes[i] = i % 251;
 await writeFile(path.join(media, 'sample.mp4'), bytes, { mode: 0o644 });
+await utimes(path.join(media, 'sample.mp4'), 1, 1);
 const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r));
 const port = socket.address().port; await new Promise(r => socket.close(r));
 const token = randomBytes(32).toString('hex'), password = randomBytes(18).toString('hex');
@@ -66,6 +67,9 @@ try {
   assert.equal(app.HostConfig.ReadonlyRootfs, true);
   assert.ok(!Object.values(app.NetworkSettings.Ports).some(Boolean), 'Only the authenticated gateway may publish ports');
   assert.equal(app.Mounts.find(m => m.Destination === '/media').RW, false);
+  assert.equal(app.Mounts.find(m => m.Destination === '/data').RW, true);
+  compose(['exec', '-T', 'app', 'test', '-s', '/data/library.sqlite']);
+  const beforeScan = JSON.parse((await get('/api/library/scan', auth)).body).job.id;
   compose(['restart']);
   compose(['up', '-d', '--wait', '--wait-timeout', '120']);
   // Compose waits for app health; wait separately for the restarted TLS listener.
@@ -77,11 +81,13 @@ try {
   }
   assert.ok(ready, 'Restarted gateway must become ready');
   assert.equal((await get(url, { ...auth, range: 'bytes=0-7' })).status, 206);
+  const afterScan = JSON.parse((await get('/api/library/scan', auth)).body).job.id;
+  assert.ok(afterScan > beforeScan, 'restart keeps scan history in the persistent data volume');
   compose(['cp', 'gateway:/data/caddy/pki/authorities/local/root.crt', caFile]);
   assert.deepEqual(await readFile(caFile), ca, 'Restart retains the trusted CA');
   const logs = compose(['logs', '--no-color', 'app']);
   assert.match(logs, /"actorId":"qa.tester"/); assert.ok(!logs.includes(token));
-  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, restart and persistent CA');
+  console.log('PASS shipped Docker deployment: no Node/Bun, non-root/read-only runtime, verified TLS, login/spoof rejection, page/WASM headers, four concurrent media ranges, persistent index and CA after restart');
 } catch (error) {
   if (started) { try { console.error(compose(['logs', '--no-color', '--tail', '80'])); } catch {} }
   throw error;

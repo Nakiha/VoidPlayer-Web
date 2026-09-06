@@ -22,7 +22,7 @@ test('one dev process starts both listeners, proxies API and closes both on SIGT
   const folder = await mkdtemp(path.join(os.tmpdir(), 'vp-start-'));
   const apiPort = await freePort(), port = await freePort();
   let output = '';
-  const child = spawn(process.execPath, ['scripts/dev.ts', '--folder', folder, '--port', String(port), '--api-port', String(apiPort), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['scripts/dev.ts', '--folder', folder, '--data-dir', path.join(folder, 'data'), '--port', String(port), '--api-port', String(apiPort), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
   const exited = new Promise<number | null>(resolve => child.once('exit', resolve));
   try {
@@ -33,7 +33,7 @@ test('one dev process starts both listeners, proxies API and closes both on SIGT
     assert.equal(await exited, 0);
     await assert.rejects(fetch(`http://127.0.0.1:${port}/api/health`));
     await assert.rejects(fetch(`http://127.0.0.1:${apiPort}/api/health`));
-  } finally { child.kill('SIGKILL'); await fsCleanup(folder); }
+  } finally { child.kill('SIGKILL'); await exited; await fsCleanup(folder); }
 });
 async function fsCleanup(folder: string) { await rm(folder, { recursive: true, force: true }); }
 
@@ -41,14 +41,14 @@ test('production start serves the built page and API from one listener; missing 
   const folder = await mkdtemp(path.join(os.tmpdir(), 'vp-prod-'));
   const port = await freePort(); let output = '';
   await mkdir(path.join(folder, 'web')); await writeFile(path.join(folder, 'web/index.html'), '<title>Release</title>');
-  const child = spawn(process.execPath, ['server/main.ts', '--folder', folder, '--static', path.join(folder, 'web'), '--port', String(port), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const child = spawn(process.execPath, ['server/main.ts', '--folder', folder, '--data-dir', path.join(folder, 'data'), '--static', path.join(folder, 'web'), '--port', String(port), '--no-logs'], { stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', chunk => { output += chunk; }); child.stderr.on('data', chunk => { output += chunk; });
   const exited = new Promise<number | null>(resolve => child.once('exit', resolve));
   try {
     await until(async () => fetch(`http://127.0.0.1:${port}/api/ready`).then(r => r.ok).catch(() => false), () => output);
     assert.match(await (await fetch(`http://127.0.0.1:${port}/`)).text(), /Release/);
     child.kill('SIGTERM'); assert.equal(await exited, 0);
-    const bad = spawn(process.execPath, ['server/main.ts', '--folder', folder, '--static', path.join(folder, 'missing')], { stdio: 'ignore' });
+    const bad = spawn(process.execPath, ['server/main.ts', '--folder', folder, '--data-dir', path.join(folder, 'data'), '--static', path.join(folder, 'missing')], { stdio: 'ignore' });
     assert.equal(await new Promise(resolve => bad.once('exit', resolve)), 1);
-  } finally { child.kill('SIGKILL'); await fsCleanup(folder); }
+  } finally { child.kill('SIGKILL'); await exited; await fsCleanup(folder); }
 });
