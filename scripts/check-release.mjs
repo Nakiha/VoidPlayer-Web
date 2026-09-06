@@ -21,9 +21,20 @@ const cwd = path.join(temp, 'unrelated cwd'), data = path.join(temp, 'persistent
 const freePort = async () => { const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r)); return port; };
 let executable;
 const run = (args, overrides = {}) => execFileSync(executable, args, { cwd, env: { ...env, ...overrides }, encoding: 'utf8', timeout: 10000, stdio: ['ignore', 'pipe', 'pipe'] });
+async function renameReleased(source, destination) {
+  // Windows can keep a just-exited image mapped briefly. Retry only sharing /
+  // permission errors, with a bound; a still-running service is never ignored.
+  for (let attempt = 0; ; attempt++) {
+    try { await rename(source, destination); return; }
+    catch (error) {
+      if (process.platform !== 'win32' || attempt === 10 || !['EPERM', 'EBUSY', 'EACCES'].includes(error.code)) throw error;
+      await new Promise(r => setTimeout(r, (attempt + 1) * 100));
+    }
+  }
+}
 async function stop() {
   if (!child || child.exitCode !== null) return;
-  const done = once(child, 'exit'); child.kill('SIGTERM');
+  const done = once(child, 'close'); child.kill('SIGTERM');
   const timer = setTimeout(() => child.kill('SIGKILL'), 7500);
   try { const [code, signal] = await done; if (process.platform === 'win32') assert.ok(code === 0 || signal === 'SIGTERM', 'Windows process termination'); else assert.equal(code, 0, `${signal}\n${output}`); } finally { clearTimeout(timer); child = null; }
 }
@@ -89,18 +100,18 @@ try {
   const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'release-test' }) }); assert.equal(uploaded.status, 201);
   assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
   await stop();
-  const upgraded = path.join(temp, 'upgraded program'); await rename(folder, upgraded); executable = path.join(upgraded, manifest.executable);
+  const upgraded = path.join(temp, 'upgraded program'); await renameReleased(folder, upgraded); executable = path.join(upgraded, manifest.executable);
   base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original); assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
   await stop();
   // A stopped full-data backup must restore into a fresh directory, not only
   // survive a program-directory rename. Keep the original for comparison.
   const backup = path.join(temp, 'data backup');
   await cp(data, backup, { recursive: true });
-  await rename(data, path.join(temp, 'original data'));
+  await renameReleased(data, path.join(temp, 'original data'));
   await cp(backup, data, { recursive: true });
   assert.throws(() => run(['--check', '--data-dir', data, '--static', path.join(temp, 'broken upgrade')]), /缺少构建后的网页/);
   run(['--check', '--data-dir', data]);
-  const offlineMedia = media + '-offline'; await rename(media, offlineMedia);
+  const offlineMedia = media + '-offline'; await renameReleased(media, offlineMedia);
   base = await start(port);
   assert.equal(await readFile(configPath, 'utf8'), original);
   assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
@@ -110,7 +121,7 @@ try {
   assert.equal(restored.entries[0].version, listing.entries[0].version);
   assert.equal((await fetch(url)).status, 404, 'offline index cannot grant stale file access');
   await stop();
-  await rename(offlineMedia, media);
+  await renameReleased(offlineMedia, media);
   const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
   assert.equal((await fetch(base + '/api/library')).status, 401);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
