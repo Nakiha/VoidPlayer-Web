@@ -1,6 +1,6 @@
 // Test the extracted release itself. Its server gets an empty PATH and an unrelated cwd.
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, readdir, rename, rm, cp } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { createHash, randomBytes } from 'node:crypto';
@@ -86,6 +86,19 @@ try {
   const upgraded = path.join(temp, 'upgraded program'); await rename(folder, upgraded); executable = path.join(upgraded, manifest.executable);
   base = await start(port); assert.equal((await fetch(base)).status, 200); assert.equal(await readFile(configPath, 'utf8'), original); assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
   await stop();
+  // A stopped full-data backup must restore into a fresh directory, not only
+  // survive a program-directory rename. Keep the original for comparison.
+  const backup = path.join(temp, 'data backup');
+  await cp(data, backup, { recursive: true });
+  await rename(data, path.join(temp, 'original data'));
+  await cp(backup, data, { recursive: true });
+  assert.throws(() => run(['--check', '--data-dir', data, '--static', path.join(temp, 'broken upgrade')]), /缺少构建后的网页/);
+  run(['--check', '--data-dir', data]);
+  base = await start(port);
+  assert.equal(await readFile(configPath, 'utf8'), original);
+  assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
+  assert.equal((await (await fetch(base + '/api/library')).json()).entries.length, 1);
+  await stop();
   const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
   assert.equal((await fetch(base + '/api/library')).status, 401);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
@@ -97,5 +110,5 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  console.log(`PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (graceful Windows console shutdown remains unverified)' : 'graceful stop'} and upgrade preserving data`);
+  console.log(`PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (graceful Windows console shutdown remains unverified)' : 'graceful stop'} and upgrade/backup/restore preserving data`);
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true }); }
