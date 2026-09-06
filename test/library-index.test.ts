@@ -6,7 +6,7 @@ import os from 'node:os';
 import { MediaLibraryIndex, mediaId, scanLibrary } from '../server/library.ts';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { DatabaseSync } from 'node:sqlite';
+import { openIndexDatabase } from '../server/sqlite.ts';
 import { createMediaServer } from '../server/app.ts';
 
 async function fixture(run: (root: string, media: string) => Promise<void>) {
@@ -15,8 +15,8 @@ async function fixture(run: (root: string, media: string) => Promise<void>) {
   let failure: unknown;
   try { await run(root, media); } catch (error) { failure = error; }
   try {
-    // Bun's Windows rm does not apply Node's retry options consistently.
-    // Retry explicitly, after all owned SQLite connections have been closed.
+    // Use the same bounded sharing-error retry policy under Node and Bun,
+    // after all owned SQLite connections have been explicitly closed.
     for (let attempt = 0; ; attempt++) {
       try { await rm(root, { recursive: true, force: true }); break; }
       catch (error) {
@@ -162,9 +162,18 @@ test('four HTTP Range requests finish while a background scan is stalled', async
 
 test('future database schema is refused without modifying its version', async () => fixture(async (root, media) => {
   const file = path.join(root, 'future.sqlite');
-  const db = new DatabaseSync(file); db.exec('PRAGMA user_version=99'); db.close();
+  const db = openIndexDatabase(file); db.exec('PRAGMA user_version=99'); db.close();
   assert.throws(() => new MediaLibraryIndex([media], { database: file }), /更新的程序版本/);
-  const check = new DatabaseSync(file); assert.equal(check.prepare('PRAGMA user_version').get()?.user_version, 99); check.close();
+  const check = openIndexDatabase(file); assert.equal(check.prepare('PRAGMA user_version').get()?.user_version, 99); check.close();
+}));
+
+test('closing an index database releases files even while a prepared statement remains reachable', async () => fixture(async root => {
+  const file = path.join(root, 'held.sqlite');
+  const db = openIndexDatabase(file); db.exec('PRAGMA journal_mode=WAL; CREATE TABLE sample(value INTEGER); INSERT INTO sample VALUES(1);');
+  const statement = db.prepare('SELECT value FROM sample'); assert.equal(statement.get()?.value, 1);
+  db.close();
+  await rename(file, file + '.closed');
+  assert.throws(() => statement.get(), /finalized|closed|not open/i);
 }));
 
 

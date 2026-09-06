@@ -1,4 +1,5 @@
-import { DatabaseSync } from 'node:sqlite';
+import { openIndexDatabase } from './sqlite.ts';
+import type { IndexDatabase } from './sqlite.ts';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 
@@ -18,19 +19,19 @@ export interface StoredMedia { id: string; root_id: string; path: string; size: 
 // stale PID files and never blocks readers of the actual metadata database.
 function lockDatabase(file: string): () => void {
   if (file === ':memory:') return () => {};
-  const lock = new DatabaseSync(file + '.lock');
+  const lock = openIndexDatabase(file + '.lock');
   try { lock.exec('PRAGMA busy_timeout=0; BEGIN EXCLUSIVE;'); }
   catch (error) { lock.close(); if (/locked|busy/i.test((error as Error).message)) throw new Error('另一个实例正在使用媒体索引，请使用不同的数据目录。'); throw error; }
   return () => { try { lock.exec('ROLLBACK'); } finally { lock.close(); } };
 }
 export class LibraryStore {
-  readonly db: DatabaseSync;
+  readonly db: IndexDatabase;
   private unlock: () => void;
   constructor(file = ':memory:') {
     this.unlock = lockDatabase(file);
-    let connection: DatabaseSync | undefined;
+    let connection: IndexDatabase | undefined;
     try {
-      this.db = connection = new DatabaseSync(file);
+      this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
       if (version.user_version > 1) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
