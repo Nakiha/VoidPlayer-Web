@@ -1,7 +1,10 @@
+import { MediaOpenError } from './media-errors.ts';
+import type { OpenStage } from './media-errors.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
 import type { MediaInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
+import { ffmpegColorInfo } from './media-metadata.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
 // demux or decode (FFV1, MPEG-2 TS, H.266/VVC, H.264 4:2:2, ...). The
@@ -62,12 +65,8 @@ interface InitResult {
   colorTransfer?: number;
   colorSpace?: number;
   colorRange?: number;
+  pixelFormat?: string | null;
 }
-
-// FFmpeg enum ints to WebCodecs-style names (subset we actually meet).
-const PRIMARIES: Record<number, string> = { 1: 'bt709', 9: 'bt2020', 12: 'display-p3' };
-const TRANSFER: Record<number, string> = { 1: 'bt709', 6: 'smpte170m', 13: 'iec61966-2-1', 16: 'pq', 18: 'hlg' };
-const MATRIX: Record<number, string> = { 0: 'rgb', 1: 'bt709', 5: 'bt470bg', 6: 'smpte170m', 9: 'bt2020-ncl' };
 
 // Player-side thread budget: fallback decoders share the host's cores, each
 // live fallback track getting an equal share of (cores − 2), capped by the
@@ -76,6 +75,13 @@ let liveFallbacks = 0;
 function threadBudget(): number {
   const cores = globalThis.navigator?.hardwareConcurrency ?? 4;
   return Math.max(1, Math.min(4, Math.floor((cores - 2) / Math.max(1, liveFallbacks))));
+}
+
+/** Shared budget for packet-fed fallback workers and file-fed fallback workers. */
+export function reserveFallbackThreads() {
+  liveFallbacks++;
+  let released = false;
+  return { threads: threadBudget(), release() { if (!released) { released = true; liveFallbacks--; } } };
 }
 
 async function createWorker(): Promise<Worker> {
@@ -92,13 +98,17 @@ export class WorkerRpc {
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   constructor(worker: Worker) {
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage }) => {
       const { id, ok, data: payload, error } = data;
       const entry = this.pending.get(id);
-      if (!entry) return;
+      if (!entry) {
+        // A transferable VideoFrame may arrive after cancellation.
+        (payload as { frame?: VideoFrame } | null)?.frame?.close();
+        return;
+      }
       clearTimeout(entry.timer);
       this.pending.delete(id);
-      if (ok) entry.resolve(payload); else entry.reject(new Error(error ?? 'WASM 解码器错误'));
+      if (ok) entry.resolve(payload); else entry.reject(data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误'));
     };
     const fail = (message: string) => this.terminate(new Error(`WASM 解码 worker 异常：${message}`));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -210,12 +220,9 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
     firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
-    color: {
-      primaries: PRIMARIES[init.colorPrimaries ?? -1] ?? null,
-      transfer: TRANSFER[init.colorTransfer ?? -1] ?? null,
-      matrix: MATRIX[init.colorSpace ?? -1] ?? null,
-      fullRange: init.colorRange == null ? null : init.colorRange === 1,
-    },
+    pixelFormat: init.pixelFormat ?? null,
+    color: ffmpegColorInfo(init),
+    colorSource: 'decoder',
   };
 
   let disposed = false;

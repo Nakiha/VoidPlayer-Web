@@ -1,3 +1,4 @@
+import { setAnnotationViewport } from './ui/annotation-svg.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
 import { installMenu } from './ui/menu.ts';
 import { createFrameTask } from './ui/frame-task.ts';
@@ -14,26 +15,27 @@ import { icon } from './ui/icons.ts';
 import { installWorkbench } from './ui/workbench.ts';
 import { needsViewRecovery } from './ui/view-recovery.ts';
 import { installSourceActions } from './ui/source-actions.ts';
-import { bindTimelinePreview } from './ui/seek-preview.ts';
+import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';
 import { installTrackDrag } from './ui/track-drag.ts';
 import { installViewportChrome } from './ui/viewport-chrome.ts';
 import { installPixelGrid } from './ui/pixel-grid.ts';
 import { openMedia } from './media.ts';
 import { ReviewSession } from './session.ts';
 import { formatTime } from './model.ts';
-import type { Region, Slot } from './model.ts';
+import type { Slot } from './model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import { bindFileDrop } from './file-drop.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
-import { paintFrame } from './presenter.ts';
+import { paintFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
 import { PanMomentumFilter, Viewport, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
 import type { LayoutMode, PixelSizeMode, TrackGeometry, ViewportSnapshot } from './viewport.ts';
 
 const stopLogging = startBrowserLogging();
+const uiEvents = new AbortController();
 
-const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
 $('app').innerHTML = shell();
 const removeHeaderActions = installHeaderActions();
 const actionMenu = installMenu($<HTMLButtonElement>('more-actions'), $('more-actions-menu'), { align: 'end' });
@@ -42,24 +44,36 @@ const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], fr
 const removeLogPanel = installLogPanel($('export-log'));
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
-let draft: { slot: Slot; region: Region } | null = null;
-let lastFrames = '';
 let message = '';
 const drawingEditor = installDrawingEditor(session, canvases);
 const workbench = installWorkbench(session, act, openMarkDialog);
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); });
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
-function openMarkDialog(slot: Slot = draft?.slot ?? workbench.selected()) {
+let timelineDragging = false;
+$('timeline').addEventListener('pointerdown', () => { timelineDragging = true; }, { signal: uiEvents.signal });
+for (const event of ['pointerup', 'pointercancel']) window.addEventListener(event, () => { timelineDragging = false; }, { signal: uiEvents.signal });
+function renderProgress(positionUs: number, durationUs: number) {
+  const timeline = $<HTMLInputElement>('timeline');
+  timeline.max = String(Math.max(1, durationUs - 1));
+  if (!timelineDragging) {
+    timeline.value = String(positionUs);
+    syncTimelineProgress(timeline);
+  }
+  const position = $<HTMLInputElement>('position');
+  if (document.activeElement !== position) {
+    const label = formatTime(positionUs);
+    position.style.setProperty('--time-input-chars', String(label.length));
+    position.value = label;
+  }
+  workbench.renderProgress(positionUs, durationUs);
+}
+function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
   viewportChrome.setFocused(false);
-  drawingEditor.open(slot, draft?.slot === slot ? draft.region : null);
-  clearRegion();
+  drawingEditor.open(slot, markId);
 }
 
-const clearRegion = () => {
-  draft = null;
-  for (const slot of SLOTS) $(`region-${slot}`).firstElementChild!.setAttribute('width', '0');
-};
+
 function showError(error: unknown) {
   message = error instanceof Error ? error.message : String(error);
   render();
@@ -93,6 +107,9 @@ function applyViewTransform() {
     if (image.style.transform !== value) image.style.transform = value;
     const stage = $(`stage-${slot}`);
     const fitted = fittedTracks.get(slot);
+    const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY, dpr: devicePixelRatio } : null;
+    setPresentationGeometry(canvases[slot], presentation);
+    for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted ? fitted.sourceWidth / fitted.sourceHeight : 1);
     const split = viewport.mode === 'split' && fittedTracks.size === 2;
     const first = stage.closest('.video-card')!.classList.contains('view-first');
     const cut = Math.max(0, Math.min(1, viewport.splitPos));
@@ -102,6 +119,7 @@ function applyViewTransform() {
     recovery.style.left = `${(left + right) / 2 * 100}%`;
     grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: offsetY } : null);
   }
+  drawingEditor.viewChanged();
 }
 function syncSplitGeometry() {
   const rect=screens.getBoundingClientRect();
@@ -179,8 +197,6 @@ function render() {
   }
   document.querySelector<HTMLElement>('.transport')!.hidden = !loaded;
   for (const card of cards) card.querySelector<HTMLElement>('.card-heading')!.hidden = !loaded;
-  const frames = JSON.stringify(state.tracks.map(t => [t.id, t.frame?.ptsUs]));
-  if (frames !== lastFrames) { clearRegion(); lastFrames = frames; }
   for (const slot of SLOTS) {
     const t = state.tracks.find(t => t.slot === slot);
     $(`empty-${slot}`).hidden = !!t;
@@ -204,23 +220,25 @@ function render() {
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);
   syncZoomSelect(loaded);
-  $<HTMLButtonElement>('play').disabled = !loaded || state.busy;
-  $<HTMLButtonElement>('previous').disabled = !loaded || state.busy;
-  $<HTMLButtonElement>('next').disabled = $<HTMLButtonElement>('previous').disabled;
+  // Transient seek preparation must not dim the row or steal button focus.
+  // Keep native disabled for empty sessions; busy actions are guarded below.
+  for (const id of ['play', 'previous', 'next']) {
+    const button = $<HTMLButtonElement>(id);
+    button.disabled = !loaded;
+    const disabled = String(!loaded || state.busy);
+    if (button.getAttribute('aria-disabled') !== disabled) button.setAttribute('aria-disabled', disabled);
+  }
+  document.querySelector('.transport')!.setAttribute('aria-busy', String(state.busy));
   $<HTMLInputElement>('position').disabled = !loaded;
   $<HTMLButtonElement>('export').disabled = !loaded && !state.marks.length;
   if ($('play').dataset.playing !== String(state.playing)) {
-    $('play').innerHTML = icon(state.playing ? 'pause' : 'play');
     $('play').dataset.playing = String(state.playing);
   }
-  $('play').setAttribute('aria-label', state.playing ? '暂停' : '播放');
+  const playLabel = state.playing ? '暂停' : '播放';
+  if ($('play').getAttribute('aria-label') !== playLabel) $('play').setAttribute('aria-label', playLabel);
   const timeline = $<HTMLInputElement>('timeline');
   timeline.disabled = !loaded || state.busy;
-  timeline.max = String(Math.max(1, state.durationUs - 1));
-  if (document.activeElement !== timeline) timeline.value = String(state.positionUs);
-  timeline.style.setProperty('--progress-ratio', String(Number(timeline.value) / Math.max(1, Number(timeline.max))));
-  $('position').style.setProperty('--time-input-chars', String(Math.max(formatTime(state.durationUs).length, formatTime(state.positionUs).length)));
-  if(document.activeElement !== $('position')) $<HTMLInputElement>('position').value = formatTime(state.positionUs);
+  renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
@@ -270,32 +288,20 @@ for (const slot of SLOTS) {
     if (file) void act(() => importFiles([file], [slot]), 'files.select', { file, slot });
   };
   $<HTMLInputElement>(`file-${slot}`).oncancel = () => log.info('ui', '取消文件选择', { slot });
-  const image = $(`image-${slot}`);
-  let start: { x: number; y: number; pointer: number } | null = null;
-  let dragging = false;
-  const point = (e: PointerEvent) => { const r = image.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
-  image.onpointerdown = e => {
-    if (e.button !== 0 || session.getState().busy || drawingEditor.active()) return;
-    session.pause(); clearRegion(); start = { ...point(e), pointer: e.pointerId }; dragging = false; image.setPointerCapture(e.pointerId);
-  };
-  image.onpointermove = e => {
-    if (!start || start.pointer !== e.pointerId) return;
-    const end = point(e);
-    const region = { left: Math.min(start.x, end.x), top: Math.min(start.y, end.y), width: Math.abs(start.x - end.x), height: Math.abs(start.y - end.y) };
-    if (!dragging && region.width >= 0.005 && region.height >= 0.005) { dragging = true; log.info('ui', '开始框选', { slot }); }
-    draft = { slot, region };
-    const rect = $(`region-${slot}`).firstElementChild!;
-    for (const [key, value] of Object.entries({ x: region.left, y: region.top, width: region.width, height: region.height })) rect.setAttribute(key, String(value));
-  };
-  image.onpointerup = e => {
-    if (!start || start.pointer !== e.pointerId) return;
-    start = null; image.releasePointerCapture(e.pointerId);
-    if (dragging) log.info('ui', '结束框选', { slot, region: draft?.region ?? null });
-    dragging = false;
-    if (!draft || draft.region.width < 0.005 || draft.region.height < 0.005) clearRegion();
-    else openMarkDialog(slot);
-  };
-  image.onpointercancel = () => { if (dragging) log.info('ui', '取消框选', { slot }); dragging = false; start = null; clearRegion(); };
+  const stage = $(`stage-${slot}`);
+  let drawingStart: PointerEvent | undefined;
+  stage.addEventListener('pointerdown', e => {
+    if (e.button !== 0 || session.getState().busy || drawingEditor.active() ||
+      (e.target as Element).closest('button, input, label') || !session.getState().tracks.some(t => t.slot === slot && t.frame)) return;
+    drawingStart = e; stage.setPointerCapture(e.pointerId);
+  }, { signal: uiEvents.signal });
+  stage.addEventListener('pointermove', e => {
+    if (!drawingStart || e.pointerId !== drawingStart.pointerId ||
+      Math.hypot(e.clientX - drawingStart.clientX, e.clientY - drawingStart.clientY) < 3) return;
+    const start = drawingStart; drawingStart = undefined;
+    drawingEditor.beginRectangle(slot, start, e);
+  }, { signal: uiEvents.signal });
+  for (const event of ['pointerup', 'pointercancel']) stage.addEventListener(event, () => { drawingStart = undefined; }, { signal: uiEvents.signal });
 }
 // Viewport gestures (desktop parity): right-drag pans, wheel/pinch zooms at the
 // cursor, trackpad two-finger scroll pans. Pan/zoom are shared by both tracks.
@@ -466,20 +472,40 @@ $('open').onclick = () => {
 };
 $('help-open').onclick = () => $<HTMLDialogElement>('help').showModal();
 $('help-close').onclick = () => $<HTMLDialogElement>('help').close();
-$('play').onclick = () => void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle');
-$('previous').onclick = () => void act(() => session.step(-1), 'step.previous');
-$('next').onclick = () => void act(() => session.step(1), 'step.next');
+$('play').onclick = () => { if (!session.getState().busy) void act(() => session.getState().playing ? session.pause() : session.play(), 'play.toggle'); };
+$('previous').onclick = () => { if (!session.getState().busy) void act(() => session.step(-1), 'step.previous'); };
+$('next').onclick = () => { if (!session.getState().busy) void act(() => session.step(1), 'step.next'); };
 $<HTMLInputElement>('timeline').onchange = e => void act(() => session.seek(Number((e.target as HTMLInputElement).value)), 'seek.timeline', { ptsUs: Number((e.target as HTMLInputElement).value) });
 
 $('export').onclick = () => void act(downloadReview, 'review.download');
+// Space owns transport even when a button, menu, slider or drawing layer has
+// focus. Capture prevents the focused control's native Space activation.
+document.addEventListener('keydown', e => {
+  if (e.code !== 'Space' || e.isComposing || e.keyCode === 229 || e.ctrlKey || e.metaKey || e.altKey) return;
+  const editingText = e.composedPath().some(node => {
+    if (!(node instanceof HTMLElement)) return false;
+    if (node.isContentEditable) return true;
+    if (node instanceof HTMLTextAreaElement) return !node.readOnly && !node.disabled;
+    return node instanceof HTMLInputElement && !node.readOnly && !node.disabled &&
+      !['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file', 'color', 'image', 'hidden'].includes(node.type);
+  });
+  if (editingText) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.repeat || !session.getState().tracks.length) return;
+  inputTrigger = 'keyboard';
+  try {
+    if (drawingEditor.active()) $('mark-close').click();
+    $('play').click();
+  } finally { inputTrigger = 'pointer'; }
+}, { capture: true });
 document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]') || drawingEditor.active()) return;
   if (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select,button') || e.target.isContentEditable)) return;
   if (!session.getState().tracks.length || e.ctrlKey || e.metaKey || e.altKey) return;
   inputTrigger = 'keyboard';
   try {
-    if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) $('play').click(); }
-    else if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); $(e.code === 'ArrowLeft' ? 'previous' : 'next').click(); }
+    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); $(e.code === 'ArrowLeft' ? 'previous' : 'next').click(); }
+    else if (e.code === 'KeyN') { e.preventDefault(); openMarkDialog(); }
     else if (e.code === 'KeyM') {
       e.preventDefault();
       if (!e.repeat) {
@@ -491,7 +517,6 @@ document.addEventListener('keydown', e => {
   } finally { inputTrigger = 'pointer'; }
 });
 // Semantic inputs only: no per-keystroke text capture or pointer-move traffic.
-const uiEvents = new AbortController();
 for (const eventName of ['click', 'change', 'invalid'] as const) document.addEventListener(eventName, event => {
   if (!(event.target instanceof Element)) return;
   const control = event.target.closest<HTMLElement>('button, input, select, textarea, summary, label');
@@ -505,6 +530,7 @@ for (const eventName of ['click', 'change', 'invalid'] as const) document.addEve
   log.info('ui', '界面操作', { event: eventName, control: control.id || control.dataset.action || control.tagName.toLowerCase(), trigger: inputTrigger, value });
 }, { capture: true, signal: uiEvents.signal });
 session.subscribe(() => { message = ''; render(); });
+session.subscribeProgress(renderProgress);
 const unregister = registerReviewTools(session);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
@@ -527,7 +553,7 @@ const api = {
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); actionMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); actionMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 
 $('benchmark').addEventListener('click', () => {

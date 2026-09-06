@@ -14,7 +14,7 @@ export type Arrangement = 'horizontal' | 'grid';
 export type PixelSizeMode = 'uniform' | 'fill';
 
 export const ZOOM_MIN = 1;
-export const ZOOM_MAX = 50;
+export const ZOOM_MAX = 500;
 export const ZOOM_PRESETS = [1, 1.25, 1.5, 2, 3, 4, 5, 10];
 /** Splitter hit width in CSS px (the visible line itself is 2 px). */
 export const SPLIT_HIT_WIDTH = 28;

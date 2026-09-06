@@ -115,7 +115,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   await get('seek_review').execute({ ptsUs: 45000 });
   assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
   get('add_review_mark').execute({ slot: 'A', text: 'Agent note' });
@@ -138,28 +138,28 @@ test('invalid inputs cannot create ambiguous frame anchors', () => {
 });
 
 test('forward planner prefers the target that steps the most tracks', () => {
-  const a = { currentUs: 0, nextUs: 33333, nextNextUs: 66667 };
-  const b = { currentUs: 0, nextUs: 41667, nextNextUs: 83334 };
-  assert.equal(planForwardStep([a, b], minFrameDurationUs([33333, 41667])), 41667);
+  const a = { currentUs: 0, durationUs: 33333, nextUs: 33333, nextNextUs: 66667 };
+  const b = { currentUs: 0, durationUs: 41667, nextUs: 41667, nextNextUs: 83334 };
+  assert.equal(planForwardStep([a, b]), 41667);
 });
 
 test('forward planner never skips a track\'s intermediate frame', () => {
-  const a = { currentUs: 0, nextUs: 100, nextNextUs: 150 };
-  const b = { currentUs: 0, nextUs: 200, nextNextUs: 250 };
-  assert.equal(planForwardStep([a, b], 100), 100);
+  const a = { currentUs: 0, durationUs: 100, nextUs: 100, nextNextUs: 150 };
+  const b = { currentUs: 0, durationUs: 200, nextUs: 200, nextNextUs: 250 };
+  assert.equal(planForwardStep([a, b]), 100);
 });
 
 test('forward planner rejects targets that jump a suspicious gap', () => {
-  const a = { currentUs: 0, nextUs: 1000000, nextNextUs: null };
-  const b = { currentUs: 0, nextUs: 33333, nextNextUs: 66667 };
-  assert.equal(planForwardStep([a, b], minFrameDurationUs([1000000, 33333])), 33333);
+  const a = { currentUs: 0, durationUs: 1000000, nextUs: 1000000, nextNextUs: null };
+  const b = { currentUs: 0, durationUs: 33333, nextUs: 33333, nextNextUs: 66667 };
+  assert.equal(planForwardStep([a, b]), 33333);
 });
 
 test('forward planner may land past a last frame without a next-next successor', () => {
-  const a = { currentUs: 0, nextUs: 100, nextNextUs: null };
-  const b = { currentUs: 0, nextUs: 200, nextNextUs: 300 };
-  assert.equal(planForwardStep([a, b], 100), 200);
-  assert.equal(planForwardStep([{ currentUs: 0, nextUs: null, nextNextUs: null }], 33333), null);
+  const a = { currentUs: 0, durationUs: 100, nextUs: 100, nextNextUs: null };
+  const b = { currentUs: 0, durationUs: 200, nextUs: 200, nextNextUs: 300 };
+  assert.equal(planForwardStep([a, b]), 200);
+  assert.equal(planForwardStep([{ currentUs: 0, durationUs: 33333, nextUs: null, nextNextUs: null }]), null);
 });
 
 test('backward planner steps the most tracks and rejects targets below a predecessor', () => {
@@ -183,6 +183,35 @@ test('forward step moves every track the fair target can advance', async () => {
   assert.equal(state.positionUs, 41667);
   assert.deepEqual(state.tracks.map(t => t.frame?.ptsUs), [33333, 41667]);
   await session.dispose();
+});
+
+test('mixed 60/30 fps stepping advances after seek and backward steps at millisecond-rounded PTS', async () => {
+  const session = new ReviewSession(() => {});
+  const fast = Array.from({length:120}, (_, i) => Math.floor(i * 1000 / 60) * 1000);
+  const slow = Array.from({length:60}, (_, i) => Math.round(i * 1000 / 30) * 1000);
+  try {
+    await session.load('A', async () => media('A', fast, 2000000).source);
+    await session.load('B', async () => media('B', slow, 2000000).source);
+    await session.seek(1483000);
+    await session.step(1);
+    assert.equal(session.getState().positionUs, 1500000);
+    await session.step(-1);
+    const back = session.getState().positionUs;
+    await session.step(1); assert.ok(session.getState().positionUs > back);
+    while (session.getState().positionUs < fast.at(-1)!) {
+      const before = session.getState();
+      await session.step(1);
+      const after = session.getState();
+      assert.ok(after.positionUs > before.positionUs, `forward step stalled at ${before.positionUs}`);
+      for (const [i, starts] of [fast, slow].entries()) {
+        const oldIndex = starts.indexOf(before.tracks[i].frame!.ptsUs);
+        const newIndex = starts.indexOf(after.tracks[i].frame!.ptsUs);
+        assert.ok(newIndex === oldIndex || newIndex === oldIndex + 1, 'no intermediate frame skipped');
+      }
+    }
+    const last = session.getState().positionUs;
+    await session.step(1); assert.equal(session.getState().positionUs, last);
+  } finally { await session.dispose(); }
 });
 
 test('forward step keeps a track whose next frame lies across a gap', async () => {
@@ -428,7 +457,7 @@ test('manual alignment maps normalized frames without double-applying nonzero so
   await session.setTrackOffset('B',-40000);await session.seek(80000);
   const mark=session.addMark({slot:'B',text:'aligned'});
   assert.equal(mark.frame.ptsUs,120000);assert.equal(mark.frame.sourcePtsUs,420000);assert.equal(mark.offsetUs,-40000);assert.equal(mark.sessionPtsUs,80000);
-  assert.equal(session.getState().durationUs,160000);
+  assert.equal(session.getState().durationUs,200000);
   assert.equal(session.exportReview().alignment.find(t=>t.slot==='B')?.offsetUs,-40000);
   await session.seek(0);assert.deepEqual(session.getState().tracks.map(t=>t.frame?.ptsUs),[0,40000]);
   const before=session.getState();await assert.rejects(session.setTrackOffset('B',-200000));
@@ -443,8 +472,77 @@ test('offset playback queues use local timestamps and finish at the adjusted sha
   await session.load('B',async()=>media('B',starts,160000).source);
   await session.setTrackOffset('B',-40000);await session.play();
   for(let i=0;i<60&&session.getState().playing;i++)await new Promise(r=>setTimeout(r,10));
-  const state=session.getState();assert.equal(state.playing,false);assert.equal(state.error,null);assert.equal(state.positionUs,119999);
-  assert.deepEqual(state.tracks.map(t=>t.frame?.ptsUs),[100000,140000]);
+  const state=session.getState();assert.equal(state.playing,false);assert.equal(state.error,null);assert.equal(state.positionUs,159999);
+  assert.deepEqual(state.tracks.map(t=>t.frame?.ptsUs),[140000,140000]);
   assert.ok(state.playback!.maxFrameSkewUs<=20000);
   await session.dispose();
+});
+
+test('editing saved annotations preserves anchors and rejects another frame through the shared Agent API', async () => {
+  const session = new ReviewSession(() => {});
+  await session.load('A', async () => media('editable').source);
+  const original = session.addMark({ slot: 'A', text: 'before', drawings: [{ tool: 'text', id: 'text', text: 'before', points: [{ x: .2, y: .3 }] }] });
+  const update = reviewTools(session).find(t => t.name === 'update_review_mark')!;
+  const drawings = [{ tool: 'text', id: 'text', text: 'after', color: '#abcdef', points: [{ x: .4, y: .5 }] }];
+  await update.execute({ id: original.id, text: 'after', drawings });
+  drawings[0].points[0].x = .9;
+  const changed = session.getState().marks[0];
+  assert.equal(changed.id, original.id); assert.deepEqual(changed.frame, original.frame);
+  assert.equal(changed.createdAt, original.createdAt); assert.equal(changed.drawings![0].points[0].x, .4);
+  await session.seek(40000);
+  assert.throws(() => session.updateMark(original.id, { text: 'wrong frame' }), /对应的画面/);
+  assert.equal(session.getState().marks[0].text, 'after');
+  await session.dispose();
+});
+
+test('shared timeline reaches the longest end and short tracks hold their last frame through seek and steps', async () => {
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => media('long', [0,40000,80000,120000,160000,200000,240000], 280000).source);
+    await session.load('B', async () => media('short', [0,40000,80000], 120000).source);
+    assert.equal(session.getState().durationUs, 280000);
+    await session.seek(160000);
+    assert.deepEqual(session.getState().tracks.map(t => t.frame?.ptsUs), [160000,80000]);
+    await session.step(1); assert.equal(session.getState().positionUs, 200000);
+    await session.step(-1); assert.equal(session.getState().positionUs, 160000);
+    assert.deepEqual(session.getState().tracks.map(t => t.frame?.ptsUs), [160000,80000]);
+    await session.seek(999999);
+    assert.equal(session.getState().positionUs, 279999);
+    assert.deepEqual(session.getState().tracks.map(t => t.frame?.ptsUs), [240000,80000]);
+    await session.removeTrack('A');
+    assert.equal(session.getState().durationUs, 120000);
+    assert.equal(session.getState().positionUs, 119999);
+    assert.equal(session.getState().tracks[0].frame?.ptsUs, 80000);
+    await session.setTrackOffset('B', 40000);
+    assert.equal(session.getState().durationUs, 160000);
+  } finally { await session.dispose(); }
+});
+
+test('playback continues after a short track ends and publishes actual progress between full snapshots', async () => {
+  const drawn = new Map<string, number[]>();
+  const session = new ReviewSession((slot, f) => { const pts = drawn.get(slot) ?? []; pts.push(f.ptsUs); drawn.set(slot, pts); });
+  try {
+    await session.load('A', async () => media('long', Array.from({length:20}, (_, i) => i * 20000), 400000).source);
+    await session.load('B', async () => media('short', [0,20000,40000,60000], 80000).source);
+    let snapshots = 0; const positions: number[] = [];
+    session.subscribe(() => { snapshots++; });
+    const unsubscribe = session.subscribeProgress((pts, duration) => {
+      assert.equal(duration, 400000);
+      assert.equal(pts, session.getState().positionUs);
+      positions.push(pts);
+    });
+    await session.play();
+    for (let i = 0; i < 100 && session.getState().playing; i++) await new Promise(r => setTimeout(r, 10));
+    const state = session.getState();
+    assert.equal(state.playing, false); assert.equal(state.error, null);
+    assert.equal(state.positionUs, 399999);
+    assert.deepEqual(state.tracks.map(t => t.frame?.ptsUs), [380000,60000]);
+    assert.equal(drawn.get('B')!.at(-1), 60000);
+    assert.ok(new Set(positions).size > snapshots * 2, 'progress is not limited by the 100ms full snapshot throttle');
+    assert.ok(positions.every((p, i) => i === 0 || p >= positions[i - 1]));
+    assert.ok(state.playback!.maxFrameLagUs < 40000, 'intentional last-frame hold is not measured as decoder lag');
+    session.pause(); const count = positions.length;
+    await new Promise(r => setTimeout(r, 30)); assert.equal(positions.length, count);
+    unsubscribe();
+  } finally { await session.dispose(); }
 });

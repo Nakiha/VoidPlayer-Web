@@ -3,6 +3,7 @@ import type { Mark, Slot } from '../model.ts';
 import { formatTime } from '../model.ts';
 import { annotationThumbnails } from './drawing-editor.ts';
 import { icon } from './icons.ts';
+import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 
 /** One content template for the compact rail's popover and expanded list. */
 function markContent(mark: Mark) {
@@ -11,11 +12,11 @@ function markContent(mark: Mark) {
   if (preview) { const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = '标注画面'; content.append(image); }
   const time = document.createElement('time'); time.textContent = formatTime(mark.frame.ptsUs);
   const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text;
-  content.prepend(time, note);
+  content.prepend(time); if (mark.text.trim()) time.after(note);
   if (mark.author) { const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author.name; content.append(author); } return content;
 }
 
-export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (id: string) => void) {
+export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (id: string) => void, edit: (id: string, ptsUs: number) => void) {
   const dock = document.getElementById('subtracks-panel')!;
   const list = document.getElementById('selected-marks')!;
   const toggle = document.getElementById('toggle-marks')!;
@@ -35,7 +36,7 @@ export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (i
     if (expanded) return;
     hidePreview(); anchor = button;
     button.setAttribute('aria-describedby', preview.id);
-    preview.replaceChildren(markContent(mark)); preview.hidden = false;
+    identifyMark(preview, mark.id); preview.replaceChildren(markSymbol(mark.id), markContent(mark)); preview.hidden = false;
     const rect = button.getBoundingClientRect();
     const box = preview.getBoundingClientRect();
     preview.style.left = `${Math.max(8, Math.min(rect.right + 8, innerWidth - box.width - 8))}px`;
@@ -87,13 +88,13 @@ export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (i
       document.getElementById('selected-mark-label')!.textContent = slot ? `标注 · ${slot} · ${marks.length}` : '标注';
       if (!marks.length) {
         const empty = document.createElement('span'); empty.className = 'marks-empty';
-        empty.innerHTML = icon('note'); empty.title = '当前轨道暂无标注';
         const label = document.createElement('span'); label.textContent = '暂无标注'; empty.append(label); list.append(empty);
       }
       for (const savedMark of marks) {
         const mark={...savedMark,frame:{...savedMark.frame,ptsUs:savedMark.frame.ptsUs+offsetUs}};
         const button = document.createElement('button'); button.className = 'mark-entry';
-        button.innerHTML = icon('note'); button.append(markContent(mark));
+        identifyMark(button, mark.id); bindMarkHover(button, mark.id);
+        button.append(markSymbol(mark.id), markContent(mark));
         button.setAttribute('aria-label', `标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
         button.disabled=mark.frame.ptsUs<0;
         button.onclick = () => seek(Math.max(0,mark.frame.ptsUs));
@@ -101,10 +102,13 @@ export function installAnnotationPanel(seek: (ptsUs: number) => void, remove: (i
         button.onpointerleave = deferHide;
         button.onfocus = () => showPreview(button, mark);
         button.onblur = hidePreview;
-        const row = document.createElement('div'); row.className = 'annotation-row';
+        const row = document.createElement('div'); row.className = 'annotation-row'; identifyMark(row, mark.id);
         const removeButton = document.createElement('button'); removeButton.className = 'annotation-remove icon-button'; removeButton.innerHTML = icon('close');
         removeButton.setAttribute('aria-label', `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`); removeButton.title = '删除标注'; removeButton.onclick = () => remove(mark.id);
-        row.append(button, removeButton); list.append(row);
+        const editButton = document.createElement('button'); editButton.className = 'annotation-edit icon-button'; editButton.innerHTML = icon('pen'); editButton.setAttribute('aria-label', '编辑标注'); editButton.title = '编辑标注'; editButton.disabled = mark.frame.ptsUs < 0; editButton.onclick = () => edit(mark.id, Math.max(0, mark.frame.ptsUs));
+        button.ondblclick = () => edit(mark.id, Math.max(0, mark.frame.ptsUs));
+        const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
+        actions.append(editButton, removeButton); row.append(button, actions); list.append(row);
       }
     },
     dispose() { hidePreview(); lifecycle.abort(); preview.remove(); toggle.onclick = null; },

@@ -7,11 +7,12 @@ import { createIconButton } from './controls.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../model.ts';
 import { formatTime } from '../model.ts';
+import { colorLabel, rangeLabel } from '../media-metadata.ts';
+import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 import { fetchLibrary, openLibraryItem } from '../library.ts';
 import { openMedia } from '../media.ts';
 import { seekTarget, showSeekPreview } from './seek-preview.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
-import { icon } from './icons.ts';
 import { WorkspaceState, marksForTrack, trackTiming } from './workspace-state.ts';
 import type { Panel, ReviewTrack } from './workspace-state.ts';
 import { SourceCatalog, sourceInUse } from './source-catalog.ts';
@@ -27,7 +28,7 @@ const text = (tag: string, value: string, className = '') => {
 };
 function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch { return []; } }
 
-export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot) => void) {
+export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void) {
   const view = new WorkspaceState();
   const catalog = new SourceCatalog(readHistory());
   let sourceTab = 'available';
@@ -38,6 +39,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   let disposed = false;
   let trackSignature = '';
   let dockSignature = '';
+  let annotationSignature = '';
   let currentIds = '';
 
   const lifecyle = new AbortController();
@@ -46,13 +48,13 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {
     setPanel(panel, false); $(`toggle-${panel}`).focus();
   });
-  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'));
+  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs) => void act(async () => { await session.seek(ptsUs); addMark(view.selected, id); }, 'ui.mark-edit'));
   let dockHeight = Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) || 180;
   const save = () => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(catalog.serializable())); } catch { /* Session access still works when storage is disabled/full. */ } };
 
   function select(slot: Slot) {
     view.selected = slot;
-    trackSignature = dockSignature = '';
+    trackSignature = '';
     render(session.getState());
   }
   function syncPanels() {
@@ -89,7 +91,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     select(slot); setPanel('inspector', !close);
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-inspect]')) button.onclick = () => inspect(button.dataset.inspect as Slot);
-  $('subtrack-add-mark').onclick = () => addMark(view.selected);
+  $('subtrack-add-mark').onclick = () => { if (!session.getState().busy) addMark(view.selected); };
 
   function propertyRows(track: ReviewTrack) {
     const color = track.color;
@@ -97,8 +99,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     return [
       ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
       ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
-      ['色彩', [color?.primaries, color?.transfer, color?.matrix].filter(Boolean).join(' / ') || '未标记'],
-      ['范围', color?.fullRange == null ? '未标记' : color.fullRange ? '全范围' : '有限范围'],
+      [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
+      ['色域原色', colorLabel(color?.primaries)],
+      ['传递特性', colorLabel(color?.transfer)],
+      ['矩阵系数', colorLabel(color?.matrix)],
+      ['范围', rangeLabel(color?.fullRange)],
       ...(hdr ? [['HDR 源', track.decoder === 'ffmpeg-wasm' ? 'SDR 兜底显示' : '浏览器输出未验证']] : []),
     ];
   }
@@ -122,6 +127,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         const dl = document.createElement('dl');
         for (const [label, value] of propertyRows(selected)) {
           const dd = text('dd', value);
+          if (label === '解码像素格式') dd.title = '浏览器解码输出的内存格式，可能与源视频的像素格式不同';
+          if (['色域原色','传递特性','矩阵系数','范围'].includes(label) && selected.colorSource) dd.title = selected.colorSource === 'container' ? '来源：封装标记' : '来源：解码器读取的码流元数据';
           dl.append(text('dt', label), dd);
         }
         properties.append(dl, text('h3', '当前帧'));
@@ -141,7 +148,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     }
   }
   function renderDock(state: State) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}`).join('/') + view.selected + state.marks.map(m => m.id).join('/');
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
       $('subtrack-count').textContent = String(state.tracks.length);
@@ -161,7 +168,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         name.setAttribute('aria-label', `检视子轨道 ${track.slot}`);
         name.setAttribute('aria-pressed', String(track.slot === view.selected));
         name.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', track.name, 'filename'));
-        name.dataset.tooltip = '展开或收起轨道详情；拖动排序'; name.onclick = () => inspect(track.slot);
+        name.onclick = () => inspect(track.slot);
         const lane = document.createElement('div'); lane.className = 'track-lane';
         const seek = document.createElement('button'); seek.className = 'track-duration';
         seek.style.left = `${Math.max(0,track.offsetUs) / maxDuration * 100}%`;
@@ -180,7 +187,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         };
         lane.append(seek);
         for (const mark of trackMarks) {
-          const marker = document.createElement('button'); marker.className = 'track-marker'; marker.innerHTML = icon('marker');
+          const marker = document.createElement('button'); marker.className = 'track-marker'; marker.append(markSymbol(mark.id));
+          identifyMark(marker, mark.id); bindMarkHover(marker, mark.id);
           marker.style.left = `${Math.max(0, Math.min(100, mark.frame.ptsUs / maxDuration * 100))}%`;
           marker.title = `${formatTime(mark.frame.ptsUs)} · ${mark.text}`;
           marker.setAttribute('aria-label', `标记 ${track.slot} ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
@@ -203,19 +211,34 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         label.append(name); row.append(label, offset, lane, remove); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', '载入视频后查看轨道与标记', 'panel-empty'));
-      const selected = state.tracks.find(t => t.slot === view.selected);
-      annotations.render(selected ? marksForTrack(selected, state.marks) : [], selected?.slot, selected?.offsetUs ?? 0);
-
     }
-    const maxDuration = Math.max(1, ...state.tracks.map(t => t.durationUs+t.offsetUs));
-    for (const track of state.tracks) $(`subtrack-playhead-${track.slot}`).style.left = `${Math.min(100, state.positionUs / maxDuration * 100)}%`;
+    // Selection changes state in place; keep row, offset input and seek nodes.
+    for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
+      const selected = row.dataset.trackDrag === view.selected;
+      row.classList.toggle('selected', selected);
+      row.querySelector('.subtrack-name')!.setAttribute('aria-pressed', String(selected));
+    }
+    const selected = state.tracks.find(t => t.slot === view.selected);
+    const nextAnnotationSignature = `${dockSignature}/${view.selected}`;
+    if (nextAnnotationSignature !== annotationSignature) {
+      annotationSignature = nextAnnotationSignature;
+      annotations.render(selected ? marksForTrack(selected, state.marks) : [], selected?.slot, selected?.offsetUs ?? 0);
+    }
+    renderProgress(state.positionUs, state.durationUs);
+  }
+  function renderProgress(positionUs: number, durationUs: number) {
+    if (!view.panels.subtracks) return;
+    const left = `${Math.min(100, positionUs / Math.max(1, durationUs) * 100)}%`;
+    for (const cursor of $('subtrack-list').querySelectorAll<HTMLElement>('.track-playhead')) cursor.style.left = left;
   }
   function render(state: State) {
     view.reconcile(state.tracks);
     if (!state.tracks.length && view.panels.subtracks) { view.panels.subtracks = false; syncPanels(); }
     if (view.panels.inspector) renderInspector(state);
     if (view.panels.subtracks) renderDock(state);
-    $<HTMLButtonElement>('subtrack-add-mark').disabled = !state.tracks.length || state.busy;
+    const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
+    addMarkButton.disabled = !state.tracks.length;
+    addMarkButton.setAttribute('aria-disabled', String(!state.tracks.length || state.busy));
     const ids = state.tracks.map(t => `${t.slot}:${t.id}`).join('/');
     if (ids !== currentIds) {
       currentIds = ids;
@@ -338,7 +361,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   resize(dockHeight); syncPanels();
   void refreshLibrary();
   return {
-    render, refreshLibrary, selected: () => view.selected,
+    render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
     getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded() }),
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },

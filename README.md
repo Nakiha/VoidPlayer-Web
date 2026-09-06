@@ -23,7 +23,7 @@ Drop up to four files in the supplied order; requests exceeding available capaci
 are rejected before loading. If a later file fails, earlier successful loads remain
 and the failed replacement preserves its previous source.
 Use the shared timeline, left/right arrows to step every track by one fair frame
-step, and Space to play/pause.
+step, and Space to play/pause. Space also works while buttons, menus, sliders or annotation tools have focus; editable text fields and IME composition keep their normal input behavior. Holding Space does not repeatedly toggle playback.
 The subtrack panel contains annotations; drag on a paused frame to start drawing.
 Export before closing: annotations currently live only in memory.
 
@@ -86,12 +86,14 @@ session time zero. The comparison ends at the shorter track. Stepping ports the
 fair multi-track planner from `native/renderer/track/track_step_policy.cpp`:
 candidate targets are the loaded tracks' decoded successor (or predecessor) frame
 starts, a candidate is invalid when any track would skip an intermediate frame or
-jump a gap beyond 1.5× the minimum current frame duration plus 2 ms, and among
+jump a gap beyond 1.5× that track’s own current frame duration plus 2 ms, and among
 valid candidates the planner maximizes the number of stepping tracks (ties break
 toward the earliest forward or latest backward target). Tracks the target does
 not move keep their current frame; it is never re-resolved by time. Successors
 are true presentation-order samples from Mediabunny's sample iterator, so VFR
-and timestamp gaps do not rely on duration arithmetic. One divergence from the
+and timestamp gaps do not rely on duration arithmetic. The gap check uses each
+track’s own duration so mixed 60/30 fps sources cannot veto normal successors
+on the slower track. Another divergence from the
 native planner: the browser decodes lookahead on demand, so a missing next-next
 frame means the track's last frame and may still be landed on, where the native
 planner treats a lookahead miss as unprovable and rejects the candidate. The
@@ -353,6 +355,10 @@ skew, pause latency and stale presentation checks. They record the actual decode
 variant, source metadata, viewport, page visibility, isolation capabilities and
 build source digest and WASM binary fingerprints. Unsupported Long Tasks observation is `null`, not zero.
 These are canvas presentation measurements, not physical display scanout proof.
+The shared timeline ends at the longest offset-adjusted track; shorter tracks hold
+their final frame. Intentional holds after track end are excluded from decoder lag
+and skew metrics. Progress controls follow each presentation-clock tick; full UI
+snapshots remain throttled to 100 ms.
 
 Default acceptance requires at least 1 s of evidence, speed >= 0.9x, frame lag
 and track skew <= 100 ms, p95 frame intervals <= 75 ms, maximum interval <= 250 ms,
@@ -466,7 +472,7 @@ fallback HDR only when float16 canvas support stabilizes.
 Comparison viewport (2026-09-05): ported the desktop viewer's comparison
 surface — side-by-side vs split-screen layout (M key or the topbar segmented
 control), a draggable split divider (5% keyboard step, unclamped while
-dragging, clamped on release), cursor-anchored zoom (1x..50x, re-centers at
+dragging, clamped on release), cursor-anchored zoom (1x..500x, re-centers at
 1x, 120 wheel units = 1.1x), unbounded shared pan, and the uniform-pixel
 display mode (default; the track with the most pixels fills its slot, the
 rest show at the same screen size per video pixel). Right-drag pans, mouse
@@ -551,3 +557,128 @@ node server/main.ts --folder fixtures/video --port 5180 --allow-local-reveal
 The shared review session now accepts tracks A–D. The top-left arrangement button switches horizontal/2×2 layout; bottom-row grid captions sit below the videos. Wipe comparison remains a two-track mode. Sidebars can be resized from their inner edges, and track sorting accepts the trailing blank area in the subtrack list. Narrow captions keep their actions in a compact menu.
 
 For the current recursive library scan limits and the proposed directory/index evolution for team experiments, see [media library evolution](docs/media-library-evolution.md). This document distinguishes current behavior from the next implementation steps.
+
+### FLV file support
+
+FLV files use a TypeScript demuxer inside a dedicated Worker. It reads local
+Blobs in chunks or library files through validated HTTP Range responses. The
+index retains byte offsets, keyframe flags and DTS/PTS, not compressed payloads.
+The same `MediaSource` feeds the UI, Agent and presenter.
+
+Supported video framing: standard AVC (ID 7), legacy CDN HEVC (12), private
+AV1 (13) and VVC (14), and single-track Enhanced FLV `avc1` / `hvc1` / `av01` /
+`vvc1`. The private AV1/VVC layout follows the Flutter player's
+`PrivateCdnFlvDemuxer`. Signed composition offsets and nonzero starts are
+preserved; seeking uses keyframes in decode order and outputs in PTS order.
+Repeated identical configuration headers are accepted. Codec/config changes,
+Enhanced multitrack and unsupported codecs receive explicit diagnostics.
+This is seekable **file** playback, not a live HTTP-FLV/RTMP client; audio is
+not played, consistent with the rest of this video-review app.
+
+WebCodecs handles supported codec configurations, returning transferable
+`VideoFrame` resources. Otherwise a packet-only FFmpeg WASM API decodes the
+compressed packets, including VVC and AV1 through dav1d. FLV does not use MEMFS,
+whole-file downloads or FFmpeg demuxing. The FLV software path shares the existing thread budget, preferring the
+multi-thread core on isolated pages and falling back to the single-thread core. It still copies decoded RGBA out of WASM into a recycled
+transfer buffer; this is bounded copying, not an end-to-end zero-copy claim.
+
+Build updated single/MT cores in `VoidPlayer-FFmpeg-Build` on branch `wasm`,
+then run `bash scripts/sync-wasm-core.sh`. An old core produces an actionable
+packet-API version error. Generate fixtures once after syncing QA videos:
+
+```sh
+npm run fixtures:flv          # Python 3 + ffmpeg/ffprobe, no transcoding
+npm test                     # includes seven real-codec FLV variants
+npm run test:flv:browser      # WebKit, production bundle, isolated server
+npm run test:flv:browser -- chromium
+```
+
+Generated fixtures are ignored under `fixtures/flv/`. They exercise real
+compressed frames in controlled private wrappers; they are not evidence that
+every CDN-specific variant has been tested. Reader/decoder queues are bounded,
+while index storage grows with packet count (capped at two million packets).
+
+### Editable annotations and pixel sampling
+
+The transport's annotation button (N), direct rectangle dragging, and a saved mark's
+edit button all enter the same floating editor. Shapes remain vector objects:
+select/move, eight-handle resize, color/width, pen, ellipse, rectangle, line and text.
+Double-click text to edit it directly on the image; Enter creates a new line,
+Escape finishes text editing. The eraser cuts pen strokes and removes other
+objects. Undo/redo and Delete operate on these objects. The single-row translucent toolbar stays inside the viewport and can be dragged.
+Preview-style circular handles keep a fixed screen size from the first pointer drag;
+stroke and text styles use icon menus. In selection mode, rectangles/ellipses can
+be picked by their interiors or within a 9 CSS-pixel margin around their outlines.
+In drawing mode, a precise click on an existing object switches to selection
+without creating an extra object or history entry; a drag of at least 3 CSS pixels
+continues drawing, including inside existing shapes. Cursors reflect that action:
+drawing uses a crosshair, selection uses move, and handles use axis resize.
+Narrow toolbars remain horizontally scrollable without a native scrollbar gutter.
+
+`strokeWidth` stores CSS pixels independently of source coordinates and zoom;
+SVG non-scaling strokes keep the chosen screen-pixel weight when zooming or resizing.
+Legacy normalized `width` values had no creation-scale metadata, so they display
+at a consistent 4 pixels and remain adjustable. Points stay relative to the source
+frame but may extend outside `[0,1]`; they are finite and bounded to ±10,000.
+Creation, movement, resizing, session validation and Agent schemas share this rule.
+The stacking order is grid, video, annotation SVG, translucent UI. Annotations
+cover the full track viewport, including surrounding blank space, and are clipped
+only at that viewport boundary, not at the video edges.
+Each completed gesture and text input updates the existing mark automatically;
+closing the toolbar keeps changes. These annotations belong to the current
+review session: export the review to retain them after closing/reloading the app.
+UI and Agent edits share `ReviewSession.updateMark`, preserving the original
+mark ID, frame and source anchors. Editing on another frame is rejected.
+
+The presenter retains the native frame canvas for pixel tools and thumbnails,
+and imports VideoFrame / RGBA directly into a viewport-sized WebGL surface,
+avoiding an intermediate canvas readback for each unrotated frame. Texture minification
+uses LINEAR (bilinear, no mipmaps), magnification uses NEAREST. Zoom/pan changes
+texture coordinates rather than enlarging a previously downsampled CSS bitmap.
+The display buffer stays viewport-sized even at high zoom. When WebGL is
+unavailable, the canvas fallback uses low-quality smoothing for reduction and
+no smoothing for magnification. Vector annotations use a separate viewport-sized SVG with a viewBox mapping,
+never a CSS-scaled parent bitmap. The background grid is below the video surface.
+
+`npm run test:annotations:browser -- [webkit|chromium]` exercises object editing,
+partial erasing, text, undo/redo, autosave/reopen and actual sampling pixels.
+`npm run test:annotations:rendering -- [webkit|chromium]` replays the reported
+AV1 + FFV1 zoom/pan sequence at DPR 2, checks final composited video pixels,
+background-grid occlusion, constant-size handles, coordinate alignment and toolbar containment.
+It also checks first-drag handles, interior/near-edge selection, out-of-frame
+creation/movement/resizing/reopening, nested shapes, export styles, and actual
+four-pixel strokes created at different zoom levels.
+
+
+### Compact annotation menus
+
+All shared popover menus suppress tooltips while expanded and toggle closed on a
+second invoker click, including browser light-dismiss ordering. Escape, outside
+click, keyboard activation and switching menus use the same behavior.
+
+Stroke choices show actual 1/2/4/6/8/12 CSS-pixel line samples, including the current
+value in the toolbar. The square color button opens a fixed strip of 12 common swatches and a
+12-column, 10-row grayscale/hue palette. Cells join without gaps; the panel has
+no visible text or recent-color section. It keeps no color history or preferences
+and removes the previous recent-color preference. New editing sessions default
+to red (`#ff3b30`); editing existing objects preserves their colors. The palette uses the editor's normal style/undo/autosave path; it does not open the OS
+color picker. Arrow keys navigate swatches. The toolbar swatch reflects the current object color.
+
+`npm run test:menus:browser -- [webkit|chromium]` checks repeated menu toggles,
+keyboard/focus behavior, tooltip exclusion, stroke samples, selected-object color
+changes, the fixed palette across reloads, red defaults, and absence of color history.
+
+
+Mixed-rate stepping regression (2026-09-06): replay the AV1 1080p + FFV1
+10-bit 4:2:2 pair with `npm run test:stepping:browser -- chromium` (or `webkit`).
+Coverage includes millisecond-rounded 60/30 fps timestamps, seek/backward/forward
+sequences, no skipped successors, keyboard/button parity, and the shorter clip’s
+end boundary. The session unit regression first failed at 1,483,000 µs before the
+per-track duration fix; forward now reaches 1,500,000 µs.
+
+
+Timeline/dock regression: `npm run test:timeline:browser -- webkit` (or
+`chromium`) checks full-width 0/50/100% marker positions, hover triangle/click
+agreement, Home/End seeking, stable subtrack nodes when selection changes,
+selected-color hover, gray/theme-colored 2px playheads, filename tooltip removal,
+and viewport-bounded presentation canvases at 500×.

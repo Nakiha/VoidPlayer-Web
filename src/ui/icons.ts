@@ -39,7 +39,11 @@ import undo from '@phosphor-icons/core/assets/regular/arrow-counter-clockwise.sv
 import grid from '@phosphor-icons/core/assets/regular/squares-four.svg?raw';
 import columns from '@phosphor-icons/core/assets/regular/columns.svg?raw';
 
-const icons = { filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, film, fit, marker };
+import select from '@phosphor-icons/core/assets/regular/cursor.svg?raw';
+import eraser from '@phosphor-icons/core/assets/regular/eraser.svg?raw';
+import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
+import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
+const icons = { select, eraser, redo, trash, filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
-  return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" aria-hidden="true" focusable="false" `);
+  return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

@@ -42,7 +42,7 @@ test('zoomAt keeps the content point under the cursor fixed', () => {
   assert.ok(Math.abs(afterY - contentY) < 1e-9);
 });
 
-test('zoom clamps to [1, 50] and returning to 1x re-centers', () => {
+test('zoom clamps to [1, 500] and returning to 1x re-centers', () => {
   const v = new Viewport();
   v.panBy(400, 300);
   v.zoomAt(1000, 10, 10);

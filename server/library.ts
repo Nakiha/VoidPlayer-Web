@@ -5,7 +5,7 @@ import path from 'node:path';
 // Server-side media library: an explicit whitelist of folders exposed over a
 // narrow read-only API. No arbitrary path access, no writes, no transcoding.
 
-export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi'];
+export const MEDIA_EXTENSIONS = ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'];
 
 export interface LibraryEntry {
   id: string;

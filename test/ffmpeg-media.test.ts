@@ -41,6 +41,7 @@ test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', 
   try {
     assert.equal(source.info.codec, 'ffv1');
     assert.equal(source.info.decoder, 'ffmpeg-wasm');
+    assert.equal(source.info.pixelFormat, 'yuv422p');
     assert.equal(source.info.width, 320); assert.equal(source.info.height, 180);
     assert.ok(Math.abs(source.info.durationUs - 2000000) <= 2000);
     const first = await source.frameAt(0);
@@ -117,4 +118,20 @@ test('openMedia falls back to WASM decoding for tracks WebCodecs cannot handle',
     const frame = await source.frameAt(0);
     assert.equal((frame as { pixels?: Uint8ClampedArray }).pixels?.length, source.info.width * source.info.height * 4);
   } finally { source.dispose(); }
+});
+
+test('WASM source metadata retains 10-bit layout and decoded BT.709 tags before RGBA conversion', async () => {
+  const tenBit = await openSample('ffv1_yuv444p10le.mkv');
+  try { assert.equal(tenBit.info.pixelFormat, 'yuv444p10le'); }
+  finally { tenBit.dispose(); }
+  const full = await openSample('mhw_hevc_fullrange_bt709_3s.mp4');
+  try {
+    // This fixture's MP4 colr says PC, but ffprobe -show_frames confirms TV in the bitstream.
+    assert.equal(full.info.color?.fullRange, false);
+    assert.equal(full.info.colorSource, 'decoder');
+    assert.equal(full.info.color?.primaries, 'bt709');
+    assert.equal(full.info.color?.transfer, 'bt709');
+    assert.equal(full.info.color?.matrix, 'bt709');
+    assert.ok(full.info.pixelFormat?.startsWith('yuv'));
+  } finally { full.dispose(); }
 });

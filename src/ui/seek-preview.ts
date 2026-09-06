@@ -1,4 +1,5 @@
 import { formatTime } from '../model.ts';
+import { annotationThumbnails } from './drawing-editor.ts';
 
 export type TimeMark = { id: string; text: string; frame: { ptsUs: number } };
 /** A screen-space magnet stays usable at different duration/zoom scales. */
@@ -11,7 +12,23 @@ export function seekTarget(x: number, width: number, durationUs: number, marks: 
 }
 
 export function showSeekPreview(output: HTMLElement, x: number, ptsUs: number, nearby: TimeMark[] = [], anchor?: HTMLElement) {
-  output.textContent = `${formatTime(ptsUs)}${nearby.length ? ` · ${nearby.slice(0, 3).map(m => m.text).join(' / ')}${nearby.length > 3 ? ` +${nearby.length - 3}` : ''}` : ''}`;
+  output.replaceChildren();
+  const mark = nearby[0];
+  const thumbnail = mark && annotationThumbnails.get(mark.id);
+  if (thumbnail) {
+    const image = document.createElement('img'); image.className = 'seek-preview-thumbnail';
+    image.src = thumbnail.url; image.width = thumbnail.width; image.height = thumbnail.height;
+    image.alt = '标注画面'; image.dataset.markId = mark.id;
+    output.append(image);
+  }
+  const time = document.createElement('time'); time.textContent = formatTime(ptsUs); output.append(time);
+  for (const mark of nearby.slice(0, 3)) {
+    if (!mark.text.trim()) continue;
+    const label = document.createElement('span'); label.className = 'seek-preview-mark';
+    label.textContent = mark.text;
+    output.append(label);
+  }
+  if (nearby.length > 3) output.append(document.createTextNode(` +${nearby.length - 3}`));
   output.hidden = false;
   if (anchor) {
     const rect = anchor.getBoundingClientRect();
@@ -25,20 +42,32 @@ export function showSeekPreview(output: HTMLElement, x: number, ptsUs: number, n
   output.style.left = `${Math.max(half, Math.min(parent.clientWidth - half, x))}px`;
 }
 
+/** Native input, painted rail, current pin and hover target share the full width. */
+export function syncTimelineProgress(input: HTMLInputElement) {
+  const ratio = Number(input.value) / Math.max(1, Number(input.max));
+  input.parentElement!.style.setProperty('--progress-ratio', String(ratio));
+}
+
 export function bindTimelinePreview(input: HTMLInputElement, output: HTMLElement) {
+  const marker = input.parentElement!.querySelector<HTMLElement>('.timeline-hover')!;
+  const hide = () => { output.hidden = true; marker.hidden = true; };
+  const preview = (x: number, ptsUs: number) => {
+    marker.style.left = `${x}px`; marker.hidden = false;
+    showSeekPreview(output, x, ptsUs);
+  };
   const update = (event: PointerEvent) => {
-    if (input.disabled) { output.hidden = true; return; }
+    if (input.disabled) { hide(); return; }
     const rect = input.getBoundingClientRect();
-    const thumb = Number.parseFloat(getComputedStyle(input).getPropertyValue('--timeline-thumb-size')) || 12;
-    const target = seekTarget(event.clientX - rect.left - thumb / 2, rect.width - thumb, Number(input.max));
-    showSeekPreview(output, event.clientX - rect.left, target.ptsUs);
+    const x = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const target = seekTarget(x, rect.width, Number(input.max));
+    preview(x, target.ptsUs);
   };
   input.addEventListener('pointermove', update);
-  input.addEventListener('pointerleave', () => { output.hidden = true; });
-  input.addEventListener('blur', () => { output.hidden = true; });
+  input.addEventListener('pointerenter', update);
+  input.addEventListener('pointerleave', hide);
+  input.addEventListener('blur', hide);
   input.addEventListener('input', () => {
-    const ratio = Number(input.value) / Math.max(1, Number(input.max));
-    input.style.setProperty('--progress-ratio', String(ratio));
-    showSeekPreview(output, ratio * input.clientWidth, Number(input.value));
+    syncTimelineProgress(input);
+    preview(Number(input.value) / Math.max(1, Number(input.max)) * input.clientWidth, Number(input.value));
   });
 }

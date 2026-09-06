@@ -7,7 +7,7 @@
   --text-xs: 11px; --text-sm: 12px; --text-ui: 13px; --text-title: 14px; --text-brand: 15px;
   --space-0: 0; --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 12px; --space-6: 16px;
   --transition-fast: 120ms ease;
-  --toolbar-height: 40px; --transport-height: 32px; --panel-heading-height: 32px;
+  --toolbar-height: 40px; --transport-height: 36px; --panel-heading-height: 32px;
   --button-size: 28px; --control-height: 28px; --control-small-height: var(--button-size); --tool-inset: var(--space-1); --tool-gap: var(--space-1); --row-height: 32px;
   --track-row-height: 32px; --source-row-height: 40px; --icon-size: 18px;
   /* Semantic spacing: callers choose a role, not a different scale step per row.
@@ -17,12 +17,13 @@
   --field-padding-inline: var(--space-3);
   --toolbar-padding-inline: var(--space-4);
   --toolbar-padding-block: calc((var(--toolbar-height) - var(--button-size)) / 2);
-  --transport-padding: var(--tool-inset) var(--space-4); --transport-row-gap: 0px;
+  --transport-padding: var(--space-2) var(--space-4); --transport-row-gap: 0px;
+  --transport-group-gap: var(--space-2); --transport-text-size: 12px;
   --transport-inset: 0px;
   --transport-text: var(--text); --transport-muted: var(--text-secondary);
   --transport-hover: color-mix(in srgb, var(--surface-hover) 65%, transparent);
   --transport-rail: color-mix(in srgb, var(--text-secondary) 25%, transparent);
-  --viewport-eye-inset: var(--space-2); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
+  --viewport-eye-inset: var(--space-4); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --panel-padding-inline: var(--space-4); --panel-padding-block: var(--space-2);
   --panel-heading-inset: calc((var(--panel-heading-height) - var(--button-size)) / 2);
   --content-inset: var(--space-5); --content-gap: var(--space-3);
@@ -36,10 +37,10 @@
   --surface-input: #ffffffb8; --surface-hover: #e3e6eb; --surface-selected: #dceaff;
   --text: #242831; --text-secondary: #626973; --text-subtle: #747c87;
   --control-border-width: 0px; --divider: #25324b14;
-  --accent: #176dd3; --accent-on: #ffffff; --border: #cdd1d7; --border-soft: #dfe2e6;
+  --accent: #007aff; --accent-on: #ffffff; --border: #cdd1d7; --border-soft: #dfe2e6;
   --glass-fill: color-mix(in srgb, var(--surface) 82%, transparent); --glass-highlight: #ffffffed;
   --glass-shadow: 0 1px 2px #1925390b, inset 0 1px 0 var(--glass-highlight);
-  --glass-filter: none; --viewport-chrome-fill: color-mix(in srgb, var(--surface) 76%, transparent); --control-shadow: 0 1px 2px #1423380d, inset 0 1px 0 #ffffff;
+  --glass-filter: blur(6px); --viewport-chrome-fill: color-mix(in srgb, var(--surface) 62%, transparent); --control-shadow: 0 1px 2px #1423380d, inset 0 1px 0 #ffffff;
   --popover-shadow: 0 12px 36px #14233826, inset 0 1px 0 #fff;
   /* The letterbox/workspace is part of the theme, not a black media pixel.
      None of these tokens filters, tints, or paints over decoded video. */
@@ -47,13 +48,15 @@
   --split-line: color-mix(in srgb, var(--surface-panel) 65%, var(--text-secondary)); --split-handle: var(--preview-fill);
   --timeline-track: #d5dae2; --timeline-track-size: 4px; --timeline-thumb-size: 10px; --timeline-pin-height: 18px; --timeline-pin-shape: polygon(0 0, 100% 0, 60% 33%, 60% 100%, 40% 100%, 40% 33%);
   --preview-fill: #f8f9fb;
+  /* Small, bounded surfaces only; no saturation pass or animated filters. */
+  --menu-fill: color-mix(in srgb, var(--preview-fill) 76%, transparent);
+  --menu-filter: blur(8px);
   --action-danger: #ce3939; --action-danger-fill: #ce393915;
   --tooltip-max-width: 300px; --tooltip-delay: 350ms; --drag-preview-opacity: .72;
   --drag-preview-width: 300px; --drag-preview-fill: var(--preview-fill); --drag-target-fill: var(--surface-group); --drag-insertion: var(--text-secondary);
   --connection-ok: #37805c; --connection-error: #bd5353; --connection-waiting: #ab802d;
   --viewport-background: #e7e9ed;
   --viewport-header: transparent;
-  --viewport-header-overlay: transparent;
   --viewport-heading-text: var(--transport-text); --viewport-heading-muted: var(--transport-muted);
   --viewport-text: #353b45;
   --viewport-muted: #68717e;
@@ -61,19 +64,20 @@
   --viewport-grid-line: #a5aebb55;
   --viewport-grid-label: #6c7785;
   --viewport-caption-inset: var(--space-4);
-  --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --track-fill: #dae0e7; --track-active: #c1dbfb;
+  --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
   --selection-fill: #3398ff1a; --selection-stroke: #73b5ff;
   --notice-fill: #fff0dd; --notice-text: #754617; --backdrop: #10182240;
   --disabled-opacity: .4; --inspector-width: 200px; --sources-width: 240px;
-  --dock-rail-width: 40px; --annotation-preview-width: 280px; --annotation-ink: #ef5144;
+  --dock-rail-width: 40px; --annotation-preview-width: 280px; --annotation-ink: #ff3b30;
+  --annotation-handle: #397ac7; --annotation-outline-light: #fff; --annotation-outline-dark: #1d1d1f;
+  --annotation-toolbar-selected: color-mix(in srgb, var(--accent) 9%, transparent);
   --dock-tools-width: 240px; --marks-min-width: 160px; --marks-max-width: 400px; --marks-timeline-min-width: 240px; --dock-tools-narrow-width: 160px;
   --dock-default-height: 180px; --track-label-width: 210px; --offset-column-width: 64px; --offset-field-gap: 4px; --zoom-control-width: 92px; --time-input-padding: var(--space-2); --time-input-caret-space: 1ch; --time-input-width: calc(var(--time-input-chars, 9) * 1ch + 2 * var(--time-input-padding) + var(--time-input-caret-space));
   --header-actions-breakpoint: 180px; --header-divider-width: 1px; --side-panel-min-width: 160px; --side-panel-max-width: 480px; --comparison-min-width: 360px; --panel-resize-hit-width: 10px; --panel-resize-line-width: 2px; --panel-collapse-distance: 32px;
   --panel-motion-duration: 220ms; --panel-motion-easing: cubic-bezier(.2,.8,.2,1); --panel-dismiss-veil: color-mix(in srgb, var(--surface-panel) 60%, transparent);
-  --focus-ring: 2px solid var(--accent); --focus-offset: 1px; --focus-dense-offset: -1px;
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --glass-fill: var(--surface); --viewport-chrome-fill: var(--surface); --glass-filter: none; --surface-input: #fff; --glass-shadow: none; --control-shadow: none; --popover-shadow: none; }
+  :root { --glass-fill: var(--surface); --viewport-chrome-fill: var(--surface); --glass-filter: none; --menu-filter: none; --menu-fill: var(--preview-fill); --surface-input: #fff; --glass-shadow: none; --control-shadow: none; --popover-shadow: none; }
 }
 @media (prefers-contrast: more) {
   :root { --control-border-width: 1px; --divider: #707780; --border: #707780; --border-soft: #9299a2; --text-secondary: #323840; --text-subtle: #424a54; }

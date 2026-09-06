@@ -1,3 +1,5 @@
+import { MediaOpenError } from './media-errors.ts';
+import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
@@ -50,22 +52,15 @@ export interface MediaMeta { name: string; size: number; lastModified: number; }
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
 // cannot (a network error or an oversized file fails identically on retry).
-export type OpenStage = 'input' | 'container' | 'codec' | 'decode' | 'resource';
-export class MediaOpenError extends Error {
-  readonly stage: OpenStage;
-  constructor(stage: OpenStage, message: string) {
-    super(message);
-    this.name = 'MediaOpenError';
-    this.stage = stage;
-  }
-}
+export { MediaOpenError } from './media-errors.ts';
+export type { OpenStage } from './media-errors.ts';
 const stageOf = (error: unknown): OpenStage =>
   error instanceof MediaOpenError ? error.stage : 'decode';
 
 interface OpenPlan {
   meta: MediaMeta;
   nativeInput(): Input;
-  /** Fetches the whole file for the WASM fallback (MEMFS holds bytes). */
+  /** Fetches the whole file for the legacy container+decoder fallback. */
   fetchFile(): Promise<File>;
 }
 
@@ -96,6 +91,10 @@ function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<
 
 export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
+  if (await isFlvFile(file)) {
+    const { openFlvMedia } = await import('./flv-media.ts');
+    return openFlvMedia({ file }, file);
+  }
   return openWithFallback({
     meta: file,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
@@ -108,7 +107,11 @@ export async function openMedia(file: File, openFallback: (file: File) => Promis
 // path. The WASM fallback still reads the full file into memory (streaming
 // AVIO is follow-up work) — but the size budget is enforced by a preflight
 // BEFORE that download starts.
-export function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+  if (/\.flv$/i.test(meta.name)) {
+    const { openFlvMedia } = await import('./flv-media.ts');
+    return openFlvMedia({ url, size: meta.size }, meta);
+  }
   return openWithFallback({
     meta,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
@@ -148,11 +151,13 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
       id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
+      colorSource: 'container',
       ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),
     };
     // Frames carry their resource and kind; the presenter (src/presenter.ts)
     // decides how to paint them.
     const wrap = (sample: VideoSample): DecodedFrame => {
+      if (info.decodedPixelFormat == null && sample.format) info.decodedPixelFormat = sample.format;
       return {
       kind: 'video-sample',
       width: sample.displayWidth,
@@ -206,4 +211,9 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
       dispose: () => input.dispose(),
     };
   } catch (error) { input.dispose(); throw error; }
+}
+
+async function isFlvFile(file: File): Promise<boolean> {
+  const header = new Uint8Array(await file.slice(0, 3).arrayBuffer());
+  return /\.flv$/i.test(file.name) || header[0] === 70 && header[1] === 76 && header[2] === 86;
 }

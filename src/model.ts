@@ -3,7 +3,7 @@ export const SLOTS = ['A', 'B', 'C', 'D'] as const;
 export type Slot = typeof SLOTS[number];
 export type Region = { left: number; top: number; width: number; height: number };
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
-/** Stream color metadata; null fields mean the container did not tag them. */
+/** Source color metadata; null fields mean the selected metadata source did not specify them. */
 export type ColorInfo = {
   primaries: string | null;
   transfer: string | null;
@@ -16,6 +16,11 @@ export type MediaInfo = {
   coreVariant?: 'single-thread' | 'multi-thread';
   codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; durationUs: number; firstPtsUs: number;
   color?: ColorInfo;
+  colorSource?: 'container' | 'decoder';
+  /** Source decoder format before conversion to presentation RGBA (FFmpeg). */
+  pixelFormat?: string | null;
+  /** Browser output buffer layout; may differ from the encoded source format. */
+  decodedPixelFormat?: string | null;
 };
 export type Mark = {
   author?: { id: string; name: string };
@@ -59,14 +64,13 @@ export function minFrameDurationUs(durationsUs: number[]): number {
   return min <= MAX_TRUSTED_FRAME_DURATION_US ? min : FALLBACK_FRAME_DURATION_US;
 }
 
-export type ForwardStepTrack = { currentUs: number; nextUs: number | null; nextNextUs: number | null };
+export type ForwardStepTrack = { currentUs: number; durationUs: number; nextUs: number | null; nextNextUs: number | null };
 
 // Candidate targets are the loaded tracks' next frame starts. A candidate is valid
 // when no track would skip an intermediate frame or jump a suspicious gap; among
 // valid candidates the planner maximizes the number of stepping tracks and breaks
 // ties toward the earliest target. Returns null when no track can step.
-export function planForwardStep(tracks: ForwardStepTrack[], frameDurationUs: number): number | null {
-  const maxStepGapUs = frameDurationUs + Math.floor(frameDurationUs / 2) + 2000;
+export function planForwardStep(tracks: ForwardStepTrack[]): number | null {
   const candidates = [...new Set(tracks.map(t => t.nextUs).filter((v): v is number => v != null))].sort((a, b) => a - b);
   let selected: number | null = null;
   let selectedCount = 0;
@@ -75,6 +79,10 @@ export function planForwardStep(tracks: ForwardStepTrack[], frameDurationUs: num
     let stepped = 0;
     for (const track of tracks) {
       if (track.nextUs == null || target < track.nextUs) continue;
+      // A 30 fps track's normal successor must not be judged by a 60 fps
+      // neighbour's interval. Keep the gap guard local to each source frame.
+      const durationUs = minFrameDurationUs([track.durationUs]);
+      const maxStepGapUs = durationUs + Math.floor(durationUs / 2) + 2000;
       if (track.nextUs - track.currentUs > maxStepGapUs) { valid = false; break; }
       if (track.nextNextUs != null && target >= track.nextNextUs) { valid = false; break; }
       // nextNextUs == null means the next frame is the track's last one, so landing

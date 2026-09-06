@@ -77,6 +77,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       width: core.ccall('vp_width', 'number', ['number'], [ctx]),
       height: core.ccall('vp_height', 'number', ['number'], [ctx]),
       codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+      pixelFormat: typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
       colorPrimaries: core.ccall('vp_color_primaries', 'number', ['number'], [ctx]),
       colorTransfer: core.ccall('vp_color_transfer', 'number', ['number'], [ctx]),
       colorSpace: core.ccall('vp_color_space', 'number', ['number'], [ctx]),

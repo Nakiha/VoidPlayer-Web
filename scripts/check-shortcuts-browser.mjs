@@ -1,0 +1,64 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { webkit, chromium } from 'playwright';
+import { createMediaServer } from '../server/app.ts';
+const root=path.resolve(import.meta.dirname,'..');
+const server=createMediaServer({roots:[path.join(root,'fixtures/video')],staticDir:path.join(root,'dist'),onLog(){}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const name=process.argv[2]??'webkit';
+const browser=await (name==='chromium'?chromium:webkit).launch({headless:true});
+try {
+  const page=await browser.newPage({viewport:{width:1280,height:800}});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
+  const playing=()=>page.evaluate(()=>window.voidPlayer.getState().playing);
+  // Real key down/up: Space must not generate a click on the focused action.
+  for (const id of ['previous','next','fullscreen','toggle-chrome','timeline','play']) {
+    await page.locator(`#${id}`).focus();
+    await page.evaluate(id=>{window.shortcutClicks=[];document.getElementById(id).addEventListener('click',()=>window.shortcutClicks.push(id),{once:true});},id);
+    await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+    await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+    assert.deepEqual(await page.evaluate(()=>window.shortcutClicks),id==='play'?['play']:[],`${id}: Space does not activate focused controls`);
+    assert.equal(await page.locator('#toggle-chrome').getAttribute('aria-pressed'),'false');
+    assert.equal(await page.locator(`#${id}`).evaluate(e=>getComputedStyle(e).outlineStyle),'none','Space retains keyboard focus without a focus ring');
+  }
+  await page.locator('#previous').focus();
+  await page.keyboard.down('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+  await page.keyboard.down('Space');await page.keyboard.down('Space');
+  assert.equal(await playing(),true,'holding Space toggles only once');
+  await page.keyboard.up('Space');await page.keyboard.press('Space');
+  await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+  await page.locator('#previous').dispatchEvent('keydown',{key:' ',code:'Space',isComposing:true});
+  assert.equal(await playing(),false,'IME composition does not trigger playback');
+  await page.locator('#pixel-size').click();
+  await page.keyboard.press('ArrowDown');
+  const pixelMode=await page.evaluate(()=>window.voidPlayer.getViewport().pixelSize);
+  await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().pixelSize),pixelMode);
+  await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+  await page.keyboard.press('Escape');
+  await page.locator('#more-actions').click();await page.locator('#help-open').click();
+  await page.locator('#help-close').focus();
+  await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+  assert.equal(await page.locator('#help').evaluate(e=>e.open),true,'Space in dialog does not activate close');
+  await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+  await page.locator('#help-close').click();
+  await page.locator('#position').fill('00:01.000');await page.keyboard.press('Space');
+  assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
+  await page.keyboard.press('Escape');
+  await page.locator('#toggle-sources').click();await page.locator('#source-search').fill('sample');
+  await page.keyboard.press('Space');assert.equal(await page.locator('#source-search').inputValue(),'sample ');assert.equal(await playing(),false);
+  await page.locator('#toggle-sources').click();
+  await page.locator('.brand').click();await page.keyboard.press('n');
+  await page.locator('[data-drawing-tool=text]').click();await page.mouse.click(250,240);
+  const text=page.locator('[contenteditable=true]');await text.fill('hello');await page.keyboard.press('Space');await page.keyboard.type('world');
+  assert.equal(await text.innerText(),'hello world');assert.equal(await playing(),false);
+  await page.keyboard.press('Escape');await page.locator('[data-drawing-tool=rect]').focus();
+  await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+  assert.equal(await page.locator('#annotation-toolbar').isVisible(),false,'Space finishes annotation editing before play');
+  await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+  assert.ok(await page.evaluate(()=>window.voidPlayer.getState().marks.some(m=>m.drawings.some(d=>d.text==='hello world'))),'annotation text is retained');
+  assert.deepEqual(errors,[]);
+  console.log(`PASS ${name}: global Space, button/menu/dialog/range focus, no native activation, no repeat toggle, text/IME input preserved, annotation saved before play`);
+}finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -9,6 +9,8 @@ export function installTooltips() {
   popup.id = 'control-tooltip'; popup.className = 'ui-tooltip'; popup.role = 'tooltip';
   popup.setAttribute('popover', 'manual'); popup.hidden = true; document.body.append(popup);
   let anchor: HTMLElement | null = null;
+  let dismissed: HTMLElement | null = null;
+  let pointerFocus = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let leaving: ReturnType<typeof setTimeout> | undefined;
   const delay = Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tooltip-delay')) || 350;
@@ -31,13 +33,16 @@ export function installTooltips() {
     if (popup.matches(':popover-open')) popup.hidePopover();
     popup.hidden = true;
   }
+  const menuOpen = () => !!document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open');
   function show() {
-    if (!anchor?.isConnected || !anchor.getClientRects().length || document.body.classList.contains('sorting-tracks')) { hide(); return; }
+    if (menuOpen() || !anchor?.isConnected || !anchor.getClientRects().length || document.body.classList.contains('sorting-tracks')) { hide(); return; }
     // Visible content is not an instruction. Never echo filenames, field values,
     // or complete accessible names of data rows into a generic tooltip.
     const text = anchor.dataset.tooltip || (!anchor.textContent?.trim() ? anchor.getAttribute('aria-label') : null);
     if (!text) { hide(); return; }
-    popup.textContent = text; popup.hidden = false;
+    if (popup.matches(':popover-open') && popup.textContent === text) return;
+    if (popup.textContent !== text) popup.textContent = text;
+    popup.hidden = false;
     if (popup.showPopover && !popup.matches(':popover-open')) popup.showPopover();
     const rect = anchor.getBoundingClientRect(), box = popup.getBoundingClientRect();
     const left = Math.max(8, Math.min(rect.left + (rect.width - box.width) / 2, innerWidth - box.width - 8));
@@ -48,12 +53,17 @@ export function installTooltips() {
     ids.add(popup.id); anchor.setAttribute('aria-describedby', [...ids].join(' '));
   }
   function enter(event: Event) {
+    if (menuOpen()) { hide(); return; }
     if (!(event.target instanceof Element) || popup.contains(event.target)) return;
     const control = event.target.closest<HTMLElement>(selector);
     if (!control || control.matches(rich) || control.closest('.track-drag-preview')) { hide(); return; }
+    if (event.type === 'focusin' && pointerFocus) return;
+    if (control === dismissed) return;
+    if (event.type === 'pointerover') dismissed = null;
     if (control === anchor) { clearTimeout(leaving); return; }
     hide(); anchor = control;
-    if (event.type === 'focusin') show(); else timer = setTimeout(show, delay);
+    // Focus can be dispatched inside another popover's show operation.
+    timer = setTimeout(show, event.type === 'focusin' ? 0 : delay);
   }
   const observer = new MutationObserver(records => {
     for (const record of records) {
@@ -64,9 +74,13 @@ export function installTooltips() {
     else if (anchor && !popup.hidden && records.some(record => record.type === 'attributes' && record.target === anchor)) show();
   });
   observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['title', 'data-tooltip', 'aria-label'] });
+  document.addEventListener('beforetoggle', event => {
+    if ((event.target as Element)?.matches?.('.popup-menu, .header-actions[popover]')) hide();
+  }, options);
   document.addEventListener('pointerover', enter, options);
   document.addEventListener('focusin', enter, options);
   document.addEventListener('pointerout', event => {
+    if (dismissed?.contains(event.target as Node) && !dismissed.contains(event.relatedTarget as Node)) dismissed = null;
     if (anchor?.contains(event.target as Node) && !anchor.contains(event.relatedTarget as Node) && !popup.contains(event.relatedTarget as Node)) {
       leaving = setTimeout(hide, 120);
     }
@@ -74,8 +88,19 @@ export function installTooltips() {
   popup.addEventListener('pointerenter', () => clearTimeout(leaving));
   popup.addEventListener('pointerleave', hide);
   document.addEventListener('focusout', hide, options);
-  document.addEventListener('pointerdown', hide, options);
-  document.addEventListener('keydown', event => { if (event.key === 'Escape') hide(); }, options);
+  document.addEventListener('pointerdown', event => {
+    pointerFocus = true;
+    dismissed = event.target instanceof Element ? event.target.closest<HTMLElement>(selector) : null;
+    hide();
+  }, options);
+  document.addEventListener('keydown', event => {
+    pointerFocus = false;
+    if (event.key === 'Tab') dismissed = null;
+    if (event.key === 'Escape' || event.key === 'Enter' || event.code === 'Space') {
+      dismissed = event.target instanceof Element ? event.target.closest<HTMLElement>(selector) : null;
+      hide();
+    }
+  }, options);
   document.addEventListener('scroll', hide, options);
   window.addEventListener('resize', hide, { signal: lifecycle.signal });
   window.addEventListener('blur', hide, { signal: lifecycle.signal });

@@ -1,7 +1,7 @@
 import { SLOTS } from './model.ts';
 import { drawingsValue } from './annotation.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
-import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
+import { planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
@@ -26,9 +26,18 @@ export class ReviewSession {
   private error: string | null = null;
   private decodeMs = 0;
   private listeners = new Set<() => void>();
+  private progressListeners = new Set<(positionUs: number, durationUs: number) => void>();
   private draw: (slot: Slot, frame: DecodedFrame) => void;
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) { this.draw = draw; }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
+  /** Presentation-clock updates, without cloning the full session or rerendering the workbench. */
+  subscribeProgress(listener: (positionUs: number, durationUs: number) => void) {
+    this.progressListeners.add(listener); return () => this.progressListeners.delete(listener);
+  }
+  private emitProgress() {
+    const durationUs = this.durationUs;
+    for (const listener of this.progressListeners) listener(this.positionUs, durationUs);
+  }
   private lastTransition = '';
   private emit() {
     const state = { busy: this.busy, playing: this.playing, error: this.error, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
@@ -38,6 +47,7 @@ export class ReviewSession {
       this.lastTransition = signature;
     }
     for (const listener of this.listeners) listener();
+    this.emitProgress();
   }
   getState() {
     return structuredClone({
@@ -56,7 +66,7 @@ export class ReviewSession {
     this.emit();
     return this.getState();
   }
-  private get durationUs() { return this.tracks.size ? Math.min(...[...this.tracks.values()].map(t => t.source.info.durationUs + t.offsetUs)) : 0; }
+  private get durationUs() { return Math.max(0, ...[...this.tracks.values()].map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {
     const wasPlaying = this.playing;
     ++this.revision;
@@ -127,11 +137,12 @@ export class ReviewSession {
   }
   async removeTrack(slot: Slot) {
     slotValue(slot);
-    await this.run('removeTrack', { slot }, async () => {
+    await this.run('removeTrack', { slot }, async current => {
       const track = this.tracks.get(slot);
       this.tracks.delete(slot);
       track?.source.dispose();
       if (!this.tracks.size) { this.positionUs = 0; this.measurements = null; }
+      else if (this.positionUs >= this.durationUs) await this.drawAt(this.durationUs - 1, current);
       log.info('session', '关闭轨道', { slot, mediaId: track?.source.info.id });
     });
     return this.getState();
@@ -143,8 +154,8 @@ export class ReviewSession {
       const old=this.tracks.get(slot); if(!old)throw new Error('轨道尚未载入。');
       if(!Number.isSafeInteger(old.source.info.durationUs+offsetUs))throw new Error('偏移超出可用时间范围。');
       const next=new Map(this.tracks);next.set(slot,{...old,offsetUs});
-      const duration=Math.min(...[...next.values()].map(t=>t.source.info.durationUs+t.offsetUs));
-      if(duration<=0 || !Number.isSafeInteger(duration))throw new Error('偏移后没有可播放的时间范围。');
+      const duration=Math.max(...[...next.values()].map(t=>t.source.info.durationUs+t.offsetUs));
+      if(old.source.info.durationUs+offsetUs<=0 || !Number.isSafeInteger(duration))throw new Error('偏移后没有可播放的时间范围。');
       await this.drawAt(Math.min(this.positionUs,duration-1),current,next,()=>{this.tracks=next;});
     });
     return this.getState();
@@ -203,9 +214,8 @@ export class ReviewSession {
     const target = planForwardStep(
       entries.map(([slot, t]) => {
         const [next, nextNext] = gathered.get(slot) ?? [];
-        return { currentUs: t.frame!.ptsUs+t.offsetUs, nextUs: next ? next.ptsUs+t.offsetUs : null, nextNextUs: nextNext ? nextNext.ptsUs+t.offsetUs : null };
-      }),
-      minFrameDurationUs(entries.map(([, t]) => t.frame!.durationUs)));
+        return { currentUs: t.frame!.ptsUs+t.offsetUs, durationUs: t.frame!.durationUs, nextUs: next ? next.ptsUs+t.offsetUs : null, nextNextUs: nextNext ? nextNext.ptsUs+t.offsetUs : null };
+      }));
     if (target == null || target < 0 || target >= this.durationUs) { closeGathered(); return; }
     const selected = new Map<Slot, DecodedFrame>();
     for (const [slot,t] of entries) {
@@ -341,10 +351,13 @@ export class ReviewSession {
         this.positionUs = target;
         metrics.wallMs = performance.now() - start;
         metrics.mediaUs = target - base;
-        const pts = entries.map(([, t]) => Math.min(target,Math.max(0,t.frame!.ptsUs+t.offsetUs)));
+        // Holding a finished track is intentional, not decoder lag or track skew.
+        const pts = entries.map(([, t], i) => readers[i].ended && target >= t.source.info.durationUs+t.offsetUs
+          ? target : Math.min(target,Math.max(0,t.frame!.ptsUs+t.offsetUs)));
         metrics.maxFrameLagUs = Math.max(metrics.maxFrameLagUs, target - Math.min(...pts));
         metrics.maxFrameSkewUs = Math.max(metrics.maxFrameSkewUs, Math.max(...pts) - Math.min(...pts));
-        // Canvas drawing is independent of the expensive DOM/state snapshot.
+        this.emitProgress();
+        // Rich UI/state snapshots remain throttled; progress follows every presentation tick.
         if (now - lastEmit >= 100) { lastEmit = now; this.emit(); }
         if (now - lastSample >= 2000) {
           lastSample = now;
@@ -390,6 +403,19 @@ export class ReviewSession {
     this.emit();
     return structuredClone(mark);
   }
+  updateMark(id: string, input: { text?: unknown; drawings?: unknown }) {
+    const mark = this.marks.find(m => m.id === id);
+    if (!mark) throw new Error('标注不存在。');
+    if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再编辑标注。');
+    const track = [...this.tracks.values()].find(t => t.source.info.id === mark.mediaId);
+    if (!track?.frame || track.frame.ptsUs !== mark.frame.ptsUs) throw new Error('请返回标注对应的画面后再编辑。');
+    const text = input.text === undefined ? mark.text : input.text;
+    const drawings = input.drawings === undefined ? mark.drawings ?? [] : drawingsValue(input.drawings);
+    if (typeof text !== 'string' || text.length > 2000 || (!text.trim() && !drawings.length)) throw new Error('标注不能为空。');
+    mark.text = text.trim(); mark.drawings = drawings;
+    log.info('session', '修改标注', { id, frameUs: mark.frame.ptsUs }); this.emit();
+    return structuredClone(mark);
+  }
   deleteMark(id: string) {
     if (!this.marks.some(mark => mark.id === id)) throw new Error('标注不存在。');
     this.marks = this.marks.filter(mark => mark.id !== id);
@@ -411,5 +437,6 @@ export class ReviewSession {
     for (const t of this.tracks.values()) t.source.dispose();
     this.tracks.clear();
     this.listeners.clear();
+    this.progressListeners.clear();
   }
 }

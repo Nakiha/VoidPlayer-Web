@@ -13,7 +13,18 @@
     "start": "node server/main.ts",
     "service": "node scripts/service.mjs",
     "release": "npm run build && node scripts/package-release.mjs",
-    "test:browser": "npm run build && node scripts/check-browser.mjs"
+    "test:browser": "npm run build && node scripts/check-browser.mjs",
+    "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
+    "fixtures:flv": "python3 scripts/make-flv-fixtures.py",
+    "test:annotations:browser": "npm run build && node scripts/check-annotation-browser.mjs",
+    "test:annotations:rendering": "npm run build && node scripts/check-annotation-rendering.mjs",
+    "test:menus:browser": "npm run build && node scripts/check-menu-browser.mjs",
+    "test:shortcuts:browser": "npm run build && node scripts/check-shortcuts-browser.mjs",
+    "test:feedback:browser": "npm run build && node scripts/check-feedback-browser.mjs",
+    "test:stepping:browser": "npm run build && node scripts/check-stepping-browser.mjs",
+    "test:timeline:browser": "npm run build && node scripts/check-timeline-browser.mjs",
+    "test:metadata:browser": "npm run build && node scripts/check-metadata-browser.mjs",
+    "test:mark-cards:browser": "npm run build && node scripts/check-mark-cards-browser.mjs"
   },
   "dependencies": {
     "@phosphor-icons/core": "2.1.1",
