@@ -137,6 +137,14 @@ try {
   for (const selector of ['.transport','.card-heading','#pixel-size-menu']) {
     assert.equal(await page.locator(selector).first().evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'none','high contrast disables blur');
   }
+  // A future dark palette must also control opaque/high-contrast fallbacks.
+  await page.addStyleTag({content: ':root { --surface-input-solid: #252932; --contrast-text-secondary: #e4e7ed; --swatch-selection-fill: #353b45; }'});
+  assert.equal(await page.locator('#drawing-color').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
+  assert.equal(await page.locator('.transport .duration').evaluate(e=>getComputedStyle(e).color),'rgb(228, 231, 237)');
+  await page.keyboard.press('Escape');await page.locator('.brand').click();await page.keyboard.press('n');
+  assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).boxShadow),'none');
+  await page.locator('#drawing-color-choice').click();
+  assert.equal(await page.getByRole('group',{name:'常用色',exact:true}).locator('[aria-checked=true]').evaluate(e=>getComputedStyle(e,'::before').backgroundColor),'rgb(53, 59, 69)');
   assert.deepEqual(errors,[]);
   console.log(`PASS ${name}: repeated click/keyboard toggle, tooltip exclusion, stroke previews, shared style edits, fixed gapless palette, no color history, red defaults`);
 } finally { await browser.close(); server.closeAllConnections(); await new Promise(r=>server.close(r)); }

@@ -38,6 +38,10 @@ export function installPixelGrid(canvas: HTMLCanvasElement, label: HTMLElement) 
   const themeChanges = new MutationObserver(schedule);
   themeChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
   themeChanges.observe(document.head, { childList: true, subtree: true, characterData: true });
+  // CSS media queries can change colors without mutating the document.
+  const appearance = ['(prefers-color-scheme: dark)', '(prefers-contrast: more)', '(forced-colors: active)']
+    .map(query => matchMedia(query));
+  for (const query of appearance) query.addEventListener('change', schedule);
   return {
     update(next: GridView | null) {
       canvas.hidden = label.hidden = !next;
@@ -46,6 +50,9 @@ export function installPixelGrid(canvas: HTMLCanvasElement, label: HTMLElement) 
       if (key === signature) return;
       signature = key; schedule();
     },
-    dispose() { disposed = true; if (pending) cancelAnimationFrame(pending); themeChanges.disconnect(); },
+    dispose() {
+      disposed = true; if (pending) cancelAnimationFrame(pending); themeChanges.disconnect();
+      for (const query of appearance) query.removeEventListener('change', schedule);
+    },
   };
 }

@@ -138,6 +138,21 @@ try {
     const rows = await page.locator('#start-library-list .source-row').allTextContents();
     assert.ok(entries.every(entry => rows.some(text => text.includes(entry.root))));
   });
+  await check('canvas grid repaints for system theme changes without geometry changes', async page => {
+    const id=listing.entries.find(e=>e.name==='ci_h264_smoke.mp4').id;
+    await page.evaluate(id=>window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id}),id);
+    await page.emulateMedia({colorScheme:'light'});
+    await page.addStyleTag({content:'@media (prefers-color-scheme: dark) { :root { --viewport-grid-line: #c0d0e0; } }'});
+    await settle(page);
+    const count=await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws));
+    assert.ok(count>0);
+    await page.emulateMedia({colorScheme:'dark'});
+    await page.waitForFunction(before=>Number(document.querySelector('#grid-A').dataset.gridDraws)>before,count);
+    assert.equal(await page.locator('#grid-A').evaluate(e=>e.getContext('2d').strokeStyle),'#c0d0e0');
+    const after=await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws));
+    await settle(page);
+    assert.equal(await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws)),after,'no continuous redraw while paused');
+  });
   console.log(`Browser regressions passed (${browserName}); no screenshots saved.`);
 } finally {
   try { await browser?.close(); }

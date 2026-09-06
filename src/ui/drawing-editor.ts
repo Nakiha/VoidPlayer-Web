@@ -1,3 +1,4 @@
+import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
 import { SLOTS } from '../model.ts';
@@ -8,7 +9,7 @@ import { drawingBounds, moveDrawing, resizeDrawing, eraseAt } from '../annotatio
 import { renderAnnotations, svgElement, textElement, annotationFrameRect } from './annotation-svg.ts';
 import type { ReviewSession } from '../session.ts';
 
-export const annotationThumbnails = new Map<string, { url: string; width: number; height: number }>();
+
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
 type Group = { markId?: string; drawings: Drawing[] };
 type Draft = { mediaId: string; ptsUs: number; groups: Group[] };

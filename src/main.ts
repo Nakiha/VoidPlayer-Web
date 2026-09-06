@@ -9,6 +9,7 @@ import { installTooltips } from './ui/tooltips.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
 import './themes/silver-glass.css';
+import './themes/accessibility.css';
 import './style.css';
 import { shell } from './ui/shell.ts';
 import { icon } from './ui/icons.ts';

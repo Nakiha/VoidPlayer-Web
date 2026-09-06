@@ -1,10 +1,10 @@
 # UI 主题与交互约定
 
-本文描述当前实现。历史迭代与验证记录保留在仓库根目录的 `design-qa.md`；其中引用的设计截图已清理。
+本文描述当前实现。验证方式见 `../../docs/testing.md`，历史迭代记录通过 Git 查询。
 
 ## 代码边界
 
-`silver-glass.css` 定义主题颜色、材质、字体和密度，`../style.css` 定义组件布局与交互状态。`main.ts` 导入两者；替换主题或覆盖同名变量即可调整外观。
+`silver-glass.css` 定义主题颜色、材质、字体和密度，`../style.css` 定义组件布局与交互状态。`accessibility.css` 管理减少透明度与高对比度行为，颜色值仍由主题提供。`main.ts` 依次导入主题、无障碍行为及组件样式；后续亮暗模式只切换颜色变量，不复制组件 CSS。
 
 `../ui/` 负责 DOM、输入和数据投影；`source-catalog.ts` 管理片源身份、访问能力和历史；播放、定位、排序、关闭轨道、偏移及标注由 UI 与 Agent 共用的 `ReviewSession` 执行。视频帧经 presenter 上屏，主题不对视频 canvas 加滤镜或染色。
 
@@ -12,7 +12,7 @@
 
 当前为亮色主题。顶栏使用 `--glass-fill`（82% 主题底色）；并排和分屏轨道标题、播放栏和标注工具条使用 `--viewport-chrome-fill`（62% 主题底色），配合 `--glass-filter: blur(6px)`。标题 32px，播放栏 36px；模糊仅覆盖控件自身的小面积，不施加到 viewport 或视频 canvas。三者共享同一条背景与滤镜样式，分屏标题不再覆盖为全透明。下拉菜单和色盘共用 `--menu-fill`（76% 预览底色）与 `--menu-filter: blur(8px)`，关闭时不渲染；文字、图标、线宽样本及色块保持不透明。没有叠加饱和度、滤镜动画或强制常驻合成层。侧栏和子轨道使用实色面板。降低透明度或提高对比度时，两类材质恢复实色并关闭模糊；不支持背景模糊的浏览器也回退为实色。
 
-默认通过空间、对齐、悬停和选中底色分组，不逐项描边或嵌套卡片。工作区边界使用 `--divider`，输入框与键盘焦点保留边界。图标采用 Phosphor 局部 SVG 导入，无远程字体；加号与刷新使用 Bold，其余保持 Regular。
+默认通过空间、对齐、悬停和选中底色分组，不逐项描边或嵌套卡片。工作区边界使用 `--divider`，输入框保留边界，键盘聚焦不额外描边。图标采用 Phosphor 局部 SVG 导入，无远程字体；加号与刷新使用 Bold，其余保持 Regular。
 
 | 用途 | 主题变量 | 当前默认 |
 | --- | --- | --- |
@@ -41,9 +41,9 @@
 
 轨道标题覆盖在画面上。并排标题边界使用 `--header-divider-width`；擦拭标题、裁切和分割线共用 `splitPixelGeometry` 的设备像素边界。`--split-line`、`--split-handle` 控制实色线条和把手。标题宽度不足 `--header-actions-breakpoint`（180px）时，原有操作按钮收进 popover，不复制操作逻辑。
 
-播放栏覆盖在 viewport 底部，依次排列播放/逐帧、时间、弹性进度条、全屏；独立眼睛按钮在最右侧。田字下排标题占底部时，控制栏上移一个行高。侧栏、子轨道和标注工具条会压缩整个 viewport，视频与播放栏共同让位。
+播放栏覆盖在 viewport 底部，依次排列播放/逐帧、时间、弹性进度条、全屏；独立眼睛按钮在最右侧。田字下排标题占底部时，控制栏上移一个行高。侧栏和子轨道占用工作区布局；标注工具条悬浮在视口内，不压缩视频。
 
-当前时间支持原位输入秒数、mm:ss.mmm、hh:mm:ss.mmm；Enter 或失焦提交，Escape 取消，编辑开始时暂停。`--time-input-chars` 按最长时间码保留位数，宽度包含 padding 和光标余量。viewport 小于 480px 隐藏总时长，小于 300px 收紧间距，小于 260px 隐藏时间区，保留播放、进度条、全屏与专注按钮。缩放入口通过 `--zoom-control-width` 固定为 92px。
+当前时间支持原位输入秒数、mm:ss.mmm、hh:mm:ss.mmm；Enter 或失焦提交，Escape 取消，编辑开始时暂停。当前时间框按自身字符数计算宽度，仅留 1px 光标余量。viewport 小于 480px 隐藏总时长，小于 300px 收紧间距，小于 260px 隐藏时间区，保留播放、进度条、全屏与专注按钮。缩放入口通过 `--zoom-control-width` 固定为 92px。
 
 主进度条预览目标时间；子轨道在 10 CSS px 内吸附到标注的精确微秒锚点，同距取较早者。预览不解码。时间指针由 `--timeline-pin-shape`、`--timeline-thumb-size`、`--timeline-pin-height` 定义，已播放区、指针、悬停和点击共用完整轨道宽度，0%/100% 不再按半个滑块宽度内收。原生 range 保留输入语义，透明零宽滑块驱动定位，独立指针负责绘制；悬停标记直接裁取同一进度钉子的上半段，共用形状、宽度和主题色，指示准确跳转位置。
 
@@ -77,23 +77,17 @@
 
 ## 时间偏移与标注
 
-两条解码路径均已将各文件首帧归零，并保留原始 PTS。手动偏移使用 `sessionUs = normalizedMediaUs + offsetUs`，正值延后、负值提前，不重复应用容器起始 PTS。输入默认毫秒，也支持显式 s/ms 和时间码；变更时暂停并重新定位。轨道开始前保持首帧，结束后保持末帧；共同播放终点是各轨偏移后终点的最大值，与子轨道刻度一致。移除最长轨道后，超出新终点的游标会重新定位到剩余轨道末尾。相对游标差与手动偏移分开展示。
+各解码路径均已将各文件首帧归零，并保留原始 PTS。手动偏移使用 `sessionUs = normalizedMediaUs + offsetUs`，正值延后、负值提前，不重复应用容器起始 PTS。输入默认毫秒，也支持显式 s/ms 和时间码；变更时暂停并重新定位。轨道开始前保持首帧，结束后保持末帧；共同播放终点是各轨偏移后终点的最大值，与子轨道刻度一致。移除最长轨道后，超出新终点的游标会重新定位到剩余轨道末尾。相对游标差与手动偏移分开展示。
 
 子轨道列为名称、偏移、时间轴和关闭操作。标注面板在其左侧，默认折叠为 `--dock-rail-width`（40px）图标列；展开使用 `--dock-tools-width`（240px），可拖动调宽。悬浮或键盘聚焦标注显示时间、备注、作者及可用缩略图，展开列表复用同一内容。浮层使用 `--annotation-preview-width`、`--preview-fill` 和 `--popover-shadow`。
 
-加号或画面矩形框选启动原位绘制；工具条位于视频区下沿，支持画笔、圈选、矩形、线条、文字、撤销与保存。可在多个可见轨道画图，共用备注，各份图形独立绑定媒体身份与帧锚点。切帧后草稿失效并禁用保存，回到原帧可继续。备注可选，至少需要文字或图形；兼容保留 severity，UI 不暴露该字段。
+加号、N 或画面矩形框选启动原位绘制，工具条悬浮在视频区内。每次完成手势自动更新标注；播放或切换到其他帧时关闭编辑器，修改保留在会话中。各份图形绑定媒体身份与帧锚点；备注可选，至少需要文字或图形。兼容保留 severity，UI 不暴露该字段。
 
-归一化图形和原始/片内帧时间存入 ReviewSession，并随评审 JSON 导出；标注记录创建时的 offsetUs/sessionPtsUs，导出还包含当前 alignment。当前偏移用于时间轴标记和跳转，返回对应媒体帧时显示图形覆盖。重新载入槽位清零偏移。`--annotation-ink` 管理绘图颜色；缩略图只作当前会话的本地预览，不导出或上传。
+归一化图形和原始/片内帧时间存入 ReviewSession，并随评审 JSON 导出；标注记录创建时的 offsetUs/sessionPtsUs，导出还包含当前 alignment。当前偏移用于时间轴标记和跳转，返回对应媒体帧时显示图形覆盖。重新载入槽位清零偏移。`DEFAULT_ANNOTATION_COLOR` 定义默认绘图红色，绘图颜色属于保存的内容，不随 UI 主题切换；缩略图只作当前会话的本地预览，不导出或上传。
 
-## macOS Preview visual direction
+## 标注与预览约定
 
-Use the system UI font, restrained neutral icons, shared macOS blue accent,
-light separators and translucent viewport chrome throughout the app. Annotation
-editing follows Preview: a fine black/white selection outline, eight blue circular
-handles with white rims at a constant screen size, grouped icon controls and
-anchored style menus. Tooltips carry instructions; the viewport toolbar is a single
-row without explanatory copy. Keep video pixels and annotations out of CSS-scaled
-compositor bitmaps; use presenter sampling and the annotation SVG viewBox.
+使用系统 UI 字体、中性图标和主题强调色。标注选框为黑白线条，八个圆形手柄保持屏幕尺寸；工具条为紧凑单行，说明放入 tooltip。视频采样与 SVG viewBox 分别负责画面和标注几何，不使用 CSS 放大中间位图。
 
 播放栏的按钮命中区统一为 28px，图标 18px；播放按钮及功能组间隔统一为 4px，当前时间与总时长共用 12px 等宽字及相同字重。眼睛按钮仍独立于它所隐藏的播放栏，但几何中心和边距与栏内按钮一致。窄窗口依次隐藏总时长、完整时间组，优先保留播放、定位及显示控制。时间框按当前时间的实际字符数在输入框本身计算宽度，仅预留 1px 光标空间，斜线两侧各 4px 间距。所有播放栏图标按钮统一 28px 命中区和 5px padding，并对图形内部留白作视觉校正。标注工具条外层 padding 为 4px。栏内不再提供标注按钮；可在画面内直接拖动创建标注，原有 N 快捷键和标注面板入口继续可用。
 
@@ -110,3 +104,13 @@ compositor bitmaps; use presenter sampling and the annotation SVG viewBox.
 标注卡片、折叠列表、子轨道时间轴和悬停预览共用 `markIdentity(id)` 的固定 FNV-1a 映射（8 色 × 五边形/方形/三角形/菱形/圆形，共 40 种组合）。映射只依赖 ID，无额外存储、不做避重；文字编辑、轨道排序和折叠不会改变身份外观，有限组合不保证全局唯一。标记轮廓为 2 CSS px，悬停使用本色加深填充和轻微放大，时间轴与列表对应项联动强调，不再显示灰色按钮块。展开列表保留缩略图、时间、备注及编辑/删除操作，采用与片源列表一致的轻斑马底色和无边框通栏布局；悬停只用 7% 标记色铺底。不为内容行添加阴影或磨砂，避免重复的玻璃层和绘制开销。
 
 子轨道标记的悬停提示复用已有标注缩略图缓存，画面放在时间戳上方，不再重复标记图标。没有缓存时仅显示时间及非空备注，悬停不触发额外 seek 或视频解码。
+
+## 亮暗主题适配边界
+
+- `--mark-red/ochre/green/teal/blue/indigo/purple/rose` 定义标记身份色；ID 只决定色系和形状。亮暗主题可调整对应色的明度，不添加标记状态、不修改绘图颜色。
+- 工具条阴影、文字编辑轮廓和色盘选择反馈通过 `--annotation-*` / `--swatch-*` 设置。色盘里的实际色值、黑白选框纹理和视频像素不进行主题替换。
+- 每个主题需要提供 `--surface-input-solid`、`--contrast-border*`、`--contrast-text-*`，避免高对比度/低透明度模式强制回到亮色。
+- 背景网格监听根节点主题变化及系统亮暗/对比度变化；只按需重画一次，暂停时不增加持续绘制。
+- 缩略图缓存独立于编辑器，保留在内存中；预览读取不会导入编辑器或触发视频解码。
+
+当前仅完成主题入口清理，尚未提供暗色调色板、自动/亮/暗切换入口或暗色视觉验收。

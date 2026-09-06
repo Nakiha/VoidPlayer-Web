@@ -18,6 +18,15 @@ try {
  await page.locator('#toggle-subtracks').click();
  const identities=()=>page.locator('.track-marker').evaluateAll(nodes=>nodes.map(e=>({id:e.dataset.markId,color:e.style.getPropertyValue('--mark-color'),shape:e.querySelector('.mark-symbol').dataset.markShape})));
  const before=await identities();assert.equal(before.length,3);
+ const savedMarks=JSON.stringify((await call('get_review_session')).marks);
+ const colorToken=before[0].color.slice(4,-1);
+ await page.evaluate(token=>document.documentElement.style.setProperty(token,'#eab866'),colorToken);
+ for(const selector of ['.track-marker','.mark-entry']) {
+  assert.equal(await page.locator(`${selector}[data-mark-id="${before[0].id}"] .mark-symbol`).evaluate(e=>getComputedStyle(e).color),'rgb(234, 184, 102)');
+ }
+ assert.equal(JSON.stringify((await call('get_review_session')).marks),savedMarks,'theme colors never alter saved drawings');
+ await page.evaluate(token=>document.documentElement.style.removeProperty(token),colorToken);
+
  for(const identity of before) {
   const symbol=page.locator(`.mark-entry[data-mark-id="${identity.id}"] .mark-symbol`);
   assert.equal(await symbol.getAttribute('data-mark-shape'),identity.shape);assert.equal(await symbol.evaluate(e=>e.style.getPropertyValue('--mark-color')),identity.color);

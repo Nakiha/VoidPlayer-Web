@@ -5,7 +5,7 @@
   --font-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
   --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
   --text-xs: 11px; --text-sm: 12px; --text-ui: 13px; --text-title: 14px; --text-brand: 15px;
-  --space-0: 0; --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 12px; --space-6: 16px;
+  --space-1: 2px; --space-2: 4px; --space-3: 6px; --space-4: 8px; --space-5: 12px; --space-6: 16px;
   --transition-fast: 120ms ease;
   --toolbar-height: 40px; --transport-height: 36px; --panel-heading-height: 32px;
   --button-size: 28px; --control-height: 28px; --control-small-height: var(--button-size); --tool-inset: var(--space-1); --tool-gap: var(--space-1); --row-height: 32px;
@@ -65,10 +65,18 @@
   --viewport-grid-label: #6c7785;
   --viewport-caption-inset: var(--space-4);
   --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
-  --selection-fill: #3398ff1a; --selection-stroke: #73b5ff;
   --notice-fill: #fff0dd; --notice-text: #754617; --backdrop: #10182240;
   --disabled-opacity: .4; --inspector-width: 200px; --sources-width: 240px;
-  --dock-rail-width: 40px; --annotation-preview-width: 280px; --annotation-ink: #ff3b30;
+  --dock-rail-width: 40px; --annotation-preview-width: 280px;
+  /* UI identity colors are themeable; annotation ink is saved content. */
+  --mark-red: #c84440; --mark-ochre: #b36b16; --mark-green: #488027; --mark-teal: #168177;
+  --mark-blue: #246ac1; --mark-indigo: #5662bb; --mark-purple: #8051b7; --mark-rose: #b23f79;
+  --annotation-edit-outline: #5b9aff; --annotation-toolbar-shadow: 0 8px 24px #0002;
+  --swatch-border: #0003; --swatch-highlight: #fff2; --swatch-selection-fill: #fff;
+  --swatch-selection-shadow: 0 1px 3px #0005; --swatch-selection-border: #0004;
+  --surface-input-solid: #fff;
+  --contrast-border: #707780; --contrast-border-soft: #9299a2;
+  --contrast-text-secondary: #323840; --contrast-text-subtle: #424a54;
   --annotation-handle: #397ac7; --annotation-outline-light: #fff; --annotation-outline-dark: #1d1d1f;
   --annotation-toolbar-selected: color-mix(in srgb, var(--accent) 9%, transparent);
   --dock-tools-width: 240px; --marks-min-width: 160px; --marks-max-width: 400px; --marks-timeline-min-width: 240px; --dock-tools-narrow-width: 160px;
@@ -76,13 +84,6 @@
   --header-actions-breakpoint: 180px; --header-divider-width: 1px; --side-panel-min-width: 160px; --side-panel-max-width: 480px; --comparison-min-width: 360px; --panel-resize-hit-width: 10px; --panel-resize-line-width: 2px; --panel-collapse-distance: 32px;
   --panel-motion-duration: 220ms; --panel-motion-easing: cubic-bezier(.2,.8,.2,1); --panel-dismiss-veil: color-mix(in srgb, var(--surface-panel) 60%, transparent);
 }
-@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  :root { --glass-fill: var(--surface); --viewport-chrome-fill: var(--surface); --glass-filter: none; --menu-filter: none; --menu-fill: var(--preview-fill); --surface-input: #fff; --glass-shadow: none; --control-shadow: none; --popover-shadow: none; }
-}
-@media (prefers-contrast: more) {
-  :root { --control-border-width: 1px; --divider: #707780; --border: #707780; --border-soft: #9299a2; --text-secondary: #323840; --text-subtle: #424a54; }
-}
-
 @media (max-width: 680px) {
   :root { --toolbar-padding-inline: var(--space-2); --timeline-column-gap: var(--space-2); }
 }

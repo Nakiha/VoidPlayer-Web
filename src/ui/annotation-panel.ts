@@ -1,7 +1,7 @@
 import { installResizeGesture } from './resize-gesture.ts';
 import type { Mark, Slot } from '../model.ts';
 import { formatTime } from '../model.ts';
-import { annotationThumbnails } from './drawing-editor.ts';
+import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { icon } from './icons.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 

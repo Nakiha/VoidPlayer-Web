@@ -1,0 +1,8 @@
+/* Shared behavior; each color theme supplies its own opaque and contrast tokens. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root { --glass-fill: var(--surface); --viewport-chrome-fill: var(--surface); --glass-filter: none; --menu-filter: none; --menu-fill: var(--preview-fill); --surface-input: var(--surface-input-solid); --glass-shadow: none; --control-shadow: none; --popover-shadow: none; --annotation-toolbar-shadow: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --control-border-width: 1px; --divider: var(--contrast-border); --border: var(--contrast-border); --border-soft: var(--contrast-border-soft); --text-secondary: var(--contrast-text-secondary); --text-subtle: var(--contrast-text-subtle); }
+}
+

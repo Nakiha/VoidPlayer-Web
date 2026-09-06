@@ -1,5 +1,5 @@
 import { formatTime } from '../model.ts';
-import { annotationThumbnails } from './drawing-editor.ts';
+import { annotationThumbnails } from './annotation-thumbnails.ts';
 
 export type TimeMark = { id: string; text: string; frame: { ptsUs: number } };
 /** A screen-space magnet stays usable at different duration/zoom scales. */
