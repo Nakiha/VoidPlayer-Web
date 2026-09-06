@@ -293,7 +293,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     if ((!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
     await act(async () => {
       await session.load(slot, () => item.file ? openMedia(item.file) : openLibraryItem(item.library!));
-      catalog.remember(item, item.library?.id); save(); renderSources();
+      catalog.remember(item, item.library?.id, item.library?.version); save(); renderSources();
     }, 'ui.source-load', { name: item.name, slot });
   }
   function sourceRow(item: SourceItem) {
