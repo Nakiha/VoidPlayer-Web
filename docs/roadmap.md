@@ -64,4 +64,6 @@
 
 阶段 3 已开始，发布脚本已改为独立可执行文件加资源目录。macOS ARM64 预览产物通过空 PATH、与源码无关的工作目录、归档校验、初始化、并发 Range、中断、网关身份和更换程序目录保留配置/日志测试；独立服务上的四组 WebKit 播放基准通过。
 
-正式打包入口已切换为 GitHub Actions：主分支代码推送或手动触发，固定 core 构建仓库、FFmpeg、dav1d 修订和工具链，从源码准备同一份解码器，再由 Linux x64、Windows x64、macOS ARM64 原生 runner 打包并测试。预览产物与校验和保留 30 天，不自动创建公开 release。详见 [发布与校验](../deploy/README.md#发布与校验)。[三平台独立产物、备份恢复及部署验证已通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34053431731)，对应应用修订 `7dd9f07`。Linux 额外验证随包 Docker/Compose/Caddy 的非 root、只读运行、无 Node/Bun、可信 TLS、认证边界、并发 Range 与重启后保留 CA；Windows 已验证真实独立控制台 Ctrl+C 正常退出。签名与公证、真实网络存储以及后续媒体库/管理后台仍待验收，不标记整个 roadmap 完成。
+正式打包入口已切换为 GitHub Actions：主分支代码推送或手动触发，固定 core 构建仓库、FFmpeg、dav1d 修订和工具链，从源码准备同一份解码器，再由 Linux x64、Windows x64、macOS ARM64 原生 runner 打包并测试。预览产物与校验和保留 30 天，不自动创建公开 release。详见 [发布与校验](../deploy/README.md#发布与校验)。[三平台独立产物、备份恢复及部署验证已通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34053905776)，对应应用修订 `b97915d`。Linux 额外验证随包 Docker/Compose/Caddy 的非 root、只读运行、无 Node/Bun、可信 TLS、认证边界、并发 Range 与重启后保留 CA；Windows 已验证真实独立控制台 Ctrl+C 正常退出。签名与公证、真实网络存储以及后续媒体库/管理后台仍待验收，不标记整个 roadmap 完成。
+
+首个独立部署预览版 [v0.1.0-preview.1](https://github.com/Nakiha/VoidPlayer-Web/releases/tag/v0.1.0-preview.1) 已发布。三平台归档和校验文件的 GitHub SHA-256 与本地核验过的 Actions 产物一致。版本范围和已知限制见 [预览版记录](releases/0.1.0-preview.1.md)。下一步实施阶段 1 的持久化索引与后台扫描，真实存储验收继续保留为未完成项。
