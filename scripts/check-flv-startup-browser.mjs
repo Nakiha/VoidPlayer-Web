@@ -32,6 +32,8 @@ try {
   const startupMs = Math.round(performance.now() - start);
   assert.equal(first.tracks[0].decoder, 'webcodecs'); assert.equal(first.tracks[0].frame.ptsUs, 0);
   assert.equal(first.tracks[0].indexState, 'building'); assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
+  await page.locator('#toggle-subtracks').click();
+  await page.locator('.track-duration').waitFor();
   const dock = async () => page.evaluate(() => ({ duration: document.querySelector('.track-duration').textContent, ruler: document.querySelector('#subtrack-ruler').textContent }));
   const startupDock = await dock();
   await page.screenshot({ path: `.run/playback-reports/flv-startup-${browserName}.png` });
