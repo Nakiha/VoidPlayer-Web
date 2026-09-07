@@ -243,7 +243,8 @@ try {
   const selected = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: 'release.test' }) });
   const selectedActor = (await selected.json()).actor;
   const selectedCookie = selected.headers.get('set-cookie').split(';')[0];
-  assert.equal((await httpFetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 403);
+  // Legacy adminUsers configuration must not gate the trusted-user service.
+  assert.equal((await httpFetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 200);
   const remoteAdmin = await httpFetch(base + '/api/admin/status', { headers: { host: 'intranet.test', cookie: selectedCookie } });
   assert.equal(remoteAdmin.status, 200); assert.equal((await remoteAdmin.json()).identity.id, selectedActor.id);
   await stop();
@@ -253,6 +254,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-2 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, trusted-user admin page/identity/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-2 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

@@ -73,7 +73,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
             if(ref.length)for(const time of [0,Math.floor(source.info.durationUs/2),source.info.durationUs-1,0]){const f=await source.frameAt(time);try{row.failures.push(...checkFrame(observe(f),expectedAt(ref,time),'seek'));}finally{f.close();}}
             row.phase='complete';
           }catch(e){row.failures.push({code:`${row.phase}:${e.stage??'decode'}`,detail:e.message});}finally{source?.dispose();disposePresentation();}
-          row.status=row.failures.some(f=>f.code==='open:resource'&&/跨源隔离/.test(f.detail))&&!row.environment.crossOriginIsolated?'environment-blocked':row.failures.length?'fail':'pass';rows.push(row);
+          row.status=row.failures.some(f=>f.code==='open:resource'&&/跨源隔离/.test(f.detail))&&(!row.environment.crossOriginIsolated||!row.environment.sharedArrayBuffer)?'environment-blocked':row.failures.length?'fail':'pass';rows.push(row);
         }return rows;
       },{file:item.file,remote,ref:refs.get(item.file)}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(Error('audit case timeout')),60000);})]);
       for(const row of rows){report.runs.push({file:item.file,backend:browserName,remote,...row});console.log(JSON.stringify({file:item.file,backend:browserName,remote,round:row.round,status:row.status,count:row.frames.length,failures:row.failures.slice(0,2)}));}
