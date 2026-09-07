@@ -57,7 +57,7 @@ test('Range reads cache blocks, reject invalid responses before consuming bodies
   }
 });
 
-for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'mhw_hevc_fullrange_bt709_3s.mp4', 'ffv1_yuv422p_8bit.mkv', 'mpeg2_10s_1280x720.ts']) {
+for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'dolby_hlg_1080p30.mp4', 'ffv1_yuv422p_8bit.mkv', 'mpeg2_10s_1280x720.ts']) {
   test(`Remote WASM ${name}: bounded Range IO and frame-exact random/forward/backward/tail decoding`, { timeout: 120000 }, async () => {
     const bytes = await readFile(new URL(`../fixtures/video/${name}`, import.meta.url)), host = await serve(bytes);
     const coreDeps = await deps();

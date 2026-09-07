@@ -33,7 +33,10 @@ try {
         return { first, last, bench };
       }, file);
       assert.deepEqual(errors, []);
-      assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
+      // New Chromium builds can decode High 4:2:2 natively. Preserve the
+      // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
+      if (!file.startsWith('h264_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
+      else assert.ok(['webcodecs', 'ffmpeg-wasm'].includes(result.first.tracks[0].decoder));
       assert.ok(result.last.tracks[0].frame.ptsUs > 0);
       assert.ok(requests.length > 0 && requests.every(r => /^bytes=/.test(r.range ?? '')));
       assert.ok(!result.bench.error, JSON.stringify(result.bench));
