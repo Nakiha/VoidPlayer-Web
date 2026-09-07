@@ -112,7 +112,7 @@ jobs:
           retention-days: 14
 
   playback:
-    name: Verify HTTP playback, memory and source UI
+    name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -136,20 +136,26 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - run: node --test test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts
+      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - name: Generate approximately 100 MB 1080p playback inputs
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg libnss3-tools
           node scripts/make-playback-fixtures.mjs
-      - name: Test HTTP loading, repeated dual playback and run benchmark
+      - name: Test FLV native decode policy
+        run: |
+          npm run fixtures:flv
+          node scripts/check-flv-browser.mjs webkit
+      - name: Test trusted HTTPS loading, repeated dual WebCodecs playback and benchmark
         run: node scripts/check-http-playback.mjs
+        env:
+          VOIDPLAYER_HTTPS_TEST: '1'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: http-playback-reports
+          name: https-playback-reports
           path: .run/playback-reports/
           if-no-files-found: ignore
           retention-days: 30
@@ -185,19 +191,28 @@ jobs:
       - run: npm ci
       - run: node scripts/check-release-core.mjs
       - name: Verify configuration and persistent index on Node
-        run: node --test test/identity.test.ts test/config.test.ts test/library-index.test.ts test/library-incremental.test.ts test/library-storage.test.ts test/media-reference.test.ts test/admin.test.ts test/measurement.test.ts test/saved-workspaces.test.ts
+        run: node --test test/tls.test.ts test/decoder-policy.test.ts test/identity.test.ts test/config.test.ts test/library-index.test.ts test/library-incremental.test.ts test/library-storage.test.ts test/media-reference.test.ts test/admin.test.ts test/measurement.test.ts test/saved-workspaces.test.ts
       - name: Verify persistent index on packaged runtime
         run: bun test --timeout 60000 ./test/identity.test.ts ./test/library-index.test.ts ./test/library-incremental.test.ts ./test/library-storage.test.ts ./test/admin.test.ts ./test/measurement.test.ts ./test/saved-workspaces.test.ts
       - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
-      - name: Install HTTP playback browser
-        if: runner.os == 'Linux'
+      - name: Install network playback browser
+        if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium
+      - name: Install certificate test utility
+        if: runner.os == 'Linux'
+        run: sudo apt-get install -y libnss3-tools
       - name: Verify ordinary HTTP playback and users
         if: runner.os == 'Linux'
         run: node scripts/check-identity-browser.mjs
         env:
           VOIDPLAYER_HTTP_TEST: '1'
+          VOIDPLAYER_HTTP_PLAYBACK: '1'
+      - name: Verify trusted HTTPS and WebCodecs on client platforms
+        if: runner.os == 'Linux' || runner.os == 'Windows'
+        run: node scripts/check-identity-browser.mjs
+        env:
+          VOIDPLAYER_HTTPS_TEST: '1'
           VOIDPLAYER_HTTP_PLAYBACK: '1'
       - name: Verify Windows console shutdown
         if: runner.os == 'Windows'

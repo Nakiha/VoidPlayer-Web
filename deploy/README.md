@@ -8,4 +8,6 @@
 - [可选后台运行与备份](operations.md)
 - [媒体库与服务管理](admin.md)
 
-内网共享加 `--host 0.0.0.0`。普通 HTTP 可使用单线程 WASM 解码；localhost 上会按浏览器能力使用 WebCodecs 和多线程 WASM。首次访问自动创建用户，设置 → 用户中可改名或选择已有用户，完全信任用户自选身份。
+远程 WebCodecs 使用 `./voidplayer --https 服务器IP`，在客户端信任 `data/tls/voidplayer-ca.crt` 后访问 HTTPS；Windows 一次性信任命令及已有证书配置见[运行说明](standalone.md#远程-webcodecs-与硬件解码)。程序自己提供 HTTPS，证书和私钥都留在 data/，不需要代理或外部证书工具。
+
+普通 HTTP 内网共享仍可加 `--host 0.0.0.0`，使用 WASM 软件解码。首次访问自动创建用户，设置 → 用户中可改名或选择已有用户，完全信任用户自选身份。

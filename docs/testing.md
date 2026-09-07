@@ -63,6 +63,8 @@ node scripts/check-http-playback.mjs
 
 测试生成每轨约 101 MB、40 秒的 1080p30 H.264 样片，以 `http://voidplayer.test` 访问临时服务，确认 WebCodecs 不可用、实际走单线程 WASM。覆盖加号连续点击只下载一次、载入状态、三轮双轨播放/关闭、解码 Worker 释放及帧缓存峰值；Linux 还统计浏览器进程的私有驻留内存。随后运行单轨/双轨播放基准各两轮，沿用原有速度与卡顿阈值。报告写入 `.run/playback-reports/`，发布工作流上传同名测试报告 artifact。
 
+发布工作流使用 `VOIDPLAYER_HTTPS_TEST=1 node scripts/check-http-playback.mjs` 验收 HTTPS：仅在一次性的 Actions runner 中导入测试根证书，结束后删除信任项，浏览器不使用忽略证书错误的参数。确认远程域名下安全上下文、WebCodecs 和跨源隔离实际可用，并断言 H.264 由 WebCodecs 解码；单轨、双轨沿用相同性能门槛。普通 HTTP 的功能回归保留，HTTPS 成为远程播放性能验收入口。Linux 和 Windows 另验证受信任 HTTPS 的用户设置、重启恢复、解码出帧与标注。CI 没有目标用户的 GPU，硬件优先策略有单元测试，实际 GPU 使用仍需目标设备核验。
+
 帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
 
 这些是当前设备上的 canvas 呈现证据，不是物理显示扫描、所有 Safari 版本、HDR 保真或低端硬件性能保证。浏览器下载和剪贴板还受宿主权限影响，不能用“调用成功”代替实际文件/内容送达验证。

@@ -16,7 +16,7 @@ export async function openFlvMedia(input: FlvInput, meta: MediaMeta, deps: Fallb
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
-    type Init = Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
+    type Init = Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
     let init: Init | undefined, selected = single, failure: unknown;
     for (const glueURL of candidates) {
       const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'

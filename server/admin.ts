@@ -9,6 +9,7 @@ import { normalizeRoots } from './library-store.ts';
 import type { MediaRoot } from './library-store.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
 import { localRequest } from './reveal.ts';
+import { encryptedRequest } from './tls.ts';
 
 export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
@@ -22,7 +23,7 @@ export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
     const origin = new URL(req.headers.origin ?? '');
-    return origin.host === req.headers.host && origin.protocol === 'http:';
+    return origin.host === req.headers.host && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:');
   } catch { return false; }
 }
 export async function readAdminJson(req: IncomingMessage, max = 65536): Promise<unknown> {

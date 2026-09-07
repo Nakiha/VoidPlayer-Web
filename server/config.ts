@@ -2,11 +2,14 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import type { MediaRoot } from './library-store.ts';
+import { parseTls } from './tls.ts';
+import type { TlsConfig } from './tls.ts';
 
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean;
   adminUsers: string[];
+  tls?: TlsConfig | null;
   origin?: { file: string; revision: string; rootsFromCli: boolean };
 }
 export const configRevision = (text: string) => createHash('sha256').update(text).digest('hex');
@@ -23,6 +26,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
     else if (flag === '--port') overrides[mode === 'dev' ? 'devPort' : 'port'] = Number(value());
     else if (flag === '--api-port') overrides.port = Number(value());
     else if (flag === '--host') overrides.host = value();
+    else if (flag === '--https') { overrides.tls = { hosts: value().split(',') }; overrides.host ??= '0.0.0.0'; }
     else if (flag === '--static') overrides.staticDir = path.resolve(cwd, value());
     else if (flag === '--logs-dir') overrides.logsDir = path.resolve(cwd, value());
     else if (flag === '--no-logs') overrides.logsDir = null;
@@ -36,9 +40,10 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   catch (error) { if (configFile || (error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
   const defaults: ServiceConfig = { dataDir: paths.dataDir ?? path.resolve(cwd, '.run/data'), mediaRoots: mode === 'dev' ? [path.resolve(cwd, 'fixtures/video')] : [], host: '127.0.0.1', port: 5180, devPort: 5178, staticDir: paths.staticDir ?? path.resolve(cwd, 'dist'), logsDir: paths.logsDir ?? path.resolve(cwd, 'logs'), allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, adminUsers: [] };
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('服务配置必须是 JSON 对象。');
-  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key)) throw new Error(`未知配置项: ${key}`);
+  for (const key of Object.keys(data)) if (!Object.hasOwn(defaults, key) && key !== 'tls') throw new Error(`未知配置项: ${key}`);
   if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
+  config.tls = parseTls(config.tls, path.dirname(file));
   if (folders.length) config.mediaRoots = folders;
   if (!Array.isArray(config.mediaRoots) || (!config.mediaRoots.length && !paths.allowEmptyRoots) || config.mediaRoots.some(r => typeof r === 'string' ? !r.trim() : !r || typeof r.path !== 'string' || !r.path.trim() || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(r.id) || (r.name !== undefined && (typeof r.name !== 'string' || !r.name.trim())) || Object.keys(r).some(k => !['id','path','name'].includes(k)))) throw new Error('请在配置中设置 mediaRoots，或指定 --folder 白名单目录。');
   for (const name of ['port', 'devPort'] as const) if (!Number.isInteger(config[name]) || config[name] < 1 || config[name] > 65535) throw new Error(`${name} 端口无效。`);

@@ -8,5 +8,6 @@ logs/
 voidplayer.config.json
 artifacts/
 .run/
+/data/
 deploy/.env
 deploy/users.caddy

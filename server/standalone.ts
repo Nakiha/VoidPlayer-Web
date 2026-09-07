@@ -3,6 +3,8 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { loadConfig, configRevision } from './config.ts';
 import { startService, validateServiceConfig } from './runtime.ts';
 import { normalizeRoots } from './library-store.ts';
+import { request as httpsRequest } from 'node:https';
+import { prepareTls } from './tls.ts';
 
 // Replaced by the release builder; the source entry can also run under Bun.
 declare const VOIDPLAYER_COMPILED: boolean;
@@ -28,6 +30,7 @@ async function main() {
   --config /path/config.json   使用指定配置；相对路径以该配置为基准
   --folder /media              媒体白名单目录，可重复指定
   --port 5180 --host 127.0.0.1  监听地址；内网可用 0.0.0.0
+  --https IP或域名             开启内置 HTTPS；多个地址用逗号分隔，默认监听所有网卡
   --static /path/dist          覆盖随包网页资源目录
   --no-logs                   禁用用户主动上传日志
   --check                     检查配置与目录后退出
@@ -57,8 +60,20 @@ async function main() {
   const config = await loadConfig(args, 'production', process.cwd(), { configFile, dataDir, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs'), allowEmptyRoots: true });
   if (healthcheck) {
     const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host === '::' ? '[::1]' : config.host.includes(':') ? `[${config.host}]` : config.host;
-    const response = await fetch(`http://${host}:${config.port}/api/ready`, { signal: AbortSignal.timeout(2500) });
-    if (!response.ok || !(await response.json() as { ready?: boolean }).ready) throw new Error('服务尚未就绪。');
+    if (config.tls) {
+      const tls = await prepareTls(config.tls, config.dataDir);
+      await new Promise<void>((resolve, reject) => {
+        const req = httpsRequest({ host: host.replace(/^\[|\]$/g, ''), port: config.port, path: '/api/ready', ca: tls.ca,
+          servername: tls.ca ? 'localhost' : undefined, timeout: 2500 }, response => {
+          let body = ''; response.setEncoding('utf8'); response.on('data', chunk => { body += chunk; });
+          response.on('end', () => { try { if (response.statusCode !== 200 || !JSON.parse(body).ready) throw new Error('服务尚未就绪。'); resolve(); } catch (e) { reject(e); } });
+        });
+        req.on('timeout', () => req.destroy(new Error('服务检查超时。'))); req.on('error', reject); req.end();
+      });
+    } else {
+      const response = await fetch(`http://${host}:${config.port}/api/ready`, { signal: AbortSignal.timeout(2500) });
+      if (!response.ok || !(await response.json() as { ready?: boolean }).ready) throw new Error('服务尚未就绪。');
+    }
     return;
   }
   async function initialize() {
@@ -76,6 +91,7 @@ async function main() {
   }
   if (init || check) {
     await validateServiceConfig(config);
+    if (config.tls) await prepareTls(config.tls, config.dataDir);
     if (init) await initialize();
     else console.log(`配置与目录检查通过: ${config.origin?.file}`);
     return;

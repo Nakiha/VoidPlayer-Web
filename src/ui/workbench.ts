@@ -132,6 +132,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     return [
       ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
       ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
+      ['加速请求', track.decoder === 'ffmpeg-wasm' ? '软件解码' : track.hardwareAcceleration === 'prefer-hardware' ? '硬件优先（实际硬件使用未验证）' : '浏览器自动选择'],
       [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
       ['色域原色', colorLabel(color?.primaries)],
       ['传递特性', colorLabel(color?.transfer)],

@@ -46,10 +46,14 @@ async function start(port, extraEnv = {}, args = [], dataDirectory = data) {
   output = '';
   child = spawn(executable, [...(dataDirectory ? ['--data-dir', dataDirectory] : []), '--port', String(port), ...args], { cwd, env: { ...env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', d => { output += d; }); child.stderr.on('data', d => { output += d; });
-  const base = `http://127.0.0.1:${port}`;
+  const secure = args.includes('--https');
+  const base = `${secure ? 'https' : 'http'}://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null) throw new Error(output);
-    if (await fetch(base + '/api/ready').then(r => r.ok).catch(() => false)) return base;
+    const ready = async () => secure
+      ? httpFetch(base + '/api/ready', { ca: await readFile(path.join(dataDirectory ?? path.join(path.dirname(executable), 'data'), 'tls/voidplayer-ca.crt'), 'utf8') })
+      : fetch(base + '/api/ready');
+    if (await ready().then(r => r.ok).catch(() => false)) return base;
     await new Promise(r => setTimeout(r, 50));
   }
   throw new Error('Startup timed out: ' + output);
@@ -91,6 +95,16 @@ try {
   portableBase = await start(portablePort, {}, [], null);
   assert.deepEqual((await (await fetch(portableBase + '/api/health', { headers: { cookie: portableCookie } })).json()).actor, portableActor);
   await stop();
+  const securePort = await freePort();
+  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test'], null);
+  const ca = await readFile(path.join(folder, 'data/tls/voidplayer-ca.crt'), 'utf8');
+  const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
+  assert.equal(secureResponse.status, 200);
+  assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');
+  assert.equal(secureResponse.headers.get('cross-origin-opener-policy'), 'same-origin');
+  run(['--healthcheck', '--https', 'voidplayer.test', '--port', String(securePort)]);
+  await stop();
+  assert.deepEqual(await readdir(cwd), cwdBefore, 'TLS startup with an empty PATH stays inside the application folder');
   run(['--init', '--data-dir', data, '--folder', media]);
   const configPath = path.join(data, 'voidplayer.config.json'), original = await readFile(configPath, 'utf8');
   assert.equal(JSON.parse(original).staticDir, undefined, 'configuration must not pin old program assets');

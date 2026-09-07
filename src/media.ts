@@ -7,6 +7,7 @@ import type { MediaInfo, FrameInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { openFFmpegMedia } from './ffmpeg-media.ts';
 import { contextLog } from './log.ts';
+import { preferredVideoConfig } from './decoder-policy.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
@@ -146,23 +147,27 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaSource> {
   try {
-  if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
+    if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     // No WebCodecs at all is a decode-capability gap, not an input error:
     // the WASM fallback exists precisely for that case.
     throw new MediaOpenError('decode', '当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
-  }
+    }
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
+    const rawConfig = await track.getDecoderConfig();
+    const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
+    if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);
     const first = await track.getFirstTimestamp();
     const end = await track.computeDuration();
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new MediaOpenError('container', '无法确定视频的有效时间范围。');
-    const sink = new VideoSampleSink(track);
+    const sink = new VideoSampleSink(track, { hardwareAcceleration: config.hardwareAcceleration });
     // Color metadata comes from the container (mediabunny), not from decoded
     // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
     const color = await track.getColorSpace().catch(() => null);
     const info: MediaInfo = {
       id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
+      hardwareAcceleration: config.hardwareAcceleration,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
       colorSource: 'container',
       ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),

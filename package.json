@@ -38,8 +38,10 @@
     "test:release:browser": "node scripts/check-release-browser.mjs"
   },
   "dependencies": {
+    "@peculiar/x509": "2.1.0",
     "@phosphor-icons/core": "2.1.1",
-    "mediabunny": "1.55.7"
+    "mediabunny": "1.55.7",
+    "reflect-metadata": "0.2.2"
   },
   "devDependencies": {
     "@types/node": "26.4.1",

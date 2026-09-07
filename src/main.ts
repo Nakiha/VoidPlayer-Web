@@ -181,6 +181,10 @@ const pixelMenu = installChoiceMenu('pixel-size',[{value:'uniform',label:'统一
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
   const state = session.getState();
+  $('decoder-environment').textContent = !globalThis.isSecureContext
+    ? '当前页面不是安全上下文，WebCodecs 不可用。远程硬件解码请使用受信任的 HTTPS 地址打开。'
+    : typeof VideoDecoder === 'undefined' ? '安全上下文已启用，但当前浏览器未提供 WebCodecs。'
+      : `安全上下文与 WebCodecs 已启用${globalThis.crossOriginIsolated ? '；支持多线程 WASM 回退' : ''}。`;
   const loaded = state.tracks.length > 0;
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');
@@ -218,7 +222,7 @@ function render() {
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec}${t.decoder === 'ffmpeg-wasm' ? ' · WASM' : ''}${hdrTag}` : '尚未载入';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}` : '尚未载入';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }

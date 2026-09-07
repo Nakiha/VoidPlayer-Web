@@ -16,6 +16,30 @@ Windows 在解压目录运行 `./voidplayer.exe`。打开 `http://127.0.0.1:5180
 
 首次启动自动保存配置，以后直接运行程序即可。`--folder` 可重复指定；已有配置时它是本次启动的覆盖，不会自动覆盖已保存的媒体目录。
 
+## 远程 WebCodecs 与硬件解码
+
+在 Linux 上直接开启内置 HTTPS，把下面的地址换成 Windows 实际访问的服务器 IP 或域名：
+
+```sh
+./voidplayer --https 192.168.1.20
+```
+
+该选项默认监听所有网卡，在原端口（默认 5180）提供 HTTPS。多个地址可写成 `--https 192.168.1.20,player.lan`。不需要 Caddy、OpenSSL、域名服务或公网连接。
+
+首次启动会在 `data/tls/` 创建本地根证书和服务器证书。将其中的 **`voidplayer-ca.crt`** 复制到 Windows，在它所在目录运行一次：
+
+```powershell
+certutil -user -addstore Root .\voidplayer-ca.crt
+```
+
+关闭并重新打开浏览器，再访问 **`https://192.168.1.20:5180/`**。使用启动时指定的地址；根证书从你自己的服务器复制，程序会打印证书 SHA-256 指纹。只分发 `.crt` 公共证书，不分发 `authority.json` 或 `server.json` 中的私钥。
+
+首次没有配置时，`--https` 会随新配置保存。已有配置时，继续使用同一启动命令；若希望以后直接运行程序，可在 `data/voidplayer.config.json` 中设置 `"host": "0.0.0.0"` 和 `"tls": { "hosts": ["192.168.1.20"] }`。更换 IP 后更新 hosts/启动参数即可，根证书保持不变，已信任的客户端不用重新安装；服务器证书在启动时按地址和有效期重新签发。
+
+已有受信任证书时，可用 `"tls": { "certFile": "tls/server.pem", "keyFile": "tls/server.key" }`，路径相对配置文件；此模式不会生成或改写证书。
+
+在“设置 → 性能”检查安全上下文和 WebCodecs 是否启用；轨道信息显示“WebCodecs · 硬件优先”时，表示浏览器接受了硬件优先请求，**不代表网页能够证明实际使用了 GPU**。浏览器不接受该硬件配置时使用浏览器自动解码；WebCodecs 不支持的编码才回退到 WASM，界面明确显示“WASM 软件解码”。实际硬件使用需在目标 Windows 的浏览器媒体诊断与任务管理器 Video Decode 中核验。HTTP 内网地址不会开启 WebCodecs；页面和媒体都应使用上述 HTTPS 同源地址。
+
 ## 文件都在哪里
 
 程序只在**可执行文件旁边的 `data/`** 下保存运行数据，与从哪个工作目录启动无关：
@@ -28,6 +52,7 @@ Windows 在解压目录运行 `./voidplayer.exe`。打开 `http://127.0.0.1:5180
 | `data/library.sqlite` | 媒体索引 |
 | `data/workspaces.sqlite` | 用户和保存的工作区 |
 | `data/logs/` | 用户主动上传的诊断日志 |
+| `data/tls/` | HTTPS 证书与私钥（启用 HTTPS 后生成） |
 
 SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用户的 AppData、Application Support、XDG 目录或 `/var/lib`。程序不安装系统服务，也不自动读取启动目录的 `.env` 或 `bunfig.toml`。控制台日志输出到终端，不额外创建服务日志文件。浏览器自身保存的身份和诊断记录仍在浏览器存储里。
 
@@ -36,6 +61,7 @@ SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用�
 ## 可选参数
 
 - `--port 5180 --host 0.0.0.0`：允许内网其他机器访问。默认仅本机访问。
+- `--https IP或域名`：内置 HTTPS 和便携证书，远程使用 WebCodecs。
 - `--data-dir /其他目录`：主动选择外置数据目录。也支持 `VOIDPLAYER_DATA_DIR`；命令行优先。
 - `--config /配置文件`：读取指定配置，不自动创建或覆盖它。配置中的相对路径相对该文件，命令行路径相对当前工作目录。
 - `--init`：仅生成配置并退出，不覆盖已有配置；普通启动不需要先执行它。

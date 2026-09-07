@@ -61,6 +61,7 @@ export function settingsShell() {
         </section>
       <section id="settings-pane-performance" role="tabpanel" aria-labelledby="settings-tab-performance" tabindex="0" hidden>
         ${paneTitle('性能', '检查视频的播放节奏与呈现状态。')}
+        <div class="settings-group"><h4>解码环境</h4><p id="decoder-environment" class="settings-caption"></p><p class="settings-caption">优先请求硬件解码；实际使用的解码器由浏览器、GPU、驱动和视频编码决定。WebCodecs 可用不等同于已确认 GPU 硬解。</p></div>
         <div class="settings-group"><div class="settings-action-row"><div><h4>检查当前视频</h4><p>从头播放一段并测量呈现节奏，结束后暂停。</p></div><button id="benchmark">开始检查</button></div></div>
         <p class="evidence settings-caption"><span id="alignment"></span><span id="decode"></span></p>
         <div id="benchmark-result" hidden><p id="benchmark-summary" role="status"></p><details><summary>性能报告</summary><textarea id="benchmark-json" aria-label="播放性能报告 JSON" readonly rows="8"></textarea></details></div>

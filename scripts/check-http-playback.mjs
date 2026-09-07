@@ -1,25 +1,33 @@
 // Real ordinary-HTTP playback, repeated source-button clicks and decoder cleanup.
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
+import { prepareTls } from '../server/tls.ts';
+import { trustTestCertificate } from './test-certificate-trust.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
+const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
+const protocol = secure ? 'https' : 'http';
+const temporary = await mkdtemp(path.join(tmpdir(), 'vp-network-playback-'));
+const tls = secure ? await prepareTls({ hosts: ['voidplayer.test'] }, temporary) : undefined;
 const library = new MediaLibraryIndex([path.join(root, '.run/playback-media')]);
 const listing = await library.list();
 listing.entries.sort((a, b) => a.name.localeCompare(b.name));
 assert.equal(listing.entries.length, 2, 'run make-playback-fixtures.mjs first');
 assert.ok(listing.entries.every(e => e.size > 90000000), 'use real ~100 MB files');
-const server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
+const server = createMediaServer({ roots: library.roots, library, tls, staticDir: path.join(root, 'dist'), onLog() {} });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-const base = `http://voidplayer.test:${server.address().port}`;
+const base = `${protocol}://voidplayer.test:${server.address().port}`;
 const reports = [];
-let browser;
+let browser, untrust;
 await mkdir(path.join(root, '.run/playback-reports'), { recursive: true });
 try {
+  if (tls) untrust = await trustTestCertificate(tls.caFile);
   browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server', '--enable-precise-memory-info'] });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
   page.setDefaultTimeout(90000);
@@ -29,7 +37,7 @@ try {
   const requests = [];
   page.on('request', request => { if (/\/api\/media\/[^/]+(?:\?|$)/.test(new URL(request.url()).pathname)) requests.push(request.url()); });
   await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
-  assert.deepEqual(await page.evaluate(() => [isSecureContext, typeof VideoDecoder, crossOriginIsolated]), [false, 'undefined', false]);
+  assert.deepEqual(await page.evaluate(() => [isSecureContext, typeof VideoDecoder, crossOriginIsolated]), secure ? [true, 'function', true] : [false, 'undefined', false]);
   await page.locator('#start-library-more').click();
   const entry = listing.entries.find(e => e.name === 'http-1080p-a.mp4');
   const row = page.locator('#source-list .source-row').filter({ hasText: entry.name });
@@ -44,11 +52,11 @@ try {
   releaseDownload();
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
   await page.unroute('**/api/media/**');
-  assert.equal(requests.length, 1, 'repeated + clicks must start exactly one file download');
-  assert.equal(workers.size, 1, 'one decoder for one loaded track');
+  if (!secure) assert.equal(requests.length, 1, 'repeated + clicks must start exactly one file download');
+  assert.equal(workers.size, secure ? 0 : 1, 'WebCodecs must not open WASM workers');
   assert.equal(await row.getAttribute('aria-busy'), 'false');
   assert.match(await row.innerText(), /使用中/);
-  console.log('PASS HTTP + button: immediate pending state, 30 repeated clicks, one download/worker, first frame');
+  console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
 
   const cdp = await browser.newBrowserCDPSession();
   async function residentBytes() {
@@ -70,12 +78,16 @@ try {
       if (round === 1 && item.id === entry.id) continue;
       await page.evaluate(({ id, slot }) => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot }), { id: item.id, slot: i ? 'B' : 'A' });
     }
-    assert.equal(workers.size, 2);
+    assert.equal(workers.size, secure ? 0 : 2);
     const report = await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'benchmark_review').execute({ durationMs: 12000 }));
     assert.equal(report.error, null);
     assert.equal(report.staleAfterPause, false);
     assert.equal(report.tracks.length, 2);
-    for (const track of report.tracks) { assert.equal(track.decoder, 'ffmpeg-wasm'); assert.equal(track.coreVariant, 'single-thread'); }
+    for (const track of report.tracks) {
+      assert.equal(track.decoder, secure ? 'webcodecs' : 'ffmpeg-wasm');
+      if (secure) assert.ok(['prefer-hardware', 'no-preference'].includes(track.hardwareAcceleration));
+      else assert.equal(track.coreVariant, 'single-thread');
+    }
     for (const queue of Object.values(report.measurements.buffers)) {
       assert.ok(queue.peakFrames <= 4, 'queue frame cap');
       assert.ok(queue.peakBytes <= 4 * 1920 * 1080 * 4, 'queue byte cap');
@@ -93,13 +105,13 @@ try {
     assert.ok(reports[2].unloadedBytes - reports[0].unloadedBytes < 256 * 1024 * 1024, 'repeated close/reopen does not accumulate hundreds of MiB');
   }
   assert.deepEqual(errors, []);
-  console.log('PASS HTTP repeated dual-track playback: bounded buffers, all workers released, stable resident memory');
+  console.log(`PASS ${protocol} repeated dual-track playback: bounded buffers, decoder cleanup, stable resident memory`);
   await browser.close(); browser = null;
 
   // Run the repository's benchmark unchanged at the session/tool boundary.
   const child = spawn(process.execPath, ['scripts/bench-playback.mjs', 'chromium', '--headless'], { cwd: root, stdio: 'inherit', env: {
     ...process.env, BASE_URL: base, BENCH_HTTP: '1', BENCH_REPEATS: '2', BENCH_DURATION_MS: '12000',
-    BENCH_SCENARIOS: JSON.stringify({ 'http-1080p-solo': ['http-1080p-a.mp4'], 'http-1080p-dual': ['http-1080p-a.mp4', 'http-1080p-b.mp4'] }),
+    BENCH_SCENARIOS: JSON.stringify({ [`${protocol}-1080p-solo`]: ['http-1080p-a.mp4'], [`${protocol}-1080p-dual`]: ['http-1080p-a.mp4', 'http-1080p-b.mp4'] }),
     BENCH_REPORT: path.join(root, '.run/playback-reports/benchmark.json'),
   } });
   const code = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
@@ -107,5 +119,7 @@ try {
 } finally {
   await writeFile(path.join(root, '.run/playback-reports/repeated-playback.json'), JSON.stringify(reports, null, 2));
   await browser?.close();
+  untrust?.();
   await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+  await rm(temporary, { recursive: true, force: true });
 }

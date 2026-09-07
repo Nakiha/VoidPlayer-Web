@@ -30,6 +30,17 @@ await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'de
 await mkdir(path.join(out, 'deploy/licenses'), { recursive: true });
 for (const file of ['README.md', 'standalone.md', 'operations.md', 'admin.md']) await cp(path.join(root, 'deploy', file), path.join(out, 'deploy', file));
 await cp(path.join(root, `deploy/licenses/Bun-${bunVersion}.md`), path.join(out, `deploy/licenses/Bun-${bunVersion}.md`));
+const lock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
+let notices = '';
+for (const [directory, dependency] of Object.entries(lock.packages)) {
+  if (!directory || dependency.dev) continue;
+  const entries = await readdir(path.join(root, directory));
+  const licenses = entries.filter(name => /^(licen[cs]e(?:\..*)?|copyrightnotice\.txt)$/i.test(name));
+  if (!licenses.length) throw new Error(`Missing dependency license: ${directory}`);
+  notices += `\n${directory} ${dependency.version}\n${'='.repeat(60)}\n`;
+  for (const license of licenses) notices += await readFile(path.join(root, directory, license), 'utf8') + '\n';
+}
+await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
 await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, adminUsers: [] }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
