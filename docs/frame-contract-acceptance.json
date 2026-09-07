@@ -1,0 +1,847 @@
+{
+  "date": "2026-09-07",
+  "codeRevision": "e345bde",
+  "baselineRevision": "6b95088",
+  "functional": {
+    "unitTests": {
+      "passed": 287,
+      "failed": 0
+    },
+    "fateNode": {
+      "passed": 15,
+      "expectedRejection": 8,
+      "knownFailure": 0,
+      "failed": 0
+    },
+    "fateBrowser": {
+      "passed": 40,
+      "failed": 0
+    }
+  },
+  "performance": [
+    {
+      "name": "baseline-webkit",
+      "build": {
+        "revision": "v0.1.0-rc.3-23-g6b95088",
+        "builtAt": "2026-09-07T15:07:15.045Z",
+        "sourceDigest": "a10d86420c0871346108ed84e7d289b8ea0f33644a595303b79572d5093ae809",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "eb269b36ec656ea89b2b407ec6abbf0037d245d666f03eef63759f371021ece6",
+          "voidplayer-core-mt.wasm": "7ca5edb79d396e9997b0bd694b175e31ec2312dfb3d8ef794c6afebe81aed0f9"
+        }
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        },
+        "headless": true
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9875360828818854,
+          "waitingMs": 37.824000000011324,
+          "maxGapMs": 49.39999999999998,
+          "maxFrameLagUs": 20076,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.9199999999999591
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.98870245125532,
+          "waitingMs": 34.244000000024215,
+          "maxGapMs": 47.98000000000047,
+          "maxFrameLagUs": 19250,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.6199999999998909
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.988859045343857,
+          "waitingMs": 33.704000000051224,
+          "maxGapMs": 63.159999999999854,
+          "maxFrameLagUs": 19077,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.5599999999994907
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9815025056765327,
+          "waitingMs": 147.32000000006974,
+          "maxGapMs": 181.07999999999993,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.9400000000000546
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9591780685109356,
+          "waitingMs": 326.220000000183,
+          "maxGapMs": 192.61999999999898,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.7200000000011642
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9725584498173248,
+          "waitingMs": 219.39300000026122,
+          "maxGapMs": 218.38000000000102,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.680000000000291
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9784362267393786,
+          "waitingMs": 171.6000000000758,
+          "maxGapMs": 205.36000000000013,
+          "maxFrameLagUs": 18496,
+          "maxFrameSkewUs": 18383,
+          "pauseMs": 1.1400000000001
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9131539906784517,
+          "waitingMs": 693.3000000001703,
+          "maxGapMs": 243.79999999999927,
+          "maxFrameLagUs": 18523,
+          "maxFrameSkewUs": 18383,
+          "pauseMs": 0.819999999999709
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9626798785042079,
+          "waitingMs": 299.1200000002872,
+          "maxGapMs": 231.65999999999985,
+          "maxFrameLagUs": 18756,
+          "maxFrameSkewUs": 18303,
+          "pauseMs": 0.8999999999978172
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9985079534302127,
+          "waitingMs": 10.700000000068641,
+          "maxGapMs": 44.59999999999991,
+          "maxFrameLagUs": 16662,
+          "maxFrameSkewUs": 16633,
+          "pauseMs": 1
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9983516181156917,
+          "waitingMs": 13.160000000174747,
+          "maxGapMs": 34.68000000000029,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.7400000000016007
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.995129514594035,
+          "waitingMs": 37.800000000291696,
+          "maxGapMs": 34.79999999999927,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.7199999999975262
+        }
+      ]
+    },
+    {
+      "name": "baseline-dual",
+      "build": {
+        "revision": "v0.1.0-rc.3-23-g6b95088",
+        "builtAt": "2026-09-07T15:07:15.045Z",
+        "sourceDigest": "a10d86420c0871346108ed84e7d289b8ea0f33644a595303b79572d5093ae809",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "eb269b36ec656ea89b2b407ec6abbf0037d245d666f03eef63759f371021ece6",
+          "voidplayer-core-mt.wasm": "7ca5edb79d396e9997b0bd694b175e31ec2312dfb3d8ef794c6afebe81aed0f9"
+        }
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        },
+        "headless": true
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "runs": [
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9777107110405495,
+          "waitingMs": 177.52000000006865,
+          "maxGapMs": 212.10000000000014,
+          "maxFrameLagUs": 18366,
+          "maxFrameSkewUs": 18218,
+          "pauseMs": 1.0399999999990541
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.8985483786617392,
+          "waitingMs": 814.7400000001638,
+          "maxGapMs": 246.8199999999997,
+          "maxFrameLagUs": 21205,
+          "maxFrameSkewUs": 16667,
+          "pauseMs": 1.1000000000021828
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "A:presentation-stall",
+            "B:presentation-stall"
+          ],
+          "speed": 0.935194009869084,
+          "waitingMs": 520.1600000002702,
+          "maxGapMs": 270.23999999999796,
+          "maxFrameLagUs": 18417,
+          "maxFrameSkewUs": 18303,
+          "pauseMs": 0.7800000000024738
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 4,
+          "passed": false,
+          "failures": [
+            "B:presentation-stall"
+          ],
+          "speed": 0.9497367901395041,
+          "waitingMs": 401.4470000004409,
+          "maxGapMs": 250.95999999999913,
+          "maxFrameLagUs": 18744,
+          "maxFrameSkewUs": 17404,
+          "pauseMs": 0.8000000000029104
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 5,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9535263121074171,
+          "waitingMs": 371.14700000054376,
+          "maxGapMs": 239,
+          "maxFrameLagUs": 18466,
+          "maxFrameSkewUs": 18413,
+          "pauseMs": 0.5800000000017462
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 6,
+          "passed": false,
+          "failures": [
+            "A:presentation-stall",
+            "B:presentation-stall"
+          ],
+          "speed": 0.9375580934134602,
+          "waitingMs": 500.59300000055845,
+          "maxGapMs": 269.26000000000204,
+          "maxFrameLagUs": 18406,
+          "maxFrameSkewUs": 17769,
+          "pauseMs": 1.0200000000040745
+        }
+      ]
+    },
+    {
+      "name": "webkit",
+      "build": {
+        "revision": "v0.1.0-rc.3-27-ga6e825d-dirty",
+        "builtAt": "2026-09-07T15:02:12.219Z",
+        "sourceDigest": "6ee01d9b8f4666059667d6a509790e91c2ea5fefa95f1d91bea94bc71f51f6e0",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "9949661b780113e6c544ca0daf60e635f4f60b2e96d54c3ed703f6f271b0db17",
+          "voidplayer-core-mt.wasm": "88ce177f67c4007c33c9e6048ce9cc9cfa49a53f34dfedf106bf0acb8d26fa40"
+        }
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        },
+        "headless": true
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9877574159525379,
+          "waitingMs": 37.124000000011954,
+          "maxGapMs": 66.25999999999999,
+          "maxFrameLagUs": 18406,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.4399999999999409
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9856652326636932,
+          "waitingMs": 43.58400000002737,
+          "maxGapMs": 73.05999999999949,
+          "maxFrameLagUs": 18950,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.6000000000003638
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9858273518556285,
+          "waitingMs": 43.06400000005665,
+          "maxGapMs": 72.68000000000029,
+          "maxFrameLagUs": 18648,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.6599999999998545
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9804008853298849,
+          "waitingMs": 156.70000000006786,
+          "maxGapMs": 174.44000000000005,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.1200000000008004
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9536582332014825,
+          "waitingMs": 371.8200000001767,
+          "maxGapMs": 221.9400000000005,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.8399999999983265
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9641553264604811,
+          "waitingMs": 286.82700000030565,
+          "maxGapMs": 220.29999999999927,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.0800000000017462
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9723662002029404,
+          "waitingMs": 220.52000000007666,
+          "maxGapMs": 243.48000000000002,
+          "maxFrameLagUs": 20657,
+          "maxFrameSkewUs": 18383,
+          "pauseMs": 1.4799999999997908
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9579207267913485,
+          "waitingMs": 337.3130000001867,
+          "maxGapMs": 238.3799999999992,
+          "maxFrameLagUs": 19016,
+          "maxFrameSkewUs": 18383,
+          "pauseMs": 0.8799999999991996
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "A:presentation-stall",
+            "B:presentation-stall"
+          ],
+          "speed": 0.9406556150104931,
+          "waitingMs": 477.3130000002716,
+          "maxGapMs": 262.1000000000022,
+          "maxFrameLagUs": 18570,
+          "maxFrameSkewUs": 18413,
+          "pauseMs": 1.0200000000004366
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9974120662411506,
+          "waitingMs": 20.780000000069464,
+          "maxGapMs": 54.19999999999982,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 1.4800000000000182
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9986240437103785,
+          "waitingMs": 9.940000000176795,
+          "maxGapMs": 34.55999999999949,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 33,
+          "pauseMs": 0.819999999999709
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9981559069618876,
+          "waitingMs": 13.540000000285707,
+          "maxGapMs": 46.340000000000146,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.7199999999975262
+        }
+      ]
+    },
+    {
+      "name": "webkit-confirm",
+      "build": {
+        "revision": "v0.1.0-rc.3-27-ga6e825d-dirty",
+        "builtAt": "2026-09-07T15:02:12.219Z",
+        "sourceDigest": "6ee01d9b8f4666059667d6a509790e91c2ea5fefa95f1d91bea94bc71f51f6e0",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "9949661b780113e6c544ca0daf60e635f4f60b2e96d54c3ed703f6f271b0db17",
+          "voidplayer-core-mt.wasm": "88ce177f67c4007c33c9e6048ce9cc9cfa49a53f34dfedf106bf0acb8d26fa40"
+        }
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        },
+        "headless": true
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9848036541684466,
+          "waitingMs": 46.20400000001079,
+          "maxGapMs": 75.38,
+          "maxFrameLagUs": 18630,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.080000000000041
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9866127630435354,
+          "waitingMs": 40.64400000002752,
+          "maxGapMs": 70.15999999999985,
+          "maxFrameLagUs": 18892,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.8000000000001819
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9855031667839551,
+          "waitingMs": 44.08400000004779,
+          "maxGapMs": 72.26000000000022,
+          "maxFrameLagUs": 19030,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.1199999999989814
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9792292697257208,
+          "waitingMs": 166.1000000000666,
+          "maxGapMs": 182.6400000000001,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.9600000000009459
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9618315270886735,
+          "waitingMs": 304.76000000016876,
+          "maxGapMs": 221.97999999999956,
+          "maxFrameLagUs": 16653,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.8800000000010186
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9662179178687466,
+          "waitingMs": 270.24000000027445,
+          "maxGapMs": 202.97999999999956,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.5800000000017462
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.97594049655831,
+          "waitingMs": 192.8800000000714,
+          "maxGapMs": 227,
+          "maxFrameLagUs": 18436,
+          "maxFrameSkewUs": 18383,
+          "pauseMs": 1.139999999999418
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "A:presentation-stall",
+            "B:presentation-stall"
+          ],
+          "speed": 0.9315166475344443,
+          "waitingMs": 546.7600000001734,
+          "maxGapMs": 284.02000000000044,
+          "maxFrameLagUs": 18139,
+          "maxFrameSkewUs": 16694,
+          "pauseMs": 1.2400000000016007
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9277166346630404,
+          "waitingMs": 579.5800000002677,
+          "maxGapMs": 248.02000000000044,
+          "maxFrameLagUs": 18336,
+          "maxFrameSkewUs": 17769,
+          "pauseMs": 0.8400000000001455
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9978469514279229,
+          "waitingMs": 15.840000000070367,
+          "maxGapMs": 49.440000000000055,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.7799999999999727
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9986097650303585,
+          "waitingMs": 10.540000000179793,
+          "maxGapMs": 42.51999999999862,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 16645,
+          "pauseMs": 0.8599999999969441
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9984994432210287,
+          "waitingMs": 10.880000000307847,
+          "maxGapMs": 42.93999999999869,
+          "maxFrameLagUs": 16598,
+          "maxFrameSkewUs": 33,
+          "pauseMs": 0.7200000000011642
+        }
+      ]
+    },
+    {
+      "name": "final-webkit",
+      "build": {
+        "revision": "v0.1.0-rc.3-28-gaef96d9-dirty",
+        "builtAt": "2026-09-07T15:16:15.565Z",
+        "sourceDigest": "2bceeb658d6b56ce95b542545a45e1ec1b051da8d9346ee1eada7a431c6eeda8",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "9949661b780113e6c544ca0daf60e635f4f60b2e96d54c3ed703f6f271b0db17",
+          "voidplayer-core-mt.wasm": "88ce177f67c4007c33c9e6048ce9cc9cfa49a53f34dfedf106bf0acb8d26fa40"
+        }
+      },
+      "environment": {
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        },
+        "headless": true
+      },
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9866842261218846,
+          "waitingMs": 40.424000000009585,
+          "maxGapMs": 69.3599999999999,
+          "maxFrameLagUs": 19250,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.8599999999996726
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9840017336599268,
+          "waitingMs": 48.72400000002756,
+          "maxGapMs": 60.779999999999745,
+          "maxFrameLagUs": 19876,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.9600000000000364
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9837949983914488,
+          "waitingMs": 49.34400000005142,
+          "maxGapMs": 78,
+          "maxFrameLagUs": 19416,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.7000000000007276
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.989382176653786,
+          "waitingMs": 84.36000000006332,
+          "maxGapMs": 100.75999999999999,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.6599999999999682
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9892245256992063,
+          "waitingMs": 85.66000000017998,
+          "maxGapMs": 119.6200000000008,
+          "maxFrameLagUs": 16593,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.680000000000291
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9887125740276804,
+          "waitingMs": 89.7800000002644,
+          "maxGapMs": 122,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 0.6399999999994179
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9890876422837064,
+          "waitingMs": 87.68000000006397,
+          "maxGapMs": 121.22000000000014,
+          "maxFrameLagUs": 18446,
+          "maxFrameSkewUs": 18413,
+          "pauseMs": 0.7200000000000273
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9878615154638402,
+          "waitingMs": 96.68000000018407,
+          "maxGapMs": 130.3799999999992,
+          "maxFrameLagUs": 18788,
+          "maxFrameSkewUs": 18303,
+          "pauseMs": 0.6599999999998545
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9867283881373129,
+          "waitingMs": 105.82000000031,
+          "maxGapMs": 122.85999999999694,
+          "maxFrameLagUs": 18426,
+          "maxFrameSkewUs": 18413,
+          "pauseMs": 0.6599999999998545
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9978292528098979,
+          "waitingMs": 17.10000000006455,
+          "maxGapMs": 35.30000000000018,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.8999999999996362
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9974218514298254,
+          "waitingMs": 19.400000000174394,
+          "maxGapMs": 37.36000000000058,
+          "maxFrameLagUs": 16662,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 0.9799999999995634
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9988163203261473,
+          "waitingMs": 9.480000000266392,
+          "maxGapMs": 34.460000000002765,
+          "maxFrameLagUs": 16662,
+          "maxFrameSkewUs": 16645,
+          "pauseMs": 0.8400000000001455
+        }
+      ]
+    }
+  ]
+}

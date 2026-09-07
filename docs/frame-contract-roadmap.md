@@ -39,8 +39,8 @@
 - [x] `npm test`、`npm run build`。
 - [x] FATE Node 门禁与 Chromium/WebKit 本地/HTTP 连续关闭重开。
 - [x] `test:browser`、展示/标注、FLV/Range 相关浏览器回归。
-- [ ] WebKit 播放基准，记录实际成绩与基线差异；不将非阻塞性能结果记为功能修复。
-- [ ] 每批独立提交，下面记录命令、结果、修订和剩余限制。
+- [x] WebKit 播放基准，记录实际成绩与基线差异；不将非阻塞性能结果记为功能修复。
+- [x] 每批独立提交，下面记录命令、结果、修订和剩余限制。
 
 ## 记录
 
@@ -55,3 +55,23 @@
 - 第四批：`media-state.ts` 统一元数据补丁、递增版本与独立事件快照；session 在 draw 成功后记录输出描述，预取不会提前改变当前画面状态。UI 按版本刷新，后台索引与片源身份更新走同一入口。Worker 失败日志记录请求关联及最多 16 条近期操作，共享时间线错误携带实际送包/配置/目标/先前输出。真实 WASM 用例验证跨尺寸预取和往返 seek 的 UI/Agent 状态。完整 `npm test` 286/286、构建通过；最终 FATE Node 15 pass / 8 expected-rejection，浏览器 40/40 通过，均无已知失败豁免。CI 中 FATE 改为阻塞门禁。
 
 - 浏览器回归：`npm run test:browser`、`check-presentation-browser.mjs`（Chromium/WebKit）、`check-flv-browser.mjs webkit`、`check-range-browser.mjs webkit`、标注 rendering/browser 全部通过。`check-flv-startup-browser.mjs` 两浏览器通过，256 MiB 尾部被阻断时 Chromium 95ms、WebKit 126ms 出首帧，并验证后台索引、缓存重开、UI 与 MCP 状态。报告保存在本地 `.run/refactor-*.log` 和 `.run/playback-reports/`。
+
+- 最终复查补充 `e345bde`：定位后改用另一个位置调用 next，必须使旧 lookahead 失效；小于首帧的 next 返回首帧。以独立回归验证这两个边界，同时让 FATE 校验器拒绝 NaN/非整数 PTS。最终完整测试 **287/287**、构建、Node FATE **15 pass / 8 expected-rejection**、浏览器 FATE **40/40**、WebKit 混合帧率逐帧前后步进通过；元数据面板与共享导出回归也通过。
+
+## 播放基准与剩余限制
+
+同一台 macOS、Playwright WebKit 26.6、headless、1280×800、DPR 1；通过应用实际 canvas 绘制测量，每轮 8 秒或片尾。运行 `node scripts/bench-playback.mjs webkit --headless`，测试服务提供同一份 QA 样片。默认速度下限 0.9、最长绘制间隔上限 250ms，全部保留。源码/core 基线为 `6b95088` / `115f365`，最终版本为 `e345bde` / `c0d3c36`。
+
+| 轮次 | 通过 | 双轨 VVC＋4K HEVC 速度范围 | 双轨最长绘制间隔 |
+| --- | --- | --- | --- |
+| 基线四场景各三轮 | 12/12 | 0.913–0.978 | 243.8ms |
+| 基线追加双轨六轮 | 2/6 | 0.899–0.978 | 270.2ms |
+| 重构首次四场景各三轮 | 11/12 | 0.941–0.972 | 262.1ms |
+| 重构首次复测 | 11/12 | 0.928–0.976 | 284.0ms |
+| 最终修订四场景各三轮 | **12/12** | **0.987–0.989** | **130.4ms** |
+
+最终 HEVC 4K 单轨、VVC 单轨、VVC＋HEVC、MPEG-2 TS＋H.264 均三轮通过。原失败报告仍保留；不能把最后一轮通过解释为所有机器的持续性能保证，也不能仅凭这些有限轮次确定先前波动的唯一原因。合并前后的性能汇总含构建摘要和每轮结果，见 [验收数据](frame-contract-acceptance.json)。物理屏幕扫描输出和真实硬件使用未验证。
+
+四批功能范围已验收；后续仍需单独推进损坏 FLV 的容错策略、裸 HEVC 入口、分片 MP4 配置/DTS、更多位深/色彩参考和长时高负载性能。这些能力没有通过删除检查或改写参考数据宣称支持。
+
+提交：第一批 `4657439`，第二批 `e613efa`，第三批 `a6e825d`，第四批 `aef96d9`，最终边界修正 `e345bde`。后续改动集中在 [PR #3](https://github.com/Nakiha/VoidPlayer-Web/pull/3)；远端验收见该 PR 对应的最新 CI，正式发布仍沿原有发布流程。
