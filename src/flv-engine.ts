@@ -1,3 +1,4 @@
+import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { demuxFlv, flvDecoderConfig, FlvReader } from './flv-demux.ts';
 import type { FlvInput, FlvIndex } from './flv-demux.ts';
@@ -14,22 +15,26 @@ export class FlvEngine {
   private last = -1;
   private primed: FlvFrame | null = null;
   constructor(input: FlvInput) { this.reader = new FlvReader(input); }
-  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress) {
     try {
+      onProgress?.('index');
       this.index = await demuxFlv(this.reader);
       flvDecoderConfig(this.index);
       if (!forceWasm) {
         try {
+          onProgress?.('decode');
           const native = await nativeFlvDecoder(this.index);
-          if (native) { this.decoder = native; this.primed = await this.extract(0); }
+          if (native) { this.decoder = native; onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
           if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
           this.decoder?.close(); this.decoder = undefined!;
         }
       }
       if (!this.decoder) {
+        onProgress?.('decoder');
         this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
         this.last = -1;
+        onProgress?.('first-frame');
         this.primed = await this.extract(0);
       }
       return { codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,

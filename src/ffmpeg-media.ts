@@ -1,3 +1,5 @@
+import type { MediaOpenProgress, MediaLoadStage } from './media-progress.ts';
+import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { createRangeBridge } from './range-bridge.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -44,6 +46,8 @@ export const WASM_CORE_GLUE_PATH_MT = 'vendor/voidplayer-core/voidplayer-core-mt
 export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm';
 
 export interface FallbackDeps {
+  onProgress?: MediaOpenProgress;
+  signal?: AbortSignal;
   /** Glue module URL (browser default: served from public/; tests: file URL). */
   glueURL?: string;
   /** Wasm binary bytes (tests pass them; the browser lets the glue fetch it). */
@@ -99,10 +103,11 @@ export class WorkerRpc {
   private failure: Error | null = null;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
   private onTerminate: () => void;
-  constructor(worker: Worker, onTerminate: () => void = () => {}) {
+  constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
+      if (data.type === 'progress') { if (!this.failure && this.pending.has(data.id) && data.progress) onProgress?.(data.progress); return; }
       const { id, ok, data: payload, error } = data;
       const entry = this.pending.get(id);
       if (!entry) {
@@ -149,10 +154,12 @@ export class WorkerRpc {
 type FallbackInput = File | (MediaMeta & { url: string });
 
 export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps: FallbackDeps = {}): Promise<MediaSource> {
+  loadAborted(deps.signal);
   const { openPacketMedia } = await import('./packet-media.ts');
   try {
     return await openPacketMedia('mp4', { url, size: meta.size }, meta, { ...deps, forceWasm: true });
   } catch (error) {
+    loadAborted(deps.signal);
     // Only a demux/codec capability gap can select FFmpeg's container path.
     // Network, resource and packet decoding failures must remain visible.
     if (!(error instanceof MediaOpenError) || !['container', 'codec'].includes(error.stage)) throw error;
@@ -166,6 +173,7 @@ export function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<Me
 }
 
 async function openFallbackInput(file: FallbackInput, deps: FallbackDeps): Promise<MediaSource> {
+  loadAborted(deps.signal);
   const openStart = performance.now();
   liveFallbacks++;
   try {
@@ -203,13 +211,16 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let rpc: WorkerRpc | null = null;
   let lastError: unknown = null;
   for (const glueURL of candidates) {
+    loadAborted(deps.signal);
     rpc?.terminate();
     const worker = deps.workerFactory?.() ?? await createWorker();
     let bridge: ReturnType<typeof createRangeBridge> | undefined;
     try {
       if ('url' in file) bridge = createRangeBridge(worker, file.url, file.size);
     } catch (error) { worker.terminate(); throw error; }
-    rpc = new WorkerRpc(worker, () => bridge?.close());
+    rpc = new WorkerRpc(worker, () => bridge?.close(), deps.onProgress);
+    const activeRpc = rpc;
+    const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
       const payload: Record<string, unknown> = { glueURL, name: file.name, threads,
         ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
@@ -220,6 +231,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       }
       // Includes fetching/compiling the core and scanning the file's index.
       // Five seconds is not a viable cold-start budget over a LAN.
+      deps.onProgress?.('decoder');
       init = await rpc.call<InitResult>('init', payload, transfer, 60000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
@@ -229,10 +241,11 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       break;
     } catch (error) {
       lastError = error;
+      loadAborted(deps.signal);
       if (error instanceof MediaOpenError && ['input', 'resource'].includes(error.stage)) { rpc.terminate(); throw error; }
       scoped.warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
       init = null;
-    }
+    } finally { detachAbort(); }
   }
   if (!init || !rpc) {
     rpc?.terminate();

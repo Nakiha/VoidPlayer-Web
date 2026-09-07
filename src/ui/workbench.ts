@@ -1,3 +1,6 @@
+import { installSourceActivity } from './source-activity.ts';
+import { loadStages } from '../media-progress.ts';
+import type { MediaLoadStage } from '../media-progress.ts';
 import { installTrackColumnResize } from './track-column-resize.ts';
 import { trackTimelineRatio } from './track-timeline.ts';
 import { installTimeInput, parseTimeInput } from '../time-input.ts';
@@ -54,6 +57,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   let recentRequest = 0;
 
   const lifecyle = new AbortController();
+  installSourceActivity(session, lifecyle.signal);
   const libraryBrowser = installLibraryBrowser((page, status) => {
     catalog.setLibrary(page?.entries ?? []); libraryStatus = status;
     if (page && recentRevision !== page.revision) { recentRevision = page.revision; void refreshRecent(); }
@@ -295,27 +299,31 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     if (sourceBusy !== state.busy) { sourceBusy = state.busy; renderSources(); }
   }
   async function load(item: SourceItem, slot: Slot) {
-    if (loadingSource || session.getState().busy || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
-    loadingSource = { key: item.key, status: '正在载入' }; sourceLoadError = null; renderSources();
-    const progress = (stage: 'download' | 'decode') => {
-      loadingSource = { key: item.key, status: stage === 'download' ? '正在下载视频' : '正在打开视频并建立索引' };
+    if (loadingSource?.key === item.key || (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
+    const pendingLoad = { key: item.key, status: '正在载入' };
+    loadingSource = pendingLoad; sourceLoadError = null; renderSources();
+    const progress = (stage: MediaLoadStage) => {
+      if (loadingSource !== pendingLoad) return;
+      pendingLoad.status = loadStages[stage];
       renderSources();
     };
     try {
       await act(async () => {
         try {
-          await session.load(slot, async () => {
-            const source = await (item.file ? openMedia(item.file, undefined, progress) : openLibraryItem(item.library!, progress));
-            loadingSource = { key: item.key, status: '正在显示首帧' }; renderSources();
+          await session.load(slot, async (signal, report) => {
+            const onProgress = (stage: MediaLoadStage) => { progress(stage); report(stage); };
+            const source = await (item.file ? openMedia(item.file, undefined, onProgress, signal) : openLibraryItem(item.library!, onProgress, signal));
+            if (loadingSource === pendingLoad) { pendingLoad.status = '正在显示首帧'; renderSources(); }
             return source;
-          });
+          }, item.name);
           catalog.remember(item, item.library?.id, item.library?.version); save();
         } catch (error) {
-          sourceLoadError = { key: item.key, message: error instanceof Error ? error.message : String(error) };
+          if (error instanceof Error && error.name === 'AbortError') return;
+          if (loadingSource === pendingLoad) sourceLoadError = { key: item.key, message: error instanceof Error ? error.message : String(error) };
           throw error;
         }
       }, 'ui.source-load', { name: item.name, slot });
-    } finally { loadingSource = null; renderSources(); }
+    } finally { if (loadingSource === pendingLoad) loadingSource = null; renderSources(); }
   }
   function sourceRow(item: SourceItem) {
       const row = document.createElement('div'); row.className = 'source-row';
@@ -353,13 +361,19 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         }, 'ui.source-remove', { name: item.name });
         actions.append(button);
       }
+      else if (loading) {
+        const button = createIconButton({ glyph: 'close', label: '取消载入' });
+        button.setAttribute('aria-label', `取消载入：${item.name}`);
+        button.onclick = () => { session.pause(); loadingSource = null; renderSources(); };
+        actions.append(button);
+      }
       else if (item.library || item.file) {
         const button = createIconButton({ glyph: 'plus', label: '添加到视图' });
-        button.disabled = blocked || !!pending || !!offline;
-        button.dataset.tooltip = loading ?? (blocked ? '请等待当前载入或定位完成' : '添加到视图');
+        button.disabled = (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') || !!pending || !!offline;
+        button.dataset.tooltip = session.getState().mediaLoad?.state === 'loading' ? '取消当前载入并添加到视图' : session.getState().busy ? '请等待当前定位完成' : '添加到视图';
         button.title = offline ? '媒体存储离线，请等待重新连接' : pending ? '片源仍在写入，请稍后重试' : '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
         button.onclick = () => {
-          if (loadingSource || session.getState().busy) return;
+          if (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') return;
           const tracks = session.getState().tracks;
           if (sourceInUse(item, tracks)) return;
           const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));

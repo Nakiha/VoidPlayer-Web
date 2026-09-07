@@ -1,3 +1,5 @@
+import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
+import { abortableLoad } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
@@ -21,6 +23,8 @@ export class ReviewSession {
   private actor: { id: string; name: string } | null = null;
   setActor(actor: { id: string; name: string } | null) { this.actor = actor ? { id: actor.id, name: actor.name } : null; }
   private queue: Promise<unknown> = Promise.resolve();
+  private mediaLoad: MediaLoadStatus | null = null;
+  private abortLoad: (() => void) | undefined;
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
   private measurements: PlaybackMeasurements | null = null;
@@ -44,7 +48,7 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -57,6 +61,7 @@ export class ReviewSession {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,
       durationUs: this.durationUs, error: this.error, lastDecodeMs: this.decodeMs,
+      mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs }] : []; }),
@@ -74,6 +79,8 @@ export class ReviewSession {
   pause() {
     const wasPlaying = this.playing;
     ++this.revision;
+    this.abortLoad?.();
+    if (this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); }
     this.stopPlayback?.();
     this.stopPlayback = undefined;
     this.playing = false;
@@ -108,26 +115,55 @@ export class ReviewSession {
       return operation;
     });
   }
-  async load(slot: Slot, open: () => Promise<MediaSource>) {
+  async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
     const scoped = contextLog();
     slotValue(slot);
     const replacing = this.tracks.get(slot)?.source.info.name;
+    const status: MediaLoadStatus = { name, slot, stage: 'queued', state: 'loading', startedAt: Date.now() };
     try {
-      await this.run('load', { slot }, async current => {
-        const source = await open();
+      const loading = this.run('load', { slot }, async current => {
+        const controller = new AbortController();
+        const abort = () => controller.abort(new DOMException('载入已取消。', 'AbortError'));
+        this.abortLoad = abort;
+        status.stage = 'inspect';
+        const progress: MediaOpenProgress = stage => {
+          if (!current() || controller.signal.aborted || status.state !== 'loading') return;
+          status.stage = stage; this.emit();
+        };
+        this.emit();
+        let source: MediaSource | undefined;
         let committed = false;
+        let released = false;
+        const release = () => { if (source && !released) { released = true; source.dispose(); } };
         try {
-          if (source.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === source.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
+          const opened = await abortableLoad<MediaSource>(Promise.resolve().then(() => open(controller.signal, progress)), controller.signal, late => late.dispose());
+          source = opened;
+          if (!current()) throw new DOMException('载入已取消。', 'AbortError');
+          // Once open has returned, stop the uncommitted decoder on cancel.
+          // drawAt remains serialized with existing tracks' pending decodes.
+          this.abortLoad = () => { abort(); release(); };
+          if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
           const next = new Map(this.tracks);
-          next.set(slot, { source, frame: null, offsetUs:0 });
+          next.set(slot, { source: opened, frame: null, offsetUs:0 });
+          progress('first-frame');
           await this.drawAt(0, current, next, () => {
             this.tracks.get(slot)?.source.dispose();
             this.tracks = next;
-            this.catalog.set(source.info.id, source.info);
+            this.catalog.set(opened.info.id, opened.info);
             committed = true;
+            status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
           });
-        } finally { if (!committed) source.dispose(); }
+        } catch (error) {
+          if (controller.signal.aborted) throw controller.signal.reason;
+          if (current()) { status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now(); }
+          throw error;
+        } finally {
+          if (!committed) release();
+          this.abortLoad = undefined;
+        }
       });
+      this.mediaLoad = status; this.emit();
+      await loading;
     } catch (error) {
       scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, error: errorText(error) });
       throw error;

@@ -30,10 +30,10 @@ async function nodeCoreDeps(): Promise<FallbackDeps> {
   }
   return { glueURL: new URL('voidplayer-core.js', coreDir).href, wasmBinary };
 }
-async function openSample(name: string): Promise<MediaSource> {
+async function openSample(name: string, onProgress?: import('../src/media-progress.ts').MediaOpenProgress): Promise<MediaSource> {
   const deps = await nodeCoreDeps();
   const data = await readFile(new URL(`../fixtures/video/${name}`, import.meta.url));
-  return openFFmpegMedia(new File([data], name), deps);
+  return openFFmpegMedia(new File([data], name), { ...deps, onProgress });
 }
 
 test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', async () => {
@@ -59,7 +59,9 @@ test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', 
 });
 
 test('WASM fallback handles an MPEG-2 TS sample mediabunny cannot demux', async () => {
-  const source = await openSample('mpeg2_10s_1280x720.ts');
+  const stages: string[] = [];
+  const source = await openSample('mpeg2_10s_1280x720.ts', stage => stages.push(stage));
+  assert.deepEqual(stages.filter((stage, i) => stage !== stages[i - 1]), ['decoder', 'inspect', 'index']);
   try {
     assert.equal(source.info.codec, 'mpeg2video');
     assert.equal(source.info.width, 1280); assert.equal(source.info.height, 720);

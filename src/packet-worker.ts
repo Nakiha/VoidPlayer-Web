@@ -17,7 +17,7 @@ async function start() {
       try {
         if (type === 'init') {
           engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input);
-          send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads) });
+          send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress })) });
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send({ id, ok: true, data: null });
         } else if (type === 'extract' && engine) {

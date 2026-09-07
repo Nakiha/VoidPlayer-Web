@@ -49,7 +49,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
       async p => {
         const entry = typeof p.id === 'string' ? await fetchLibraryItem(p.id, AbortSignal.timeout(5000)) : null;
         if (!entry) throw new Error('媒体库中没有该文件，或服务未连接。');
-        return session.load(slotValue(p.slot), () => openLibraryItem(entry));
+        return session.load(slotValue(p.slot), (signal, progress) => openLibraryItem(entry, progress, signal), entry.name);
       }),
   ];
 }

@@ -1,3 +1,4 @@
+import type { MediaOpenProgress } from './media-progress.ts';
 import { Input, CustomSource, MP4, EncodedPacketSink } from 'mediabunny';
 import type { EncodedPacket } from 'mediabunny';
 import { MediaOpenError } from './media-errors.ts';
@@ -28,10 +29,11 @@ export class Mp4Engine {
     this.input = new Input({ source: new CustomSource({ getSize: () => this.reader.size,
       read: (start, end) => this.reader.read(start, end - start), maxCacheSize: 1024 * 1024 }), formats: [MP4] });
   }
-  async open(glueURL: string, wasmBinary?: Uint8Array, _forceWasm = true, threads = 1) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, _forceWasm = true, threads = 1, onProgress?: MediaOpenProgress) {
     try {
       // These are capability checks, before opening the decoder. Only these
       // stages may route an unsupported container to FFmpeg's AVIO path.
+      onProgress?.('inspect');
       try { await this.input.getFormat(); }
       catch (error) {
         if (error instanceof MediaOpenError) throw error;
@@ -48,6 +50,7 @@ export class Mp4Engine {
       const raw = config?.description;
       const description = codec === 'vvc' ? await readVvcConfig(this.reader, track.id)
         : raw ? ArrayBuffer.isView(raw) ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength) : new Uint8Array(raw) : new Uint8Array(0);
+      onProgress?.('index');
       this.sink = new EncodedPacketSink(track);
       for await (const packet of this.sink.packets(undefined, undefined, { metadataOnly: true })) {
         this.packets.push(packet);
@@ -59,7 +62,9 @@ export class Mp4Engine {
       if (pts.some((p, i) => i > 0 && p <= pts[i - 1])) throw new MediaOpenError('container', 'MP4 显示时间戳无效。');
       const firstPtsUs = pts[0], times = pts.map(p => p - firstPtsUs);
       const durations = this.order.map((p, i) => Math.round(this.packets[p].duration * 1e6) || (i + 1 < pts.length ? pts[i + 1] - pts[i] : i ? pts[i] - pts[i - 1] : 40000));
+      onProgress?.('decoder');
       this.decoder = await wasmFlvDecoder({ codec, description }, glueURL, wasmBinary, threads);
+      onProgress?.('first-frame');
       this.primed = await this.extract(0);
       return { codec, decoder: 'ffmpeg-wasm', width: this.primed.width, height: this.primed.height,
         ...this.decoder.metadata?.(), firstPtsUs, durationUs: times.at(-1)! + durations.at(-1)!, times, durations };

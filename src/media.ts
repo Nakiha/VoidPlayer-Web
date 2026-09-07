@@ -1,3 +1,6 @@
+import type { MediaOpenProgress } from './media-progress.ts';
+export type { MediaOpenProgress } from './media-progress.ts';
+import { abortableLoad, loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
@@ -49,7 +52,6 @@ export async function inspectVideoTrack(input: Input) {
   return { track, codec, format: format.name };
 }
 export interface MediaMeta { name: string; size: number; lastModified: number; }
-export type MediaOpenProgress = (stage: 'download' | 'decode') => void;
 
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
@@ -64,18 +66,21 @@ interface OpenPlan {
   nativeInput(): Input;
   fallback(): Promise<MediaSource>;
   onProgress?: MediaOpenProgress;
+  signal?: AbortSignal;
 }
 
 function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
   const log = contextLog();
-  return (async () => {
+  return abortableLoad((async () => {
+    loadAborted(plan.signal);
     let nativeError: unknown;
     try {
       plan.onProgress?.('decode');
-      const source = await openWebCodecsInput(plan.nativeInput(), plan.meta);
+      const source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress);
       log.info('media', '使用 WebCodecs 解码路径', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (error) {
+      loadAborted(plan.signal);
       nativeError = error;
     }
     const stage = stageOf(nativeError);
@@ -87,63 +92,78 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
       log.info('media', 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (fallbackError) {
+      loadAborted(plan.signal);
       log.warn('media', 'WASM 回退也不支持', { name: plan.meta.name, error: errorText(fallbackError) });
       // Preserve input/resource failures and the actual decoder failure; the
       // initial capability error cannot explain a failed download or timeout.
       throw fallbackError;
     }
-  })();
+  })(), plan.signal, source => source.dispose());
 }
 
-export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  loadAborted(signal);
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
   if (await isFlvFile(file)) {
     const { openFlvMedia } = await import('./flv-media.ts');
-    return openFlvMedia({ file }, file);
+    return openFlvMedia({ file }, file, { signal, onProgress });
   }
   return openWithFallback({
     meta: file,
-    onProgress,
+    onProgress, signal,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
-    fallback: () => openFallback(file),
+    fallback: () => openFallback ? openFallback(file) : openFFmpegMedia(file, { signal, onProgress }),
   });
 }
 
 // Both native and WASM library paths read compressed bytes on demand.
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (url: string, meta: MediaMeta) => Promise<MediaSource> = openFFmpegMediaFromUrl, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  loadAborted(signal);
   if (!meta.size) {
-    const head = await fetch(url, { method: 'HEAD' });
+    const head = await fetch(url, { method: 'HEAD', signal });
     if (!head.ok) throw new MediaOpenError('input', `读取媒体文件信息失败（${head.status}）。`);
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
   if (/\.flv$/i.test(meta.name)) {
     const { openFlvMedia } = await import('./flv-media.ts');
-    return openFlvMedia({ url, size: meta.size }, meta);
+    return openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress });
   }
   return openWithFallback({
-    meta, onProgress,
+    meta, onProgress, signal,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
-    fallback: () => openFallback(url, meta),
+    fallback: () => openFallback ? openFallback(url, meta) : openFFmpegMediaFromUrl(url, meta, { signal, onProgress }),
   });
 }
 
-async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaSource> {
+async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+  const detachAbort = onLoadAbort(signal, () => input.dispose());
+  let primed: VideoSample | null = null;
   try {
+    loadAborted(signal);
     if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     // No WebCodecs at all is a decode-capability gap, not an input error:
     // the WASM fallback exists precisely for that case.
     throw new MediaOpenError('decode', '当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
     }
+    onProgress?.('inspect');
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
     const rawConfig = await track.getDecoderConfig();
     const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
     if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);
-    const first = await track.getFirstTimestamp();
+    onProgress?.('index');
+    let first = await track.getFirstTimestamp();
     const end = await track.computeDuration();
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new MediaOpenError('container', '无法确定视频的有效时间范围。');
     const sink = new VideoSampleSink(track, { hardwareAcceleration: config.hardwareAcceleration });
+    // A TS capture may start before a decodable keyframe. Capability alone
+    // does not prove frame 0 exists: prime inside the staged open operation.
+    onProgress?.('first-frame');
+    primed = await firstDecodableSample(sink, first);
+    loadAborted(signal);
+    first = primed.timestamp;
+    if (!Number.isFinite(first) || first >= end) throw new MediaOpenError('decode', '首个可解码画面不在有效时间范围内。');
     // Color metadata comes from the container (mediabunny), not from decoded
     // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
     const color = await track.getColorSpace().catch(() => null);
@@ -176,11 +196,14 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
+        if (ptsUs === 0 && primed) { const sample = primed; primed = null; return wrap(sample); }
+        primed?.close(); primed = null;
         const sample = await sink.getSample(first + (ptsUs + 0.5) / 1e6);
         if (!sample) throw new Error(`时间 ${ptsUs} µs 没有可解码的画面。`);
         return wrap(sample);
       },
       async framesAfter(ptsUs, count) {
+        primed?.close(); primed = null;
         // Iterate presentation order and keep true successors, so VFR and
         // timestamp gaps cannot strand stepping on a duration-based guess.
         // Start just before the current frame: its rounded start may sit a
@@ -200,6 +223,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
         return frames;
       },
       async *framesFrom(ptsUs) {
+        primed?.close(); primed = null;
         // Sequential iterator: the sink pre-decodes ahead, so playback no
         // longer pays a keyframe seek per frame like sparse getSample does.
         const iterator = sink.samples(first + Math.max(0, ptsUs - 1) / 1e6);
@@ -209,12 +233,30 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
           await iterator.return(undefined);
         }
       },
-      dispose: () => input.dispose(),
+      dispose: () => { primed?.close(); primed = null; input.dispose(); },
     };
-  } catch (error) { input.dispose(); throw error; }
+  } catch (error) { primed?.close(); input.dispose(); loadAborted(signal); throw error; }
+  finally { detachAbort(); }
 }
 
 async function isFlvFile(file: File): Promise<boolean> {
   const header = new Uint8Array(await file.slice(0, 3).arrayBuffer());
   return /\.flv$/i.test(file.name) || header[0] === 70 && header[1] === 76 && header[2] === 86;
+}
+
+/** Preserve the real source timestamp when the capture starts before a GOP. */
+export async function firstDecodableSample(sink: Pick<VideoSampleSink, 'getSample' | 'samples'>, first: number): Promise<VideoSample> {
+  const sample = await sink.getSample(first + 0.5 / 1e6);
+  if (sample) return sample;
+  const frames = sink.samples(first);
+  let decoded: VideoSample | undefined;
+  try {
+    const next = await frames.next();
+    decoded = next.done ? undefined : next.value;
+    if (decoded) return decoded;
+    throw new MediaOpenError('decode', '视频没有可解码的首帧。');
+  } finally {
+    try { await frames.return(undefined); }
+    catch (error) { decoded?.close(); throw error; }
+  }
 }

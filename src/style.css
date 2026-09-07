@@ -592,3 +592,19 @@ button.icon-button[aria-pressed=true] {
 .library-pagination > span { flex: 1; text-align: center; white-space: nowrap; }
 .library-pagination .icon-button { width: var(--control-small-height); height: var(--control-small-height); min-height: var(--control-small-height); background: transparent; }
 .library-cancel { width: 100%; min-height: var(--control-small-height); font-size: var(--text-xs); background: transparent; }
+
+/* Remains outside the scrolling file list, directly above Add source. */
+.source-activity { flex: 0 0 auto; padding: var(--panel-padding-block) var(--panel-padding-inline); border-top: 1px solid var(--divider); font-size: var(--text-xs); }
+.source-activity-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); min-height: var(--control-small-height); font-weight: 600; }
+.source-activity-heading button { flex: 0 0 auto; min-height: var(--control-small-height); height: var(--control-small-height); padding: 0 var(--space-2); font-size: var(--text-xs); }
+.source-activity-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); margin-top: var(--space-1); }
+.source-activity-meter { height: 2px; margin-top: var(--space-3); overflow: hidden; background: var(--divider); }
+.source-activity-meter span { display: block; height: 100%; width: 35%; background: var(--accent); animation: source-activity-pulse 1.6s ease-in-out infinite alternate; }
+.source-activity:not([data-state="loading"]) .source-activity-meter { display: none; }
+.source-activity-meta { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); color: var(--text-secondary); margin-top: var(--space-2); line-height: 1.5; overflow-wrap: anywhere; }
+#source-activity-time { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+#source-activity-hint { max-height: 5em; overflow: auto; }
+.source-activity[data-state="error"] #source-activity-stage { color: var(--action-danger); }
+.source-activity[data-state="idle"] .source-activity-meta { display: none; }
+@keyframes source-activity-pulse { from { transform: translateX(0); } to { transform: translateX(180%); } }
+@media (prefers-reduced-motion: reduce) { .source-activity-meter span { animation: none; width: 100%; opacity: .55; } }

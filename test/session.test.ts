@@ -576,3 +576,68 @@ test('workspace decode failure and cancellation preserve the prior session and r
   await assert.rejects(operation,{name:'AbortError'});assert.equal(cancelled.disposed,1);assert.equal(original.disposed,0);
   await session.dispose();
 });
+
+test('replacing a hung load immediately frees the queue and disposes its late source', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), late = media('late'), next = media('next');
+  const started = deferred<void>(), pending = deferred<MediaSource>();
+  let signal!: AbortSignal;
+  const loading = session.load('A', value => { signal = value; started.resolve(); return pending.promise; });
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  await started.promise;
+  await session.load('A', async () => next.source);
+  await rejected;
+  assert.equal(signal.aborted, true);
+  assert.equal(session.getState().tracks[0].id, 'next');
+  assert.equal(session.getState().error, null);
+  pending.resolve(late.source);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(late.disposed, 1);
+  session.pause();
+  assert.equal(next.disposed, 0, 'pause must not dispose a committed track');
+  await session.dispose();
+});
+
+test('cancelling while showing the first frame releases the incoming decoder exactly once', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), incoming = media('incoming');
+  const started = deferred<void>(), released = deferred<void>();
+  const dispose = incoming.source.dispose;
+  incoming.source.dispose = () => { dispose(); released.resolve(); };
+  incoming.source.frameAt = async () => { started.resolve(); await released.promise; throw new Error('decoder stopped'); };
+  const loading = session.load('A', async () => incoming.source);
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  await started.promise;
+  session.pause();
+  await rejected;
+  assert.equal(incoming.disposed, 1);
+  assert.equal(session.getState().error, null);
+  await session.load('A', async () => media('recovered').source);
+  await session.dispose();
+});
+
+test('shared load status reports stages and terminal results, ignoring progress from a cancelled load', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), pending = deferred<MediaSource>(), started = deferred<void>();
+  let report!: import('../src/media-progress.ts').MediaOpenProgress;
+  const loading = session.load('A', async (_, progress) => { report = progress; progress('index'); started.resolve(); return pending.promise; }, 'capture.ts');
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  assert.equal(session.getState().mediaLoad?.stage, 'queued');
+  assert.equal(session.getState().mediaLoad?.state, 'loading');
+  await started.promise;
+  assert.equal(session.getState().mediaLoad?.name, 'capture.ts');
+  assert.equal(session.getState().mediaLoad?.stage, 'index');
+  assert.equal(session.getState().mediaLoad?.state, 'loading');
+  session.pause();
+  await rejected;
+  assert.equal(session.getState().mediaLoad?.state, 'cancelled');
+  assert.ok(session.getState().mediaLoad?.finishedAt);
+  await session.load('A', async () => media('next').source, 'next');
+  report('decoder');
+  assert.equal(session.getState().mediaLoad?.name, 'next');
+  assert.equal(session.getState().mediaLoad?.state, 'complete');
+  await assert.rejects(session.load('A', async (_, progress) => { progress('decoder'); throw new Error('broken core'); }, 'bad.ts'));
+  assert.equal(session.getState().mediaLoad?.stage, 'decoder');
+  assert.equal(session.getState().mediaLoad?.state, 'error');
+  assert.equal(session.getState().mediaLoad?.error, 'broken core');
+  assert.equal(session.getState().tracks[0].name, 'next');
+  pending.resolve(media('late').source);
+  await session.dispose();
+});

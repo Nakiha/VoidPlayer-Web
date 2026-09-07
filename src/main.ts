@@ -285,7 +285,7 @@ async function importFiles(files: File[], slots: Slot[]) {
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException('文件导入已被新的请求取代。', 'AbortError');
-    await withLogContext(context, () => session.load(slots[i], () => openMedia(files[i])));
+    await withLogContext(context, () => session.load(slots[i], (signal, progress) => openMedia(files[i], undefined, progress, signal), files[i].name));
     workbench.rememberFile(files[i]);
   }
 }
@@ -568,7 +568,7 @@ const api = {
     return captureFrame(canvases[slot]);
   },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
-    const result = await session.load(slot, () => openMedia(file)); workbench.rememberFile(file); return result;
+    const result = await session.load(slot, (signal, progress) => openMedia(file, undefined, progress, signal), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
   exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,

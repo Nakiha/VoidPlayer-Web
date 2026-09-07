@@ -82,6 +82,12 @@ export function shell() {
         <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button></div>
         <label class="search-field">${icon('search')}<input id="source-search" type="search" placeholder="搜索片源" aria-label="搜索片源"></label>
         <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
+        <section id="source-activity" class="source-activity" aria-label="片源载入状态" data-state="idle">
+          <div class="source-activity-heading"><span id="source-activity-stage" role="status" aria-live="polite" aria-atomic="true">等待添加片源</span><button id="source-activity-cancel" hidden>取消</button></div>
+          <div id="source-activity-name" class="source-activity-name">点击片源旁的 + 添加到视图</div>
+          <div class="source-activity-meter" aria-hidden="true"><span></span></div>
+          <div class="source-activity-meta"><span id="source-activity-time"></span><span id="source-activity-hint"></span></div>
+        </section>
         <footer class="panel-foot"><button id="sources-import">${icon('filePlus')}添加片源</button><input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden></footer>
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="子轨道" hidden>

@@ -1,3 +1,4 @@
+import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { VideoSample } from 'mediabunny';
@@ -10,6 +11,7 @@ import { contextLog } from './log.ts';
 import type { MediaInfo } from './model.ts';
 
 export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean } = {}): Promise<MediaSource> {
+  loadAborted(deps.signal);
   const reservation = reserveFallbackThreads();
   let rpc: WorkerRpc | undefined;
   try {
@@ -19,17 +21,22 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     type Init = Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
     let init: Init | undefined, selected = single, failure: unknown;
     for (const glueURL of candidates) {
+      loadAborted(deps.signal);
       const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'
         ? new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' })
         : new (await import('node:worker_threads')).Worker(new URL('./packet-worker.ts', import.meta.url)) as unknown as Worker;
-      rpc = new WorkerRpc(worker);
+      rpc = new WorkerRpc(worker, undefined, deps.onProgress);
+      const currentRpc = rpc;
+      const detachAbort = onLoadAbort(deps.signal, () => currentRpc.terminate(deps.signal!.reason));
       try {
+        deps.onProgress?.('inspect');
         init = await rpc.call<Init>('init', { input, glueURL, wasmBinary: deps.wasmBinary, forceWasm: deps.forceWasm, container, threads: reservation.threads }, [], glueURL.includes('core-mt.') ? 10000 : 60000);
         selected = glueURL; break;
       } catch (error) {
         rpc.terminate(); failure = error;
+        loadAborted(deps.signal);
         if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
-      }
+      } finally { detachAbort(); }
     }
     if (!init || !rpc) throw failure;
     const activeRpc = rpc;

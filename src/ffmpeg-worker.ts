@@ -1,3 +1,4 @@
+import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
@@ -30,7 +31,8 @@ const port: any = (() => {
 let core: any = null;
 const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string }>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
+  onProgress('decoder');
   const mod = await import(payload.glueURL);
   core = await mod.default(payload.wasmBinary ? { wasmBinary: new Uint8Array(payload.wasmBinary) } : {});
   core.vpBlobs = new Map();
@@ -44,6 +46,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     // Blobs read on demand through the custom AVIO (FileReaderSync chunks), so
     // no whole-file copy ever enters WASM memory. Node workers lack
     // FileReaderSync and buffer the bytes once (capped) into MEMFS.
+    onProgress('inspect');
     let ioMode = 'memfs';
     if (payload.range) {
       ioMode = 'http-range'; blobHandle = ctx;
@@ -84,6 +87,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
         throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
       }
     }
+    onProgress('index');
     const indexStart = performance.now();
     const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
@@ -140,7 +144,7 @@ port.onmessage = async (event: { data: any }) => {
   const { id, type, ...payload } = event.data;
   try {
     if (type === 'init') {
-      port.postMessage({ id, ok: true, data: await init(payload) });
+      port.postMessage({ id, ok: true, data: await init(payload, progress => port.postMessage({ id, type: 'progress', progress })) });
     } else if (type === 'extract') {
       const buffer = extract(payload.ctx, payload.index, payload.recycle);
       port.postMessage({ id, ok: true, data: buffer }, [buffer]);
