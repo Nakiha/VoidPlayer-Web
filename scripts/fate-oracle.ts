@@ -20,7 +20,7 @@ export function pixelSignature(pixels: ArrayLike<number>, width: number, height:
 export function checkFrame(actual: ObservedFrame, expected: ReferenceFrame, label: string): Failure[] {
   const failures: Failure[] = [];
   const fail = (code: string, detail: string) => failures.push({ code, detail: `${label}: ${detail}` });
-  if (Math.abs(actual.ptsUs - expected.ptsUs) > 1) fail('pts', `${actual.ptsUs} != ${expected.ptsUs}`);
+  if (!Number.isSafeInteger(actual.ptsUs) || Math.abs(actual.ptsUs - expected.ptsUs) > 1) fail('pts', `${actual.ptsUs} != ${expected.ptsUs}`);
   if (actual.width !== expected.width || actual.height !== expected.height) fail('geometry', `${actual.width}x${actual.height} != ${expected.width}x${expected.height}`);
   if (actual.bytes !== undefined && actual.bytes !== actual.width * actual.height * 4) fail('bytes', `invalid RGBA length ${actual.bytes}`);
   // Regional averages tolerate browser YUV conversion/rounding, but catch wrong

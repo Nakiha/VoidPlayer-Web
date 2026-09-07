@@ -34,3 +34,13 @@ test('seek releases skipped and exact-hit predecessors and close releases lookah
   const exact=await timeline.at(20000);assert.ok(closed.includes(0));exact.frame!.close();
   const floor=await timeline.at(30000);floor.frame!.close();timeline.close();assert.ok(closed.includes(40000));
 });
+test('next after an unrelated seek discards lookahead from the old display position',async()=>{
+  const {timeline}=fixture();
+  try{
+    const floor=await timeline.at(30000);floor.frame!.close();
+    const earlier=await timeline.next(0);assert.equal(earlier?.pts,20000);earlier!.frame!.close();
+    const last=await timeline.at(40000);last.frame!.close();
+    const beforeStart=await timeline.next(-1);assert.equal(beforeStart?.pts,0);beforeStart!.frame!.close();
+    const later=await timeline.next(20000);assert.equal(later?.pts,40000);later!.frame!.close();
+  }finally{timeline.close();}
+});

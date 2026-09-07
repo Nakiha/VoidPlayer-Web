@@ -6,6 +6,7 @@ test('FATE oracle rejects silent missing frames, incorrect timestamps, geometry,
   assert.deepEqual(checkSequence(frames,frames),[]);
   assert.ok(checkSequence(frames.slice(0,2),frames).some(f=>f.code==='count'));
   assert.ok(checkSequence([frames[0],frames[2]],frames).some(f=>f.code==='pts'));
+  for(const ptsUs of [NaN,Infinity,0.5]) assert.ok(checkFrame({...frames[0],ptsUs},frames[0],'frame').some(f=>f.code==='pts'));
   assert.ok(checkFrame({...frames[0],width:4,bytes:256},frames[0],'frame').some(f=>f.code==='geometry'));
   assert.ok(checkFrame({...frames[0],signature:Array(48).fill(130)},frames[0],'frame').some(f=>f.code==='pixels'));
   assert.equal(expectedAt(frames,79000),frames[1]);assert.equal(expectedAt(frames,0),frames[0]);assert.equal(expectedAt(frames,999999),frames[2]);

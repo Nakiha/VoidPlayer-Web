@@ -10,6 +10,7 @@ export class PacketTimeline {
   private drained=false;
   private started=false;
   private lastPts=-Infinity;
+  private deliveredPts:number|null=null;
   private pending:FlvFrame|null=null;
   private failure:unknown;
   private operation=0;
@@ -18,7 +19,7 @@ export class PacketTimeline {
   readonly decoder:PacketDecoder;
   readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
   constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>){this.index=index;this.decoder=decoder;this.read=read;}
-  replaceIndex(index:FlvIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;}
+  replaceIndex(index:FlvIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
       if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,description:this.index.configurations?.[id]??this.index.description});
@@ -28,6 +29,7 @@ export class PacketTimeline {
   }
   private async start(target:number){
     this.pending?.frame?.close();this.pending=null;
+    this.actualPacket=undefined;this.deliveredPts=null;
     const {packets,order}=this.index;
     let lo=0,hi=order.length;
     while(lo<hi){const m=(lo+hi)>>1;if(packets[order[m]].pts<=target)lo=m+1;else hi=m;}
@@ -67,8 +69,8 @@ export class PacketTimeline {
       try{
         for(;;){
           const f=await this.pull(recycle);recycle=undefined;
-          if(!f){if(previous)return previous;throw new MediaOpenError('decode','解码器没有输出可显示帧。');}
-          if(f.pts>=target){if(f.pts===target||!previous){previous?.frame?.close();return f;}this.pending=f;return previous;}
+          if(!f){if(previous){this.deliveredPts=previous.pts;return previous;}throw new MediaOpenError('decode','解码器没有输出可显示帧。');}
+          if(f.pts>=target){if(f.pts===target||!previous){previous?.frame?.close();this.deliveredPts=f.pts;return f;}this.pending=f;this.deliveredPts=previous.pts;return previous;}
           previous?.frame?.close();previous=f;
         }
       }catch(error){previous?.frame?.close();throw error;}
@@ -76,10 +78,12 @@ export class PacketTimeline {
   }
   async next(after:number,recycle?:ArrayBuffer):Promise<FlvFrame|null>{
     return this.run(after,async()=>{
-      if(!this.started||(!this.pending&&this.lastPts!==after)){
-        const f=await this.at(after);f.frame?.close();
+      if(!this.started||this.deliveredPts!==after){
+        const f=await this.at(after);
+        if(f.pts>after)return f;
+        f.frame?.close();
       }
-      for(;;){const f=await this.pull(recycle);recycle=undefined;if(!f||f.pts>after)return f;f.frame?.close();}
+      for(;;){const f=await this.pull(recycle);recycle=undefined;if(!f||f.pts>after){if(f)this.deliveredPts=f.pts;return f;}f.frame?.close();}
     });
   }
   private async run<T>(target:number,work:()=>Promise<T>):Promise<T>{
