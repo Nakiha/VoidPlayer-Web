@@ -5,7 +5,7 @@ import type { FlvIndex, FlvPacket } from './flv-demux.ts';
 import type { MediaInfo } from './model.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
-import { instantiateCore } from './wasm-core.ts';
+import { loadCore } from './wasm-core.ts';
 
 export interface FlvFrame { pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
@@ -94,13 +94,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'description'>, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
-  const mod = await import(/* @vite-ignore */ glueURL);
-  if (!wasmBinary) {
-    const url = new URL(glueURL); url.pathname = url.pathname.replace(/\.js$/, '.wasm');
-    const response = await fetch(url); if (!response.ok) throw new Error(`WASM 下载失败：${response.status}`);
-    wasmBinary = new Uint8Array(await response.arrayBuffer());
-  }
-  const { core, heap } = await instantiateCore(mod.default, wasmBinary);
+  const { core, heap } = await loadCore(glueURL, wasmBinary);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
   call('vp_set_threads', ['number'], [threads], null);

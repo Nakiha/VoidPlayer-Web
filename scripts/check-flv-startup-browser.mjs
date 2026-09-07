@@ -4,6 +4,7 @@ await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
 import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
+import { formatTime } from '../src/model.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
 let browser;
 async function within(promise, ms) {
@@ -31,11 +32,18 @@ try {
   const startupMs = Math.round(performance.now() - start);
   assert.equal(first.tracks[0].decoder, 'webcodecs'); assert.equal(first.tracks[0].frame.ptsUs, 0);
   assert.equal(first.tracks[0].indexState, 'building'); assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
+  const dock = async () => page.evaluate(() => ({ duration: document.querySelector('.track-duration').textContent, ruler: document.querySelector('#subtrack-ruler').textContent }));
+  const startupDock = await dock();
   await page.screenshot({ path: `.run/playback-reports/flv-startup-${browserName}.png` });
   await within(call('seek_review', { ptsUs: 0 }), 3000);
   let finished = false; const seek = call('seek_review', { ptsUs: 2500000 }).then(s => { finished = true; return s; });
   await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
   fixture.release(); const complete = await seek; assert.equal(complete.tracks[0].indexState, 'complete');
+  const expectedDuration = formatTime(complete.tracks[0].durationUs);
+  await page.waitForFunction(text => document.querySelector('.track-duration').textContent === text, expectedDuration);
+  const completeDock = await dock();
+  assert.notEqual(completeDock.duration, startupDock.duration); assert.notEqual(completeDock.ruler, startupDock.ruler);
+  assert.ok(completeDock.ruler.endsWith(expectedDuration), 'ruler follows completed index duration');
   assert.match(complete.tracks[0].indexWarning, /尾部不完整/);
   assert.match(await page.locator('#meta-A').textContent(), /尾部不完整/);
   await page.waitForFunction(async () => (await (await fetch('/api/admin/frame-indexes')).json()).count === 1);

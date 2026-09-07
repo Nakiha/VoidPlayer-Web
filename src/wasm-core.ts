@@ -1,3 +1,13 @@
+export async function loadCore(glueURL: string, binary?: Uint8Array) {
+  const mod = await import(/* @vite-ignore */ glueURL);
+  if (!binary) {
+    const url = new URL(glueURL); url.pathname = url.pathname.replace(/\.js$/, '.wasm');
+    const response = await fetch(url); if (!response.ok) throw new Error(`WASM 下载失败：${response.status}`);
+    binary = new Uint8Array(await response.arrayBuffer());
+  }
+  return instantiateCore(mod.default, binary);
+}
+
 /** Capture the actual memory through Emscripten's public instantiation hook.
  * A pthread can grow shared memory without refreshing Module.HEAPU8 in this
  * worker. External callers must get a current view from memory.buffer instead.

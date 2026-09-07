@@ -188,7 +188,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     }
   }
   function renderDock(state: State) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}`).join('/') + JSON.stringify(state.marks);
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.durationUs}:${t.indexState}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
       $('subtrack-count').textContent = String(state.tracks.length);

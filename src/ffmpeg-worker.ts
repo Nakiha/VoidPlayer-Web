@@ -1,7 +1,7 @@
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
-import { instantiateCore } from './wasm-core.ts';
+import { loadCore } from './wasm-core.ts';
 import { checkedHeap } from './flv-decoder.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
@@ -36,8 +36,7 @@ const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: st
 
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
   onProgress('decoder');
-  const mod = await import(payload.glueURL);
-  ({ core, heap } = await instantiateCore(mod.default, new Uint8Array(payload.wasmBinary)));
+  ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
