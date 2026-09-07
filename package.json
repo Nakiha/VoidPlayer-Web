@@ -39,7 +39,9 @@
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
     "test:saved-workspaces:browser": "npm run build && node scripts/check-saved-workspaces-browser.mjs",
     "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs",
-    "test:release:browser": "node scripts/check-release-browser.mjs"
+    "test:release:browser": "node scripts/check-release-browser.mjs",
+    "test:fate": "node scripts/check-fate.mjs",
+    "test:fate:browser": "node scripts/check-fate-browser.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

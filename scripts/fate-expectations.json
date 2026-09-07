@@ -1,0 +1,237 @@
+{
+  "node": {
+    "h264/brokensps.flv": {
+      "container-single": {
+        "reject": "container"
+      },
+      "container-multi": {
+        "reject": "container"
+      },
+      "flv-packets": {}
+    },
+    "h264/test-4867.flv": {
+      "container-single": {
+        "reject": "container"
+      },
+      "container-multi": {
+        "reject": "container"
+      },
+      "flv-packets": {
+        "reject": "container"
+      }
+    },
+    "h264/extradata-reload-multi-stsd.mov": {
+      "container-single": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "container-multi": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "mp4-packets": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      }
+    },
+    "hevc/extradata-reload-multi-stsd.mov": {
+      "container-single": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "container-multi": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "mp4-packets": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      }
+    },
+    "h264/crop-to-container-dims-canon.mov": {
+      "container-single": {},
+      "container-multi": {},
+      "mp4-packets": {
+        "reject": "container"
+      }
+    },
+    "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
+      "container-single": {},
+      "container-multi": {},
+      "mp4-packets": {
+        "known": [
+          "play:decode"
+        ]
+      }
+    },
+    "h264/interlaced_crop.mp4": {
+      "container-single": {},
+      "container-multi": {},
+      "mp4-packets": {}
+    },
+    "hevc/paramchange_yuv420p_yuv420p10.hevc": {
+      "container-single": {
+        "reject": "container"
+      },
+      "container-multi": {
+        "reject": "container"
+      }
+    }
+  },
+  "browser": {
+    "h264/brokensps.flv": {
+      "chromium/local": {},
+      "chromium/http": {},
+      "webkit/local": {
+        "known": [
+          "geometry",
+          "pixels",
+          "play:decode"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "geometry",
+          "pixels",
+          "play:decode"
+        ]
+      }
+    },
+    "h264/extradata-reload-multi-stsd.mov": {
+      "chromium/local": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "chromium/http": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "webkit/local": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      }
+    },
+    "hevc/extradata-reload-multi-stsd.mov": {
+      "chromium/local": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "chromium/http": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "webkit/local": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "geometry",
+          "pixels",
+          "first:decode",
+          "play:decode"
+        ]
+      }
+    },
+    "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
+      "chromium/local": {
+        "known": [
+          "count",
+          "pts",
+          "pixels",
+          "seek:decode"
+        ]
+      },
+      "chromium/http": {
+        "known": [
+          "count",
+          "pts",
+          "pixels",
+          "seek:decode"
+        ]
+      },
+      "webkit/local": {
+        "known": [
+          "pixels"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "pixels"
+        ]
+      }
+    },
+    "h264/interlaced_crop.mp4": {
+      "chromium/local": {},
+      "chromium/http": {},
+      "webkit/local": {
+        "known": [
+          "geometry",
+          "seek:decode"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "geometry",
+          "seek:decode"
+        ]
+      }
+    }
+  }
+}

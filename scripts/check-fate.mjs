@@ -1,41 +1,47 @@
-// Targeted player integration audit, not a replacement for FFmpeg's FATE suite.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import assert from 'node:assert/strict';
 import { openFlvMedia } from '../src/flv-media.ts';
 import { openFFmpegMedia } from '../src/ffmpeg-media.ts';
 import { openPacketMedia } from '../src/packet-media.ts';
+import { pixelSignature, checkFrame, checkSequence, expectedAt, classify } from './fate-oracle.ts';
 const manifest = JSON.parse(await readFile(new URL('./fate-samples.json', import.meta.url)));
+const reference = JSON.parse(await readFile(new URL('./fate-reference.json', import.meta.url)));
+const expectations = JSON.parse(await readFile(new URL('./fate-expectations.json', import.meta.url)));
 const report = [];
 for (const item of manifest) {
-  const path = new URL('../fixtures/fate/' + item.file, import.meta.url);
-  const bytes = await readFile(path);
-  if (createHash('sha256').update(bytes).digest('hex') !== item.sha256) throw new Error('FATE sample checksum mismatch: '+item.file);
-  const reference = JSON.parse(execFileSync('ffprobe', ['-v','quiet','-select_streams','v:0','-show_frames','-show_entries','frame=best_effort_timestamp_time,width,height,pix_fmt','-of','json',path.pathname], {maxBuffer:16*1024*1024,timeout:30000}));
+  const bytes = await readFile(new URL('../fixtures/fate/' + item.file, import.meta.url));
+  assert.equal(createHash('sha256').update(bytes).digest('hex'), item.sha256);
+  const ref=reference.samples[item.path];assert.equal(ref.sha256,item.sha256);
   for (const backend of ['container-single', 'container-multi', ...(item.file.endsWith('.flv') ? ['flv-packets'] : /\.(mp4|mov)$/.test(item.file) ? ['mp4-packets'] : [])]) {
     const file = new File([bytes], item.file), variant = backend.endsWith('multi') ? '-mt' : '';
     const deps = {glueURL: new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.js`,import.meta.url).href,
       wasmBinary:await readFile(new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.wasm`,import.meta.url)),forceWasm:true};
-    const row = {sample:item.path,backend,referenceFrames:reference.frames?.length,referenceGeometry:[...new Set(reference.frames?.map(f=>`${f.width}x${f.height}:${f.pix_fmt}`))],frames:0,geometry:[],geometryMismatches:[],seeks:[],phase:'open'};
+    const row = {sample:item.path,backend,referenceFrames:ref.frames.length,frames:[],seeks:[],failures:[],phase:'open'};
+    const observe = frame => ({ptsUs:frame.ptsUs,width:frame.width,height:frame.height,bytes:frame.pixels?.byteLength,
+      signature:frame.pixels && pixelSignature(frame.pixels,frame.width,frame.height)});
     let source;
     try {
       source = await (backend==='flv-packets' ? openFlvMedia({file},file,deps) : backend==='mp4-packets' ? openPacketMedia('mp4',{file},file,deps) : openFFmpegMedia(file,deps));
-      row.info=structuredClone(source.info); row.phase='first'; (await source.frameAt(0)).close();
-      row.phase='index'; await source.ensureIndexed?.(); row.durationUs=source.info.durationUs;
-      row.phase='play';
+      row.info=structuredClone(source.info); row.phase='first';
+      const first=await source.frameAt(0);try{row.failures.push(...checkFrame(observe(first),ref.frames[0],'first'));}finally{first.close();}
+      row.phase='index'; await source.ensureIndexed?.();row.phase='play';
       for await(const frame of source.framesFrom(0)) {
-        const expected=reference.frames?.[row.frames];
-        if(expected && (expected.width!==frame.width || expected.height!==frame.height) && row.geometryMismatches.length<8) row.geometryMismatches.push({frame:row.frames,expected:[expected.width,expected.height],actual:[frame.width,frame.height],bytes:frame.pixels?.byteLength});
-        row.frames++; const size=`${frame.width}x${frame.height}`;if(!row.geometry.includes(size))row.geometry.push(size);frame.close(); if(row.frames>2000)throw new Error('audit frame limit');
+        try{row.frames.push(observe(frame));}finally{frame.close();}
+        if(row.frames.length>2000)throw new Error('audit frame limit');
       }
+      row.failures.push(...checkSequence(row.frames,ref.frames));
       row.phase='seek';
-      for(const time of [0,Math.floor(source.info.durationUs/2),Math.max(0,source.info.durationUs-1),0]) {const f=await source.frameAt(time);row.seeks.push({requested:time,actual:f.ptsUs});f.close();}
+      for(const time of [0,Math.floor(source.info.durationUs/2),Math.max(0,source.info.durationUs-1),0]) {
+        const f=await source.frameAt(time);try{const actual=observe(f);row.seeks.push({requested:time,...actual});row.failures.push(...checkFrame(actual,expectedAt(ref.frames,time),`seek ${time}`));}finally{f.close();}
+      }
       row.phase='complete';
-    } catch(e) {row.error={message:e.message,stage:e.stage};}
+    } catch(e) {row.error={message:e.message,stage:e.stage};row.failures.push({code:`${row.phase}:${e.stage??'decode'}`,detail:e.message});}
     finally {source?.dispose();}
-    row.passed = row.phase==='complete' && row.frames===row.referenceFrames && !row.geometryMismatches.length;
-    report.push(row); console.log(JSON.stringify(row));
+    row.status=classify(row.failures,expectations.node[item.path]?.[backend]??{});
+    report.push(row);console.log(JSON.stringify({sample:row.sample,backend,status:row.status,frames:row.frames.length,failures:row.failures}));
   }
 }
-await mkdir('.run/playback-reports',{recursive:true}); await writeFile('.run/playback-reports/fate-report.json',JSON.stringify(report,null,2)+'\n');
-console.log(`FATE integration audit: ${report.filter(r=>r.passed).length}/${report.length} passed; failures are recorded, not release gates.`);
+await mkdir('.run/playback-reports',{recursive:true});await writeFile('.run/playback-reports/fate-report.json',JSON.stringify({referenceGenerator:reference.generator,report},null,2)+'\n');
+console.log('FATE integration:',Object.fromEntries(['pass','expected-rejection','known-failure','fail'].map(s=>[s,report.filter(r=>r.status===s).length])));
+if(report.some(r=>r.status==='fail') && !process.argv.includes('--report-only'))process.exitCode=1;
