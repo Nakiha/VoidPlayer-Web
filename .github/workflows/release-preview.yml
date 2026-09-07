@@ -140,6 +140,7 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - name: Generate approximately 100 MB 1080p playback inputs
+        id: playback-inputs
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg libnss3-tools
@@ -151,6 +152,7 @@ jobs:
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
       - name: Test trusted HTTPS loading, repeated dual WebCodecs playback and benchmark
+        if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/check-http-playback.mjs
         env:
           VOIDPLAYER_HTTPS_TEST: '1'

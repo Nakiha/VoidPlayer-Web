@@ -8,10 +8,13 @@ import { X509Certificate, randomUUID } from 'node:crypto';
 export async function trustTestCertificate(file) {
   if (process.env.GITHUB_ACTIONS !== 'true') throw new Error('Automatic certificate trust is restricted to disposable GitHub Actions runners.');
   const cert = new X509Certificate(await readFile(file));
-  const run = args => execFileSync(process.platform === 'win32' ? 'certutil.exe' : 'certutil', args, { stdio: 'pipe' });
+  const run = args => execFileSync(process.platform === 'win32' ? 'certutil.exe' : 'certutil', args, { stdio: 'pipe', timeout: 15000 });
   if (process.platform === 'win32') {
-    run(['-user', '-addstore', 'Root', file]);
-    return () => run(['-user', '-delstore', 'Root', cert.fingerprint.replaceAll(':', '')]);
+    // Hosted Windows runners are administrators without an interactive desktop.
+    // CurrentUser root imports can wait for a trust dialog; use the disposable
+    // runner's machine store and remove this exact certificate during cleanup.
+    run(['-f', '-addstore', 'Root', file]);
+    return () => run(['-delstore', 'Root', cert.fingerprint.replaceAll(':', '')]);
   }
   if (process.platform !== 'linux') throw new Error('Certificate trust test supports Linux and Windows runners.');
   const legacy = path.join(homedir(), '.pki/nssdb');
