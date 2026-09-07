@@ -98,6 +98,19 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       ticks[i] = Number(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
       durations[i] = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]));
     }
+    // MP4 edit lists may keep negative-time discard/pre-roll packets in the
+    // demux index. Keep them in the core for decoding, but do not expose an
+    // unrenderable prefix as frame zero. Never skip a positive-time failure.
+    let prefix = 0;
+    while (prefix < ticks.length && ticks[prefix] < 0) {
+      if (prefix >= 128) throw new MediaOpenError('resource', '视频预滚范围超过 128 帧探测上限。');
+      const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, BigInt(ticks[prefix])]);
+      if (result === 1) break;
+      if (result !== 2) throw new MediaOpenError('decode', '软件解码器无法解析视频预滚帧。');
+      prefix++;
+    }
+    if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
+    if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
     contexts.set(ctx, { ticks, blobHandle, path });
     return {
       ctx, path, ticks, durations, indexMs, ioMode,

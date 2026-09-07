@@ -80,19 +80,22 @@ try {
   assert.deepEqual(capture, { width:244,height:436 });
   await page.screenshot({ path: `.run/playback-reports/hevc-portrait-${browserName}.png` });
   await call('remove_review_track', { slot:'A' });
-  const preroll = [...await prerollMp4()];
-  for (let round=0; round<3; round++) {
-    await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'preroll.mp4')), preroll);
-    const configurations = await page.evaluate(() => window.testDecoderConfigurations);
-    for (let i=0;i<3;i++) await call('seek_review', {ptsUs:0});
-    assert.equal(await page.evaluate(() => window.testDecoderConfigurations), configurations, 'repeated first-frame access does not decode again');
-    await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'preroll-b.mp4')), preroll);
-    await page.evaluate(() => window.voidPlayer.play());
-    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 100000);
-    await call('pause_review');
-    await call('remove_review_track',{slot:'B'}); await call('remove_review_track',{slot:'A'});
-    await page.waitForFunction(() => window.testDecoders.every(d => d.state === 'closed'));
+  for (const codec of ['h264', 'hevc']) {
+    const preroll = [...await prerollMp4(codec)];
+    for (let round=0; round<3; round++) {
+      await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'preroll.mp4')), preroll);
+      const configurations = await page.evaluate(() => window.testDecoderConfigurations);
+      for (let i=0;i<3;i++) await call('seek_review', {ptsUs:0});
+      assert.equal(await page.evaluate(() => window.testDecoderConfigurations), configurations, 'repeated first-frame access does not decode again');
+      await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'preroll-b.mp4')), preroll);
+      await page.evaluate(() => window.voidPlayer.play());
+      await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 100000);
+      await call('pause_review');
+      await call('remove_review_track',{slot:'B'}); await call('remove_review_track',{slot:'A'});
+      await page.waitForFunction(() => window.testDecoders.every(d => d.state === 'closed'));
+    }
   }
+  assert.ok(await page.evaluate(() => window.testDecoderConfigurations > 0), 'native decoder lifecycle was exercised');
   assert.deepEqual(errors, []);
   console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);
 } finally { await browser?.close(); await fixture.close(); }

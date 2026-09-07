@@ -110,4 +110,6 @@ FLV 同编码配置/分辨率切换：索引记录每段配置和所属视频包
 
 HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位计算的 conformance window 和 VUI SAR；配置 WebCodecs codedWidth/codedHeight 与 displayAspect，切换配置时同步更新。输出 visibleRect 不符时拒绝原生首帧并走软件回退，不能仅交换画布宽高；像素区域一致时才可通过 VideoFrame 显示元数据修正比例。SPS 读取有边界/数量限制，多个不同尺寸 SPS 不猜测当前生效者。`test/hevc-geometry.test.ts` 包括 736→720 的 4:2:0 裁剪与真实竖屏/非方形 SAR。
 
-首帧与关闭重开：原生片源保留一份首帧引用，frameAt(0) 返回独立 clone，dispose 释放缓存及活跃 sink 迭代器。添加片源不会重复解码已经在会话时间 0 的其他轨道。浏览器回归使用带预滚的 HEVC MP4，重复定位 0 不重新 configure 解码器，双轨打开/播放/关闭循环后检查所有主线程 VideoDecoder 都已关闭，并验证竖屏上屏与采样尺寸。
+首帧与关闭重开：原生片源保留一份首帧引用，frameAt(0) 返回独立 clone，dispose 释放缓存及活跃 sink 迭代器。添加片源不会重复解码已经在会话时间 0 的其他轨道。浏览器回归使用带预滚的 H.264 / HEVC MP4，重复定位 0 不重新 configure 解码器，双轨打开/播放/关闭循环后检查所有主线程 VideoDecoder 都已关闭，并验证竖屏上屏与采样尺寸。
+
+软件解码预滚：逐个探测负时间前缀，仅将返回时间不匹配的不可输出包移出显示索引，原始包仍留在 core 中用于解码参考。最多探测 128 个，非负时间包及其他错误不跳过。`test/preroll.test.ts` 使用真实 HEVC open-GOP 裁切文件验证首次及重复定位；浏览器回归同时覆盖原生与可用的软件回退路径。

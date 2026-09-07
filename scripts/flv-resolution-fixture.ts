@@ -28,11 +28,11 @@ export async function resolutionFlv(codec = 'h264', sizes = ['320x180', '640x360
   } finally { await rm(dir, { recursive: true, force: true }); }
 }
 
-export async function prerollMp4(): Promise<Buffer> {
+export async function prerollMp4(codec = 'hevc'): Promise<Buffer> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'vp-preroll-'));
   try {
     const source = path.join(dir,'source.mp4'), cut = path.join(dir,'cut.mp4');
-    execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=320x180:rate=10','-t','4','-an','-c:v','libx265','-preset','ultrafast','-x265-params','pools=1:frame-threads=1:log-level=error:keyint=20:open-gop=1','-tag:v','hvc1',source],{timeout:30000});
+    execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','testsrc2=size=320x180:rate=10','-t','4','-an','-c:v',codec === 'hevc' ? 'libx265' : 'libx264','-preset','ultrafast',...(codec === 'hevc' ? ['-x265-params','pools=1:frame-threads=1:log-level=error:keyint=20:open-gop=1','-tag:v','hvc1'] : ['-x264-params','keyint=20:open-gop=1','-bf','2']),source],{timeout:30000});
     execFileSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-ss','0.7','-i',source,'-t','2','-c','copy',cut],{timeout:30000});
     return await readFile(cut);
   } finally { await rm(dir,{recursive:true,force:true}); }
