@@ -10,7 +10,7 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
     const actor = currentActor(); setActor(actor);
     $('current').textContent = actor?.name ?? '正在连接服务…';
     $('id').textContent = actor ? `ID · ${actor.id.slice(0, 8)}` : '';
-    $('id').title = actor?.id ?? '';
+    $('id').dataset.tooltip = actor?.id ?? '';
     input.value = actor?.name ?? '';
     input.disabled = select.disabled = $<HTMLButtonElement>('save').disabled = busy || !actor;
     select.value = actor?.id ?? '';

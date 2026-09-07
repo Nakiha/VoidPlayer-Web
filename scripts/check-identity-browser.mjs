@@ -20,21 +20,21 @@ try {
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); };
   await page.goto(base); await settings(page);
   const cached = await page.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.identity'))); assert.ok(cached.name && cached.id);
-  const id = await page.locator('#identity-id').getAttribute('title'); assert.ok(id);
+  const id = await page.locator('#identity-id').getAttribute('data-tooltip'); assert.ok(id);
   assert.equal(await page.locator('#identity-id').innerText(), `ID · ${id.slice(0, 8)}`);
   await page.locator('#identity-name').fill('小明'); await page.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '小明' && !document.querySelector('#identity-save').disabled);
-  assert.equal(await page.locator('#identity-id').getAttribute('title'), id);
+  assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await other.goto(base); await settings(other);
-  const otherId = await other.locator('#identity-id').getAttribute('title'); assert.notEqual(otherId, id);
+  const otherId = await other.locator('#identity-id').getAttribute('data-tooltip'); assert.notEqual(otherId, id);
   await other.locator('#identity-users').selectOption(id);
   await other.waitForFunction(() => document.querySelector('#identity-current').textContent === '小明');
-  assert.equal(await other.locator('#identity-id').getAttribute('title'), id);
+  assert.equal(await other.locator('#identity-id').getAttribute('data-tooltip'), id);
   // Editing from another tab updates the name without replacing the user ID.
   const tab = await a.newPage(); await tab.goto(base); await settings(tab);
   await tab.locator('#identity-name').fill('新名字'); await tab.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '新名字');
-  await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('title'), id);
+  await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-name').fill('   '); await page.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-message').textContent.includes('1–128'));
   assert.equal(await page.locator('#identity-current').innerText(), '新名字');
@@ -46,11 +46,11 @@ try {
   const overflow = await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth - e.clientWidth); assert.ok(overflow <= 1);
   await page.screenshot({ path: '/tmp/voidplayer-identity-mobile.png' });
   await service.close(); service = await startService(config);
-  await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('title'), id);
+  await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await a.clearCookies(); await page.reload(); await settings(page);
-  assert.notEqual(await page.locator('#identity-id').getAttribute('title'), id);
+  assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-users').selectOption(id);
-  await page.waitForFunction(id => document.querySelector('#identity-id').title === id, id);
+  await page.waitForFunction(id => document.querySelector('#identity-id').dataset.tooltip === id, id);
   assert.deepEqual(errors, []);
   console.log('PASS identity: automatic users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
 } finally { await browser?.close(); await service?.close(); await rm(temp, { recursive: true, force: true }); }
