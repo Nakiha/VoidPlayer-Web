@@ -17,6 +17,7 @@ try {
   if (secure) config.tls = { hosts: ['voidplayer.test'] };
   service = await startService(config); config.port = service.server.address().port;
   if (secure) untrust = await trustTestCertificate(service.tls.caFile);
+  console.log('Identity browser: service ready, certificate trust configured');
   const base = `${secure ? 'https' : 'http'}://${insecure || secure ? 'voidplayer.test' : '127.0.0.1'}:${config.port}`;
   browser = await chromium.launch({ headless: true, args: insecure || secure ? ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] : [], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const a = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
@@ -25,6 +26,7 @@ try {
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); };
   const initial = await page.goto(base); await settings(page);
+  console.log('Identity browser: page and settings loaded');
   if (insecure) {
     assert.equal(await page.evaluate(() => isSecureContext), false);
     assert.equal(await page.evaluate(() => typeof crypto.randomUUID), 'undefined');
@@ -60,13 +62,16 @@ try {
   await page.setViewportSize({ width: 390, height: 700 });
   const overflow = await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth - e.clientWidth); assert.ok(overflow <= 1);
   await page.screenshot({ path: '/tmp/voidplayer-identity-mobile.png' });
+  console.log('Identity browser: users, cross-tab synchronization and layout passed; restarting service');
   await service.close(); service = await startService(config);
+  console.log('Identity browser: service restarted');
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await a.clearCookies(); await page.reload(); await settings(page);
   assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-users').selectOption(id);
   await page.waitForFunction(id => document.querySelector('#identity-id').dataset.tooltip === id, id);
   if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') {
+    console.log('Identity browser: loading and seeking playback sample');
     await page.locator('#settings-close').click();
     const state = await page.evaluate(async () => {
       const api = window.voidPlayer;
@@ -82,4 +87,9 @@ try {
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
   console.log('PASS identity: automatic users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
-} finally { await browser?.close(); await service?.close(); untrust?.(); await rm(temp, { recursive: true, force: true }); }
+} finally {
+  console.log('Identity browser: closing browser'); await browser?.close();
+  console.log('Identity browser: closing service'); await service?.close();
+  untrust?.(); await rm(temp, { recursive: true, force: true });
+  console.log('Identity browser: cleanup complete');
+}

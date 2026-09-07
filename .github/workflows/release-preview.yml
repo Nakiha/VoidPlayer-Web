@@ -145,6 +145,8 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools
           node scripts/make-playback-fixtures.mjs
       - name: Test FLV native decode policy
+        env:
+          FLV_CASE: standard-h264
         run: |
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
@@ -209,6 +211,7 @@ jobs:
           VOIDPLAYER_HTTP_TEST: '1'
           VOIDPLAYER_HTTP_PLAYBACK: '1'
       - name: Verify trusted HTTPS and WebCodecs on client platforms
+        timeout-minutes: 3
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: node scripts/check-identity-browser.mjs
         env:
