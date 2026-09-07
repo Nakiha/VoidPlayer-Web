@@ -1,3 +1,4 @@
+import { packetFixture } from './packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -7,9 +8,9 @@ import { openFFmpegMedia } from '../src/ffmpeg-media.ts';
 const core = new URL('../public/vendor/voidplayer-core/', import.meta.url);
 const hash = (pixels: Uint8Array | Uint8ClampedArray) => createHash('sha256').update(pixels).digest('hex');
 
-for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'dolby_hlg_1080p30.mp4']) {
+for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'hevc-packet-1080p.mp4']) {
   test(`MP4 packet WASM ${name}: metadata-only indexing and exact pixels across GOP seeks and EOF`, { timeout: 120000 }, async () => {
-    const bytes = await readFile(new URL(`../fixtures/video/${name}`, import.meta.url));
+    const bytes = await packetFixture(name);
     let readBytes = 0;
     class ChunkBlob extends Blob {
       override arrayBuffer(): Promise<ArrayBuffer> { throw new Error('whole-file materialization forbidden'); }
