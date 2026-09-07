@@ -1,3 +1,4 @@
+import { httpFetch as fetch } from './http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -62,25 +63,26 @@ test('workspace listing is bounded, omits documents, and isolates owners', () =>
 }));
 
 test('HTTP workspace access uses trusted ownership, same-origin writes and atomic competing updates', () => temporary(async root => {
-  const previous = process.env.VOIDPLAYER_PROXY_TOKEN; process.env.VOIDPLAYER_PROXY_TOKEN = 'f'.repeat(64);
   await fs.mkdir(path.join(root, 'media')); await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: ['media'], dataDir: 'data', logsDir: null, adminUsers: ['admin'], indexWatch: false }));
   const config = await loadConfig([], 'production', root); config.port = 0;
   const service = await startService(config, false); const base = `http://127.0.0.1:${(service.server.address() as { port: number }).port}`;
-  const call = (url: string, user = 'alice', method = 'GET', body?: unknown, revision?: string) => fetch(base + url, { method, headers: { origin: base.replace('http:', 'https:'), 'x-voidplayer-action': 'workspace', 'content-type': 'application/json', 'x-forwarded-proto': 'https', 'x-voidplayer-user': user, 'x-voidplayer-proxy-token': 'f'.repeat(64), ...(revision ? { 'if-match': revision } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const actors: Record<string, { id: string; name: string }> = {};
+  for (const name of ['alice', 'bob', 'admin']) { const response = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name }) }); actors[name] = (await response.json()).actor; }
+  const call = (url: string, user = 'alice', method = 'GET', body?: unknown, revision?: string) => fetch(base + url, { method, headers: { origin: 'http://intranet.test', host: 'intranet.test', 'x-voidplayer-action': 'workspace', 'content-type': 'application/json', cookie: `voidplayer-user=${actors[user].id}`, ...(revision ? { 'if-match': revision } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   try {
     const created = await call('/api/workspaces', 'alice', 'POST', { name: 'private', document: document(), owner: 'admin' }); assert.equal(created.status, 201); const entry = await created.json();
-    assert.equal(entry.owner, 'alice'); assert.equal((await call('/api/workspaces/' + entry.id, 'bob')).status, 404);
+    assert.equal(entry.owner, actors.alice.id); assert.equal((await call('/api/workspaces/' + entry.id, 'bob')).status, 404);
     assert.equal((await call('/api/workspaces?all=1', 'bob')).status, 403); assert.equal((await call('/api/workspaces?all=1', 'admin')).status, 200);
     assert.equal((await fetch(base + '/api/workspaces', { headers: { 'x-voidplayer-user': 'admin' } })).status, 403);
-    assert.equal((await fetch(base + '/api/workspaces', { method: 'POST', headers: { 'x-voidplayer-user': 'alice', 'x-voidplayer-proxy-token': 'f'.repeat(64), 'content-type': 'application/json' }, body: JSON.stringify({ name: 'cross-origin', document: document() }) })).status, 403);
+    assert.equal((await fetch(base + '/api/workspaces', { method: 'POST', headers: { cookie: `voidplayer-user=${actors.alice.id}`, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'cross-origin', document: document() }) })).status, 403);
     const updates = await Promise.all(['a', 'b'].map(name => call('/api/workspaces/' + entry.id, 'alice', 'PUT', { name, document: document() }, '"1"')));
     assert.deepEqual(updates.map(r => r.status).sort(), [200, 409]);
     const result = await call('/api/workspaces/' + entry.id, 'admin'); assert.equal(result.headers.get('etag'), '"2"');
-    const doc = await result.json(); assert.equal(doc.revision, 2); assert.equal(doc.owner, 'alice');
+    const doc = await result.json(); assert.equal(doc.revision, 2); assert.equal(doc.owner, actors.alice.id);
     assert.equal((await call('/api/workspaces/' + entry.id, 'admin', 'DELETE', undefined, '"1"')).status, 409);
-    const big = await new Promise<number>((resolve, reject) => { const req = request(base + '/api/workspaces', { method: 'POST', headers: { origin: base.replace('http:', 'https:'), 'x-forwarded-proto': 'https', 'x-voidplayer-action': 'workspace', 'x-voidplayer-user': 'alice', 'x-voidplayer-proxy-token': 'f'.repeat(64), 'content-type': 'application/json', 'content-length': WORKSPACE_BYTES + 4096 } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode!)); }); req.on('error', reject); req.end(); });
+    const big = await new Promise<number>((resolve, reject) => { const req = request(base + '/api/workspaces', { method: 'POST', headers: { origin: 'http://intranet.test', host: 'intranet.test', 'x-voidplayer-action': 'workspace', cookie: `voidplayer-user=${actors.alice.id}`, 'content-type': 'application/json', 'content-length': WORKSPACE_BYTES + 4096 } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode!)); }); req.on('error', reject); req.end(); });
     assert.equal(big, 413);
-  } finally { await service.close(); if (previous === undefined) delete process.env.VOIDPLAYER_PROXY_TOKEN; else process.env.VOIDPLAYER_PROXY_TOKEN = previous; }
+  } finally { await service.close(); }
 }));
 
 

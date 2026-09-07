@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
@@ -148,7 +149,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaS
     // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
     const color = await track.getColorSpace().catch(() => null);
     const info: MediaInfo = {
-      id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
       colorSource: 'container',

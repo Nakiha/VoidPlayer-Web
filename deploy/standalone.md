@@ -1,54 +1,59 @@
-# VoidPlayer 独立运行包（预览版）
+# VoidPlayer 便携运行包
 
-无需安装 Node、Bun、npm 或 FFmpeg。选择与系统/架构匹配的包，校验 `.sha256` 后解压。
-保持 `voidplayer`（Windows 为 `voidplayer.exe`）与 `dist/` 在同一目录。
-
-## 首次运行
+解压与你的系统匹配的包，直接运行，不需要安装 Node、Bun、FFmpeg，也不需要建立专用系统账号。
 
 ```sh
-/path/to/voidplayer --init --folder /absolute/path/to/media --data-dir /absolute/path/to/voidplayer-data
-/path/to/voidplayer --data-dir /absolute/path/to/voidplayer-data --check
-/path/to/voidplayer --data-dir /absolute/path/to/voidplayer-data
+./voidplayer
 ```
 
-Windows 可在 PowerShell 中用 `& 'C:\VoidPlayer\voidplayer.exe'` 替换程序路径；包含空格的所有路径需要加引号。
-`--folder` 可重复；`--init` 只创建配置并退出，已有配置不会覆盖。打开 http://127.0.0.1:5180/。
-也可直接用 `--folder /media` 临时启动，不写配置。
+Windows 在解压目录运行 `./voidplayer.exe`。打开 `http://127.0.0.1:5180/` 即可使用；首次媒体库为空，可以直接打开本地视频，也可以在服务管理页 `/admin` 添加媒体目录。
 
-首次配置为每个媒体根目录生成固定 `id`。之后可在 `mediaRoots` 中修改 `name` 和 `path`；移动存储挂载点时保留 `id` 与数据目录，已有媒体引用才能延续。旧路径字符串配置仍兼容；若同时改为对象和移动路径，应先在原路径完成一次索引。媒体列表支持目录、面包屑、分页及当前目录/全库搜索。工作区记录媒体版本，文件被替换后拒绝静默套用旧标注；旧工作区按原大小和修改时间核对后迁移。
+也可以启动时指定片源：
 
-未指定 `--data-dir` 时使用 `VOIDPLAYER_DATA_DIR`，否则使用系统用户数据目录：
-macOS 为 `~/Library/Application Support/VoidPlayer`，Windows 为 `%LOCALAPPDATA%\VoidPlayer`，
-Linux 为 `$XDG_DATA_HOME/voidplayer` 或 `~/.local/share/voidplayer`。
-配置文件为该目录下的 `voidplayer.config.json`，媒体索引为 `library.sqlite`；用户主动上传的日志保存在 `logs/`。数据目录应位于本机可写磁盘，不能与其他实例共用。
-可用 `--config` / `VOIDPLAYER_CONFIG` 指定其他配置，文件内相对路径以配置文件所在目录为基准。
-程序不自动读取当前目录中的 `.env` 或 `bunfig.toml`。
+```sh
+./voidplayer --folder /你的媒体目录
+```
 
-`--version` 显示产物版本，`--healthcheck` 检查运行实例就绪状态，`--help` 显示选项。
-默认前台运行；Ctrl+C 正常退出，Linux/macOS 也支持 SIGTERM，未结束的连接最多等待 5 秒后关闭。Windows 控制台 Ctrl+C 和计划任务的强制停止不同，具体见后台运行说明。
-长期运行应交给系统服务管理器或容器，服务的启动命令使用绝对路径并显式指定数据目录。Linux systemd、macOS LaunchAgent、Windows 计划任务及备份恢复步骤见 [后台运行与恢复](operations.md)。
-macOS 公网下载包的签名/公证尚待首发平台验收，不提供绕过系统信任检查的启动脚本。
+首次启动自动保存配置，以后直接运行程序即可。`--folder` 可重复指定；已有配置时它是本次启动的覆盖，不会自动覆盖已保存的媒体目录。
 
-## 服务管理
+## 文件都在哪里
 
-访问 `/admin` 或点击播放器的服务状态灯，管理媒体目录、扫描任务并检视运行状态与上传日志。远端需要配置 `adminUsers` 或 `VOIDPLAYER_ADMIN_USERS`。详见 [服务管理与权限](admin.md)。
+程序只在**可执行文件旁边的 `data/`** 下保存运行数据，与从哪个工作目录启动无关：
 
-## 升级与恢复
+| 路径 | 内容 |
+| --- | --- |
+| `voidplayer` / `voidplayer.exe` | 独立程序 |
+| `dist/` | 随包网页和解码器资源 |
+| `data/voidplayer.config.json` | 自动生成的配置 |
+| `data/library.sqlite` | 媒体索引 |
+| `data/workspaces.sqlite` | 用户和保存的工作区 |
+| `data/logs/` | 用户主动上传的诊断日志 |
 
-1. 停止旧服务并备份独立数据目录，保留旧程序包。
-2. 校验新包并解压到新目录，不覆盖数据目录。
-3. 用同一个 `--data-dir` 执行新程序的 `--check`，再启动并检查媒体读取。
-4. 媒体索引当前使用 SQLite schema 2，工作区保持 schema 1；从 RC 2 的索引 schema 1 升级会原位保留记录并添加存储绑定，从 preview.1 升级会新建索引并扫描。首次校准需原媒体存储在线；原媒体文件与工作区内容不变。遇到更新的数据库版本会拒绝启动。回退时停止新程序，恢复旧程序及升级前的完整数据备份。
+SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用户的 AppData、Application Support、XDG 目录或 `/var/lib`。程序不安装系统服务，也不自动读取启动目录的 `.env` 或 `bunfig.toml`。控制台日志输出到终端，不额外创建服务日志文件。浏览器自身保存的身份和诊断记录仍在浏览器存储里。
 
-媒体原文件由存储系统备份，不在程序包或工作区文件中。更新程序不删除视频、用户配置或日志。
+整个解压目录放在当前用户可写的位置即可；目录不可写时会报错，不会悄悄改用其他目录。
 
-## 远端部署
+## 可选参数
 
-远端使用 HTTPS 和认证网关；具体配置见 `deploy/README.md`。不能仅将 `--host` 改为公网地址。
-`deploy/Dockerfile` 消费此包中的 Linux 可执行文件；macOS/Windows 包不能放进 Linux 容器。
+- `--port 5180 --host 0.0.0.0`：允许内网其他机器访问。默认仅本机访问。
+- `--data-dir /其他目录`：主动选择外置数据目录。也支持 `VOIDPLAYER_DATA_DIR`；命令行优先。
+- `--config /配置文件`：读取指定配置，不自动创建或覆盖它。配置中的相对路径相对该文件，命令行路径相对当前工作目录。
+- `--init`：仅生成配置并退出，不覆盖已有配置；普通启动不需要先执行它。
+- `--check`、`--healthcheck`、`--version`、`--help`：检查配置、就绪状态、版本和帮助。
+- `--no-logs`：禁用用户主动上传诊断日志。
 
-## 验收与来源
+默认前台运行，Ctrl+C 停止。需要关闭终端后继续运行，可看 [后台运行与更新](operations.md)。管理页的远端管理用户名在 `adminUsers` 中配置，见 [服务管理](admin.md)。
 
-`release.json` 列出平台、Bun 版本、源码修订和逐文件 SHA-256；`BUILD-SOURCES.md` 记录来源。
-`source.tar.gz` 包含本次应用源码，便于重建；编译后的程序运行不依赖该源码包。
-正式版本与候选版本以归档内 release.json 和对应发布说明为准。三平台与 HTTPS 网关已有验收；真实 SMB/NFS、程序签名及公证尚未提供，范围见项目 Roadmap。
+## 搬家、升级和旧版迁移
+
+停止程序后，移动整个文件夹即可保留配置、用户与评审；外部媒体路径仍需有效。
+
+升级时停止旧程序，备份整个 `data/`，解压新包到新文件夹，把 `data/` 复制进去，再启动新程序。也可以保留原文件夹中的 `data/`，只替换程序和随包资源。不要同时运行两个指向同一数据目录的实例。
+
+旧版数据不会被自动搬动或删除。如果之前使用系统用户目录或 `/var/lib/voidplayer`，停止旧程序后将其中的配置、数据库和日志整体复制到新包的 `data/`，或者继续显式使用 `--data-dir` 指向原位置。旧配置中自定义的绝对路径会保留，需要时手动调整。
+
+媒体索引和用户工作区当前都使用 SQLite schema 2。回退旧程序时使用升级前的完整数据备份；不要把保存用户和评审的 `workspaces.sqlite` 当缓存删除。视频原文件不在数据备份中。
+
+## 包的来源
+
+`release.json` 记录平台、版本、源码修订和逐文件校验和；`BUILD-SOURCES.md` 记录构建来源，`source.tar.gz` 是对应源码。运行不依赖源码包。macOS 包的签名和公证尚未提供。

@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -34,7 +35,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
-  const path = `/vp-in-${crypto.randomUUID()}`;
+  const path = `/vp-in-${randomUUID()}`;
   let blobHandle = 0;
   try {
     // Player-assigned decode thread budget (no-op on the single-thread core).

@@ -147,9 +147,15 @@ jobs:
         run: bun test --timeout 60000 ./test/identity.test.ts ./test/library-index.test.ts ./test/library-incremental.test.ts ./test/library-storage.test.ts ./test/admin.test.ts ./test/measurement.test.ts ./test/saved-workspaces.test.ts
       - run: npm run release -- --target bun-${{ matrix.platform }}
       - run: npm run test:release
-      - name: Verify packaged Docker and HTTPS deployment
+      - name: Install HTTP playback browser
         if: runner.os == 'Linux'
-        run: node scripts/check-release-deploy.mjs
+        run: npx playwright install --with-deps chromium
+      - name: Verify ordinary HTTP playback and users
+        if: runner.os == 'Linux'
+        run: node scripts/check-identity-browser.mjs
+        env:
+          VOIDPLAYER_HTTP_TEST: '1'
+          VOIDPLAYER_HTTP_PLAYBACK: '1'
       - name: Verify Windows console shutdown
         if: runner.os == 'Windows'
         run: python scripts/check-windows-console.py

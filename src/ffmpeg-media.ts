@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
@@ -217,7 +218,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     return declared > 0 ? declared : (i + 1 < total ? relUs[i + 1] - relUs[i] : (i > 0 ? relUs[i] - relUs[i - 1] : 0));
   });
   const info: MediaInfo = {
-    id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
+    id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
     firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
     pixelFormat: init.pixelFormat ?? null,

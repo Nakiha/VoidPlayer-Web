@@ -14,20 +14,18 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
   }
   const staticOk = (await stat(path.join(config.staticDir, 'index.html')).catch(() => null))?.isFile();
   if (requireStatic && !staticOk) throw new Error('缺少构建后的网页，请先运行 npm run build 或使用完整发布包。');
-  const proxyToken = process.env.VOIDPLAYER_PROXY_TOKEN;
-  if (proxyToken && proxyToken.length < 32) throw new Error('VOIDPLAYER_PROXY_TOKEN 至少需要 32 个字符。');
   await mkdir(config.dataDir, { recursive: true }); await access(config.dataDir, constants.W_OK);
   if (config.logsDir) { await mkdir(config.logsDir, { recursive: true }); await access(config.logsDir, constants.W_OK); }
-  return { staticOk, proxyToken };
+  return { staticOk };
 }
 
 export async function startService(config: ServiceConfig, requireStatic = true, build?: { version: string; revision: string }) {
-  const { staticOk, proxyToken } = await validateServiceConfig(config, requireStatic, false);
+  const { staticOk } = await validateServiceConfig(config, requireStatic, false);
   const library = new MediaLibraryIndex(config.mediaRoots, { ttlMs: config.indexTtlMs, database: path.join(config.dataDir, 'library.sqlite'), settleMs: 1000, watch: config.indexWatch });
   library.start();
   let admin: AdminController;
   try { admin = new AdminController(config, library, build); } catch (error) { await library.close(); throw error; }
-  const server = createMediaServer({ proxyToken, library, admin, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
+  const server = createMediaServer({ library, admin, roots: library.roots, staticDir: staticOk ? config.staticDir : undefined, logsDir: config.logsDir ?? undefined,
     allowLocalReveal: config.allowLocalReveal && ['127.0.0.1', 'localhost', '::1'].includes(config.host) && ['darwin', 'win32'].includes(process.platform),
   });
   try { await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(config.port, config.host, () => { server.removeListener('error', reject); resolve(); }); }); }

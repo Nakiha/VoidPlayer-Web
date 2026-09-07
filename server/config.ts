@@ -11,7 +11,7 @@ export interface ServiceConfig {
 }
 export const configRevision = (text: string) => createHash('sha256').update(text).digest('hex');
 /** Paths in a JSON config are relative to that file; CLI paths are relative to cwd. */
-export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd = process.cwd(), paths: { configFile?: string; staticDir?: string; logsDir?: string; dataDir?: string } = {}): Promise<ServiceConfig> {
+export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd = process.cwd(), paths: { configFile?: string; staticDir?: string; logsDir?: string; dataDir?: string; allowEmptyRoots?: boolean } = {}): Promise<ServiceConfig> {
   let configFile = process.env.VOIDPLAYER_CONFIG;
   const overrides: Record<string, unknown> = {}, folders: string[] = [];
   for (let i = 0; i < args.length; i++) {
@@ -40,7 +40,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (process.env.VOIDPLAYER_ADMIN_USERS !== undefined) overrides.adminUsers = process.env.VOIDPLAYER_ADMIN_USERS.split(',').map(id => id.trim()).filter(Boolean);
   const config = { ...defaults, ...data, ...overrides } as ServiceConfig;
   if (folders.length) config.mediaRoots = folders;
-  if (!Array.isArray(config.mediaRoots) || !config.mediaRoots.length || config.mediaRoots.some(r => typeof r === 'string' ? !r.trim() : !r || typeof r.path !== 'string' || !r.path.trim() || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(r.id) || (r.name !== undefined && (typeof r.name !== 'string' || !r.name.trim())) || Object.keys(r).some(k => !['id','path','name'].includes(k)))) throw new Error('请在配置中设置 mediaRoots，或指定 --folder 白名单目录。');
+  if (!Array.isArray(config.mediaRoots) || (!config.mediaRoots.length && !paths.allowEmptyRoots) || config.mediaRoots.some(r => typeof r === 'string' ? !r.trim() : !r || typeof r.path !== 'string' || !r.path.trim() || typeof r.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(r.id) || (r.name !== undefined && (typeof r.name !== 'string' || !r.name.trim())) || Object.keys(r).some(k => !['id','path','name'].includes(k)))) throw new Error('请在配置中设置 mediaRoots，或指定 --folder 白名单目录。');
   for (const name of ['port', 'devPort'] as const) if (!Number.isInteger(config[name]) || config[name] < 1 || config[name] > 65535) throw new Error(`${name} 端口无效。`);
   if (mode === 'dev' && config.port === config.devPort) throw new Error('网页端口与媒体端口不能相同。');
   if (typeof config.host !== 'string' || !config.host.trim()) throw new Error('host 无效。');

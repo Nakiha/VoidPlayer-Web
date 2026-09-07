@@ -8,24 +8,21 @@ import type { ServiceConfig } from './config.ts';
 import { normalizeRoots } from './library-store.ts';
 import type { MediaRoot } from './library-store.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
-import { requestActor } from './identity.ts';
 import { localRequest } from './reveal.ts';
 
 export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
 import { WorkspaceStore } from './workspaces.ts';
-export function adminIdentity(req: IncomingMessage, proxyToken: string | undefined, users: string[], browserActor?: { id: string; name: string } | null) {
+export function adminIdentity(req: IncomingMessage, users: string[], browserActor?: { id: string; name: string } | null) {
   if (browserActor && users.includes(browserActor.name)) return browserActor;
-  if (!proxyToken) return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
-  const actor = requestActor(req, proxyToken);
-  return actor && users.includes(actor.id) ? actor : null;
+  return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
 }
-export function adminWriteAllowed(req: IncomingMessage, proxyToken?: string, action = 'admin') {
+export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
     const origin = new URL(req.headers.origin ?? '');
-    return origin.host === req.headers.host && origin.protocol === `${req.headers['x-forwarded-proto'] ?? (proxyToken ? 'https' : 'http')}:`;
+    return origin.host === req.headers.host && origin.protocol === 'http:';
   } catch { return false; }
 }
 export async function readAdminJson(req: IncomingMessage, max = 65536): Promise<unknown> {

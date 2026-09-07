@@ -1,3 +1,4 @@
+import { httpFetch } from './http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -9,8 +10,7 @@ import { MediaLibraryIndex } from '../server/library.ts';
 import { AdminController } from '../server/admin.ts';
 import { createMediaServer } from '../server/app.ts';
 const MiB = 1024 * 1024;
-const token = 'e'.repeat(64);
-async function fixture(run: (f: { base: string; root: string; file: string; data: Buffer; admin: AdminController; library: MediaLibraryIndex; call: (url: string, method?: string, value?: unknown, user?: string) => Promise<Response> }) => Promise<void>, proxy = false) {
+async function fixture(run: (f: { base: string; root: string; file: string; data: Buffer; admin: AdminController; library: MediaLibraryIndex; call: (url: string, method?: string, value?: unknown, user?: string) => Promise<Response> }) => Promise<void>, remote = false) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-measure-'));
   const file = path.join(root, 'media', 'sample.mp4'); await fs.mkdir(path.dirname(file));
   const data = Buffer.alloc(4 * MiB); for (let i = 0; i < data.length; i++) data[i] = i % 251;
@@ -19,10 +19,11 @@ async function fixture(run: (f: { base: string; root: string; file: string; data
   const config = await loadConfig([], 'production', root);
   const library = new MediaLibraryIndex(config.mediaRoots, { watch: false }); await library.refresh();
   const admin = new AdminController(config, library);
-  const server = createMediaServer({ roots: library.roots, library, admin, ...(proxy ? { proxyToken: token } : {}), onLog: () => {} });
+  const server = createMediaServer({ roots: library.roots, library, admin, onLog: () => {} });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const call = (url: string, method = 'GET', value?: unknown, user = 'owner') => fetch(base + url, { method, headers: { origin: proxy ? base.replace('http:', 'https:') : base, 'x-voidplayer-action': 'admin', ...(value === undefined ? {} : { 'content-type': 'application/json' }), ...(proxy ? { 'x-voidplayer-proxy-token': token, 'x-voidplayer-user': user, 'x-forwarded-proto': 'https' } : {}) }, body: value === undefined ? undefined : JSON.stringify(value) });
+  const actors = Object.fromEntries(['owner', 'other', 'viewer'].map(name => [name, admin.workspaces.identify(undefined, name)]));
+  const call = (url: string, method = 'GET', value?: unknown, user = 'owner') => httpFetch(base + url, { method, headers: { origin: remote ? 'http://intranet.test' : base, 'x-voidplayer-action': 'admin', ...(value === undefined ? {} : { 'content-type': 'application/json' }), ...(remote ? { host: 'intranet.test', cookie: `voidplayer-user=${actors[user].id}` } : {}) }, body: value === undefined ? undefined : JSON.stringify(value) });
   try { await run({ base, root, file, data, admin, library, call }); }
   finally { await admin.close(); server.closeAllConnections(); await new Promise<void>(r => server.close(() => r())); await library.close(); await fs.rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 }
@@ -36,7 +37,7 @@ async function until<T>(read: () => T | null, predicate: (v: T) => boolean) {
 test('measurement is idle until explicitly started and rejects invalid or unauthorized work', () => fixture(async ({ base, call, admin }) => {
   assert.deepEqual(await (await call(endpoint)).json(), { job: null });
   assert.equal((await call(endpoint, 'POST', settings, 'viewer')).status, 403);
-  assert.equal((await fetch(base + endpoint, { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-proxy-token': token, 'x-voidplayer-user': 'owner' }, body: JSON.stringify(settings) })).status, 403);
+  assert.equal((await fetch(base + endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(settings) })).status, 403);
   for (const value of [{ ...settings, seconds: 100 }, { ...settings, limitMiB: -1 }, { ...settings, kind: 'arbitrary' }, { ...settings, kind: 'storage', mediaId: '/etc/passwd' }]) assert.ok([400, 409].includes((await call(endpoint, 'POST', value)).status));
   assert.equal(admin.measurements.status().job, null);
   const { job } = await (await call(endpoint, 'POST', settings)).json();

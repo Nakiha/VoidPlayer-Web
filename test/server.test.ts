@@ -1,3 +1,4 @@
+import { httpFetch } from './http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -215,26 +216,15 @@ test('Range traffic shares one index and an explicit library refresh discovers a
   });
 });
 
-test('legacy gateway identity remains optional and its secret never appears in audit', async () => {
+test('ordinary HTTP serves media without isolation warnings or a favicon error', async () => {
   await withFixture(async root => {
-    const token = 'a'.repeat(64), audit: Record<string, unknown>[] = [];
-    const server = createMediaServer({ roots: [root], proxyToken: token, onLog: entry => audit.push(entry) });
-    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
-    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
-    const headers = { 'x-voidplayer-proxy-token': token, 'x-voidplayer-user': 'tester.one' };
-    try {
-      assert.equal((await fetch(`${base}/api/library`)).status, 200);
-      assert.equal((await fetch(`${base}/api/library`, { headers: { 'x-voidplayer-user': 'forged' } })).status, 200);
-      assert.equal((await fetch(`${base}/api/library`, { headers: { ...headers, 'x-voidplayer-proxy-token': 'wrong' } })).status, 200);
-      assert.equal((await fetch(`${base}/api/library`, { headers })).status, 200);
-      assert.deepEqual((await (await fetch(`${base}/api/health`, { headers })).json()).actor, { id: 'tester.one', name: 'tester.one' });
-      assert.equal((await (await fetch(`${base}/api/health`)).json()).actor, null);
-      const range = await fetch(`${base}/api/media/${mediaId(root, 'a.mp4')}`, { headers: { ...headers, range: 'bytes=0-9' } });
-      await range.arrayBuffer();
-      await new Promise(resolve => setImmediate(resolve));
-      assert.ok(audit.some(e => e.actorId === 'tester.one' && e.status === 206 && e.completed === true));
-      assert.ok(!JSON.stringify(audit).includes(token));
-    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+    await withServer([root], async base => {
+      const response = await httpFetch(base + '/api/health', { headers: { host: 'intranet.test' } });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('cross-origin-opener-policy'), null);
+      assert.equal((await fetch(base + '/api/health')).headers.get('cross-origin-opener-policy'), 'same-origin');
+      assert.equal((await fetch(base + '/favicon.ico')).status, 204);
+    });
   });
 });
 

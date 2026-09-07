@@ -1,24 +1,31 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { chromium } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
+const insecure = process.env.VOIDPLAYER_HTTP_TEST === '1';
 const temp = await mkdtemp(path.join(os.tmpdir(), 'vp-identity-browser-'));
 let service, browser;
 try {
   await mkdir(path.join(temp, 'media'));
+  if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') await writeFile(path.join(temp, 'media/http-smoke.mp4'), Buffer.from(await readFile(new URL('../test/http-smoke.mp4.base64', import.meta.url), 'utf8'), 'base64'));
   const config = await loadConfig(['--folder', path.join(temp, 'media'), '--data-dir', temp], 'production'); config.port = 0; config.logsDir = null;
   service = await startService(config); config.port = service.server.address().port;
-  const base = `http://127.0.0.1:${config.port}`;
-  browser = await chromium.launch({ headless: true, ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
+  const base = `http://${insecure ? 'voidplayer.test' : '127.0.0.1'}:${config.port}`;
+  browser = await chromium.launch({ headless: true, args: insecure ? ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] : [], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const a = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
   const b = await browser.newContext(); const errors = [];
   const page = await a.newPage(), other = await b.newPage();
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); };
-  await page.goto(base); await settings(page);
+  const initial = await page.goto(base); await settings(page);
+  if (insecure) {
+    assert.equal(await page.evaluate(() => isSecureContext), false);
+    assert.equal(await page.evaluate(() => typeof crypto.randomUUID), 'undefined');
+    assert.equal(initial.headers()['cross-origin-opener-policy'], undefined);
+  }
   const cached = await page.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.identity'))); assert.ok(cached.name && cached.id);
   const id = await page.locator('#identity-id').getAttribute('data-tooltip'); assert.ok(id);
   assert.equal(await page.locator('#identity-id').innerText(), `ID · ${id.slice(0, 8)}`);
@@ -51,6 +58,20 @@ try {
   assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-users').selectOption(id);
   await page.waitForFunction(id => document.querySelector('#identity-id').dataset.tooltip === id, id);
+  if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') {
+    await page.locator('#settings-close').click();
+    const state = await page.evaluate(async () => {
+      const api = window.voidPlayer;
+      const listing = await api.tools.find(t => t.name === 'list_library').execute({});
+      await api.tools.find(t => t.name === 'load_library_item').execute({ slot: 'A', id: listing.entries.find(e => e.name === 'http-smoke.mp4').id });
+      await api.seek(200000);
+      api.addMark({ slot: 'A', text: 'HTTP smoke' });
+      const state = api.getState();
+      return { decoder: state.tracks[0].decoder, variant: state.tracks[0].coreVariant, frame: !!state.tracks[0].frame, marks: state.marks.length };
+    });
+    assert.deepEqual(state, { decoder: 'ffmpeg-wasm', variant: 'single-thread', frame: true, marks: 1 });
+  }
   assert.deepEqual(errors, []);
+  console.log(`PASS ${insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
   console.log('PASS identity: automatic users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
 } finally { await browser?.close(); await service?.close(); await rm(temp, { recursive: true, force: true }); }
