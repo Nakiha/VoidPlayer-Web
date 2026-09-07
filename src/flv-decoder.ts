@@ -1,3 +1,7 @@
+import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
+import { sampleDescription } from './frame-description.ts';
+import type { FrameDescription } from './frame-description.ts';
+import { VideoSample } from 'mediabunny';
 import { hevcGeometry, verifyHevcFrame } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
@@ -7,7 +11,7 @@ import { ffmpegColorInfo } from './media-metadata.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 import { loadCore } from './wasm-core.ts';
 
-export interface FlvFrame { pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export interface FlvFrame { description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
@@ -84,7 +88,10 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
       frames.sort((a, b) => a.timestamp - b.timestamp);
       while (frames.length && frames[0].timestamp < target) frames.shift()!.close();
       const frame = frames.shift();
-      return frame ? { pts: frame.timestamp, width: frame.displayWidth, height: frame.displayHeight, frame } : null;
+      if (!frame) return null;
+      const sample=new VideoSample(frame.clone());
+      try {return {pts:frame.timestamp,width:frame.displayWidth,height:frame.displayHeight,frame,description:sampleDescription(sample,frame.allocationSize())};}
+      finally {sample.close();}
     },
     async drain() { await decoder.flush(); check(); },
     close() { frames.splice(0).forEach(f => f.close()); if (decoder.state !== 'closed') decoder.close(); },
@@ -95,6 +102,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'description'>, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
   const { core, heap } = await loadCore(glueURL, wasmBinary);
+  requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
   call('vp_set_threads', ['number'], [threads], null);
@@ -129,13 +137,8 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
       const status = call('vp_packet_receive', ['number', 'i64'], [ctx, BigInt(minimum)]);
       if (status < 0) throw new MediaOpenError('decode', 'WASM 无法解码 FLV 视频包。');
       if (!status) return null;
-      const width = call('vp_width', ['number'], [ctx]), height = call('vp_height', ['number'], [ctx]);
-      const ptr = call('vp_pixels', ['number'], [ctx]), size = width * height * 4;
-      const pixels = checkedHeap(heap(), ptr, size, '读取解码像素');
-      if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) throw new MediaOpenError('decode', '解码器返回了无效的画面尺寸。');
-      const out = recycle?.byteLength === size ? new Uint8Array(recycle) : new Uint8Array(size);
-      out.set(pixels.subarray(ptr, ptr + size));
-      return { pts: Number(call('vp_last_ticks', ['number'], [ctx], 'i64')), width, height, pixels: out.buffer };
+      const output=readWasmFrame(core,heap,ctx,recycle);
+      return {...output,width:output.description.width,height:output.description.height};
     },
     async drain() {
       if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, 0n, 0n, 0, 1]) !== 0) throw new MediaOpenError('decode', 'FLV 解码器无法完成尾帧输出。');

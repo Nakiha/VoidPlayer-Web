@@ -1,3 +1,5 @@
+import type { WasmFrameOutput } from './wasm-frame.ts';
+import { validateDescription } from './frame-description.ts';
 import type { MediaOpenProgress, MediaLoadStage } from './media-progress.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { createRangeBridge } from './range-bridge.ts';
@@ -292,17 +294,20 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const payload: Record<string, unknown> = { ctx: init.ctx, index };
     const transfer: Transferable[] = [];
     if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
-    const buffer = await rpc.call<ArrayBuffer>('extract', payload, transfer);
-    const pixels = new Uint8ClampedArray(buffer);
+    const output = await rpc.call<WasmFrameOutput>('extract', payload, transfer);
+    if (disposed) throw new Error('媒体已释放。');
+    const pixels = new Uint8ClampedArray(output.pixels);
+    validateDescription(output.description,pixels.byteLength);
     let closed = false;
     return {
       kind: 'rgba8',
-      width: init.width,
-      height: init.height,
+      description: output.description,
+      width: output.description.width,
+      height: output.description.height,
       byteSize: pixels.byteLength,
       pixels,
-      ptsUs: relUs[index],
-      sourcePtsUs: ticksToUs(ticks[index]),
+      ptsUs: ticksToUs(output.pts) - firstUs,
+      sourcePtsUs: ticksToUs(output.pts),
       durationUs: durations[index],
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };

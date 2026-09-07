@@ -1,3 +1,4 @@
+import { rgbaDescription } from '../src/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../src/session.ts';
@@ -10,7 +11,7 @@ function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   let closed = 0, disposed = 0;
   const frame = (pts: number) => ({
     ptsUs: pts, sourcePtsUs: pts + 300000, durationUs: (starts[starts.indexOf(pts) + 1] ?? end) - pts,
-    kind: 'video-sample' as const, width: 10, height: 10, byteSize: 400, close() { closed++; },
+    description: rgbaDescription(10,10), kind: 'video-sample' as const, width: 10, height: 10, byteSize: 400, close() { closed++; },
   });
   const source: MediaSource = {
     info: { id: name, name, size: 10, lastModified: 0, codec: 'test', decoder: 'webcodecs', width: 10, height: 10, firstPtsUs: 300000, durationUs: end },

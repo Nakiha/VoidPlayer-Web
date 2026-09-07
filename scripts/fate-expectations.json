@@ -21,22 +21,8 @@
       }
     },
     "h264/extradata-reload-multi-stsd.mov": {
-      "container-single": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "container-multi": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
+      "container-single": {},
+      "container-multi": {},
       "mp4-packets": {
         "known": [
           "geometry",
@@ -47,22 +33,8 @@
       }
     },
     "hevc/extradata-reload-multi-stsd.mov": {
-      "container-single": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "container-multi": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
+      "container-single": {},
+      "container-multi": {},
       "mp4-packets": {
         "known": [
           "geometry",

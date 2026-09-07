@@ -13,7 +13,7 @@ if (process.argv[3] === '--variant') {
   try {
     const create = (await import(pathToFileURL(path.join(directory, stem + '.js')).href)).default;
     const core = await create({ wasmBinary: await readFile(path.join(directory, stem + '.wasm')) });
-    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_index_build', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset']) assert.equal(typeof core['_' + symbol], 'function', symbol);
+    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_index_build', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset', 'vp_frame_info', 'vp_frame_format']) assert.equal(typeof core['_' + symbol], 'function', symbol);
     const ctx = core.ccall('vp_create', 'number', [], []);
     assert.ok(ctx);
     try {

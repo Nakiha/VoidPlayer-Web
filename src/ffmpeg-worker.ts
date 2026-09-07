@@ -2,7 +2,7 @@ import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
-import { checkedHeap } from './flv-decoder.ts';
+import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -37,6 +37,7 @@ const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: st
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
+  requireFrameAbi(core);
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
@@ -144,15 +145,7 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
     throw new Error(`WASM 解码未能命中索引帧 ${index}（结果 ${result}）。`);
   }
-  const width = core.ccall('vp_width', 'number', ['number'], [ctx]);
-  const height = core.ccall('vp_height', 'number', ['number'], [ctx]);
-  const ptr = core.ccall('vp_pixels', 'number', ['number'], [ctx]);
-  const len = width * height * 4;
-  // Reuse the client's recycled buffer when it fits: at 60 fps an 8 MB frame
-  // allocation per extract is pure GC churn.
-  const out = recycle && recycle.byteLength === len ? new Uint8Array(recycle) : new Uint8Array(len);
-  out.set(checkedHeap(heap(), ptr, len, '读取解码像素').subarray(ptr, ptr + len));
-  return out.buffer;
+  return readWasmFrame(core, heap, ctx, recycle);
 }
 
 port.onmessage = async (event: { data: any }) => {
@@ -161,8 +154,8 @@ port.onmessage = async (event: { data: any }) => {
     if (type === 'init') {
       port.postMessage({ id, ok: true, data: await init(payload, progress => port.postMessage({ id, type: 'progress', progress })) });
     } else if (type === 'extract') {
-      const buffer = extract(payload.ctx, payload.index, payload.recycle);
-      port.postMessage({ id, ok: true, data: buffer }, [buffer]);
+      const frame = extract(payload.ctx, payload.index, payload.recycle);
+      port.postMessage({ id, ok: true, data: frame }, [frame.pixels]);
     } else if (type === 'dispose') {
       const ctx = payload.ctx;
       const entry = contexts.get(ctx);

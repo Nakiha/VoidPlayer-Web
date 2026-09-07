@@ -1,3 +1,4 @@
+import { validateDescription } from './frame-description.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -108,11 +109,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
         const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
         const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
+        try { validateDescription(frame.description,pixels?.byteLength); } catch(error) {sample?.close();throw error;}
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         let closed = false;
-        return { kind: sample ? 'video-sample' : 'rgba8', width: frame.width, height: frame.height,
-          ptsUs: times[position], sourcePtsUs: frame.pts, durationUs: durations[position],
-          byteSize: frame.width * frame.height * 4, sample, pixels,
+        return { description:frame.description,kind: sample ? 'video-sample' : 'rgba8', width: frame.width, height: frame.height,
+          ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: durations[position],
+          byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
         } satisfies DecodedFrame;
       });

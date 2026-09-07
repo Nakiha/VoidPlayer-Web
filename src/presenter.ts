@@ -1,3 +1,4 @@
+import { validateDescription } from './frame-description.ts';
 import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
@@ -9,6 +10,7 @@ import { log } from './log.ts';
 // sRGB Canvas 2D path before upload, consistently from the first frame onward.
 const colorStates = new WeakMap<HTMLCanvasElement, string>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
+  validateDescription(frame.description,frame.pixels?.byteLength);
   if (canvas.width !== frame.width) canvas.width = frame.width;
   if (canvas.height !== frame.height) canvas.height = frame.height;
   const surface = surfaces.get(canvas);

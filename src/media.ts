@@ -1,3 +1,5 @@
+import { sampleDescription, validateDescription } from './frame-description.ts';
+import type { FrameDescription } from './frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 export type { MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad, loadAborted, onLoadAbort } from './media-abort.ts';
@@ -16,6 +18,7 @@ import { preferredVideoConfig } from './decoder-policy.ts';
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 export interface DecodedFrame extends FrameInfo {
+  readonly description: FrameDescription;
   /** Resource form: a WebCodecs sample or RGBA8 pixels. The presenter decides
    *  how a kind reaches the canvas; backends never paint. */
   readonly kind: 'video-sample' | 'rgba8';
@@ -185,11 +188,15 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     // decides how to paint them.
     const wrap = (sample: VideoSample): DecodedFrame => {
       if (info.decodedPixelFormat == null && sample.format) info.decodedPixelFormat = sample.format;
+      const byteSize=sampleByteSize(sample);
+      const description=sampleDescription(sample,byteSize);
+      validateDescription(description);
       return {
+      description,
       kind: 'video-sample',
       width: sample.displayWidth,
       height: sample.displayHeight,
-      byteSize: sampleByteSize(sample),
+      byteSize,
       sample,
       ptsUs: Math.round((sample.timestamp - first) * 1e6),
       sourcePtsUs: Math.round(sample.timestamp * 1e6),

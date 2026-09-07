@@ -1,3 +1,4 @@
+import { rgbaDescription } from '../src/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { FrameQueue } from '../src/playback.ts';
@@ -11,7 +12,7 @@ test('presentation ticks before the next frame cannot bypass queue backpressure'
     for (let i = 1; i <= 200; i++) {
       produced++;
       yield { ptsUs: i * 100000, sourcePtsUs: i * 100000, durationUs: 100000,
-        kind: 'rgba8' as const, width: 1920, height: 1080, byteSize: 1920 * 1080 * 4,
+        description: rgbaDescription(1920,1080), kind: 'rgba8' as const, width: 1920, height: 1080, byteSize: 1920 * 1080 * 4,
         close() { closed++; } };
     }
   }
@@ -32,7 +33,7 @@ test('prefetch is bounded and stopping a full queue releases every frame', async
   async function* frames() {
     try { for (let i = 0; i < 100; i++) {
       produced++;
-      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'video-sample' as const, width: 10, height: 10, byteSize: 400, close() { closed++; } };
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, description: rgbaDescription(10,10), kind: 'video-sample' as const, width: 10, height: 10, byteSize: 400, close() { closed++; } };
     } } finally { returned = true; }
   }
   const q = new FrameQueue(frames()); await turn();
@@ -79,7 +80,7 @@ test('frame queue also honors its byte budget, not just the frame count', async 
   async function* frames() {
     for (let i = 0; i < 100; i++) {
       produced++;
-      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'rgba8' as const, width: 10, height: 10, byteSize: 1000, close() { closed++; } };
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, description: rgbaDescription(10,10), kind: 'rgba8' as const, width: 10, height: 10, byteSize: 1000, close() { closed++; } };
     }
   }
   const q = new FrameQueue(frames(), 4, 1000); // 4-frame cap OR 1000 bytes
@@ -99,7 +100,7 @@ test('suspending an in-flight oversized frame retains its successor without pull
   async function* frames() {
     for (let i = 0; i < 5; i++) {
       await pending; produced++;
-      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'rgba8' as const,
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, description: rgbaDescription(10,10), kind: 'rgba8' as const,
         width: 7680, height: 4320, byteSize: 7680 * 4320 * 4, close() { closed++; } };
     }
   }
