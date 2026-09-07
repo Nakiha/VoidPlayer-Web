@@ -5,6 +5,7 @@ import type { FlvIndex, FlvPacket } from './flv-demux.ts';
 import type { MediaInfo } from './model.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
+import { instantiateCore } from './wasm-core.ts';
 
 export interface FlvFrame { pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
@@ -94,7 +95,12 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'description'>, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
   const mod = await import(/* @vite-ignore */ glueURL);
-  const core = await mod.default(wasmBinary ? { wasmBinary } : {});
+  if (!wasmBinary) {
+    const url = new URL(glueURL); url.pathname = url.pathname.replace(/\.js$/, '.wasm');
+    const response = await fetch(url); if (!response.ok) throw new Error(`WASM 下载失败：${response.status}`);
+    wasmBinary = new Uint8Array(await response.arrayBuffer());
+  }
+  const { core, heap } = await instantiateCore(mod.default, wasmBinary);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
   const call = (name: string, types: string[], args: unknown[], result: string | null = 'number') => core.ccall(name, result, types, args);
   call('vp_set_threads', ['number'], [threads], null);
@@ -105,7 +111,7 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
     const extra = core._malloc(Math.max(1, description.length));
     try {
       if (!extra) throw new MediaOpenError('resource', '无法分配 FLV 配置头内存。');
-      checkedHeap(core.HEAPU8, extra, description.length, '写入配置头').set(description, extra);
+      checkedHeap(heap(), extra, description.length, '写入配置头').set(description, extra);
       if (call('vp_packet_open', ['number', 'string', 'number', 'number'], [ctx, next.codec, extra, description.length]) !== 0) throw new MediaOpenError('decode', `WASM 无法初始化 ${next.codec} 解码器。`);
     } finally { core._free(extra); }
   };
@@ -122,7 +128,7 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
     async send(bytes, packet) {
       const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length]);
       if (!ptr) throw new MediaOpenError('resource', '无法分配 FLV 压缩包内存。');
-      checkedHeap(core.HEAPU8, ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
+      checkedHeap(heap(), ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
       if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, BigInt(packet.pts), BigInt(packet.dts), +packet.key, 0]) !== 0) throw new MediaOpenError('decode', 'WASM 拒绝 FLV 视频包。');
     },
     receive(minimum, recycle) {
@@ -131,10 +137,10 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
       if (!status) return null;
       const width = call('vp_width', ['number'], [ctx]), height = call('vp_height', ['number'], [ctx]);
       const ptr = call('vp_pixels', ['number'], [ctx]), size = width * height * 4;
-      const heap = checkedHeap(core.HEAPU8, ptr, size, '读取解码像素');
+      const pixels = checkedHeap(heap(), ptr, size, '读取解码像素');
       if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0) throw new MediaOpenError('decode', '解码器返回了无效的画面尺寸。');
       const out = recycle?.byteLength === size ? new Uint8Array(recycle) : new Uint8Array(size);
-      out.set(heap.subarray(ptr, ptr + size));
+      out.set(pixels.subarray(ptr, ptr + size));
       return { pts: Number(call('vp_last_ticks', ['number'], [ctx], 'i64')), width, height, pixels: out.buffer };
     },
     async drain() {

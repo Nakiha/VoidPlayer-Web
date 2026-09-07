@@ -32,3 +32,23 @@ for (const codec of ['h264', 'hevc']) {
     } finally { source.dispose(); }
   });
 }
+
+test('portrait HEVC multithread WASM survives decode growth, playback and reverse seek', async () => {
+  const file = new File([Uint8Array.from(await resolutionFlv('hevc', ['720x1280']))], 'portrait.flv');
+  const source = await openFlvMedia({file}, file, { forceWasm: true,
+    glueURL: new URL('../public/vendor/voidplayer-core/voidplayer-core-mt.js', import.meta.url).href,
+    wasmBinary: await readFile(new URL('../public/vendor/voidplayer-core/voidplayer-core-mt.wasm', import.meta.url)),
+  });
+  try {
+    (await source.frameAt(0)).close(); await source.ensureIndexed!();
+    for (let round=0; round<2; round++) {
+      let count=0;
+      for await (const frame of source.framesFrom(0)) {
+        assert.equal(frame.width,720); assert.equal(frame.height,1280);
+        assert.equal(frame.ptsUs,count*100000); count++; frame.close();
+      }
+      assert.equal(count,10);
+      (await source.frameAt(0)).close();
+    }
+  } finally { source.dispose(); }
+});

@@ -113,3 +113,9 @@ HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位�
 首帧与关闭重开：原生片源保留一份首帧引用，frameAt(0) 返回独立 clone，dispose 释放缓存及活跃 sink 迭代器。添加片源不会重复解码已经在会话时间 0 的其他轨道。浏览器回归使用带预滚的 H.264 / HEVC MP4，重复定位 0 不重新 configure 解码器，双轨打开/播放/关闭循环后检查所有主线程 VideoDecoder 都已关闭，并验证竖屏上屏与采样尺寸。
 
 软件解码预滚：逐个探测负时间前缀，仅将返回时间不匹配的不可输出包移出显示索引，原始包仍留在 core 中用于解码参考。最多探测 128 个，非负时间包及其他错误不跳过。`test/preroll.test.ts` 使用真实 HEVC open-GOP 裁切文件验证首次及重复定位；浏览器回归同时覆盖原生与可用的软件回退路径。
+
+HDR 上屏一致性：首帧在展示层创建前走 Canvas 2D，后续帧原先直接上传 VideoFrame 到 WebGL，两种浏览器转换路径可能产生不同的 HDR→SDR 结果。现在所有原生 PQ/HLG 帧都经显式 sRGB Canvas 2D 后上传，首帧、播放、定位一致；SDR 仍直接上传，没有逐帧 CPU readback。以解码 sample 的 transfer 为准，不将容器 HDR 标签强行贴到可能已经转成 SDR 的输出像素。浏览器决定具体 tone mapping，本改动不提供 HDR 显示输出或 WASM RGBA 的 HDR tone mapping。首次及色彩状态变化写本地“上屏色彩路径”日志。
+
+`check-presentation-browser.mjs` 使用相同 PQ/HLG 像素的真实 VideoFrame 和 VideoSample，验证 clone/toVideoFrame 元数据、展示层创建前后、连续帧、回到首帧的像素完全一致，并检查随后 SDR 恢复直接上传；保留旋转、像素提取、无 WebGL 回退和资源释放检查。
+
+WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core 的实际 WebAssembly.Memory。每次外部包/配置写入及 RGBA 读取，按 memory.buffer 重建过期视图，再执行范围检查；不信任 pthread 扩容后可能滞后的 Module.HEAPU8，不修改生成胶水、不移除越界检查。测试覆盖非共享内存增长后旧视图脱离、另一 worker 扩容共享内存后旧视图仍有效但过短，以及真实 720×1280 HEVC 多线程 core 首帧、连续播放、回退定位。core 版本和构建锁不变。

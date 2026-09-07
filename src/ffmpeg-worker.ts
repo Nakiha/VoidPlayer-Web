@@ -1,6 +1,8 @@
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
+import { instantiateCore } from './wasm-core.ts';
+import { checkedHeap } from './flv-decoder.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -29,12 +31,13 @@ const port: any = (() => {
 })();
 
 let core: any = null;
+let heap: () => Uint8Array;
 const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string }>();
 
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
   onProgress('decoder');
   const mod = await import(payload.glueURL);
-  core = await mod.default(payload.wasmBinary ? { wasmBinary: new Uint8Array(payload.wasmBinary) } : {});
+  ({ core, heap } = await instantiateCore(mod.default, new Uint8Array(payload.wasmBinary)));
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
@@ -149,7 +152,7 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   // Reuse the client's recycled buffer when it fits: at 60 fps an 8 MB frame
   // allocation per extract is pure GC churn.
   const out = recycle && recycle.byteLength === len ? new Uint8Array(recycle) : new Uint8Array(len);
-  out.set(core.HEAPU8.subarray(ptr, ptr + len));
+  out.set(checkedHeap(heap(), ptr, len, '读取解码像素').subarray(ptr, ptr + len));
   return out.buffer;
 }
 

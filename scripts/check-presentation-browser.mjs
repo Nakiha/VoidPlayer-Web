@@ -55,6 +55,58 @@ try {
     assert.deepEqual(result.rotation, result.rotationExpected);
     assert.equal(result.surfaces, 0);
     console.log(`PASS ${name}: direct native/RGBA upload, lazy pixels, rotation, buffer recycling, 2D fallback and cleanup`);
+    const hdrResults = await page.evaluate(async () => {
+      const { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } = await import('/src/presenter.ts');
+      const { VideoSample } = await import('/node_modules/mediabunny/dist/modules/src/index.js');
+      const source = document.getElementById('source');
+      const geometry = { width: 200, height: 200, imageWidth: 200, imageHeight: 200, zoom: 1, offsetX: 0, offsetY: 0, dpr: 1 };
+      const results = [];
+      for (const transfer of ['pq', 'hlg']) {
+        // Identical HDR pixels in distinct samples isolate presentation changes
+        // from scene motion. Use real VideoFrame + Mediabunny clone semantics.
+        const makeSample = timestamp => new VideoSample(new VideoFrame(new Uint8Array([40, 90, 140, 190, 128, 128]), {
+          format: 'I420', codedWidth: 2, codedHeight: 2, timestamp,
+          colorSpace: { primaries: 'bt2020', transfer, matrix: 'bt2020-ncl', fullRange: false },
+        }));
+        const frame = sample => ({ kind: 'video-sample', width: 2, height: 2, sample });
+        const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, 2, 2).data];
+        const primed = makeSample(0), clone = primed.clone();
+        // Exactly the application sequence: draw first, then create the surface.
+        paintFrame(source, frame(clone)); clone.close();
+        const first = pixels();
+        setPresentationGeometry(source, geometry);
+        const initialized = pixels();
+        const gl = document.querySelector('.frame-presentation').getContext('webgl');
+        let nativeUploads = 0;
+        const upload = gl.texImage2D.bind(gl);
+        gl.texImage2D = (...args) => { if (args.at(-1) instanceof VideoFrame) nativeUploads++; return upload(...args); };
+        const playback = [];
+        for (let i = 1; i <= 3; i++) {
+          const sample = makeSample(i * 40000);
+          paintFrame(source, frame(sample)); sample.close(); playback.push(pixels());
+        }
+        const seek = primed.clone(); paintFrame(source, frame(seek)); seek.close();
+        const sought = pixels();
+        const roundtrip = primed.toVideoFrame();
+        const metadata = { sample: primed.colorSpace.transfer, frame: roundtrip.colorSpace.transfer };
+        roundtrip.close(); primed.close();
+        // A following SDR frame must immediately regain direct upload.
+        const sdr = new VideoSample(new VideoFrame(source, { timestamp: 200000 }));
+        paintFrame(source, frame(sdr)); sdr.close();
+        const sdrUploads = nativeUploads;
+        disposePresentation();
+        results.push({ transfer, first, initialized, playback, sought, metadata, sdrUploads });
+      }
+      return results;
+    });
+    for (const r of hdrResults) {
+      assert.equal(r.metadata.sample, r.transfer); assert.equal(r.metadata.frame, r.transfer);
+      assert.deepEqual(r.initialized, r.first, `${r.transfer}: surface creation`);
+      for (const pixels of [...r.playback, r.sought]) assert.deepEqual(pixels, r.first, `${r.transfer}: HDR first/play/seek pixels`);
+      assert.equal(r.sdrUploads, 1, 'only the following SDR frame uses native upload');
+      assert.ok(new Set(r.first.filter((_, i) => i % 4 !== 3)).size > 1, 'HDR ramp is not blank');
+    }
+    console.log(`PASS ${name}: PQ/HLG clone metadata and first/play/seek pixel consistency; SDR direct upload restored`);
     await browser.close(); browser = null;
   }
 } finally { await browser?.close(); await server.close(); }
