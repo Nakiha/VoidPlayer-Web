@@ -95,6 +95,8 @@ export function probeTsVideo(bytes: Uint8Array): string[] {
 export async function explainMediaFailure(input: RandomAccessInput, nativeError: unknown, fallbackError: unknown, signal?: AbortSignal): Promise<unknown> {
   if (fallbackError instanceof MediaOpenError && ['input', 'resource'].includes(fallbackError.stage)) return fallbackError;
   loadAborted(signal);
+  // A failed core download/startup is not evidence against the media codec.
+  if (!(fallbackError instanceof MediaOpenError) || !['container', 'codec'].includes(fallbackError.stage)) return fallbackError;
   const reader = new RangeReader(input, 64 * 1024);
   const timer = setTimeout(() => reader.close(), 1500);
   const detach = onLoadAbort(signal, () => reader.close());

@@ -53,6 +53,8 @@ test('failed opens retain declared codecs without overriding resource/network fa
   assert.ok(explained instanceof MediaOpenError); assert.match(explained.message, /AVS3/);
   const network = new MediaOpenError('input', 'network');
   assert.equal(await explainMediaFailure(input, generic, network), network);
+  const coreUnavailable = new Error('Unable to load WASM core');
+  assert.equal(await explainMediaFailure(input, generic, coreUnavailable), coreUnavailable);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(explainMediaFailure(input, generic, generic, controller.signal), { name: 'AbortError' });
 });
