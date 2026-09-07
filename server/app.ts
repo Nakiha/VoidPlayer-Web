@@ -1,7 +1,10 @@
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
-import { requestActor } from './identity.ts';
+import { browserUserId, identityCookie } from './identity.ts';
 import { createServer } from 'node:http';
+import { createServer as createSecureServer } from 'node:https';
+import type { ServerOptions as HttpsOptions } from 'node:https';
+import { encryptedRequest } from './tls.ts';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -18,7 +21,7 @@ import type { AdminController } from './admin.ts';
 
 export interface ServerOptions {
   roots: string[];
-  proxyToken?: string;
+  tls?: HttpsOptions;
   library?: MediaLibraryIndex;
   admin?: AdminController;
   allowLocalReveal?: boolean;
@@ -38,7 +41,7 @@ const MIME: Record<string, string> = {
 
 function sendJson(res: ServerResponse, status: number, body: unknown) {
   const payload = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', ...ISOLATION_HEADERS });
+  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
   res.end(payload);
 }
 
@@ -78,7 +81,7 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: str
     if (expectedVersion && fileVersion(stat) !== expectedVersion) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
     const size = stat.size;
     const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-    const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store', ...ISOLATION_HEADERS };
+    const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
     const range = parseRange(req.headers.range, size);
     if (range === 'unsatisfiable') {
       res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
@@ -108,11 +111,16 @@ export function createMediaServer(options: ServerOptions): Server {
   let activeRequests = 0, completedRequests = 0, abortedRequests = 0;
   const recentRequests: Record<string, unknown>[] = [];
 
-  const server = createServer(async (req, res) => {
+  const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     const started = performance.now();
-    const actor = requestActor(req, options.proxyToken);
+    let actor = options.admin?.workspaces.user(browserUserId(req)) ?? null;
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
+    let hostname = '';
+    try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
+    if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
+      for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
+    }
     let status = 200, logged = false;
     activeRequests++;
     const finish = () => {
@@ -127,21 +135,46 @@ export function createMediaServer(options: ServerOptions): Server {
     res.once('finish', finish); res.once('close', finish);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      const healthRequest = ['/api/health', '/api/ready'].includes(url.pathname) && req.method === 'GET';
-      if (options.proxyToken && !actor && !healthRequest) { status = 401; sendJson(res, 401, { error: '请通过团队登录入口访问。' }); return; }
+      if (url.pathname === '/favicon.ico' && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return; }
+      if (url.pathname === '/api/users' && req.method === 'GET') {
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
+        sendJson(res, 200, { users: options.admin.workspaces.users() }); return;
+      }
+      if (url.pathname === '/api/identity' && req.method === 'POST') {
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
+        if (!adminWriteAllowed(req, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return; }
+        try {
+          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown } | null;
+          if (body && typeof body.id === 'string' && body.name === undefined) {
+            const selected = options.admin.workspaces.user(body.id);
+            if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
+            actor = selected;
+          } else {
+            if (!body || typeof body.name !== 'string' || body.id !== undefined) throw new AdminError(400, '请填写用户名。');
+            actor = options.admin.workspaces.identify(actor?.id, body.name);
+          }
+          res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); sendJson(res, 200, { actor });
+        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); }
+        return;
+      }
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
+        if (options.admin && !actor) {
+          actor = options.admin.workspaces.identify();
+          res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
+        } else if (actor && !browserUserId(req)) res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
+        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin && !!adminIdentity(req, options.admin.config.adminUsers, actor), workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
       }
       if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
-        const workspaceActor = actor ?? (!options.proxyToken && localRequest(req) ? { id: 'local', name: '本机用户' } : null);
-        if (!workspaceActor || !options.admin) { sendJson(res, 403, { error: '工作区需要本机连接或可信网关身份。' }); return; }
-        if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
+        const workspaceActor = actor;
+        if (!workspaceActor || !options.admin) { sendJson(res, 403, { error: '请先连接服务以创建用户身份。' }); return; }
+        if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
+        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return; }
         const store = options.admin.workspaces;
-        const isAdmin = !!adminIdentity(req, options.proxyToken, options.admin.config.adminUsers);
+        const isAdmin = !!adminIdentity(req, options.admin.config.adminUsers, actor);
         const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
         try {
           if (url.pathname === '/api/workspaces') {
@@ -163,9 +196,9 @@ export function createMediaServer(options: ServerOptions): Server {
       if (url.pathname.startsWith('/api/admin/')) {
         const admin = options.admin;
         if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
-        const identity = adminIdentity(req, options.proxyToken, admin.config.adminUsers);
-        if (!identity) { sendJson(res, 403, { error: options.proxyToken ? '当前网关用户没有管理权限，请在服务器配置的 adminUsers 中授权。' : '管理后台仅接受本机访问，远端请配置认证网关与管理员身份。' }); return; }
-        if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
+        const identity = adminIdentity(req, admin.config.adminUsers, actor);
+        if (!identity) { sendJson(res, 403, { error: '当前用户没有管理权限，请在服务器配置的 adminUsers 中添加用户名。' }); return; }
+        if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
         try {
           if (url.pathname === '/api/admin/measurements') {
             if (req.method === 'GET') { sendJson(res, 200, admin.measurements.status()); return; }
@@ -213,7 +246,7 @@ export function createMediaServer(options: ServerOptions): Server {
       }
       if (url.pathname === '/api/library/scan' && req.method === 'POST') {
         let sameOrigin = false;
-        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === `${options.proxyToken ? req.headers['x-forwarded-proto'] ?? 'https' : 'http'}:`; } catch {}
+        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:'); } catch {}
         if (!sameOrigin || req.headers['x-voidplayer-action'] !== 'scan') { sendJson(res, 403, { error: '请从播放器或管理页面操作扫描。' }); return; }
         if (url.searchParams.get('action') === 'cancel') library.cancel();
         else if (!url.searchParams.has('action') || url.searchParams.get('action') === 'refresh') void library.refresh().catch(() => {});
@@ -244,7 +277,7 @@ export function createMediaServer(options: ServerOptions): Server {
         const abs = await library.resolve(actionMatch[1]);
         if (!abs) { status = 404; sendJson(res, 404, { error: 'unknown media id' }); return; }
         if (action === 'reveal') await (options.reveal ?? revealFile)(abs);
-        sendJson(res, 200, action === 'location' ? { absolutePath: options.proxyToken ? null : abs, reveal: !!options.allowLocalReveal && localRequest(req) } : { ok: true });
+        sendJson(res, 200, action === 'location' ? { absolutePath: abs, reveal: !!options.allowLocalReveal && localRequest(req) } : { ok: true });
         return;
       }
       // Users explicitly submit a problem log from
@@ -308,7 +341,8 @@ export function createMediaServer(options: ServerOptions): Server {
       if (!res.headersSent) sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
       else res.end();
     }
-  });
+  };
+  const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   if (!options.library) server.on('close', () => { void library.close(); });
   return server;

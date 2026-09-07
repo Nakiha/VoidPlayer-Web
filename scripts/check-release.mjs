@@ -1,3 +1,4 @@
+import { httpFetch } from '../test/http-request.ts';
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';
@@ -19,7 +20,7 @@ let child, output = '', successMessage = '';
 const env = { ...process.env };
 for (const key of Object.keys(env)) if (key.toLowerCase() === 'path') delete env[key];
 env.PATH = path.join(temp, 'empty-path');
-for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_PROXY_TOKEN', 'VOIDPLAYER_ADMIN_USERS', 'BUN_OPTIONS', 'BUN_INSPECT']) delete env[key];
+for (const key of ['VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_ADMIN_USERS', 'BUN_OPTIONS', 'BUN_INSPECT']) delete env[key];
 const cwd = path.join(temp, 'unrelated cwd'), data = path.join(temp, 'persistent data'), media = path.join(temp, 'nested media');
 const freePort = async () => { const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r)); const port = socket.address().port; await new Promise(r => socket.close(r)); return port; };
 let executable;
@@ -41,14 +42,18 @@ async function stop() {
   const timer = setTimeout(() => child.kill('SIGKILL'), 7500);
   try { const [code, signal] = await done; if (process.platform === 'win32') assert.ok(code === 0 || signal === 'SIGTERM', 'Windows process termination'); else assert.equal(code, 0, `${signal}\n${output}`); } finally { clearTimeout(timer); child = null; }
 }
-async function start(port, extraEnv = {}, args = []) {
+async function start(port, extraEnv = {}, args = [], dataDirectory = data) {
   output = '';
-  child = spawn(executable, ['--data-dir', data, '--port', String(port), ...args], { cwd, env: { ...env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] });
+  child = spawn(executable, [...(dataDirectory ? ['--data-dir', dataDirectory] : []), '--port', String(port), ...args], { cwd, env: { ...env, ...extraEnv }, stdio: ['ignore', 'pipe', 'pipe'] });
   child.stdout.on('data', d => { output += d; }); child.stderr.on('data', d => { output += d; });
-  const base = `http://127.0.0.1:${port}`;
+  const secure = args.includes('--https');
+  const base = `${secure ? 'https' : 'http'}://127.0.0.1:${port}`;
   for (let i = 0; i < 100; i++) {
     if (child.exitCode !== null) throw new Error(output);
-    if (await fetch(base + '/api/ready').then(r => r.ok).catch(() => false)) return base;
+    const ready = async () => secure
+      ? httpFetch(base + '/api/ready', { ca: await readFile(path.join(dataDirectory ?? path.join(path.dirname(executable), 'data'), 'tls/voidplayer-ca.crt'), 'utf8') })
+      : fetch(base + '/api/ready');
+    if (await ready().then(r => r.ok).catch(() => false)) return base;
     await new Promise(r => setTimeout(r, 50));
   }
   throw new Error('Startup timed out: ' + output);
@@ -62,7 +67,7 @@ try {
   await utimes(path.join(media, '子目录', 'sample.mp4'), 1, 1);
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
   execFileSync(tar, ['-xzf', archive, '-C', temp]);
-  const folder = path.join(temp, path.basename(archive, '.tar.gz'));
+  let folder = path.join(temp, path.basename(archive, '.tar.gz'));
   const manifest = JSON.parse(await readFile(path.join(folder, 'release.json'), 'utf8'));
   assert.equal(manifest.target, `bun-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`, 'Test on the target OS/architecture');
   assert.equal(manifest.runtime.name, 'bun');
@@ -72,6 +77,34 @@ try {
   assert.match(snapshotFiles, /admin\/index\.html/); assert.match(snapshotFiles, /public\/theme-init\.js/);
   executable = path.join(folder, manifest.executable);
   assert.equal(run(['--version']).trim(), `VoidPlayer ${manifest.appVersion} (${manifest.revision}${manifest.dirty ? '-dirty' : ''})`); assert.match(run(['--help']), /--init/);
+  const cwdBefore = await readdir(cwd);
+  const portablePort = await freePort();
+  let portableBase = await start(portablePort, {}, [], null);
+  const portableData = path.join(folder, 'data');
+  const portableConfig = JSON.parse(await readFile(path.join(portableData, 'voidplayer.config.json'), 'utf8'));
+  assert.deepEqual(portableConfig.mediaRoots, []);
+  assert.equal((await (await fetch(portableBase + '/api/library')).json()).entries.length, 0);
+  const portableIdentityResponse = await fetch(portableBase + '/api/health');
+  const portableActor = (await portableIdentityResponse.json()).actor;
+  const portableCookie = portableIdentityResponse.headers.get('set-cookie').split(';')[0];
+  assert.equal((await (await fetch(portableBase + '/api/admin/roots')).json()).writable, true);
+  await stop();
+  assert.deepEqual(await readdir(cwd), cwdBefore, 'bare startup must not write into the invoking directory');
+  const relocated = path.join(temp, 'portable moved');
+  await renameReleased(folder, relocated); folder = relocated; executable = path.join(folder, manifest.executable);
+  portableBase = await start(portablePort, {}, [], null);
+  assert.deepEqual((await (await fetch(portableBase + '/api/health', { headers: { cookie: portableCookie } })).json()).actor, portableActor);
+  await stop();
+  const securePort = await freePort();
+  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test'], null);
+  const ca = await readFile(path.join(folder, 'data/tls/voidplayer-ca.crt'), 'utf8');
+  const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
+  assert.equal(secureResponse.status, 200);
+  assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');
+  assert.equal(secureResponse.headers.get('cross-origin-opener-policy'), 'same-origin');
+  run(['--healthcheck', '--https', 'voidplayer.test', '--port', String(securePort)]);
+  await stop();
+  assert.deepEqual(await readdir(cwd), cwdBefore, 'TLS startup with an empty PATH stays inside the application folder');
   run(['--init', '--data-dir', data, '--folder', media]);
   const configPath = path.join(data, 'voidplayer.config.json'), original = await readFile(configPath, 'utf8');
   assert.equal(JSON.parse(original).staticDir, undefined, 'configuration must not pin old program assets');
@@ -82,7 +115,7 @@ try {
   assert.equal(await readFile(configPath, 'utf8'), original);
   run(['--check', '--data-dir', data]);
   assert.throws(() => run(['--check', '--data-dir', data, '--folder', path.join(temp, 'missing')]), /媒体目录不存在/);
-  assert.throws(() => run(['--check', '--data-dir', data, '--host', '0.0.0.0']), /认证网关/);
+  run(['--check', '--data-dir', data, '--host', '0.0.0.0']);
   const port = await freePort(); let base = await start(port);
   run(['--healthcheck', '--data-dir', data, '--port', String(port)]);
   const homepage = await fetch(base); assert.equal(homepage.status, 200); assert.match(await homepage.text(), /VoidPlayer/);
@@ -100,8 +133,11 @@ try {
     const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } });
     return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
   }, listing.entries[0]);
-  const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
-  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', 'local');
+  const identityResponse = await fetch(base + '/api/health');
+  const workspaceActor = (await identityResponse.json()).actor;
+  const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
+  const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
+  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', workspaceActor.id);
   const url = base + '/api/media/' + listing.entries[0].id + '?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
@@ -197,12 +233,14 @@ try {
   await stop();
   await renameReleased(offlineMedia, media);
   await writeFile(configPath, JSON.stringify({ ...JSON.parse(original), adminUsers: ['release.test'] }, null, 2) + '\n');
-  const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
-  assert.equal((await fetch(base + '/api/library')).status, 401);
-  assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
-  assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);
-  assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'viewer', 'x-voidplayer-proxy-token': token } })).status, 403);
-  assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);
+  base = await start(port, {}, ['--host', '0.0.0.0']);
+  assert.equal((await fetch(base + '/api/library')).status, 200);
+  const selected = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: 'release.test' }) });
+  const selectedActor = (await selected.json()).actor;
+  const selectedCookie = selected.headers.get('set-cookie').split(';')[0];
+  assert.equal((await httpFetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 403);
+  const remoteAdmin = await httpFetch(base + '/api/admin/status', { headers: { host: 'intranet.test', cookie: selectedCookie } });
+  assert.equal(remoteAdmin.status, 200); assert.equal((await remoteAdmin.json()).identity.id, selectedActor.id);
   await stop();
   if (process.env.RELEASE_BENCH === '1') {
     base = await start(port, {}, ['--folder', path.join(root, 'fixtures/video')]);
@@ -210,6 +248,6 @@ try {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), 'webkit', '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: '1', BENCH_DURATION_MS: '4000' }, stdio: 'inherit' });
     const [code] = await once(bench, 'exit'); assert.equal(code, 0); await stop();
   }
-  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, gateway identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-2 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
+  successMessage = `PASS standalone ${manifest.target}: archive hashes, empty PATH, unrelated cwd, init/check, HTTP/HEAD/Range/concurrency/abort, explicit log upload, portable HTTP identity, ${process.platform === 'win32' ? 'process termination (Ctrl+C verified by the separate console check)' : 'graceful stop'}, admin page/auth/config/logs and four bounded measurements, native directory watchers, SQLite process lock and schema 1-to-2 migration with empty mount underlay, reconnect and upgrade/backup/restore preserving offline index and versioned workspaces`;
 } finally { if (child && child.exitCode === null && child.signalCode === null) { const done = once(child, 'exit'); child.kill('SIGKILL'); await done.catch(() => {}); } await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }
 console.log(successMessage);

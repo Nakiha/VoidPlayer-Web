@@ -22,7 +22,7 @@ with tempfile.TemporaryDirectory(prefix='vp-console-') as folder:
     with socket.socket() as probe:
         probe.bind(('127.0.0.1', 0))
         port = probe.getsockname()[1]
-    env = {k: v for k, v in os.environ.items() if k.upper() not in ('PATH', 'VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR', 'VOIDPLAYER_PROXY_TOKEN')}
+    env = {k: v for k, v in os.environ.items() if k.upper() not in ('PATH', 'VOIDPLAYER_CONFIG', 'VOIDPLAYER_DATA_DIR')}
     env['PATH'] = str(root / 'empty-path')
     # CI shells may ignore Ctrl+C; this flag is inherited across CreateProcess.
     # Reset it in this helper before creating the isolated console child.

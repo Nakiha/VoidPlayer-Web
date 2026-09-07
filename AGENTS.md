@@ -12,8 +12,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
   clip-path，不动解码路径）；`log.ts` / `log-panel.ts` / `log-storage.ts`
   本地诊断日志；`agent.ts` WebMCP 工具；`library.ts` / `ui/source-catalog.ts` / `ui/workbench.ts` 媒体库与工具区；`ui/track-drag.ts` 排序输入；`ui/seek-preview.ts` 时间预览/标注吸附；`ui/source-actions.ts` 服务连接和文件操作。
 - `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：Worker 内的 FLV 分块读取、索引及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
-- `server/`：基于 Node API 的零依赖服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 可信网关身份）；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
-- `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为内网 HTTPS / 独立账号部署模板。
+- `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
+- `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/`：node:test，无浏览器依赖；WASM 用例在 Node worker_threads 里跑真实 core。
 - `scripts/`：`sync-wasm-core.sh`（从 VoidPlayer-FFmpeg-Build 产物同步 core，可用
   `WASM_CORE_DIR` 覆盖）、`sync-samples.sh`（样片进 `fixtures/video/`，可用

@@ -1,3 +1,4 @@
+import { httpFetch as fetch } from './http-request.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
@@ -10,7 +11,7 @@ import { AdminController } from '../server/admin.ts';
 import { createMediaServer } from '../server/app.ts';
 
 type Fixture = { root: string; media: string; base: string; library: MediaLibraryIndex; admin: AdminController; config: Awaited<ReturnType<typeof loadConfig>> };
-async function fixture(run: (f: Fixture) => Promise<void>, token?: string) {
+async function fixture(run: (f: Fixture) => Promise<void>) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'vp-admin-'));
   const media = path.join(root, 'media'); await fs.mkdir(media); await fs.writeFile(path.join(media, 'one.mp4'), 'video');
   await fs.writeFile(path.join(root, 'voidplayer.config.json'), JSON.stringify({ mediaRoots: [{ id: 'archive', path: 'media', name: '媒体库' }], dataDir: 'data', logsDir: 'logs', adminUsers: ['owner'], indexWatch: false }));
@@ -18,7 +19,7 @@ async function fixture(run: (f: Fixture) => Promise<void>, token?: string) {
   const library = new MediaLibraryIndex(config.mediaRoots, { database: path.join(config.dataDir, 'library.sqlite'), watch: false });
   library.start(); await library.refresh();
   const admin = new AdminController(config, library, { version: 'test-version', revision: 'test-revision' });
-  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, proxyToken: token, onLog: () => {} });
+  const server = createMediaServer({ roots: library.roots, library, admin, logsDir: config.logsDir!, onLog: () => {} });
   await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
   try { await run({ root, media, base, library, admin, config }); }
@@ -26,7 +27,7 @@ async function fixture(run: (f: Fixture) => Promise<void>, token?: string) {
 }
 const mutation = (base: string, method: string, value?: unknown, extra = {}) => ({ method, headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'admin', ...extra }, body: value === undefined ? undefined : JSON.stringify(value) });
 
-test('admin requires a loopback host or an allowlisted trusted gateway identity', async () => {
+test('admin requires a loopback host or an allowlisted self-selected identity', async () => {
   await fixture(async ({ base }) => {
     const status = await (await fetch(base + '/api/admin/status')).json();
     assert.equal(status.identity.id, 'local'); assert.equal(status.version, 'test-version'); assert.ok(status.memory.rss > 0); assert.ok(status.http.connections > 0);
@@ -35,15 +36,15 @@ test('admin requires a loopback host or an allowlisted trusted gateway identity'
     assert.equal((await fetch(base + '/api/admin/scan', mutation('https://attacker.example', 'POST', { action: 'cancel' }))).status, 403);
     assert.equal((await fetch(base + '/api/admin/scan', { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: '{}' })).status, 403);
   });
-  const token = 'a'.repeat(64);
-  await fixture(async ({ base }) => {
-    assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'owner' } })).status, 401);
-    assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'viewer', 'x-voidplayer-proxy-token': token } })).status, 403);
-    const headers = { 'x-voidplayer-user': 'owner', 'x-voidplayer-proxy-token': token, 'x-forwarded-proto': 'https' };
-    const response = await fetch(base + '/api/admin/status', { headers }); assert.equal(response.status, 200); assert.equal((await response.json()).identity.id, 'owner');
-    assert.equal((await fetch(base + '/api/admin/scan', mutation(base, 'POST', { action: 'cancel' }, headers))).status, 403, 'protocol mismatch cannot authorize writes');
-    assert.equal((await fetch(base + '/api/admin/scan', mutation(base.replace('http:', 'https:'), 'POST', { action: 'cancel' }, headers))).status, 202);
-  }, token);
+  await fixture(async ({ base, admin }) => {
+    const actor = admin.workspaces.identify(undefined, 'owner');
+    const headers = { host: 'intranet.test', cookie: `voidplayer-user=${actor.id}` };
+    assert.equal((await fetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 403);
+    const response = await fetch(base + '/api/admin/status', { headers });
+    assert.equal(response.status, 200); assert.equal((await response.json()).identity.id, actor.id);
+    assert.equal((await fetch(base + '/api/admin/scan', mutation('https://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 403);
+    assert.equal((await fetch(base + '/api/admin/scan', mutation('http://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 202);
+  });
 });
 
 test('root edits persist stable identities, preserve unrelated config and reject stale or external edits', async () => fixture(async ({ root, media, base, library, config }) => {

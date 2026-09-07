@@ -5,6 +5,28 @@ import { assessPlayback } from '../src/benchmark.ts';
 import { WorkerRpc } from '../src/ffmpeg-media.ts';
 const turn = () => new Promise<void>(r => setTimeout(r, 0));
 
+test('presentation ticks before the next frame cannot bypass queue backpressure', async () => {
+  let produced = 0, closed = 0;
+  async function* frames() {
+    for (let i = 1; i <= 200; i++) {
+      produced++;
+      yield { ptsUs: i * 100000, sourcePtsUs: i * 100000, durationUs: 100000,
+        kind: 'rgba8' as const, width: 1920, height: 1080, byteSize: 1920 * 1080 * 4,
+        close() { closed++; } };
+    }
+  }
+  // The display ticks faster than the video's frame rate (also happens while
+  // waiting for a slower second track). None of these ticks consumes a frame.
+  const q = new FrameQueue(frames());
+  try {
+    await turn();
+    for (let tick = 0; tick < 40; tick++) { assert.equal(q.take(tick * 1000).frame, null); await turn(); }
+    assert.equal(produced, 4, 'empty presentation ticks must not allocate more decoded frames');
+    assert.equal(q.frames.length, 4);
+  } finally { q.stop(); await q.done; }
+  assert.equal(closed, produced);
+});
+
 test('prefetch is bounded and stopping a full queue releases every frame', async () => {
   let produced = 0, closed = 0, returned = false;
   async function* frames() {
@@ -23,7 +45,7 @@ test('prefetch is bounded and stopping a full queue releases every frame', async
 });
 
 test('benchmark rejects slow playback and missing or stalled presentation, even with a healthy timeline', () => {
-  const healthy = { wallMs: 2000, mediaUs: 2000000, waitingMs: 0, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
+  const healthy = { wallMs: 2000, mediaUs: 2000000, waitingMs: 0, buffers: {}, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
     tracks: { A: { drawn: 120, dropped: 0, fps: 60, p95GapMs: 17, maxGapMs: 20 } } };
   assert.deepEqual(assessPlayback(healthy, 1, false), []);
   assert.ok(assessPlayback({ ...healthy, speed: .5 }, 1, false).includes('below-realtime'));

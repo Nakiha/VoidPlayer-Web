@@ -1,9 +1,10 @@
 import path from 'node:path';
-import { homedir } from 'node:os';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { loadConfig } from './config.ts';
+import { loadConfig, configRevision } from './config.ts';
 import { startService, validateServiceConfig } from './runtime.ts';
 import { normalizeRoots } from './library-store.ts';
+import { request as httpsRequest } from 'node:https';
+import { prepareTls } from './tls.ts';
 
 // Replaced by the release builder; the source entry can also run under Bun.
 declare const VOIDPLAYER_COMPILED: boolean;
@@ -13,11 +14,9 @@ const compiled = typeof VOIDPLAYER_COMPILED !== 'undefined' && VOIDPLAYER_COMPIL
 const version = typeof VOIDPLAYER_VERSION === 'undefined' ? 'development' : VOIDPLAYER_VERSION;
 const revision = typeof VOIDPLAYER_REVISION === 'undefined' ? 'source' : VOIDPLAYER_REVISION;
 
+const appDir = compiled ? path.dirname(process.execPath) : path.resolve(import.meta.dirname, '..');
 function defaultDataDirectory() {
-  if (process.env.VOIDPLAYER_DATA_DIR) return path.resolve(process.env.VOIDPLAYER_DATA_DIR);
-  if (process.platform === 'darwin') return path.join(homedir(), 'Library', 'Application Support', 'VoidPlayer');
-  if (process.platform === 'win32') return path.join(process.env.LOCALAPPDATA || path.join(homedir(), 'AppData', 'Local'), 'VoidPlayer');
-  return path.join(process.env.XDG_DATA_HOME || path.join(homedir(), '.local', 'share'), 'voidplayer');
+  return process.env.VOIDPLAYER_DATA_DIR ? path.resolve(process.env.VOIDPLAYER_DATA_DIR) : path.join(appDir, 'data');
 }
 
 async function main() {
@@ -26,16 +25,18 @@ async function main() {
   if (argv.includes('--help') || argv.includes('-h')) {
     console.log(`VoidPlayer ${version}
 用法: voidplayer [选项]
-  --init --folder /media       创建配置（不会覆盖已有文件），然后退出
-  --data-dir /data             配置、媒体索引和上传日志的数据目录
+  --init --folder /media       可选：创建配置（不会覆盖已有文件），然后退出
+  --data-dir /data             可选：将配置与运行数据放到其他目录
   --config /path/config.json   使用指定配置；相对路径以该配置为基准
   --folder /media              媒体白名单目录，可重复指定
-  --port 5180 --host 127.0.0.1  监听地址；远端访问需要认证网关
+  --port 5180 --host 127.0.0.1  监听地址；内网可用 0.0.0.0
+  --https IP或域名             开启内置 HTTPS；多个地址用逗号分隔，默认监听所有网卡
   --static /path/dist          覆盖随包网页资源目录
   --no-logs                   禁用用户主动上传日志
   --check                     检查配置与目录后退出
   --healthcheck               检查运行中的服务是否就绪
   --version                   显示版本
+直接运行即可启动，首次自动创建 data/voidplayer.config.json。
 默认数据目录: ${defaultDataDirectory()}`);
     return;
   }
@@ -56,26 +57,49 @@ async function main() {
   if (Number(init) + Number(check) + Number(healthcheck) > 1) throw new Error('--init、--check 和 --healthcheck 不能组合。');
   if (init && (process.env.VOIDPLAYER_CONFIG || args.some(a => a === '--config' || a.startsWith('--config=')))) throw new Error('--init 请使用 --data-dir 指定位置，不要同时指定 --config / VOIDPLAYER_CONFIG。');
   const configFile = path.join(dataDir, 'voidplayer.config.json');
-  const appDir = compiled ? path.dirname(process.execPath) : path.resolve(import.meta.dirname, '..');
-  const config = await loadConfig(args, 'production', process.cwd(), { configFile, dataDir, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs') });
+  const config = await loadConfig(args, 'production', process.cwd(), { configFile, dataDir, staticDir: path.join(appDir, 'dist'), logsDir: path.join(dataDir, 'logs'), allowEmptyRoots: true });
   if (healthcheck) {
     const host = config.host === '0.0.0.0' ? '127.0.0.1' : config.host === '::' ? '[::1]' : config.host.includes(':') ? `[${config.host}]` : config.host;
-    const response = await fetch(`http://${host}:${config.port}/api/ready`, { signal: AbortSignal.timeout(2500) });
-    if (!response.ok || !(await response.json() as { ready?: boolean }).ready) throw new Error('服务尚未就绪。');
+    if (config.tls) {
+      const tls = await prepareTls(config.tls, config.dataDir);
+      await new Promise<void>((resolve, reject) => {
+        const req = httpsRequest({ host: host.replace(/^\[|\]$/g, ''), port: config.port, path: '/api/ready', ca: tls.ca,
+          servername: tls.ca ? 'localhost' : undefined, timeout: 2500 }, response => {
+          let body = ''; response.setEncoding('utf8'); response.on('data', chunk => { body += chunk; });
+          response.on('end', () => { try { if (response.statusCode !== 200 || !JSON.parse(body).ready) throw new Error('服务尚未就绪。'); resolve(); } catch (e) { reject(e); } });
+        });
+        req.on('timeout', () => req.destroy(new Error('服务检查超时。'))); req.on('error', reject); req.end();
+      });
+    } else {
+      const response = await fetch(`http://${host}:${config.port}/api/ready`, { signal: AbortSignal.timeout(2500) });
+      if (!response.ok || !(await response.json() as { ready?: boolean }).ready) throw new Error('服务尚未就绪。');
+    }
     return;
+  }
+  async function initialize() {
+    await mkdir(dataDir, { recursive: true });
+    // Keep application assets and default mutable paths relocatable with the folder.
+    const { staticDir: _static, devPort: _dev, dataDir: _data, origin: _origin, ...rest } = config;
+    const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name }) => ({ id, path, name })), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
+    if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
+    const text = JSON.stringify(stored, null, 2) + '\n';
+    try {
+      await writeFile(configFile, text, { flag: 'wx', mode: 0o600 });
+      if (config.origin) config.origin.revision = configRevision(text);
+      console.log(`配置已创建: ${configFile}`);
+    } catch (error) { if (init || (error as NodeJS.ErrnoException).code !== 'EEXIST') throw error; }
   }
   if (init || check) {
     await validateServiceConfig(config);
-    if (init) {
-      await mkdir(dataDir, { recursive: true });
-      // Resource paths remain release-relative so moving/upgrading the app works.
-      const { staticDir: _static, devPort: _dev, dataDir: _data, origin: _origin, ...rest } = config;
-      const stored = { ...rest, mediaRoots: normalizeRoots(config.mediaRoots).map(({ id, path, name }) => ({ id, path, name })), ...(args.some(a => a === '--static' || a.startsWith('--static=')) ? { staticDir: config.staticDir } : {}) };
-      if (stored.logsDir === path.join(dataDir, 'logs')) stored.logsDir = 'logs';
-      await writeFile(configFile, JSON.stringify(stored, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
-      console.log(`配置已创建: ${configFile}\n再次运行相同程序和 --data-dir 即可启动。`);
-    } else console.log(`配置与目录检查通过: ${configFile}`);
+    if (config.tls) await prepareTls(config.tls, config.dataDir);
+    if (init) await initialize();
+    else console.log(`配置与目录检查通过: ${config.origin?.file}`);
     return;
+  }
+  // A bare launch creates its own portable config; explicit config files are never replaced.
+  if (config.origin?.file === configFile && config.origin.revision === configRevision('')) {
+    await validateServiceConfig(config);
+    await initialize();
   }
   console.log(`VoidPlayer ${version} (${revision})\n数据目录: ${dataDir}`);
   const service = await startService(config, true, { version, revision });
@@ -85,6 +109,6 @@ async function main() {
 }
 void main().catch(error => {
   console.error(error instanceof Error ? error.message : String(error));
-  console.error('运行 voidplayer --help 查看用法；首次可使用 --init --folder /媒体目录。');
+  console.error('运行 voidplayer --help 查看用法；可直接运行，或用 --folder /媒体目录 指定片源。');
   process.exitCode = 1;
 });

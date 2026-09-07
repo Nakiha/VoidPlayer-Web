@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
@@ -6,6 +7,7 @@ import type { MediaInfo, FrameInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { openFFmpegMedia } from './ffmpeg-media.ts';
 import { contextLog } from './log.ts';
+import { preferredVideoConfig } from './decoder-policy.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
@@ -48,6 +50,7 @@ export async function inspectVideoTrack(input: Input) {
   return { track, codec, format: format.name };
 }
 export interface MediaMeta { name: string; size: number; lastModified: number; }
+export type MediaOpenProgress = (stage: 'download' | 'decode') => void;
 
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
@@ -62,6 +65,7 @@ interface OpenPlan {
   nativeInput(): Input;
   /** Fetches the whole file for the legacy container+decoder fallback. */
   fetchFile(): Promise<File>;
+  onProgress?: MediaOpenProgress;
 }
 
 function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<MediaSource>): Promise<MediaSource> {
@@ -69,6 +73,7 @@ function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<
   return (async () => {
     let nativeError: unknown;
     try {
+      plan.onProgress?.('decode');
       const source = await openWebCodecsInput(plan.nativeInput(), plan.meta);
       log.info('media', '使用 WebCodecs 解码路径', { name: plan.meta.name, codec: source.info.codec });
       return source;
@@ -79,17 +84,21 @@ function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<
     if (stage === 'input' || stage === 'resource') throw nativeError;
     log.info('media', 'WebCodecs 路径不可用，尝试 WASM 回退', { name: plan.meta.name, stage, reason: errorText(nativeError) });
     try {
-      const source = await openFallback(await plan.fetchFile());
+      const file = await plan.fetchFile();
+      plan.onProgress?.('decode');
+      const source = await openFallback(file);
       log.info('media', 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (fallbackError) {
       log.warn('media', 'WASM 回退也不支持', { name: plan.meta.name, error: errorText(fallbackError) });
-      throw nativeError;
+      // Preserve input/resource failures and the actual decoder failure; the
+      // initial capability error cannot explain a failed download or timeout.
+      throw fallbackError;
     }
   })();
 }
 
-export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+export async function openMedia(file: File, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia, onProgress?: MediaOpenProgress): Promise<MediaSource> {
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
   if (await isFlvFile(file)) {
     const { openFlvMedia } = await import('./flv-media.ts');
@@ -97,6 +106,7 @@ export async function openMedia(file: File, openFallback: (file: File) => Promis
   }
   return openWithFallback({
     meta: file,
+    onProgress,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
     fetchFile: async () => file,
   }, openFallback);
@@ -107,13 +117,14 @@ export async function openMedia(file: File, openFallback: (file: File) => Promis
 // path. The WASM fallback still reads the full file into memory (streaming
 // AVIO is follow-up work) — but the size budget is enforced by a preflight
 // BEFORE that download starts.
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia, onProgress?: MediaOpenProgress): Promise<MediaSource> {
   if (/\.flv$/i.test(meta.name)) {
     const { openFlvMedia } = await import('./flv-media.ts');
     return openFlvMedia({ url, size: meta.size }, meta);
   }
   return openWithFallback({
     meta,
+    onProgress,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
     fetchFile: async () => {
       let size = meta.size;
@@ -124,32 +135,39 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
       if (size > MAX_FALLBACK_FILE_BYTES) {
         throw new MediaOpenError('resource', `文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
       }
+      onProgress?.('download');
       const response = await fetch(url);
       if (!response.ok) throw new MediaOpenError('input', `下载媒体库文件失败（${response.status}）。`);
-      return new File([await response.arrayBuffer()], meta.name, { lastModified: meta.lastModified });
+      // Keep the response as a browser-managed Blob instead of materializing
+      // the whole compressed file in a JS ArrayBuffer and copying it to File.
+      return new File([await response.blob()], meta.name, { lastModified: meta.lastModified });
     },
   }, openFallback);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaSource> {
-  if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
+  try {
+    if (!globalThis.isSecureContext || typeof VideoDecoder === 'undefined') {
     // No WebCodecs at all is a decode-capability gap, not an input error:
     // the WASM fallback exists precisely for that case.
     throw new MediaOpenError('decode', '当前浏览器不支持 WebCodecs。请通过 localhost 或 HTTPS，在支持的桌面浏览器中打开。');
-  }
-  try {
+    }
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
+    const rawConfig = await track.getDecoderConfig();
+    const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
+    if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);
     const first = await track.getFirstTimestamp();
     const end = await track.computeDuration();
     if (!Number.isFinite(first) || !Number.isFinite(end) || end <= first) throw new MediaOpenError('container', '无法确定视频的有效时间范围。');
-    const sink = new VideoSampleSink(track);
+    const sink = new VideoSampleSink(track, { hardwareAcceleration: config.hardwareAcceleration });
     // Color metadata comes from the container (mediabunny), not from decoded
     // frames: WebKit resolves VideoFrame.colorSpace to presentation values.
     const color = await track.getColorSpace().catch(() => null);
     const info: MediaInfo = {
-      id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
+      hardwareAcceleration: config.hardwareAcceleration,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
       colorSource: 'container',
       ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),

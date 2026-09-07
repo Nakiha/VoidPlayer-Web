@@ -33,6 +33,7 @@ export class FlvEngine {
         this.primed = await this.extract(0);
       }
       return { codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
+        hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
         firstPtsUs: this.index.firstPts, durationUs: this.index.duration,
         times: this.index.order.map(i => this.index.packets[i].pts - this.index.firstPts), durations: this.index.durations };

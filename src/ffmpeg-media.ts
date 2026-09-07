@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
@@ -188,7 +189,9 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
         transfer.push(payload.wasmBinary as ArrayBuffer);
       }
-      init = await rpc.call<InitResult>('init', payload, transfer, 5000);
+      // Includes fetching/compiling the core and scanning the file's index.
+      // Five seconds is not a viable cold-start budget over a LAN.
+      init = await rpc.call<InitResult>('init', payload, transfer, 60000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -217,7 +220,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     return declared > 0 ? declared : (i + 1 < total ? relUs[i + 1] - relUs[i] : (i > 0 ? relUs[i] - relUs[i - 1] : 0));
   });
   const info: MediaInfo = {
-    id: crypto.randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
+    id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
     firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
     pixelFormat: init.pixelFormat ?? null,
@@ -246,7 +249,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       ptsUs: relUs[index],
       sourcePtsUs: ticksToUs(ticks[index]),
       durationUs: durations[index],
-      close() { if (!closed) { closed = true; spare = pixels.buffer as ArrayBuffer; } },
+      close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };
   };
 
@@ -257,8 +260,10 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       const start = nextIndex(relUs, ptsUs);
       if (start < 0) return [];
       const frames: WasmDecodedFrame[] = [];
-      for (let i = start; i < Math.min(start + count, total); i++) frames.push(await extract(i));
-      return frames;
+      try {
+        for (let i = start; i < Math.min(start + count, total); i++) frames.push(await extract(i));
+        return frames;
+      } catch (error) { for (const frame of frames) frame.close(); throw error; }
     },
     async *framesFrom(ptsUs) {
       for (let idx = floorIndex(relUs, ptsUs); idx < total && !disposed; idx++) yield await extract(idx);
@@ -266,6 +271,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     dispose() {
       if (disposed) return;
       disposed = true;
+      spare = null;
       liveFallbacks--;
       rpc.terminate();
     },

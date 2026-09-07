@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
@@ -41,8 +42,8 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
       const track = session.getState().tracks.find(t => t.slot === slot);
       if (!track?.frame) return null;
       const groups = session.getState().marks.filter(m => m.mediaId === track.id && m.frame.ptsUs === track.frame!.ptsUs).map(mark => {
-        const drawings = (mark.drawings ?? []).map(d => ({ ...d, id: d.id ?? crypto.randomUUID() }));
-        if (mark.text && !drawings.some(d => d.tool === 'text')) drawings.push({ id: crypto.randomUUID(), tool: 'text', text: mark.text, points: [{ x: .05, y: .05 }] });
+        const drawings = (mark.drawings ?? []).map(d => ({ ...d, id: d.id ?? randomUUID() }));
+        if (mark.text && !drawings.some(d => d.tool === 'text')) drawings.push({ id: randomUUID(), tool: 'text', text: mark.text, points: [{ x: .05, y: .05 }] });
         return { markId: mark.id, drawings };
       });
       drafts.set(slot, { mediaId: track.id, ptsUs: track.frame.ptsUs, groups: groups.length ? groups : [{ drawings: [] }] });
@@ -195,7 +196,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     function beginDrawing(next: Drawing['tool'], p: Point, before: Snapshot, pointer: number) {
       if (all(slot).length >= 200) return;
       const w = annotationFrameRect(svg).width;
-      const drawing: Drawing = { id: crypto.randomUUID(), tool: next, points: next === 'text' || next === 'pen' ? [p] : [p, p], color: $<HTMLInputElement>('drawing-color').value, strokeWidth: Number($<HTMLInputElement>('drawing-width').value), fontSize: Math.min(1, Number($<HTMLInputElement>('drawing-font').value) / w), ...(next === 'text' ? { text: '' } : {}) };
+      const drawing: Drawing = { id: randomUUID(), tool: next, points: next === 'text' || next === 'pen' ? [p] : [p, p], color: $<HTMLInputElement>('drawing-color').value, strokeWidth: Number($<HTMLInputElement>('drawing-width').value), fontSize: Math.min(1, Number($<HTMLInputElement>('drawing-font').value) / w), ...(next === 'text' ? { text: '' } : {}) };
       ensure(slot)!.groups[0].drawings.push(drawing); selectedId = drawing.id;
       if (next === 'text') { startText(slot, drawing, before); return; }
       gesture = { slot, pointer, start: p, previous: p, before, mode: 'draw' };

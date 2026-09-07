@@ -137,3 +137,11 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .saved-workspace-row { padding-block: 0; }
 .saved-workspace-row:has(.saved-workspace-open[aria-pressed=true]) { background: var(--surface-selected); }
 .saved-workspace-open[aria-pressed=true] { background: transparent; }
+
+.identity-current { display: flex; flex-direction: column; gap: 6px; padding: 16px; overflow-wrap: anywhere; }
+.identity-current .settings-caption { margin: 0; color: var(--text-subtle); font-size: 11px; }
+.identity-form { display: flex; flex-direction: column; gap: 8px; margin-top: 24px; }
+.identity-input-row { display: flex; gap: 8px; }
+.identity-input-row input { flex: 1; min-width: 0; }
+.identity-form input, .identity-form select { width: 100%; min-width: 0; box-sizing: border-box; padding: 8px 10px; border: 1px solid var(--border-soft); border-radius: 6px; background: var(--surface-input); color: var(--text); font: inherit; }
+.identity-input-row button { flex-shrink: 0; }

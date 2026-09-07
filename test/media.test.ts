@@ -43,6 +43,6 @@ test('input-stage failures skip the WASM fallback; decode-stage gaps use it', as
   assert.equal(attempted, 0);
   // Node has no WebCodecs: that is a decode-stage gap and must reach the fallback.
   const data = await readFile(new URL('../fixtures/video/ci_h264_smoke.mp4', import.meta.url));
-  await assert.rejects(openMedia(new File([data], 'ci_h264_smoke.mp4'), fallback), /WebCodecs/);
+  await assert.rejects(openMedia(new File([data], 'ci_h264_smoke.mp4'), fallback), /nope/);
   assert.equal(attempted, 1);
 });

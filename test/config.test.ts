@@ -88,7 +88,19 @@ test('explicit admin environment overrides JSON identities, including revoking a
     assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, ['team.admin', 'qa.tester']);
     process.env.VOIDPLAYER_ADMIN_USERS = '';
     assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, []);
-    process.env.VOIDPLAYER_ADMIN_USERS = 'not a user';
+    process.env.VOIDPLAYER_ADMIN_USERS = 'bad\nuser';
     await assert.rejects(loadConfig([], 'production', root), /adminUsers/);
   } finally { if (original === undefined) delete process.env.VOIDPLAYER_ADMIN_USERS; else process.env.VOIDPLAYER_ADMIN_USERS = original; await rm(root, { recursive: true, force: true }); }
+});
+
+
+test('portable startup supports an empty library and keeps defaults beside the executable', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-portable-config-'));
+  try {
+    const app = path.join(root, 'app'), cwd = path.join(root, 'elsewhere'), data = path.join(app, 'data');
+    await mkdir(cwd); await writeFile(path.join(cwd, 'voidplayer.config.json'), '{"wrong":true}');
+    const config = await loadConfig([], 'production', cwd, { configFile: path.join(data, 'voidplayer.config.json'), dataDir: data, staticDir: path.join(app, 'dist'), logsDir: path.join(data, 'logs'), allowEmptyRoots: true });
+    assert.deepEqual(config.mediaRoots, []); assert.equal(config.dataDir, data);
+    assert.equal(config.staticDir, path.join(app, 'dist')); assert.equal(config.logsDir, path.join(data, 'logs'));
+  } finally { await rm(root, { recursive: true, force: true }); }
 });

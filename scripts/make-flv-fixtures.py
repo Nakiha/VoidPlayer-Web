@@ -4,6 +4,7 @@ Requires ffmpeg/ffprobe on PATH. No transcoding; private framing matches the
 Flutter demuxer. Files and reference timestamps go into ignored fixtures/flv/.
 """
 import json
+import os
 import pathlib
 import subprocess
 import tempfile
@@ -24,6 +25,8 @@ def tag(data, dts):
 cases = [('h264', 'ci_h264_smoke.mp4', 7, 'avc1'), ('hevc', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 12, 'hvc1'),
          ('av1', 'av1_10s_1920x1080.webm', 13, 'av01'), ('vvc', 'h266_10s_1920x1080.mp4', 14, 'vvc1')]
 for codec, source, codec_id, fourcc in cases:
+    if os.environ.get('FLV_CASE') and not os.environ['FLV_CASE'].endswith('-' + codec):
+        continue
     with tempfile.TemporaryDirectory(prefix='vp-flv-') as tmp:
         # MP4 provides avcC/hvcC/av1C/vvcC config records for all four codecs.
         mp4 = pathlib.Path(tmp) / 'source.mp4'

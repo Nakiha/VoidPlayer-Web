@@ -1,3 +1,4 @@
+import { randomUUID } from '../uuid.ts';
 import '../themes/silver-glass.css';
 import '../themes/dark.css';
 import '../themes/accents.css';
@@ -150,7 +151,7 @@ for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=
   if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'logs') void act(loadLogs);
 };
-$('add-root').onclick = () => { const row = rootRow({ id: crypto.randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
+$('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
 $('reset-roots').onclick = () => void act(loadRoots);
 $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.writable || rootSaving) return;
   void act(async () => {

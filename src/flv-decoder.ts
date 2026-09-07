@@ -3,10 +3,12 @@ import { flvDecoderConfig } from './flv-demux.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
 import type { MediaInfo } from './model.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
+import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface FlvFrame { pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
+  hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
   metadata?(): Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat'>;
   reset(): void;
   send(bytes: Uint8Array, packet: FlvPacket): Promise<void>;
@@ -17,9 +19,9 @@ export interface PacketDecoder {
 
 export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder | null> {
   const parsed = flvDecoderConfig(index);
-  const config = parsed ? { ...parsed, optimizeForLatency: true } : null;
-  if (!config || typeof VideoDecoder === 'undefined') return null;
-  if (!(await VideoDecoder.isConfigSupported(config)).supported) return null;
+  if (!parsed || typeof VideoDecoder === 'undefined') return null;
+  const config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
+  if (!config) return null;
   const frames: VideoFrame[] = [];
   let error: Error | null = null, outstanding = 0, minimum = -Infinity;
   let notify: (() => void) | undefined;
@@ -40,6 +42,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
   const check = () => { if (error) throw new MediaOpenError(error instanceof MediaOpenError ? error.stage : 'decode', error.message); };
   return {
     kind: 'webcodecs',
+    hardwareAcceleration: config.hardwareAcceleration,
     reset() { frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(config); outstanding = 0; error = null; minimum = -Infinity; },
     async send(bytes, packet) {
       check();
