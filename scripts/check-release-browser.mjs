@@ -10,12 +10,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { webkit, chromium } from 'playwright';
 import { sha256 } from './check-release-set.mjs';
+import { generatedLibrary } from './check-generated-library.mjs';
 const root = path.resolve(import.meta.dirname, '..');
 const archive = path.resolve(process.argv[2] || JSON.parse(await readFile(path.join(root, 'artifacts/latest-release.json'), 'utf8')).archive);
 const browserName = process.argv[3] || 'webkit';
 assert.ok(['webkit', 'chromium'].includes(browserName));
 const samples = path.resolve(process.env.VOIDPLAYER_SAMPLES || path.join(root, 'fixtures/video'));
-for (const file of ['av1_10s_1920x1080.webm', 'ffv1_yuv444p10le.mkv']) await access(path.join(samples, file));
+const generated = process.env.VOIDPLAYER_LIBRARY_FIXTURE ? await generatedLibrary(process.env.VOIDPLAYER_LIBRARY_FIXTURE) : null;
+if (!generated) for (const file of ['av1_10s_1920x1080.webm', 'ffv1_yuv444p10le.mkv']) await access(path.join(samples, file));
 const temp = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-native-browser-'));
 let child, browser, output = '';
 const env = { ...process.env };
@@ -43,7 +45,7 @@ try {
   const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r));
   const port = socket.address().port; await new Promise(r => socket.close(r));
   const base = `http://127.0.0.1:${port}`;
-  await writeFile(path.join(data, 'voidplayer.config.json'), JSON.stringify({ host: '127.0.0.1', port, mediaRoots: [{ id: 'qa', name: 'QA', path: samples }], logsDir: null, indexWatch: false }));
+  await writeFile(path.join(data, 'voidplayer.config.json'), JSON.stringify({ host: '127.0.0.1', port, mediaRoots: generated?.roots || [{ id: 'qa', name: 'QA', path: samples }], logsDir: null, indexWatch: false }));
   async function start() {
     output = '';
     child = spawn(executable, ['--data-dir', data], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -60,15 +62,30 @@ try {
     assert.equal(sha256(Buffer.from(await (await fetch(base + '/')).arrayBuffer())), manifest.files['dist/index.html'], 'serves exactly the packaged frontend');
   }
   await start();
+  const generatedEntries = await generated?.verify(base);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
   const page = await context.newPage(); await page.goto(base);
   const call = (p, name, args = {}) => p.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
   await page.waitForFunction(() => window.voidPlayer);
-  const listing = await call(page, 'list_library');
-  for (const [slot, name] of [['A', 'av1_10s_1920x1080.webm'], ['B', 'ffv1_yuv444p10le.mkv']]) {
-    const entry = listing.entries.find(e => e.name === name); assert.ok(entry, name);
+  if (generated) {
+    await page.locator('#toggle-sources').click();
+    await page.locator('#library-root').selectOption('archive');
+    await page.getByRole('button', { name: '打开目录：分页目录', exact: true }).click();
+    await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 60);
+    await page.getByRole('button', { name: '下一页片源', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('#source-list').textContent.includes('clip-00180'));
+    await page.locator('#source-search').fill('clip-00777');
+    await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 1);
+    await page.locator('#source-list').getByRole('button', { name: '添加到视图：分页目录/clip-00777.mp4', exact: true }).click();
+    await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
+    console.log('PASS generated library UI: root selection, directory navigation, 60-item pagination, scoped search and load from last page');
+  }
+  const entries = generatedEntries || (await call(page, 'list_library')).entries;
+  const playback = generated?.playback || [{ slot: 'A', name: 'av1_10s_1920x1080.webm' }, { slot: 'B', name: 'ffv1_yuv444p10le.mkv' }];
+  for (const { slot, name, rootId } of playback) {
+    const entry = entries.find(e => e.name === name && (!rootId || e.rootId === rootId)); assert.ok(entry, name);
     await call(page, 'load_library_item', { slot, id: entry.id });
   }
   const state = await page.evaluate(() => window.voidPlayer.getState());
@@ -95,7 +112,14 @@ try {
   await admin.getByRole('button', { name: '工作区', exact: true }).click();
   await admin.locator('#admin-workspaces-list button').filter({ hasText: 'Native release' }).click();
   await admin.waitForFunction(() => document.querySelector('#admin-workspace-json').value.includes('Native release round trip'));
-  await context.close(); await stop(); await start();
+  await context.close();
+  await generated?.disconnect();
+  await stop(); await start();
+  if (generated) {
+    await generated.verifyOffline();
+    assert.equal((await (await fetch(base + '/api/workspaces')).json()).entries[0].id, stored.id);
+    await generated.reconnect();
+  }
   const restarted = await browser.newPage(); restarted.on('pageerror', e => errors.push(e.message));
   await restarted.goto(base + '/?workspace=' + stored.id);
   await restarted.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && window.voidPlayer.getState().marks.length === 1 && !window.voidPlayer.getState().busy);
@@ -104,9 +128,10 @@ try {
   assert.deepEqual(errors, []);
   console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged frontend, dual decode, vector marks, gzip file restore, server save/admin inspection, process restart and workspace restore; empty PATH and isolated data`);
   await browser.close(); browser = null;
+  await generated?.replacement();
   if (process.env.RELEASE_BENCH === '1') {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), browserName, '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: process.env.BENCH_REPEATS || '1' }, stdio: 'inherit' });
     const timer = setTimeout(() => bench.kill('SIGKILL'), 600000);
     try { const [code] = await once(bench, 'close'); assert.equal(code, 0, 'packaged playback benchmark'); } finally { clearTimeout(timer); }
   }
-} finally { await browser?.close(); await stop(); await rm(temp, { recursive: true, force: true }); }
+} finally { await browser?.close(); try { await stop(); } finally { await generated?.cleanup(); await rm(temp, { recursive: true, force: true }); } }

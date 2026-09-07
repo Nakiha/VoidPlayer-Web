@@ -18,6 +18,7 @@
     "test:library:browser": "npm run build && node scripts/check-library-browser.mjs",
     "test:browser": "npm run build && node scripts/check-browser.mjs",
     "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
+    "fixtures:library": "node scripts/make-library-fixtures.mjs",
     "fixtures:flv": "python3 scripts/make-flv-fixtures.py",
     "test:annotations:browser": "npm run build && node scripts/check-annotation-browser.mjs",
     "test:annotations:rendering": "npm run build && node scripts/check-annotation-rendering.mjs",

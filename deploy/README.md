@@ -128,8 +128,10 @@ RELEASE_BENCH=1 npm run test:release:browser -- /path/to/voidplayer-package.tar.
 1. 将 `package.json` 与 lockfile 的版本更新为目标 `x.y.z`，并提交 `docs/releases/<版本>.md`，说明支持平台、改动、升级步骤和已知限制。正式标签使用 `vx.y.z`，候选标签可使用 `vx.y.z-rc.1`，候选版的说明文件相应为 `x.y.z-rc.1.md`。
 2. 确认目标修订和工作区干净，再创建并推送对应 Git 标签。工作流会检查标签指向当前修订、版本匹配及说明存在。也可以在 Actions 页面选择已有版本标签重跑；不要移动已经发出的标签。
 3. 三平台原生验收、Linux HTTPS/Docker 验收及汇总校验通过后，Actions 将同一批受测归档及校验文件放入 Release 草稿，上传后再比对 GitHub 返回的 SHA-256。标签包名称固定，例如 `voidplayer-0.1.0-linux-x64.tar.gz`；程序报告的版本与标签一致。
-4. 在草稿中核对说明和三平台附件，完成 Roadmap 的真实存储及正式验收后再点击 **Publish release**。自动流程始终保留草稿状态；候选标签的草稿自动标为 prerelease。
+4. 在草稿中核对说明和三平台附件，完成 Roadmap 当前约定的生成片源环境及正式验收后再点击 **Publish release**。自动流程始终保留草稿状态；候选标签的草稿自动标为 prerelease。
 
 中断后可重跑失败的草稿任务：相同校验和的已有附件会跳过。已有公开 Release、归属修订/说明不符、同名异内容附件或不完整附件会阻止继续，不删除或覆盖。此时先检查失败原因；如需重新构建不同内容，使用新候选版本，避免更换已经受测的包。跨平台构建成功本身不替代真实 SMB/NFS 验收。
 
 流程依据：[GitHub 工作流权限](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)、[Release 草稿](https://docs.github.com/en/rest/releases/releases#create-a-release)、[附件上传与摘要](https://docs.github.com/en/rest/releases/assets#upload-a-release-asset)。
+
+本轮媒体库验收使用 FFmpeg 生成的 5,242 个真实可解码文件（多根目录、12 层嵌套、零散文件），实际 SMB/NFS 验证延期。生成及针对归档运行的方法见 [生成片源验收](../docs/generated-library-acceptance.md)。
