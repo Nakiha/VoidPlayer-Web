@@ -3,7 +3,7 @@ import { icon } from './icons.ts';
 import { ACCENTS } from './appearance.ts';
 export const SETTINGS_PANES = [
   ['appearance', '外观', 'appearance'], ['workspace', '工作区', 'open'],
-  ['shortcuts', '快捷键', 'keyboard'], ['logs', '日志', 'note'], ['performance', '性能', 'diagnostics'], ['about', '关于', 'info'],
+  ['identity', '用户', 'info'], ['shortcuts', '快捷键', 'keyboard'], ['logs', '日志', 'note'], ['performance', '性能', 'diagnostics'], ['about', '关于', 'info'],
 ] as const;
 const paneTitle = (title: string, description: string) => `<div class="settings-page-title"><h3>${title}</h3><p>${description}</p></div>`;
 const shortcutRows = (entries: string[][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.split(' / ').map(key => `<kbd>${key}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
@@ -36,6 +36,18 @@ export function settingsShell() {
         ${savedWorkspaceShell()}
         <h4 class="settings-section-title">片源连接</h4><p class="settings-copy">工作区保存媒体服务地址，不打包视频。本地视频需要重新选择原文件；媒体库视频需要能访问记录的服务。</p>
         <p class="settings-caption">导入准备完成后才替换当前会话。片源不可用时会保留当前工作区。</p>
+      </section>
+      <section id="settings-pane-identity" role="tabpanel" aria-labelledby="settings-tab-identity" tabindex="0" hidden>
+        ${paneTitle('用户', '浏览器会记住当前用户，下次打开即可继续。')}
+        <div class="settings-group identity-current"><strong id="identity-current"></strong><span id="identity-id" class="settings-caption"></span></div>
+        <form id="identity-form" class="identity-form">
+          <label for="identity-name">用户名</label>
+          <div class="identity-input-row"><input id="identity-name" maxlength="128" autocomplete="off" spellcheck="false" aria-describedby="identity-hint"><button id="identity-save" type="submit">保存</button></div>
+          <p id="identity-hint" class="settings-caption">填写新名字可重命名；填写已有名字会直接切换到该用户。</p>
+        </form>
+        <div class="identity-form"><label for="identity-users">切换到已有用户</label><select id="identity-users" aria-describedby="identity-switch-hint"></select></div>
+        <p id="identity-switch-hint" class="settings-caption">选择后立即切换。当前评审会保留，服务器工作区列表随用户切换。</p>
+        <p id="identity-message" class="settings-caption" role="status"></p>
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>
         ${paneTitle('快捷键', '播放、观察和标注时常用的操作。')}

@@ -1,0 +1,27 @@
+name: Verify intranet users
+on:
+  pull_request:
+  push:
+    branches: [main, codex/simplify-intranet-identity]
+permissions:
+  contents: read
+jobs:
+  identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: node --test test/identity.test.ts test/saved-workspaces.test.ts test/config.test.ts test/admin.test.ts test/release-pipeline.test.mjs
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:identity:browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: identity-screenshots
+          path: /tmp/voidplayer-identity-*.png
+          if-no-files-found: ignore

@@ -16,34 +16,19 @@
 配置文件内的相对路径以配置文件所在目录为基准。`logsDir` 控制用户主动上传的诊断日志；设为 `null` 禁用上传。
 本机 Finder/Explorer 定位需要显式启用 `allowLocalReveal`，不要用于远端或端口转发。
 
-## 内网小团队：HTTPS + 每人独立账号
+## 内网小团队：自动用户 + 可选 HTTPS
 
-应用自身仍为单个独立服务程序；Caddy 只负责 HTTPS 和登录入口。
-下列步骤从与服务器架构匹配的 Linux 发布包执行，目标服务器需有 Docker Engine / Compose。源码目录及 macOS/Windows 包不能直接作为该 Dockerfile 的构建上下文。先为服务器配置内网域名及 DNS。
+首次进入页面自动创建唯一用户名和固定 ID，浏览器通过持久 Cookie 记住 ID，并在 localStorage 缓存当前用户名和 ID，后端存入 `workspaces.sqlite` 的 `users` 表。无需注册、密码、认证插件或网关账号。
 
-1. 进入 Linux 发布包的 `deploy/`，复制 `.env.example` 为 `.env`，设置 `VOIDPLAYER_SITE` 为实际内网域名，`VOIDPLAYER_MEDIA_DIR` 为服务器媒体目录的绝对路径。目录需允许容器内 UID 1000 读取；挂载只读，应用不能改源文件。
-2. 用下面的命令生成网关密钥，将输出写入 `.env` 的 `VOIDPLAYER_PROXY_TOKEN`，不要提交配置或把密钥发到聊天中：
+设置 → 用户显示当前用户名和缩略 ID（悬停查看完整 ID），可以修改名字，也可以用下拉列表直接切换到后端已有用户。新名字会重命名当前用户并保留 ID；已有名字会切换到该用户，原用户和数据保留，不合并。用户名去除首尾空白并按 NFC 规范化，区分大小写，最多 128 字符；数据库 UNIQUE 约束和事务避免重复身份。清除 Cookie 或换浏览器后可从列表选回原用户。旧工作区所有者自动成为同名用户，原 ID 与工作区归属保持不变（旧本机用户为 `local`）。
 
-   ```sh
-   openssl rand -hex 32
-   ```
+直接运行可设置 `--host 0.0.0.0`。远端浏览器的视频能力需要安全上下文，建议使用 HTTPS。下列步骤从 Linux 发布包的 `deploy/` 执行，服务器需有 Docker Engine / Compose 和内网 DNS：
 
-3. 复制 `users.caddy.example` 为 `users.caddy`。每人一个固定账号 ID（字母、数字、`_.@-`，最多 128 字符），不要共用。交互式生成密码哈希，文件中每行写 `账号ID 哈希`，不要写明文密码：
+1. 复制 `.env.example` 为 `.env`，填写 `VOIDPLAYER_SITE` 和 `VOIDPLAYER_MEDIA_DIR`。媒体目录需允许 UID 1000 读取，容器挂载只读。
+2. 如需远端管理，在 `VOIDPLAYER_ADMIN_USERS` 填写对应用户名。
+3. 执行 `docker compose config --quiet` 和 `docker compose up -d --build`。
 
-   ```sh
-   docker run --rm -it caddy:2.11.4 caddy hash-password
-   chmod 600 .env users.caddy
-   ```
-
-4. 检查配置并启动：
-
-   ```sh
-   docker compose config --quiet
-   docker compose up -d --build
-   docker compose ps
-   ```
-
-仅网关向主机开放 80/443；媒体端口不发布。应用拒绝没有有效网关凭据的媒体请求，用户名由网关认证后覆盖转发，应用不信任浏览器自行声明的身份。
+Caddy 仅提供 HTTPS，不再要求 `users.caddy`、密码或网关密钥。已有部署升级时更新 Caddyfile、Compose 和 `.env`，保留原数据卷。旧版认证网关头仍兼容，但不再是播放器访问的前置条件。
 
 ### 内网 HTTPS 的证书
 
@@ -58,10 +43,9 @@ docker compose cp gateway:/data/caddy/pki/authorities/local/root.crt ./voidplaye
 
 ### 身份与评审记录的边界
 
-登录账号作为稳定 `actor.id` 传给页面，新标注和导出的评审包含作者快照。右上角状态提示显示当前账号。网关拒绝错误密码，后端访问日志包含 requestId、actorId、请求路径、结果与耗时；不记录密码、网关密钥或请求正文。
+用户 ID 用于工作区归属和新标注的作者快照，重命名不会改变归属或历史作者快照；切换用户会解除当前服务器工作区关联，保留正在编辑的评审。系统完全信任用户选择，任何人都能选择已有用户名；这些身份用于整理数据，不作为防冒用认证。
 
-**页面会话不会自动保存；关闭前可导出文件，或在设置中主动保存到服务器。** 服务器工作区记录可信归属、更新时间和版本，更新/删除需版本匹配，冲突时可另存副本。管理员可以检视和管理工作区，详见 [服务器工作区](admin.md#服务器工作区)。这不是实时协作或完整操作审计：客户端 JSON 中的标注作者字段不是防篡改证据，页面里的每次 seek、播放和绘图也没有上传成团队审计记录。
-Basic Auth 暂无应用内账号管理、改密与登出界面；本轮适用于受管理的小团队入口。账号 ID 重命名会被视为新身份，需稳定分配。
+**页面会话不会自动保存；关闭前可导出文件，或在设置中主动保存到服务器。** 工作区更新和删除仍需版本匹配，冲突时可另存副本。详见 [服务器工作区](admin.md#服务器工作区)。日志上传仍只由用户显式触发。
 
 ### 运维与更新
 
@@ -69,8 +53,7 @@ Basic Auth 暂无应用内账号管理、改密与登出界面；本轮适用于
 - 媒体索引保存在本地 SQLite，后台默认每 30 秒校准。Range 请求直接查索引，不等待全库扫描；仍检查文件版本和白名单边界。根目录离线时保留缓存，任务状态见 `/api/library/scan`。
 - 应用数据保存在 `app-data` 卷，媒体 `/media` 保持只读；迁移时保留该卷及配置。备份前停止应用，复制完整 `/data`，不能只复制正在写入的 SQLite 主文件。
 - `docker compose logs --tail=100 app gateway` 查看服务请求日志；默认每容器 10 MB × 3 轮转。这是短期排障记录，不是长期审计存档。浏览器诊断仍保存在本地，容器默认禁用上传。管理身份、持久化配置和启用方式见 [服务管理](admin.md)。
-- 修改账号文件后执行 `docker compose exec gateway caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`；网关密钥更新需重建两个容器的环境。
-- 更新时校验新包 `.sha256`，解压到新目录，只迁移实际 `.env`、`users.caddy`，执行 `docker compose up -d --build`。模板固定项目名为 `voidplayer`，避免新目录另建一套 CA 数据卷；同机多实例需各自指定并保留不同项目名。保留旧包便于回退。
+- 更新时校验新包 `.sha256`，解压到新目录，只迁移实际 `.env`，执行 `docker compose up -d --build`。模板固定项目名为 `voidplayer`，避免新目录另建一套 CA 数据卷；同机多实例需各自指定并保留不同项目名。保留旧包便于回退。
 - `docker compose down` 停止；不要加 `-v`，否则会删除媒体索引和 CA 数据卷，客户端证书信任需要重新配置。备份 CA 私钥所在卷时按密钥管理要求保护。
 
 ## 源码开发与 macOS 后台运行
@@ -109,7 +92,7 @@ npm run service -- uninstall
 
 开发机可运行 `CADDY_BIN=/path/to/caddy node scripts/check-gateway.mjs` 做独立的 HTTPS/鉴权/Range 验证；使用临时私有 CA，不安装到系统信任。
 
-配置依据：[Caddy Basic Auth](https://caddyserver.com/docs/caddyfile/directives/basic_auth)、[反向代理请求头](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)、[自动 HTTPS 与本地 CA](https://caddyserver.com/docs/automatic-https)。
+配置依据：[反向代理请求头](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)、[自动 HTTPS 与本地 CA](https://caddyserver.com/docs/automatic-https)。
 
 ### 从发布包运行浏览器验收
 

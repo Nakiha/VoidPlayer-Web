@@ -1,6 +1,6 @@
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
-import { requestActor } from './identity.ts';
+import { requestActor, browserUserId, identityCookie } from './identity.ts';
 import { createServer } from 'node:http';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
@@ -110,7 +110,7 @@ export function createMediaServer(options: ServerOptions): Server {
 
   const server = createServer(async (req, res) => {
     const started = performance.now();
-    const actor = requestActor(req, options.proxyToken);
+    let actor = options.admin?.workspaces.user(browserUserId(req)) ?? requestActor(req, options.proxyToken);
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
     let status = 200, logged = false;
@@ -127,21 +127,45 @@ export function createMediaServer(options: ServerOptions): Server {
     res.once('finish', finish); res.once('close', finish);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      const healthRequest = ['/api/health', '/api/ready'].includes(url.pathname) && req.method === 'GET';
-      if (options.proxyToken && !actor && !healthRequest) { status = 401; sendJson(res, 401, { error: '请通过团队登录入口访问。' }); return; }
+      if (url.pathname === '/api/users' && req.method === 'GET') {
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
+        sendJson(res, 200, { users: options.admin.workspaces.users() }); return;
+      }
+      if (url.pathname === '/api/identity' && req.method === 'POST') {
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
+        if (!adminWriteAllowed(req, options.proxyToken, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return; }
+        try {
+          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown } | null;
+          if (body && typeof body.id === 'string' && body.name === undefined) {
+            const selected = options.admin.workspaces.user(body.id);
+            if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
+            actor = selected;
+          } else {
+            if (!body || typeof body.name !== 'string' || body.id !== undefined) throw new AdminError(400, '请填写用户名。');
+            actor = options.admin.workspaces.identify(actor?.id, body.name);
+          }
+          res.setHeader('set-cookie', identityCookie(actor)); sendJson(res, 200, { actor });
+        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); }
+        return;
+      }
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
+        if (options.admin && !actor) {
+          actor = options.admin.workspaces.identify();
+          res.setHeader('set-cookie', identityCookie(actor));
+        } else if (actor && !browserUserId(req)) res.setHeader('set-cookie', identityCookie(actor));
+        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin && !!adminIdentity(req, options.proxyToken, options.admin.config.adminUsers, actor), workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
       }
       if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
-        const workspaceActor = actor ?? (!options.proxyToken && localRequest(req) ? { id: 'local', name: '本机用户' } : null);
-        if (!workspaceActor || !options.admin) { sendJson(res, 403, { error: '工作区需要本机连接或可信网关身份。' }); return; }
+        const workspaceActor = actor;
+        if (!workspaceActor || !options.admin) { sendJson(res, 403, { error: '请先连接服务以创建用户身份。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
+        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return; }
         const store = options.admin.workspaces;
-        const isAdmin = !!adminIdentity(req, options.proxyToken, options.admin.config.adminUsers);
+        const isAdmin = !!adminIdentity(req, options.proxyToken, options.admin.config.adminUsers, actor);
         const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
         try {
           if (url.pathname === '/api/workspaces') {
@@ -163,8 +187,8 @@ export function createMediaServer(options: ServerOptions): Server {
       if (url.pathname.startsWith('/api/admin/')) {
         const admin = options.admin;
         if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
-        const identity = adminIdentity(req, options.proxyToken, admin.config.adminUsers);
-        if (!identity) { sendJson(res, 403, { error: options.proxyToken ? '当前网关用户没有管理权限，请在服务器配置的 adminUsers 中授权。' : '管理后台仅接受本机访问，远端请配置认证网关与管理员身份。' }); return; }
+        const identity = adminIdentity(req, options.proxyToken, admin.config.adminUsers, actor);
+        if (!identity) { sendJson(res, 403, { error: '当前用户没有管理权限，请在服务器配置的 adminUsers 中添加用户名。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, options.proxyToken)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
         try {
           if (url.pathname === '/api/admin/measurements') {
@@ -213,7 +237,7 @@ export function createMediaServer(options: ServerOptions): Server {
       }
       if (url.pathname === '/api/library/scan' && req.method === 'POST') {
         let sameOrigin = false;
-        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === `${options.proxyToken ? req.headers['x-forwarded-proto'] ?? 'https' : 'http'}:`; } catch {}
+        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === `${req.headers['x-forwarded-proto'] ?? (options.proxyToken ? 'https' : 'http')}:`; } catch {}
         if (!sameOrigin || req.headers['x-voidplayer-action'] !== 'scan') { sendJson(res, 403, { error: '请从播放器或管理页面操作扫描。' }); return; }
         if (url.searchParams.get('action') === 'cancel') library.cancel();
         else if (!url.searchParams.has('action') || url.searchParams.get('action') === 'refresh') void library.refresh().catch(() => {});

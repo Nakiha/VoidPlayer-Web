@@ -15,7 +15,8 @@ export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
 import { WorkspaceStore } from './workspaces.ts';
-export function adminIdentity(req: IncomingMessage, proxyToken: string | undefined, users: string[]) {
+export function adminIdentity(req: IncomingMessage, proxyToken: string | undefined, users: string[], browserActor?: { id: string; name: string } | null) {
+  if (browserActor && users.includes(browserActor.name)) return browserActor;
   if (!proxyToken) return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
   const actor = requestActor(req, proxyToken);
   return actor && users.includes(actor.id) ? actor : null;
@@ -24,7 +25,7 @@ export function adminWriteAllowed(req: IncomingMessage, proxyToken?: string, act
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {
     const origin = new URL(req.headers.origin ?? '');
-    return origin.host === req.headers.host && origin.protocol === `${proxyToken ? req.headers['x-forwarded-proto'] ?? 'https' : 'http'}:`;
+    return origin.host === req.headers.host && origin.protocol === `${req.headers['x-forwarded-proto'] ?? (proxyToken ? 'https' : 'http')}:`;
   } catch { return false; }
 }
 export async function readAdminJson(req: IncomingMessage, max = 65536): Promise<unknown> {

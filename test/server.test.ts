@@ -215,7 +215,7 @@ test('Range traffic shares one index and an explicit library refresh discovers a
   });
 });
 
-test('gateway identity requires a secret and audit records the authenticated actor, never the secret', async () => {
+test('legacy gateway identity remains optional and its secret never appears in audit', async () => {
   await withFixture(async root => {
     const token = 'a'.repeat(64), audit: Record<string, unknown>[] = [];
     const server = createMediaServer({ roots: [root], proxyToken: token, onLog: entry => audit.push(entry) });
@@ -223,9 +223,9 @@ test('gateway identity requires a secret and audit records the authenticated act
     const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
     const headers = { 'x-voidplayer-proxy-token': token, 'x-voidplayer-user': 'tester.one' };
     try {
-      assert.equal((await fetch(`${base}/api/library`)).status, 401);
-      assert.equal((await fetch(`${base}/api/library`, { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
-      assert.equal((await fetch(`${base}/api/library`, { headers: { ...headers, 'x-voidplayer-proxy-token': 'wrong' } })).status, 401);
+      assert.equal((await fetch(`${base}/api/library`)).status, 200);
+      assert.equal((await fetch(`${base}/api/library`, { headers: { 'x-voidplayer-user': 'forged' } })).status, 200);
+      assert.equal((await fetch(`${base}/api/library`, { headers: { ...headers, 'x-voidplayer-proxy-token': 'wrong' } })).status, 200);
       assert.equal((await fetch(`${base}/api/library`, { headers })).status, 200);
       assert.deepEqual((await (await fetch(`${base}/api/health`, { headers })).json()).actor, { id: 'tester.one', name: 'tester.one' });
       assert.equal((await (await fetch(`${base}/api/health`)).json()).actor, null);

@@ -1,3 +1,4 @@
+import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
 import { setAnnotationViewport } from './ui/annotation-svg.ts';
@@ -53,6 +54,7 @@ const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
 let message = '';
 let benchmarkRunning = false;
+const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
 const workbench = installWorkbench(session, act, openMarkDialog);
 const removeTrackDrag = installTrackDrag(session);
@@ -576,7 +578,7 @@ const api = {
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 
 $('benchmark').addEventListener('click', () => {

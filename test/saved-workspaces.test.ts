@@ -71,7 +71,7 @@ test('HTTP workspace access uses trusted ownership, same-origin writes and atomi
     const created = await call('/api/workspaces', 'alice', 'POST', { name: 'private', document: document(), owner: 'admin' }); assert.equal(created.status, 201); const entry = await created.json();
     assert.equal(entry.owner, 'alice'); assert.equal((await call('/api/workspaces/' + entry.id, 'bob')).status, 404);
     assert.equal((await call('/api/workspaces?all=1', 'bob')).status, 403); assert.equal((await call('/api/workspaces?all=1', 'admin')).status, 200);
-    assert.equal((await fetch(base + '/api/workspaces', { headers: { 'x-voidplayer-user': 'admin' } })).status, 401);
+    assert.equal((await fetch(base + '/api/workspaces', { headers: { 'x-voidplayer-user': 'admin' } })).status, 403);
     assert.equal((await fetch(base + '/api/workspaces', { method: 'POST', headers: { 'x-voidplayer-user': 'alice', 'x-voidplayer-proxy-token': 'f'.repeat(64), 'content-type': 'application/json' }, body: JSON.stringify({ name: 'cross-origin', document: document() }) })).status, 403);
     const updates = await Promise.all(['a', 'b'].map(name => call('/api/workspaces/' + entry.id, 'alice', 'PUT', { name, document: document() }, '"1"')));
     assert.deepEqual(updates.map(r => r.status).sort(), [200, 409]);

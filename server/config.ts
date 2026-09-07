@@ -47,7 +47,7 @@ export async function loadConfig(args: string[], mode: 'dev' | 'production', cwd
   if (mode === 'dev' && !['127.0.0.1', 'localhost', '::1'].includes(config.host)) throw new Error('开发服务仅监听本机；远端使用构建后的正式服务。');
   if (typeof config.allowLocalReveal !== 'boolean') throw new Error('allowLocalReveal 必须是布尔值。');
   if (typeof config.indexWatch !== 'boolean') throw new Error('indexWatch 必须是布尔值。');
-  if (!Array.isArray(config.adminUsers) || config.adminUsers.length > 100 || config.adminUsers.some(id => typeof id !== 'string' || !/^[a-zA-Z0-9_.@-]{1,128}$/.test(id)) || new Set(config.adminUsers).size !== config.adminUsers.length) throw new Error('adminUsers 必须是不重复的网关用户 ID 列表。');
+  if (!Array.isArray(config.adminUsers) || config.adminUsers.length > 100 || config.adminUsers.some(id => typeof id !== 'string' || !id.trim() || id !== id.normalize('NFC').trim() || id.length > 128 || /[\p{Cc}\p{Cf}]/u.test(id)) || new Set(config.adminUsers).size !== config.adminUsers.length) throw new Error('adminUsers 必须是不重复的用户名列表。');
   if (!Number.isInteger(config.indexTtlMs) || config.indexTtlMs < 1000 || config.indexTtlMs > 3600000) throw new Error('indexTtlMs 必须是 1000–3600000 毫秒。');
   if (typeof config.staticDir !== 'string' || !config.staticDir || (config.logsDir !== null && (typeof config.logsDir !== 'string' || !config.logsDir))) throw new Error('staticDir / logsDir 配置无效。');
   if (typeof config.dataDir !== 'string' || !config.dataDir.trim()) throw new Error('dataDir 无效。');

@@ -17,6 +17,8 @@ try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', page => { page.setDefaultTimeout(20000); page.on('pageerror', error => errors.push(error.message)); });
   const page = await context.newPage(); await page.goto(base);
+  const identity = await page.request.get(base + '/api/health').then(r => r.json());
+  const fetch = (url, options = {}) => context.request.fetch(url, { method: options.method, headers: options.headers, data: options.body }).then(r => ({ status: r.status(), json: () => r.json() }));
   const tool = (page, name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args), { name, args });
   const listing = await tool(page, 'list_library');
   for (const [slot, name] of [['A', 'av1_10s_1920x1080.webm'], ['B', 'h264_9s_1920x1080.mp4']]) await tool(page, 'load_library_item', { slot, id: listing.entries.find(entry => entry.name === name).id });
@@ -28,7 +30,7 @@ try {
   await page.locator('#saved-workspace-name').fill('镜头评审'); await page.locator('#saved-workspace-save').click();
   await page.locator('#saved-workspace-message').filter({ hasText: '已保存到服务器' }).waitFor();
   let entries = (await (await fetch(base + '/api/workspaces')).json()).entries; assert.equal(entries.length, 1); const id = entries[0].id;
-  const record = await (await fetch(base + '/api/workspaces/' + id)).json(); assert.equal(record.document.marks.length, 1); assert.equal(record.document.tracks.length, 2); assert.equal(record.owner, 'local');
+  const record = await (await fetch(base + '/api/workspaces/' + id)).json(); assert.equal(record.document.marks.length, 1); assert.equal(record.document.tracks.length, 2); assert.equal(record.owner, identity.actor.id);
   const second = await context.newPage(); await second.goto(base + '/?workspace=' + id);
   await second.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && window.voidPlayer.getState().marks.length === 1 && !window.voidPlayer.getState().busy);
   assert.deepEqual(await second.evaluate(() => window.voidPlayer.getState().marks), record.document.marks);

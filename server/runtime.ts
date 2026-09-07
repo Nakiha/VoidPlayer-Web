@@ -16,7 +16,6 @@ export async function validateServiceConfig(config: ServiceConfig, requireStatic
   if (requireStatic && !staticOk) throw new Error('缺少构建后的网页，请先运行 npm run build 或使用完整发布包。');
   const proxyToken = process.env.VOIDPLAYER_PROXY_TOKEN;
   if (proxyToken && proxyToken.length < 32) throw new Error('VOIDPLAYER_PROXY_TOKEN 至少需要 32 个字符。');
-  if (!['127.0.0.1', 'localhost', '::1'].includes(config.host) && !proxyToken) throw new Error('远端监听需要配置 VOIDPLAYER_PROXY_TOKEN，并通过认证网关访问。');
   await mkdir(config.dataDir, { recursive: true }); await access(config.dataDir, constants.W_OK);
   if (config.logsDir) { await mkdir(config.logsDir, { recursive: true }); await access(config.logsDir, constants.W_OK); }
   return { staticOk, proxyToken };

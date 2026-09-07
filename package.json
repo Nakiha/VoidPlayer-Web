@@ -31,6 +31,7 @@
     "test:mark-cards:browser": "npm run build && node scripts/check-mark-cards-browser.mjs",
     "test:theme:browser": "npm run build && node scripts/check-theme-browser.mjs",
     "test:workspace:browser": "npm run build && node scripts/check-workspace-browser.mjs",
+    "test:identity:browser": "npm run build && node scripts/check-identity-browser.mjs",
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
     "test:saved-workspaces:browser": "npm run build && node scripts/check-saved-workspaces-browser.mjs",
     "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs",

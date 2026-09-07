@@ -82,7 +82,7 @@ try {
   assert.equal(await readFile(configPath, 'utf8'), original);
   run(['--check', '--data-dir', data]);
   assert.throws(() => run(['--check', '--data-dir', data, '--folder', path.join(temp, 'missing')]), /媒体目录不存在/);
-  assert.throws(() => run(['--check', '--data-dir', data, '--host', '0.0.0.0']), /认证网关/);
+  run(['--check', '--data-dir', data, '--host', '0.0.0.0']);
   const port = await freePort(); let base = await start(port);
   run(['--healthcheck', '--data-dir', data, '--port', String(port)]);
   const homepage = await fetch(base); assert.equal(homepage.status, 200); assert.match(await homepage.text(), /VoidPlayer/);
@@ -100,8 +100,11 @@ try {
     const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } });
     return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
   }, listing.entries[0]);
-  const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
-  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', 'local');
+  const identityResponse = await fetch(base + '/api/health');
+  const workspaceActor = (await identityResponse.json()).actor;
+  const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
+  const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
+  const savedWorkspace = await verifySavedWorkspaces(workspaceTransport, listing.entries[0], base + '/', workspaceActor.id);
   const url = base + '/api/media/' + listing.entries[0].id + '?v=' + listing.entries[0].version;
   const head = await fetch(url, { method: 'HEAD' }); assert.equal(head.headers.get('content-length'), String(bytes.length)); assert.equal((await head.arrayBuffer()).byteLength, 0);
   await Promise.all(Array.from({ length: 12 }, async (_, i) => {
@@ -198,8 +201,8 @@ try {
   await renameReleased(offlineMedia, media);
   await writeFile(configPath, JSON.stringify({ ...JSON.parse(original), adminUsers: ['release.test'] }, null, 2) + '\n');
   const token = randomBytes(32).toString('hex'); base = await start(port, { VOIDPLAYER_PROXY_TOKEN: token }, ['--host', '0.0.0.0']);
-  assert.equal((await fetch(base + '/api/library')).status, 401);
-  assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 401);
+  assert.equal((await fetch(base + '/api/library')).status, 200);
+  assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'forged' } })).status, 200);
   assert.equal((await fetch(base + '/api/library', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);
   assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'viewer', 'x-voidplayer-proxy-token': token } })).status, 403);
   assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'release.test', 'x-voidplayer-proxy-token': token } })).status, 200);

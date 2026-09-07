@@ -88,7 +88,7 @@ test('explicit admin environment overrides JSON identities, including revoking a
     assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, ['team.admin', 'qa.tester']);
     process.env.VOIDPLAYER_ADMIN_USERS = '';
     assert.deepEqual((await loadConfig([], 'production', root)).adminUsers, []);
-    process.env.VOIDPLAYER_ADMIN_USERS = 'not a user';
+    process.env.VOIDPLAYER_ADMIN_USERS = 'bad\nuser';
     await assert.rejects(loadConfig([], 'production', root), /adminUsers/);
   } finally { if (original === undefined) delete process.env.VOIDPLAYER_ADMIN_USERS; else process.env.VOIDPLAYER_ADMIN_USERS = original; await rm(root, { recursive: true, force: true }); }
 });

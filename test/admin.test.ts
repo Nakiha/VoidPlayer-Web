@@ -37,7 +37,7 @@ test('admin requires a loopback host or an allowlisted trusted gateway identity'
   });
   const token = 'a'.repeat(64);
   await fixture(async ({ base }) => {
-    assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'owner' } })).status, 401);
+    assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'owner' } })).status, 403);
     assert.equal((await fetch(base + '/api/admin/status', { headers: { 'x-voidplayer-user': 'viewer', 'x-voidplayer-proxy-token': token } })).status, 403);
     const headers = { 'x-voidplayer-user': 'owner', 'x-voidplayer-proxy-token': token, 'x-forwarded-proto': 'https' };
     const response = await fetch(base + '/api/admin/status', { headers }); assert.equal(response.status, 200); assert.equal((await response.json()).identity.id, 'owner');

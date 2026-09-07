@@ -7,7 +7,6 @@ services:
     restart: unless-stopped
     init: true
     environment:
-      VOIDPLAYER_PROXY_TOKEN: ${VOIDPLAYER_PROXY_TOKEN:?Set a gateway token in .env}
       VOIDPLAYER_ADMIN_USERS: ${VOIDPLAYER_ADMIN_USERS:-}
     volumes:
       - app-data:/data
@@ -34,18 +33,11 @@ services:
     restart: unless-stopped
     environment:
       VOIDPLAYER_SITE: ${VOIDPLAYER_SITE:?Set the HTTPS hostname in .env}
-      VOIDPLAYER_PROXY_TOKEN: ${VOIDPLAYER_PROXY_TOKEN:?Set a gateway token in .env}
     ports:
       - '80:80'
       - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - type: bind
-        source: ./users.caddy
-        target: /etc/caddy/users.caddy
-        read_only: true
-        bind:
-          create_host_path: false
       - caddy-data:/data
       - caddy-config:/config
     depends_on:

@@ -51,7 +51,7 @@
 
 - `GET /api/library/browse`：`root`、`directory`、`search`、`recursive=1`、`limit`（1–200）、`offset`；返回当前目录的媒体与子目录、扫描状态及下一页位置。递归搜索不返回目录行。
 - `GET /api/library/scan`：任务状态、根目录状态和本次错误详情。响应不包含根目录绝对路径。
-- `POST /api/library/scan?action=refresh|cancel`：返回 202，不等待扫描；要求同源 `Origin` 与 `X-VoidPlayer-Action: scan`，远端同时需要现有网关认证。
+- `POST /api/library/scan?action=refresh|cancel`：返回 202，不等待扫描；要求同源 `Origin` 与 `X-VoidPlayer-Action: scan`。
 - `GET /api/media/<id>/metadata`：查询已存元数据，支持旧 ID 别名，最近片源因此不依赖当前目录页。
 - 旧 `GET /api/library` 仅保留为兼容接口，最多 5000 项，超过返回 `truncated`。当前 UI 与 Agent 均改用分页接口，不再调用它。
 
@@ -62,4 +62,4 @@
 1. 在真实本地和网络挂载上验证多轨播放、断线恢复与大型目录，不以临时测试目录代替真实验收。
 2. 管理后台已有根目录、扫描错误与运行状态入口；继续完善主动性能测试及上传内容的管理。
 
-评审集合、收藏和共享注释属于后续产品能力。端侧上传内容仍遵守用户显式操作与网关身份边界，媒体文件始终只读。
+评审集合、收藏和共享注释属于后续产品能力。端侧上传内容仍遵守用户显式操作约定，媒体文件始终只读。
