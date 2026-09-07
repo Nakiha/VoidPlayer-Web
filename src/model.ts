@@ -1,3 +1,4 @@
+import type { FrameDescription } from './frame-description.ts';
 import type { Drawing } from './annotation.ts';
 export const SLOTS = ['A', 'B', 'C', 'D'] as const;
 export type Slot = typeof SLOTS[number];
@@ -11,6 +12,9 @@ export type ColorInfo = {
   fullRange: boolean | null;
 };
 export type MediaInfo = {
+  metadataRevision?:number;
+  /** Description of the currently presented frame; prefetch never updates it. */
+  output?:FrameDescription;
   indexSource?: 'client' | 'server';
   indexState?: 'building' | 'complete' | 'error';
   indexError?: string;

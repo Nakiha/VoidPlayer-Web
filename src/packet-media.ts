@@ -1,3 +1,4 @@
+import { updateMediaInfo } from './media-state.ts';
 import { validateDescription } from './frame-description.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
@@ -81,10 +82,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       indexing = activeRpc.call<Pick<Init, 'indexWarning' | 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
         times = result.times; durations = result.durations;
-        info.firstPtsUs=result.firstPtsUs;info.durationUs=result.durationUs;info.indexState='complete';info.indexSource=result.indexSource;info.indexWarning=result.indexWarning;source.onInfoChange?.();
+        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning},'index');
       }, error => {
         if (!disposed) {
-          info.indexState='error';info.indexError=error instanceof Error?error.message:String(error);source.onInfoChange?.();
+          updateMediaInfo(source,{indexState:'error',indexError:error instanceof Error?error.message:String(error)},'index');
           contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
         }
         throw error;

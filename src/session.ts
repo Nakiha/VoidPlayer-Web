@@ -1,3 +1,4 @@
+import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
@@ -53,10 +54,7 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id,
-      durationUs: t.source.info.durationUs, firstPtsUs: t.source.info.firstPtsUs, offsetUs: t.offsetUs,
-      indexState: t.source.info.indexState, indexError: t.source.info.indexError,
-      width: t.source.info.width, height: t.source.info.height, decoder: t.source.info.decoder, coreVariant: t.source.info.coreVariant })) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -337,8 +335,8 @@ export class ReviewSession {
       for (let i = 0; i < entries.length; i++) {
         const r = results[i];
         if (r.status !== 'fulfilled' || !r.value) continue;
-        entries[i][1].source.info.width = r.value.width; entries[i][1].source.info.height = r.value.height;
         this.draw(entries[i][0], r.value);
+        recordPresentedFrame(entries[i][1].source,r.value);
         entries[i][1].frame = this.frameInfo(r.value);
       }
       commit?.();
@@ -420,8 +418,8 @@ export class ReviewSession {
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
-              track.source.info.width = frame.width; track.source.info.height = frame.height;
               this.draw(slot, frame);
+              recordPresentedFrame(track.source,frame);
               track.frame = this.frameInfo(frame);
               metrics.draw(slot, performance.now(), dropped);
             }
@@ -525,7 +523,7 @@ export class ReviewSession {
           await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
-          source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.
+          updateMediaInfo(source,{id:info.id},'identity'); // Keep mark and comparison anchors stable after reopening decoders.
         }
         const duration = Math.max(0, ...[...next.values()].map(t => t.source.info.durationUs + t.offsetUs));
         await this.drawAt(Math.min(document.positionUs, Math.max(0, duration - 1)), current, next, () => {

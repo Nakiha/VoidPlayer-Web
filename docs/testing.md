@@ -121,3 +121,25 @@ HDR 上屏一致性：首帧在展示层创建前走 Canvas 2D，后续帧原先
 WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core 的实际 WebAssembly.Memory。每次外部包/配置写入及 RGBA 读取，按 memory.buffer 重建过期视图，再执行范围检查；不信任 pthread 扩容后可能滞后的 Module.HEAPU8，不修改生成胶水、不移除越界检查。测试覆盖非共享内存增长后旧视图脱离、另一 worker 扩容共享内存后旧视图仍有效但过短，以及真实 720×1280 HEVC 多线程 core 首帧、连续播放、回退定位。core 版本和构建锁不变。
 
 后台索引时长：子轨道 dock 的刷新签名纳入 durationUs/indexState。FLV 启动浏览器回归在阻塞尾部时记录临时时长，解除阻塞后验证子轨道时长文字和标尺更新到完整索引时长，不靠切换轨道/修改标记触发刷新。
+
+
+## 帧契约门禁（PR #2 后的四批重构）
+
+先同步 core、普通样片和 FATE 样本，再运行 `npm test` / `npm run build`。
+新增 `test/avc-geometry.test.ts` 和 `test/media-state.test.ts` 使用固定 FATE 样本。
+
+```
+node scripts/sync-fate-samples.mjs
+npm run test:fate
+npm run test:fate:browser
+```
+
+参考 `scripts/fate-reference.json` 固定逐帧 PTS、尺寸和 SDR RGB 分区指纹；
+普通检查不调用本机 ffprobe 改写预期。`update-fate-reference.mjs` 仅用于人工
+维护参考结果，记录生成工具版本，变更必须审阅。分区最大差 8 / 平均差 3
+允许浏览器 YUV 转换舍入，不代表 HDR 色准或逐像素 bit-exact 验收。
+
+`fate-expectations.json` 按片源和后端区分成功与预期拒绝；新失败令检查返回非零。
+当前 15 个 Node 适用组合、40 次浏览器本地/HTTP 重开都必须通过，8 个 Node
+入口为明确的 container 拒绝，没有已知失败豁免。CI 已将此步骤改为阻塞门禁；
+独立性能报告保持非阻塞。报告仍写入 `.run/playback-reports/`。

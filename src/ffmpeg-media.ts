@@ -100,6 +100,8 @@ async function createWorker(): Promise<Worker> {
 }
 
 export class WorkerRpc {
+  private workerId=randomUUID();
+  private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
   private nextId = 1;
   private failure: Error | null = null;
@@ -127,7 +129,7 @@ export class WorkerRpc {
       else {
         const failure = data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误');
         if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
-        contextLog().warn('media', '解码 worker 请求失败', { error: failure });
+        contextLog().warn('media', '解码 worker 请求失败', {workerId:this.workerId,requestId:id,recentRequests:this.requests,error:failure});
         entry.reject(failure);
       }
     };
@@ -146,6 +148,7 @@ export class WorkerRpc {
   call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
+    this.requests.push({id,type,pts:payload.pts,index:payload.index});if(this.requests.length>16)this.requests.shift();
     return new Promise<T>((resolve, reject) => {
       const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
       const entry = { resolve: resolve as (v: unknown) => void, reject, timer: setTimeout(expire, timeoutMs),

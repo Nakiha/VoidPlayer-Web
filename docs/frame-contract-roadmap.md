@@ -29,16 +29,16 @@
 
 ## 4. 状态变更与诊断
 
-- [ ] 用统一元数据变更入口/版本替代 UI 中分散的字段签名，UI、Agent 和本地日志消费相同状态。
-- [ ] 当前显示尺寸/色彩只随实际展示帧更新，后台索引可独立更新时长和索引状态。
-- [ ] 操作、目标帧、实际送包、配置与实际输出可关联；错误保留原阶段，日志有界且只留本地。
-- [ ] 验证后台索引完成、动态尺寸、失败/取消及资源回收；现有 UI 和 Agent 行为一致。
+- [x] 用统一元数据变更入口/版本替代 UI 中分散的字段签名，UI、Agent 和本地日志消费相同状态。
+- [x] 当前显示尺寸/色彩只随实际展示帧更新，后台索引可独立更新时长和索引状态。
+- [x] 操作、目标帧、实际送包、配置与实际输出可关联；错误保留原阶段，日志有界且只留本地。
+- [x] 验证后台索引完成、动态尺寸、失败/取消及资源回收；现有 UI 和 Agent 行为一致。
 
 ## 最终验收
 
-- [ ] `npm test`、`npm run build`。
-- [ ] FATE Node 门禁与 Chromium/WebKit 本地/HTTP 连续关闭重开。
-- [ ] `test:browser`、展示/标注、FLV/Range 相关浏览器回归。
+- [x] `npm test`、`npm run build`。
+- [x] FATE Node 门禁与 Chromium/WebKit 本地/HTTP 连续关闭重开。
+- [x] `test:browser`、展示/标注、FLV/Range 相关浏览器回归。
 - [ ] WebKit 播放基准，记录实际成绩与基线差异；不将非阻塞性能结果记为功能修复。
 - [ ] 每批独立提交，下面记录命令、结果、修订和剩余限制。
 
@@ -51,3 +51,7 @@
 - 第二批：上游 `ee9e013` 已推送 wasm，双 core 构建和 ABI 实测通过；应用锁定修订、产物摘要/接口验证通过。FATE Node 12 pass / 8 expected-rejection / 3 known-failure；普通多配置 MOV 四个组合提升为门禁。全套测试初跑 279/280，唯一失败是直接读取 Worker 返回 ArrayBuffer 的旧断言，已改为验证帧消息的像素字段并通过定向复验；构建通过。最终浏览器和播放基准在后续批次完成后汇总。
 
 - 第三批：共享 PacketTimeline 消费真实输出，支持一包多帧、跨配置 drain、显示时刻 floor 定位和队列释放。MP4 读取 stsd/stsc 配置及真实 CTTS/DTS/文件偏移；原生 AVC 按 SPS 的隔行与重排约束选择路径，带内参数切换先 drain 旧帧。上游 `c0d3c36` 修复 HEVC reset 残留 FIFO 并采用保守 AVC DPB，已推送。Node 15 pass / 8 expected-rejection / 0 known-failure；两浏览器本地/HTTP 重开 40/40 通过，已知失败清单清空。分片 MP4 的配置/DTS、容器独有裁剪仍在 container 阶段交给普通容器回退，不猜测参数。
+
+- 第四批：`media-state.ts` 统一元数据补丁、递增版本与独立事件快照；session 在 draw 成功后记录输出描述，预取不会提前改变当前画面状态。UI 按版本刷新，后台索引与片源身份更新走同一入口。Worker 失败日志记录请求关联及最多 16 条近期操作，共享时间线错误携带实际送包/配置/目标/先前输出。真实 WASM 用例验证跨尺寸预取和往返 seek 的 UI/Agent 状态。完整 `npm test` 286/286、构建通过；最终 FATE Node 15 pass / 8 expected-rejection，浏览器 40/40 通过，均无已知失败豁免。CI 中 FATE 改为阻塞门禁。
+
+- 浏览器回归：`npm run test:browser`、`check-presentation-browser.mjs`（Chromium/WebKit）、`check-flv-browser.mjs webkit`、`check-range-browser.mjs webkit`、标注 rendering/browser 全部通过。`check-flv-startup-browser.mjs` 两浏览器通过，256 MiB 尾部被阻断时 Chromium 95ms、WebKit 126ms 出首帧，并验证后台索引、缓存重开、UI 与 MCP 状态。报告保存在本地 `.run/refactor-*.log` 和 `.run/playback-reports/`。

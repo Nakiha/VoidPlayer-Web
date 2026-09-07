@@ -149,7 +149,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   }
   function renderInspector(state: State) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}:${t.width}:${t.height}`).join('/') + view.selected;
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision??0}`).join('/') + view.selected;
     if (signature !== trackSignature) {
       trackSignature = signature;
       const list = $('track-selector'); list.replaceChildren();
@@ -188,7 +188,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     }
   }
   function renderDock(state: State) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.durationUs}:${t.indexState}`).join('/') + JSON.stringify(state.marks);
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision??0}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
       $('subtrack-count').textContent = String(state.tracks.length);
@@ -290,7 +290,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
     addMarkButton.disabled = !state.tracks.length;
     addMarkButton.setAttribute('aria-disabled', String(!state.tracks.length || state.busy));
-    const ids = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}:${t.width}:${t.height}`).join('/');
+    const ids = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision??0}`).join('/');
     if (ids !== currentIds) {
       currentIds = ids;
       for (const track of state.tracks) catalog.remember(track, track.source?.id, referenceVersion(track.source?.url));

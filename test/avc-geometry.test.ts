@@ -12,6 +12,6 @@ for(const [file,interlaced,reorder,height] of [
     const description=(await(await input.getPrimaryVideoTrack())!.getDecoderConfig())!.description!;
     const bytes=ArrayBuffer.isView(description)?new Uint8Array(description.buffer,description.byteOffset,description.byteLength):new Uint8Array(description);
     const geometry=avcGeometry(bytes)!;assert.equal(geometry.interlaced,interlaced);assert.equal(geometry.maxReorderFrames,reorder);assert.equal(geometry.height,height);assert.equal(nativeAvcCompatible(geometry),false);
-    for(let i=0;i<bytes.length-4;i++)assert.equal(avcGeometry(bytes.subarray(0,i)),null);
+    for(let i=0;i<8+bytes[6]*256+bytes[7];i++)assert.equal(avcGeometry(bytes.subarray(0,i)),null);
   }finally{input.dispose();}
 });

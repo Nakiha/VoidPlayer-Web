@@ -1,3 +1,4 @@
+import type { MediaInfoChange } from './media-state.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { RangeReader } from './range-reader.ts';
@@ -36,7 +37,7 @@ export interface DecodedFrame extends FrameInfo {
 export interface MediaSource {
   info: MediaInfo;
   /** Background container indexing can extend duration after the first frame. */
-  onInfoChange?: () => void;
+  onInfoChange?: (change?:MediaInfoChange) => void;
   ensureIndexed?(ptsUs?: number): Promise<void>;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;

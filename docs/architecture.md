@@ -50,3 +50,23 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 `server/` 提供白名单媒体索引、Range、静态文件、健康检查和可选日志上传。默认绑定本机；配置、账号、可选本机定位能力和部署方式见 [部署说明](../deploy/README.md)。
 
 诊断通过 `log.ts` / `log-storage.ts` 本地保存，读取不会上传。上传只由用户操作触发。评审内容当前没有服务器保存功能。
+
+
+## 输出帧、包时间线与元数据变更
+
+- `frame-description.ts` 定义像素/显示几何、裁剪、长度、格式和色彩；
+  `wasm-frame.ts` 核验 core 帧 ABI v1 并只拷贝该输出帧的有效字节。
+  WASM 源色彩与转换后的 RGBA 描述分开；没有新增 HDR tone mapping。
+- `packet-timeline.ts` 是 MP4/FLV 的配置和显示游标。压缩包表用于找随机访问
+  起点，实际 receive 输出决定显示 PTS；顺序读取到 drain 结束，不按包数量
+  截断显示帧。定位保留一帧前瞻并返回目标时刻之前最近的实际帧。
+- MP4 的 stsd/stsc/ctts/样本偏移映射在 `mp4-config.ts` 中验证；公共解封装
+  接口继续负责读取包和应用 edit list。分片 MP4 的 DTS/配置映射、容器独有
+  裁剪等不满足包路径约定时，在 container 阶段选择普通容器回退。
+- AVC 原生能力判断包括 SPS 的隔行和重排约束，不能只依赖 isConfigSupported。
+  带内参数集切换先完成旧配置输出，防止预读配置改变旧画面。普通兼容流仍优先
+  WebCodecs；无重排约束/隔行使用保守的软件路径。
+- `media-state.ts` 是元数据修改入口，递增 metadataRevision 并产生变更快照。
+  后台索引只修改索引/时长；当前帧描述仅由 session 成功展示后记录。UI 使用
+  版本刷新，Agent 仍读取同一个 session；日志在同一变更入口记录有界字段差异。
+  Worker 失败附带请求 ID 和最近 16 次操作（不含压缩包或像素内容）。
