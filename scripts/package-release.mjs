@@ -28,14 +28,25 @@ await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
 await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'deploy/standalone.md'), 'utf8')).replace('(operations.md)', '(deploy/operations.md)').replace('(admin.md)', '(deploy/admin.md)'));
 await mkdir(path.join(out, 'deploy/licenses'), { recursive: true });
-for (const file of ['Dockerfile', 'container-entrypoint.sh', 'container.config.json', 'compose.yaml', 'Caddyfile', '.env.example', 'users.caddy.example', 'README.md', 'standalone.md', 'operations.md', 'admin.md']) await cp(path.join(root, 'deploy', file), path.join(out, 'deploy', file));
+for (const file of ['README.md', 'standalone.md', 'operations.md', 'admin.md']) await cp(path.join(root, 'deploy', file), path.join(out, 'deploy', file));
 await cp(path.join(root, `deploy/licenses/Bun-${bunVersion}.md`), path.join(out, `deploy/licenses/Bun-${bunVersion}.md`));
+const lock = JSON.parse(await readFile(path.join(root, 'package-lock.json'), 'utf8'));
+let notices = '';
+for (const [directory, dependency] of Object.entries(lock.packages)) {
+  if (!directory || dependency.dev) continue;
+  const entries = await readdir(path.join(root, directory));
+  const licenses = entries.filter(name => /^(licen[cs]e(?:\..*)?|copyrightnotice\.txt)$/i.test(name));
+  if (!licenses.length) throw new Error(`Missing dependency license: ${directory}`);
+  notices += `\n${directory} ${dependency.version}\n${'='.repeat(60)}\n`;
+  for (const license of licenses) notices += await readFile(path.join(root, directory, license), 'utf8') + '\n';
+}
+await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
 await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, adminUsers: [] }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js']);
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
-const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|admin|scripts|test|docs|public\/licenses|\.github)\//.test(f) || /^deploy\/(Dockerfile|container-entrypoint\.sh|container\.config\.json|compose\.yaml|Caddyfile|\.env\.example|users\.caddy\.example|README\.md|standalone\.md|operations\.md|admin\.md|licenses\/[^/]+)$/.test(f));
+const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|admin|scripts|test|docs|public\/licenses|\.github)\//.test(f) || /^deploy\/(README\.md|standalone\.md|operations\.md|admin\.md|licenses\/[^/]+)$/.test(f));
 const sourceDir = path.join(out, '.source');
 for (const file of sourceFiles) { await mkdir(path.dirname(path.join(sourceDir, file)), { recursive: true }); await cp(path.join(root, file), path.join(sourceDir, file)); }
 execFileSync(tar, ['-czf', path.join(out, 'source.tar.gz'), '-C', sourceDir, '.']);

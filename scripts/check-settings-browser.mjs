@@ -12,7 +12,7 @@ try {
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
  assert.equal(await page.locator('#more-actions').count(),0);assert.equal(await page.locator('#help').count(),0);assert.equal(await page.locator('dialog.log-panel').count(),0);
  await page.locator('#settings-open').click();await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));const geometry=await page.locator('#settings').boundingBox();
- for(const pane of ['appearance','workspace','shortcuts','logs','performance','about']) {
+ for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
   await page.locator(`#settings-tab-${pane}`).click();assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);assert.equal(await page.locator('dialog[open]').count(),1);
   assert.deepEqual(await page.locator('#settings').boundingBox(),geometry,'panes keep a stable window');
   assert.equal(await page.locator(`#settings-tab-${pane}`).getAttribute('aria-selected'),'true');
@@ -37,7 +37,7 @@ try {
    const downloadPromise=page.waitForEvent('download');await page.locator('.log-panel [data-action=download]').click();const download=await downloadPromise;
    const log=JSON.parse(await readFile(await download.path(),'utf8'));assert.ok(log.events.length>0);assert.equal(uploads,0,'viewing and downloading logs never uploads');
   }
-  if(['appearance','workspace','shortcuts','logs','performance','about'].includes(pane))await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-${pane}-${name}.png`});
+  if(['appearance','workspace','identity','shortcuts','logs','performance','about'].includes(pane))await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-${pane}-${name}.png`});
  }
  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.activeElement===document.querySelector('#settings-open'));
  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings-tab-about').getAttribute('aria-selected'),'true','reopening remembers last pane');
@@ -47,7 +47,7 @@ try {
  assert.equal(await page.locator('#settings').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(240, 241, 243)');
  await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-light-${name}.png`});
  await page.setViewportSize({width:390,height:700});
- for(const pane of ['appearance','workspace','shortcuts','logs','performance','about']) {
+ for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(overflow.scroll<=overflow.width+1,`no horizontal overflow in ${pane}: ${JSON.stringify(overflow)}`);
@@ -78,5 +78,5 @@ try {
  await page.emulateMedia({reducedMotion:'reduce'});await page.locator('#settings-close').click();await page.locator('#settings').waitFor({state:'hidden'});
  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.getAnimations().length),0);
  await page.keyboard.press('Escape');await page.locator('#settings').waitFor({state:'hidden'});
- assert.equal(uploads,0);assert.deepEqual(errors,[]);console.log(`PASS ${name}: direct settings, six persistent panes, unified geometry/material, Escape/focus/shortcut/navigation, log download without upload, narrow layouts`);
+ assert.equal(uploads,0);assert.deepEqual(errors,[]);console.log(`PASS ${name}: direct settings, seven persistent panes, unified geometry/material, Escape/focus/shortcut/navigation, log download without upload, narrow layouts`);
 } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { VideoSample } from 'mediabunny';
 import { WorkerRpc, floorIndex, nextIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
@@ -15,7 +16,7 @@ export async function openFlvMedia(input: FlvInput, meta: MediaMeta, deps: Fallb
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
-    type Init = Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
+    type Init = Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
     let init: Init | undefined, selected = single, failure: unknown;
     for (const glueURL of candidates) {
       const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'
@@ -34,7 +35,7 @@ export async function openFlvMedia(input: FlvInput, meta: MediaMeta, deps: Fallb
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs') reservation.release();
     const { times, durations, ...details } = init;
-    const info = { id: crypto.randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified, ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
+    const info = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified, ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
     contextLog().info('media', 'FLV 已通过 TS 解封装载入', { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range' });
     let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();

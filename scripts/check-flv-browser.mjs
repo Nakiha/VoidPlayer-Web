@@ -17,7 +17,7 @@ try {
     const page = await browser.newPage();
     const errors = [], mediaRequests = [];
     page.on('pageerror', error => errors.push(error.message));
-    page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(request.url())) mediaRequests.push(request.headers()); });
+    page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(request.url()).pathname)) mediaRequests.push(request.headers()); });
     try {
       await page.goto(base);
       const reference = JSON.parse(await readFile(path.join(root, 'fixtures/flv', name + '.json'), 'utf8'));

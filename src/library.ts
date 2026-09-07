@@ -1,4 +1,4 @@
-import type { MediaSource } from './media.ts';
+import type { MediaSource, MediaOpenProgress } from './media.ts';
 import { openMediaFromUrl } from './media.ts';
 import { contextLog } from './log.ts';
 
@@ -20,10 +20,10 @@ export function mediaUrl(id: string, version?: string): string {
   return `/api/media/${encodeURIComponent(id)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
 }
 
-export async function openLibraryItem(entry: LibraryEntry): Promise<MediaSource> {
+export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress): Promise<MediaSource> {
   if (entry.state && entry.state !== 'ready') throw new Error(entry.state === 'pending' ? '片源仍在写入，请稍后重试。' : '片源已从媒体库移除。');
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
-  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry);
+  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress);
   source.info.source = { kind: 'library', id: entry.id, url: mediaUrl(entry.id, entry.version) };
   return source;
 }

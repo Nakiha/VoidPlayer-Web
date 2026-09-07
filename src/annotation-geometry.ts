@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import type { Drawing, Point } from './annotation.ts';
 export type Bounds = { x: number; y: number; width: number; height: number };
 
@@ -48,7 +49,7 @@ export function eraseAt(drawings: Drawing[], point: Point, radius: number, width
     }
     if (run.length) runs.push(run);
     if (!changed) result.push(d);
-    else result.push(...runs.filter(r => r.length > 1).map(points => ({ ...d, id: crypto.randomUUID(), points })));
+    else result.push(...runs.filter(r => r.length > 1).map(points => ({ ...d, id: randomUUID(), points })));
   }
   return result;
 }

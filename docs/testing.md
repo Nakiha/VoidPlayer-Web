@@ -14,6 +14,8 @@ npm run fixtures:flv
 
 FLV 样片生成需要 Python 3、ffmpeg 和 ffprobe。`fixtures/`、`dist/` 和 `public/vendor/voidplayer-core/` 是本机产物，不进入 Git。需要基础合成样片时运行 `python3 test/generate-fixtures.py`。
 
+本次发布的 FLV 硬件优先策略回归使用 `FLV_CASE=standard-h264`，同时限定素材生成与浏览器用例，验证 WebCodecs、Range、seek 和播放。完整 FLV 回归仍默认覆盖所有编码，其中 H.266 素材生成需要支持 VVC 的新版 FFmpeg；Ubuntu 24.04 自带的 FFmpeg 6 无法生成该素材。
+
 ## 常规检查
 
 ```sh
@@ -52,6 +54,20 @@ node scripts/bench-playback.mjs chromium
 `BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/benchmark.ts` 为准。
 
 应用内“快捷键与说明”的性能检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
+
+普通 HTTP 的载入、内存和播放回归（需要 FFmpeg、Chromium 和已同步的 core）：
+
+```sh
+npm run build
+node scripts/make-playback-fixtures.mjs
+node scripts/check-http-playback.mjs
+```
+
+测试生成每轨约 101 MB、40 秒的 1080p30 H.264 样片，以 `http://voidplayer.test` 访问临时服务，确认 WebCodecs 不可用、实际走单线程 WASM。覆盖加号连续点击只下载一次、载入状态、三轮双轨播放/关闭、解码 Worker 释放及帧缓存峰值；Linux 还统计浏览器进程的私有驻留内存。随后运行单轨/双轨播放基准各两轮，沿用原有速度与卡顿阈值。报告写入 `.run/playback-reports/`，发布工作流上传同名测试报告 artifact。
+
+发布工作流使用 `VOIDPLAYER_HTTPS_TEST=1 node scripts/check-http-playback.mjs` 验收 HTTPS：仅在一次性的 Actions runner 中导入测试根证书，结束后删除信任项，浏览器不使用忽略证书错误的参数。确认远程域名下安全上下文、WebCodecs 和跨源隔离实际可用，并断言 H.264 由 WebCodecs 解码；单轨、双轨沿用相同性能门槛。普通 HTTP 的功能回归保留，HTTPS 成为远程播放性能验收入口。Linux 和 Windows 另验证受信任 HTTPS 的用户设置、重启恢复、解码出帧与标注。CI 没有目标用户的 GPU，硬件优先策略有单元测试，实际 GPU 使用仍需目标设备核验。
+
+帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
 
 这些是当前设备上的 canvas 呈现证据，不是物理显示扫描、所有 Safari 版本、HDR 保真或低端硬件性能保证。浏览器下载和剪贴板还受宿主权限影响，不能用“调用成功”代替实际文件/内容送达验证。
 

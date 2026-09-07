@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type LogCategory = 'ui' | 'session' | 'media' | 'agent' | 'error';
 export type OperationContext = { operationId: string; parentOperationId?: string; source: string };
@@ -67,7 +68,7 @@ export class SessionLog {
   storageState: 'memory' | 'pending' | 'saved' | 'failed' = 'memory';
   storageError: string | null = null;
   constructor(capacity = 2000) {
-    this.document = { schema: 'voidplayer-web-log', version: 1, sessionId: crypto.randomUUID(), startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), environment: {}, capacity, droppedEvents: 0, events: [] };
+    this.document = { schema: 'voidplayer-web-log', version: 1, sessionId: randomUUID(), startedAt: new Date().toISOString(), updatedAt: new Date().toISOString(), environment: {}, capacity, droppedEvents: 0, events: [] };
   }
   subscribe(fn: () => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   private notify() { for (const fn of this.listeners) { try { fn(); } catch { /* Logging cannot break playback. */ } } }
@@ -122,7 +123,7 @@ export function contextLog(context = activeContext) {
 }
 export const log = Object.fromEntries(Object.keys(rank).map(level => [level, (cat: LogCategory, msg: string, data?: unknown) => sessionLog.append(level as LogLevel, cat, msg, data, activeContext)])) as ReturnType<typeof contextLog>;
 export function traceOperation<T>(source: string, action: string, data: unknown, work: () => T): T {
-  const context = { operationId: crypto.randomUUID(), parentOperationId: activeContext?.operationId, source: source === 'session' ? activeContext?.source ?? source : source };
+  const context = { operationId: randomUUID(), parentOperationId: activeContext?.operationId, source: source === 'session' ? activeContext?.source ?? source : source };
   const scoped = contextLog(context); const start = performance.now();
   scoped.info(source === 'agent' ? 'agent' : source === 'ui' ? 'ui' : 'session', '操作请求', { action, arguments: data });
   const done = (error?: unknown, failed = false) => {

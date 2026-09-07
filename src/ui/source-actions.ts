@@ -1,3 +1,4 @@
+import { identityHealth } from '../identity.ts';
 import { SLOTS } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../model.ts';
@@ -22,12 +23,11 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
     if (!prior || prior === 'checking') status.dataset.state = 'checking';
     let state = 'disconnected', label = '媒体服务未连接；本地文件仍可播放。点击重试';
     try {
-      const response = await fetch('/api/health', { cache: 'no-store', signal: signal() });
-      const health = response.ok ? await response.json() : null;
+      const health = await identityHealth();
       if (health?.service === 'voidplayer-media') {
         state = 'connected'; label = '媒体服务已连接'; hasAdmin = !!health.capabilities?.admin;
         const actor = health.actor && typeof health.actor.id === 'string' && typeof health.actor.name === 'string' ? health.actor : null;
-        session.setActor(actor);
+
         if (actor) label += ` · ${actor.name}`; canReveal = !!health.capabilities?.reveal && localPage();
       } else canReveal = false;
     } catch { canReveal = false; }

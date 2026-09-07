@@ -1,3 +1,4 @@
+import { randomUUID } from './uuid.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
@@ -340,6 +341,7 @@ export class ReviewSession {
         if (now - lastProgress > 15000) throw new Error('解码超过 15 秒没有推进，请重新载入视频。');
         for (let i = 0; i < entries.length; i++) {
           const [slot, track] = entries[i];
+          metrics.buffer(slot, readers[i]);
           if(target < track.offsetUs) metrics.holdBeforeStart(slot,now);
           const { frame, dropped } = readers[i].take(target-track.offsetUs);
           if (!frame) continue;
@@ -396,7 +398,7 @@ export class ReviewSession {
     if (origin !== 'human' && origin !== 'agent') throw new Error('标注来源无效。');
     const mark: Mark = {
       ...(this.actor ? { author: { ...this.actor } } : {}),
-      id: crypto.randomUUID(), text: input.text.trim(), severity: Number(severity), origin,
+      id: randomUUID(), text: input.text.trim(), severity: Number(severity), origin,
       createdAt: new Date().toISOString(), slot, mediaId: track.source.info.id,
       frame: this.frameInfo(track.frame), offsetUs:track.offsetUs, sessionPtsUs:this.positionUs, region: regionValue(input.region), ...(drawings.length ? { drawings } : {}),
       comparison: [...this.tracks].filter(([, t]) => t.frame).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
