@@ -5,6 +5,8 @@ import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import type { ServerOptions as HttpsOptions } from 'node:https';
 import { encryptedRequest } from './tls.ts';
+import { connectionDetails } from './connection-guide.ts';
+import type { ConnectionOptions } from './connection-guide.ts';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -22,6 +24,8 @@ import type { AdminController } from './admin.ts';
 export interface ServerOptions {
   roots: string[];
   tls?: HttpsOptions;
+  connection?: ConnectionOptions;
+  guideOnly?: boolean;
   library?: MediaLibraryIndex;
   admin?: AdminController;
   allowLocalReveal?: boolean;
@@ -135,6 +139,20 @@ export function createMediaServer(options: ServerOptions): Server {
     res.once('finish', finish); res.once('close', finish);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
+      if (options.guideOnly && ['/', '/index.html'].includes(url.pathname) && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(302, { location: '/connection' }); res.end(); return; }
+      if (url.pathname === '/api/connection' && req.method === 'GET') {
+        sendJson(res, 200, connectionDetails(options.connection, req.headers.host)); return;
+      }
+      if (url.pathname === '/api/connection/certificate' && ['GET', 'HEAD'].includes(req.method ?? '')) {
+        if (!options.connection?.ca) { sendJson(res, 404, { error: '当前服务没有可下载的本地根证书。' }); return; }
+        const certificate = Buffer.from(options.connection.ca);
+        res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="voidplayer-ca.crt"', 'content-length': certificate.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(req.method === 'HEAD' ? undefined : certificate); return;
+      }
+      // The HTTP companion exposes only the guide, its assets and the public CA.
+      if (options.guideOnly && (!['GET', 'HEAD'].includes(req.method ?? '') || !['/', '/connection', '/index.html', '/theme-init.js', '/favicon.ico'].includes(url.pathname) && !url.pathname.startsWith('/assets/'))) {
+        sendJson(res, 404, { error: '请使用 HTTPS 访问播放器。' }); return;
+      }
       if (url.pathname === '/favicon.ico' && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return; }
       if (url.pathname === '/api/users' && req.method === 'GET') {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
@@ -324,7 +342,7 @@ export function createMediaServer(options: ServerOptions): Server {
         return;
       }
       if (staticDir) {
-        const rel = decodeURIComponent(url.pathname === '/' ? '/index.html' : ['/admin', '/admin/'].includes(url.pathname) ? '/admin/index.html' : url.pathname);
+        const rel = decodeURIComponent(['/', '/connection'].includes(url.pathname) ? '/index.html' : ['/admin', '/admin/'].includes(url.pathname) ? '/admin/index.html' : url.pathname);
         const root = await staticRoot;
         const candidate = root ? path.join(root, rel) : '';
         const real = await fs.realpath(candidate).catch(() => null);

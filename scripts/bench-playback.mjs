@@ -30,6 +30,7 @@ try {
         const run = async () => {
           if (repeat === 1) await page.goto(process.env.BASE_URL ?? 'http://127.0.0.1:5180/');
           await page.bringToFront();
+          await page.waitForFunction(() => window.voidPlayer);
           return page.evaluate(async ({ files, durationMs }) => {
             const tool = name => window.voidPlayer.tools.find(t => t.name === name);
             const lib = await tool('list_library').execute({});

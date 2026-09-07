@@ -1,4 +1,4 @@
-// Real ordinary-HTTP playback, repeated source-button clicks and decoder cleanup.
+// Trusted HTTPS playback, repeated source-button clicks and decoder cleanup.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,7 @@ if (process.argv.length > 3 || (mode && !['--functional-only', '--benchmark-only
 const functional = mode !== '--benchmark-only';
 const benchmark = mode !== '--functional-only';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
+if (!secure) throw new Error('远程 HTTP 已改为连接引导页；播放回归请设置 VOIDPLAYER_HTTPS_TEST=1，本机基准使用 localhost 媒体服务。');
 const protocol = secure ? 'https' : 'http';
 const temporary = await mkdtemp(path.join(tmpdir(), 'vp-network-playback-'));
 const tls = secure ? await prepareTls({ hosts: ['voidplayer.test'] }, temporary) : undefined;

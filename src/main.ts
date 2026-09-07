@@ -35,7 +35,7 @@ import { bindFileDrop } from './file-drop.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
-import { paintFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
+import { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
 import { PanMomentumFilter, Viewport, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
 import type { LayoutMode, PixelSizeMode, TrackGeometry, ViewportSnapshot } from './viewport.ts';
 
@@ -563,6 +563,10 @@ const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
+  captureFrame: (slot: Slot) => {
+    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error('轨道没有可读取的画面。');
+    return captureFrame(canvases[slot]);
+  },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
     const result = await session.load(slot, () => openMedia(file)); workbench.rememberFile(file); return result;
   }),

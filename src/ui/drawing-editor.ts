@@ -1,4 +1,5 @@
 import { randomUUID } from '../uuid.ts';
+import { captureFrame } from '../presenter.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
@@ -93,7 +94,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   function refreshThumbnails() {
     for (const [slot, draft] of drafts) for (const g of draft.groups) {
       if (!g.markId || !g.drawings.length) continue;
-      const source = sources[slot], thumb = document.createElement('canvas'); thumb.width = 320; thumb.height = Math.max(1, Math.round(320 / aspect(slot)));
+      const source = captureFrame(sources[slot]), thumb = document.createElement('canvas'); thumb.width = 320; thumb.height = Math.max(1, Math.round(320 / aspect(slot)));
       const ctx = thumb.getContext('2d')!; ctx.drawImage(source, 0, 0, thumb.width, thumb.height); drawAnnotations(ctx, g.drawings.filter(d => d.tool !== 'text' || d.text?.trim()), thumb.width, thumb.height, DEFAULT_ANNOTATION_COLOR, thumb.width / annotationFrameRect(layer(slot)).width);
       const url = thumb.toDataURL('image/jpeg', .78); annotationThumbnails.set(g.markId, { url, width: thumb.width, height: thumb.height });
       for (const content of document.querySelectorAll<HTMLElement>('[data-mark-content]')) if (content.dataset.markContent === g.markId) {

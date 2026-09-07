@@ -55,17 +55,16 @@ node scripts/bench-playback.mjs chromium
 
 应用内“快捷键与说明”的性能检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
-普通 HTTP 的载入、内存和播放回归（需要 FFmpeg、Chromium 和已同步的 core）：
+远程 HTTP 现在进入连接准备页，不再启动播放器或 WASM。对应检查为：
 
 ```sh
-npm run build
-node scripts/make-playback-fixtures.mjs
-node scripts/check-http-playback.mjs
+npm run test:connection:browser
+npm run test:presentation:browser
 ```
 
-测试生成每轨约 101 MB、40 秒的 1080p30 H.264 样片，以 `http://voidplayer.test` 访问临时服务，确认 WebCodecs 不可用、实际走单线程 WASM。覆盖加号连续点击只下载一次、载入状态、三轮双轨播放/关闭、解码 Worker 释放及帧缓存峰值；Linux 还统计浏览器进程的私有驻留内存。随后运行单轨/双轨播放基准各两轮，沿用原有速度与卡顿阈值。报告写入 `.run/playback-reports/`，发布工作流上传同名测试报告 artifact。
+前者检查 Windows/macOS 安装步骤、实际公开 CA 下载、HTTPS 链接与未配置状态，并确认未加载播放器或解码 Worker；后者在 Chromium/WebKit 中检查原生帧和 RGBA 直接上传、按需源像素、旋转、像素缓冲复用、无 WebGL 回退与资源清理。页面取源像素应使用 `window.voidPlayer.captureFrame(slot)`，不要直接读取可能尚未生成的隐藏 canvas。
 
-发布工作流使用 `VOIDPLAYER_HTTPS_TEST=1 node scripts/check-http-playback.mjs` 验收 HTTPS：仅在一次性的 Actions runner 中导入测试根证书，结束后删除信任项，浏览器不使用忽略证书错误的参数。确认远程域名下安全上下文、WebCodecs 和跨源隔离实际可用，并断言 H.264 由 WebCodecs 解码；单轨、双轨沿用相同性能门槛。普通 HTTP 的功能回归保留，HTTPS 成为远程播放性能验收入口。Linux 和 Windows 另验证受信任 HTTPS 的用户设置、重启恢复、解码出帧与标注。CI 没有目标用户的 GPU，硬件优先策略有单元测试，实际 GPU 使用仍需目标设备核验。
+发布工作流使用 `VOIDPLAYER_HTTPS_TEST=1 node scripts/check-http-playback.mjs` 验证可信 HTTPS 下的重复载入和播放：只在一次性 Actions runner 中导入测试根证书，结束后删除信任项；浏览器不使用忽略证书错误的参数。样片由 `node scripts/make-playback-fixtures.mjs` 生成，报告写入 `.run/playback-reports/`。Linux 和 Windows 还检查用户设置、重启恢复、解码出帧与标注。本机播放基准使用上文的 localhost 媒体服务，无需更改本机证书信任。
 
 帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
 

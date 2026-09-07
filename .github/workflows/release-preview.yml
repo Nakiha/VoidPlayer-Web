@@ -139,6 +139,8 @@ jobs:
       - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
+      - run: node scripts/check-presentation-browser.mjs
+      - run: node scripts/check-connection-guide-browser.mjs
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
@@ -218,7 +220,7 @@ jobs:
       - name: Install certificate test utility
         if: runner.os == 'Linux'
         run: sudo apt-get install -y libnss3-tools
-      - name: Verify ordinary HTTP playback and users
+      - name: Verify ordinary HTTP connection guide
         if: runner.os == 'Linux'
         run: node scripts/check-identity-browser.mjs
         env:

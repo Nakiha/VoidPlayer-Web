@@ -44,10 +44,13 @@ npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗�
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
+npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
+npm run test:connection:browser # HTTP 引导、Windows/macOS 步骤与公开证书下载
 node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 ```
 
 改动播放/解码路径后必须跑 bench；改动载入路径后跑测试即可。
+源画布按需由 presenter.captureFrame 生成；取像素/缩略图不得依赖隐藏画布在每帧更新。
 改动视图尺寸调度、轨道操作或片源 UI 后跑 test:browser；需先同步样片/core 并安装 Playwright WebKit。
 
 ## 独立发布

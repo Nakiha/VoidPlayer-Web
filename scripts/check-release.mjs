@@ -96,8 +96,13 @@ try {
   assert.deepEqual((await (await fetch(portableBase + '/api/health', { headers: { cookie: portableCookie } })).json()).actor, portableActor);
   await stop();
   const securePort = await freePort();
-  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test'], null);
+  const guidePort = await freePort();
+  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test', '--http-port', String(guidePort)], null);
   const ca = await readFile(path.join(folder, 'data/tls/voidplayer-ca.crt'), 'utf8');
+  const guideBase = `http://127.0.0.1:${guidePort}`;
+  assert.equal((await fetch(guideBase)).status, 200);
+  assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
+  assert.equal((await fetch(guideBase + '/api/library')).status, 404);
   const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
   assert.equal(secureResponse.status, 200);
   assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');
