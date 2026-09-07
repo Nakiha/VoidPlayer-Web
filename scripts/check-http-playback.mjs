@@ -53,10 +53,15 @@ try {
     let releaseDownload;
     const blocked = new Promise(resolve => { releaseDownload = resolve; });
     await page.route('**/api/media/**', async route => { await blocked; await route.continue(); });
+    const clickedButton = await add.elementHandle();
     await add.click();
     await page.waitForFunction(() => document.querySelector('#source-list [aria-busy="true"]'));
-    assert.equal(await add.isDisabled(), true);
-    await add.evaluate(button => { for (let i = 0; i < 30; i++) button.click(); });
+    await row.getByRole('button', { name: `取消载入：${entry.name}`, exact: true }).waitFor();
+    assert.equal(await add.count(), 0, 'pending source exposes cancel instead of another add action');
+    assert.equal(await page.locator('#source-activity').getAttribute('data-state'), 'loading');
+    // Already queued clicks on the old element cannot start duplicate loads.
+    await clickedButton.evaluate(button => { for (let i = 0; i < 30; i++) button.click(); });
+    await clickedButton.dispose();
     releaseDownload();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
     await page.unroute('**/api/media/**');

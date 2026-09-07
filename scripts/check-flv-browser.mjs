@@ -35,7 +35,9 @@ try {
         await call('seek_review', { ptsUs: 0 });
         await call('step_review', { direction: 1 });
         states.push(await call('get_review_session'));
-        const benchmark = await call('benchmark_review', { durationMs: 1000 });
+        // Leave a margin above the 1000 ms minimum: the last rendered frame
+        // can precede the polling deadline by one refresh interval.
+        const benchmark = await call('benchmark_review', { durationMs: 1200 });
         return { states, benchmark };
       }, { name, reference });
       assert.deepEqual(errors, []);

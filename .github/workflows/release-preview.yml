@@ -136,7 +136,7 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts
+      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media-abort.test.ts test/media.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
