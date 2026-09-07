@@ -111,6 +111,49 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  playback:
+    name: Verify HTTP playback, memory and source UI
+    needs: decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - run: npm ci
+      - name: Checkout pinned codec QA samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - run: node --test test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:browser
+      - name: Generate approximately 100 MB 1080p playback inputs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          node scripts/make-playback-fixtures.mjs
+      - name: Test HTTP loading, repeated dual playback and run benchmark
+        run: node scripts/check-http-playback.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: http-playback-reports
+          path: .run/playback-reports/
+          if-no-files-found: ignore
+          retention-days: 30
+
   native-release:
     name: Standalone ${{ matrix.platform }}
     needs: decoder
@@ -175,7 +218,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: native-release
+    needs: [native-release, playback]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

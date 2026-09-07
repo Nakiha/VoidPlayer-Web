@@ -47,6 +47,9 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   let annotationSignature = '';
   let currentIds = '';
   let sourceSignature = '';
+  let sourceBusy = false;
+  let loadingSource: { key: string; status: string } | null = null;
+  let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
   let recentRequest = 0;
 
@@ -288,17 +291,38 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       if (view.panels.sources) renderSources();
       else renderStartLibrary();
     }
+    if (sourceBusy !== state.busy) { sourceBusy = state.busy; renderSources(); }
   }
   async function load(item: SourceItem, slot: Slot) {
-    if ((!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
-    await act(async () => {
-      await session.load(slot, () => item.file ? openMedia(item.file) : openLibraryItem(item.library!));
-      catalog.remember(item, item.library?.id, item.library?.version); save(); renderSources();
-    }, 'ui.source-load', { name: item.name, slot });
+    if (loadingSource || session.getState().busy || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
+    loadingSource = { key: item.key, status: '正在载入' }; sourceLoadError = null; renderSources();
+    const progress = (stage: 'download' | 'decode') => {
+      loadingSource = { key: item.key, status: stage === 'download' ? '正在下载视频' : '正在打开视频并建立索引' };
+      renderSources();
+    };
+    try {
+      await act(async () => {
+        try {
+          await session.load(slot, async () => {
+            const source = await (item.file ? openMedia(item.file, undefined, progress) : openLibraryItem(item.library!, progress));
+            loadingSource = { key: item.key, status: '正在显示首帧' }; renderSources();
+            return source;
+          });
+          catalog.remember(item, item.library?.id, item.library?.version); save();
+        } catch (error) {
+          sourceLoadError = { key: item.key, message: error instanceof Error ? error.message : String(error) };
+          throw error;
+        }
+      }, 'ui.source-load', { name: item.name, slot });
+    } finally { loadingSource = null; renderSources(); }
   }
   function sourceRow(item: SourceItem) {
       const row = document.createElement('div'); row.className = 'source-row';
       const used = sourceInUse(item, session.getState().tracks);
+      const loading = loadingSource?.key === item.key ? loadingSource.status : null;
+      const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
+      const blocked = !!loadingSource || session.getState().busy;
+      row.setAttribute('aria-busy', String(!!loading));
       row.classList.toggle('in-use', used);
       const info = document.createElement('div'); info.className = 'source-info';
       const name = text('span', item.name, 'filename');
@@ -306,13 +330,17 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       name.title = item.name;
       const pending = item.library?.state === 'pending';
       const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-      info.append(name, text('span', `${sizeText(item.size)} · ${used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : item.library ? '媒体库' : item.file ? '本次添加' : item.libraryId ? '内容已改变或不可用' : '需重新选择'}${origin}`, 'source-meta'));
+      const status = text('span', `${sizeText(item.size)} · ${loading ?? (failed ? `载入失败：${failed}` : used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : item.library ? '媒体库' : item.file ? '本次添加' : item.libraryId ? '内容已改变或不可用' : '需重新选择')}${origin}`, 'source-meta');
+      if (loading || failed) { status.setAttribute('role', 'status'); status.dataset.tooltip = loading ?? failed!; }
+      info.append(name, status);
       const actions = document.createElement('div'); actions.className = 'source-actions';
       if (used) {
         const button = createIconButton({ glyph: 'close', label: '从视图移除' });
         button.classList.add('remove-track');
+        button.disabled = blocked;
         button.setAttribute('aria-label', `从视图移除：${item.name}`);
         button.onclick = () => void act(async () => {
+          if (loadingSource || session.getState().busy) return;
           button.disabled = true;
           try {
             const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
@@ -326,9 +354,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       }
       else if (item.library || item.file) {
         const button = createIconButton({ glyph: 'plus', label: '添加到视图' });
-        button.disabled = !!pending || !!offline;
+        button.disabled = blocked || !!pending || !!offline;
+        button.dataset.tooltip = loading ?? (blocked ? '请等待当前载入或定位完成' : '添加到视图');
         button.title = offline ? '媒体存储离线，请等待重新连接' : pending ? '片源仍在写入，请稍后重试' : '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
         button.onclick = () => {
+          if (loadingSource || session.getState().busy) return;
           const tracks = session.getState().tracks;
           if (sourceInUse(item, tracks)) return;
           const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
@@ -365,7 +395,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     libraryBrowser.visible(sourceTab === 'available');
     const page = libraryBrowser.page();
     const folders = sourceTab === 'available' ? page?.directories ?? [] : [];
-    const signature = JSON.stringify([sourceTab, query, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
+    const signature = JSON.stringify([sourceTab, query, loadingSource, sourceLoadError, session.getState().busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
     if (signature !== sourceSignature) {
       sourceSignature = signature; list.replaceChildren();

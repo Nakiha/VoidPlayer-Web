@@ -189,7 +189,9 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
         transfer.push(payload.wasmBinary as ArrayBuffer);
       }
-      init = await rpc.call<InitResult>('init', payload, transfer, 5000);
+      // Includes fetching/compiling the core and scanning the file's index.
+      // Five seconds is not a viable cold-start budget over a LAN.
+      init = await rpc.call<InitResult>('init', payload, transfer, 60000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -247,7 +249,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       ptsUs: relUs[index],
       sourcePtsUs: ticksToUs(ticks[index]),
       durationUs: durations[index],
-      close() { if (!closed) { closed = true; spare = pixels.buffer as ArrayBuffer; } },
+      close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };
   };
 
@@ -258,8 +260,10 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       const start = nextIndex(relUs, ptsUs);
       if (start < 0) return [];
       const frames: WasmDecodedFrame[] = [];
-      for (let i = start; i < Math.min(start + count, total); i++) frames.push(await extract(i));
-      return frames;
+      try {
+        for (let i = start; i < Math.min(start + count, total); i++) frames.push(await extract(i));
+        return frames;
+      } catch (error) { for (const frame of frames) frame.close(); throw error; }
     },
     async *framesFrom(ptsUs) {
       for (let idx = floorIndex(relUs, ptsUs); idx < total && !disposed; idx++) yield await extract(idx);
@@ -267,6 +271,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
     dispose() {
       if (disposed) return;
       disposed = true;
+      spare = null;
       liveFallbacks--;
       rpc.terminate();
     },

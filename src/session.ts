@@ -341,6 +341,7 @@ export class ReviewSession {
         if (now - lastProgress > 15000) throw new Error('解码超过 15 秒没有推进，请重新载入视频。');
         for (let i = 0; i < entries.length; i++) {
           const [slot, track] = entries[i];
+          metrics.buffer(slot, readers[i]);
           if(target < track.offsetUs) metrics.holdBeforeStart(slot,now);
           const { frame, dropped } = readers[i].take(target-track.offsetUs);
           if (!frame) continue;
