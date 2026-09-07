@@ -18,7 +18,7 @@ async function temporary(run: (root: string) => Promise<void>) { const root = aw
 test('workspace transactions persist metadata, content and ownership across close and backup restore', () => temporary(async root => {
   const file = path.join(root, 'data', 'workspaces.sqlite'), store = new WorkspaceStore(file), input = document();
   const created = store.create({ name: '  评审一  ', document: input, owner: 'forged' }, alice); assert.equal(created.owner, alice.id); assert.equal(created.name, '评审一'); assert.equal(created.revision, 1);
-  const updated = store.update(created.id, '"1"', { name: '评审二', document: { ...input, positionUs: 600 } }, bob, true);
+  const updated = store.update(created.id, '"1"', { name: '评审二', document: { ...input, positionUs: 600 } }, bob);
   assert.equal(updated.owner, alice.id); assert.equal(updated.updatedBy, bob.id); assert.equal(updated.revision, 2);
   store.close(); await fs.cp(path.join(root, 'data'), path.join(root, 'backup'), { recursive: true });
   const restored = new WorkspaceStore(path.join(root, 'backup', 'workspaces.sqlite'));
@@ -50,7 +50,7 @@ test('stored workspaces use the shared format validator and refuse unsupported d
   const retained = openIndexDatabase(file); assert.equal((retained.prepare('PRAGMA user_version').get() as { user_version: number }).user_version, 99); retained.close();
 }));
 
-test('workspace listing is bounded, omits documents, and isolates owners', () => temporary(async root => {
+test('workspace listing filters owners while shared access preserves attribution', () => temporary(async root => {
   const store = new WorkspaceStore(path.join(root, 'workspaces.sqlite'));
   try {
     for (let i = 0; i < 85; i++) store.create({ name: `review-${i}`, document: document() }, i % 2 ? alice : bob);
@@ -58,7 +58,7 @@ test('workspace listing is bounded, omits documents, and isolates owners', () =>
     do { const page = store.list(alice, true, before); assert.ok(page.entries.length <= 40); for (const row of page.entries) { assert.ok(!('document' in row)); assert.ok(!ids.has(row.id)); ids.add(row.id); } before = page.next ?? ''; } while (before);
     assert.equal(ids.size, 85); assert.ok(store.list(alice, false).entries.every(row => row.owner === 'alice'));
     assert.equal(store.list(alice, true, '', 'review-84').entries.length, 1);
-    const privateRow = store.list(bob, false).entries[0]; assert.throws(() => store.read(privateRow.id, alice), /无权/); assert.throws(() => store.remove(privateRow.id, '"1"', alice), /无权/);
+    const privateRow = store.list(bob, false).entries[0]; assert.equal(store.read(privateRow.id, alice).owner, bob.id); assert.deepEqual(store.remove(privateRow.id, '"1"', alice), { ok: true });
   } finally { store.close(); }
 }));
 
@@ -71,11 +71,11 @@ test('HTTP workspace access uses trusted ownership, same-origin writes and atomi
   const call = (url: string, user = 'alice', method = 'GET', body?: unknown, revision?: string) => fetch(base + url, { method, headers: { origin: 'http://intranet.test', host: 'intranet.test', 'x-voidplayer-action': 'workspace', 'content-type': 'application/json', cookie: `voidplayer-user=${actors[user].id}`, ...(revision ? { 'if-match': revision } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   try {
     const created = await call('/api/workspaces', 'alice', 'POST', { name: 'private', document: document(), owner: 'admin' }); assert.equal(created.status, 201); const entry = await created.json();
-    assert.equal(entry.owner, actors.alice.id); assert.equal((await call('/api/workspaces/' + entry.id, 'bob')).status, 404);
-    assert.equal((await call('/api/workspaces?all=1', 'bob')).status, 403); assert.equal((await call('/api/workspaces?all=1', 'admin')).status, 200);
-    assert.equal((await fetch(base + '/api/workspaces', { headers: { 'x-voidplayer-user': 'admin' } })).status, 403);
+    assert.equal(entry.owner, actors.alice.id); assert.equal((await call('/api/workspaces/' + entry.id, 'bob')).status, 200);
+    assert.equal((await call('/api/workspaces?all=1', 'bob')).status, 200); assert.equal((await call('/api/workspaces?all=1', 'admin')).status, 200);
+    assert.equal((await fetch(base + '/api/workspaces', { headers: { 'x-voidplayer-user': 'admin' } })).status, 200);
     assert.equal((await fetch(base + '/api/workspaces', { method: 'POST', headers: { cookie: `voidplayer-user=${actors.alice.id}`, 'content-type': 'application/json' }, body: JSON.stringify({ name: 'cross-origin', document: document() }) })).status, 403);
-    const updates = await Promise.all(['a', 'b'].map(name => call('/api/workspaces/' + entry.id, 'alice', 'PUT', { name, document: document() }, '"1"')));
+    const updates = await Promise.all(['alice', 'bob'].map(name => call('/api/workspaces/' + entry.id, name, 'PUT', { name, document: document() }, '"1"')));
     assert.deepEqual(updates.map(r => r.status).sort(), [200, 409]);
     const result = await call('/api/workspaces/' + entry.id, 'admin'); assert.equal(result.headers.get('etag'), '"2"');
     const doc = await result.json(); assert.equal(doc.revision, 2); assert.equal(doc.owner, actors.alice.id);

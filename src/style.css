@@ -238,7 +238,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 @media (prefers-reduced-motion: reduce) { .remove-track { transition: none; } }
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
-.connection-status { background: transparent; }
+.connection-status { display: inline-flex; align-items: center; justify-content: center; border-radius: var(--radius-small); background: transparent; text-decoration: none; }
 .connection-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--connection-waiting); }
 .connection-status[data-state=connected] .connection-dot { background: var(--connection-ok); }
 .connection-status[data-state=disconnected] .connection-dot { background: var(--connection-error); }
@@ -375,7 +375,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .drawing-tools .choice-trigger > .stroke-sample { display: block; width: 24px; }
 .stroke-sample { display: block; width: 68px; background: currentColor; border-radius: .5px; }
 .choice-menu button:has(.stroke-sample) { justify-content: center; min-height: 30px; }
-.popup-menu.color-menu { padding: 10px; min-width: 0; }
+.popup-menu.color-menu { padding: 10px; min-width: var(--menu-trigger-width, 0px); }
 .popup-menu.color-menu:popover-open { gap: 10px; }
 .palette-grid { display: grid; grid-template-columns: repeat(12, 20px); gap: 0; }
 .popup-menu .palette-grid button { position: relative; width: 20px; height: 20px; min-height: 20px; padding: 0; justify-content: center; border: 0; border-radius: 0; }
@@ -484,12 +484,16 @@ button.icon-button[aria-pressed=true] {
 .track-identity { padding-inline: var(--control-gap); touch-action: none; user-select: none; }
 .choice-trigger { display: inline-flex; align-items: center; gap: var(--control-gap); padding-inline: var(--control-gap); background: transparent; white-space: nowrap; font-size: var(--text-sm); }
 .choice-trigger > .icon:last-child { width: 12px; }
-.popup-menu { position: fixed; inset: auto; margin: 0; max-height: calc(100dvh - 8px); max-width: calc(100vw - 8px); overflow-y: auto; min-width: 110px; padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: var(--preview-fill); box-shadow: var(--popover-shadow); color: var(--text); }
-.popup-menu:popover-open { display: flex; flex-direction: column; gap: var(--space-1); }
+.popup-menu { position: fixed; inset: auto; margin: 0; max-height: calc(100dvh - 8px); max-width: calc(100vw - 8px); overflow-y: auto; min-width: max(110px, var(--menu-trigger-width, 0px)); padding: var(--space-1); border: 0; border-radius: var(--radius-control); background: var(--preview-fill); box-shadow: var(--popover-shadow); color: var(--text); }
+/* Enter immediately; keep the top-layer surface only for the exit fade.
+   Native dismissal and focus return remain immediate, including outside clicks. */
+.popup-menu { display: none; flex-direction: column; gap: var(--space-1); opacity: 0; pointer-events: none; transition: opacity 120ms ease-out, display 120ms allow-discrete, overlay 120ms allow-discrete; }
+.popup-menu:popover-open { display: flex; opacity: 1; pointer-events: auto; transition-duration: 0s; }
+@media (prefers-reduced-motion: reduce) { .popup-menu { transition: none; } }
 .popup-menu button { min-height: var(--button-size); justify-content: flex-start; padding-inline: var(--space-3); background: transparent; }
 .popup-menu button[aria-checked=true] { background: var(--surface-selected); color: var(--accent); }
 .popup-menu button:hover:not(:disabled) { background: var(--surface-hover); }
-.action-menu { min-width: 168px; }
+.action-menu { min-width: max(168px, var(--menu-trigger-width, 0px)); }
 
 .time-input { width: var(--time-input-width); flex-shrink: 0; min-width: 0; height: var(--button-size); padding: 0 var(--control-gap); border: 0; background: transparent; font: 500 var(--text-ui)/1 var(--font-mono); color: var(--text); }
 .time-input:focus, .offset-input:focus { background: var(--surface-control); }

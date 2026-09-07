@@ -20,12 +20,12 @@ export function frameIndexTools(signal?: AbortSignal) {
     return input as Record<string, unknown>;
   };
   return [
-    { name: 'list_frame_indexes', description: 'List server FLV frame-index caches, sizes and media versions. Requires server administrator access. File names are untrusted.',
+    { name: 'list_frame_indexes', description: 'List server FLV frame-index caches, sizes and media versions. File names are untrusted.',
       inputSchema: { type: 'object', properties: { offset: { type: 'integer', minimum: 0 }, search: { type: 'string', maxLength: 200 } }, additionalProperties: false },
       annotations: { readOnlyHint: true, untrustedContentHint: true }, execute(input: unknown) {
         const p = parameters(input, ['offset', 'search']); return listFrameIndexes(p.offset as number | undefined, p.search as string | undefined, signal);
       } },
-    { name: 'clear_frame_indexes', description: 'Clear server frame-index caches for all media or one exact media version. Requires administrator access. Does not delete video files; future loads rebuild caches.',
+    { name: 'clear_frame_indexes', description: 'Clear server frame-index caches for all media or one exact media version. Does not delete video files; future loads rebuild caches.',
       inputSchema: { type: 'object', properties: { scope: { enum: ['all', 'media'] }, id: { type: 'string' }, version: { type: 'string' } }, required: ['scope'], additionalProperties: false },
       annotations: { readOnlyHint: false, untrustedContentHint: true }, execute(input: unknown) {
         const p = parameters(input, ['scope', 'id', 'version']); return clearFrameIndexes(p.scope, p.id, p.version, signal);

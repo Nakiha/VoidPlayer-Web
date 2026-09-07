@@ -74,14 +74,14 @@ export class WorkspaceStore {
     const entries = rows.slice(0, 40), last = entries.at(-1);
     return { entries, next: rows.length > 40 && last ? `${last.updatedAt}|${last.id}` : null };
   }
-  private row(id: string, actor: Actor, admin: boolean, content = false) {
+  private row(id: string, content = false) {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new AdminError(404, '工作区不存在。');
     const row = this.db.prepare(`SELECT ${columns}${content ? ",document" : ""} FROM workspaces WHERE id=?`).get(id) as unknown as (SavedWorkspace & { document?: string }) | undefined;
-    if (!row || (!admin && row.owner !== actor.id)) throw new AdminError(404, '工作区不存在或无权访问。');
+    if (!row) throw new AdminError(404, '工作区不存在。');
     return row;
   }
-  read(id: string, actor: Actor, admin = false) {
-    const { document, ...metadata } = this.row(id, actor, admin, true);
+  read(id: string, _actor: Actor) {
+    const { document, ...metadata } = this.row(id, true);
     return { ...metadata, document: JSON.parse(document!) as WorkspaceFile };
   }
   private input(value: unknown) {
@@ -96,17 +96,17 @@ export class WorkspaceStore {
   create(value: unknown, actor: Actor) {
     const input = this.input(value), id = randomUUID(), now = new Date().toISOString();
     this.db.prepare('INSERT INTO workspaces VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id, input.name, actor.id, now, now, actor.id, 1, input.bytes, input.document.tracks.length, input.document.marks.length, input.json);
-    return this.row(id, actor, false);
+    return this.row(id);
   }
-  update(id: string, revision: string | undefined, value: unknown, actor: Actor, admin = false) {
-    const row = this.row(id, actor, admin); this.match(row, revision);
+  update(id: string, revision: string | undefined, value: unknown, actor: Actor) {
+    const row = this.row(id); this.match(row, revision);
     const input = this.input(value), now = new Date().toISOString();
     const changed = this.db.prepare('UPDATE workspaces SET name=?,updated_at=?,updated_by=?,revision=revision+1,bytes=?,tracks=?,marks=?,document=? WHERE id=? AND revision=?').run(input.name, now, actor.id, input.bytes, input.document.tracks.length, input.document.marks.length, input.json, id, row.revision);
     if (!changed.changes) throw new AdminError(409, '工作区已更新，请载入服务器版本或另存为副本。');
-    return this.row(id, actor, admin);
+    return this.row(id);
   }
-  remove(id: string, revision: string | undefined, actor: Actor, admin = false) {
-    const row = this.row(id, actor, admin); this.match(row, revision);
+  remove(id: string, revision: string | undefined, actor: Actor) {
+    const row = this.row(id); this.match(row, revision);
     const changed = this.db.prepare('DELETE FROM workspaces WHERE id=? AND revision=?').run(id, row.revision);
     if (!changed.changes) throw new AdminError(409, '工作区已改变，请重新载入后再删除。');
     return { ok: true };

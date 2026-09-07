@@ -13,7 +13,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
   const status = document.getElementById('server-status')!;
   const locations = new Map<string, Location>();
   const pending = new Set<string>();
-  let disposed = false, probing = false, canReveal = false, hasAdmin = false;
+  let disposed = false, probing = false, canReveal = false;
   const lifetime = new AbortController();
   const signal = () => AbortSignal.any([lifetime.signal, AbortSignal.timeout(4000)]);
   async function probe() {
@@ -21,11 +21,11 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
     probing = true;
     const prior = status.dataset.state;
     if (!prior || prior === 'checking') status.dataset.state = 'checking';
-    let state = 'disconnected', label = '媒体服务未连接；本地文件仍可播放。点击重试';
+    let state = 'disconnected', label = '媒体服务未连接；本地文件仍可播放';
     try {
       const health = await identityHealth();
       if (health?.service === 'voidplayer-media') {
-        state = 'connected'; label = '媒体服务已连接'; hasAdmin = !!health.capabilities?.admin;
+        state = 'connected'; label = '媒体服务已连接';
         const actor = health.actor && typeof health.actor.id === 'string' && typeof health.actor.name === 'string' ? health.actor : null;
 
         if (actor) label += ` · ${actor.name}`; canReveal = !!health.capabilities?.reveal && localPage();
@@ -34,8 +34,8 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
     if (state !== 'connected' && !navigator.onLine) { state = 'offline'; label = '网络离线；本地文件仍可播放'; }
     probing = false;
     if (disposed) return;
-    status.dataset.state = state; status.setAttribute('aria-label', label + (state === 'connected' && hasAdmin ? '，打开服务管理（新标签页）' : ''));
-    status.dataset.tooltip = state === 'connected' ? (hasAdmin ? '媒体服务已连接\n点击在新标签页打开服务管理。' : '媒体服务已连接\n可浏览媒体库片源。点击重新检查连接。') : state === 'offline' ? '媒体库连接：网络离线\n本地文件仍可播放。' : '媒体库连接：未连接\n本地文件仍可播放。点击重试。';
+    status.dataset.state = state; status.setAttribute('aria-label', label + '，打开服务管理（新标签页）');
+    status.dataset.tooltip = `${state === 'connected' ? '媒体服务已连接' : state === 'offline' ? '网络离线' : '媒体服务未连接'}\n打开服务管理（新标签页）`;
     render();
     if (state === 'connected' && (prior === 'disconnected' || prior === 'offline')) onReconnect();
   }
@@ -76,7 +76,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
       }
     }
   }
-  status.onclick = () => { if (status.dataset.state === 'connected' && hasAdmin) window.open('/admin', '_blank', 'noopener'); else { pending.clear(); void probe(); } };
+
   window.addEventListener('online', () => void probe(), { signal: lifetime.signal });
   window.addEventListener('offline', () => void probe(), { signal: lifetime.signal });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) void probe(); }, { signal: lifetime.signal });

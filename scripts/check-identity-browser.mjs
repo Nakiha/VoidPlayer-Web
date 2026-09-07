@@ -47,9 +47,17 @@ try {
   assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await other.goto(base); await settings(other);
   const otherId = await other.locator('#identity-id').getAttribute('data-tooltip'); assert.notEqual(otherId, id);
-  await other.locator('#identity-users').selectOption(id);
+  await other.locator('#identity-users').click();
+  await other.locator(`#identity-users-menu [data-value="${id}"]`).click();
   await other.waitForFunction(() => document.querySelector('#identity-current').textContent === '小明');
   assert.equal(await other.locator('#identity-id').getAttribute('data-tooltip'), id);
+  await other.waitForFunction(() => !document.querySelector('#identity-users').disabled);
+  await other.locator('#identity-users').focus(); await other.keyboard.press('ArrowDown');
+  assert.equal(await other.locator('#identity-users-menu [aria-checked=true]').evaluate(e => e === document.activeElement), true);
+  await other.locator('#settings').screenshot({ path: '/tmp/voidplayer-settings-user-menu.png' });
+  await other.keyboard.press('Escape');
+  assert.equal(await other.locator('#settings').evaluate(e => e.open), true);
+  assert.equal(await other.locator('#identity-users').evaluate(e => e === document.activeElement), true);
   // Editing from another tab updates the name without replacing the user ID.
   const tab = await a.newPage(); await tab.goto(base); await settings(tab);
   await tab.locator('#identity-name').fill('新名字'); await tab.locator('#identity-save').click();
@@ -71,7 +79,8 @@ try {
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await a.clearCookies(); await page.reload(); await settings(page);
   assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
-  await page.locator('#identity-users').selectOption(id);
+  await page.locator('#identity-users').click();
+  await page.locator(`#identity-users-menu [data-value="${id}"]`).click();
   await page.waitForFunction(id => document.querySelector('#identity-id').dataset.tooltip === id, id);
   if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') {
     console.log('Identity browser: loading and seeking playback sample');

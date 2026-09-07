@@ -8,17 +8,12 @@ import type { ServiceConfig } from './config.ts';
 import { normalizeRoots } from './library-store.ts';
 import type { MediaRoot } from './library-store.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
-import { localRequest } from './reveal.ts';
 import { encryptedRequest } from './tls.ts';
 
 export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
 import { WorkspaceStore } from './workspaces.ts';
-export function adminIdentity(req: IncomingMessage, users: string[], browserActor?: { id: string; name: string } | null) {
-  if (browserActor && users.includes(browserActor.name)) return browserActor;
-  return localRequest(req) ? { id: 'local', name: '本机管理员' } : null;
-}
 export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
   try {

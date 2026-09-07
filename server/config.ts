@@ -8,6 +8,7 @@ import type { TlsConfig } from './tls.ts';
 export interface ServiceConfig {
   mediaRoots: MediaRoot[]; dataDir: string; host: string; port: number; devPort: number;
   staticDir: string; logsDir: string | null; allowLocalReveal: boolean; indexTtlMs: number; indexWatch: boolean;
+  /** Legacy configuration, retained for compatibility; all users are trusted. */
   adminUsers: string[];
   tls?: TlsConfig | null;
   httpPort?: number | null;

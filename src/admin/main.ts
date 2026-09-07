@@ -1,3 +1,4 @@
+import { emptyState } from './presentation.ts';
 import { installFrameIndexes } from './frame-indexes.ts';
 import { randomUUID } from '../uuid.ts';
 import '../themes/silver-glass.css';
@@ -25,11 +26,13 @@ const life = new AbortController(); const disposeTheme = observeTheme();
 const text = (id: string, value: string) => { $(id).textContent = value; };
 const bytes = (n: number) => n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1)} GB` : n >= 1024 ** 2 ? `${(n / 1024 ** 2).toFixed(1)} MB` : `${(n / 1024).toFixed(1)} KB`;
 const stateLabels: Record<string, string> = { ready: '可用', offline: '存储离线', scanning: '扫描中', partial: '部分路径不可读', cancelled: '已停止', unscanned: '等待扫描', error: '扫描出错', completed: '已完成', failed: '失败', running: '进行中', interrupted: '上次任务被中断' };
+let statusError = false;
 let pane = 'overview', rootConfig: RootConfig | null = null, rootDirty = false, rootSaving = false;
 let status: Status | null = null, polling = false, errorsOffset = 0, errorsJob: unknown = null;
 let logCursor = '', nextLog: string | null = null, selectedLog: LogEntry | null = null;
+const userNames = new Map<string, string>();
 let logDocument: unknown, logsMode = 'uploads', logSequence = 0, listSequence = 0, scanSequence = 0;
-function notice(message: string, error = false) { text('admin-message', message); $('admin-message').hidden = !message; $('admin-message').dataset.error = String(error); }
+function notice(message: string, error = false) { statusError = false; text('admin-message', message); $('admin-message').hidden = !message; $('admin-message').dataset.error = String(error); }
 async function api<T>(url: string, method = 'GET', body?: unknown, headers: Record<string, string> = {}): Promise<T> {
   const response = await fetch(url, { method, cache: 'no-store', headers: { ...(method !== 'GET' ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}), ...headers }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([life.signal, AbortSignal.timeout(15000)]) });
   const value = await response.json();
@@ -49,7 +52,7 @@ function readDraft(): Root[] {
 }
 function rootRow(root: Root) {
   const row = document.createElement('div'); row.className = 'admin-root-row'; row.dataset.id = root.id;
-  row.innerHTML = `<div><input data-field="name" aria-label="目录名称" required maxlength="120"><span data-root-state class="admin-root-state"></span></div><input data-field="path" aria-label="服务器上的目录路径" required maxlength="4096" spellcheck="false"><button type="button" class="icon-button admin-danger" aria-label="移除目录">${icon('trash')}</button>`;
+  row.innerHTML = `<label>名称<input data-field="name" aria-label="目录名称" placeholder="例如：拍摄素材" required maxlength="120"></label><label>服务器路径<input data-field="path" aria-label="服务器上的目录路径" placeholder="填写完整目录路径" required maxlength="4096" spellcheck="false"></label><button type="button" class="icon-button admin-danger" aria-label="移除目录" title="移出媒体库，不删除文件">${icon('trash')}</button><span data-root-state class="admin-root-state"></span>`;
   row.querySelector<HTMLInputElement>('[data-field=name]')!.value = root.name;
   row.querySelector<HTMLInputElement>('[data-field=path]')!.value = root.path;
   for (const input of row.querySelectorAll('input')) { input.disabled = !rootConfig?.writable; input.addEventListener('input', () => { rootDirty = true; updateRootActions(); }); }
@@ -75,7 +78,7 @@ function renderStatus(value: Status) {
   text('uptime', hours ? `${hours} 小时 ${Math.floor(seconds % 3600 / 60)} 分` : `${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒`);
   text('memory', bytes(value.memory.rss)); text('cpu', `${value.cpuPercent.toFixed(1)}%`); text('connections', String(value.http.connections));
   text('version', `${value.version} · ${value.revision}`); text('runtime', `${value.runtime} · ${value.platform}`);
-  text('data-dir', value.dataDir); text('identity', `${value.identity.name} · ${value.identity.id}`);
+  text('data-dir', value.dataDir); text('identity', value.identity.name); $('identity').title = value.identity.id;
   text('system-memory', `${bytes(value.memory.systemFree)} / ${bytes(value.memory.systemTotal)}`);
   text('requests', `${value.http.completedRequests} 次完成 · ${value.http.activeRequests} 次处理中 · ${value.http.abortedRequests} 次中断`);
   text('root-summary', `${value.library.roots.length} 个目录 · ${value.library.roots.filter(r => r.state === 'offline').length} 个离线`);
@@ -88,8 +91,8 @@ function renderStatus(value: Status) {
 }
 async function poll() {
   if (polling || document.hidden) return; polling = true;
-  try { renderStatus(await api<Status>('/api/admin/status')); if (app.dataset.denied) { delete app.dataset.denied; notice(''); } if (pane === 'library') await loadScan(); }
-  catch (error) { if (!life.signal.aborted) { if ([401, 403].includes(Number((error as { status?: number }).status))) app.dataset.denied = 'true'; notice((error as Error).message, true); } }
+  try { renderStatus(await api<Status>('/api/admin/status')); if (statusError) notice(''); if (pane === 'library') await loadScan(); }
+  catch (error) { if (!life.signal.aborted) { notice((error as Error).message, true); statusError = true; } }
   finally { polling = false; }
 }
 async function loadScan() {
@@ -98,26 +101,31 @@ async function loadScan() {
   if (sequence !== scanSequence) return;
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
   text('scan-progress', value.job ? `${stateLabels[String(value.job.state)] ?? value.job.state} · ${value.job.visited} 个目录 · ${value.job.files} 个媒体` : '尚无扫描任务');
-  text('scan-detail', value.scanning ? String(value.job?.current_path || '正在读取根目录…') : '手动校准检查所有根目录；离线或不可读的路径保留上次索引。');
+  text('scan-detail', value.scanning ? String(value.job?.current_path || '正在读取根目录…') : Number(value.job?.errors ?? 0) ? '部分目录无法读取，请检查下方路径或网络挂载。' : '目录离线时保留已有视频索引。');
+  $('scan-cancel').hidden = !value.scanning; $('scan-refresh').toggleAttribute('disabled', value.scanning);
   $('scan-cancel').toggleAttribute('disabled', !value.scanning);
   const nodes = value.errors.map(error => { const row = document.createElement('div'); row.className = 'admin-error-row';
     const name = document.createElement('strong'); name.textContent = `${value.roots.find(r => r.id === error.root_id)?.name ?? error.root_id} / ${error.path || '(根目录)'}`;
-    const code = document.createElement('span'); code.textContent = String(error.code); row.append(name, code); return row; });
+    const code = document.createElement('span'); const rawCode = String(error.code); code.textContent = ({ ENOENT: '路径不存在', EACCES: '无法读取此目录', EPERM: '无法读取此目录', ESTORAGECHANGED: '网络存储已断开' } as Record<string, string>)[rawCode] ?? rawCode; code.title = rawCode; row.append(name, code); return row; });
   $('scan-errors').replaceChildren(...nodes);
-  const count = Number(value.job?.errors ?? 0);
+  const count = Number(value.job?.errors ?? 0); $('scan-issues').hidden = count === 0; $('scan-error-pages').hidden = count <= 100;
   text('scan-error-count', count ? `${count} 处读取错误${value.errorDetailsTruncated ? ' · 详情保留前 1000 条' : ''}` : '本次扫描没有读取错误');
   $('errors-prev').toggleAttribute('disabled', errorsOffset === 0);
   $('errors-next').toggleAttribute('disabled', errorsOffset + value.errors.length >= Math.min(count, 1000));
 }
-function clearLog() { selectedLog = null; logDocument = undefined; ++logSequence; $('log-json').textContent = ''; ($('log-json') as HTMLTextAreaElement).value = ''; text('log-description', '选择一份日志'); $('download-log').setAttribute('disabled', ''); $('delete-log').setAttribute('disabled', ''); $('delete-log-confirm').hidden = true; }
+function clearLog() { $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'true'; selectedLog = null; logDocument = undefined; ++logSequence; $('log-json').textContent = ''; ($('log-json') as HTMLTextAreaElement).value = ''; text('log-description', '选择一份日志查看内容'); $('download-log').setAttribute('disabled', ''); $('delete-log').setAttribute('disabled', ''); $('delete-log-confirm').hidden = true; }
 async function loadLogs() {
   const sequence = ++listSequence;
   const page = await api<Awaited<ReturnType<AdminController['logs']>>>(`/api/admin/logs?before=${encodeURIComponent(logCursor)}`);
   if (sequence !== listSequence) return;
+  const users = await api<{ users: { id: string; name: string }[] }>('/api/users').catch(() => ({ users: [] }));
+  if (sequence !== listSequence) return;
+  for (const user of users.users) userNames.set(user.id, user.name);
   nextLog = page.next;
+  $('more-logs').hidden = $('first-logs').hidden = !nextLog && !logCursor;
   $('more-logs').toggleAttribute('disabled', !nextLog); $('first-logs').toggleAttribute('disabled', !logCursor);
   if (!page.entries.length) {
-    const empty = document.createElement('p'); empty.className = 'admin-empty'; empty.textContent = page.enabled ? '暂无上传日志' : '服务端未启用日志接收'; $('log-list').replaceChildren(empty); return;
+    $('log-list').replaceChildren(emptyState(page.enabled ? '暂无上传日志' : '未开启日志接收', page.enabled ? '在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。' : '服务器未设置日志接收目录。你仍可在播放器中下载本地日志。', true)); return;
   }
   const rows = page.entries.map(entry => {
     const button = document.createElement('button'); button.className = 'admin-log-item'; button.title = entry.name;
@@ -129,10 +137,10 @@ async function loadLogs() {
       for (const row of $('log-list').querySelectorAll('button')) row.setAttribute('aria-pressed', String(row === button));
       const result = await api<Awaited<ReturnType<AdminController['readLog']>>>(`/api/admin/logs/${encodeURIComponent(entry.name)}?v=${entry.version}`);
       if (request !== logSequence) return;
-      logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);
+      $('log-json').closest<HTMLElement>('.admin-log-detail')!.dataset.empty = 'false'; logDocument = result.document; ($('log-json') as HTMLTextAreaElement).value = JSON.stringify(result.document, null, 2);
       const receipt = (result.document as { serverReceipt?: { id?: string; actorId?: string } })?.serverReceipt;
       const received = receipt?.id && entry.name.includes(`-${receipt.id}-`);
-      text('log-description', received ? `上传者：${receipt.actorId ?? '未知'} · ${bytes(entry.size)}` : `历史日志 · ${bytes(entry.size)}`);
+      text('log-description', received ? `上传者：${userNames.get(receipt.actorId ?? '') ?? receipt.actorId ?? '未知'} · ${bytes(entry.size)}` : `历史日志 · ${bytes(entry.size)}`);
       $('download-log').removeAttribute('disabled'); $('delete-log').removeAttribute('disabled');
     }); return button;
   }); $('log-list').replaceChildren(...rows);
@@ -140,21 +148,21 @@ async function loadLogs() {
 function renderRequests() {
   $('request-list').replaceChildren(...[...(status?.recentRequests ?? [])].reverse().map(request => {
     const row = document.createElement('div'); row.className = 'admin-request-row';
-    for (const value of [`${new Date(String(request.t)).toLocaleTimeString()} · ${request.actorId ?? '匿名'}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`]) { const span = document.createElement('span'); span.textContent = value; row.append(span); }
+    for (const value of [`${new Date(String(request.t)).toLocaleTimeString()} · ${userNames.get(String(request.actorId)) ?? (request.actorId === 'local' ? '本机用户' : request.actorId ?? '匿名')}`, `${request.method} ${request.url}`, String(request.status), `${request.ms} ms`]) { const span = document.createElement('span'); span.textContent = value; row.append(span); }
     return row;
   }));
 }
 const frameIndexes = installFrameIndexes(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
-const measurements = installMeasurements(life.signal, notice, () => status?.identity.id);
+const measurements = installMeasurements(life.signal, notice);
 for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
-  pane = id; measurements.activate(id === 'measurements'); if (!app.dataset.denied) notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  pane = id; measurements.activate(id === 'measurements'); notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
   if (id === 'frame-indexes') frameIndexes.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'logs') void act(loadLogs);
 };
-$('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
+$('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); renderRootStates(); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
 $('reset-roots').onclick = () => void act(loadRoots);
 $('roots-form').onsubmit = event => { event.preventDefault(); if (!rootConfig?.writable || rootSaving) return;
   void act(async () => {
@@ -178,6 +186,16 @@ $('download-log').onclick = () => { if (!selectedLog || logDocument === undefine
 $('delete-log').onclick = () => { $('delete-log-confirm').hidden = false; };
 $('cancel-delete-log').onclick = () => { $('delete-log-confirm').hidden = true; };
 $('confirm-delete-log').onclick = () => void act(async () => { if (!selectedLog) return; await api(`/api/admin/logs/${encodeURIComponent(selectedLog.name)}`, 'DELETE', undefined, { 'if-match': `"${selectedLog.version}"` }); clearLog(); await loadLogs(); notice('日志已从服务器删除。'); });
+// Keep the original review alive when returning from its management tab.
+// Direct visits, closed players, and modified clicks keep normal link behavior.
+document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  try {
+    const player = window.opener as Window | null;
+    if (!player || player.closed || player.location.origin !== location.origin || !['/', '/index.html'].includes(player.location.pathname)) return;
+    event.preventDefault(); player.focus(); window.close();
+  } catch { /* An opener on another origin is not a return destination. */ }
+};
 window.addEventListener('beforeunload', event => { if (rootDirty) { event.preventDefault(); event.returnValue = ''; } });
 const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); }, { once: true });

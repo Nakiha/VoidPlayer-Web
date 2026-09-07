@@ -1,26 +1,34 @@
+import { installChoiceMenu } from './choice-menu.ts';
 import { chooseIdentity, currentActor, identityHealth } from '../identity.ts';
 import type { Actor } from '../identity.ts';
 
 export function installIdentitySettings(setActor: (actor: Actor | null) => void) {
   const life = new AbortController();
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`identity-${id}`) as T;
-  const input = $<HTMLInputElement>('name'), select = $<HTMLSelectElement>('users');
+  const input = $<HTMLInputElement>('name');
+  let userOptions: Actor[] = [];
+  const menu = installChoiceMenu('identity-users', [], id => void choose('', id));
   let busy = false;
+  function syncMenu() {
+    const actor = currentActor();
+    menu.sync(actor?.id ?? '', actor?.name ?? '暂无可用用户', !busy && !!actor && userOptions.length > 0);
+  }
   function render() {
     const actor = currentActor(); setActor(actor);
     $('current').textContent = actor?.name ?? '正在连接服务…';
     $('id').textContent = actor ? `ID · ${actor.id.slice(0, 8)}` : '';
     $('id').dataset.tooltip = actor?.id ?? '';
     input.value = actor?.name ?? '';
-    input.disabled = select.disabled = $<HTMLButtonElement>('save').disabled = busy || !actor;
-    select.value = actor?.id ?? '';
+    input.disabled = $<HTMLButtonElement>('save').disabled = busy || !actor;
+    syncMenu();
   }
   async function users() {
     const response = await fetch('/api/users', { cache: 'no-store', signal: AbortSignal.any([life.signal, AbortSignal.timeout(4000)]) });
     const result = await response.json();
     if (!response.ok) throw new Error(result.error ?? '无法读取用户列表。');
-    const options = (result.users as Actor[]).map(user => new Option(user.name, user.id));
-    select.replaceChildren(...options); select.value = currentActor()?.id ?? '';
+    userOptions = result.users as Actor[];
+    menu.setOptions(userOptions.map(user => ({ value: user.id, label: user.name })));
+    syncMenu();
   }
   async function refresh() {
     try { await identityHealth(); await users(); }
@@ -37,12 +45,11 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
     finally { busy = false; render(); }
   }
   $('form').addEventListener('submit', event => { event.preventDefault(); void choose(input.value); }, { signal: life.signal });
-  select.addEventListener('change', () => { const option = select.selectedOptions[0]; if (option) void choose(option.text, option.value); }, { signal: life.signal });
   window.addEventListener('voidplayer-identity-change', render, { signal: life.signal });
   window.addEventListener('storage', event => { if (event.key === 'voidplayer.identity') void refresh(); }, { signal: life.signal });
   document.getElementById('settings')!.addEventListener('settings-pane-change', event => {
     if ((event as CustomEvent).detail === 'identity') void refresh();
   }, { signal: life.signal });
   render(); void refresh();
-  return { dispose() { life.abort(); } };
+  return { dispose() { life.abort(); menu.dispose(); } };
 }
