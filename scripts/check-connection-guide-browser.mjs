@@ -13,6 +13,7 @@ try {
   service = await startService(config);
   browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] });
   const page = await browser.newPage({ viewport: { width: 1100, height: 1100 } });
+  await page.emulateMedia({ colorScheme: 'light' });
   // Resolve the test hostname through loopback even on hosts with a system proxy.
   // The browser keeps a genuinely insecure remote origin; all bytes come from the real server.
   await page.route(/^http:\/\/voidplayer\.test(?::\d+)?\//, async route => {
@@ -30,6 +31,7 @@ try {
   assert.equal(workers.length, 0);
   assert.ok(!requests.some(url => /\/vendor\/|\/assets\/main-|\/api\/media\//.test(url)), 'guide must not load player or decoders');
   assert.equal(await page.locator('#connection-open').getAttribute('href'), `https://voidplayer.test:${service.server.address().port}/`);
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   for (const os of ['windows', 'macos']) {
     await page.locator(`[data-os="${os}"]`).click();
     assert.equal(await page.locator(`#connection-${os}`).isVisible(), true);
@@ -42,13 +44,39 @@ try {
   await page.locator('[data-os="windows"]').click();
   await page.screenshot({ path: '/tmp/voidplayer-connection-windows.png', fullPage: true });
   await page.locator('[data-os="macos"]').click(); await page.emulateMedia({ colorScheme: 'dark' });
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await page.waitForFunction(() => !document.getAnimations().some(animation => animation.playState === 'running'));
   await page.screenshot({ path: '/tmp/voidplayer-connection-macos.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.locator('.connection-fingerprint summary').click();
+  assert.equal(await page.locator('#connection-fingerprint').innerText(), service.tls.fingerprint);
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'expanded fingerprint fits mobile');
   await page.screenshot({ path: '/tmp/voidplayer-connection-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 320, height: 740 });
+  assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth));
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+  await page.route('**/api/connection/certificate', route => route.fulfill({ status: 503 }));
+  await page.locator('#connection-download').click();
+  await page.waitForFunction(() => document.getElementById('connection-status').dataset.state === 'error');
+  assert.equal(await page.locator('#connection-download').getAttribute('aria-busy'), null);
+  assert.match(await page.locator('#connection-download').innerText(), /重试下载/);
+  await page.unroute('**/api/connection/certificate');
+  const retryDownload = page.waitForEvent('download');
+  await page.locator('#connection-download').click(); await retryDownload;
+  assert.equal(await page.locator('#connection-status').getAttribute('data-state'), 'ready');
   await page.route('**/api/connection', route => route.fulfill({ json: { configured: false } }));
   await page.locator('#connection-retry').click(); await page.locator('#connection-unavailable').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#connection-download').isVisible(), false);
+  await page.unroute('**/api/connection');
+  await page.route('**/api/connection', route => route.fulfill({ json: { configured: true, httpsUrl: 'https://voidplayer.test:5180/', certificateUrl: null, fingerprint: null } }));
+  await page.locator('#connection-retry').click();
+  await page.locator('#connection-enter').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#connection-setup').isVisible(), false);
+  assert.equal(await page.locator('#connection-enter-number').innerText(), '1');
+  assert.match(await page.locator('#connection-enter-hint').innerText(), /自有证书/);
+  assert.ok(!requests.some(url => /\/vendor\/|\/assets\/main-|\/api\/media\//.test(url)), 'theme observer stays independent of the player');
   assert.deepEqual(errors, []);
-  console.log('PASS HTTP guide: OS steps, exact CA download, HTTPS URL, no player/WASM, mobile/dark layout, unavailable configuration');
+  console.log('PASS HTTP guide: OS steps, exact CA download and failure recovery, HTTPS URL, no player/WASM, 320/390px layout, live theme changes, fingerprint, unavailable/custom certificate states');
 } finally { await browser?.close(); await service?.close(); await rm(temp, { recursive: true, force: true }); }
