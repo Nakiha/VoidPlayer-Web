@@ -27,6 +27,9 @@ export interface DecodedFrame extends FrameInfo {
 }
 export interface MediaSource {
   info: MediaInfo;
+  /** Background container indexing can extend duration after the first frame. */
+  onInfoChange?: () => void;
+  ensureIndexed?(ptsUs?: number): Promise<void>;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
   /** Sequential presentation-order frames starting at ptsUs, for playback. */

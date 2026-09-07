@@ -1,4 +1,5 @@
 import { RangeReader } from './range-reader.ts';
+import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
@@ -20,7 +21,8 @@ const s24 = (b: Uint8Array, i: number) => (u24(b, i) << 8) >> 8;
 
 /** Private-CDN and Enhanced FLV share bounded, cancellable HTTP Range IO. */
 export class FlvReader extends RangeReader {
-  constructor(input: FlvInput) { super(input, 64 * 1024); }
+  constructor(input: FlvInput, version?: RangeVersion) { super(input, 64 * 1024, version); }
+  setIndexing(indexing: boolean) { this.setReadAheadBlocks(indexing && 'url' in this.input ? 16 : 1); }
   override async read(offset: number, length: number): Promise<Uint8Array> {
     try { return await super.read(offset, length); }
     catch (error) {
@@ -32,17 +34,27 @@ export class FlvReader extends RangeReader {
 
 /** Standard AVC, legacy CDN HEVC/AV1/VVC and single-track Enhanced FLV.
  * Audio/script tags are skipped: this review app currently has video only. */
-export async function demuxFlv(reader: FlvReader): Promise<FlvIndex> {
+export interface FlvCheckpoint { index: FlvIndex; nextOffset: number; complete: boolean; }
+
+export async function demuxFlv(reader: FlvReader, onProgress?: () => void): Promise<FlvIndex> {
+  return (await scanFlv(reader, onProgress)).index;
+}
+
+/** Stop after the first video packet for startup; resume at the next tag. */
+export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false): Promise<FlvCheckpoint> {
   const header = await reader.read(0, 9);
   if (header[0] !== 70 || header[1] !== 76 || header[2] !== 86 || header[3] !== 1) bad('不是有效的 FLV 1 文件。');
   let offset = u32(header, 5);
   if (offset < 9 || offset + 4 > reader.size) bad('文件头长度无效。');
   if (u32(await reader.read(offset, 4), 0) !== 0) bad('首个 PreviousTagSize 无效。');
   offset += 4;
-  let codec: FlvCodec | undefined;
-  let description: Uint8Array | undefined;
-  const packets: FlvPacket[] = [];
+  if (resume) offset = resume.nextOffset;
+  let codec: FlvCodec | undefined = resume?.index.codec;
+  let description: Uint8Array | undefined = resume?.index.description;
+  const packets: FlvPacket[] = resume ? resume.index.packets.slice() : [];
+  let reported = performance.now();
   while (offset < reader.size) {
+    if (performance.now() - reported >= 250) { onProgress?.(); reported = performance.now(); await new Promise<void>(resolve => setTimeout(resolve, 0)); }
     const tag = await reader.read(offset, 11);
     const size = u24(tag, 1), start = offset + 11, next = start + size + 4;
     if (next > reader.size || u24(tag, 8) !== 0) bad('标签长度或 stream ID 无效。');
@@ -84,11 +96,16 @@ export async function demuxFlv(reader: FlvReader): Promise<FlvIndex> {
         if (size <= skip) bad('视频包为空。');
         const dts = (u24(tag, 4) + tag[7] * 16777216) * 1000;
         packets.push({ offset: start + skip, size: size - skip, dts, pts: dts + cts * 1000, key: frameType === 1 });
+        if (firstPacket) return { index: buildFlvIndex(codec, description, packets), nextOffset: next, complete: next === reader.size };
         if (packets.length > 2_000_000) throw new MediaOpenError('resource', 'FLV 帧索引超过安全上限。');
       }
     }
     offset = next;
   }
+  return { index: buildFlvIndex(codec, description, packets), nextOffset: offset, complete: true };
+}
+
+export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[]): FlvIndex {
   if (!codec || !description || !packets.length || !packets[0].key) bad('没有带配置头和起始关键帧的有效视频。');
   const order = packets.map((_, i) => i).sort((a, b) => packets[a].pts - packets[b].pts);
   const firstPts = packets[order[0]].pts;

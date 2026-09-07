@@ -72,7 +72,7 @@ test('schema 1 upgrade preserves media and waits for an unchanged original befor
   await index.refresh(); assert.equal(index.status().roots[0].state, 'ready'); assert.deepEqual(index.browse().entries, before);
   await index.close();
   const upgraded = openIndexDatabase(database);
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 2);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 3);
   assert.equal(upgraded.prepare('SELECT fs_type FROM root_storage').get()?.fs_type, '101'); upgraded.close();
 }));
 

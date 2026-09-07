@@ -101,13 +101,17 @@ export class WorkerRpc {
   private worker: Worker;
   private nextId = 1;
   private failure: Error | null = null;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; refresh?: () => void }>();
   private onTerminate: () => void;
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
     const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
-      if (data.type === 'progress') { if (!this.failure && this.pending.has(data.id) && data.progress) onProgress?.(data.progress); return; }
+      if (data.type === 'progress') {
+        const entry = this.pending.get(data.id);
+        if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
+        return;
+      }
       const { id, ok, data: payload, error } = data;
       const entry = this.pending.get(id);
       if (!entry) {
@@ -131,12 +135,14 @@ export class WorkerRpc {
       anyWorker.on('exit', (code: number) => fail(`exit ${code}`));
     }
   }
-  call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000): Promise<T> {
+  call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
     return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`)), timeoutMs);
-      this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
+      const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
+      const entry = { resolve: resolve as (v: unknown) => void, reject, timer: setTimeout(expire, timeoutMs),
+        refresh: idleTimeout ? () => { clearTimeout(entry.timer); entry.timer = setTimeout(expire, timeoutMs); } : undefined };
+      this.pending.set(id, entry);
       try { this.worker.postMessage({ id, type, ...payload }, transfer); }
       catch (error) { this.terminate(error instanceof Error ? error : new Error(String(error))); }
     });

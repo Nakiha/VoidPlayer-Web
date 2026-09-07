@@ -79,3 +79,15 @@ CI 将这两类检查分开运行：`--functional-only` 检查载入、解码路
 使用 `.bun-version` 对应的 Bun 执行 `npm run release`，可用 `BUN_BIN` 指定可执行路径。`npm run test:release` 校验最新归档并在临时目录解压运行；也可传归档路径。测试服务使用空 PATH，不依赖源码或 node_modules，覆盖配置初始化、不同工作目录、HTTP/HEAD/Range、并发、中断、鉴权、上传日志、退出及升级保留数据。`RELEASE_BENCH=1 npm run test:release` 额外用 WebKit 在独立服务上跑四组真实播放基准，需要同步样片和浏览器。
 
 远程 WASM 专项验证包含 MP4/VVC 索引不遍历 mdat、与原 FFmpeg 路径逐像素对比、B 帧/GOP 随机跳转和尾帧、5 GiB 稀疏来源、Range 响应校验与取消。`range-media.test.ts` 使用真实本地 HTTP 服务；`range-reader.test.ts` 使用可控响应检查缓存与 AVIO 桥接，不替代浏览器网络验证。私有 FLV 继续由 `test/flv.test.ts` 和 `test:flv:browser` 覆盖。
+
+### FLV first-frame and shared index cache
+
+`node --test test/flv-startup.test.ts test/frame-index-cache.test.ts` checks checkpoint resume, bounded reads, index deadlines, decoder retry, cache schema/version validation, persistence, deletion and offline storage.
+
+After syncing the pinned core and generating `standard-h264.flv`, run `node --test test/flv-background.test.ts` and `npm run test:flv:startup`. The fixture appends a sparse 256 MiB audio tail and blocks reads beyond the initial 64 KiB. The first decoded/drawn frame must arrive while the tail remains blocked. After release, the worker uploads the complete index, a second opening reuses it without rescanning the tail, and playback plus administrator UI/WebMCP clearing are checked. Run `node scripts/check-flv-startup-browser.mjs webkit` for WebKit.
+
+FLV startup reads the configuration and first video packet, then flushes the decoder to display that frame. The rest is scanned from the saved tag offset after the first frame; seeking outside the indexed prefix waits for completion. Duration is provisional until then, exposed as `indexState` in session metadata and the inspector. Cache lookup/upload is optional and never blocks the first frame.
+
+Complete indexes are keyed by media ID + file version + schema and stored in the library SQLite database (schema 3). Only version-pinned library URLs use the cache API. The same-origin client upload validates bounded packet offsets, codec configuration and timing; consumers check the cached prefix against freshly read source bytes. Missing/changed files and removed/relocated roots invalidate caches, while offline storage preserves them. Cache uploads are capped at 32 MiB; total live cache data is capped at 256 MiB with least-recently-used eviction. Clearing increments an epoch so an earlier in-flight upload cannot undo the clear. SQLite may retain reusable free pages after deletion.
+
+Administrators can list/search and clear individual versions or all caches under **帧索引缓存**. `list_frame_indexes` and `clear_frame_indexes` are registered through WebMCP in both the player and administration page and share the same client functions and server authorization.

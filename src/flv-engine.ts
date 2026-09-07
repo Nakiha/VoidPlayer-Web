@@ -1,25 +1,65 @@
+import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
-import { demuxFlv, flvDecoderConfig, FlvReader } from './flv-demux.ts';
-import type { FlvInput, FlvIndex } from './flv-demux.ts';
+import { scanFlv, flvDecoderConfig, FlvReader } from './flv-demux.ts';
+import type { FlvInput, FlvIndex, FlvCheckpoint } from './flv-demux.ts';
 import { nativeFlvDecoder, wasmFlvDecoder } from './flv-decoder.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
+import type { RangeVersion } from './range-reader.ts';
+
+export interface PreparedFlv extends FlvCheckpoint { version: RangeVersion; }
 
 export class FlvEngine {
   readonly reader: FlvReader;
+  private cache: FlvIndexClient;
   index!: FlvIndex;
+  private checkpoint?: FlvCheckpoint;
   decoder!: PacketDecoder;
   private cursor = 0;
   private drained = false;
   private anchorPts = -Infinity;
   private last = -1;
   private primed: FlvFrame | null = null;
-  constructor(input: FlvInput) { this.reader = new FlvReader(input); }
-  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress) {
-    try {
+  constructor(input: FlvInput, prepared?: PreparedFlv) {
+    this.reader = new FlvReader(input, prepared?.version);
+    this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size);
+    if (prepared) { this.index = prepared.index; this.checkpoint = prepared; }
+  }
+  async prepare(onProgress?: MediaOpenProgress): Promise<PreparedFlv> {
+    if (!this.index) {
       onProgress?.('index');
-      this.index = await demuxFlv(this.reader);
-      flvDecoderConfig(this.index);
+      // First-frame reads stay small; bulk scan read-ahead starts after display.
+      try {
+        this.checkpoint = await scanFlv(this.reader, () => onProgress?.('index'), undefined, true);
+        this.index = this.checkpoint.index;
+        flvDecoderConfig(this.index);
+      } catch (error) { this.close(); throw error; }
+      finally { this.reader.setIndexing(false); }
+    }
+    return { ...this.checkpoint!, version: this.reader.version };
+  }
+  async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, beforeCommit?: () => Promise<void>) {
+    cached ??= await this.cache.read(this.index) ?? undefined;
+    if (!this.checkpoint!.complete) {
+      this.reader.setIndexing(true);
+      try {
+        const completed = cached ? { index: cached, nextOffset: this.reader.size, complete: true }
+          : await scanFlv(this.reader, () => onProgress?.('index'), this.checkpoint);
+        if (completed.index.firstPts !== this.index.firstPts) throw new MediaOpenError('container', 'FLV 后续视频包早于首帧，无法保持帧时间基准。');
+        await beforeCommit?.();
+        this.checkpoint = completed; this.index = completed.index;
+        // The startup packet has been drained. Resume future extraction with
+        // a fresh decoder cursor while retaining the already displayed frame.
+        this.last = -1;
+      } finally { this.reader.setIndexing(false); }
+    }
+    if (!cached) void this.cache.save(this.index).catch(() => {});
+    return { indexSource: cached ? 'server' as const : 'client' as const, firstPtsUs: this.index.firstPts, durationUs: this.index.duration,
+      times: this.index.order.map(i => this.index.packets[i].pts - this.index.firstPts), durations: this.index.durations };
+  }
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
+    try {
+      await this.prepare(onProgress);
       if (!forceWasm) {
         try {
           onProgress?.('decode');
@@ -30,6 +70,7 @@ export class FlvEngine {
           this.decoder?.close(); this.decoder = undefined!;
         }
       }
+      if (!this.decoder && nativeOnly) return null;
       if (!this.decoder) {
         onProgress?.('decoder');
         this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
@@ -40,6 +81,7 @@ export class FlvEngine {
       return { codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
+        indexState: this.checkpoint!.complete ? 'complete' as const : 'building' as const,
         firstPtsUs: this.index.firstPts, durationUs: this.index.duration,
         times: this.index.order.map(i => this.index.packets[i].pts - this.index.firstPts), durations: this.index.durations };
     } catch (error) { this.close(); throw error; }
@@ -73,5 +115,5 @@ export class FlvEngine {
       else throw new MediaOpenError('decode', 'FLV 文件未输出目标视频帧。');
     }
   }
-  close() { this.primed?.frame?.close(); this.primed = null; this.decoder?.close(); this.decoder = undefined!; this.reader.close(); }
+  close() { this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.decoder?.close(); this.decoder = undefined!; this.reader.close(); }
 }

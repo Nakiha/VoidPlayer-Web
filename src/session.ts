@@ -150,6 +150,7 @@ export class ReviewSession {
             this.tracks.get(slot)?.source.dispose();
             this.tracks = next;
             this.catalog.set(opened.info.id, opened.info);
+            opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
             committed = true;
             status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
           });
@@ -206,6 +207,8 @@ export class ReviewSession {
     try {
       await this.run('seek', { ptsUs }, async current => {
         if (!this.tracks.size) throw new Error('请先打开视频。');
+        await Promise.all([...this.tracks.values()].map(t => t.source.ensureIndexed?.(Math.max(0, ptsUs - t.offsetUs))));
+        if (!current()) return;
         await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
       });
     } catch (error) {
@@ -404,7 +407,7 @@ export class ReviewSession {
           lastSample = now;
           scoped.debug('session', '播放采样', metrics.snapshot());
         }
-        if (target >= this.durationUs - 1) {
+        if (target >= this.durationUs - 1 && ![...this.tracks.values()].some(t => t.source.info.indexState === 'building')) {
           this.playing = false;
           scoped.info('session', '播放到末尾结束', { positionUs: target });
         }
@@ -481,6 +484,7 @@ export class ReviewSession {
           const info = document.media.find(m => m.id === track.mediaId)!;
           const source = await open(info);
           next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs });
+          await source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
           source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.
@@ -490,7 +494,10 @@ export class ReviewSession {
           for (const track of this.tracks.values()) track.source.dispose();
           this.tracks = next; this.order = [...next.keys(), ...SLOTS.filter(slot => !next.has(slot))];
           this.catalog = new Map(document.media.map(info => [info.id, info]));
-          for (const track of next.values()) this.catalog.set(track.source.info.id, track.source.info);
+          for (const track of next.values()) {
+            this.catalog.set(track.source.info.id, track.source.info);
+            track.source.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === track.source)) this.emit(); };
+          }
           this.marks = document.marks; this.measurements = null; committed = true;
         });
       } finally { if (!committed) for (const track of next.values()) track.source.dispose(); }

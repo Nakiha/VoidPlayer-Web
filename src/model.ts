@@ -11,6 +11,9 @@ export type ColorInfo = {
   fullRange: boolean | null;
 };
 export type MediaInfo = {
+  indexSource?: 'client' | 'server';
+  indexState?: 'building' | 'complete' | 'error';
+  indexError?: string;
   id: string; name: string; size: number; lastModified: number;
   source?: { kind: 'library'; id: string; url: string };
   coreVariant?: 'single-thread' | 'multi-thread';

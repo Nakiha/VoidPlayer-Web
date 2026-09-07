@@ -115,7 +115,10 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
+  assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
+  for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
   await get('seek_review').execute({ ptsUs: 45000 });
   assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
   get('add_review_mark').execute({ slot: 'A', text: 'Agent note' });

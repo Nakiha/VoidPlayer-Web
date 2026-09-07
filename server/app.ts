@@ -1,3 +1,4 @@
+import { FLV_INDEX_BYTES } from '../src/flv-index-cache.ts';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import { browserUserId, identityCookie } from './identity.ts';
@@ -85,7 +86,7 @@ async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: str
     if (expectedVersion && fileVersion(stat) !== expectedVersion) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
     const size = stat.size;
     const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-    const base = { 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
+    const base = { etag: `"${fileVersion(stat)}"`, 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
     const range = parseRange(req.headers.range, size);
     if (range === 'unsatisfiable') {
       res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
@@ -218,6 +219,12 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!identity) { sendJson(res, 403, { error: '当前用户没有管理权限，请在服务器配置的 adminUsers 中添加用户名。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
         try {
+          if (url.pathname === '/api/admin/frame-indexes') {
+            if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.list(Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }
+            if (req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove()); return; }
+          }
+          const frameIndex = /^\/api\/admin\/frame-indexes\/([0-9a-f]{24})$/.exec(url.pathname);
+          if (frameIndex && req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove(frameIndex[1], url.searchParams.get('v') ?? undefined)); return; }
           if (url.pathname === '/api/admin/measurements') {
             if (req.method === 'GET') { sendJson(res, 200, admin.measurements.status()); return; }
             if (req.method === 'POST') { sendJson(res, 202, admin.measurements.start(await readAdminJson(req), identity.id)); return; }
@@ -279,6 +286,20 @@ export function createMediaServer(options: ServerOptions): Server {
         try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision })); }
         catch (error) { sendJson(res, (error as {code?: string}).code === 'INDEX_CHANGED' ? 409 : 400, { error: (error as Error).message }); }
         return;
+      }
+      const indexMatch = /^\/api\/media\/([0-9a-f]{24})\/frame-index$/.exec(url.pathname);
+      if (indexMatch) {
+        try {
+          if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
+          if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
+          const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
+          if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
+          if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
+          if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.get(entry.id, version)); return; }
+          const body = await readAdminJson(req, FLV_INDEX_BYTES + 1024) as { index?: unknown; epoch?: unknown } | null;
+          if (!body || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
+          sendJson(res, 201, library.frameIndexes.put(entry.id, version, entry.size, body.index, body.epoch)); return;
+        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
       }
       const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal|metadata)$/.exec(url.pathname);
       if (actionMatch) {

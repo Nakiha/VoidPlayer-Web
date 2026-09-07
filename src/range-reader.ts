@@ -1,6 +1,7 @@
 import { MediaOpenError } from './media-errors.ts';
 
 export type RandomAccessInput = { file: Blob } | { url: string; size: number };
+export interface RangeVersion { validator?: string; ifRange?: string; }
 const BLOCK = 256 * 1024;
 const CACHE_BYTES = 8 * 1024 * 1024;
 
@@ -14,13 +15,28 @@ export class RangeReader {
   private serial: Promise<unknown> = Promise.resolve();
   readonly input: RandomAccessInput;
   private blockSize: number;
-  constructor(input: RandomAccessInput, blockSize = BLOCK) {
+  private readAheadBlocks = 1;
+  constructor(input: RandomAccessInput, blockSize = BLOCK, version?: RangeVersion) {
     this.blockSize = blockSize;
     this.input = input;
     this.size = 'file' in input ? input.file.size : input.size;
+    this.validator = version?.validator; this.ifRange = version?.ifRange;
     if (!Number.isSafeInteger(this.size) || this.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
   }
+  /** Preserve the source version when a decoder worker is replaced. */
+  get version(): RangeVersion { return { validator: this.validator, ifRange: this.ifRange }; }
+  protected setReadAheadBlocks(blocks: number) { this.readAheadBlocks = Math.max(1, Math.min(blocks, Math.floor(CACHE_BYTES / this.blockSize))); }
   read(offset: number, length: number): Promise<Uint8Array> {
+    // A slow background scan must not hold already cached startup frames
+    // behind a pending network request. Cache hits need no IO serialization.
+    if (!this.controller.signal.aborted && Number.isSafeInteger(offset) && Number.isSafeInteger(length)
+      && offset >= 0 && length >= 0 && length <= 64 * 1024 * 1024 && offset + length <= this.size) {
+      let cached = true;
+      for (let p = Math.floor(offset / this.blockSize) * this.blockSize; p < offset + length; p += this.blockSize) {
+        if (!this.cache.has(p)) { cached = false; break; }
+      }
+      if (cached) return this.readInner(offset, length);
+    }
     const task = this.serial.then(() => this.readInner(offset, length));
     this.serial = task.catch(() => {});
     return task;
@@ -33,7 +49,19 @@ export class RangeReader {
     for (let position = offset; position < offset + length;) {
       const start = Math.floor(position / this.blockSize) * this.blockSize;
       let bytes = this.cache.get(start);
-      if (!bytes) bytes = await this.load(start, Math.min(start + this.blockSize, this.size));
+      if (!bytes) {
+        // Coalesce scan windows into one request, keeping the same bounded
+        // block cache and all Range/version/body checks. Never prefetch during
+        // ordinary playback unless the caller explicitly enables it.
+        const end = Math.min(start + this.blockSize * this.readAheadBlocks, this.size);
+        const window = await this.load(start, end);
+        if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
+        for (let p = start; p < end; p += this.blockSize) {
+          // Copy blocks so an evicted window cannot stay pinned by one slice.
+          this.cache.set(p, window.slice(p - start, Math.min(p - start + this.blockSize, window.length)));
+        }
+        bytes = this.cache.get(start)!;
+      }
       this.cache.delete(start); this.cache.set(start, bytes);
       while (this.cache.size > CACHE_BYTES / this.blockSize) this.cache.delete(this.cache.keys().next().value!);
       const count = Math.min(bytes.length - (position - start), offset + length - position);

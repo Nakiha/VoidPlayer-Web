@@ -1,3 +1,4 @@
+import { frameIndexTools } from './frame-index-admin.ts';
 import { ANNOTATION_COORD_LIMIT } from './annotation.ts';
 import { SLOTS } from './model.ts';
 import { benchmarkPlayback } from './benchmark.ts';
@@ -25,6 +26,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     },
   });
   return [
+    ...frameIndexTools(),
     ...(workspace ? [
       tool('export_workspace', 'Export the current workspace, including absolute media service URLs, source references, marks, time and layout. No upload.', {}, [], true, () => workspace.exportWorkspace()),
       tool('import_workspace', 'Restore a workspace atomically using the same source resolution as the UI. Local sources may require the user to reselect files.', { document: { type: 'object' } }, ['document'], false, p => workspace.importWorkspace(p.document)),

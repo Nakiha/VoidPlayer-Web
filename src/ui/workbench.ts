@@ -135,6 +135,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const hdr = color?.transfer === 'pq' || color?.transfer === 'hlg';
     return [
       ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
+      ...(track.indexState ? [['帧索引', track.indexState === 'building' ? '后台建立中，时长暂为已索引范围' : track.indexState === 'error' ? `索引失败：${track.indexError}` : track.indexSource === 'server' ? '已复用服务器缓存' : '已完成']] : []),
       ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
       ['加速请求', track.decoder === 'ffmpeg-wasm' ? '软件解码' : track.hardwareAcceleration === 'prefer-hardware' ? '硬件优先（实际硬件使用未验证）' : '浏览器自动选择'],
       [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
@@ -147,7 +148,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   }
   function renderInspector(state: State) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}`).join('/') + view.selected;
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}`).join('/') + view.selected;
     if (signature !== trackSignature) {
       trackSignature = signature;
       const list = $('track-selector'); list.replaceChildren();
@@ -288,7 +289,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
     addMarkButton.disabled = !state.tracks.length;
     addMarkButton.setAttribute('aria-disabled', String(!state.tracks.length || state.busy));
-    const ids = state.tracks.map(t => `${t.slot}:${t.id}`).join('/');
+    const ids = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}`).join('/');
     if (ids !== currentIds) {
       currentIds = ids;
       for (const track of state.tracks) catalog.remember(track, track.source?.id, referenceVersion(track.source?.url));

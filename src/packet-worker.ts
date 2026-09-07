@@ -1,5 +1,6 @@
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
+import type { PreparedFlv } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { FlvInput } from './flv-demux.ts';
 
@@ -11,12 +12,26 @@ async function start() {
   const send = (value: unknown, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | undefined;
   let chain = Promise.resolve();
-  const receive = (message: { id: number; type: string; input: FlvInput; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; recycle?: ArrayBuffer }) => {
+  const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; recycle?: ArrayBuffer }) => {
+    if (message.type === 'complete-index' && engine instanceof FlvEngine) {
+      const current = engine, id = message.id;
+      // Scanning yields to extraction; commit metadata between extracts.
+      void current.completeIndex(progress => send({ id, type: 'progress', progress }), undefined, () => chain)
+        .then(data => send({ id, ok: true, data }), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
+      return;
+    }
     chain = chain.then(async () => {
       const { id, type } = message;
       try {
-        if (type === 'init') {
-          engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input);
+        if (type === 'prepare') {
+          engine?.close(); engine = new FlvEngine(message.input);
+          send({ id, ok: true, data: await engine.prepare(progress => send({ id, type: 'progress', progress })) });
+        } else if (type === 'native' && engine instanceof FlvEngine) {
+          send({ id, ok: true, data: await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true) });
+        } else if (type === 'init') {
+          if (!(engine instanceof FlvEngine && message.container === 'flv')) {
+            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);
+          }
           send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress })) });
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send({ id, ok: true, data: null });
