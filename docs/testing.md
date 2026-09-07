@@ -53,6 +53,18 @@ node scripts/bench-playback.mjs chromium
 
 应用内“快捷键与说明”的性能检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
+普通 HTTP 的载入、内存和播放回归（需要 FFmpeg、Chromium 和已同步的 core）：
+
+```sh
+npm run build
+node scripts/make-playback-fixtures.mjs
+node scripts/check-http-playback.mjs
+```
+
+测试生成每轨约 101 MB、40 秒的 1080p30 H.264 样片，以 `http://voidplayer.test` 访问临时服务，确认 WebCodecs 不可用、实际走单线程 WASM。覆盖加号连续点击只下载一次、载入状态、三轮双轨播放/关闭、解码 Worker 释放及帧缓存峰值；Linux 还统计浏览器进程的私有驻留内存。随后运行单轨/双轨播放基准各两轮，沿用原有速度与卡顿阈值。报告写入 `.run/playback-reports/`，发布工作流上传同名测试报告 artifact。
+
+帧队列同时按数量和字节限制，播放报告的 `measurements.buffers` 记录每轨当前值、峰值及上限。这仅统计队列内已解码帧，不代表浏览器总内存；解码器、压缩文件、画布与 GPU 还会占用内存。
+
 这些是当前设备上的 canvas 呈现证据，不是物理显示扫描、所有 Safari 版本、HDR 保真或低端硬件性能保证。浏览器下载和剪贴板还受宿主权限影响，不能用“调用成功”代替实际文件/内容送达验证。
 
 ## 独立发布产物
