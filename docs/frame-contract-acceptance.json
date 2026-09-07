@@ -843,5 +843,66 @@
         }
       ]
     }
-  ]
+  ],
+  "ci": {
+    "url": "https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34137750296",
+    "testedRevision": "bab24131e13670d34c2343edc6808a73d24409ca",
+    "blockingGates": "passed",
+    "platforms": [
+      "linux-x64",
+      "windows-x64",
+      "darwin-arm64"
+    ],
+    "fateNode": {
+      "passed": 15,
+      "expectedRejection": 8,
+      "failed": 0
+    },
+    "fateBrowser": {
+      "passed": 40,
+      "failed": 0
+    },
+    "nonBlockingPerformance": [
+      {
+        "scenario": "https-1080p-solo",
+        "repeat": 1,
+        "browser": "chromium",
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.8900612014407303
+      },
+      {
+        "scenario": "https-1080p-solo",
+        "repeat": 2,
+        "browser": "chromium",
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.8899060050716273
+      },
+      {
+        "scenario": "https-1080p-dual",
+        "repeat": 1,
+        "browser": "chromium",
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.5616836064070115
+      },
+      {
+        "scenario": "https-1080p-dual",
+        "repeat": 2,
+        "browser": "chromium",
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.5599741025825484
+      }
+    ]
+  }
 }

@@ -75,3 +75,5 @@
 四批功能范围已验收；后续仍需单独推进损坏 FLV 的容错策略、裸 HEVC 入口、分片 MP4 配置/DTS、更多位深/色彩参考和长时高负载性能。这些能力没有通过删除检查或改写参考数据宣称支持。
 
 提交：第一批 `4657439`，第二批 `e613efa`，第三批 `a6e825d`，第四批 `aef96d9`，最终边界修正 `e345bde`。后续改动集中在 [PR #3](https://github.com/Nakiha/VoidPlayer-Web/pull/3)；远端验收见该 PR 对应的最新 CI，正式发布仍沿原有发布流程。
+
+远端补充：[CI #34137750296](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34137750296) 对 `bab2413`（上述最终代码及本地验收文档）完成验证：Node FATE 15 pass / 8 expected-rejection，浏览器 FATE 40/40，可信 HTTPS 功能检查、Windows/Linux/macOS ARM64 独立包和发布集汇总全部通过。下载核对了 `https-playback-reports` 原始报告。该 Linux runner 的 Chromium 性能报告四轮均未达到 0.9 速度门槛：1080p 单轨两轮约 0.890，双轨两轮约 0.560–0.562；此步骤原本非阻塞，不能将绿色 CI 解释为性能也通过。该场景与上表本地 WebKit/VVC 基准不同，仍需单独做环境与性能定位。
