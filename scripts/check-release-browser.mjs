@@ -102,7 +102,8 @@ try {
   const document = await readFile(await download.path()); assert.deepEqual(JSON.parse(gunzipSync(document)).marks, saved.marks);
   await page.locator('#saved-workspace-name').fill('Native release'); await page.locator('#saved-workspace-save').click();
   await page.locator('#saved-workspace-message').filter({ hasText: '已保存到服务器' }).waitFor();
-  const stored = (await (await fetch(base + '/api/workspaces')).json()).entries[0]; assert.equal(stored.revision, 1);
+  const stored = (await (await context.request.get(base + '/api/workspaces')).json()).entries[0];
+  assert.ok(stored, 'saved workspace belongs to the browser identity'); assert.equal(stored.revision, 1);
   const restored = await context.newPage(); await restored.goto(base);
   await restored.locator('#workspace-file').setInputFiles({ name: 'review.voidplayer', mimeType: 'application/gzip', buffer: document });
   await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
@@ -117,7 +118,7 @@ try {
   await stop(); await start();
   if (generated) {
     await generated.verifyOffline();
-    assert.equal((await (await fetch(base + '/api/workspaces')).json()).entries[0].id, stored.id);
+    assert.equal((await (await fetch(base + '/api/workspaces/' + stored.id)).json()).id, stored.id);
     await generated.reconnect();
   }
   const restarted = await browser.newPage(); restarted.on('pageerror', e => errors.push(e.message));
