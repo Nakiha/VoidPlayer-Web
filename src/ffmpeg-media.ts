@@ -106,7 +106,7 @@ export class WorkerRpc {
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
       if (data.type === 'progress') {
         const entry = this.pending.get(data.id);
         if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
@@ -121,7 +121,13 @@ export class WorkerRpc {
       }
       clearTimeout(entry.timer);
       this.pending.delete(id);
-      if (ok) entry.resolve(payload); else entry.reject(data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误'));
+      if (ok) entry.resolve(payload);
+      else {
+        const failure = data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误');
+        if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
+        contextLog().warn('media', '解码 worker 请求失败', { error: failure });
+        entry.reject(failure);
+      }
     };
     const fail = (message: string) => this.terminate(new Error(`WASM 解码 worker 异常：${message}`));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

@@ -19,6 +19,9 @@ export async function startupFixture(nodeOrigin = false) {
       await handle.write(header, 0, 11, offset); offset += 11 + size;
       const footer = Buffer.alloc(4); footer.writeUInt32BE(size + 11); await handle.write(footer, 0, 4, offset); offset += 4;
     }
+    // Incomplete final video tag reproduces interrupted CDN recordings.
+    const tail = Buffer.alloc(853); tail[0] = 9; tail.writeUIntBE(5639, 1, 3);
+    await handle.write(tail, 0, tail.length, offset);
   } finally { await handle.close(); }
   const config = await loadConfig(['--folder', media], 'production', temporary); config.dataDir = path.join(temporary, 'data');
   const library = new MediaLibraryIndex([media], { watch: false }); await library.refresh();

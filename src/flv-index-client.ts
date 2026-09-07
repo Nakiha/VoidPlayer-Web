@@ -44,10 +44,12 @@ export class FlvIndexClient {
     this.lookup = Promise.resolve(null);
     if (!cached || cached.codec !== prefix.codec || cached.description.length !== prefix.description.length
       || cached.description.some((b, i) => b !== prefix.description[i]) || cached.packets.length < prefix.packets.length) return null;
+    const originalConfigs = prefix.configurations ?? [prefix.description], cachedConfigs = cached.configurations ?? [cached.description];
+    if (originalConfigs.some((c, i) => !cachedConfigs[i] || c.length !== cachedConfigs[i].length || c.some((b, j) => b !== cachedConfigs[i][j]))) return null;
     // Verify against bytes just read from the source before trusting a cache.
     for (let i = 0; i < prefix.packets.length; i++) {
       const a = prefix.packets[i], b = cached.packets[i];
-      if (a.offset !== b.offset || a.size !== b.size || a.pts !== b.pts || a.dts !== b.dts || a.key !== b.key) return null;
+      if (a.offset !== b.offset || a.size !== b.size || a.pts !== b.pts || a.dts !== b.dts || a.key !== b.key || (a.configuration ?? 0) !== (b.configuration ?? 0)) return null;
     }
     return cached;
   }

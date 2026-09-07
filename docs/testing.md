@@ -98,3 +98,11 @@ Administrators can list/search and clear individual versions or all caches under
 `check-http-playback.mjs --functional-only` 在真实 MP4/WebCodecs 上验证暂停无时间推进、快速反复续播不重新 configure 解码器，并继续执行原有双轨内存与资源释放检查。性能基准仍独立记录，避免把续播改善等同于持续解码达到实时。
 
 失败诊断：`test/media-diagnostics.test.ts` 覆盖带 CRC 的 PAT/PMT、跨包 PSI、连续计数缺口、188/192/204 字节 TS 包，以及 AVS3 (0xD4)、HEVC (0x24)、私有 PES (0x06) 不误识别。只有所有打开路径都失败且不是网络/资源错误时，才额外探测至多 64 KiB、远程读取至多等待 1.5 秒。诊断报告 PMT 声明的编码，不把声明当作码流有效性证明；探测失败保留原错误，不扩大下载范围。
+
+
+FLV 尾部恢复：`test/flv-recovery.test.ts` 和 `test/flv.test.ts` 验证首帧优先后，尾部截断不再使后台索引失败。只将末尾未完成标签排除出索引；非零 stream ID、错误 PreviousTagSize 等依然失败，配置头或起始关键帧缺失不能冒充可播放文件。时长来自完整包的时间戳，UI 明示“尾部不完整”；不把源文件绝对时间戳当作可播放时长。共享 FLV 帧索引格式升级为 schema 2 以保存 truncatedAt，旧格式缓存读取时自动失效，无媒体库数据库迁移。
+
+真实 HEVC/私有 VVC/AVC 回归在完整码流后追加残缺视频标签，验证连续取帧、前后定位、尾帧及警告。首帧浏览器夹具包含被阻塞的大尾部和最终残缺标签，验证后台恢复、播放基准、警告显示与服务器缓存复用。缺失包可能是其他完整包的参考帧，因此恢复不保证任意损坏流都能输出每一帧；解码失败保留上下文并停止重复调用失败的解码器。worker 原始异常堆栈进入现有本地诊断日志，不额外上传。
+
+
+FLV 同编码配置/分辨率切换：索引记录每段配置和所属视频包，新配置从关键帧开始；解码或跨段定位时切换对应配置并在段末 drain，避免丢失旧段 B 帧。WASM 复用模块，通过既有 vp_packet_open 重建上下文；WebCodecs 重新 configure。`test/flv-resolution.test.ts` 生成真实 H.264/HEVC 双分辨率文件，验证顺序帧、来回定位和缓存序列化；浏览器夹具验证实际播放跨过切换点及 UI 尺寸。尺寸由 session 在显示帧时更新，不由后台预读提前改变。不支持中途更换视频编码种类；配置切换缺少关键帧仍明确报错。

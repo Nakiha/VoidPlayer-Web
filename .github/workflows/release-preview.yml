@@ -136,7 +136,7 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media-abort.test.ts test/media.test.ts test/media-diagnostics.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts test/flv-startup.test.ts test/frame-index-cache.test.ts
+      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media-abort.test.ts test/media.test.ts test/media-diagnostics.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts test/flv-startup.test.ts test/flv-recovery.test.ts test/frame-index-cache.test.ts
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
@@ -155,6 +155,7 @@ jobs:
           node scripts/check-flv-browser.mjs webkit
           node scripts/check-range-browser.mjs webkit
           node --test test/flv-background.test.ts
+          node --test test/flv-resolution.test.ts
           node scripts/check-flv-startup-browser.mjs chromium
           node scripts/check-flv-startup-browser.mjs webkit
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback

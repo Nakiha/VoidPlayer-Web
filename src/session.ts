@@ -333,6 +333,7 @@ export class ReviewSession {
       for (let i = 0; i < entries.length; i++) {
         const r = results[i];
         if (r.status !== 'fulfilled' || !r.value) continue;
+        entries[i][1].source.info.width = r.value.width; entries[i][1].source.info.height = r.value.height;
         this.draw(entries[i][0], r.value);
         entries[i][1].frame = this.frameInfo(r.value);
       }
@@ -415,6 +416,7 @@ export class ReviewSession {
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
+              track.source.info.width = frame.width; track.source.info.height = frame.height;
               this.draw(slot, frame);
               track.frame = this.frameInfo(frame);
               metrics.draw(slot, performance.now(), dropped);

@@ -222,7 +222,7 @@ function render() {
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.indexState === 'building' ? ' · 后台建立索引中' : t.indexState === 'error' ? ' · 索引失败' : ''}` : '尚未载入';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.indexState === 'building' ? ' · 后台建立索引中' : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }

@@ -19,7 +19,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
-    type Init = Pick<MediaInfo, 'indexSource' | 'indexState' | 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
+    type Init = Pick<MediaInfo, 'indexWarning' | 'indexSource' | 'indexState' | 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
     const createRpc = async () => {
@@ -77,10 +77,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (indexing) return indexing;
       if (container !== 'flv') return Promise.resolve();
       if (info.indexState === 'error') return Promise.reject(new Error(info.indexError));
-      indexing = activeRpc.call<Pick<Init, 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
+      indexing = activeRpc.call<Pick<Init, 'indexWarning' | 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
         times = result.times; durations = result.durations;
-        info.firstPtsUs = result.firstPtsUs; info.durationUs = result.durationUs; info.indexState = 'complete'; info.indexSource = result.indexSource;
+        info.firstPtsUs = result.firstPtsUs; info.durationUs = result.durationUs; info.indexState = 'complete'; info.indexSource = result.indexSource; info.indexWarning = result.indexWarning;
         source.onInfoChange?.();
       }, error => {
         if (!disposed) {

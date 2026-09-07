@@ -17,7 +17,7 @@ async function start() {
       const current = engine, id = message.id;
       // Scanning yields to extraction; commit metadata between extracts.
       void current.completeIndex(progress => send({ id, type: 'progress', progress }), undefined, () => chain)
-        .then(data => send({ id, ok: true, data }), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
+        .then(data => send({ id, ok: true, data }), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
       return;
     }
     chain = chain.then(async () => {
@@ -41,7 +41,7 @@ async function start() {
           finally { result.frame?.close(); }
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');
       } catch (error) {
-        send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stage: error instanceof MediaOpenError ? error.stage : 'decode' });
+        send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'decode' });
       }
     });
   };
@@ -49,3 +49,8 @@ async function start() {
   else globalThis.onmessage = e => receive(e.data);
 }
 void start();
+
+function workerStack(error: unknown): string | undefined {
+  if (!(error instanceof Error)) return undefined;
+  return [error.stack, error.cause instanceof Error ? error.cause.stack : undefined].filter(Boolean).join('\nCaused by: ').slice(0, 16000);
+}

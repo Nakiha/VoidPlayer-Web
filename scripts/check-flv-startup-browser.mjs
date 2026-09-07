@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
+import { resolutionFlv } from './flv-resolution-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
 let browser;
@@ -27,10 +28,12 @@ try {
   let finished = false; const seek = call('seek_review', { ptsUs: 2500000 }).then(s => { finished = true; return s; });
   await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
   fixture.release(); const complete = await seek; assert.equal(complete.tracks[0].indexState, 'complete');
+  assert.match(complete.tracks[0].indexWarning, /尾部不完整/);
+  assert.match(await page.locator('#meta-A').textContent(), /尾部不完整/);
   await page.waitForFunction(async () => (await (await fetch('/api/admin/frame-indexes')).json()).count === 1);
   await call('remove_review_track', { slot: 'A' }); const before = fixture.counts().ranges;
   await call('load_library_item', { id: fixture.entry.id, slot: 'A' }); const reused = await call('seek_review', { ptsUs: 2500000 });
-  assert.equal(reused.tracks[0].indexSource, 'server'); assert.ok(fixture.counts().ranges - before < 10);
+  assert.equal(reused.tracks[0].indexSource, 'server'); assert.match(reused.tracks[0].indexWarning, /尾部不完整/); assert.ok(fixture.counts().ranges - before < 10);
   await call('seek_review', { ptsUs: 0 });
   const benchmark = await call('benchmark_review', { durationMs: 1500 }); assert.equal(benchmark.passed, true, JSON.stringify(benchmark));
   const list = await call('list_frame_indexes'); assert.equal(list.count, 1);
@@ -47,6 +50,20 @@ try {
   assert.equal(await admin.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   // MCP mutations use the same endpoint and permission checks as the UI.
   assert.deepEqual(await call('clear_frame_indexes', { scope: 'all' }), { removed: 0 });
+  for (const codec of ['h264', 'hevc']) {
+    const bytes = [...await resolutionFlv(codec)];
+    await page.evaluate(async ({ bytes, codec }) => {
+      await window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], `resolution-${codec}.flv`));
+    }, { bytes, codec });
+    for (const [ptsUs, width, height] of [[1100000, 640, 360], [400000, 320, 180], [1900000, 640, 360], [0, 320, 180]]) {
+      const state = await call('seek_review', { ptsUs });
+      assert.equal(state.tracks[0].width, width); assert.equal(state.tracks[0].height, height);
+    }
+    const report = await call('benchmark_review', { durationMs: 1500 });
+    assert.equal(report.error, null); assert.ok(report.measurements.mediaUs > 1000000, JSON.stringify(report));
+    assert.match(await page.locator('#meta-A').textContent(), /640 × 360/);
+    await page.screenshot({ path: `.run/playback-reports/flv-resolution-${codec}-${browserName}.png` });
+  }
   assert.deepEqual(errors, []);
   console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);
 } finally { await browser?.close(); await fixture.close(); }

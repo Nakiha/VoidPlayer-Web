@@ -4,8 +4,10 @@ import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
-export interface FlvPacket { offset: number; size: number; pts: number; dts: number; key: boolean; }
+export interface FlvPacket { configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; }
 export interface FlvIndex {
+  configurations?: Uint8Array[]; // Configuration records in decode-order segments.
+  truncatedAt?: number; // Start of an incomplete trailing tag, never a playable packet.
   codec: FlvCodec;
   description: Uint8Array;
   packets: FlvPacket[]; // decode order; payloads stay in the source
@@ -51,13 +53,21 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
   if (resume) offset = resume.nextOffset;
   let codec: FlvCodec | undefined = resume?.index.codec;
   let description: Uint8Array | undefined = resume?.index.description;
+  const configurations = resume?.index.configurations?.slice() ?? (description ? [description] : []);
+  let configuration = configurations.length - 1;
   const packets: FlvPacket[] = resume ? resume.index.packets.slice() : [];
+  let truncatedAt: number | undefined;
   let reported = performance.now();
   while (offset < reader.size) {
     if (performance.now() - reported >= 250) { onProgress?.(); reported = performance.now(); await new Promise<void>(resolve => setTimeout(resolve, 0)); }
+    if (reader.size - offset < 11) { truncatedAt = offset; break; }
     const tag = await reader.read(offset, 11);
     const size = u24(tag, 1), start = offset + 11, next = start + size + 4;
-    if (next > reader.size || u24(tag, 8) !== 0) bad('标签长度或 stream ID 无效。');
+    if (u24(tag, 8) !== 0) bad(`标签 @${offset} 的 stream ID 无效。`);
+    if (next > reader.size) {
+      if (![8, 9, 18].includes(tag[0])) bad(`末尾标签 @${offset} 的类型或标志无效，且长度超出文件末尾。`);
+      truncatedAt = offset; break;
+    }
     if (u32(await reader.read(next - 4, 4), 0) !== size + 11) bad('PreviousTagSize 与标签长度不一致。');
     if ((tag[0] & 31) === 9) {
       if (tag[0] & 0xe0) bad('不支持加密或扩展标签标志。');
@@ -89,30 +99,37 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
       if (type === 0) {
         if (size <= skip || size - skip > 1024 * 1024) bad('视频配置头长度无效。');
         const config = await reader.read(start + skip, size - skip);
-        if (description && (description.length !== config.length || description.some((v, i) => v !== config[i]))) bad('不支持文件中途更换视频配置。');
-        description = config.slice();
+        const previous = configurations.at(-1);
+        if (!previous || previous.length !== config.length || previous.some((v, i) => v !== config[i])) {
+          if (configurations.length >= 1024 || configurations.reduce((n, c) => n + c.length, 0) + config.length > 8 * 1024 * 1024) throw new MediaOpenError('resource', 'FLV 视频配置数量或大小超过上限。');
+          configurations.push(config.slice()); configuration = configurations.length - 1;
+        }
+        description ??= config.slice();
       } else if (type === 1 || type === 3) {
         if (!description) bad('视频数据前缺少配置头。');
         if (size <= skip) bad('视频包为空。');
         const dts = (u24(tag, 4) + tag[7] * 16777216) * 1000;
-        packets.push({ offset: start + skip, size: size - skip, dts, pts: dts + cts * 1000, key: frameType === 1 });
-        if (firstPacket) return { index: buildFlvIndex(codec, description, packets), nextOffset: next, complete: next === reader.size };
+        if (configuration !== (packets.at(-1)?.configuration ?? 0) && frameType !== 1) bad('新视频配置必须从关键帧开始。');
+        packets.push({ ...(configuration > 0 ? { configuration } : {}), offset: start + skip, size: size - skip, dts, pts: dts + cts * 1000, key: frameType === 1 });
+        if (firstPacket) return { index: buildFlvIndex(codec, description, packets, configurations), nextOffset: next, complete: next === reader.size };
         if (packets.length > 2_000_000) throw new MediaOpenError('resource', 'FLV 帧索引超过安全上限。');
       }
     }
     offset = next;
   }
-  return { index: buildFlvIndex(codec, description, packets), nextOffset: offset, complete: true };
+  const index = buildFlvIndex(codec, description, packets, configurations);
+  if (truncatedAt !== undefined) index.truncatedAt = truncatedAt;
+  return { index, nextOffset: reader.size, complete: true };
 }
 
-export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[]): FlvIndex {
+export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[], configurations?: Uint8Array[]): FlvIndex {
   if (!codec || !description || !packets.length || !packets[0].key) bad('没有带配置头和起始关键帧的有效视频。');
   const order = packets.map((_, i) => i).sort((a, b) => packets[a].pts - packets[b].pts);
   const firstPts = packets[order[0]].pts;
   const durations = order.map((p, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[p].pts : 0);
   if (durations.slice(0, -1).some(d => d <= 0)) bad('视频包包含重复显示时间戳。');
   durations[durations.length - 1] = durations.length > 1 ? durations[durations.length - 2] : 40000;
-  return { codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
+  return { ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
 }
 
 export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>): VideoDecoderConfig | null {
@@ -134,4 +151,8 @@ export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>)
   const constraints = [...b.subarray(6, 12)];
   while (constraints.at(-1) === 0) constraints.pop();
   return { codec: `hvc1.${['', 'A', 'B', 'C'][b[1] >> 6]}${b[1] & 31}.${reversed.toString(16)}.${b[1] & 32 ? 'H' : 'L'}${b[12]}${constraints.length ? '.' + constraints.map(hex).join('.') : ''}`, description: b as Uint8Array<ArrayBuffer> };
+}
+
+export function flvIndexWarning(index: FlvIndex): string | undefined {
+  return index.truncatedAt === undefined ? undefined : '文件尾部不完整，已忽略残缺标签，仅播放完整视频包。';
 }
