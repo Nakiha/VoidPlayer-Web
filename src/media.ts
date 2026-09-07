@@ -197,25 +197,27 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       close: () => sample.close(),
       };
     };
+    let disposed = false;
+    const iterators = new Set<AsyncGenerator<VideoSample>>();
+    const samples = (time: number) => { const iterator = sink.samples(time); iterators.add(iterator); return iterator; };
     return {
       info,
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
-        if (ptsUs === 0 && primed) { const sample = primed; primed = null; return wrap(sample); }
-        primed?.close(); primed = null;
+        if (ptsUs === 0 && primed) return wrap(primed.clone());
         const sample = await sink.getSample(first + (ptsUs + 0.5) / 1e6);
+        if (disposed) { sample?.close(); throw new DOMException('媒体已释放。', 'AbortError'); }
         if (!sample) throw new Error(`时间 ${ptsUs} µs 没有可解码的画面。`);
         return wrap(sample);
       },
       async framesAfter(ptsUs, count) {
-        primed?.close(); primed = null;
         // Iterate presentation order and keep true successors, so VFR and
         // timestamp gaps cannot strand stepping on a duration-based guess.
         // Start just before the current frame: its rounded start may sit a
         // fraction of a microsecond below ptsUs.
         const frames: DecodedFrame[] = [];
-        const iterator = sink.samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        const iterator = samples(first + Math.max(0, ptsUs - 1) / 1e6);
         try {
           for await (const sample of iterator) {
             const frame = wrap(sample);
@@ -223,23 +225,31 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
             frames.push(frame);
             if (frames.length >= count) break;
           }
-        } finally {
+        } catch (error) { frames.forEach(frame => frame.close()); throw error; }
+        finally {
+          iterators.delete(iterator);
           await iterator.return(undefined);
         }
         return frames;
       },
       async *framesFrom(ptsUs) {
-        primed?.close(); primed = null;
         // Sequential iterator: the sink pre-decodes ahead, so playback no
         // longer pays a keyframe seek per frame like sparse getSample does.
-        const iterator = sink.samples(first + Math.max(0, ptsUs - 1) / 1e6);
+        const iterator = samples(first + Math.max(0, ptsUs - 1) / 1e6);
         try {
           for await (const sample of iterator) yield wrap(sample);
         } finally {
+          iterators.delete(iterator);
           await iterator.return(undefined);
         }
       },
-      dispose: () => { primed?.close(); primed = null; input.dispose(); },
+      dispose: () => {
+        if (disposed) return; disposed = true;
+        // Return the sink iterators directly, even if an outer queue is waiting
+        // on next(). This wakes the sink pump so its finally closes the decoder.
+        for (const iterator of iterators) void iterator.return(undefined).catch(() => {});
+        iterators.clear(); primed?.close(); primed = null; input.dispose();
+      },
     };
   } catch (error) { primed?.close(); input.dispose(); loadAborted(signal); throw error; }
   finally { detachAbort(); }

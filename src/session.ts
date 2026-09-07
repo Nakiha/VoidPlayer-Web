@@ -152,6 +152,7 @@ export class ReviewSession {
           const next = new Map(this.tracks);
           next.set(slot, { source: opened, frame: null, offsetUs:0 });
           progress('first-frame');
+          const kept = this.positionUs === 0 ? new Set([...this.tracks].filter(([s, t]) => s !== slot && t.frame).map(([s]) => s)) : undefined;
           await this.drawAt(0, current, next, () => {
             this.tracks.get(slot)?.source.dispose();
             this.tracks = next;
@@ -159,7 +160,7 @@ export class ReviewSession {
             opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
             committed = true;
             status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
-          });
+          }, undefined, kept);
         } catch (error) {
           if (controller.signal.aborted) throw controller.signal.reason;
           if (current()) { status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now(); }

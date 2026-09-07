@@ -1,3 +1,4 @@
+import { hevcGeometry } from './hevc-geometry.ts';
 import { RangeReader } from './range-reader.ts';
 import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -150,7 +151,8 @@ export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>)
   for (let i = 0; i < 32; i++) { reversed = (reversed * 2 + (flags & 1)) >>> 0; flags >>>= 1; }
   const constraints = [...b.subarray(6, 12)];
   while (constraints.at(-1) === 0) constraints.pop();
-  return { codec: `hvc1.${['', 'A', 'B', 'C'][b[1] >> 6]}${b[1] & 31}.${reversed.toString(16)}.${b[1] & 32 ? 'H' : 'L'}${b[12]}${constraints.length ? '.' + constraints.map(hex).join('.') : ''}`, description: b as Uint8Array<ArrayBuffer> };
+  const geometry = hevcGeometry(b);
+  return { ...(geometry ? { codedWidth: geometry.codedWidth, codedHeight: geometry.codedHeight, displayAspectWidth: geometry.width * geometry.sarNum, displayAspectHeight: geometry.height * geometry.sarDen } : {}), codec: `hvc1.${['', 'A', 'B', 'C'][b[1] >> 6]}${b[1] & 31}.${reversed.toString(16)}.${b[1] & 32 ? 'H' : 'L'}${b[12]}${constraints.length ? '.' + constraints.map(hex).join('.') : ''}`, description: b as Uint8Array<ArrayBuffer> };
 }
 
 export function flvIndexWarning(index: FlvIndex): string | undefined {

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
-import { resolutionFlv } from './flv-resolution-fixture.ts';
+import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
 let browser;
@@ -14,6 +14,14 @@ async function within(promise, ms) {
 try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const page = await browser.newPage(), errors = [], wasmRequests = [];
+  await page.addInitScript(() => {
+    window.testDecoders = []; window.testDecoderConfigurations = 0;
+    const Native = VideoDecoder;
+    window.VideoDecoder = class extends Native {
+      constructor(init) { super(init); window.testDecoders.push(this); }
+      configure(config) { window.testDecoderConfigurations++; return super.configure(config); }
+    };
+  });
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', req => { if (/voidplayer-core.*\.(js|wasm)$/.test(req.url())) wasmRequests.push(req.url()); });
   await page.goto(fixture.base); await page.waitForFunction(() => !!window.voidPlayer);
@@ -63,6 +71,27 @@ try {
     assert.equal(report.error, null); assert.ok(report.measurements.mediaUs > 1000000, JSON.stringify(report));
     assert.match(await page.locator('#meta-A').textContent(), /640 × 360/);
     await page.screenshot({ path: `.run/playback-reports/flv-resolution-${codec}-${browserName}.png` });
+  }
+  // Portrait geometry must agree across the source, displayed metadata and capture.
+  const portrait = [...await resolutionFlv('hevc', ['244x436'])];
+  const portraitState = await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'portrait.flv')), portrait);
+  assert.equal(portraitState.tracks[0].width, 244); assert.equal(portraitState.tracks[0].height, 436);
+  const capture = await page.evaluate(() => { const c = window.voidPlayer.captureFrame('A'); return { width:c.width,height:c.height }; });
+  assert.deepEqual(capture, { width:244,height:436 });
+  await page.screenshot({ path: `.run/playback-reports/hevc-portrait-${browserName}.png` });
+  await call('remove_review_track', { slot:'A' });
+  const preroll = [...await prerollMp4()];
+  for (let round=0; round<3; round++) {
+    await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'preroll.mp4')), preroll);
+    const configurations = await page.evaluate(() => window.testDecoderConfigurations);
+    for (let i=0;i<3;i++) await call('seek_review', {ptsUs:0});
+    assert.equal(await page.evaluate(() => window.testDecoderConfigurations), configurations, 'repeated first-frame access does not decode again');
+    await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'preroll-b.mp4')), preroll);
+    await page.evaluate(() => window.voidPlayer.play());
+    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 100000);
+    await call('pause_review');
+    await call('remove_review_track',{slot:'B'}); await call('remove_review_track',{slot:'A'});
+    await page.waitForFunction(() => window.testDecoders.every(d => d.state === 'closed'));
   }
   assert.deepEqual(errors, []);
   console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);

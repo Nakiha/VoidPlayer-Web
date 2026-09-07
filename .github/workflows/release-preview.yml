@@ -155,7 +155,7 @@ jobs:
           node scripts/check-flv-browser.mjs webkit
           node scripts/check-range-browser.mjs webkit
           node --test test/flv-background.test.ts
-          node --test test/flv-resolution.test.ts
+          node --test test/flv-resolution.test.ts test/hevc-geometry.test.ts
           node scripts/check-flv-startup-browser.mjs chromium
           node scripts/check-flv-startup-browser.mjs webkit
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback

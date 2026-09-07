@@ -684,3 +684,14 @@ test('pause/resume reuses both decoders with no random seek, while seek invalida
   await session.dispose(); await new Promise(r => setTimeout(r, 0));
   assert.equal(returned, 4);
 });
+
+test('adding/reopening another track does not seek an existing frame already at session zero', async () => {
+  const first = media('first'), session = new ReviewSession(() => {});
+  await session.load('A', async () => first.source);
+  first.source.frameAt = async () => { throw new Error('random access cannot reproduce the pre-roll first frame'); };
+  await session.load('B', async () => media('second').source);
+  await session.removeTrack('B');
+  await session.load('B', async () => media('second-again').source);
+  assert.equal(session.getState().tracks.length,2);assert.equal(session.getState().tracks[0].frame?.ptsUs,0);
+  await session.dispose();
+});

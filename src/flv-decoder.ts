@@ -1,3 +1,4 @@
+import { hevcGeometry, verifyHevcFrame } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -23,6 +24,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
   if (!parsed || typeof VideoDecoder === 'undefined') return null;
   let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
   if (!config) return null;
+  let geometry = index.codec === 'hevc' ? hevcGeometry(index.description) : null;
   let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
   const frames: VideoFrame[] = [];
   let error: Error | null = null, outstanding = 0, minimum = -Infinity;
@@ -30,6 +32,8 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
   const decoder = new VideoDecoder({
     output(frame) {
       outstanding--;
+      try { if (geometry) frame = verifyHevcFrame(frame, geometry); }
+      catch (e) { frame.close(); error = packetDecodeError(e, '浏览器输出校验'); notify?.(); return; }
       if (frame.timestamp < minimum) frame.close();
       else frames.push(frame);
       if (frames.length > 32 || frames.reduce((n, f) => n + f.displayWidth * f.displayHeight * 4, 0) > 128 * 1024 * 1024) {
@@ -50,7 +54,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
       frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(nextConfig);
-      config = nextConfig; currentIndex = next; outstanding = 0; error = null; minimum = -Infinity;
+      config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : null; outstanding = 0; error = null; minimum = -Infinity;
     },
     reset() { frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(config!); outstanding = 0; error = null; minimum = -Infinity; },
     async send(bytes, packet) {
