@@ -53,7 +53,10 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id,
+      durationUs: t.source.info.durationUs, firstPtsUs: t.source.info.firstPtsUs, offsetUs: t.offsetUs,
+      indexState: t.source.info.indexState, indexError: t.source.info.indexError,
+      width: t.source.info.width, height: t.source.info.height, decoder: t.source.info.decoder, coreVariant: t.source.info.coreVariant })) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });

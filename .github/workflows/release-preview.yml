@@ -158,6 +158,13 @@ jobs:
           node --test test/flv-resolution.test.ts test/hevc-geometry.test.ts test/preroll.test.ts
           node scripts/check-flv-startup-browser.mjs chromium
           node scripts/check-flv-startup-browser.mjs webkit
+      - name: Audit targeted FATE integration samples (report only)
+        continue-on-error: true
+        timeout-minutes: 6
+        run: |
+          node scripts/sync-fate-samples.mjs
+          node scripts/check-fate.mjs
+          node scripts/check-fate-browser.mjs
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/check-http-playback.mjs --functional-only

@@ -130,7 +130,8 @@ export class FlvEngine {
         // Leading pictures after a CRA may refer to the preceding GOP. They
         // cannot be displayed when random access starts at this keyframe.
         if ((idx.codec === 'hevc' || idx.codec === 'vvc') && packet.pts < this.anchorPts) continue;
-        await this.decoder.send(await this.reader.read(packet.offset, packet.size), packet);
+        try { await this.decoder.send(await this.reader.read(packet.offset, packet.size), packet); }
+        catch (error) { throw packetDecodeError(error, `实际送包 offset=${packet.offset}, bytes=${packet.size}, PTS=${packet.pts}, DTS=${packet.dts}, config=${configuration}，目标 PTS=${target}，锚点 PTS=${this.anchorPts}：`); }
       } else if (!this.drained) { this.drained = true; await this.decoder.drain(); }
       else throw new MediaOpenError('decode', 'FLV 文件未输出目标视频帧。');
     }
