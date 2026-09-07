@@ -10,6 +10,7 @@ try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}`);
+  await page.waitForFunction(() => window.voidPlayer);
   await page.evaluate(async () => {
     const tool = n => window.voidPlayer.tools.find(t => t.name === n);
     const lib = await tool('list_library').execute({});
@@ -91,7 +92,7 @@ try {
   assert.equal((await state()).marks[0].id, markId, 'autosave preserves mark identity');
   if (await page.locator('#toggle-subtracks').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-subtracks').click();
   await page.locator('#toggle-marks').click();
-  await page.getByRole('button', { name: '编辑标注', exact: true }).first().click();
+  await page.locator('#selected-marks .mark-entry').first().dblclick();
   await page.locator('#annotation-toolbar').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#drawing-A .annotation-object').count(), 4);
   await page.locator('#drawing-delete').click();
@@ -107,7 +108,7 @@ try {
   await page.locator('#mark-close').click();
   // Compare the actual VideoFrame import against the native-resolution canvas.
   const importErrors = await page.evaluate(() => {
-    const source = document.querySelector('#canvas-A'), target = document.querySelector('#stage-A .frame-presentation');
+    const source = window.voidPlayer.captureFrame('A'), target = document.querySelector('#stage-A .frame-presentation');
     const gl = target.getContext('webgl'), expected = document.createElement('canvas');
     expected.width = target.width; expected.height = target.height;
     const ctx = expected.getContext('2d'), view = target.getBoundingClientRect(), image = document.querySelector('#image-A').getBoundingClientRect();

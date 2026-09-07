@@ -20,6 +20,7 @@ try {
     page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(request.url()).pathname)) mediaRequests.push(request.headers()); });
     try {
       await page.goto(base);
+      await page.waitForFunction(() => !!window.voidPlayer);
       const reference = JSON.parse(await readFile(path.join(root, 'fixtures/flv', name + '.json'), 'utf8'));
       const result = await page.evaluate(async ({ name, reference }) => {
         const call = async (name, params = {}) => { try { return await window.voidPlayer.tools.find(t => t.name === name).execute(params); } catch (e) { throw new Error(name + ' ' + JSON.stringify(params) + ': ' + e.message); } };
@@ -34,7 +35,9 @@ try {
         await call('seek_review', { ptsUs: 0 });
         await call('step_review', { direction: 1 });
         states.push(await call('get_review_session'));
-        const benchmark = await call('benchmark_review', { durationMs: 1000 });
+        // Leave a margin above the 1000 ms minimum: the last rendered frame
+        // can precede the polling deadline by one refresh interval.
+        const benchmark = await call('benchmark_review', { durationMs: 1200 });
         return { states, benchmark };
       }, { name, reference });
       assert.deepEqual(errors, []);

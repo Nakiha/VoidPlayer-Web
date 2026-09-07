@@ -10,6 +10,7 @@ try {
  const page = await browser.newPage({ viewport:{width:1408,height:789}, deviceScaleFactor:2 });
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ await page.waitForFunction(()=>window.voidPlayer);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name]of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv422p_8bit.mkv']]) await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
  await page.locator('#toggle-sources').click();
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4.568,offsetX:-52,offsetY:-81}));
@@ -67,6 +68,7 @@ async function checkWorkspace(browser, url) {
  const page = await browser.newPage({viewport:{width:1408,height:789},deviceScaleFactor:2});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(url);
+ await page.waitForFunction(()=>window.voidPlayer);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name]of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv422p_8bit.mkv']]) await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
  const state=()=>page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({}));
  const zoom=async value=>{await page.evaluate(zoom=>window.voidPlayer.setViewport({zoom,offsetX:0,offsetY:0}),value);await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));};

@@ -1,4 +1,4 @@
-// Real ordinary-HTTP playback, repeated source-button clicks and decoder cleanup.
+// Trusted HTTPS playback, repeated source-button clicks and decoder cleanup.
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,6 +18,7 @@ if (process.argv.length > 3 || (mode && !['--functional-only', '--benchmark-only
 const functional = mode !== '--benchmark-only';
 const benchmark = mode !== '--functional-only';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
+if (!secure) throw new Error('远程 HTTP 已改为连接引导页；播放回归请设置 VOIDPLAYER_HTTPS_TEST=1，本机基准使用 localhost 媒体服务。');
 const protocol = secure ? 'https' : 'http';
 const temporary = await mkdtemp(path.join(tmpdir(), 'vp-network-playback-'));
 const tls = secure ? await prepareTls({ hosts: ['voidplayer.test'] }, temporary) : undefined;
@@ -38,6 +39,14 @@ try {
     browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server', '--enable-precise-memory-info'] });
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
     page.setDefaultTimeout(90000);
+    await page.addInitScript(() => {
+      window.decoderConfigurations = 0;
+      const configure = VideoDecoder.prototype.configure;
+      VideoDecoder.prototype.configure = function(config) {
+        window.decoderConfigurations++;
+        return configure.call(this, config);
+      };
+    });
     const errors = [], workers = new Set();
     page.on('pageerror', error => errors.push(error.message));
     page.on('worker', worker => { workers.add(worker); worker.on('close', () => workers.delete(worker)); });
@@ -52,10 +61,15 @@ try {
     let releaseDownload;
     const blocked = new Promise(resolve => { releaseDownload = resolve; });
     await page.route('**/api/media/**', async route => { await blocked; await route.continue(); });
+    const clickedButton = await add.elementHandle();
     await add.click();
     await page.waitForFunction(() => document.querySelector('#source-list [aria-busy="true"]'));
-    assert.equal(await add.isDisabled(), true);
-    await add.evaluate(button => { for (let i = 0; i < 30; i++) button.click(); });
+    await row.getByRole('button', { name: `取消载入：${entry.name}`, exact: true }).waitFor();
+    assert.equal(await add.count(), 0, 'pending source exposes cancel instead of another add action');
+    assert.equal(await page.locator('#source-activity').getAttribute('data-state'), 'loading');
+    // Already queued clicks on the old element cannot start duplicate loads.
+    await clickedButton.evaluate(button => { for (let i = 0; i < 30; i++) button.click(); });
+    await clickedButton.dispose();
     releaseDownload();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
     await page.unroute('**/api/media/**');
@@ -64,6 +78,26 @@ try {
     assert.equal(await row.getAttribute('aria-busy'), 'false');
     assert.match(await row.innerText(), /使用中/);
     console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
+
+    // Observe the real WebCodecs lifecycle: warm resume must neither seek nor
+    // configure another decoder, including rapid pause/play in one JS turn.
+    await page.evaluate(() => window.voidPlayer.play());
+    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 500000);
+    const paused = await page.evaluate(() => {
+      window.voidPlayer.pause();
+      return { pts: window.voidPlayer.getState().positionUs, configurations: window.decoderConfigurations };
+    });
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), paused.pts);
+    const resumedAt = performance.now();
+    await page.evaluate(async () => {
+      for (let i = 0; i < 5; i++) { await window.voidPlayer.play(); window.voidPlayer.pause(); }
+      await window.voidPlayer.play();
+    });
+    await page.waitForFunction(pts => window.voidPlayer.getState().positionUs > pts + 100000, paused.pts);
+    assert.equal(await page.evaluate(() => window.decoderConfigurations), paused.configurations, 'warm resume retains the decoder');
+    await page.evaluate(() => window.voidPlayer.pause());
+    console.log(`PASS warm MP4 resume: no decoder reconfiguration, +100ms media in ${Math.round(performance.now() - resumedAt)}ms`);
 
     const cdp = await browser.newBrowserCDPSession();
     async function residentBytes() {

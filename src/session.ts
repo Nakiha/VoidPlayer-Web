@@ -1,3 +1,5 @@
+import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
+import { abortableLoad } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
@@ -21,8 +23,15 @@ export class ReviewSession {
   private actor: { id: string; name: string } | null = null;
   setActor(actor: { id: string; name: string } | null) { this.actor = actor ? { id: actor.id, name: actor.name } : null; }
   private queue: Promise<unknown> = Promise.resolve();
+  private mediaLoad: MediaLoadStatus | null = null;
+  private abortLoad: (() => void) | undefined;
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
+  private readers: FrameQueue[] | undefined;
+  private releaseReaders() {
+    this.readers?.forEach(r => r.stop());
+    this.readers = undefined;
+  }
   private measurements: PlaybackMeasurements | null = null;
   private busy = false;
   private playing = false;
@@ -44,7 +53,10 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id })) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id,
+      durationUs: t.source.info.durationUs, firstPtsUs: t.source.info.firstPtsUs, offsetUs: t.offsetUs,
+      indexState: t.source.info.indexState, indexError: t.source.info.indexError,
+      width: t.source.info.width, height: t.source.info.height, decoder: t.source.info.decoder, coreVariant: t.source.info.coreVariant })) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -57,6 +69,7 @@ export class ReviewSession {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,
       durationUs: this.durationUs, error: this.error, lastDecodeMs: this.decodeMs,
+      mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs }] : []; }),
@@ -74,6 +87,8 @@ export class ReviewSession {
   pause() {
     const wasPlaying = this.playing;
     ++this.revision;
+    this.abortLoad?.();
+    if (this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); }
     this.stopPlayback?.();
     this.stopPlayback = undefined;
     this.playing = false;
@@ -86,6 +101,7 @@ export class ReviewSession {
     return traceOperation('session', name, data, () => {
       const context = operationContext();
       this.pause();
+      this.releaseReaders();
       const revision = this.revision;
       this.busy = true;
       this.error = null;
@@ -108,26 +124,57 @@ export class ReviewSession {
       return operation;
     });
   }
-  async load(slot: Slot, open: () => Promise<MediaSource>) {
+  async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
     const scoped = contextLog();
     slotValue(slot);
     const replacing = this.tracks.get(slot)?.source.info.name;
+    const status: MediaLoadStatus = { name, slot, stage: 'queued', state: 'loading', startedAt: Date.now() };
     try {
-      await this.run('load', { slot }, async current => {
-        const source = await open();
+      const loading = this.run('load', { slot }, async current => {
+        const controller = new AbortController();
+        const abort = () => controller.abort(new DOMException('载入已取消。', 'AbortError'));
+        this.abortLoad = abort;
+        status.stage = 'inspect';
+        const progress: MediaOpenProgress = stage => {
+          if (!current() || controller.signal.aborted || status.state !== 'loading') return;
+          status.stage = stage; this.emit();
+        };
+        this.emit();
+        let source: MediaSource | undefined;
         let committed = false;
+        let released = false;
+        const release = () => { if (source && !released) { released = true; source.dispose(); } };
         try {
-          if (source.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === source.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
+          const opened = await abortableLoad<MediaSource>(Promise.resolve().then(() => open(controller.signal, progress)), controller.signal, late => late.dispose());
+          source = opened;
+          if (!current()) throw new DOMException('载入已取消。', 'AbortError');
+          // Once open has returned, stop the uncommitted decoder on cancel.
+          // drawAt remains serialized with existing tracks' pending decodes.
+          this.abortLoad = () => { abort(); release(); };
+          if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
           const next = new Map(this.tracks);
-          next.set(slot, { source, frame: null, offsetUs:0 });
+          next.set(slot, { source: opened, frame: null, offsetUs:0 });
+          progress('first-frame');
+          const kept = this.positionUs === 0 ? new Set([...this.tracks].filter(([s, t]) => s !== slot && t.frame).map(([s]) => s)) : undefined;
           await this.drawAt(0, current, next, () => {
             this.tracks.get(slot)?.source.dispose();
             this.tracks = next;
-            this.catalog.set(source.info.id, source.info);
+            this.catalog.set(opened.info.id, opened.info);
+            opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
             committed = true;
-          });
-        } finally { if (!committed) source.dispose(); }
+            status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
+          }, undefined, kept);
+        } catch (error) {
+          if (controller.signal.aborted) throw controller.signal.reason;
+          if (current()) { status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now(); }
+          throw error;
+        } finally {
+          if (!committed) release();
+          this.abortLoad = undefined;
+        }
       });
+      this.mediaLoad = status; this.emit();
+      await loading;
     } catch (error) {
       scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, error: errorText(error) });
       throw error;
@@ -164,12 +211,21 @@ export class ReviewSession {
     });
     return this.getState();
   }
+  private async waitForIndex(pending: Promise<unknown>) {
+    const controller = new AbortController();
+    const abort = () => controller.abort(new DOMException('定位已取消。', 'AbortError'));
+    this.abortLoad = abort;
+    try { await abortableLoad(pending, controller.signal); }
+    finally { if (this.abortLoad === abort) this.abortLoad = undefined; }
+  }
   async seek(ptsUs: number) {
     const scoped = contextLog();
     timeUs(ptsUs);
     try {
       await this.run('seek', { ptsUs }, async current => {
         if (!this.tracks.size) throw new Error('请先打开视频。');
+        await this.waitForIndex(Promise.all([...this.tracks.values()].map(t => t.source.ensureIndexed?.(Math.max(0, ptsUs - t.offsetUs)))));
+        if (!current()) return;
         await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
       });
     } catch (error) {
@@ -189,7 +245,11 @@ export class ReviewSession {
       await this.run('step', { direction }, async current => {
         const entries = [...this.tracks];
         if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
-        if (direction > 0) await this.stepForward(entries, current);
+        if (direction > 0) {
+          await this.waitForIndex(Promise.all(entries.map(([, t]) => t.source.ensureIndexed?.())));
+          if (!current()) return;
+          await this.stepForward(entries, current);
+        }
         else await this.stepBackward(entries, current);
       });
     } catch (error) {
@@ -277,6 +337,7 @@ export class ReviewSession {
       for (let i = 0; i < entries.length; i++) {
         const r = results[i];
         if (r.status !== 'fulfilled' || !r.value) continue;
+        entries[i][1].source.info.width = r.value.width; entries[i][1].source.info.height = r.value.height;
         this.draw(entries[i][0], r.value);
         entries[i][1].frame = this.frameInfo(r.value);
       }
@@ -289,7 +350,17 @@ export class ReviewSession {
   }
   async play() {
     const scoped = contextLog();
-    await this.seek(this.positionUs >= this.durationUs - 1 ? 0 : this.positionUs);
+    if (this.playing) return this.getState();
+    if (!this.tracks.size) throw new Error('请先载入视频。');
+    if (this.busy) throw new Error('请等待当前操作完成后再播放。');
+    if (this.positionUs >= this.durationUs - 1 && ![...this.tracks.values()].some(t => t.source.info.indexState === 'building')) {
+      const seek = this.seek(0), revision = this.revision;
+      await seek;
+      if (revision !== this.revision) return this.getState();
+    }
+    if ([...this.tracks.values()].some(t => !t.frame)) throw new Error('请先完成画面定位。');
+    this.error = null;
+    ++this.revision;
     this.playing = true;
     scoped.info('session', '开始播放', { positionUs: this.positionUs });
     const revision = this.revision;
@@ -305,11 +376,13 @@ export class ReviewSession {
     const scoped = contextLog();
     const active = () => this.playing && revision === this.revision;
     const entries = [...this.tracks];
-    const readers = entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
+    const readers = this.readers ?? entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
+    this.readers = readers;
+    readers.forEach(r => r.resume());
     const metrics = this.measurements = new PlaybackMeasurements();
     let lastTick = start, lastEmit = start, lastSample = start, lastProgress = start;
     let cancelTick: (() => void) | undefined;
-    const stop = () => { readers.forEach(r => r.stop()); cancelTick?.(); };
+    const stop = () => { readers.forEach(r => r.suspend()); cancelTick?.(); };
     this.stopPlayback = stop;
     const tick = () => new Promise<void>(resolve => {
       const finish = () => { cancelTick = undefined; resolve(); };
@@ -347,6 +420,7 @@ export class ReviewSession {
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
+              track.source.info.width = frame.width; track.source.info.height = frame.height;
               this.draw(slot, frame);
               track.frame = this.frameInfo(frame);
               metrics.draw(slot, performance.now(), dropped);
@@ -368,7 +442,7 @@ export class ReviewSession {
           lastSample = now;
           scoped.debug('session', '播放采样', metrics.snapshot());
         }
-        if (target >= this.durationUs - 1) {
+        if (target >= this.durationUs - 1 && ![...this.tracks.values()].some(t => t.source.info.indexState === 'building')) {
           this.playing = false;
           scoped.info('session', '播放到末尾结束', { positionUs: target });
         }
@@ -380,7 +454,10 @@ export class ReviewSession {
         scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
       }
     } finally {
-      stop();
+      // Pause retains the iterator and unseen frames. A seek/replacement has
+      // already detached and stopped these readers; an older loop must never
+      // stop readers that a rapid resume has adopted.
+      if (revision === this.revision) this.releaseReaders();
       scoped.info('session', '播放统计', metrics.snapshot());
       if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
     }
@@ -445,6 +522,7 @@ export class ReviewSession {
           const info = document.media.find(m => m.id === track.mediaId)!;
           const source = await open(info);
           next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs });
+          await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
           source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.
@@ -454,7 +532,10 @@ export class ReviewSession {
           for (const track of this.tracks.values()) track.source.dispose();
           this.tracks = next; this.order = [...next.keys(), ...SLOTS.filter(slot => !next.has(slot))];
           this.catalog = new Map(document.media.map(info => [info.id, info]));
-          for (const track of next.values()) this.catalog.set(track.source.info.id, track.source.info);
+          for (const track of next.values()) {
+            this.catalog.set(track.source.info.id, track.source.info);
+            track.source.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === track.source)) this.emit(); };
+          }
           this.marks = document.marks; this.measurements = null; committed = true;
         });
       } finally { if (!committed) for (const track of next.values()) track.source.dispose(); }
@@ -471,6 +552,7 @@ export class ReviewSession {
   }
   async dispose() {
     this.pause();
+    this.releaseReaders();
     await this.queue.catch(() => {});
     for (const t of this.tracks.values()) t.source.dispose();
     this.tracks.clear();

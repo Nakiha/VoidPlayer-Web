@@ -1,0 +1,58 @@
+[
+  {
+    "path": "h264/brokensps.flv",
+    "file": "h264--brokensps.flv",
+    "url": "https://fate-suite.ffmpeg.org/h264/brokensps.flv",
+    "size": 133693,
+    "sha256": "ba3ec8f4102cd47bfb072d63eb8bc30a957327560749dc7b270239d8a755e6e2"
+  },
+  {
+    "path": "h264/test-4867.flv",
+    "file": "h264--test-4867.flv",
+    "url": "https://fate-suite.ffmpeg.org/h264/test-4867.flv",
+    "size": 158640,
+    "sha256": "db5545353f2eb221a7f33da355b9ef651fde6d4cab9c5d7381041042c955faa4"
+  },
+  {
+    "path": "h264/extradata-reload-multi-stsd.mov",
+    "file": "h264--extradata-reload-multi-stsd.mov",
+    "url": "https://fate-suite.ffmpeg.org/h264/extradata-reload-multi-stsd.mov",
+    "size": 5639,
+    "sha256": "b5bcbd4edc1ce3ead58e868367e7ea72a0945d2b988d00ff2e22ddbe139d94e7"
+  },
+  {
+    "path": "hevc/extradata-reload-multi-stsd.mov",
+    "file": "hevc--extradata-reload-multi-stsd.mov",
+    "url": "https://fate-suite.ffmpeg.org/hevc/extradata-reload-multi-stsd.mov",
+    "size": 5217,
+    "sha256": "a68ed4d72c8a798c845910ff29f3a356b0199342075eff446f9cc0a0ba355913"
+  },
+  {
+    "path": "h264/crop-to-container-dims-canon.mov",
+    "file": "h264--crop-to-container-dims-canon.mov",
+    "url": "https://fate-suite.ffmpeg.org/h264/crop-to-container-dims-canon.mov",
+    "size": 536674,
+    "sha256": "5b9f021275a8db5e27288559dbc087763d8d6ac52fc1a07336d03e2b3cd81737"
+  },
+  {
+    "path": "h264/h264_4bf_pyramid_nobsrestriction.mp4",
+    "file": "h264--h264_4bf_pyramid_nobsrestriction.mp4",
+    "url": "https://fate-suite.ffmpeg.org/h264/h264_4bf_pyramid_nobsrestriction.mp4",
+    "size": 55849,
+    "sha256": "48c80512b607ee0b1a87bea5a8d9f9dc684f6d6acd7211f4e3c2c6856ce4bcfa"
+  },
+  {
+    "path": "h264/interlaced_crop.mp4",
+    "file": "h264--interlaced_crop.mp4",
+    "url": "https://fate-suite.ffmpeg.org/h264/interlaced_crop.mp4",
+    "size": 347569,
+    "sha256": "49559668e71f3a9ef5f1dbe092980e58262857d625a26bfc3016336d1aaf6c11"
+  },
+  {
+    "path": "hevc/paramchange_yuv420p_yuv420p10.hevc",
+    "file": "hevc--paramchange_yuv420p_yuv420p10.hevc",
+    "url": "https://fate-suite.ffmpeg.org/hevc/paramchange_yuv420p_yuv420p10.hevc",
+    "size": 455554,
+    "sha256": "67e0ce1fadaae2c617bb5a9c72f2ec6d41d72507a4b8bea0dee760b177656fba"
+  }
+]

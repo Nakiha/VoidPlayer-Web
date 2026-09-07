@@ -89,7 +89,7 @@ test('pending media settles with a local rescan instead of rereading the entire 
   try {
     await index.refresh(); assert.equal(index.browse({ recursive: true }).entries[0].state, 'pending');
     now += 151;
-    await until(() => index.browse({ recursive: true }).entries[0].state === 'ready', 'pending file did not settle');
+    await until(() => index.browse({ recursive: true }).entries[0].state === 'ready' && !index.status().scanning, 'pending file did not finish settling');
     assert.equal(index.status().job?.visited, 1);
   } finally { await index.close(); }
 }));

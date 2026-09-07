@@ -1,3 +1,4 @@
+import { installFrameIndexes } from './frame-indexes.ts';
 import { randomUUID } from '../uuid.ts';
 import '../themes/silver-glass.css';
 import '../themes/dark.css';
@@ -143,11 +144,13 @@ function renderRequests() {
     return row;
   }));
 }
+const frameIndexes = installFrameIndexes(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const measurements = installMeasurements(life.signal, notice, () => status?.identity.id);
 for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   pane = id; measurements.activate(id === 'measurements'); if (!app.dataset.denied) notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
+  if (id === 'frame-indexes') frameIndexes.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'logs') void act(loadLogs);
 };

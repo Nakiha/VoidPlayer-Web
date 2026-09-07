@@ -20,10 +20,10 @@ export function mediaUrl(id: string, version?: string): string {
   return `/api/media/${encodeURIComponent(id)}${version ? `?v=${encodeURIComponent(version)}` : ''}`;
 }
 
-export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   if (entry.state && entry.state !== 'ready') throw new Error(entry.state === 'pending' ? '片源仍在写入，请稍后重试。' : '片源已从媒体库移除。');
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
-  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress);
+  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal);
   source.info.source = { kind: 'library', id: entry.id, url: mediaUrl(entry.id, entry.version) };
   return source;
 }

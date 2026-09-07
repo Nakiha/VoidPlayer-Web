@@ -31,6 +31,8 @@ async function main() {
   --folder /media              媒体白名单目录，可重复指定
   --port 5180 --host 127.0.0.1  监听地址；内网可用 0.0.0.0
   --https IP或域名             开启内置 HTTPS；多个地址用逗号分隔，默认监听所有网卡
+  --http-port 5181             证书引导页端口，默认 HTTPS 端口加 1
+  --no-http-guide              禁用独立 HTTP 引导入口
   --static /path/dist          覆盖随包网页资源目录
   --no-logs                   禁用用户主动上传日志
   --check                     检查配置与目录后退出

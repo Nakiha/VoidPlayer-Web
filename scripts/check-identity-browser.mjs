@@ -25,13 +25,16 @@ try {
   const page = await a.newPage(), other = await b.newPage();
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); };
-  const initial = await page.goto(base); await settings(page);
-  console.log('Identity browser: page and settings loaded');
+  const initial = await page.goto(base);
   if (insecure) {
+    await page.locator('#connection-unavailable').waitFor({ state: 'visible' });
     assert.equal(await page.evaluate(() => isSecureContext), false);
-    assert.equal(await page.evaluate(() => typeof crypto.randomUUID), 'undefined');
-    assert.equal(initial.headers()['cross-origin-opener-policy'], undefined);
-  }
+    assert.equal(await page.evaluate(() => typeof window.voidPlayer), 'undefined');
+    assert.deepEqual(errors, []);
+    console.log('PASS ordinary HTTP: dedicated HTTPS guide, player not initialized');
+  } else {
+  await settings(page);
+  console.log('Identity browser: page and settings loaded');
   if (secure) {
     assert.deepEqual(await page.evaluate(() => [isSecureContext, typeof VideoDecoder, crossOriginIsolated]), [true, 'function', true]);
     assert.equal(initial.headers()['cross-origin-opener-policy'], 'same-origin');
@@ -87,6 +90,7 @@ try {
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
   console.log('PASS identity: automatic users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
+  }
 } finally {
   console.log('Identity browser: closing browser'); await browser?.close();
   console.log('Identity browser: closing service'); await service?.close();

@@ -6,6 +6,7 @@ export class FrameQueue {
   ended = false;
   error: unknown = null;
   private stopped = false;
+  private suspended = false;
   private wake: (() => void) | undefined;
   private bytes = 0;
   private peakFrames = 0;
@@ -22,7 +23,7 @@ export class FrameQueue {
     try {
       while (!this.stopped) {
         // Bounded by both count and bytes: four 4K RGBA frames are ~133 MB.
-        while (!this.stopped && (this.frames.length >= this.capacity || this.bytes >= this.budgetBytes)) {
+        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.budgetBytes)) {
           await new Promise<void>(r => { this.wake = r; });
         }
         if (this.stopped) break;
@@ -48,6 +49,8 @@ export class FrameQueue {
     if (frame) { this.wake?.(); this.wake = undefined; }
     return { frame, dropped };
   }
+  suspend() { this.suspended = true; }
+  resume() { this.suspended = false; this.wake?.(); this.wake = undefined; }
   stop() {
     this.stopped = true;
     this.wake?.(); this.wake = undefined;

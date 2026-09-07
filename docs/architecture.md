@@ -13,14 +13,21 @@
 | 路径 | 入口 | 边界 |
 | --- | --- | --- |
 | WebCodecs | `src/media.ts` | Mediabunny 解封装，通过文件或 HTTP Range 读取；浏览器负责支持的编码组合 |
-| 文件 WASM 回退 | `src/ffmpeg-media.ts`、`src/ffmpeg-worker.ts` | 按 `MediaOpenError.stage` 决定是否回退；文件进入 WASM 内存，上限 512 MiB |
+| MP4 WASM 压缩包 | `src/mp4-engine.ts`、`src/packet-media.ts`、`src/packet-worker.ts` | 远程 AVC/HEVC/AV1/VVC 由 TS 读取包索引，按 GOP 读取压缩数据；WASM 只解码 |
+| FFmpeg 解封装回退 | `src/ffmpeg-media.ts`、`src/ffmpeg-worker.ts` | 仅用于尚不能用 TS 压缩包路径处理的文件；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
 | FLV | `src/flv-media.ts`、`src/flv-engine.ts`、`src/flv-demux.ts`、`src/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
 
 FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV 的 avc1/hvc1/av01/vvc1。重复配置头可接受，编码配置变化、多轨 Enhanced FLV 和不支持的编码会返回诊断。它是可定位的文件播放器，不是 HTTP-FLV/RTMP 直播客户端。
 
-WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓库的 `wasm` 分支。本仓库通过 `scripts/sync-wasm-core.sh` 消费产物，产物不进入 Git。FLV 需要支持 packet API 的 core。跨源隔离时优先尝试多线程 core，否则使用单线程；多轨共享线程预算。
+普通 MP4 的 sample table 已给出包大小、时间戳和关键帧位置，因此读取索引不需要遍历 `mdat`。VVC 的 `vvcC` 配置由小范围 box 读取补充，包表、B 帧排序和 edit list 由 Mediabunny 的公开接口处理。分片 MP4 可能仍需遍历 fragment 头。FLV 缺少完整 sample table，由 TS 扫描 tag 头构建索引；64 KiB 预读可能覆盖部分载荷，小包密集文件仍可能读到大部分文件，但不会整文件驻留。
 
-`presenter.ts` 是上屏入口，解码器不直接绘制。`presentation-surface.ts` 使用视口大小的 WebGL 表面，缩小时 LINEAR、放大时 NEAREST；不可用时回退 Canvas 2D。保留源帧 canvas 供像素工具和缩略图使用。500× 缩放不会分配 500× 的显示缓冲。
+Range 压缩数据缓存每轨最多 8 MiB（MP4 解封装库另有最多 1 MiB 缓存）；MP4/FFmpeg 以 256 KiB 块读取，FLV 以 64 KiB 块读取。HTTP 必须返回精确的 206/Content-Range；忽略 Range、截断、响应过长及文件版本变化都报输入错误，不静默退回整文件下载。FFmpeg 同步 AVIO 通过 SharedArrayBuffer 与异步 fetch 桥接，需要 COOP/COEP 跨源隔离；MP4/FLV 的 TS 路径没有这项读取限制。FFmpeg 容器回退仍会扫描包建立索引，因此 TS/MKV 等文件的首次载入时间还可能随文件长度增长。
+
+索引用于真实帧时间、关键帧定位、倒退逐帧和尾帧定位。没有完整索引可支持顺序播放，但若要先播再渐进建立索引，需要会话和 UI 明确区分已索引范围、暂定时长及尚不可精确跳转的位置；当前评审会话仍在完整索引就绪后开放轨道。
+
+WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓库的 `wasm` 分支。本仓库通过 `scripts/sync-wasm-core.sh` 消费产物，产物不进入 Git。FLV 和 MP4 压缩包路径复用已有 packet API，不需要修改 core。跨源隔离时优先尝试多线程 core，否则使用单线程；多轨共享线程预算。
+
+`presenter.ts` 是上屏入口，解码器不直接绘制。`presentation-surface.ts` 使用视口大小的 WebGL 表面，缩小时 LINEAR、放大时 NEAREST；不可用时回退 Canvas 2D。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
 
 当前没有原生 HDR 输出管线。WASM 输出为 8-bit RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。
 

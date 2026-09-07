@@ -1,3 +1,4 @@
+import { FrameIndexStore } from './frame-index-store.ts';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import type { Stats } from 'node:fs';
@@ -21,6 +22,7 @@ export class MediaLibraryIndex {
   readonly roots: string[];
   readonly definitions: RootRecord[];
   private store: LibraryStore;
+  readonly frameIndexes: FrameIndexStore;
   private pending: Promise<void> | null = null;
   private abort: AbortController | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -41,6 +43,7 @@ export class MediaLibraryIndex {
     this.options = options;
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
+    this.frameIndexes = new FrameIndexStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
     if (this.initialized) this.refreshedAt = this.now();

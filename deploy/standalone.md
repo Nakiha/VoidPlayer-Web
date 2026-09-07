@@ -26,6 +26,10 @@ Windows 在解压目录运行 `./voidplayer.exe`。打开 `http://127.0.0.1:5180
 
 该选项默认监听所有网卡，在原端口（默认 5180）提供 HTTPS。多个地址可写成 `--https 192.168.1.20,player.lan`。不需要 Caddy、OpenSSL、域名服务或公网连接。
 
+启用 HTTPS 后，同时提供 **`http://192.168.1.20:5181/` 证书引导页**（默认 HTTPS 端口加 1；65535 时使用 65534）。先把这个 HTTP 地址发给 Windows / macOS 用户：页面提供公开根证书下载、各系统的信任步骤和正确的 HTTPS 链接。这个端口不提供媒体、工作区或管理 API，也不下载解码器。可用 `--http-port 其他端口`（配置 `httpPort`）更换，或 `--no-http-guide`（`httpPort: null`）禁用；防火墙应放行实际使用的两个端口。
+
+HTTP 和 HTTPS 使用不同端口：用 HTTP 请求 HTTPS 端口时，浏览器无法加载引导页；尚未信任证书时直接进入 HTTPS，也会先被浏览器拦截。普通远程 HTTP 服务打开后会显示连接准备页，不再自动进入低性能 WASM 播放。localhost 的 HTTP 访问仍直接进入播放器。
+
 首次启动会在 `data/tls/` 创建本地根证书和服务器证书。将其中的 **`voidplayer-ca.crt`** 复制到 Windows，在它所在目录运行一次：
 
 ```powershell
@@ -33,6 +37,10 @@ certutil -user -addstore Root .\voidplayer-ca.crt
 ```
 
 如果 Windows 弹出证书信任确认框，核对后选择“是”。这一步只需要在每台客户端首次使用时执行。
+
+macOS 用户在“钥匙串访问”的“登录”钥匙串中导入 `.crt`，双击 `VoidPlayer Local CA` 证书，展开“信任”，把“安全套接字层（SSL）”设为“始终信任”，关闭窗口并按提示验证身份。安装前向管理员核对服务器地址和 SHA-256 指纹；HTTP 页面自身提供的指纹不能替代独立核对。网页不会自动修改系统信任库。
+
+系统操作参考：[Apple 钥匙串证书信任设置](https://support.apple.com/guide/keychain-access/kyca11871/mac)、[Microsoft certutil](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/certutil)。
 
 关闭并重新打开浏览器，再访问 **`https://192.168.1.20:5180/`**。使用启动时指定的地址；根证书从你自己的服务器复制，程序会打印证书 SHA-256 指纹。只分发 `.crt` 公共证书，不分发 `authority.json` 或 `server.json` 中的私钥。
 

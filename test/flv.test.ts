@@ -42,11 +42,11 @@ for (const name of names) {
   });
 }
 
-test('FLV index rejects truncation, tag size mismatch and missing sequence headers', async () => {
+test('FLV index rejects invalid headers, tag size mismatch and missing sequence headers', async () => {
   const { bytes } = await fixture('standard-h264');
   const noConfig = Buffer.from(bytes); noConfig[25] = 1;
   const badPrevious = Buffer.from(bytes); badPrevious.writeUInt32BE(999, 9);
-  for (const invalid of [noConfig, badPrevious, bytes.subarray(0, 8), bytes.subarray(0, -2)]) {
+  for (const invalid of [noConfig, badPrevious, bytes.subarray(0, 8)]) {
     const reader = new FlvReader({ file: new Blob([invalid]) });
     try { await assert.rejects(demuxFlv(reader), /FLV/); } finally { reader.close(); }
   }
@@ -79,3 +79,23 @@ test('FLV indexing reads bounded windows and preserves negative composition offs
     assert.ok(index.packets.every(p => !('data' in p)), 'index must not retain payloads');
   } finally { reader.close(); }
 });
+
+for (const name of ['legacy-hevc', 'private-vvc', 'standard-h264']) {
+  test(`FLV ${name}: incomplete trailing video tag still plays, seeks and retains a warning`, async () => {
+    const { bytes, ref } = await fixture(name);
+    const tail = Buffer.alloc(853); tail[0] = 9; tail.writeUIntBE(5639, 1, 3);
+    const file = new File([bytes, tail], `${name}-truncated.flv`);
+    const source = await openFlvMedia({ file }, file, {
+      glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true,
+    });
+    try {
+      (await source.frameAt(0)).close(); await source.ensureIndexed!();
+      assert.equal(source.info.indexState, 'complete'); assert.match(source.info.indexWarning!, /尾部不完整/);
+      const iterator = source.framesFrom(0);
+      for (let i = 0; i < 5; i++) { const f = await iterator.next(); assert.equal(f.done, false); assert.equal(f.value!.sourcePtsUs, ref.times[i]); f.value!.close(); }
+      await iterator.return(undefined);
+      const last = await source.frameAt(ref.times.at(-1) - ref.times[0]); assert.equal(last.sourcePtsUs, ref.times.at(-1)); last.close();
+      (await source.frameAt(0)).close();
+    } finally { source.dispose(); }
+  });
+}

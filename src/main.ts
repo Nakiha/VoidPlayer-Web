@@ -35,7 +35,7 @@ import { bindFileDrop } from './file-drop.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
-import { paintFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
+import { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
 import { PanMomentumFilter, Viewport, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
 import type { LayoutMode, PixelSizeMode, TrackGeometry, ViewportSnapshot } from './viewport.ts';
 
@@ -222,7 +222,7 @@ function render() {
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}` : '尚未载入';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.indexState === 'building' ? ' · 后台建立索引中' : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }
@@ -285,7 +285,7 @@ async function importFiles(files: File[], slots: Slot[]) {
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException('文件导入已被新的请求取代。', 'AbortError');
-    await withLogContext(context, () => session.load(slots[i], () => openMedia(files[i])));
+    await withLogContext(context, () => session.load(slots[i], (signal, progress) => openMedia(files[i], undefined, progress, signal), files[i].name));
     workbench.rememberFile(files[i]);
   }
 }
@@ -563,8 +563,12 @@ const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);
 const api = {
   getState: () => session.getState(),
+  captureFrame: (slot: Slot) => {
+    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error('轨道没有可读取的画面。');
+    return captureFrame(canvases[slot]);
+  },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
-    const result = await session.load(slot, () => openMedia(file)); workbench.rememberFile(file); return result;
+    const result = await session.load(slot, (signal, progress) => openMedia(file, undefined, progress, signal), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
   exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,

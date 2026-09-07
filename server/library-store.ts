@@ -34,7 +34,7 @@ export class LibraryStore {
       this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 2) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      if (version.user_version > 3) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
       this.db.exec('PRAGMA journal_mode=WAL');
       this.db.exec(`
         BEGIN IMMEDIATE;
@@ -55,7 +55,12 @@ export class LibraryStore {
         CREATE TRIGGER IF NOT EXISTS directory_added AFTER INSERT ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS directory_removed AFTER DELETE ON directories BEGIN UPDATE library_revision SET revision=revision+1; END;
         CREATE TRIGGER IF NOT EXISTS root_changed AFTER UPDATE ON roots WHEN old.active!=new.active OR old.path!=new.path OR old.name!=new.name BEGIN UPDATE library_revision SET revision=revision+1; END;
-        PRAGMA user_version=2;
+        CREATE TABLE IF NOT EXISTS frame_indexes (media_id TEXT PRIMARY KEY REFERENCES media(id) ON DELETE CASCADE, version TEXT NOT NULL, document TEXT NOT NULL, bytes INTEGER NOT NULL, frames INTEGER NOT NULL, created_at INTEGER NOT NULL, accessed_at INTEGER NOT NULL);
+        CREATE TABLE IF NOT EXISTS frame_index_epoch (id INTEGER PRIMARY KEY CHECK(id=1), epoch INTEGER NOT NULL);
+        INSERT OR IGNORE INTO frame_index_epoch VALUES(1,0);
+        CREATE TRIGGER IF NOT EXISTS frame_index_changed AFTER UPDATE ON media WHEN old.version!=new.version OR new.state='missing' BEGIN DELETE FROM frame_indexes WHERE media_id=new.id; END;
+        CREATE TRIGGER IF NOT EXISTS frame_index_root_changed AFTER UPDATE ON roots WHEN old.path!=new.path BEGIN DELETE FROM frame_indexes WHERE media_id IN (SELECT id FROM media WHERE root_id=new.id); END;
+        PRAGMA user_version=3;
         COMMIT;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());
@@ -67,6 +72,7 @@ export class LibraryStore {
       this.db.exec('UPDATE roots SET active=0');
       const statement = this.db.prepare('INSERT INTO roots(id,path,name) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET path=excluded.path,name=excluded.name,active=1');
       for (const root of roots) statement.run(root.id, root.path, root.name);
+      this.db.exec('DELETE FROM frame_indexes WHERE media_id IN (SELECT media.id FROM media JOIN roots ON media.root_id=roots.id WHERE roots.active=0)');
       this.db.exec('COMMIT');
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }

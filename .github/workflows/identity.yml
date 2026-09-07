@@ -16,9 +16,10 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci
-      - run: node --test test/uuid.test.ts test/identity.test.ts test/saved-workspaces.test.ts test/config.test.ts test/admin.test.ts test/release-pipeline.test.mjs
+      - run: node --test test/uuid.test.ts test/identity.test.ts test/saved-workspaces.test.ts test/config.test.ts test/admin.test.ts test/connection-guide.test.ts test/release-pipeline.test.mjs test/flv-startup.test.ts test/frame-index-cache.test.ts
       - run: npx playwright install --with-deps chromium
       - run: npm run test:identity:browser
+      - run: node scripts/check-connection-guide-browser.mjs
       - name: Verify ordinary HTTP without secure-context APIs
         run: node scripts/check-identity-browser.mjs
         env:

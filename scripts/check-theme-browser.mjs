@@ -32,7 +32,7 @@ try {
  await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
  const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.5,stage.y+stage.height*.55,{steps:5});await page.mouse.up();
  await page.waitForTimeout(220);await page.locator('#mark-close').click();await page.locator('#toggle-marks').click();
- const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:document.querySelector('#canvas-A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
+ const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:window.voidPlayer.captureFrame('A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
  const before=await evidence();
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');

@@ -12,6 +12,8 @@ const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(browserName), 'Expected webkit or chromium');
 const fixtures = path.join(root, 'fixtures/video');
+const screenshots = path.join(root, 'artifacts', 'source-activity');
+await mkdir(screenshots, { recursive: true });
 await access(path.join(root, 'dist/index.html'));
 const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-browser-'));
 let browser, server;
@@ -115,6 +117,61 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
   });
 
+  await check('stalled source loads can be cancelled or replaced without locking the add buttons', async page => {
+    const entries = listing.entries.filter(entry => entry.name === 'same.mp4');
+    const stalled = [];
+    await page.route(`**/api/media/${encodeURIComponent(entries[0].id)}?*`, route => { stalled.push(route); });
+    await page.locator('#toggle-sources').click();
+    const row = entry => page.locator('#source-list .source-row').filter({ hasText: entry.root }).filter({ hasText: 'same.mp4' });
+    const add = entry => row(entry).getByRole('button', { name: '添加到视图：same.mp4', exact: true });
+    const nextRequest = () => page.waitForRequest(request => new URL(request.url()).pathname === `/api/media/${encodeURIComponent(entries[0].id)}`);
+    try {
+      let request = nextRequest();
+      await add(entries[0]).click();
+      await request;
+      const cancel = row(entries[0]).getByRole('button', { name: '取消载入：same.mp4', exact: true });
+      await cancel.waitFor();
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '正在读取视频信息');
+      assert.match(await page.locator('#source-activity-name').textContent(), /same\.mp4/);
+      assert.equal(await page.locator('#source-activity-cancel').isVisible(), true);
+      await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));
+      await page.setViewportSize({ width: 600, height: 800 });
+      await settle(page);
+      await page.locator('#source-list').evaluate(element => { element.scrollTop = element.scrollHeight; });
+      const activity = await page.locator('#source-activity').boundingBox();
+      const files = await page.locator('#source-list').boundingBox();
+      const importButton = await page.locator('#sources-import').boundingBox();
+      assert.ok(activity.y >= files.y + files.height - 1 && activity.y + activity.height <= importButton.y + 1, 'status stays between the scroll area and import button');
+      await page.screenshot({ path: path.join(screenshots, `${browserName}-loading.png`) });
+      await page.setViewportSize({ width: 1280, height: 800 });
+      await settle(page);
+      assert.equal(await add(entries[1]).isEnabled(), true);
+      await page.locator('#source-activity-cancel').click();
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '已取消载入');
+      await page.waitForFunction(() => !window.voidPlayer.getState().busy);
+      assert.equal(await add(entries[0]).isEnabled(), true);
+      request = nextRequest();
+      await add(entries[0]).click();
+      await request;
+      await cancel.waitFor();
+      await add(entries[1]).click();
+      await page.waitForFunction(id => {
+        const state = window.voidPlayer.getState();
+        return !state.busy && state.tracks.length === 1 && state.tracks[0].source.id === id;
+      }, entries[1].id, { timeout: 10000 });
+      assert.equal(await page.evaluate(() => window.voidPlayer.getState().error), null);
+      assert.equal(await add(entries[0]).isEnabled(), true);
+      assert.equal(await page.locator('.source-row[aria-busy="true"]').count(), 0);
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '已上屏');
+      assert.equal(await page.locator('#source-activity-cancel').isVisible(), false);
+      await page.evaluate(() => window.voidPlayer.loadFile('A', new File([], 'empty.ts')).catch(() => {}));
+      assert.equal(await page.locator('#source-activity-stage').textContent(), '载入失败');
+      assert.match(await page.locator('#source-activity-hint').textContent(), /非空的视频文件/);
+      await page.emulateMedia({ colorScheme: 'dark' });
+      await page.screenshot({ path: path.join(screenshots, `${browserName}-error.png`) });
+    } finally { await Promise.all(stalled.map(route => route.abort().catch(() => {}))); }
+  });
+
   await check('distinct same-metadata sources load and survive history restore', async page => {
     const entries = listing.entries.filter(entry => entry.name === 'same.mp4');
     assert.equal(entries.length, 2);
@@ -165,7 +222,7 @@ try {
     await settle(page);
     assert.equal(await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws)),after,'no continuous redraw while paused');
   });
-  console.log(`Browser regressions passed (${browserName}); no screenshots saved.`);
+  console.log(`Browser regressions passed (${browserName}); status screenshots saved under artifacts/source-activity.`);
 } finally {
   try { await browser?.close(); }
   finally {

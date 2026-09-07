@@ -11,6 +11,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
   平移与像素尺寸模式的纯几何/状态（DOM 接线在 `main.ts`，标注走独立视口 SVG viewBox，视频走 viewport-sized WebGL 采样 +
   clip-path，不动解码路径）；`log.ts` / `log-panel.ts` / `log-storage.ts`
   本地诊断日志；`agent.ts` WebMCP 工具；`library.ts` / `ui/source-catalog.ts` / `ui/workbench.ts` 媒体库与工具区；`ui/track-drag.ts` 排序输入；`ui/seek-preview.ts` 时间预览/标注吸附；`ui/source-actions.ts` 服务连接和文件操作。
+- `src/mp4-engine.ts` / `mp4-config.ts`：远程 MP4 的 TS 包索引和 VVC 配置；与 FLV 共用 `packet-media.ts` / `packet-worker.ts`。`range-reader.ts` 有界缓存；`range-bridge.ts` 仅供 FFmpeg 容器回退的同步 AVIO 读取。
 - `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：Worker 内的 FLV 分块读取、索引及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
 - `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
@@ -38,16 +39,20 @@ npm run build            # tsc --noEmit && vite build
 npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/ffprobe）
 npm run test:annotations:rendering # DPR 2 双轨连续缩放、最终像素、图层与工具条约束
 npm run test:annotations:browser # 标注交互与实际采样像素回归
+npm run test:range:browser # MP4/VVC 和 FFmpeg Range、seek、播放基准
 npm run test:flv:browser # FLV WebKit 解码、Range、seek 和播放回归
 npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服务重启还原
 npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
+npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
+npm run test:connection:browser # HTTP 引导、Windows/macOS 步骤与公开证书下载
 node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 ```
 
 改动播放/解码路径后必须跑 bench；改动载入路径后跑测试即可。
+源画布按需由 presenter.captureFrame 生成；取像素/缩略图不得依赖隐藏画布在每帧更新。
 改动视图尺寸调度、轨道操作或片源 UI 后跑 test:browser；需先同步样片/core 并安装 Playwright WebKit。
 
 ## 独立发布

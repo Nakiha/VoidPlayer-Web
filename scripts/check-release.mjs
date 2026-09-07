@@ -96,8 +96,13 @@ try {
   assert.deepEqual((await (await fetch(portableBase + '/api/health', { headers: { cookie: portableCookie } })).json()).actor, portableActor);
   await stop();
   const securePort = await freePort();
-  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test'], null);
+  const guidePort = await freePort();
+  const secureBase = await start(securePort, {}, ['--https', 'voidplayer.test', '--http-port', String(guidePort)], null);
   const ca = await readFile(path.join(folder, 'data/tls/voidplayer-ca.crt'), 'utf8');
+  const guideBase = `http://127.0.0.1:${guidePort}`;
+  assert.equal((await fetch(guideBase)).status, 200);
+  assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
+  assert.equal((await fetch(guideBase + '/api/library')).status, 404);
   const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
   assert.equal(secureResponse.status, 200);
   assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');
@@ -209,7 +214,7 @@ try {
   assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206);
   await stop();
   const migratedIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
-  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 2);
+  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 3);
   assert.ok(migratedIndex.prepare('SELECT fs_type FROM root_storage').get()?.fs_type);
   migratedIndex.close();
   // A stopped full-data backup must restore into a fresh directory, not only

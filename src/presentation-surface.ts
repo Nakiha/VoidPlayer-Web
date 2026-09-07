@@ -14,6 +14,7 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
   const ctx = gl ? null : canvas.getContext('2d');
   let geometry: PresentationGeometry | null = null;
   let uploadedWidth = 0, uploadedHeight = 0;
+  let sourceReady = true;
   let texture: WebGLTexture | null = null, program: WebGLProgram | null = null, buffer: WebGLBuffer | null = null;
   if (gl) {
     const shader = (type: number, code: string) => {
@@ -59,12 +60,33 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
         else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, source.width, source.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, input);
       } else gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, input);
       uploadedWidth = source.width; uploadedHeight = source.height;
+      sourceReady = input === source;
     }
     draw();
   }
   source.classList.add('frame-source'); upload();
   return {
     upload,
+    directUpload: !!gl,
+    captureSource() {
+      if (!gl || sourceReady) return source;
+      // Read the source texture only for explicit pixel/thumbnail requests.
+      // Texture row zero is the source's top row, independent of viewport transforms.
+      const previous = gl.getParameter(gl.FRAMEBUFFER_BINDING);
+      const framebuffer = gl.createFramebuffer();
+      try {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('无法读取当前视频帧。');
+        const pixels = new Uint8Array(source.width * source.height * 4);
+        gl.readPixels(0, 0, source.width, source.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        const context = source.getContext('2d');
+        if (!context) throw new Error('浏览器无法创建画布。');
+        context.putImageData(new ImageData(new Uint8ClampedArray(pixels.buffer), source.width, source.height), 0, 0);
+        sourceReady = true;
+      } finally { gl.bindFramebuffer(gl.FRAMEBUFFER, previous); gl.deleteFramebuffer(framebuffer); }
+      return source;
+    },
     geometry(value: PresentationGeometry | null) { if (JSON.stringify(geometry) === JSON.stringify(value)) return; geometry = value; canvas.hidden = !value; draw(); },
     dispose() { if (gl) { gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program); gl.getExtension('WEBGL_lose_context')?.loseContext(); } canvas.remove(); source.classList.remove('frame-source'); },
   };

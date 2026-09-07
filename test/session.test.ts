@@ -115,7 +115,10 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
+  assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
+  for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
   await get('seek_review').execute({ ptsUs: 45000 });
   assert.equal(session.getState().tracks[0].frame?.ptsUs, 40000);
   get('add_review_mark').execute({ slot: 'A', text: 'Agent note' });
@@ -300,7 +303,7 @@ test('slow decode cannot finish playback before the final frame is drawn', async
   await session.dispose();
 });
 
-test('pause while a decode is pending rejects late presentation and releases the iterator', async () => {
+test('pause retains a pending decode without late presentation; dispose releases it', async () => {
   const m = media(); const started = deferred<void>(); const release = deferred<void>();
   let returned = false; let draws = 0;
   m.source.framesFrom = async function* () {
@@ -315,8 +318,10 @@ test('pause while a decode is pending rejects late presentation and releases the
   await started.promise; session.pause(); const count = draws; release.resolve();
   await new Promise(r => setTimeout(r, 30));
   assert.equal(draws, count);
-  assert.equal(returned, true);
+  assert.equal(returned, false);
   await session.dispose();
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, true);
 });
 
 test('both track producers start independently and paused sleep releases their queues', async () => {
@@ -574,5 +579,119 @@ test('workspace decode failure and cancellation preserve the prior session and r
   const pending=deferred<MediaSource>(), cancelled=media('cancelled');
   const operation=session.restoreWorkspace(document,()=>pending.promise);await new Promise(r=>setTimeout(r,0));session.pause();pending.resolve(cancelled.source);
   await assert.rejects(operation,{name:'AbortError'});assert.equal(cancelled.disposed,1);assert.equal(original.disposed,0);
+  await session.dispose();
+});
+
+test('replacing a hung load immediately frees the queue and disposes its late source', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), late = media('late'), next = media('next');
+  const started = deferred<void>(), pending = deferred<MediaSource>();
+  let signal!: AbortSignal;
+  const loading = session.load('A', value => { signal = value; started.resolve(); return pending.promise; });
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  await started.promise;
+  await session.load('A', async () => next.source);
+  await rejected;
+  assert.equal(signal.aborted, true);
+  assert.equal(session.getState().tracks[0].id, 'next');
+  assert.equal(session.getState().error, null);
+  pending.resolve(late.source);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(late.disposed, 1);
+  session.pause();
+  assert.equal(next.disposed, 0, 'pause must not dispose a committed track');
+  await session.dispose();
+});
+
+test('cancelling while showing the first frame releases the incoming decoder exactly once', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), incoming = media('incoming');
+  const started = deferred<void>(), released = deferred<void>();
+  const dispose = incoming.source.dispose;
+  incoming.source.dispose = () => { dispose(); released.resolve(); };
+  incoming.source.frameAt = async () => { started.resolve(); await released.promise; throw new Error('decoder stopped'); };
+  const loading = session.load('A', async () => incoming.source);
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  await started.promise;
+  session.pause();
+  await rejected;
+  assert.equal(incoming.disposed, 1);
+  assert.equal(session.getState().error, null);
+  await session.load('A', async () => media('recovered').source);
+  await session.dispose();
+});
+
+test('shared load status reports stages and terminal results, ignoring progress from a cancelled load', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), pending = deferred<MediaSource>(), started = deferred<void>();
+  let report!: import('../src/media-progress.ts').MediaOpenProgress;
+  const loading = session.load('A', async (_, progress) => { report = progress; progress('index'); started.resolve(); return pending.promise; }, 'capture.ts');
+  const rejected = assert.rejects(loading, { name: 'AbortError' });
+  assert.equal(session.getState().mediaLoad?.stage, 'queued');
+  assert.equal(session.getState().mediaLoad?.state, 'loading');
+  await started.promise;
+  assert.equal(session.getState().mediaLoad?.name, 'capture.ts');
+  assert.equal(session.getState().mediaLoad?.stage, 'index');
+  assert.equal(session.getState().mediaLoad?.state, 'loading');
+  session.pause();
+  await rejected;
+  assert.equal(session.getState().mediaLoad?.state, 'cancelled');
+  assert.ok(session.getState().mediaLoad?.finishedAt);
+  await session.load('A', async () => media('next').source, 'next');
+  report('decoder');
+  assert.equal(session.getState().mediaLoad?.name, 'next');
+  assert.equal(session.getState().mediaLoad?.state, 'complete');
+  await assert.rejects(session.load('A', async (_, progress) => { progress('decoder'); throw new Error('broken core'); }, 'bad.ts'));
+  assert.equal(session.getState().mediaLoad?.stage, 'decoder');
+  assert.equal(session.getState().mediaLoad?.state, 'error');
+  assert.equal(session.getState().mediaLoad?.error, 'broken core');
+  assert.equal(session.getState().tracks[0].name, 'next');
+  pending.resolve(media('late').source);
+  await session.dispose();
+});
+
+test('removing a track cancels a seek waiting on background indexing immediately', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), sample = media();
+  sample.source.info.indexState = 'building';
+  let started!: () => void;
+  const ready = new Promise<void>(r => { started = r; });
+  sample.source.ensureIndexed = async pts => { if (pts! > 0) { started(); await new Promise<void>(() => {}); } };
+  await session.load('A', async () => sample.source);
+  const seeking = session.seek(1000000), rejected = assert.rejects(seeking, { name: 'AbortError' });
+  await ready;
+  await session.removeTrack('A'); await rejected;
+  assert.equal(session.getState().tracks.length, 0);
+  await session.dispose();
+});
+
+test('pause/resume reuses both decoders with no random seek, while seek invalidates them', async () => {
+  const session = new ReviewSession(() => {});
+  let seeks = 0, iterators = 0, returned = 0;
+  for (const slot of ['A', 'B'] as const) {
+    const m = media(slot, Array.from({ length: 100 }, (_, i) => i * 40000), 4000000);
+    const at = m.source.frameAt, from = m.source.framesFrom;
+    m.source.frameAt = async pts => { seeks++; return at(pts); };
+    m.source.framesFrom = async function* (pts) { iterators++; try { yield* from(pts); } finally { returned++; } };
+    await session.load(slot, async () => m.source);
+  }
+  const initialSeeks = seeks;
+  await session.play(); await new Promise(r => setTimeout(r, 30));
+  for (let i = 0; i < 5; i++) { session.pause(); await session.play(); }
+  await new Promise(r => setTimeout(r, 30));
+  session.pause();
+  assert.equal(seeks, initialSeeks); assert.equal(iterators, 2); assert.equal(returned, 0);
+  await session.seek(400000); await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, 2);
+  await session.play(); await new Promise(r => setTimeout(r, 0));
+  assert.equal(iterators, 4);
+  await session.dispose(); await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, 4);
+});
+
+test('adding/reopening another track does not seek an existing frame already at session zero', async () => {
+  const first = media('first'), session = new ReviewSession(() => {});
+  await session.load('A', async () => first.source);
+  first.source.frameAt = async () => { throw new Error('random access cannot reproduce the pre-roll first frame'); };
+  await session.load('B', async () => media('second').source);
+  await session.removeTrack('B');
+  await session.load('B', async () => media('second-again').source);
+  assert.equal(session.getState().tracks.length,2);assert.equal(session.getState().tracks[0].frame?.ptsUs,0);
   await session.dispose();
 });
