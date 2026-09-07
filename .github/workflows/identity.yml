@@ -2,7 +2,7 @@ name: Verify intranet users
 on:
   pull_request:
   push:
-    branches: [main, codex/simplify-intranet-identity]
+    branches: [main]
 permissions:
   contents: read
 jobs:

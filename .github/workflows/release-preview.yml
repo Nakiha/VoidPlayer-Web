@@ -151,11 +151,23 @@ jobs:
         run: |
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
-      - name: Test trusted HTTPS loading, repeated dual WebCodecs playback and benchmark
+      - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
-        run: node scripts/check-http-playback.mjs
+        run: node scripts/check-http-playback.mjs --functional-only
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
+      - name: Report playback performance on this runner (non-blocking)
+        id: benchmark
+        if: success()
+        continue-on-error: true
+        run: node scripts/check-http-playback.mjs --benchmark-only
+        env:
+          VOIDPLAYER_HTTPS_TEST: '1'
+      - name: Summarize playback benchmark
+        if: ${{ !cancelled() && steps.benchmark.outcome == 'failure' }}
+        run: |
+          echo '::warning::Playback benchmark did not pass on this runner; see https-playback-reports. Functional checks remain required.'
+          echo 'Playback benchmark: did not pass on this runner. See https-playback-reports for results and logs for execution errors. Performance is informational; functional checks still gate release aggregation.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
