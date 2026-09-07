@@ -201,13 +201,20 @@ export class ReviewSession {
     });
     return this.getState();
   }
+  private async waitForIndex(pending: Promise<unknown>) {
+    const controller = new AbortController();
+    const abort = () => controller.abort(new DOMException('定位已取消。', 'AbortError'));
+    this.abortLoad = abort;
+    try { await abortableLoad(pending, controller.signal); }
+    finally { if (this.abortLoad === abort) this.abortLoad = undefined; }
+  }
   async seek(ptsUs: number) {
     const scoped = contextLog();
     timeUs(ptsUs);
     try {
       await this.run('seek', { ptsUs }, async current => {
         if (!this.tracks.size) throw new Error('请先打开视频。');
-        await Promise.all([...this.tracks.values()].map(t => t.source.ensureIndexed?.(Math.max(0, ptsUs - t.offsetUs))));
+        await this.waitForIndex(Promise.all([...this.tracks.values()].map(t => t.source.ensureIndexed?.(Math.max(0, ptsUs - t.offsetUs)))));
         if (!current()) return;
         await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
       });
@@ -228,7 +235,11 @@ export class ReviewSession {
       await this.run('step', { direction }, async current => {
         const entries = [...this.tracks];
         if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
-        if (direction > 0) await this.stepForward(entries, current);
+        if (direction > 0) {
+          await this.waitForIndex(Promise.all(entries.map(([, t]) => t.source.ensureIndexed?.())));
+          if (!current()) return;
+          await this.stepForward(entries, current);
+        }
         else await this.stepBackward(entries, current);
       });
     } catch (error) {
@@ -484,7 +495,7 @@ export class ReviewSession {
           const info = document.media.find(m => m.id === track.mediaId)!;
           const source = await open(info);
           next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs });
-          await source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs));
+          await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
           source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.

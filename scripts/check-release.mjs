@@ -214,7 +214,7 @@ try {
   assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206);
   await stop();
   const migratedIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
-  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 2);
+  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 3);
   assert.ok(migratedIndex.prepare('SELECT fs_type FROM root_storage').get()?.fs_type);
   migratedIndex.close();
   // A stopped full-data backup must restore into a fresh directory, not only

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
 import { startupFixture } from './flv-startup-fixture.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
@@ -20,7 +22,7 @@ try {
   const startupMs = Math.round(performance.now() - start);
   assert.equal(first.tracks[0].decoder, 'webcodecs'); assert.equal(first.tracks[0].frame.ptsUs, 0);
   assert.equal(first.tracks[0].indexState, 'building'); assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
-  await page.screenshot({ path: `/tmp/voidplayer-flv-startup-${browserName}.png` });
+  await page.screenshot({ path: `.run/playback-reports/flv-startup-${browserName}.png` });
   await within(call('seek_review', { ptsUs: 0 }), 3000);
   let finished = false; const seek = call('seek_review', { ptsUs: 2500000 }).then(s => { finished = true; return s; });
   await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
@@ -35,13 +37,13 @@ try {
   const admin = await browser.newPage(); await admin.goto(fixture.base + '/admin');
   await admin.locator('[data-pane="frame-indexes"]').click();
   await admin.locator('.admin-frame-index-row').waitFor();
-  await admin.screenshot({ path: `/tmp/voidplayer-frame-indexes-${browserName}.png` });
+  await admin.screenshot({ path: `.run/playback-reports/frame-indexes-${browserName}.png` });
   await admin.getByRole('button', { name: '清理 startup.flv 的帧索引', exact: true }).click();
   await admin.locator('#frame-index-confirm-delete').click();
   await admin.waitForFunction(() => document.querySelector('#frame-index-summary').textContent.startsWith('0 个'));
   assert.equal((await call('list_frame_indexes')).count, 0);
   await admin.setViewportSize({ width: 390, height: 844 });
-  await admin.screenshot({ path: `/tmp/voidplayer-frame-indexes-mobile-${browserName}.png` });
+  await admin.screenshot({ path: `.run/playback-reports/frame-indexes-mobile-${browserName}.png` });
   assert.equal(await admin.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   // MCP mutations use the same endpoint and permission checks as the UI.
   assert.deepEqual(await call('clear_frame_indexes', { scope: 'all' }), { removed: 0 });

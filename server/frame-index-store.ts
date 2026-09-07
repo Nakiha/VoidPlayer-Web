@@ -1,6 +1,6 @@
 import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
-import { FLV_INDEX_BYTES, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
+import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
 
 const CACHE_LIMIT = 256 * 1024 * 1024;
@@ -10,8 +10,13 @@ export class FrameIndexStore {
   get epoch(): number { return Number(this.db.prepare('SELECT epoch FROM frame_index_epoch WHERE id=1').get()!.epoch); }
   get(id: string, version: string): { epoch: number; index: FlvIndexDocument | null } {
     const row = this.db.prepare('SELECT document FROM frame_indexes WHERE media_id=? AND version=?').get(id, version);
-    if (row) this.db.prepare('UPDATE frame_indexes SET accessed_at=? WHERE media_id=?').run(Date.now(), id);
-    return { epoch: this.epoch, index: row ? JSON.parse(String(row.document)) : null };
+    let index: FlvIndexDocument | null = null;
+    if (row) {
+      try { index = JSON.parse(String(row.document)); } catch { /* discard an unreadable cache */ }
+      if (index?.schema !== FLV_INDEX_SCHEMA) { this.db.prepare('DELETE FROM frame_indexes WHERE media_id=?').run(id); index = null; }
+      else this.db.prepare('UPDATE frame_indexes SET accessed_at=? WHERE media_id=?').run(Date.now(), id);
+    }
+    return { epoch: this.epoch, index };
   }
   put(id: string, version: string, size: number, value: unknown, epoch: unknown) {
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');

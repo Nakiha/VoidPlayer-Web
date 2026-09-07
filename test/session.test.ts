@@ -644,3 +644,17 @@ test('shared load status reports stages and terminal results, ignoring progress 
   pending.resolve(media('late').source);
   await session.dispose();
 });
+
+test('removing a track cancels a seek waiting on background indexing immediately', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), sample = media();
+  sample.source.info.indexState = 'building';
+  let started!: () => void;
+  const ready = new Promise<void>(r => { started = r; });
+  sample.source.ensureIndexed = async pts => { if (pts! > 0) { started(); await new Promise<void>(() => {}); } };
+  await session.load('A', async () => sample.source);
+  const seeking = session.seek(1000000), rejected = assert.rejects(seeking, { name: 'AbortError' });
+  await ready;
+  await session.removeTrack('A'); await rejected;
+  assert.equal(session.getState().tracks.length, 0);
+  await session.dispose();
+});
