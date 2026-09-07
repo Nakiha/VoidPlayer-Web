@@ -115,7 +115,7 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -165,6 +165,16 @@ jobs:
           node --test test/fate-oracle.test.ts test/frame-description.test.ts test/avc-geometry.test.ts test/packet-timeline.test.ts test/media-state.test.ts
           node scripts/check-fate.mjs
           node scripts/check-fate-browser.mjs
+      - name: Verify HEVC display-order recovery and seek pixels
+        timeout-minutes: 4
+        run: |
+          node --test test/hevc-timeline.test.ts
+          node scripts/check-hevc-timeline-browser.mjs
+      - name: Audit FATE transport-stream clock faults (exploratory report)
+        timeout-minutes: 8
+        run: |
+          node scripts/make-timestamp-fixtures.mjs
+          node scripts/check-timestamp-corpus.mjs --report-only
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/check-http-playback.mjs --functional-only

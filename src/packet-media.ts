@@ -21,7 +21,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
-    type Init = Pick<MediaInfo, 'indexWarning' | 'indexSource' | 'indexState' | 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
+    type Init = Pick<MediaInfo, 'timelineSource' | 'indexWarning' | 'indexSource' | 'indexState' | 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
     const createRpc = async () => {
@@ -52,7 +52,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call<Init>('init', { input, prepared: restore, glueURL, wasmBinary: deps.wasmBinary,
-          forceWasm: container === 'flv' || deps.forceWasm, container, threads: reservation.threads }, [],
+          forceWasm: container === 'flv' || !!deps.forceWasm, container, threads: reservation.threads }, [],
           container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000);
         selected = glueURL;
       } catch (error) {
@@ -71,7 +71,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     if (init.decoder === 'webcodecs') reservation.release();
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified, ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
-    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range' });
+    contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration });
     let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;

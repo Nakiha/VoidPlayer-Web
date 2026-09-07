@@ -13,7 +13,7 @@
 | 路径 | 入口 | 边界 |
 | --- | --- | --- |
 | WebCodecs | `src/media.ts` | Mediabunny 解封装，通过文件或 HTTP Range 读取；浏览器负责支持的编码组合 |
-| MP4 WASM 压缩包 | `src/mp4-engine.ts`、`src/packet-media.ts`、`src/packet-worker.ts` | 远程 AVC/HEVC/AV1/VVC 由 TS 读取包索引，按 GOP 读取压缩数据；WASM 只解码 |
+| MP4 压缩包 | `src/mp4-engine.ts`、`src/hevc-timeline.ts`、`src/packet-media.ts`、`src/packet-worker.ts` | TS 读取包索引，按 GOP 读取压缩数据；缺失重排时间的 HEVC 可恢复显示序并继续 WebCodecs，其余包回退由 WASM 解码 |
 | FFmpeg 解封装回退 | `src/ffmpeg-media.ts`、`src/ffmpeg-worker.ts` | 仅用于尚不能用 TS 压缩包路径处理的文件；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
 | FLV | `src/flv-media.ts`、`src/flv-engine.ts`、`src/flv-demux.ts`、`src/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
 

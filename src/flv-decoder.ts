@@ -12,6 +12,8 @@ import { ffmpegColorInfo } from './media-metadata.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 import { loadCore } from './wasm-core.ts';
 
+/** pts is the logical source clock; a platform resource's internal timestamp
+ * may use a shifted decoder clock and must never be used as frame identity. */
 export interface FlvFrame { description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
@@ -25,27 +27,37 @@ export interface PacketDecoder {
   close(): void;
 }
 
-export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder | null> {
+export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDecoderConfig): Promise<PacketDecoder | null> {
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description)))return null;
-  const parsed = flvDecoderConfig(index);
+  const parsed = initialConfig ?? flvDecoderConfig(index);
   if (!parsed || typeof VideoDecoder === 'undefined') return null;
   let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
   if (!config) return null;
   let geometry = index.codec === 'hevc' ? hevcGeometry(index.description) : index.codec==='h264'?avcGeometry(index.description):null;
+  // Platform decoders can discard negative presentation times (edit-list
+  // preroll). Shift only at the WebCodecs boundary, restoring source time on
+  // output so indexing, seeking and other backends keep the same clock.
+  const timestampOrigin = Math.min(0, index.firstPts);
   let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
-  const frames: VideoFrame[] = [];
+  const frames: { frame: VideoFrame; pts: number }[] = [];
+  const clearFrames = () => frames.splice(0).forEach(f => f.frame.close());
   let error: Error | null = null, outstanding = 0, minimum = -Infinity;
   let notify: (() => void) | undefined;
   const decoder = new VideoDecoder({
     output(frame) {
       outstanding--;
-      try { if (geometry) frame = verifyHevcFrame(frame, geometry); }
+      try {
+        if (geometry) frame = verifyHevcFrame(frame, geometry);
+      }
       catch (e) { frame.close(); error = packetDecodeError(e, '浏览器输出校验'); notify?.(); return; }
-      if (frame.timestamp < minimum) frame.close();
-      else frames.push(frame);
-      if (frames.length > 32 || frames.reduce((n, f) => n + f.displayWidth * f.displayHeight * 4, 0) > 128 * 1024 * 1024) {
+      // Restore logical time in the frame envelope, not by cloning/relabeling
+      // the GPU resource. WebKit's nested metadata clones can trap in WebGL.
+      const pts = frame.timestamp + timestampOrigin;
+      if (pts < minimum) frame.close();
+      else frames.push({ frame, pts });
+      if (frames.length > 32 || frames.reduce((n, f) => n + f.frame.displayWidth * f.frame.displayHeight * 4, 0) > 128 * 1024 * 1024) {
         error = new MediaOpenError('resource', 'FLV 解码输出超过队列内存上限。');
-        frames.splice(0).forEach(f => f.close());
+        clearFrames();
       }
       notify?.();
     },
@@ -61,10 +73,10 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
       const parsed = flvDecoderConfig(next);
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
-      frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(nextConfig);
+      clearFrames(); decoder.reset(); decoder.configure(nextConfig);
       config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : next.codec==='h264'?avcGeometry(next.description):null; outstanding = 0; error = null; minimum = -Infinity;
     },
-    reset() { frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(config!); outstanding = 0; error = null; minimum = -Infinity; },
+    reset() { clearFrames(); decoder.reset(); decoder.configure(config!); outstanding = 0; error = null; minimum = -Infinity; },
     async send(bytes, packet) {
       check();
       if(currentIndex.codec==='h264'&&packet.key){
@@ -88,7 +100,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
         combined.set(currentIndex.description.subarray(4)); combined.set(bytes, currentIndex.description.length - 4);
         bytes = combined;
       }
-      decoder.decode(new EncodedVideoChunk({ type: packet.key ? 'key' : 'delta', timestamp: packet.pts, data: bytes as Uint8Array<ArrayBuffer> }));
+      decoder.decode(new EncodedVideoChunk({ type: packet.key ? 'key' : 'delta', timestamp: packet.pts - timestampOrigin, data: bytes as Uint8Array<ArrayBuffer> }));
       outstanding++;
       // Give hardware output a chance to run without accumulating an entire GOP.
       await new Promise<void>(resolve => setTimeout(resolve, 0));
@@ -102,16 +114,18 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
     },
     receive(target) {
       minimum = target; check();
-      frames.sort((a, b) => a.timestamp - b.timestamp);
-      while (frames.length && frames[0].timestamp < target) frames.shift()!.close();
-      const frame = frames.shift();
-      if (!frame) return null;
+      frames.sort((a, b) => a.pts - b.pts);
+      while (frames.length && frames[0].pts < target) frames.shift()!.frame.close();
+      const output = frames.shift();
+      if (!output) return null;
+      const { frame, pts } = output;
       const sample=new VideoSample(frame.clone());
-      try {return {pts:frame.timestamp,width:frame.displayWidth,height:frame.displayHeight,frame,description:sampleDescription(sample,frame.allocationSize())};}
+      try {return {pts,width:frame.displayWidth,height:frame.displayHeight,frame,description:sampleDescription(sample,frame.allocationSize())};}
+      catch (error) { frame.close(); throw error; }
       finally {sample.close();}
     },
     async drain() { await decoder.flush(); check(); },
-    close() { frames.splice(0).forEach(f => f.close()); if (decoder.state !== 'closed') decoder.close(); },
+    close() { clearFrames(); if (decoder.state !== 'closed') decoder.close(); },
   };
 }
 

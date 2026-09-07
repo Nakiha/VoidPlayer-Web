@@ -1,6 +1,7 @@
 import type { MediaInfoChange } from './media-state.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
+import { hevcDisplayOrder } from './hevc-timeline.ts';
 import { RangeReader } from './range-reader.ts';
 import { sampleDescription, validateDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
@@ -177,8 +178,16 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     }
     if(access&&(await input.getFormat()) instanceof IsobmffInputFormat){
       const reader=new RangeReader(access);
-      try{const configs=await readMp4Configurations(reader,track.id);if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');}
-      finally{reader.close();}
+      const detach=onLoadAbort(signal,()=>reader.close());
+      try{
+        const configs=await readMp4Configurations(reader,track.id);
+        if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');
+        if(await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index'))){
+          input.dispose();
+          const {openPacketMedia}=await import('./packet-media.ts');
+          return await openPacketMedia('mp4',access,meta,{signal,onProgress});
+        }
+      } finally{detach();reader.close();}
     }
     const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
     if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);

@@ -5,7 +5,8 @@ import { MediaOpenError } from './media-errors.ts';
 import { RangeReader } from './range-reader.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { readMp4Configurations } from './mp4-config.ts';
-import { wasmFlvDecoder } from './flv-decoder.ts';
+import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
+import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import type { FlvCodec, FlvIndex, FlvPacket } from './flv-demux.ts';
 import { PacketTimeline } from './packet-timeline.ts';
@@ -23,7 +24,7 @@ export class Mp4Engine {
     this.reader=new RangeReader(source);
     this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:(start,end)=>this.reader.read(start,end-start),maxCacheSize:1024*1024}),formats:[MP4,QTFF]});
   }
-  async open(glueURL:string,wasmBinary?:Uint8Array,_forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
+  async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
     try{
       onProgress?.('inspect');
       try{await this.input.getFormat();}catch(error){if(error instanceof MediaOpenError)throw error;throw new MediaOpenError('container','不是可通过 MP4 索引读取的文件。');}
@@ -46,19 +47,28 @@ export class Mp4Engine {
         if(configs.sampleSizes?.[i]!==p.byteLength)throw new MediaOpenError('container','MP4 sample 长度与包索引不一致。');
         return {configuration,sequenceNumber:i,offset:configs.sampleOffsets![i],size:p.byteLength,pts:Math.round(p.timestamp*1e6),dts:Math.round(p.timestamp*1e6-(configs.compositionOffsets![i]/resolution)*1e6),key:p.type==='key'};
       });
+      const displayOrder=codec==='hevc'?await hevcDisplayOrder(this.reader,configs,()=>onProgress?.('index')):null;
+      const recovered=displayOrder&&recoveredHevcTimes(displayOrder,packets.map(p=>p.pts),this.packets.map(p=>Math.round(p.duration*1e6)));
+      if(displayOrder&&!recovered)throw new MediaOpenError('container','HEVC 图片顺序与容器时间不一致，但无法从非等距时间线恢复显示时间。');
+      if(recovered)packets.forEach((p,i)=>{p.originalPts=p.pts;p.pts=recovered[i];});
       const order=packets.map((_,i)=>i).sort((a,b)=>packets[a].pts-packets[b].pts),pts=order.map(i=>packets[i].pts);
       if(pts.some((p,i)=>i>0&&p<=pts[i-1]))throw new MediaOpenError('container','MP4 包时间戳存在歧义，需要容器解码路径。');
-      const durations=order.map((p,i)=>Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
+      const durations=order.map((p,i)=>recovered&&i+1<pts.length?pts[i+1]-pts[i]:Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
       this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations};
-      onProgress?.('decoder');const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      const nativeConfig=!forceWasm&&recovered?await track.getDecoderConfig():null;
+      onProgress?.('decoder');const native=nativeConfig&&await nativeFlvDecoder(this.index,nativeConfig);
+      const decoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
       this.timeline=new PacketTimeline(this.index,decoder,async packet=>{
         const meta=this.packets[packet.sequenceNumber!];const p=await this.sink.getPacket(meta.timestamp);
         if(!p||p.sequenceNumber!==meta.sequenceNumber)throw new MediaOpenError('container','MP4 压缩包与索引不一致。');return p.data;
       });
-      onProgress?.('first-frame');this.primed=await this.timeline.at(Math.max(0,firstPts));
+      onProgress?.('first-frame');this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
       const firstPtsUs=this.primed.pts;
-      return {codec,decoder:'ffmpeg-wasm' as const,width:this.primed.width,height:this.primed.height,...decoder.metadata?.(),
+      const color=decoder.kind==='webcodecs'?await track.getColorSpace():null;
+      return {codec,decoder:decoder.kind,hardwareAcceleration:decoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...decoder.metadata?.(),
+        ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
+        ...(recovered?{indexWarning:'容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。',timelineSource:'hevc-poc' as const}:{}),
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}
   }

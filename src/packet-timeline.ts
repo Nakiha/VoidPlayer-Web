@@ -91,7 +91,7 @@ export class PacketTimeline {
     const operation=++this.operation;
     try{return await work();}catch(error){
       const p=this.actualPacket;
-      const failure=packetDecodeError(error,`解码操作 ${operation}，目标 PTS=${target}，实际包 offset=${p?.offset}, bytes=${p?.size}, PTS=${p?.pts}, DTS=${p?.dts}, config=${this.configuration}，实际输出 PTS=${this.lastPts}`);
+      const failure=packetDecodeError(error,`解码操作 ${operation}，目标 PTS=${target}，实际包 offset=${p?.offset}, bytes=${p?.size}, PTS=${p?.pts}, DTS=${p?.dts}, originalPTS=${p?.originalPts??p?.pts}, config=${this.configuration}，实际输出 PTS=${this.lastPts}`);
       if(failure.stage==='decode'||failure.stage==='resource')this.failure=failure;throw failure;
     }
   }

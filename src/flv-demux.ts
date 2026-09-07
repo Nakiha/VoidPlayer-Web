@@ -5,7 +5,7 @@ import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
-export interface FlvPacket { sequenceNumber?:number; configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; }
+export interface FlvPacket { sequenceNumber?:number; configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; originalPts?: number; }
 export interface FlvIndex {
   configurations?: Uint8Array[]; // Configuration records in decode-order segments.
   truncatedAt?: number; // Start of an incomplete trailing tag, never a playable packet.
