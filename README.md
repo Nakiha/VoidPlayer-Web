@@ -4,7 +4,7 @@
 
 ## 启动
 
-独立包运行无需安装 Node/Bun，见 [独立运行说明](deploy/standalone.md)。
+从 [v0.1.0 Release](https://github.com/Nakiha/VoidPlayer-Web/releases/tag/v0.1.0) 下载对应平台的独立包，运行无需安装 Node/Bun，见 [独立运行说明](deploy/standalone.md)。
 
 以下为源码开发方式，需要 Node.js 24+。首次运行：
 

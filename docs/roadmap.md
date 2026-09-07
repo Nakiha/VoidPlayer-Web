@@ -62,7 +62,7 @@
 
 ## 当前状态
 
-部署基础、媒体库和管理后台已落地，当前推进正式发布验收。发布脚本使用独立可执行文件加资源目录。macOS ARM64 预览产物通过空 PATH、与源码无关的工作目录、归档校验、初始化、并发 Range、中断、网关身份和更换程序目录保留配置/日志测试；独立服务上的四组 WebKit 播放基准通过。
+部署基础、媒体库和管理后台已落地，按本轮约定的生成片源环境完成验收，首个正式版 [v0.1.0](https://github.com/Nakiha/VoidPlayer-Web/releases/tag/v0.1.0) 已发布。下文保留各阶段验收记录。发布脚本使用独立可执行文件加资源目录。macOS ARM64 预览产物通过空 PATH、与源码无关的工作目录、归档校验、初始化、并发 Range、中断、网关身份和更换程序目录保留配置/日志测试；独立服务上的四组 WebKit 播放基准通过。
 
 正式打包入口已切换为 GitHub Actions：主分支代码推送、版本标签或手动触发，固定 core 构建仓库、FFmpeg、dav1d 修订和工具链，从源码准备同一份解码器，再由 Linux x64、Windows x64、macOS ARM64 原生 runner 打包并测试。分支预览产物与校验和保留 30 天；版本标签经三平台验证和汇总后创建 Release 草稿，公开发布仍需完成正式验收。详见 [发布与校验](../deploy/README.md#发布与校验)。[三平台独立产物、备份恢复及部署验证已通过](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34053905776)，对应应用修订 `b97915d`。Linux 额外验证随包 Docker/Compose/Caddy 的非 root、只读运行、无 Node/Bun、可信 TLS、认证边界、并发 Range 与重启后保留 CA；Windows 已验证真实独立控制台 Ctrl+C 正常退出。这是部署基础阶段的历史验收；后续媒体库/管理后台记录见下方。签名与公证尚未提供，真实网络存储仍待验收，不标记整个 roadmap 完成。
 
@@ -91,4 +91,6 @@
 
 生成环境验收通过：9 个完整解码验证的母片复制/分布成 5,242 个真实媒体文件，3 根目录、12 层、每根 260 项分页目录。RC 3 Actions 的 macOS ARM64 归档在空 PATH 下通过 WebKit/Chromium：全部路径与摘要、同名 ID 隔离、分页搜索、扫描期间四路字节精确 Range（各 100 轮）、双轨与矢量标注、gzip 导入/导出、服务器保存、离线期间重启后保留索引、其他根可读、恢复后的工作区还原，以及替换文件后旧版本返回 409。Node 全套 212 项与构建通过。复现方式见 [生成片源验收环境](generated-library-acceptance.md)。
 
-- [ ] 发布首个正式版本 v0.1.0：等待该标签的三平台构建、归档验收和草稿核验，确认后公开发布。
+- [x] 发布首个正式版本 [v0.1.0](https://github.com/Nakiha/VoidPlayer-Web/releases/tag/v0.1.0)。应用修订 `61545f00851c1277355c634c299753a7c55db2d0`，[标签 Actions](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34072770095) 的三平台构建、原生运行、升级迁移、备份恢复、Windows Ctrl+C、Linux HTTPS/容器和产物汇总全部通过。下载三平台归档后重新核验六个附件摘要、版本、修订与解码器来源，公开 Release 附件摘要完全一致。
+
+正式版 macOS ARM64 归档已重复通过上述 5,242 文件生成环境的 WebKit/Chromium 全流程；相同归档另用原有 QA 样片通过双轨工作区回归和四组 WebKit 播放基准。正式版本运行无需安装 Node/Bun/FFmpeg。实际 SMB/NFS、其他平台浏览器显示效果、签名/公证等不扩大为已验证，限制随 [0.1.0 发布说明](releases/0.1.0.md) 交付。本 Roadmap 在已约定范围内完成。
