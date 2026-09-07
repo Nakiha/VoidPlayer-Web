@@ -41,3 +41,14 @@ node scripts/check-fate-browser.mjs
 需已有锁定的单/多线程 WASM core、ffmpeg/ffprobe；浏览器检查另需 Playwright Chromium/WebKit。二进制仅放 gitignored fixtures/fate，仓库只提交清单和脚本。Node 报告为 `.run/playback-reports/fate-report.json`；浏览器报告为 `fate-browser-report.json`。浏览器检查 5 个重点样本 × 2 个浏览器 × 本地/HTTP 两条路径，每组合连续关闭重开两次，逐帧经过实际 presenter；记录阶段、尺寸/传递特性和错误，不冒充实时播放基准。
 
 CI 新增探索性报告步骤，保留失败记录并上传产物，不将已知缺陷伪装成 release gate 通过。原有功能门禁和性能报告保留。此次浏览器实测结果以相应 CI artifact 为准；本地 Chromium 下载超时，未声称本机已完成浏览器测试。
+
+## 浏览器实测补充
+
+[CI 34129807720](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/34129807720) 已完成。5 个重点样本 × Chromium/WebKit × 本地/HTTP，共 20 个组合，每组合关闭重开两轮，共 40 次。完整明细在该次 `https-playback-reports` 的 `fate-browser-report.json`。没有将 phase=complete 等同于像素/尺寸正确。
+
+- Chromium：HEVC 多 stsd 的本地路径使用普通 WASM 回退，可以完成 4 帧但尺寸仍固定错误；HTTP 包路径每轮都在首帧之后失败，目标 0µs 得到 40000µs。验证了本地/远程后端分流引出的行为差异。
+- Chromium：H.264 无重排约束的 B 帧样本，本地/HTTP 每轮都正常结束但只输出 23 帧；firstPtsUs=0，durationUs=1000000。参考和 WebKit 为 25 帧。这是静默少帧现象，尚未断定责任属于浏览器、Mediabunny 还是调用方式。
+- WebKit：隔行裁剪样本本地/HTTP 均能完整输出 126 帧，之后往返定位阶段每轮报 `Decode error`。仅测试顺序播放会漏报。
+- WebKit：brokensps FLV 输出 79 帧但始终标记 192×144；Chromium 软件路径同样输出 79 帧，记录了 192×144→320×240。多 stsd 的两种 MOV 在 WebKit 也固定为最后一段尺寸，没有抛异常。帧数一致不能代替尺寸/图像验证。
+
+本轮确认了问题并补强日志和测试基础设施，未修复以上全部解码/尺寸问题。下一批修复应以这些公开样本为验收：先统一输出帧 ABI，再处理配置切换与显示顺序；对容错恢复策略独立决策。原有功能与三平台产物汇总通过，持续双轨性能报告仍为非阻塞且有未达标项。
