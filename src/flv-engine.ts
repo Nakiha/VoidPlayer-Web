@@ -1,3 +1,4 @@
+import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -15,11 +16,7 @@ export class FlvEngine {
   index!: FlvIndex;
   private checkpoint?: FlvCheckpoint;
   decoder!: PacketDecoder;
-  private cursor = 0;
-  private configuration = 0;
-  private drained = false;
-  private anchorPts = -Infinity;
-  private last = -1;
+  private timeline?: PacketTimeline;
   private decodeFailure?: MediaOpenError;
   private primed: FlvFrame | null = null;
   constructor(input: FlvInput, prepared?: PreparedFlv) {
@@ -50,9 +47,9 @@ export class FlvEngine {
         if (completed.index.firstPts !== this.index.firstPts) throw new MediaOpenError('container', 'FLV 后续视频包早于首帧，无法保持帧时间基准。');
         await beforeCommit?.();
         this.checkpoint = completed; this.index = completed.index;
+        this.timeline?.replaceIndex(this.index);
         // The startup packet has been drained. Resume future extraction with
         // a fresh decoder cursor while retaining the already displayed frame.
-        this.last = -1;
       } finally { this.reader.setIndexing(false); }
     }
     if (!cached) void this.cache.save(this.index).catch(() => {});
@@ -66,7 +63,7 @@ export class FlvEngine {
         try {
           onProgress?.('decode');
           const native = await nativeFlvDecoder(this.index);
-          if (native) { this.decoder = native; onProgress?.('first-frame'); this.primed = await this.extract(0); }
+          if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size)); onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
           if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
           this.decoder?.close(); this.decoder = undefined!;
@@ -75,9 +72,9 @@ export class FlvEngine {
       if (!this.decoder && nativeOnly) return null;
       if (!this.decoder) {
         onProgress?.('decoder');
-        this.decodeFailure = undefined; this.configuration = 0;
+        this.decodeFailure = undefined;
         this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
-        this.last = -1;
+        this.timeline=new PacketTimeline(this.index,this.decoder,p=>this.reader.read(p.offset,p.size));
         onProgress?.('first-frame');
         this.primed = await this.extract(0);
       }
@@ -100,41 +97,14 @@ export class FlvEngine {
       throw failure;
     }
   }
-  private async extractFrame(position: number, recycle?: ArrayBuffer): Promise<FlvFrame> {
-    const idx = this.index;
-    if (!Number.isInteger(position) || position < 0 || position >= idx.order.length) throw new MediaOpenError('input', 'FLV 帧位置越界。');
-    if (position === 0 && this.primed) { const f = this.primed; this.primed = null; return f; }
-    this.primed?.frame?.close(); this.primed = null;
-    const target = idx.packets[idx.order[position]].pts;
-    const configuration = idx.packets[idx.order[position]].configuration ?? 0;
-    if (configuration !== this.configuration) {
-      if (!this.decoder.reconfigure) throw new MediaOpenError('decode', '解码器不支持视频配置切换。');
-      await this.decoder.reconfigure({ codec: idx.codec, description: idx.configurations![configuration] });
-      this.configuration = configuration; this.last = -1;
-    }
-    if (this.last < 0 || position <= this.last || position > this.last + 8) {
-      this.decoder.reset();
-      this.cursor = idx.order[position];
-      while (this.cursor > 0 && (idx.packets[this.cursor - 1].configuration ?? 0) === configuration && (!idx.packets[this.cursor].key || idx.packets[this.cursor].pts > target)) this.cursor--;
-      this.anchorPts = idx.packets[this.cursor].pts;
-      this.drained = false;
-    }
-    for (;;) {
-      const frame = this.decoder.receive(target, recycle);
-      if (frame) {
-        if (frame.pts !== target) { frame.frame?.close(); throw new MediaOpenError('decode', `FLV 解码未命中目标帧 ${target}（实际 ${frame.pts}）。`); }
-        this.last = position; return frame;
-      }
-      if (this.cursor < idx.packets.length && (idx.packets[this.cursor].configuration ?? 0) === configuration) {
-        const packet = idx.packets[this.cursor++];
-        // Leading pictures after a CRA may refer to the preceding GOP. They
-        // cannot be displayed when random access starts at this keyframe.
-        if ((idx.codec === 'hevc' || idx.codec === 'vvc') && packet.pts < this.anchorPts) continue;
-        try { await this.decoder.send(await this.reader.read(packet.offset, packet.size), packet); }
-        catch (error) { throw packetDecodeError(error, `实际送包 offset=${packet.offset}, bytes=${packet.size}, PTS=${packet.pts}, DTS=${packet.dts}, config=${configuration}，目标 PTS=${target}，锚点 PTS=${this.anchorPts}：`); }
-      } else if (!this.drained) { this.drained = true; await this.decoder.drain(); }
-      else throw new MediaOpenError('decode', 'FLV 文件未输出目标视频帧。');
-    }
+  async at(pts:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
+    if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return f;}
+    this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
-  close() { this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.decoder?.close(); this.decoder = undefined!; this.reader.close(); }
+  next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  private async extractFrame(position:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
+    if(!Number.isInteger(position)||position<0||position>=this.index.order.length)throw new MediaOpenError('input','FLV 帧位置越界。');
+    return this.at(this.index.packets[this.index.order[position]].pts,recycle);
+  }
+  close() { this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
 }

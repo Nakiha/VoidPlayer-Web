@@ -3,7 +3,7 @@ import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { VideoSample } from 'mediabunny';
-import { WorkerRpc, floorIndex, nextIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
+import { WorkerRpc, floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import type { MediaMeta, MediaSource, DecodedFrame } from './media.ts';
 import type { FlvInput } from './flv-demux.ts';
@@ -81,12 +81,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       indexing = activeRpc.call<Pick<Init, 'indexWarning' | 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
         times = result.times; durations = result.durations;
-        info.firstPtsUs = result.firstPtsUs; info.durationUs = result.durationUs; info.indexState = 'complete'; info.indexSource = result.indexSource; info.indexWarning = result.indexWarning;
-        source.onInfoChange?.();
+        info.firstPtsUs=result.firstPtsUs;info.durationUs=result.durationUs;info.indexState='complete';info.indexSource=result.indexSource;info.indexWarning=result.indexWarning;source.onInfoChange?.();
       }, error => {
         if (!disposed) {
-          info.indexState = 'error'; info.indexError = error instanceof Error ? error.message : String(error);
-          source.onInfoChange?.();
+          info.indexState='error';info.indexError=error instanceof Error?error.message:String(error);source.onInfoChange?.();
           contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
         }
         throw error;
@@ -101,11 +99,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (disposed) throw new Error('媒体已释放。');
       if (ptsUs > 0 && (info.indexState === 'building' || info.indexState === 'error')) await completeIndex();
     };
-    const extract = (position: number): Promise<DecodedFrame> => {
+    const extract = (pts:number, next=false): Promise<DecodedFrame|null> => {
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
-        const frame = await activeRpc.call<FlvFrame>('extract', { position, recycle }, recycle ? [recycle] : []);
+        const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : []);
+        if(!frame)return null;
+        const position=floorIndex(times,frame.pts-info.firstPtsUs);
         if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
         const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
         const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
@@ -123,25 +123,21 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     };
     const source: MediaSource = {
       info, ensureIndexed,
-      async frameAt(pts) { await ensureIndexed(pts); return extract(floorIndex(times, pts)); },
-      async framesAfter(pts, count) {
-        if (info.indexState !== 'complete' && (nextIndex(times, pts) < 0 || nextIndex(times, pts) + count >= times.length)) await completeIndex();
-        const result: DecodedFrame[] = [], start = nextIndex(times, pts);
-        if (start < 0) return result;
-        try { for (let i = start; i < Math.min(times.length, start + count); i++) result.push(await extract(i)); }
-        catch (error) { result.forEach(f => f.close()); throw error; }
+      async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
+      async framesAfter(pts,count){
+        if(count<=0)return [];await ensureIndexed(Infinity);
+        const result:DecodedFrame[]=[];
+        try{for(let i=0;i<count;i++){const f=await extract(pts,true);if(!f)break;result.push(f);pts=f.ptsUs;}}catch(error){result.forEach(f=>f.close());throw error;}
         return result;
       },
-      async *framesFrom(pts) {
-        await ensureIndexed(pts);
-        let i = floorIndex(times, pts);
-        while (!disposed) {
-          if (i >= times.length) {
-            if (info.indexState === 'complete' || !info.indexState) return;
-            await completeIndex(); if (i >= times.length) return;
-          }
-          yield await extract(i++);
+      async *framesFrom(pts){
+        await ensureIndexed(pts);let frame=await extract(pts);
+        while(frame&&!disposed){
+          const after=frame.ptsUs;yield frame;
+          if(info.indexState==='building')await completeIndex();
+          frame=await extract(after,true);
         }
+        if(frame&&disposed)frame.close();
       },
       dispose() { if (!disposed) { disposed = true; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
     };

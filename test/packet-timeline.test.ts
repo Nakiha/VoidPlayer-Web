@@ -1,0 +1,36 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {PacketTimeline} from '../src/packet-timeline.ts';
+import type {PacketDecoder,FlvFrame} from '../src/flv-decoder.ts';
+import type {FlvIndex} from '../src/flv-demux.ts';
+import {rgbaDescription} from '../src/frame-description.ts';
+function fixture(){
+  const closed:number[]=[],configurations:number[]=[];
+  const f=(pts:number):FlvFrame=>({pts,width:4,height:4,description:rgbaDescription(4,4),frame:{close(){closed.push(pts);}} as VideoFrame});
+  const index:FlvIndex={codec:'h264',description:new Uint8Array([0]),configurations:[new Uint8Array([0]),new Uint8Array([1])],packets:[
+    {pts:0,dts:0,key:true,offset:100,size:1,configuration:0},
+    {pts:40000,dts:40000,key:true,offset:200,size:1,configuration:1},
+  ],order:[0,1],firstPts:0,duration:80000,durations:[40000,40000]};
+  let pending:FlvFrame[]=[],ready:FlvFrame[]=[];
+  const decoder:PacketDecoder={kind:'webcodecs',async reconfigure(c){configurations.push(c.description[0]);},reset(){pending.splice(0).forEach(f=>f.frame!.close());ready.splice(0).forEach(f=>f.frame!.close());},
+    async send(_bytes,p){pending.push(...(p.pts===0?[f(0),f(20000)]:[f(40000)]));},receive(){return ready.shift()??null;},async drain(){ready.push(...pending.splice(0));},close(){this.reset();}};
+  return {timeline:new PacketTimeline(index,decoder,async()=>new Uint8Array(1)),closed,configurations};
+}
+test('display timeline preserves multi-image packet outputs, drains configuration boundaries, and seeks by actual output PTS',async()=>{
+  const {timeline,configurations}=fixture();
+  try{
+    const first=await timeline.at(0);assert.equal(first.pts,0);first.frame!.close();
+    const extra=await timeline.next(0);assert.equal(extra?.pts,20000);extra!.frame!.close();
+    const next=await timeline.next(20000);assert.equal(next?.pts,40000);next!.frame!.close();
+    assert.equal(await timeline.next(40000),null);
+    const floor=await timeline.at(30000);assert.equal(floor.pts,20000);floor.frame!.close();
+    const following=await timeline.next(20000);assert.equal(following?.pts,40000);following!.frame!.close();
+    const back=await timeline.at(0);assert.equal(back.pts,0);back.frame!.close();
+    assert.ok(configurations.includes(1));assert.ok(configurations.includes(0));
+  }finally{timeline.close();}
+});
+test('seek releases skipped and exact-hit predecessors and close releases lookahead',async()=>{
+  const {timeline,closed}=fixture();
+  const exact=await timeline.at(20000);assert.ok(closed.includes(0));exact.frame!.close();
+  const floor=await timeline.at(30000);floor.frame!.close();timeline.close();assert.ok(closed.includes(40000));
+});

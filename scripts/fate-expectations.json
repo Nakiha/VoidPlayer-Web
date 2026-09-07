@@ -23,26 +23,12 @@
     "h264/extradata-reload-multi-stsd.mov": {
       "container-single": {},
       "container-multi": {},
-      "mp4-packets": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      }
+      "mp4-packets": {}
     },
     "hevc/extradata-reload-multi-stsd.mov": {
       "container-single": {},
       "container-multi": {},
-      "mp4-packets": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      }
+      "mp4-packets": {}
     },
     "h264/crop-to-container-dims-canon.mov": {
       "container-single": {},
@@ -54,11 +40,7 @@
     "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
       "container-single": {},
       "container-multi": {},
-      "mp4-packets": {
-        "known": [
-          "play:decode"
-        ]
-      }
+      "mp4-packets": {}
     },
     "h264/interlaced_crop.mp4": {
       "container-single": {},
@@ -78,132 +60,32 @@
     "h264/brokensps.flv": {
       "chromium/local": {},
       "chromium/http": {},
-      "webkit/local": {
-        "known": [
-          "geometry",
-          "pixels",
-          "play:decode"
-        ]
-      },
-      "webkit/http": {
-        "known": [
-          "geometry",
-          "pixels",
-          "play:decode"
-        ]
-      }
+      "webkit/local": {},
+      "webkit/http": {}
     },
     "h264/extradata-reload-multi-stsd.mov": {
-      "chromium/local": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "chromium/http": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "webkit/local": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "webkit/http": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      }
+      "chromium/local": {},
+      "chromium/http": {},
+      "webkit/local": {},
+      "webkit/http": {}
     },
     "hevc/extradata-reload-multi-stsd.mov": {
-      "chromium/local": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "chromium/http": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "webkit/local": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      },
-      "webkit/http": {
-        "known": [
-          "geometry",
-          "pixels",
-          "first:decode",
-          "play:decode"
-        ]
-      }
+      "chromium/local": {},
+      "chromium/http": {},
+      "webkit/local": {},
+      "webkit/http": {}
     },
     "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
-      "chromium/local": {
-        "known": [
-          "count",
-          "pts",
-          "pixels",
-          "seek:decode"
-        ]
-      },
-      "chromium/http": {
-        "known": [
-          "count",
-          "pts",
-          "pixels",
-          "seek:decode"
-        ]
-      },
-      "webkit/local": {
-        "known": [
-          "pixels"
-        ]
-      },
-      "webkit/http": {
-        "known": [
-          "pixels"
-        ]
-      }
+      "chromium/local": {},
+      "chromium/http": {},
+      "webkit/local": {},
+      "webkit/http": {}
     },
     "h264/interlaced_crop.mp4": {
       "chromium/local": {},
       "chromium/http": {},
-      "webkit/local": {
-        "known": [
-          "geometry",
-          "seek:decode"
-        ]
-      },
-      "webkit/http": {
-        "known": [
-          "geometry",
-          "seek:decode"
-        ]
-      }
+      "webkit/local": {},
+      "webkit/http": {}
     }
   }
 }

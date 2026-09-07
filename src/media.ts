@@ -1,3 +1,6 @@
+import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
+import { readMp4Configurations } from './mp4-config.ts';
+import { RangeReader } from './range-reader.ts';
 import { sampleDescription, validateDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
@@ -8,7 +11,7 @@ import { explainMediaFailure } from './media-diagnostics.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
-import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
+import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
 import { openFFmpegMedia, openFFmpegMediaFromUrl } from './ffmpeg-media.ts';
@@ -85,7 +88,7 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
     let nativeError: unknown;
     try {
       plan.onProgress?.('decode');
-      const source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress);
+      const source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress,plan.input);
       log.info('media', '使用 WebCodecs 解码路径', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (error) {
@@ -121,7 +124,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
     meta: file, input: { file },
     onProgress, signal,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
-    fallback: () => openFallback ? openFallback(file) : openFFmpegMedia(file, { signal, onProgress }),
+    fallback: () => openFallback ? openFallback(file) : openLocalFallback(file,{signal,onProgress}),
   });
 }
 
@@ -145,7 +148,14 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
   });
 }
 
-async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+async function openLocalFallback(file:File,deps:import('./ffmpeg-media.ts').FallbackDeps):Promise<MediaSource>{
+  const {openPacketMedia}=await import('./packet-media.ts');
+  try{return await openPacketMedia('mp4',{file},file,{...deps,forceWasm:true});}
+  catch(error){loadAborted(deps.signal);if(!(error instanceof MediaOpenError)||!['container','codec'].includes(error.stage))throw error;}
+  return openFFmpegMedia(file,deps);
+}
+
+async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput): Promise<MediaSource> {
   const detachAbort = onLoadAbort(signal, () => input.dispose());
   let primed: VideoSample | null = null;
   try {
@@ -159,6 +169,16 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const { track, codec, format } = await inspectVideoTrack(input);
     if (!await track.canDecode()) throw new MediaOpenError('decode', `已识别 ${format} / ${codec}，但当前浏览器不支持该编码配置的解码。`);
     const rawConfig = await track.getDecoderConfig();
+    if(rawConfig?.codec.startsWith('avc')&&rawConfig.description){
+      const raw=rawConfig.description;
+      const bytes=ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength):new Uint8Array(raw);
+      if(!nativeAvcCompatible(avcGeometry(bytes)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码，浏览器能力探测不足以保证完整输出。');
+    }
+    if(access&&(await input.getFormat()) instanceof IsobmffInputFormat){
+      const reader=new RangeReader(access);
+      try{const configs=await readMp4Configurations(reader,track.id);if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');}
+      finally{reader.close();}
+    }
     const config = rawConfig ? await preferredVideoConfig(rawConfig) : null;
     if (!config) throw new MediaOpenError('decode', `浏览器无法解码 ${codec}，将尝试软件回退。`);
     onProgress?.('index');
@@ -187,10 +207,9 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     // Frames carry their resource and kind; the presenter (src/presenter.ts)
     // decides how to paint them.
     const wrap = (sample: VideoSample): DecodedFrame => {
-      if (info.decodedPixelFormat == null && sample.format) info.decodedPixelFormat = sample.format;
       const byteSize=sampleByteSize(sample);
       const description=sampleDescription(sample,byteSize);
-      validateDescription(description);
+      try {validateDescription(description);} catch(error) {sample.close();throw error;}
       return {
       description,
       kind: 'video-sample',

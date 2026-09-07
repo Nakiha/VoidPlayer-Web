@@ -1,3 +1,4 @@
+import { avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { sampleDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
@@ -25,11 +26,12 @@ export interface PacketDecoder {
 }
 
 export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder | null> {
+  if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description)))return null;
   const parsed = flvDecoderConfig(index);
   if (!parsed || typeof VideoDecoder === 'undefined') return null;
   let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
   if (!config) return null;
-  let geometry = index.codec === 'hevc' ? hevcGeometry(index.description) : null;
+  let geometry = index.codec === 'hevc' ? hevcGeometry(index.description) : index.codec==='h264'?avcGeometry(index.description):null;
   let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
   const frames: VideoFrame[] = [];
   let error: Error | null = null, outstanding = 0, minimum = -Infinity;
@@ -55,15 +57,30 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
     kind: 'webcodecs',
     hardwareAcceleration: config.hardwareAcceleration,
     async reconfigure(next) {
+      if(next.codec==='h264'&&!nativeAvcCompatible(avcGeometry(next.description)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码。');
       const parsed = flvDecoderConfig(next);
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
       frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(nextConfig);
-      config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : null; outstanding = 0; error = null; minimum = -Infinity;
+      config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : next.codec==='h264'?avcGeometry(next.description):null; outstanding = 0; error = null; minimum = -Infinity;
     },
     reset() { frames.splice(0).forEach(f => f.close()); decoder.reset(); decoder.configure(config!); outstanding = 0; error = null; minimum = -Infinity; },
     async send(bytes, packet) {
       check();
+      if(currentIndex.codec==='h264'&&packet.key){
+        const description=avcInBandDescription(bytes,currentIndex.description);
+        if(description){
+          const next={codec:currentIndex.codec,description};
+          const nextGeometry=avcGeometry(description),parsed=flvDecoderConfig(next);
+          if(!nativeAvcCompatible(nextGeometry)||!parsed)throw new MediaOpenError('decode','AVC 带内参数集需要软件解码。');
+          const nextConfig=await preferredVideoConfig({...parsed,optimizeForLatency:true});
+          if(!nextConfig)throw new MediaOpenError('decode','浏览器不支持 AVC 带内配置切换。');
+          // Drain with OLD geometry, retain those outputs, then accept the new
+          // configuration. A prefetched SPS must not relabel older pictures.
+          await decoder.flush();check();decoder.reset();decoder.configure(nextConfig);
+          config=nextConfig;currentIndex=next;geometry=nextGeometry;outstanding=0;
+        }
+      }
       // WebCodecs AV1 has no description field. Include sequence-header OBUs
       // held only in av1C when starting from any keyframe.
       if (currentIndex.codec === 'av1' && packet.key && currentIndex.description.length > 4) {

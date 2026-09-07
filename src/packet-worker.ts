@@ -12,7 +12,7 @@ async function start() {
   const send = (value: unknown, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | undefined;
   let chain = Promise.resolve();
-  const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; recycle?: ArrayBuffer }) => {
+  const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; pts:number; recycle?: ArrayBuffer }) => {
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Scanning yields to extraction; commit metadata between extracts.
@@ -35,8 +35,9 @@ async function start() {
           send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress })) });
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send({ id, ok: true, data: null });
-        } else if (type === 'extract' && engine) {
-          const result = await engine.extract(message.position, message.recycle);
+        } else if (['extract','at','next'].includes(type) && engine) {
+          const result = type==='at'?await engine.at(message.pts,message.recycle):type==='next'?await engine.next(message.pts,message.recycle):await engine.extract(message.position, message.recycle);
+          if(!result){send({id,ok:true,data:null});return;}
           try { send({ id, ok: true, data: result }, result.frame ? [result.frame] : [result.pixels!]); }
           finally { result.frame?.close(); }
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');
