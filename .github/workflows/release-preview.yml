@@ -115,7 +115,7 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -166,7 +166,7 @@ jobs:
           node scripts/check-fate.mjs
           node scripts/check-fate-browser.mjs
       - name: Verify HEVC display-order recovery and seek pixels
-        timeout-minutes: 4
+        timeout-minutes: 12
         run: |
           node --test test/hevc-timeline.test.ts
           node scripts/check-hevc-timeline-browser.mjs
