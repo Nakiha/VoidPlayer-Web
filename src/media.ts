@@ -4,8 +4,7 @@ import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import type { MediaInfo, FrameInfo } from './model.ts';
-import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
-import { openFFmpegMedia } from './ffmpeg-media.ts';
+import { openFFmpegMedia, openFFmpegMediaFromUrl } from './ffmpeg-media.ts';
 import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 
@@ -63,12 +62,11 @@ const stageOf = (error: unknown): OpenStage =>
 interface OpenPlan {
   meta: MediaMeta;
   nativeInput(): Input;
-  /** Fetches the whole file for the legacy container+decoder fallback. */
-  fetchFile(): Promise<File>;
+  fallback(): Promise<MediaSource>;
   onProgress?: MediaOpenProgress;
 }
 
-function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<MediaSource>): Promise<MediaSource> {
+function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
   const log = contextLog();
   return (async () => {
     let nativeError: unknown;
@@ -84,9 +82,8 @@ function openWithFallback(plan: OpenPlan, openFallback: (file: File) => Promise<
     if (stage === 'input' || stage === 'resource') throw nativeError;
     log.info('media', 'WebCodecs 路径不可用，尝试 WASM 回退', { name: plan.meta.name, stage, reason: errorText(nativeError) });
     try {
-      const file = await plan.fetchFile();
       plan.onProgress?.('decode');
-      const source = await openFallback(file);
+      const source = await plan.fallback();
       log.info('media', 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (fallbackError) {
@@ -108,41 +105,27 @@ export async function openMedia(file: File, openFallback: (file: File) => Promis
     meta: file,
     onProgress,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
-    fetchFile: async () => file,
-  }, openFallback);
+    fallback: () => openFallback(file),
+  });
 }
 
-// Library items are read over HTTP range requests; mediabunny's UrlSource
-// streams them, so large files are never downloaded whole on the WebCodecs
-// path. The WASM fallback still reads the full file into memory (streaming
-// AVIO is follow-up work) — but the size budget is enforced by a preflight
-// BEFORE that download starts.
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (file: File) => Promise<MediaSource> = openFFmpegMedia, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+// Both native and WASM library paths read compressed bytes on demand.
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: (url: string, meta: MediaMeta) => Promise<MediaSource> = openFFmpegMediaFromUrl, onProgress?: MediaOpenProgress): Promise<MediaSource> {
+  if (!meta.size) {
+    const head = await fetch(url, { method: 'HEAD' });
+    if (!head.ok) throw new MediaOpenError('input', `读取媒体文件信息失败（${head.status}）。`);
+    meta = { ...meta, size: Number(head.headers.get('content-length')) };
+  }
+  if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
   if (/\.flv$/i.test(meta.name)) {
     const { openFlvMedia } = await import('./flv-media.ts');
     return openFlvMedia({ url, size: meta.size }, meta);
   }
   return openWithFallback({
-    meta,
-    onProgress,
+    meta, onProgress,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
-    fetchFile: async () => {
-      let size = meta.size;
-      if (!size) {
-        const head = await fetch(url, { method: 'HEAD' });
-        size = Number(head.headers.get('content-length')) || 0;
-      }
-      if (size > MAX_FALLBACK_FILE_BYTES) {
-        throw new MediaOpenError('resource', `文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
-      }
-      onProgress?.('download');
-      const response = await fetch(url);
-      if (!response.ok) throw new MediaOpenError('input', `下载媒体库文件失败（${response.status}）。`);
-      // Keep the response as a browser-managed Blob instead of materializing
-      // the whole compressed file in a JS ArrayBuffer and copying it to File.
-      return new File([await response.blob()], meta.name, { lastModified: meta.lastModified });
-    },
-  }, openFallback);
+    fallback: () => openFallback(url, meta),
+  });
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta): Promise<MediaSource> {

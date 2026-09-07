@@ -2,7 +2,7 @@ name: Build and verify standalone releases
 
 on:
   push:
-    branches: [main, codex/simplify-intranet-identity]
+    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide]
     tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
@@ -136,7 +136,7 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts
+      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
@@ -153,6 +153,7 @@ jobs:
         run: |
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
+          node scripts/check-range-browser.mjs webkit
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/check-http-playback.mjs --functional-only

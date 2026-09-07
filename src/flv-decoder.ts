@@ -79,7 +79,7 @@ export async function nativeFlvDecoder(index: FlvIndex): Promise<PacketDecoder |
 
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function wasmFlvDecoder(index: FlvIndex, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
+export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'description'>, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
   const mod = await import(/* @vite-ignore */ glueURL);
   const core = await mod.default(wasmBinary ? { wasmBinary } : {});
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');

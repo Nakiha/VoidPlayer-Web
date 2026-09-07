@@ -1,7 +1,8 @@
+import { createRangeBridge } from './range-bridge.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
-import type { DecodedFrame, MediaSource } from './media.ts';
+import type { DecodedFrame, MediaSource, MediaMeta } from './media.ts';
 import type { MediaInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
@@ -61,7 +62,7 @@ interface InitResult {
   height: number;
   codec: string;
   indexMs?: number;
-  ioMode?: 'blob' | 'memfs';
+  ioMode?: 'blob' | 'memfs' | 'http-range';
   colorPrimaries?: number;
   colorTransfer?: number;
   colorSpace?: number;
@@ -97,7 +98,9 @@ export class WorkerRpc {
   private nextId = 1;
   private failure: Error | null = null;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
-  constructor(worker: Worker) {
+  private onTerminate: () => void;
+  constructor(worker: Worker, onTerminate: () => void = () => {}) {
+    this.onTerminate = onTerminate;
     this.worker = worker;
     const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stage?: OpenStage }) => {
       const { id, ok, data: payload, error } = data;
@@ -136,13 +139,33 @@ export class WorkerRpc {
   terminate(error = new Error('WASM worker 已释放。')) {
     if (this.failure) return;
     this.failure = error;
+    this.onTerminate();
     for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
     this.pending.clear();
     this.worker.terminate();
   }
 }
 
-export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<MediaSource> {
+type FallbackInput = File | (MediaMeta & { url: string });
+
+export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps: FallbackDeps = {}): Promise<MediaSource> {
+  const { openPacketMedia } = await import('./packet-media.ts');
+  try {
+    return await openPacketMedia('mp4', { url, size: meta.size }, meta, { ...deps, forceWasm: true });
+  } catch (error) {
+    // Only a demux/codec capability gap can select FFmpeg's container path.
+    // Network, resource and packet decoding failures must remain visible.
+    if (!(error instanceof MediaOpenError) || !['container', 'codec'].includes(error.stage)) throw error;
+    contextLog().info('media', 'MP4 压缩包路径不可用，使用 FFmpeg Range 解封装', { reason: error.message });
+  }
+  return openFallbackInput({ ...meta, url }, deps);
+}
+
+export function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Promise<MediaSource> {
+  return openFallbackInput(file, deps);
+}
+
+async function openFallbackInput(file: FallbackInput, deps: FallbackDeps): Promise<MediaSource> {
   const openStart = performance.now();
   liveFallbacks++;
   try {
@@ -153,12 +176,12 @@ export async function openFFmpegMedia(file: File, deps: FallbackDeps = {}): Prom
   }
 }
 
-async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: number): Promise<MediaSource> {
+async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, openStart: number): Promise<MediaSource> {
   // The Blob crosses into the worker by reference; there the custom AVIO
   // reads it in chunks via FileReaderSync, so the file never enters WASM
   // memory at all. Environments without FileReaderSync (Node tests) buffer
   // the whole file in the worker and enforce the byte cap there.
-  if (file.size > MAX_FALLBACK_FILE_BYTES && typeof File === 'undefined') {
+  if (!('url' in file) && file.size > MAX_FALLBACK_FILE_BYTES && typeof File === 'undefined') {
     throw new Error(`文件超过 WASM 回退解码的 ${MAX_FALLBACK_FILE_BYTES / 1024 / 1024} MiB 内存上限。`);
   }
   // In a cross-origin-isolated page, SharedArrayBuffer unlocks the
@@ -181,9 +204,15 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
   let lastError: unknown = null;
   for (const glueURL of candidates) {
     rpc?.terminate();
-    rpc = new WorkerRpc(deps.workerFactory?.() ?? await createWorker());
+    const worker = deps.workerFactory?.() ?? await createWorker();
+    let bridge: ReturnType<typeof createRangeBridge> | undefined;
     try {
-      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, blob: file };
+      if ('url' in file) bridge = createRangeBridge(worker, file.url, file.size);
+    } catch (error) { worker.terminate(); throw error; }
+    rpc = new WorkerRpc(worker, () => bridge?.close());
+    try {
+      const payload: Record<string, unknown> = { glueURL, name: file.name, threads,
+        ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
         payload.wasmBinary = new Uint8Array(deps.wasmBinary).buffer;
@@ -200,6 +229,7 @@ async function openFFmpegMediaInner(file: File, deps: FallbackDeps, openStart: n
       break;
     } catch (error) {
       lastError = error;
+      if (error instanceof MediaOpenError && ['input', 'resource'].includes(error.stage)) { rpc.terminate(); throw error; }
       scoped.warn('media', 'WASM core 初始化失败，尝试下一个候选', { glueURL, error: error instanceof Error ? error.message : String(error) });
       init = null;
     }

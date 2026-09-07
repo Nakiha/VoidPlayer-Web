@@ -20,6 +20,7 @@ try {
     page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(request.url()).pathname)) mediaRequests.push(request.headers()); });
     try {
       await page.goto(base);
+      await page.waitForFunction(() => !!window.voidPlayer);
       const reference = JSON.parse(await readFile(path.join(root, 'fixtures/flv', name + '.json'), 'utf8'));
       const result = await page.evaluate(async ({ name, reference }) => {
         const call = async (name, params = {}) => { try { return await window.voidPlayer.tools.find(t => t.name === name).execute(params); } catch (e) { throw new Error(name + ' ' + JSON.stringify(params) + ': ' + e.message); } };

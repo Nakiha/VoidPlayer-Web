@@ -1,3 +1,4 @@
+import { RangeReader } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
@@ -17,42 +18,16 @@ const u24 = (b: Uint8Array, i: number) => b[i] * 65536 + b[i + 1] * 256 + b[i + 
 const u32 = (b: Uint8Array, i: number) => b[i] * 16777216 + u24(b, i + 1);
 const s24 = (b: Uint8Array, i: number) => (u24(b, i) << 8) >> 8;
 
-/** One bounded read window. Range responses are checked before consuming a body;
- * a server ignoring Range must never silently trigger a full-file download. */
-export class FlvReader {
-  readonly input: FlvInput;
-  size: number;
-  private cache: Uint8Array = new Uint8Array(0);
-  private start = 0;
-  private controller = new AbortController();
-  constructor(input: FlvInput) { this.input = input; this.size = 'file' in input ? input.file.size : input.size; }
-  async read(offset: number, length: number): Promise<Uint8Array> {
-    if (this.controller.signal.aborted) throw new MediaOpenError('input', 'FLV 文件已关闭。');
-    if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > this.size) bad('文件被截断或标签长度越界。');
-    if (!length) return new Uint8Array(0);
-    if (offset >= this.start && offset + length <= this.start + this.cache.length) return this.cache.subarray(offset - this.start, offset - this.start + length);
-    const end = Math.min(this.size, offset + Math.max(length, 64 * 1024));
-    let bytes: Uint8Array;
-    try {
-      if ('file' in this.input) bytes = new Uint8Array(await this.input.file.slice(offset, end).arrayBuffer());
-      else {
-        const response = await fetch(this.input.url, { headers: { Range: `bytes=${offset}-${end - 1}` }, signal: this.controller.signal });
-        const range = response.headers.get('content-range');
-        if (response.status !== 206 || range !== `bytes ${offset}-${end - 1}/${this.size}`) {
-          await response.body?.cancel();
-          throw new MediaOpenError('input', 'FLV 文件服务必须提供正确的 HTTP Range 响应。');
-        }
-        bytes = new Uint8Array(await response.arrayBuffer());
-      }
-    } catch (error) {
-      if (error instanceof MediaOpenError) throw error;
-      throw new MediaOpenError('input', `读取 FLV 失败：${error instanceof Error ? error.message : String(error)}`);
+/** Private-CDN and Enhanced FLV share bounded, cancellable HTTP Range IO. */
+export class FlvReader extends RangeReader {
+  constructor(input: FlvInput) { super(input, 64 * 1024); }
+  override async read(offset: number, length: number): Promise<Uint8Array> {
+    try { return await super.read(offset, length); }
+    catch (error) {
+      if (error instanceof MediaOpenError) throw new MediaOpenError(error.stage, `FLV：${error.message}`);
+      throw error;
     }
-    if (bytes.length !== end - offset) bad('读取长度与文件声明不一致。');
-    this.start = offset; this.cache = bytes;
-    return bytes.subarray(0, length);
   }
-  close() { this.controller.abort(); this.cache = new Uint8Array(0); }
 }
 
 /** Standard AVC, legacy CDN HEVC/AV1/VVC and single-track Enhanced FLV.

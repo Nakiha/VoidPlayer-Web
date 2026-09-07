@@ -19,6 +19,7 @@
     "test:browser": "npm run build && node scripts/check-browser.mjs",
     "test:presentation:browser": "node scripts/check-presentation-browser.mjs",
     "test:connection:browser": "npm run build && node scripts/check-connection-guide-browser.mjs",
+    "test:range:browser": "npm run build && node scripts/check-range-browser.mjs",
     "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
     "fixtures:library": "node scripts/make-library-fixtures.mjs",
     "fixtures:flv": "python3 scripts/make-flv-fixtures.py",
