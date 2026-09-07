@@ -303,7 +303,7 @@ test('slow decode cannot finish playback before the final frame is drawn', async
   await session.dispose();
 });
 
-test('pause while a decode is pending rejects late presentation and releases the iterator', async () => {
+test('pause retains a pending decode without late presentation; dispose releases it', async () => {
   const m = media(); const started = deferred<void>(); const release = deferred<void>();
   let returned = false; let draws = 0;
   m.source.framesFrom = async function* () {
@@ -318,8 +318,10 @@ test('pause while a decode is pending rejects late presentation and releases the
   await started.promise; session.pause(); const count = draws; release.resolve();
   await new Promise(r => setTimeout(r, 30));
   assert.equal(draws, count);
-  assert.equal(returned, true);
+  assert.equal(returned, false);
   await session.dispose();
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, true);
 });
 
 test('both track producers start independently and paused sleep releases their queues', async () => {
@@ -657,4 +659,28 @@ test('removing a track cancels a seek waiting on background indexing immediately
   await session.removeTrack('A'); await rejected;
   assert.equal(session.getState().tracks.length, 0);
   await session.dispose();
+});
+
+test('pause/resume reuses both decoders with no random seek, while seek invalidates them', async () => {
+  const session = new ReviewSession(() => {});
+  let seeks = 0, iterators = 0, returned = 0;
+  for (const slot of ['A', 'B'] as const) {
+    const m = media(slot, Array.from({ length: 100 }, (_, i) => i * 40000), 4000000);
+    const at = m.source.frameAt, from = m.source.framesFrom;
+    m.source.frameAt = async pts => { seeks++; return at(pts); };
+    m.source.framesFrom = async function* (pts) { iterators++; try { yield* from(pts); } finally { returned++; } };
+    await session.load(slot, async () => m.source);
+  }
+  const initialSeeks = seeks;
+  await session.play(); await new Promise(r => setTimeout(r, 30));
+  for (let i = 0; i < 5; i++) { session.pause(); await session.play(); }
+  await new Promise(r => setTimeout(r, 30));
+  session.pause();
+  assert.equal(seeks, initialSeeks); assert.equal(iterators, 2); assert.equal(returned, 0);
+  await session.seek(400000); await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, 2);
+  await session.play(); await new Promise(r => setTimeout(r, 0));
+  assert.equal(iterators, 4);
+  await session.dispose(); await new Promise(r => setTimeout(r, 0));
+  assert.equal(returned, 4);
 });

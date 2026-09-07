@@ -2,6 +2,8 @@ import type { MediaOpenProgress } from './media-progress.ts';
 export type { MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad, loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
+import { explainMediaFailure } from './media-diagnostics.ts';
+import type { RandomAccessInput } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
@@ -66,6 +68,7 @@ const stageOf = (error: unknown): OpenStage =>
 
 interface OpenPlan {
   meta: MediaMeta;
+  input: RandomAccessInput;
   nativeInput(): Input;
   fallback(): Promise<MediaSource>;
   onProgress?: MediaOpenProgress;
@@ -99,7 +102,7 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
       log.warn('media', 'WASM 回退也不支持', { name: plan.meta.name, error: errorText(fallbackError) });
       // Preserve input/resource failures and the actual decoder failure; the
       // initial capability error cannot explain a failed download or timeout.
-      throw fallbackError;
+      throw await explainMediaFailure(plan.input, nativeError, fallbackError, plan.signal);
     }
   })(), plan.signal, source => source.dispose());
 }
@@ -112,7 +115,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
     return openFlvMedia({ file }, file, { signal, onProgress });
   }
   return openWithFallback({
-    meta: file,
+    meta: file, input: { file },
     onProgress, signal,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
     fallback: () => openFallback ? openFallback(file) : openFFmpegMedia(file, { signal, onProgress }),
@@ -133,7 +136,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     return openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress });
   }
   return openWithFallback({
-    meta, onProgress, signal,
+    meta, input: { url, size: meta.size }, onProgress, signal,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
     fallback: () => openFallback ? openFallback(url, meta) : openFFmpegMediaFromUrl(url, meta, { signal, onProgress }),
   });
@@ -186,7 +189,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       kind: 'video-sample',
       width: sample.displayWidth,
       height: sample.displayHeight,
-      byteSize: sample.displayWidth * sample.displayHeight * 4,
+      byteSize: sampleByteSize(sample),
       sample,
       ptsUs: Math.round((sample.timestamp - first) * 1e6),
       sourcePtsUs: Math.round(sample.timestamp * 1e6),
@@ -262,4 +265,10 @@ export async function firstDecodableSample(sink: Pick<VideoSampleSink, 'getSampl
     try { await frames.return(undefined); }
     catch (error) { decoded?.close(); throw error; }
   }
+}
+
+/** Pixel storage estimate, not a claim about total decoder/GPU memory. */
+export function sampleByteSize(sample: Pick<VideoSample, 'allocationSize' | 'displayWidth' | 'displayHeight'>): number {
+  try { return sample.allocationSize(); }
+  catch { return sample.displayWidth * sample.displayHeight * 4; } // Opaque GPU frames may hide their format.
 }

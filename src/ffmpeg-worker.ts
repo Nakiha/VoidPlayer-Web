@@ -69,14 +69,14 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
         } },
       });
       if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
-        throw new MediaOpenError('container', 'FFmpeg WASM 无法读取该文件的视频轨道。');
+        throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else if (payload.blob && typeof FileReaderSync !== 'undefined') {
       ioMode = 'blob';
       blobHandle = ctx; // the ctx pointer is already a unique id per context
       core.vpBlobs.set(blobHandle, { blob: payload.blob, reader: new FileReaderSync() });
       if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
-        throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
+        throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else {
       const bytes = payload.file ?? await payload.blob?.arrayBuffer();
@@ -84,7 +84,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       if (bytes.byteLength > 512 * 1024 * 1024) throw new Error('文件超过 WASM 回退解码的内存上限。');
       core.FS.writeFile(path, new Uint8Array(bytes));
       if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
-        throw new Error('FFmpeg WASM 也无法读取该文件的视频轨道。');
+        throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     }
     onProgress('index');

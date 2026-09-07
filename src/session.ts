@@ -27,6 +27,11 @@ export class ReviewSession {
   private abortLoad: (() => void) | undefined;
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
+  private readers: FrameQueue[] | undefined;
+  private releaseReaders() {
+    this.readers?.forEach(r => r.stop());
+    this.readers = undefined;
+  }
   private measurements: PlaybackMeasurements | null = null;
   private busy = false;
   private playing = false;
@@ -93,6 +98,7 @@ export class ReviewSession {
     return traceOperation('session', name, data, () => {
       const context = operationContext();
       this.pause();
+      this.releaseReaders();
       const revision = this.revision;
       this.busy = true;
       this.error = null;
@@ -339,7 +345,17 @@ export class ReviewSession {
   }
   async play() {
     const scoped = contextLog();
-    await this.seek(this.positionUs >= this.durationUs - 1 ? 0 : this.positionUs);
+    if (this.playing) return this.getState();
+    if (!this.tracks.size) throw new Error('请先载入视频。');
+    if (this.busy) throw new Error('请等待当前操作完成后再播放。');
+    if (this.positionUs >= this.durationUs - 1 && ![...this.tracks.values()].some(t => t.source.info.indexState === 'building')) {
+      const seek = this.seek(0), revision = this.revision;
+      await seek;
+      if (revision !== this.revision) return this.getState();
+    }
+    if ([...this.tracks.values()].some(t => !t.frame)) throw new Error('请先完成画面定位。');
+    this.error = null;
+    ++this.revision;
     this.playing = true;
     scoped.info('session', '开始播放', { positionUs: this.positionUs });
     const revision = this.revision;
@@ -355,11 +371,13 @@ export class ReviewSession {
     const scoped = contextLog();
     const active = () => this.playing && revision === this.revision;
     const entries = [...this.tracks];
-    const readers = entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
+    const readers = this.readers ?? entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
+    this.readers = readers;
+    readers.forEach(r => r.resume());
     const metrics = this.measurements = new PlaybackMeasurements();
     let lastTick = start, lastEmit = start, lastSample = start, lastProgress = start;
     let cancelTick: (() => void) | undefined;
-    const stop = () => { readers.forEach(r => r.stop()); cancelTick?.(); };
+    const stop = () => { readers.forEach(r => r.suspend()); cancelTick?.(); };
     this.stopPlayback = stop;
     const tick = () => new Promise<void>(resolve => {
       const finish = () => { cancelTick = undefined; resolve(); };
@@ -430,7 +448,10 @@ export class ReviewSession {
         scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
       }
     } finally {
-      stop();
+      // Pause retains the iterator and unseen frames. A seek/replacement has
+      // already detached and stopped these readers; an older loop must never
+      // stop readers that a rapid resume has adopted.
+      if (revision === this.revision) this.releaseReaders();
       scoped.info('session', '播放统计', metrics.snapshot());
       if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
     }
@@ -525,6 +546,7 @@ export class ReviewSession {
   }
   async dispose() {
     this.pause();
+    this.releaseReaders();
     await this.queue.catch(() => {});
     for (const t of this.tracks.values()) t.source.dispose();
     this.tracks.clear();

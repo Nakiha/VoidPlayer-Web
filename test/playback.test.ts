@@ -91,3 +91,25 @@ test('frame queue also honors its byte budget, not just the frame count', async 
   q.stop(); await q.done;
   assert.equal(closed, produced);
 });
+
+test('suspending an in-flight oversized frame retains its successor without pulling or skipping', async () => {
+  let release!: () => void;
+  const pending = new Promise<void>(r => release = r);
+  let produced = 0, closed = 0;
+  async function* frames() {
+    for (let i = 0; i < 5; i++) {
+      await pending; produced++;
+      yield { ptsUs: i, sourcePtsUs: i, durationUs: 1, kind: 'rgba8' as const,
+        width: 7680, height: 4320, byteSize: 7680 * 4320 * 4, close() { closed++; } };
+    }
+  }
+  const q = new FrameQueue(frames());
+  q.suspend(); release(); await turn();
+  assert.equal(produced, 1);
+  q.resume(); await turn(); assert.equal(produced, 1, 'oversized frame still enforces backpressure');
+  assert.equal(q.take(0).frame?.ptsUs, 0); closed++;
+  await turn(); q.suspend(); await turn();
+  assert.equal(produced, 2);
+  assert.equal(q.frames[0].ptsUs, 1, 'unseen successor is retained, not discarded');
+  q.stop(); await q.done; assert.equal(closed, produced);
+});

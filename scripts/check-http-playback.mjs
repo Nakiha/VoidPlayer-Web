@@ -39,6 +39,14 @@ try {
     browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server', '--enable-precise-memory-info'] });
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
     page.setDefaultTimeout(90000);
+    await page.addInitScript(() => {
+      window.decoderConfigurations = 0;
+      const configure = VideoDecoder.prototype.configure;
+      VideoDecoder.prototype.configure = function(config) {
+        window.decoderConfigurations++;
+        return configure.call(this, config);
+      };
+    });
     const errors = [], workers = new Set();
     page.on('pageerror', error => errors.push(error.message));
     page.on('worker', worker => { workers.add(worker); worker.on('close', () => workers.delete(worker)); });
@@ -70,6 +78,26 @@ try {
     assert.equal(await row.getAttribute('aria-busy'), 'false');
     assert.match(await row.innerText(), /使用中/);
     console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
+
+    // Observe the real WebCodecs lifecycle: warm resume must neither seek nor
+    // configure another decoder, including rapid pause/play in one JS turn.
+    await page.evaluate(() => window.voidPlayer.play());
+    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 500000);
+    const paused = await page.evaluate(() => {
+      window.voidPlayer.pause();
+      return { pts: window.voidPlayer.getState().positionUs, configurations: window.decoderConfigurations };
+    });
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), paused.pts);
+    const resumedAt = performance.now();
+    await page.evaluate(async () => {
+      for (let i = 0; i < 5; i++) { await window.voidPlayer.play(); window.voidPlayer.pause(); }
+      await window.voidPlayer.play();
+    });
+    await page.waitForFunction(pts => window.voidPlayer.getState().positionUs > pts + 100000, paused.pts);
+    assert.equal(await page.evaluate(() => window.decoderConfigurations), paused.configurations, 'warm resume retains the decoder');
+    await page.evaluate(() => window.voidPlayer.pause());
+    console.log(`PASS warm MP4 resume: no decoder reconfiguration, +100ms media in ${Math.round(performance.now() - resumedAt)}ms`);
 
     const cdp = await browser.newBrowserCDPSession();
     async function residentBytes() {
