@@ -56,7 +56,7 @@ export function shell() {
             <button id="fullscreen" class="icon-button" aria-label="全屏" title="全屏">${icon('fit')}</button>
           </div><span id="status" class="sr-only" role="status"></span>
         </section>
-        ${iconButton({ glyph: 'eye', label: '隐藏标题和播放控件', tooltip: '专注观察：隐藏标题、控制栏和提示', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
+        ${iconButton({ glyph: 'eye', label: '专注模式', tooltip: '专注模式', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
 
 <section id="annotation-toolbar" class="annotation-toolbar" aria-label="标注工具条" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="标注工具">
@@ -79,7 +79,7 @@ export function shell() {
       </section>
       <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="片源" hidden>
         <header class="panel-heading"><h2>片源</h2><button data-close-panel="sources" class="icon-button" aria-label="收起片源">${icon('sidebar', 'mirror')}</button></header>
-        <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button></div>
+        <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button><button id="sources-import" class="icon-button" aria-label="添加片源" data-tooltip="添加片源">${icon('filePlus')}</button></div>
         <label class="search-field">${icon('search')}<input id="source-search" type="search" placeholder="搜索片源" aria-label="搜索片源"></label>
         <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
         <section id="source-activity" class="source-activity" aria-label="片源载入状态" data-state="idle">
@@ -88,7 +88,7 @@ export function shell() {
           <div class="source-activity-meter" aria-hidden="true"><span></span></div>
           <div class="source-activity-meta"><span id="source-activity-time"></span><span id="source-activity-hint"></span></div>
         </section>
-        <footer class="panel-foot"><button id="sources-import">${icon('filePlus')}添加片源</button><input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden></footer>
+        <input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden>
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="子轨道" hidden>
         <div id="dock-resize" class="dock-resize" role="separator" tabindex="0" aria-label="调整子轨道高度" aria-orientation="horizontal" aria-valuemin="128" aria-valuemax="420" aria-valuenow="180"></div>

@@ -44,7 +44,7 @@ export async function fetchLibraryPage(query: LibraryQuery, signal?: AbortSignal
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, typeof value === 'boolean' ? value ? '1' : '0' : String(value));
   const response = await fetch(`/api/library/browse?${params}`, { cache: 'no-store', signal });
-  if (response.status === 409) throw new LibraryChangedError('媒体库已更新，已返回第一页');
+  if (response.status === 409) throw new LibraryChangedError('媒体库已更新，请重新读取');
   if (!response.ok) throw new Error(response.status === 404 ? '媒体服务需要升级，才能使用目录浏览' : '媒体库未连接，仍可添加本地文件');
   return response.json();
 }

@@ -1,88 +1,100 @@
 import { fetchLibraryPage, LibraryChangedError, requestLibraryScan } from '../library.ts';
 import type { LibraryPage } from '../library.ts';
-import { createIconButton } from './controls.ts';
+import { installChoiceMenu } from './choice-menu.ts';
 
-/** Shared source browser state; decoded media still loads through ReviewSession. */
+/** Continuous browsing with bounded requests and atomic result replacement. */
 export function installLibraryBrowser(change: (page: LibraryPage | null, status: string) => void, signal: AbortSignal) {
-  let page: LibraryPage | null = null, root = '', directory = '', search = '', all = false;
-  let offset = 0, revision: number | undefined, request: AbortController | undefined, sequence = 0;
-  let loading = false, note = '', rootsSignature = '', breadcrumbSignature = '', searchTimer: ReturnType<typeof setTimeout>;
-  const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
-  const select = document.createElement('select'); select.setAttribute('aria-label', '媒体根目录'); select.id = 'library-root';
-  const breadcrumbs = document.createElement('nav'); breadcrumbs.className = 'library-breadcrumbs'; breadcrumbs.setAttribute('aria-label', '媒体目录');
-  nav.append(select, breadcrumbs);
-  const scope = document.createElement('div'); scope.className = 'library-scope segmented'; scope.setAttribute('role', 'group'); scope.setAttribute('aria-label', '搜索范围');
-  const choices = ['当前目录', '全部媒体'];
-  choices.forEach((label, i) => {
-    const button = document.createElement('button'); button.textContent = label; button.dataset.libraryScope = i ? 'all' : 'directory'; button.setAttribute('aria-pressed', String(!i));
-    button.onclick = () => { all = !!i; for (const b of scope.querySelectorAll('button')) b.setAttribute('aria-pressed', String(b === button)); reset(); };
-    scope.append(button);
-  });
+  let page: LibraryPage | null = null, root = '', directory = '', search = '', appliedSearch = '', all = false;
+  let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false, available = true;
+  let note = '', optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
+  const list = document.getElementById('source-list')!;
   const field = document.querySelector('#sources-panel .search-field')!;
-  field.before(nav); field.after(scope);
-  const footer = document.createElement('div'); footer.className = 'library-pagination'; footer.id = 'library-pagination';
-  const previous = createIconButton({ glyph: 'previous', label: '上一页片源' });
-  const next = createIconButton({ glyph: 'next', label: '下一页片源' });
-  const count = document.createElement('span'); count.setAttribute('role', 'status');
-  const cancel = document.createElement('button'); cancel.textContent = '停止扫描'; cancel.className = 'library-cancel';
-  cancel.onclick = () => void refresh('cancel');
-  footer.append(previous, count, next, cancel); document.getElementById('source-list')!.after(footer);
-  select.onchange = () => navigate(select.value, '');
-  previous.onclick = () => { offset = Math.max(0, offset - 60); void load(); };
-  next.onclick = () => { if (page?.nextOffset !== null && page?.nextOffset !== undefined) { offset = page.nextOffset; void load(); } };
+  const input = document.getElementById('source-search') as HTMLInputElement;
+  const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
+  const button = document.createElement('button'); button.type = 'button'; button.id = 'library-root'; button.className = 'choice-trigger'; button.setAttribute('aria-label', '媒体库范围');
+  nav.append(button); field.before(nav);
+  const key = (id: string, path = '') => JSON.stringify([id, path]);
+  const menu = installChoiceMenu(button.id, [], value => {
+    if (value === 'all') { all = true; root = directory = ''; reset(); }
+    else { const [id, path] = JSON.parse(value); navigate(id, path); }
+  });
+  function controls() {
+    const roots = page?.roots ?? [];
+    const options = [{ value: 'all', label: '全部媒体' }, { value: key(''), label: '所有媒体库' },
+      ...roots.map(item => ({ value: key(item.id), label: `${item.name}${item.state === 'offline' ? ' · 离线' : ''}` }))];
+    let path = '';
+    for (const part of directory.split('/').filter(Boolean)) {
+      path += (path ? '/' : '') + part;
+      options.push({ value: key(root, path), label: `${roots.find(r => r.id === root)?.name ?? ''} / ${path}` });
+    }
+    const signature = JSON.stringify(options);
+    if (signature !== optionsSignature) { optionsSignature = signature; menu.setOptions(options); }
+    const value = all ? 'all' : key(root, directory);
+    const label = options.find(o => o.value === value)?.label ?? '所有媒体库';
+    menu.sync(value, available ? label : '最近打开', available);
+    input.placeholder = available ? `搜索${all ? '全部媒体' : directory || roots.find(r => r.id === root)?.name || '媒体库'}` : '搜索最近打开';
+    input.title = input.placeholder;
+    list.setAttribute('aria-busy', String(available && (loading || pendingSearch)));
+  }
   function render() {
-    if (page) {
-      const signature = JSON.stringify(page.roots);
-      if (signature !== rootsSignature) {
-        rootsSignature = signature; select.replaceChildren(new Option('所有媒体库', ''));
-        for (const item of page.roots) select.append(new Option(`${item.name}${item.state === 'offline' ? ' · 离线' : ''}`, item.id));
-
-      }
-    }
-    select.value = root;
-    const signature = `${root}/${directory}`;
-    if (signature !== breadcrumbSignature) {
-      breadcrumbSignature = signature; breadcrumbs.replaceChildren();
-      const crumb = (label: string, value: string) => {
-        const button = document.createElement('button'); button.textContent = label; button.title = label; button.onclick = () => navigate(root, value);
-        button.setAttribute('aria-current', value === directory ? 'location' : 'false'); breadcrumbs.append(button);
-      };
-      crumb('根目录', '');
-      let path = ''; for (const part of directory.split('/').filter(Boolean)) { const slash = document.createElement('span'); slash.textContent = '/'; breadcrumbs.append(slash); path += (path ? '/' : '') + part; crumb(part, path); }
-      breadcrumbs.scrollLeft = breadcrumbs.scrollWidth;
-    }
-    previous.disabled = loading || offset === 0; next.disabled = loading || !page || page.nextOffset === null;
-    count.textContent = page ? `第 ${Math.floor(offset / 60) + 1} 页 · ${page.total} 个视频` : loading ? '载入中…' : '暂无结果';
-    cancel.hidden = !page?.scanning; cancel.disabled = loading;
+    controls();
     const job = page?.job;
-    const status = note || (page?.scanning ? `扫描中 · ${job?.visited ?? 0} 个目录 · ${job?.files ?? 0} 个视频` : job?.errors ? `${job.errors} 处路径无法读取，保留上次索引` : page?.roots.some(r => r.state === 'offline') ? '部分存储离线，正在显示上次索引' : job?.state === 'cancelled' ? '扫描已停止，刷新可继续校准' : '');
+    const status = note || (page?.scanning ? `扫描中 · ${job?.files ?? 0} 个视频` : job?.errors ? `${job.errors} 处路径无法读取` : page?.roots.some(r => r.state === 'offline') ? '部分存储离线，显示上次索引' : '');
     change(page, status);
   }
-  async function load(restarted = false) {
-    const ticket = ++sequence; request?.abort(); request = new AbortController(); loading = true; render();
+  async function load(append = false, resetView = false, restarted = false): Promise<void> {
+    clearTimeout(searchTimer); pendingSearch = false;
+    const scope = JSON.stringify([root, directory, search, all]);
+    resetView ||= scope !== appliedScope;
+    const ticket = ++sequence; request?.abort(); request = new AbortController(); loading = true; controls();
+    const previous = page, targetCount = resetView ? 60 : Math.max(60, previous?.entries.length ?? 0, previous?.directories.length ?? 0);
+    const abort = AbortSignal.any([signal, request.signal, AbortSignal.timeout(10000)]);
     try {
-      const value = await fetchLibraryPage({ root: all && search ? undefined : root, directory: all && search ? '' : directory, search, recursive: !!search && all, offset, limit: 60, revision }, AbortSignal.any([signal, request.signal, AbortSignal.timeout(5000)]));
+      const query = { root: all ? undefined : root, directory: all ? '' : directory, search, recursive: all, limit: 60 };
+      let value = await fetchLibraryPage({ ...query, offset: append ? previous?.nextOffset ?? 0 : 0, revision: resetView || restarted ? undefined : previous?.revision }, abort);
+      if (append && previous) value = { ...value, entries: [...previous.entries, ...value.entries], directories: [...previous.directories, ...value.directories] };
+      else if (!resetView && previous?.revision === value.revision) value = { ...value, entries: previous.entries, directories: previous.directories, nextOffset: previous.nextOffset };
+      else while (Math.max(value.entries.length, value.directories.length) < targetCount && value.nextOffset !== null) {
+        const more = await fetchLibraryPage({ ...query, offset: value.nextOffset, revision: value.revision }, abort);
+        value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
+      }
       if (ticket !== sequence || signal.aborted) return;
-      page = value; revision = value.revision;
-      if (note !== '媒体库已更新，已返回第一页') note = '';
+      page = value; appliedSearch = search; appliedScope = scope; note = '';
     } catch (error) {
       if (ticket !== sequence || signal.aborted) return;
-      if (error instanceof LibraryChangedError && !restarted) { offset = 0; revision = undefined; note = error.message; await load(true); return; }
+      if (error instanceof LibraryChangedError && !restarted) { await load(false, resetView, true); return; }
       note = error instanceof Error ? error.message : '媒体库读取失败';
-    } finally { if (ticket === sequence && !signal.aborted) { loading = false; render(); } }
+    } finally {
+      if (ticket === sequence && !signal.aborted) {
+        loading = false; render();
+        if (resetView) list.scrollTop = 0;
+        if (!note) requestAnimationFrame(more);
+      }
+    }
   }
-  function reset() { offset = 0; revision = undefined; page = null; note = ''; void load(); }
-  function navigate(id: string, path: string) { root = id; directory = path; reset(); }
-  async function refresh(action: 'refresh' | 'cancel' = 'refresh') {
-    try { await requestLibraryScan(action); note = ''; } catch (error) { note = (error as Error).message; }
-    await load();
+  function more() {
+    if (available && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
   }
-  const timer = setInterval(() => { if (!document.hidden && !loading && !signal.aborted && document.activeElement !== select && (!document.getElementById('sources-panel')!.hidden || !document.getElementById('empty-A')!.hidden)) void load(); }, 3000);
-  signal.addEventListener('abort', () => { clearInterval(timer); clearTimeout(searchTimer); request?.abort(); }, { once: true });
+  function reset() { note = ''; void load(false, true); }
+  function navigate(id: string, path: string) { all = false; root = id; directory = path; reset(); }
+  async function refresh() {
+    try { await requestLibraryScan('refresh'); note = ''; } catch (error) { note = (error as Error).message; }
+    await load(false, pendingSearch);
+  }
+  list.addEventListener('scroll', more, { signal, passive: true });
+  const resize = new ResizeObserver(more); resize.observe(list);
+  const timer = setInterval(() => {
+    if (!document.hidden && !loading && !pendingSearch && !signal.aborted && !button.matches('[aria-expanded=true]') && (!document.getElementById('sources-panel')!.hidden || !document.getElementById('empty-A')!.hidden)) void load();
+  }, 3000);
+  signal.addEventListener('abort', () => { clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose(); }, { once: true });
   return {
-    navigate, page: () => page, refresh,
+    navigate, page: () => page, refresh, filter: () => appliedSearch,
     load: () => load(),
-    search(value: string) { search = value.trim(); clearTimeout(searchTimer); searchTimer = setTimeout(reset, 200); },
-    visible(visible: boolean) { nav.hidden = scope.hidden = footer.hidden = !visible; },
+    search(value: string) {
+      value = value.trim(); if (value === search) return;
+      search = value; clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = true; controls();
+      searchTimer = setTimeout(reset, 200);
+    },
+    visible(value: boolean) { available = value; controls(); if (value) requestAnimationFrame(more); },
   };
 }

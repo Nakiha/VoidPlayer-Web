@@ -122,7 +122,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .search-field input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); }
 .search-field input::placeholder { color: var(--text-secondary); opacity: 1; }
 .source-status { padding: 0 var(--panel-padding-inline); margin: var(--panel-padding-block) 0; font-size: var(--text-xs); color: var(--text-secondary); }
-.source-list { flex: 1; min-height: 0; overflow: auto; }
+.source-list { flex: 1; min-height: 0; overflow: auto; scrollbar-gutter: stable; }
 .source-row:nth-child(even) { background: var(--surface-stripe); }
 .source-row:hover { background: var(--surface-hover); }
 .source-row { display: flex; align-items: center; min-height: var(--source-row-height); gap: var(--control-gap); padding: var(--tool-inset) var(--panel-padding-inline);  }
@@ -529,7 +529,7 @@ button.icon-button[aria-pressed=true] {
 .viewport-surface.chrome-hidden .pixel-grid-label, .viewport-surface.chrome-hidden .recover-view,
 .viewport-surface.chrome-hidden .frame-annotations, .viewport-surface.chrome-hidden .image-wrap svg { visibility: hidden; pointer-events: none; }
 .viewport-surface.chrome-hidden #divider { top: 0; }
-.viewport-surface.chrome-hidden .viewport-eye { bottom: var(--viewport-eye-inset); }
+
 
 /* One material for all video overlays, including split-view headings. */
 .annotation-toolbar, .transport.glass, .screens .video-card .card-heading {
@@ -584,18 +584,11 @@ button.icon-button[aria-pressed=true] {
 .workspace-relink { background: var(--surface-panel); }
 
 .library-navigation { flex-shrink: 0; padding: 0 var(--panel-padding-inline) var(--space-2); min-width: 0; }
-.library-navigation select { width: 100%; min-width: 0; height: var(--control-small-height); font-size: var(--text-sm); background: var(--search-fill); border: 0; }
-.library-breadcrumbs { display: flex; align-items: center; gap: var(--space-1); overflow-x: auto; white-space: nowrap; scrollbar-width: thin; padding-top: var(--space-1); color: var(--text-secondary); }
-.library-breadcrumbs button { flex-shrink: 0; min-height: var(--control-small-height); padding: 0 var(--space-1); border: 0; background: transparent; color: var(--text-secondary); font-size: var(--text-xs); }
-.library-breadcrumbs button[aria-current=location] { color: var(--text); }
-.library-scope { flex-shrink: 0; margin: 0 var(--panel-padding-inline) var(--space-2); }
-.library-scope button { flex: 1; min-height: var(--control-small-height); font-size: var(--text-xs); }
+.library-navigation .choice-trigger { width: 100%; min-width: 0; height: var(--control-small-height); font-size: var(--text-sm); background: var(--search-fill); border: 0; }
+.library-navigation .choice-trigger > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .library-folder { width: 100%; justify-content: flex-start; text-align: left; border: 0; border-radius: 0; background: transparent; font-weight: 400; }
 .library-folder > span:first-child { color: var(--text-secondary); }
-.library-pagination { display: flex; flex-shrink: 0; flex-wrap: wrap; align-items: center; gap: var(--space-1); padding: var(--space-2) var(--panel-padding-inline); color: var(--text-secondary); font-size: var(--text-xs); }
-.library-pagination > span { flex: 1; text-align: center; white-space: nowrap; }
-.library-pagination .icon-button { width: var(--control-small-height); height: var(--control-small-height); min-height: var(--control-small-height); background: transparent; }
-.library-cancel { width: 100%; min-height: var(--control-small-height); font-size: var(--text-xs); background: transparent; }
+
 
 /* Remains outside the scrolling file list, directly above Add source. */
 .source-activity { flex: 0 0 auto; padding: var(--panel-padding-block) var(--panel-padding-inline); border-top: 1px solid var(--divider); font-size: var(--text-xs); }

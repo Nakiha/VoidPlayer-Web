@@ -405,7 +405,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     $('start-library-status').textContent = items.length ? '' : libraryStatus || (startTab === 'recent' ? '暂无最近片源' : '添加文件以开始对比');
   }
   function renderSources() {
-    const query = $<HTMLInputElement>('source-search').value.trim().toLocaleLowerCase();
+    const query = (sourceTab === 'available' ? libraryBrowser.filter() : $<HTMLInputElement>('source-search').value.trim()).toLocaleLowerCase();
     const items = (sourceTab === 'recent' ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
     $('source-status').textContent = libraryStatus;
     $('source-status').hidden = !libraryStatus;
@@ -415,16 +415,28 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const signature = JSON.stringify([sourceTab, query, loadingSource, sourceLoadError, session.getState().busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
     if (signature !== sourceSignature) {
-      sourceSignature = signature; list.replaceChildren();
+      sourceSignature = signature;
+      const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+      const rows: HTMLElement[] = [];
+      const reuse = (key: string, fingerprint: string, create: () => HTMLElement) => {
+        const old = existing.get(key);
+        const row = old?.dataset.fingerprint === fingerprint ? old : create();
+        row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; rows.push(row);
+      };
       for (const folder of folders) {
+        reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
         const row = document.createElement('button'); row.className = 'source-row library-folder';
         const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
         const info = text('span', '', 'source-info');
         info.append(text('span', folder.name, 'filename'), text('span', page?.roots.find(root => root.id === folder.rootId)?.name ?? '', 'source-meta'));
-        row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); list.append(row);
+        row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
+        });
       }
-      for (const item of items) list.append(sourceRow(item));
-      if (!items.length && !folders.length) list.append(text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+      for (const item of items) reuse(item.key, JSON.stringify([!!item.file, item.library, loadingSource, sourceLoadError, session.getState().busy, sourceInUse(item, session.getState().tracks), page?.roots]), () => sourceRow(item));
+      if (!items.length && !folders.length) reuse('empty', `${sourceTab}/${query}`, () => text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+      // Keep unchanged nodes and their focus/scroll anchors through refreshes.
+      rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
+      while (list.children.length > rows.length) list.lastElementChild!.remove();
     }
     renderStartLibrary();
   }
