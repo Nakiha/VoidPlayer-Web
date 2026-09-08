@@ -10,4 +10,4 @@
 
 远程 WebCodecs 使用 `./voidplayer --https 服务器IP`，在客户端信任 `data/tls/voidplayer-ca.crt` 后访问 HTTPS；Windows 一次性信任命令及已有证书配置见[运行说明](standalone.md#远程-webcodecs-与硬件解码)。程序自己提供 HTTPS，证书和私钥都留在 data/，不需要代理或外部证书工具。
 
-普通 HTTP 内网共享仍可加 `--host 0.0.0.0`，使用 WASM 软件解码。首次访问自动创建用户，设置 → 用户中可改名或选择已有用户，完全信任用户自选身份。
+HTTP 内网共享可加 `--host 0.0.0.0`，管理页和媒体 API 可直接访问；远程播放器需启用 HTTPS，HTTP 入口会检测连接并引导。首次访问自动创建用户，设置 → 用户中可改名或选择已有用户，完全信任用户自选身份。

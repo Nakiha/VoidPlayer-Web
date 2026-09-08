@@ -102,7 +102,9 @@ try {
   const guideBase = `http://127.0.0.1:${guidePort}`;
   assert.equal((await fetch(guideBase)).status, 200);
   assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
-  assert.equal((await fetch(guideBase + '/api/library')).status, 404);
+  assert.equal((await fetch(guideBase + '/api/library')).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${securePort}/llms.txt`)).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${securePort}/admin`)).status, 200);
   const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
   assert.equal(secureResponse.status, 200);
   assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');

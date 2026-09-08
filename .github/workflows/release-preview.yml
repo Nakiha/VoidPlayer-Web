@@ -141,6 +141,17 @@ jobs:
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
       - run: node scripts/check-connection-guide-browser.mjs
+      - name: Verify HTTP and HTTPS entry policy
+        run: |
+          node --test test/protocol-server.test.ts test/connection-routing.test.ts test/connection-guide.test.ts
+          node scripts/check-http-entry-browser.mjs chromium
+          node scripts/check-http-entry-browser.mjs webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: http-entry-screenshots
+          path: /tmp/voidplayer-http-*.png
+          if-no-files-found: ignore
       - name: Verify report descriptions and explicit log submission
         run: |
           node --test test/log.test.ts test/server.test.ts

@@ -12,7 +12,7 @@ import type { ConnectionOptions } from './connection-guide.ts';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { allowReveal, localRequest, revealFile } from './reveal.ts';
+import { allowReveal, localRequest, revealFile, setClientAddress } from './reveal.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
 import { AdminError, adminWriteAllowed, readAdminJson } from './admin.ts';
 import { ANNOTATION_BYTES } from './annotations.ts';
@@ -24,11 +24,14 @@ import type { AdminController } from './admin.ts';
 //   GET|HEAD /api/media/<id> -> file bytes with HTTP Range support
 // plus static hosting of the built frontend (dist/) when present.
 
+export function createTrafficState() { return { sockets:new Set<import('node:net').Socket>(),activeRequests:0,completedRequests:0,abortedRequests:0,recentRequests:[] as Record<string,unknown>[] }; }
+
 export interface ServerOptions {
+  traffic?: ReturnType<typeof createTrafficState>;
   roots: string[];
   tls?: HttpsOptions;
   connection?: ConnectionOptions;
-  guideOnly?: boolean;
+  clientAddress?: (req: IncomingMessage) => string;
   library?: MediaLibraryIndex;
   admin?: AdminController;
   allowLocalReveal?: boolean;
@@ -114,26 +117,26 @@ export function createMediaServer(options: ServerOptions): Server {
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
-  const sockets = new Set<import('node:net').Socket>();
-  let activeRequests = 0, completedRequests = 0, abortedRequests = 0;
-  const recentRequests: Record<string, unknown>[] = [];
+  const traffic=options.traffic ?? createTrafficState();
+  const {sockets,recentRequests}=traffic;
 
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
+    if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
     let actor = options.admin?.workspaces.user(browserUserId(req)) ?? null;
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
-    if (!options.guideOnly) res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
+    res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
     let hostname = '';
     try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
       for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
     }
     let status = 200, logged = false;
-    activeRequests++;
+    traffic.activeRequests++;
     const finish = () => {
       if (logged) return; logged = true;
-      activeRequests--; completedRequests++; if (!res.writableFinished) abortedRequests++;
+      traffic.activeRequests--; traffic.completedRequests++; if (!res.writableFinished) traffic.abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
       const entry = { t: new Date().toISOString(), requestId, actorId: actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
@@ -143,7 +146,11 @@ export function createMediaServer(options: ServerOptions): Server {
     res.once('finish', finish); res.once('close', finish);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (options.guideOnly && ['/', '/index.html'].includes(url.pathname) && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(302, { location: '/connection' }); res.end(); return; }
+      if (url.pathname === '/api/connection/probe' && req.method === 'GET') {
+        res.setHeader('access-control-allow-origin', '*');
+        res.setHeader('cross-origin-resource-policy', 'cross-origin');
+        sendJson(res, encryptedRequest(req) ? 200 : 409, { service: 'voidplayer-connection', https: encryptedRequest(req) }); return;
+      }
       if (url.pathname === '/api/connection' && req.method === 'GET') {
         sendJson(res, 200, connectionDetails(options.connection, req.headers.host)); return;
       }
@@ -152,10 +159,6 @@ export function createMediaServer(options: ServerOptions): Server {
         const certificate = Buffer.from(options.connection.ca);
         res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="voidplayer-ca.crt"', 'content-length': certificate.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         res.end(req.method === 'HEAD' ? undefined : certificate); return;
-      }
-      // The HTTP companion exposes only the guide, its assets and the public CA.
-      if (options.guideOnly && (!['GET', 'HEAD'].includes(req.method ?? '') || !['/', '/connection', '/index.html', '/theme-init.js', '/favicon.ico'].includes(url.pathname) && !url.pathname.startsWith('/assets/'))) {
-        sendJson(res, 404, { error: '请使用 HTTPS 访问播放器。' }); return;
       }
       if (url.pathname === '/llms.txt') {
         if (!['GET', 'HEAD'].includes(req.method ?? '')) {
@@ -285,7 +288,7 @@ export function createMediaServer(options: ServerOptions): Server {
             if (req.method === 'DELETE' && !measurement[2]) { sendJson(res, 200, admin.measurements.cancel(measurement[1], identity.id)); return; }
           }
           if (url.pathname === '/api/admin/status' && req.method === 'GET') {
-            sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests, connections: sockets.size, completedRequests, abortedRequests }, recentRequests }); return;
+            sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests:traffic.activeRequests, connections:sockets.size, completedRequests:traffic.completedRequests, abortedRequests:traffic.abortedRequests }, recentRequests }); return;
           }
           if (url.pathname === '/api/admin/roots') {
             if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return; }

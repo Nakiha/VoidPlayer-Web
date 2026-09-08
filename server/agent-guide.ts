@@ -4,7 +4,8 @@ export const AGENT_GUIDE = `# VoidPlayer Web
 > Search a configured video library and download original media using ordinary HTTP requests. No browser automation or MCP connection is needed for these read operations.
 
 Resolve all paths below against the server origin where you fetched this file.
-Use the actual media server, not its HTTP-only HTTPS connection-guide port.
+HTTP and HTTPS both serve these APIs, including the optional companion HTTP port.
+Only the remote player page requires HTTPS for browser decoding APIs.
 Media listing and downloads do not currently require a user cookie. A deployment
 may add authentication at its reverse proxy. Only indexed media in configured
 roots is available; this is not an arbitrary filesystem or non-media file server.
