@@ -1,4 +1,4 @@
-import { avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
+import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { sampleDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
@@ -27,11 +27,16 @@ export interface PacketDecoder {
   close(): void;
 }
 
-export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDecoderConfig): Promise<PacketDecoder | null> {
-  if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description)))return null;
+export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
+  if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }
   const parsed = initialConfig ?? flvDecoderConfig(index);
-  if (!parsed || typeof VideoDecoder === 'undefined') return null;
-  let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
+  if (!parsed || typeof VideoDecoder === 'undefined') { diagnostic({ reason: !parsed ? 'no-native-config' : 'webcodecs-unavailable', codec: index.codec }); return null; }
+  let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true }, async candidate => {
+    const result = await VideoDecoder.isConfigSupported(candidate);
+    diagnostic({ reason: 'capability-probe', codec: candidate.codec, codedWidth: candidate.codedWidth, codedHeight: candidate.codedHeight,
+      hardwareAcceleration: candidate.hardwareAcceleration, optimizeForLatency: candidate.optimizeForLatency, supported: result.supported });
+    return result;
+  });
   if (!config) return null;
   let geometry = index.codec === 'hevc' ? hevcGeometry(index.description) : index.codec==='h264'?avcGeometry(index.description):null;
   // Platform decoders can discard negative presentation times (edit-list
@@ -41,6 +46,7 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
   let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
   const frames: { frame: VideoFrame; pts: number }[] = [];
   const clearFrames = () => frames.splice(0).forEach(f => f.frame.close());
+  let needsKey = true;
   let error: Error | null = null, outstanding = 0, minimum = -Infinity;
   let notify: (() => void) | undefined;
   const decoder = new VideoDecoder({
@@ -73,10 +79,10 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       const parsed = flvDecoderConfig(next);
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
-      clearFrames(); decoder.reset(); decoder.configure(nextConfig);
+      clearFrames(); decoder.reset(); decoder.configure(nextConfig); needsKey = true;
       config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : next.codec==='h264'?avcGeometry(next.description):null; outstanding = 0; error = null; minimum = -Infinity;
     },
-    reset() { clearFrames(); decoder.reset(); decoder.configure(config!); outstanding = 0; error = null; minimum = -Infinity; },
+    reset() { clearFrames(); decoder.reset(); decoder.configure(config!); needsKey = true; outstanding = 0; error = null; minimum = -Infinity; },
     async send(bytes, packet) {
       check();
       if(currentIndex.codec==='h264'&&packet.key){
@@ -89,7 +95,7 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
           if(!nextConfig)throw new MediaOpenError('decode','浏览器不支持 AVC 带内配置切换。');
           // Drain with OLD geometry, retain those outputs, then accept the new
           // configuration. A prefetched SPS must not relabel older pictures.
-          await decoder.flush();check();decoder.reset();decoder.configure(nextConfig);
+          await decoder.flush();check();decoder.reset();decoder.configure(nextConfig);needsKey=true;
           config=nextConfig;currentIndex=next;geometry=nextGeometry;outstanding=0;
         }
       }
@@ -100,7 +106,10 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
         combined.set(currentIndex.description.subarray(4)); combined.set(bytes, currentIndex.description.length - 4);
         bytes = combined;
       }
-      decoder.decode(new EncodedVideoChunk({ type: packet.key ? 'key' : 'delta', timestamp: packet.pts - timestampOrigin, data: bytes as Uint8Array<ArrayBuffer> }));
+      const key = currentIndex.codec === 'h264' ? avcHasIdr(bytes, currentIndex.description) : packet.key;
+      if (needsKey && !key) throw new MediaOpenError('decode', '浏览器 AVC 起播需要 IDR；该恢复点需要软件解码。');
+      decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: packet.pts - timestampOrigin, data: bytes as Uint8Array<ArrayBuffer> }));
+      needsKey = false;
       outstanding++;
       // Give hardware output a chance to run without accumulating an entire GOP.
       await new Promise<void>(resolve => setTimeout(resolve, 0));

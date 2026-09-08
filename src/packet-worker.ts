@@ -27,7 +27,8 @@ async function start() {
           engine?.close(); engine = new FlvEngine(message.input);
           send({ id, ok: true, data: await engine.prepare(progress => send({ id, type: 'progress', progress })) });
         } else if (type === 'native' && engine instanceof FlvEngine) {
-          send({ id, ok: true, data: await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true) });
+          const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
+          send({ id, ok: true, data, diagnostics: engine.nativeDiagnostics });
         } else if (type === 'init') {
           if (!(engine instanceof FlvEngine && message.container === 'flv')) {
             engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);

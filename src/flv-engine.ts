@@ -11,6 +11,7 @@ import type { RangeVersion } from './range-reader.ts';
 export interface PreparedFlv extends FlvCheckpoint { version: RangeVersion; }
 
 export class FlvEngine {
+  nativeDiagnostics: Record<string, unknown>[] = [];
   readonly reader: FlvReader;
   private cache: FlvIndexClient;
   index!: FlvIndex;
@@ -59,12 +60,16 @@ export class FlvEngine {
     try {
       await this.prepare(onProgress);
       if (!forceWasm) {
+        this.nativeDiagnostics = [];
+        let phase = 'capability';
         try {
           onProgress?.('decode');
-          const native = await nativeFlvDecoder(this.index);
+          const native = await nativeFlvDecoder(this.index, undefined, event => this.nativeDiagnostics.push(event));
+          phase = 'first-frame';
           if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size)); onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
           if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
+          this.nativeDiagnostics.push({ reason: 'native-failed', phase, error: error instanceof Error ? error.message : String(error) });
           this.decoder?.close(); this.decoder = undefined!;
         }
       }

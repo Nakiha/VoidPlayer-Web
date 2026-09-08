@@ -77,3 +77,20 @@ export function avcInBandDescription(bytes:Uint8Array,current:Uint8Array):Uint8A
   sps.forEach(put);result[at++]=pps.length;pps.forEach(put);
   return result.length===current.length&&result.every((b,i)=>b===current[i])?null:result;
 }
+
+/** A container sync/recovery flag is not WebCodecs' AVC key-chunk contract.
+ * Inspect length-prefixed NAL units; only IDR slices establish a fresh DPB. */
+export function avcHasIdr(bytes: Uint8Array, description: Uint8Array): boolean {
+  if (description.length < 7 || description[0] !== 1) throw new Error('invalid AVC configuration');
+  const lengthBytes = (description[4] & 3) + 1;
+  let offset = 0, idr = false;
+  while (offset < bytes.length) {
+    if (offset + lengthBytes > bytes.length) throw new Error('truncated AVC NAL length');
+    let size = 0;
+    for (let i = 0; i < lengthBytes; i++) size = size * 256 + bytes[offset++];
+    if (size <= 0 || offset + size > bytes.length) throw new Error('AVC NAL exceeds packet');
+    idr ||= (bytes[offset] & 31) === 5;
+    offset += size;
+  }
+  return idr;
+}

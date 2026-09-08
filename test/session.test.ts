@@ -696,3 +696,41 @@ test('adding/reopening another track does not seek an existing frame already at 
   assert.equal(session.getState().tracks.length,2);assert.equal(session.getState().tracks[0].frame?.ptsUs,0);
   await session.dispose();
 });
+
+for (const paused of [false, true]) test(`removing A ${paused ? 'while paused' : 'while playing'} keeps B's producer and buffered frames`, async () => {
+  const session = new ReviewSession(() => {});
+  const stats = { A: { started: 0, returned: 0, seeks: 0 }, B: { started: 0, returned: 0, seeks: 0 } };
+  for (const slot of ['A', 'B'] as const) {
+    const m = media(slot, Array.from({ length: 100 }, (_, i) => i * 40000), 4000000);
+    const from = m.source.framesFrom, at = m.source.frameAt;
+    m.source.frameAt = async pts => { stats[slot].seeks++; return at(pts); };
+    m.source.framesFrom = async function* (pts) { stats[slot].started++; try { yield* from(pts); } finally { stats[slot].returned++; } };
+    await session.load(slot, async () => m.source);
+  }
+  try {
+    await session.play(); await new Promise(r => setTimeout(r, 90));
+    if (paused) session.pause();
+    const before = session.getState().tracks.find(t => t.slot === 'B')!.frame!.ptsUs;
+    const seeks = stats.B.seeks;
+    await session.removeTrack('A'); await new Promise(r => setTimeout(r, 0));
+    assert.equal(stats.A.returned, 1); assert.equal(stats.B.returned, 0);
+    await session.play(); await new Promise(r => setTimeout(r, 90)); session.pause();
+    assert.equal(stats.B.started, 1); assert.equal(stats.B.seeks, seeks);
+    assert.ok(session.getState().tracks[0].frame!.ptsUs > before);
+  } finally { await session.dispose(); }
+  await new Promise(r => setTimeout(r, 0)); assert.equal(stats.B.returned, 1);
+});
+
+test('removal that clamps the clock invalidates surviving producers before repositioning', async () => {
+  const session = new ReviewSession(() => {}), a = media('long', [0, 40000, 120000], 200000), b = media('short', [0, 40000], 80000);
+  let seeks = 0; const at = b.source.frameAt;
+  b.source.frameAt = async pts => { seeks++; return at(pts); };
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.seek(120000); const before = seeks;
+    await session.removeTrack('A');
+    assert.equal(session.getState().positionUs, 79999); assert.equal(seeks, before + 1);
+    await session.play(); await new Promise(r => setTimeout(r, 0)); session.pause();
+    assert.equal(session.getState().tracks[0].frame!.ptsUs, 0, 'replay starts at zero after reaching the shorter end');
+  } finally { await session.dispose(); }
+});

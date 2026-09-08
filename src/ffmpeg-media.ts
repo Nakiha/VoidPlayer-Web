@@ -110,7 +110,7 @@ export class WorkerRpc {
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
       if (data.type === 'progress') {
         const entry = this.pending.get(data.id);
         if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
@@ -123,6 +123,7 @@ export class WorkerRpc {
         (payload as { frame?: VideoFrame } | null)?.frame?.close();
         return;
       }
+      if (data.diagnostics?.length) contextLog().info('media', '原生解码路径探测', { workerId: this.workerId, requestId: id, decisions: data.diagnostics });
       clearTimeout(entry.timer);
       this.pending.delete(id);
       if (ok) entry.resolve(payload);

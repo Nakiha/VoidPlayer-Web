@@ -15,3 +15,15 @@ for(const [file,interlaced,reorder,height] of [
     for(let i=0;i<8+bytes[6]*256+bytes[7];i++)assert.equal(avcGeometry(bytes.subarray(0,i)),null);
   }finally{input.dispose();}
 });
+
+test('AVC key chunks require IDR NALs, not a container recovery flag', async () => {
+  const { avcHasIdr } = await import('../src/avc-geometry.ts');
+  for (const lengthBytes of [1, 2, 4]) {
+    const description = Uint8Array.of(1, 100, 0, 31, lengthBytes - 1, 0, 0);
+    const packet = new Uint8Array(lengthBytes + 1); packet[lengthBytes - 1] = 1;
+    packet[lengthBytes] = 0x41; assert.equal(avcHasIdr(packet, description), false);
+    packet[lengthBytes] = 0x65; assert.equal(avcHasIdr(packet, description), true);
+    assert.throws(() => avcHasIdr(packet.subarray(0, lengthBytes), description), /exceeds/);
+    packet[lengthBytes - 1] = 0; assert.throws(() => avcHasIdr(packet, description), /exceeds/);
+  }
+});

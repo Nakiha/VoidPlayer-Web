@@ -44,3 +44,24 @@ The official [FATE H.264 samples](https://fate-suite.ffmpeg.org/h264/) include
 include `fate-h264-intra-refresh-recovery`. These cover related reordering and
 recovery behavior, but neither is asserted to reproduce the reported CDN FLV
 cut. Use the generated regression for that exact startup/full-index conflict.
+
+WebCodecs AVC `key` chunks require an IDR picture, per the
+[AVC codec registration](https://www.w3.org/TR/webcodecs-avc-codec-registration/#encodedvideochunk-type).
+Native decoding now inspects NALs rather than copying the container key flag.
+A cut beginning at a non-IDR recovery point fails the native first-frame contract
+before feeding the browser and selects WASM during open, with an explicit reason.
+This fixes the browser-only seek failure exposed after the initial timeline fix.
+
+## Playback ownership
+
+Session queues are keyed by source identity. Pause suspends them without losing
+unseen frames. Removing/replacing a track releases only that source's queue;
+position changes and stepping invalidate sources before touching their decoder.
+A removal which clamps the common clock therefore still repositions survivors.
+Workspace replacement and disposal release all remaining queues.
+
+Logs distinguish reused queues from newly created queues and record why a queue
+was released. Native FLV diagnostics include capability probe preferences and
+results, policy exclusions, and first-frame failure reasons. Packet open logs
+also include the chosen WASM variant and requested thread count. Neither a
+hardware preference nor capability acceptance proves the GPU actually used.

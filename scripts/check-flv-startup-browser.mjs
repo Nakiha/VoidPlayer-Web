@@ -17,6 +17,11 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const page = await browser.newPage(), errors = [], wasmRequests = [];
   await page.addInitScript(() => {
+    window.testWorkerAt = 0;
+    const NativeWorker = Worker;
+    window.Worker = class extends NativeWorker {
+      postMessage(message, ...rest) { if (message?.type === 'at') window.testWorkerAt++; return super.postMessage(message, ...rest); }
+    };
     window.testDecoders = []; window.testDecoderConfigurations = 0;
     const Native = VideoDecoder;
     window.VideoDecoder = class extends Native {
@@ -97,6 +102,18 @@ try {
   assert.equal(openGopBench.error, null);
   assert.ok(openGopBench.measurements.mediaUs > 1000000, JSON.stringify(openGopBench));
   assert.ok((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].frame.ptsUs > 1000000, 'track must advance, not just the session clock');
+  // Exercise a real packet/WASM producer across removal of a different track.
+  await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'resume-b.flv')), openGop);
+  await page.evaluate(() => window.voidPlayer.play());
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks.find(t => t.slot === 'B')?.frame?.ptsUs > 200000);
+  await call('pause_review');
+  const resumeBefore = await page.evaluate(() => ({ at: window.testWorkerAt, pts: window.voidPlayer.getState().tracks.find(t => t.slot === 'B').frame.ptsUs }));
+  await call('remove_review_track', { slot: 'A' });
+  await page.evaluate(() => window.voidPlayer.play());
+  await page.waitForFunction(pts => window.voidPlayer.getState().tracks.find(t => t.slot === 'B').frame.ptsUs > pts, resumeBefore.pts);
+  await call('pause_review');
+  assert.equal(await page.evaluate(() => window.testWorkerAt), resumeBefore.at, 'unrelated removal must not trigger packet random access');
+  await call('remove_review_track', { slot: 'B' });
   // Portrait geometry must agree across the source, displayed metadata and capture.
   const portrait = [...await resolutionFlv('hevc', ['244x436'])];
   const portraitState = await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'portrait.flv')), portrait);

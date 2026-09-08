@@ -51,3 +51,22 @@ test('real WASM open-GOP startup, complete playback and repeated seeks share fra
     }
   } finally { source.dispose(); }
 });
+
+test('a non-IDR recovery-point start is rejected before feeding an invalid native key chunk', async t => {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'VideoDecoder');
+  let decoded = 0, closed = 0;
+  class Decoder {
+    state = 'configured';
+    static async isConfigSupported(config: VideoDecoderConfig) { return { supported: true, config }; }
+    configure() {} reset() {} decode() { decoded++; }
+    close() { this.state = 'closed'; closed++; }
+  }
+  Object.defineProperty(globalThis, 'VideoDecoder', { configurable: true, value: Decoder });
+  t.after(() => { if (saved) Object.defineProperty(globalThis, 'VideoDecoder', saved); else Reflect.deleteProperty(globalThis, 'VideoDecoder'); });
+  const engine = new FlvEngine({ file: new Blob([new Uint8Array(bytes)]) });
+  try {
+    assert.equal(await engine.open('', undefined, false, 1, undefined, true), null);
+    assert.equal(decoded, 0); assert.equal(closed, 1);
+    assert.ok(engine.nativeDiagnostics.some(e => e.phase === 'first-frame' && String(e.error).includes('IDR')));
+  } finally { engine.close(); }
+});
