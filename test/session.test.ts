@@ -789,3 +789,34 @@ test('background index rejection is isolated before seek without poisoning other
     assert.match(session.getState().tracks[1].failure!.message, /index broken/);
   } finally { await session.dispose(); }
 });
+
+
+test('a track waiting for an index lets healthy clocks advance and rejoins after catching up', async () => {
+  const session = new ReviewSession(() => {}), gate = deferred<void>();
+  const starts = Array.from({ length: 50 }, (_, i) => i * 20000);
+  const a = media('ready', starts, 1000000), b = media('indexing', starts, 1000000);
+  b.source.info.indexState = 'building'; b.source.info.indexWaiting = true;
+  const frames = b.source.framesFrom.bind(b.source);
+  b.source.framesFrom = async function* (pts) { await gate.promise; yield* frames(pts); };
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.play(); await new Promise(resolve => setTimeout(resolve, 120));
+    assert.ok(session.getState().positionUs > 40000, 'healthy A advances while B has no index data');
+    assert.equal(session.getState().tracks[1].syncState, 'index-wait');
+    session.pause(); assert.throws(() => session.addMark({ slot: 'B', text: 'stale image' }), /尚未同步/);
+    b.source.info.indexWaiting = false; b.source.info.indexState = 'complete'; gate.resolve();
+    await session.play(); await new Promise(resolve => setTimeout(resolve, 160));
+    assert.equal(session.getState().tracks[1].syncState, undefined);
+    assert.ok(session.getState().tracks[1].frame!.ptsUs > 40000);
+    assert.equal(session.getState().error, null);
+  } finally { gate.resolve(); await session.dispose(); }
+});
+
+test('forward stepping requests the current prefix, never the entire unfinished index', async () => {
+  const session = new ReviewSession(() => {}), fixture = media();
+  const requested: (number | undefined)[] = [];
+  fixture.source.info.indexState = 'building';
+  fixture.source.ensureIndexed = async pts => { requested.push(pts); if (pts === undefined || pts === Infinity) throw new Error('full index requested'); };
+  try { await session.load('A', async () => fixture.source); await session.step(1); assert.ok(requested.every(Number.isFinite)); assert.equal(session.getState().positionUs, 40000); }
+  finally { await session.dispose(); }
+});

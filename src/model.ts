@@ -18,6 +18,8 @@ export type MediaInfo = {
   indexSource?: 'client' | 'server';
   indexState?: 'building' | 'complete' | 'error';
   indexError?: string;
+  indexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
+  indexWaiting?: boolean;
   indexWarning?: string;
   /** Explicit recovery provenance; original packet timestamps remain in the demux index. */
   timelineSource?: 'hevc-poc';

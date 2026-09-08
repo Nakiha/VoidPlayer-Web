@@ -156,3 +156,15 @@ test('stalled storage coalesces repeated flushes into one writer and bounded lat
   assert.equal(saved[1].droppedEvents, 9990);
   await logger.dispose();
 });
+
+
+test('summary lookup and a selected archive never enumerate historical report bodies', async () => {
+  const logger = new SessionLog(), report = logger.snapshot();
+  let lists = 0, gets = 0;
+  await logger.attach({ async save() {}, async list() { lists++; throw new Error('full history must not be read'); },
+    async summaries() { return [{ sessionId: report.sessionId, startedAt: report.startedAt, updatedAt: report.updatedAt, droppedEvents: 0, events: 0 }]; },
+    async get(id) { gets++; return id === report.sessionId ? report : undefined; } }, {});
+  assert.equal((await logger.summaries()).length, 1);
+  assert.equal((await logger.archive(report.sessionId))?.sessionId, report.sessionId);
+  assert.equal(lists, 0); assert.equal(gets, 1); await logger.dispose();
+});

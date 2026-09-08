@@ -17,7 +17,7 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number } };
+type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up' };
 export class ReviewSession {
   private order: Slot[] = [...SLOTS];
   private tracks = new Map<Slot, Track>();
@@ -90,7 +90,7 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure})) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,syncState:t.syncState})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -108,7 +108,7 @@ export class ReviewSession {
       const info = track.source.info;
       log.warn('session', '故障现场：轨道', { ...context, slot, mediaId: info.id, name: info.name, decoder: info.decoder,
         width: info.width, height: info.height, durationUs: info.durationUs, offsetUs: track.offsetUs, frame: track.frame,
-        indexState: info.indexState, indexError: info.indexError, color: info.color });
+        indexState: info.indexState, indexError: info.indexError, indexProgress: info.indexProgress, indexWaiting: info.indexWaiting, syncState: track.syncState, color: info.color });
       log.warn('session', '故障现场：播放队列', { reason, slot, mediaId: info.id, queue: this.readers.get(track.source)?.snapshot() ?? null });
     }
   }
@@ -119,7 +119,7 @@ export class ReviewSession {
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
-      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure }] : []; }),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState }] : []; }),
       marks: this.marks,
     });
   }
@@ -311,7 +311,7 @@ export class ReviewSession {
         let entries = this.playableEntries();
         if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
         if (direction > 0) {
-          await this.ensureTrackIndexes(undefined, current);
+          await this.ensureTrackIndexes(this.positionUs, current);
           entries = this.playableEntries();
           if (!current()) return;
           await this.stepForward(entries, current);
@@ -421,6 +421,7 @@ export class ReviewSession {
         this.draw(entries[i][0], r.value);
         recordPresentedFrame(entries[i][1].source,r.value);
         entries[i][1].frame = this.frameInfo(r.value);
+        entries[i][1].syncState = undefined;
       }
       commit?.();
       this.positionUs = ptsUs;
@@ -491,7 +492,13 @@ export class ReviewSession {
         if (!entries.some(([, t]) => !t.failure)) throw new Error('所有轨道均已停用，请重新载入片源。');
         // A future indexed frame proves coverage, including VFR timestamp gaps.
         // Only a drained producer proves that the final frame covers the end.
-        const coverage = Math.min(...readers.map((r, i) => entries[i][1].failure ? Infinity : r.ended ? this.durationUs - 1
+        readers.forEach((reader, i) => {
+          const track = entries[i][1];
+          if (track.source.info.indexWaiting && reader.frames.length === 0) track.syncState = 'index-wait';
+          else if (track.syncState) track.syncState = reader.ended || (reader.frames.at(-1)?.ptsUs ?? track.frame!.ptsUs) + track.offsetUs >= this.positionUs ? undefined : 'catching-up';
+        });
+        const waitingForIndex = (i: number) => !!entries[i][1].syncState;
+        const coverage = Math.min(...readers.map((r, i) => entries[i][1].failure || waitingForIndex(i) ? Infinity : r.ended ? this.durationUs - 1
           : (r.frames.at(-1)?.ptsUs ?? entries[i][1].frame!.ptsUs) + entries[i][1].offsetUs));
         const target = Math.max(this.positionUs, Math.min(this.durationUs - 1,
           this.positionUs + Math.round(elapsed * 1000), coverage));
@@ -501,7 +508,7 @@ export class ReviewSession {
         if (now - lastProgress > 15000) {
           readers.forEach((reader, i) => {
             const [slot, track] = entries[i];
-            if (!track.failure && !reader.ended && (reader.frames.at(-1)?.ptsUs ?? track.frame!.ptsUs) + track.offsetUs <= this.positionUs)
+            if (!track.failure && !track.source.info.indexWaiting && !reader.ended && (reader.frames.at(-1)?.ptsUs ?? track.frame!.ptsUs) + track.offsetUs <= this.positionUs)
               this.failTrack(slot, track, new Error('解码超过 15 秒没有推进，请重新载入此轨道。'));
           });
           lastProgress = now; continue;
@@ -562,6 +569,7 @@ export class ReviewSession {
     if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再标注。');
     const slot = slotValue(input.slot);
     const track = this.tracks.get(slot);
+    if (track?.syncState) throw new Error('当前轨道尚未同步，请等待追赶完成或定位后再标注。');
     if (!track?.frame || track.failure) throw new Error('当前轨道没有可标注的有效画面，请重新载入停用的片源。');
     const drawings = drawingsValue(input.drawings);
     if (typeof input.text !== 'string' || input.text.length > 2000 || (!input.text.trim() && !drawings.length)) throw new Error('写点文字或在画面上画一笔即可保存。');
@@ -574,7 +582,7 @@ export class ReviewSession {
       id: randomUUID(), text: input.text.trim(), severity: Number(severity), origin,
       createdAt: new Date().toISOString(), slot, mediaId: track.source.info.id,
       frame: this.frameInfo(track.frame), offsetUs:track.offsetUs, sessionPtsUs:this.positionUs, region: regionValue(input.region), ...(drawings.length ? { drawings } : {}),
-      comparison: [...this.tracks].filter(([, t]) => t.frame && !t.failure).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
+      comparison: [...this.tracks].filter(([, t]) => t.frame && !t.failure && !t.syncState).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
     };
     this.marks.push(mark); this.markChanged(mark.id);
     log.info('session', '添加标注', { id: mark.id, authorId: this.actor?.id ?? null, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
@@ -586,7 +594,7 @@ export class ReviewSession {
     if (!mark) throw new Error('标注不存在。');
     if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再编辑标注。');
     const track = [...this.tracks.values()].find(t => t.source.info.id === mark.mediaId);
-    if (!track?.frame || track.failure || track.frame.ptsUs !== mark.frame.ptsUs) throw new Error('请返回标注对应的画面后再编辑。');
+    if (!track?.frame || track.failure || track.syncState || track.frame.ptsUs !== mark.frame.ptsUs) throw new Error('请返回标注对应的画面后再编辑。');
     const text = input.text === undefined ? mark.text : input.text;
     const drawings = input.drawings === undefined ? mark.drawings ?? [] : drawingsValue(input.drawings);
     if (typeof text !== 'string' || text.length > 2000 || (!text.trim() && !drawings.length)) throw new Error('标注不能为空。');

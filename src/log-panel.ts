@@ -1,3 +1,4 @@
+import { logPreview } from './log-preview.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
 import { icon } from './ui/icons.ts';
 import { exportLog, getLogSessions, log, sessionLog, traceOperation, withLogDescription, LOG_DESCRIPTION_LIMIT } from './log.ts';
@@ -8,7 +9,7 @@ export function installLogPanel(container: HTMLElement) {
   const panel = document.createElement('div'); panel.className = 'log-panel';
   panel.innerHTML = `<div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="日志会话"></button><button type="button" class="icon-button" data-action="refresh" aria-label="更新日志" data-tooltip="更新日志">${icon('refresh')}</button><button type="button" class="icon-button" id="log-help-toggle" aria-label="日志说明" data-tooltip="日志说明" popovertarget="log-help">${icon('info')}</button></div>
     <div class="log-description-field"><label for="log-description">问题描述 <span>选填</span></label><textarea id="log-description" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="3" placeholder="遇到了什么问题？如何复现？" spellcheck="false"></textarea></div>
-    <section class="log-report" aria-label="日志报告"><header class="log-report-toolbar"><span>报告预览</span><div class="log-actions"><button type="button" class="icon-button" data-action="copy" aria-label="复制报告" data-tooltip="复制报告">${icon('copy')}</button><button type="button" class="icon-button" data-action="download" aria-label="下载报告" data-tooltip="下载报告">${icon('download')}</button><button type="button" data-action="upload">${icon('export')}上传报告</button></div></header><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div></section>`;
+    <section class="log-report" aria-label="日志报告"><header class="log-report-toolbar"><span>报告预览</span><div class="log-actions"><button type="button" class="icon-button" data-action="copy" aria-label="复制报告" data-tooltip="复制报告">${icon('copy')}</button><button type="button" class="icon-button" data-action="download" aria-label="下载报告" data-tooltip="下载报告">${icon('download')}</button><button type="button" data-action="upload">${icon('export')}上传报告</button></div></header><div class="log-preview-navigation"><button type="button" data-page="previous">上一页</button><span class="log-preview-status"></span><button type="button" data-page="next">下一页</button></div><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div></section>`;
   container.append(panel);
   const help = document.createElement('div'); help.id = 'log-help'; help.className = 'log-help'; help.setAttribute('popover', 'auto');
   help.innerHTML = '<strong>日志说明</strong><p>本机保留最近 3 次会话，最长 7 天。</p><p>报告包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。</p><p>仅点击“上传报告”后，才发送到当前服务器。</p>';
@@ -45,18 +46,33 @@ export function installLogPanel(container: HTMLElement) {
     showFeedback();
   };
   const unsubscribe = sessionLog.subscribe(storageStatus);
+  let previewPage = 0;
   const renderReport = () => {
-    if (reportDocument) textarea.value = JSON.stringify(withLogDescription(reportDocument, description.value), null, 2);
+    if (!reportDocument) return;
+    const preview = logPreview(reportDocument, previewPage); previewPage = preview.page;
+    textarea.value = preview.text; textarea.dataset.sessionId = reportDocument.sessionId;
+    panel.querySelector('.log-preview-status')!.textContent = preview.label;
+    panel.querySelector<HTMLButtonElement>('[data-page="previous"]')!.disabled = preview.page === 0;
+    panel.querySelector<HTMLButtonElement>('[data-page="next"]')!.disabled = preview.page === preview.pages - 1;
   };
-  description.addEventListener('input', () => { descriptions.set(selectedSession, description.value); message(); renderReport(); });
-  async function snapshot() {
+  for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-page]')) button.onclick = () => {
+    previewPage += button.dataset.page === 'next' ? 1 : -1; renderReport();
+  };
+  description.addEventListener('input', () => { descriptions.set(selectedSession, description.value); message(); });
+  async function snapshot(serialize = false) {
     const ticket = ++snapshotGeneration, id = selectedSession;
     const doc = await exportLog(id || undefined, descriptions.get(id) ?? '');
-    if (ticket === snapshotGeneration && id === selectedSession) { reportDocument = doc; renderReport(); }
-    return { json: JSON.stringify(doc, null, 2), filename: `voidplayer-log-${doc.startedAt.slice(0, 10)}-${doc.sessionId.slice(0, 8)}.json` };
+    if (ticket === snapshotGeneration && id === selectedSession) { reportDocument = doc; previewPage = Math.max(0, Math.ceil(doc.events.length / 25) - 1); renderReport(); }
+    return { json: serialize ? JSON.stringify(withLogDescription(doc, description.value), null, 2) : '', filename: `voidplayer-log-${doc.startedAt.slice(0, 10)}-${doc.sessionId.slice(0, 8)}.json` };
   }
   async function refresh() {
     const request = ++generation, selected = selectedSession;
+    // Paint the current bounded preview before asking disk for history.
+    if (!selectedSession) {
+      selectedSession = sessionLog.summary().sessionId;
+      sessions = [{ value: selectedSession, label: '本次会话' }]; menu.setOptions(sessions);
+      await snapshot();
+    }
     const history = await getLogSessions();
     if (request !== generation || (!dialog.open || pane.hidden)) return;
     sessions = history.sessions.map(s => ({ value: s.sessionId, label: `${s.current ? '本次' : '历史'} · ${new Date(s.startedAt).toLocaleString()}` }));
@@ -88,22 +104,22 @@ export function installLogPanel(container: HTMLElement) {
   dialog.addEventListener('settings-pane-change', onPaneChange);
   panel.querySelector('[data-action="refresh"]')!.addEventListener('click', () => void action('refresh', refresh));
   panel.querySelector('[data-action="download"]')!.addEventListener('click', () => void action('download', async () => {
-    const { json, filename } = await snapshot();
+    const { json, filename } = await snapshot(true);
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
     const link = document.createElement('a'); link.href = url; link.download = filename;
     document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
     message('下载已开始。');
   }));
   panel.querySelector('[data-action="copy"]')!.addEventListener('click', () => void action('copy', async () => {
-    const { json } = await snapshot();
+    const { json } = await snapshot(true);
     try { await navigator.clipboard.writeText(json); message('报告已复制。'); }
     catch (error) {
-      textarea.focus(); textarea.select(); log.warn('ui', '剪贴板复制失败', { error });
-      message('请复制下方已选中的报告内容。');
+      log.warn('ui', '剪贴板复制失败', { error });
+      message('复制失败，请使用下载报告保存完整内容。');
     }
   }));
   panel.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
-    const { json } = await snapshot();
+    const { json } = await snapshot(true);
     let response: Response;
     try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: json }); }
     catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error('无法连接当前服务器，请重试或下载报告。'); }

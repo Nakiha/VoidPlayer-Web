@@ -44,7 +44,7 @@ export async function demuxFlv(reader: FlvReader, onProgress?: () => void): Prom
 }
 
 /** Stop after the first video packet for startup; resume at the next tag. */
-export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false): Promise<FlvCheckpoint> {
+export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
   const header = await reader.read(0, 9);
   if (header[0] !== 70 || header[1] !== 76 || header[2] !== 86 || header[3] !== 1) bad('不是有效的 FLV 1 文件。');
   let offset = u32(header, 5);
@@ -59,8 +59,33 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
   const packets: FlvPacket[] = resume ? resume.index.packets.slice() : [];
   let truncatedAt: number | undefined;
   let reported = performance.now();
+  let published = resume?.index;
+  const checkpoint = (nextOffset: number, complete: boolean) => {
+    // Sort only newly discovered packets, then merge with the existing order.
+    const index = extendFlvIndex(published, codec, description, packets, configurations);
+    published = index;
+    return { index, nextOffset, complete };
+  };
+  let publicationFailure: unknown;
+  let publishedOffset = resume?.nextOffset ?? offset;
+  const publishProgress = () => {
+    if (!publish || !packets.length || offset <= publishedOffset || publicationFailure) return;
+    try { publish(checkpoint(offset, false)); publishedOffset = offset; onProgress?.(); }
+    catch (error) { publicationFailure = error; }
+  };
+  // Publish the validated prefix even if the next HTTP read is still pending.
+  // Never emit heartbeats for unchanged bytes: stalled IO must still time out.
+  const timer = publish ? setInterval(publishProgress, 500) : undefined;
+  try {
   while (offset < reader.size) {
-    if (performance.now() - reported >= 250) { onProgress?.(); reported = performance.now(); await new Promise<void>(resolve => setTimeout(resolve, 0)); }
+    if (publicationFailure) throw publicationFailure;
+    if (performance.now() - reported >= 500) {
+      onProgress?.();
+      publishProgress();
+      if (publicationFailure) throw publicationFailure;
+      reported = performance.now();
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
     if (reader.size - offset < 11) { truncatedAt = offset; break; }
     const tag = await reader.read(offset, 11);
     const size = u24(tag, 1), start = offset + 11, next = start + size + 4;
@@ -125,14 +150,32 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
     }
     offset = next;
   }
-  const index = buildFlvIndex(codec, description, packets, configurations);
+  if (publicationFailure) throw publicationFailure;
+  const { index } = checkpoint(reader.size, true);
   if (truncatedAt !== undefined) index.truncatedAt = truncatedAt;
   return { index, nextOffset: reader.size, complete: true };
+  } finally { clearInterval(timer); }
+}
+
+export function extendFlvIndex(previous: FlvIndex | undefined, codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[], configurations?: Uint8Array[]): FlvIndex {
+  if (!previous) return buildFlvIndex(codec, description, packets.slice(), configurations?.slice());
+  if (packets.length === previous.packets.length && (configurations?.length ?? 1) === (previous.configurations?.length ?? 1)) return previous;
+  const added = packets.slice(previous.packets.length).map((_, i) => previous.packets.length + i).sort((a, b) => packets[a].pts - packets[b].pts);
+  const order: number[] = [];
+  let a = 0, b = 0;
+  while (a < previous.order.length || b < added.length) {
+    if (b === added.length || (a < previous.order.length && packets[previous.order[a]].pts <= packets[added[b]].pts)) order.push(previous.order[a++]);
+    else order.push(added[b++]);
+  }
+  return finishFlvIndex(codec!, description!, packets.slice(), configurations?.slice(), order);
 }
 
 export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[], configurations?: Uint8Array[]): FlvIndex {
   if (!codec || !description || !packets.length || !packets[0].key) bad('没有带配置头和起始关键帧的有效视频。');
   const order = packets.map((_, i) => i).sort((a, b) => packets[a].pts - packets[b].pts);
+  return finishFlvIndex(codec!, description!, packets, configurations, order);
+}
+function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPacket[], configurations: Uint8Array[] | undefined, order: number[]): FlvIndex {
   const firstPts = packets[order[0]].pts;
   const durations = order.map((p, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[p].pts : 0);
   if (durations.slice(0, -1).some(d => d <= 0)) bad('视频包包含重复显示时间戳。');

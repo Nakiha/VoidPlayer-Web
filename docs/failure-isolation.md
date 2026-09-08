@@ -49,3 +49,20 @@ days; the event-count limit still applies.
 Uploading is explicit. Uploaded reports are server files with separate lifetime:
 the backend currently offers management/deletion but no automatic age/size
 rotation for them. Long browser uptime alone does not upload any reports.
+
+## Bounded log preview and history reads
+
+The settings panel previews 25 events per page, with per-event truncation and a
+24,000-character page limit. It initially shows the latest page. Editing the
+problem description does not serialize or replace the preview. Copy, download
+and explicit upload serialize the full retained report, not the preview; a
+clipboard failure offers download instead of selecting an incomplete preview.
+
+IndexedDB schema 2 stores small session summaries alongside report documents.
+Opening the history menu reads summaries; selecting history reads only that
+report. Retention during saves reads summaries instead of cloning every prior
+report body. Existing schema 1 reports are migrated once in the upgrade
+transaction. The retention policy itself remains unchanged.
+
+Progressive-index waits are temporary runtime states, not failed tracks; see
+[progressive-indexing.md](progressive-indexing.md).

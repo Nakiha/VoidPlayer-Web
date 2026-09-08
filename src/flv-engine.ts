@@ -14,12 +14,33 @@ export class FlvEngine {
   nativeDiagnostics: Record<string, unknown>[] = [];
   readonly reader: FlvReader;
   private cache: FlvIndexClient;
+  private scanReader?: FlvReader;
   index!: FlvIndex;
   private checkpoint?: FlvCheckpoint;
   decoder!: PacketDecoder;
   private timeline?: PacketTimeline;
   private decodeFailure?: MediaOpenError;
   private primed: FlvFrame | null = null;
+  private indexingFailure: unknown;
+  private growing = false;
+  onIndexWaiting?: (waiting: boolean) => void;
+  private waiters = new Set<() => void>();
+  private waitForGrowth = async () => {
+    if (this.indexingFailure) throw this.indexingFailure;
+    if (!this.growing) return;
+    this.onIndexWaiting?.(true);
+    await new Promise<void>(resolve => this.waiters.add(resolve));
+    this.onIndexWaiting?.(false);
+    if (this.indexingFailure) throw this.indexingFailure;
+  };
+  private wake() { for (const resolve of this.waiters) resolve(); this.waiters.clear(); }
+  private publishIndex(checkpoint: FlvCheckpoint) {
+    this.checkpoint = checkpoint; this.index = checkpoint.index;
+    this.timeline?.appendIndex(this.index);
+    this.growing = !checkpoint.complete;
+    this.timeline?.setGrowth(this.growing ? this.waitForGrowth : undefined);
+    this.wake();
+  }
   constructor(input: FlvInput, prepared?: PreparedFlv) {
     this.reader = new FlvReader(input, prepared?.version);
     this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size);
@@ -38,23 +59,32 @@ export class FlvEngine {
     }
     return { ...this.checkpoint!, version: this.reader.version };
   }
-  async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, beforeCommit?: () => Promise<void>) {
-    cached ??= await this.cache.read(this.index) ?? undefined;
-    if (!this.checkpoint!.complete) {
-      this.reader.setIndexing(true);
-      try {
+  async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, publish?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void) {
+    this.growing = !this.checkpoint!.complete;
+    // Startup deliberately drained one packet for display. Restart that cursor
+    // once, before streaming, then retain it across every index publication.
+    this.timeline?.replaceIndex(this.index);
+    this.timeline?.setGrowth(this.growing ? this.waitForGrowth : undefined);
+    const commit = (checkpoint: FlvCheckpoint) => {
+      this.publishIndex(checkpoint);
+      publish?.({ durationUs: checkpoint.index.firstPts + checkpoint.index.duration - checkpoint.index.packets[0].pts,
+        scannedBytes: checkpoint.nextOffset, totalBytes: this.reader.size, packets: checkpoint.index.packets.length });
+    };
+    try {
+      cached ??= await this.cache.read(this.index) ?? undefined;
+      if (!this.checkpoint!.complete) {
+        const scanner = this.scanReader = new FlvReader(this.reader.input, this.reader.version);
+        scanner.setIndexing(true);
         const completed = cached ? { index: cached, nextOffset: this.reader.size, complete: true }
-          : await scanFlv(this.reader, () => onProgress?.('index'), this.checkpoint);
+          : await scanFlv(scanner, () => onProgress?.('index'), this.checkpoint, false, commit);
         if (completed.index.packets[0].pts !== this.index.packets[0].pts) throw new MediaOpenError('container', 'FLV 索引的起始包发生变化。');
-        await beforeCommit?.();
-        this.checkpoint = completed; this.index = completed.index;
-        this.timeline?.replaceIndex(this.index);
-        // The startup packet has been drained. Resume future extraction with
-        // a fresh decoder cursor while retaining the already displayed frame.
-      } finally { this.reader.setIndexing(false); }
-    }
-    if (!cached) void this.cache.save(this.index).catch(() => {});
-    return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
+        commit(completed);
+      }
+      if (!cached) void this.cache.save(this.index).catch(() => {});
+      return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
+    } catch (error) {
+      this.indexingFailure = error; this.wake(); throw error;
+    } finally { this.scanReader?.close(); this.scanReader = undefined; }
   }
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
@@ -109,5 +139,5 @@ export class FlvEngine {
     if(!Number.isInteger(position)||position<0||position>=this.index.order.length)throw new MediaOpenError('input','FLV 帧位置越界。');
     return this.at(this.index.packets[this.index.order[position]].pts,recycle);
   }
-  close() { this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
+  close() { this.indexingFailure = new Error('媒体已释放。'); this.growing = false; this.wake(); this.scanReader?.close(); this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
 }

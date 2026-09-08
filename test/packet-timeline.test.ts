@@ -65,3 +65,29 @@ test('output arriving during packet IO defers submission without advancing the p
     assert.deepEqual(accepted, [0, 40000]);
   } finally { timeline.close(); }
 });
+
+
+test('a growing decode frontier waits without drain/reset and resumes at the same packet cursor', async () => {
+  const ready: FlvFrame[] = []; let resets = 0, drains = 0;
+  const packets = [0, 40000, 80000].map((pts, offset) => ({ pts, dts: pts, key: offset === 0, offset, size: 1 }));
+  const index: FlvIndex = { codec: 'h264', description: new Uint8Array(), packets: packets.slice(0, 1), order: [0], firstPts: 0, duration: 40000, durations: [40000] };
+  const sent: number[] = [];
+  const decoder: PacketDecoder = { kind: 'webcodecs', reset() { resets++; }, close() {}, async drain() { drains++; }, receive() { return ready.shift() ?? null; },
+    async send(_bytes, p) { sent.push(p.pts); ready.push({ pts: p.pts, width: 2, height: 2, description: rgbaDescription(2, 2), pixels: new ArrayBuffer(16) }); } };
+  const timeline = new PacketTimeline(index, decoder, async () => new Uint8Array(1));
+  let release!: () => void;
+  timeline.setGrowth(() => new Promise<void>(resolve => { release = resolve; }));
+  try {
+    assert.equal((await timeline.at(0)).pts, 0);
+    const pending = timeline.next(0); let settled = false; void pending.then(() => { settled = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false); assert.equal(drains, 0);
+    timeline.appendIndex({ ...index, packets, order: [0, 1, 2], duration: 120000, durations: [40000, 40000, 40000] });
+    timeline.setGrowth(); release();
+    assert.equal((await pending)?.pts, 40000);
+    assert.equal((await timeline.next(40000))?.pts, 80000);
+    assert.equal(await timeline.next(80000), null);
+    assert.equal(resets, 1); assert.equal(drains, 1);
+    assert.deepEqual(sent, [0, 40000, 80000]);
+  } finally { timeline.close(); }
+});

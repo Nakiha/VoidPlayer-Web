@@ -100,6 +100,8 @@ async function createWorker(): Promise<Worker> {
 }
 
 export class WorkerRpc {
+  onIndexWaiting?: (waiting: boolean) => void;
+  onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   private workerId=randomUUID();
   private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
@@ -111,6 +113,15 @@ export class WorkerRpc {
     this.onTerminate = onTerminate;
     this.worker = worker;
     const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
+      if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
+      if (data.type === 'index-progress') {
+        if (!this.failure && this.pending.has(data.id)) {
+          // Real scan advances keep waiting extraction RPCs alive, too.
+          for (const entry of this.pending.values()) entry.refresh?.();
+          this.onIndexProgress?.(data.data as Parameters<NonNullable<WorkerRpc['onIndexProgress']>>[0]);
+        }
+        return;
+      }
       if (data.type === 'progress') {
         const entry = this.pending.get(data.id);
         if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }

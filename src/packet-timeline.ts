@@ -15,6 +15,9 @@ export class PacketTimeline {
   private failure:unknown;
   private operation=0;
   private actualPacket:FlvPacket|undefined;
+  private growth?: () => Promise<void>;
+  setGrowth(wait?: () => Promise<void>) { this.growth = wait; }
+  appendIndex(index: FlvIndex) { this.index = index; }
   index:FlvIndex;
   readonly decoder:PacketDecoder;
   readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
@@ -40,14 +43,14 @@ export class PacketTimeline {
   }
   private async pull(recycle?:ArrayBuffer):Promise<FlvFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;return f;}
-    const {packets}=this.index;
     for(;;){
       const frame=this.decoder.receive(Number.MIN_SAFE_INTEGER,recycle);
       if(frame){
         if(!Number.isSafeInteger(frame.pts)||frame.pts<=this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} <= ${this.lastPts}`);}
         this.lastPts=frame.pts;return frame;
       }
-      const packet=packets[this.cursor];
+      const packet=this.index.packets[this.cursor];
+      if (!packet && this.growth) { await this.growth(); continue; }
       if(!packet||(packet.configuration??0)!==this.configuration){
         if(!this.drained){this.drained=true;await this.decoder.drain();continue;}
         if(!packet)return null;

@@ -1,3 +1,4 @@
+import { indexProgressLabel } from './index-progress.ts';
 import { AnnotationClient } from './annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
@@ -228,9 +229,9 @@ function render() {
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.indexState === 'building' ? ' · 后台建立索引中' : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
-    $(`failure-${slot}`).hidden = !t?.failure;
-    $(`failure-${slot}`).textContent = t?.failure ? `轨道 ${slot} 已停用 · 画面已停止更新。${t.failure.message} 请重新载入此片源。` : '';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? ' · 等待索引，画面暂未同步' : ' · 正在追赶播放位置') : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
+    $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
+    $(`failure-${slot}`).textContent = t?.failure ? `轨道 ${slot} 已停用 · 画面已停止更新。${t.failure.message} 请重新载入此片源。` : t?.syncState ? `轨道 ${slot} ${t.syncState === 'index-wait' ? '等待索引数据' : '正在追赶播放位置'} · 当前画面暂未同步，其他轨道继续播放。` : '';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }

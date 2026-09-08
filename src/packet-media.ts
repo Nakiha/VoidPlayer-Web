@@ -75,6 +75,14 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
+    const indexWaiters = new Set<() => void>();
+    const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
+    activeRpc.onIndexWaiting = indexWaiting => { if (!disposed) updateMediaInfo(source, { indexWaiting }, 'index'); };
+    activeRpc.onIndexProgress = ({ durationUs, ...indexProgress }) => {
+      if (disposed) return;
+      updateMediaInfo(source, { durationUs, indexProgress }, 'index');
+      wakeIndex();
+    };
     const completeIndex = () => {
       if (indexing) return indexing;
       if (container !== 'flv') return Promise.resolve();
@@ -86,9 +94,11 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource });
         times = result.times; durations = result.durations;
         updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning},'index');
+        wakeIndex();
       }, error => {
         if (!disposed) {
           updateMediaInfo(source,{indexState:'error',indexError:error instanceof Error?error.message:String(error)},'index');
+          wakeIndex();
           contextLog().warn('media', 'FLV 后台索引失败', { error: info.indexError });
         }
         throw error;
@@ -101,13 +111,18 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     let backgroundTimer: ReturnType<typeof setTimeout> | undefined;
     const ensureIndexed = async (ptsUs = Infinity) => {
       if (disposed) throw new Error('媒体已释放。');
-      if (ptsUs > 0 && (info.indexState === 'building' || info.indexState === 'error')) await completeIndex();
+      if (info.indexState === 'error') throw new Error(info.indexError);
+      if (info.indexState !== 'building' || (ptsUs === 0 && !indexing)) return;
+      void completeIndex().catch(() => {});
+      while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await new Promise<void>(resolve => indexWaiters.add(resolve));
+      if (disposed) throw new Error('媒体已释放。');
+      if ((info.indexState as string) === 'error') throw new Error(info.indexError);
     };
     const extract = (pts:number, next=false): Promise<DecodedFrame|null> => {
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
-        const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : []);
+        const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
         const position=floorIndex(times,frame.pts-info.firstPtsUs);
         if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
@@ -117,7 +132,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         let closed = false;
         return { description:frame.description,kind: sample ? 'video-sample' : 'rgba8', width: frame.width, height: frame.height,
-          ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: durations[position],
+          ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: frame.durationUs ?? durations[position],
           byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
         } satisfies DecodedFrame;
@@ -129,7 +144,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       info, ensureIndexed,
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){
-        if(count<=0)return [];await ensureIndexed(Infinity);
+        if(count<=0)return [];
+        if (info.indexState === 'building') void completeIndex().catch(() => {});
+        await ensureIndexed(pts);
         const result:DecodedFrame[]=[];
         try{for(let i=0;i<count;i++){const f=await extract(pts,true);if(!f)break;result.push(f);pts=f.ptsUs;}}catch(error){result.forEach(f=>f.close());throw error;}
         return result;
@@ -138,12 +155,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         await ensureIndexed(pts);let frame=await extract(pts);
         while(frame&&!disposed){
           const after=frame.ptsUs;yield frame;
-          await ensureIndexed(); // A failed background index is an error, never decoder EOF.
+          if (info.indexState === 'building') void completeIndex().catch(() => {});
+          await ensureIndexed(after); // Wait only for the requested prefix; worker waits at its live decode frontier.
           frame=await extract(after,true);
         }
         if(frame&&disposed)frame.close();
       },
-      dispose() { if (!disposed) { disposed = true; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { disposed = true; wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
     };
     return source;
   } catch (error) { reservation.release(); rpc?.terminate(); throw error; }

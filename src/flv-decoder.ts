@@ -13,7 +13,7 @@ import { loadCore } from './wasm-core.ts';
 
 /** pts is the logical source clock; a platform resource's internal timestamp
  * may use a shifted decoder clock and must never be used as frame identity. */
-export interface FlvFrame { description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export interface FlvFrame { durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];

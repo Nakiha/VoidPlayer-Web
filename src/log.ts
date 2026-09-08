@@ -7,7 +7,9 @@ export type LogDocument = {
   schema: 'voidplayer-web-log'; version: 1; sessionId: string; startedAt: string; updatedAt: string;
   environment: Record<string, unknown>; capacity: number; droppedEvents: number; events: LogEvent[];
 };
-export interface LogStorage { save(document: LogDocument): Promise<void>; list(): Promise<LogDocument[]>; }
+export type LogSummary = Pick<LogDocument, 'sessionId' | 'startedAt' | 'updatedAt' | 'droppedEvents'> & { events: number };
+export const logSummary = (d: LogDocument): LogSummary => ({ sessionId: d.sessionId, startedAt: d.startedAt, updatedAt: d.updatedAt, droppedEvents: d.droppedEvents, events: d.events.length });
+export interface LogStorage { save(document: LogDocument): Promise<void>; list(): Promise<LogDocument[]>; summaries?(): Promise<LogSummary[]>; get?(id: string): Promise<LogDocument | undefined>; }
 export type LogQuery = { sinceSeq?: number; level?: LogLevel; limit?: number; sessionId?: string };
 const rank = { debug: 0, info: 1, warn: 2, error: 3 };
 
@@ -85,6 +87,7 @@ export class SessionLog {
     }
     this.notify();
   }
+  summary() { return logSummary(this.document); }
   snapshot() { return structuredClone(this.document); }
   read(query: LogQuery = {}) { return readLogPage(this.document, query); }
   attach(storage: LogStorage, environment: Record<string, unknown>) {
@@ -113,6 +116,8 @@ export class SessionLog {
     })().finally(() => { this.writes = undefined; });
     return this.writes;
   }
+  async summaries() { return this.storage?.summaries ? this.storage.summaries() : (await this.archives()).map(logSummary); }
+  async archive(id: string) { return this.storage?.get ? this.storage.get(id) : (await this.archives()).find(d => d.sessionId === id); }
   async archives() { return this.storage ? this.storage.list() : []; }
   dispose() { clearTimeout(this.timer); this.listeners.clear(); return this.flush(); }
 }
@@ -143,12 +148,12 @@ export function traceOperation<T>(source: string, action: string, data: unknown,
 }
 export const getLogEvents = (query: LogQuery = {}) => sessionLog.read(query);
 export async function getLogSessions() {
-  let archives: LogDocument[] = []; let historyError: string | null = null;
-  try { archives = await sessionLog.archives(); } catch (error) { historyError = String(error); }
-  const current = sessionLog.snapshot();
+  let archives: LogSummary[] = []; let historyError: string | null = null;
+  try { archives = await sessionLog.summaries(); } catch (error) { historyError = String(error); }
+  const current = sessionLog.summary();
   const documents = [current, ...archives.filter(d => d.sessionId !== current.sessionId)].sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   return { storage: sessionLog.storageState, error: sessionLog.storageError ?? historyError,
-    sessions: documents.map(d => ({ sessionId: d.sessionId, startedAt: d.startedAt, updatedAt: d.updatedAt, events: d.events.length, droppedEvents: d.droppedEvents, current: d.sessionId === current.sessionId })) };
+    sessions: documents.map(d => ({ sessionId: d.sessionId, startedAt: d.startedAt, updatedAt: d.updatedAt, events: d.events, droppedEvents: d.droppedEvents, current: d.sessionId === current.sessionId })) };
 }
 export const LOG_DESCRIPTION_LIMIT = 5000;
 /** Explicit report text is separate from diagnostic events and local archives. */
@@ -158,9 +163,8 @@ export function withLogDescription<T extends LogDocument>(document: T, descripti
   const text = description.trim();
   return { ...base, ...(text ? { report: { description: text } } : {}) };
 }
-export async function exportLog(sessionId = sessionLog.snapshot().sessionId, description = '') {
-  const current = sessionLog.snapshot();
-  const document = sessionId === current.sessionId ? current : (await sessionLog.archives()).find(d => d.sessionId === sessionId);
+export async function exportLog(sessionId = sessionLog.summary().sessionId, description = '') {
+  const document = sessionId === sessionLog.summary().sessionId ? sessionLog.snapshot() : await sessionLog.archive(sessionId);
   if (!document) throw new Error('该日志会话不存在或已超过保留期限。');
   return withLogDescription({ ...document, exportedAt: new Date().toISOString(), storage: sessionLog.storageState, storageError: sessionLog.storageError }, description);
 }
