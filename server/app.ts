@@ -1,4 +1,5 @@
 import { FLV_INDEX_BYTES } from '../src/flv-index-cache.ts';
+import { AGENT_GUIDE } from './agent-guide.ts';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
 import { browserUserId, identityCookie } from './identity.ts';
@@ -122,6 +123,7 @@ export function createMediaServer(options: ServerOptions): Server {
     let actor = options.admin?.workspaces.user(browserUserId(req)) ?? null;
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
+    if (!options.guideOnly) res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
     let hostname = '';
     try { hostname = new URL(`http://${req.headers.host || 'localhost'}`).hostname; } catch {}
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
@@ -154,6 +156,13 @@ export function createMediaServer(options: ServerOptions): Server {
       // The HTTP companion exposes only the guide, its assets and the public CA.
       if (options.guideOnly && (!['GET', 'HEAD'].includes(req.method ?? '') || !['/', '/connection', '/index.html', '/theme-init.js', '/favicon.ico'].includes(url.pathname) && !url.pathname.startsWith('/assets/'))) {
         sendJson(res, 404, { error: '请使用 HTTPS 访问播放器。' }); return;
+      }
+      if (url.pathname === '/llms.txt') {
+        if (!['GET', 'HEAD'].includes(req.method ?? '')) {
+          res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, { error: 'read only' }); return;
+        }
+        res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'content-length': Buffer.byteLength(AGENT_GUIDE), 'cache-control': 'no-cache' });
+        res.end(req.method === 'HEAD' ? undefined : AGENT_GUIDE); return;
       }
       if (url.pathname === '/favicon.ico' && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return; }
       if (url.pathname === '/api/users' && req.method === 'GET') {
