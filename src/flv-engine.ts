@@ -2,7 +2,7 @@ import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
-import { scanFlv, flvDecoderConfig, flvIndexWarning, FlvReader } from './flv-demux.ts';
+import { scanFlv, flvDecoderConfig, flvIndexWarning, flvMediaTiming, FlvReader } from './flv-demux.ts';
 import type { FlvInput, FlvIndex, FlvCheckpoint } from './flv-demux.ts';
 import { nativeFlvDecoder, wasmFlvDecoder, packetDecodeError } from './flv-decoder.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
@@ -44,7 +44,7 @@ export class FlvEngine {
       try {
         const completed = cached ? { index: cached, nextOffset: this.reader.size, complete: true }
           : await scanFlv(this.reader, () => onProgress?.('index'), this.checkpoint);
-        if (completed.index.firstPts !== this.index.firstPts) throw new MediaOpenError('container', 'FLV 后续视频包早于首帧，无法保持帧时间基准。');
+        if (completed.index.packets[0].pts !== this.index.packets[0].pts) throw new MediaOpenError('container', 'FLV 索引的起始包发生变化。');
         await beforeCommit?.();
         this.checkpoint = completed; this.index = completed.index;
         this.timeline?.replaceIndex(this.index);
@@ -53,8 +53,7 @@ export class FlvEngine {
       } finally { this.reader.setIndexing(false); }
     }
     if (!cached) void this.cache.save(this.index).catch(() => {});
-    return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, firstPtsUs: this.index.firstPts, durationUs: this.index.duration,
-      times: this.index.order.map(i => this.index.packets[i].pts - this.index.firstPts), durations: this.index.durations };
+    return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
   }
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
@@ -83,8 +82,7 @@ export class FlvEngine {
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
         indexWarning: flvIndexWarning(this.index),
         indexState: this.checkpoint!.complete ? 'complete' as const : 'building' as const,
-        firstPtsUs: this.index.firstPts, durationUs: this.index.duration,
-        times: this.index.order.map(i => this.index.packets[i].pts - this.index.firstPts), durations: this.index.durations };
+        ...flvMediaTiming(this.index) };
     } catch (error) { this.close(); throw error; }
   }
   async extract(position: number, recycle?: ArrayBuffer): Promise<FlvFrame> {

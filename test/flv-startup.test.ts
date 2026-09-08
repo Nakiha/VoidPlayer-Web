@@ -83,3 +83,36 @@ test('a timed-out multithread decoder reuses the startup checkpoint without rest
   assert.equal(messages.filter(m => m.type === 'prepare').length, 1);
   source.dispose(); assert.equal(terminated, 2);
 });
+
+test('background index failure during a yielded frame rejects playback instead of reporting EOF', async t => {
+  const { openPacketMedia } = await import('../src/packet-media.ts');
+  const { rgbaDescription } = await import('../src/frame-description.ts');
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { baseURI: 'https://example.invalid/' } });
+  t.after(() => { if (saved) Object.defineProperty(globalThis, 'document', saved); else Reflect.deleteProperty(globalThis, 'document'); });
+  const file = new Blob([syntheticFlv()]), reader = new FlvReader({ file });
+  const prepared = { ...await scanFlv(reader, undefined, undefined, true), version: {} }; reader.close();
+  const calls: string[] = [];
+  const factory = () => {
+    let receive!: (e: { data: unknown }) => void;
+    return { addEventListener(type: string, fn: typeof receive) { if (type === 'message') receive = fn; }, terminate() {},
+      postMessage(m: { id: number; type: string }) {
+        calls.push(m.type);
+        const data = m.type === 'prepare' ? prepared : m.type === 'native' ? {
+          codec: 'h264', decoder: 'webcodecs', width: 2, height: 2, firstPtsUs: 0, durationUs: 40000, times: [0], durations: [40000], indexState: 'building',
+        } : m.type === 'at' ? { pts: 0, width: 2, height: 2, pixels: new ArrayBuffer(16), description: rgbaDescription(2, 2) } : null;
+        queueMicrotask(() => receive({ data: m.type === 'complete-index'
+          ? { id: m.id, ok: false, stage: 'container', error: 'test corrupt index' }
+          : { id: m.id, ok: true, data } }));
+      } } as unknown as Worker;
+  };
+  const source = await openPacketMedia('flv', { file }, { name: 'bad.flv', size: file.size, lastModified: 0 }, { workerFactory: factory });
+  try {
+    const iterator = source.framesFrom(0);
+    const first = await iterator.next(); assert.equal(first.done, false); first.value!.close();
+    await assert.rejects(source.ensureIndexed!(), /test corrupt index/);
+    assert.equal(source.info.indexState, 'error');
+    await assert.rejects(iterator.next(), /test corrupt index/);
+    assert.ok(!calls.includes('next'), 'never confuse an incomplete index with decoder EOF');
+  } finally { source.dispose(); }
+});

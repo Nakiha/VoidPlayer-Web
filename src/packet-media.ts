@@ -81,6 +81,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (info.indexState === 'error') return Promise.reject(new Error(info.indexError));
       indexing = activeRpc.call<Pick<Init, 'indexWarning' | 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
+        contextLog().info('media', 'FLV 后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
+          earliestRelativePtsUs: result.times[0], packets: result.times.length,
+          durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource });
         times = result.times; durations = result.durations;
         updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning},'index');
       }, error => {
@@ -135,7 +138,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         await ensureIndexed(pts);let frame=await extract(pts);
         while(frame&&!disposed){
           const after=frame.ptsUs;yield frame;
-          if(info.indexState==='building')await completeIndex();
+          await ensureIndexed(); // A failed background index is an error, never decoder EOF.
           frame=await extract(after,true);
         }
         if(frame&&disposed)frame.close();

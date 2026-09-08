@@ -3,6 +3,7 @@ import { mkdir } from 'node:fs/promises';
 await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
 import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
+import { openGopFlv } from './open-gop-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
 import { formatTime } from '../src/model.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
@@ -82,6 +83,20 @@ try {
     assert.match(await page.locator('#meta-A').textContent(), /640 × 360/);
     await page.screenshot({ path: `.run/playback-reports/flv-resolution-${codec}-${browserName}.png` });
   }
+  // A non-IDR H.264 recovery point has leading B pictures before its PTS.
+  const openGop = [...await openGopFlv()];
+  await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'open-gop.flv')), openGop);
+  const completedGop = await call('seek_review', { ptsUs: 1500000 });
+  assert.equal(completedGop.tracks[0].indexState, 'complete');
+  assert.ok(completedGop.tracks[0].durationUs > 2000000);
+  for (const ptsUs of [0, 2100000, 0]) {
+    const state = await call('seek_review', { ptsUs });
+    if (ptsUs === 0) assert.equal(state.tracks[0].frame.ptsUs, 0, 'index completion never rebases the startup frame');
+  }
+  const openGopBench = await call('benchmark_review', { durationMs: 1500 });
+  assert.equal(openGopBench.error, null);
+  assert.ok(openGopBench.measurements.mediaUs > 1000000, JSON.stringify(openGopBench));
+  assert.ok((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].frame.ptsUs > 1000000, 'track must advance, not just the session clock');
   // Portrait geometry must agree across the source, displayed metadata and capture.
   const portrait = [...await resolutionFlv('hevc', ['244x436'])];
   const portraitState = await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'portrait.flv')), portrait);
