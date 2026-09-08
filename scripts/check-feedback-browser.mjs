@@ -10,6 +10,8 @@ try {
  const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:2});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ // The entry page loads the player with a dynamic import after the HTTPS check.
+ await page.waitForFunction(()=>!!window.voidPlayer?.tools);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
  // Fit is unobscured, but the full stage remains available beneath glass at zoom.
  await page.setViewportSize({width:1280,height:520});
