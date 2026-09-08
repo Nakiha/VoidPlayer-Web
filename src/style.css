@@ -500,7 +500,7 @@ button.icon-button[aria-pressed=true] {
 .viewport-eye { position: absolute; right: var(--viewport-eye-inset); bottom: calc(var(--transport-bottom, 0px) + (var(--transport-height) - var(--button-size)) / 2); z-index: 5; color: var(--transport-text); background: transparent; }
 .viewport-eye:hover, .viewport-eye[aria-pressed=true] { color: var(--transport-text); background: var(--viewport-eye-fill); }
 .viewport-surface.chrome-hidden .card-heading, .viewport-surface.chrome-hidden .transport,
-.viewport-surface.chrome-hidden .pixel-grid-label, .viewport-surface.chrome-hidden .recover-view,
+.viewport-surface.chrome-hidden .pixel-grid-label,
 .viewport-surface.chrome-hidden .frame-annotations, .viewport-surface.chrome-hidden .image-wrap svg { visibility: hidden; pointer-events: none; }
 .viewport-surface.chrome-hidden #divider { top: 0; }
 

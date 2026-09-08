@@ -155,7 +155,8 @@ export function fitContain(slotW: number, slotH: number, videoW: number, videoH:
 
 /** Fitted display size for one track. In `uniform` pixel mode (desktop
  *  uniformVideoPixels) one video pixel occupies the same screen size on every
- *  track: the track with the most pixels fills its slot, the rest shrink. */
+ *  track: the reference supplies the shared density; fitReference chooses the
+ *  tightest constraint so every source remains contained. */
 export function fittedSize(track: TrackGeometry, reference: TrackGeometry | null, pixelSize: PixelSizeMode): { width: number; height: number } {
   const base = fitContain(track.slotW, track.slotH, track.videoW, track.videoH);
   if (pixelSize !== 'uniform' || !reference) return base;
@@ -220,4 +221,25 @@ export function splitPixelGeometry(fraction:number, width:number, left:number, d
   const x=Math.round((left+fraction*width)*scale)/scale-left;
   // Two physical pixels straddle the clip boundary without half-pixel line edges.
   return {x,strokeWidth:2/scale};
+}
+
+
+export type OverlayBounds = { left: number; right: number; top: number; bottom: number };
+/** Reserve visible overlay bands for fit/centering only. The stage remains full
+ * size so zoomed video can still pass underneath the translucent controls. */
+export function unobscuredFitArea(width: number, height: number, overlays: OverlayBounds[], gap = 4) {
+  let top = 0, bottom = height;
+  for (const box of overlays) {
+    if (box.right <= 0 || box.left >= width || box.bottom <= 0 || box.top >= height) continue;
+    if ((box.top + box.bottom) / 2 <= height / 2) top = Math.max(top, Math.min(height, box.bottom + gap));
+    else bottom = Math.min(bottom, Math.max(0, box.top - gap));
+  }
+  const available = Math.max(1, bottom - top);
+  return { width: Math.max(1, width), height: available, centerY: (top + bottom) / 2 - height / 2 };
+}
+/** Equal pixel density must fit every track, including mixed portrait/landscape
+ * sources and grid rows with different amounts of overlay chrome. */
+export function fitReference(tracks: TrackGeometry[]): TrackGeometry | null {
+  return tracks.reduce<TrackGeometry | null>((reference, track) => !reference ||
+    Math.min(track.slotW / track.videoW, track.slotH / track.videoH) < Math.min(reference.slotW / reference.videoW, reference.slotH / reference.videoH) ? track : reference, null);
 }

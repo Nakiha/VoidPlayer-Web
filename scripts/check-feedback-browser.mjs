@@ -11,6 +11,35 @@ try {
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
+ // Fit is unobscured, but the full stage remains available beneath glass at zoom.
+ await page.setViewportSize({width:1280,height:520});
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:1,offsetX:0,offsetY:0}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const fitted=await page.evaluate(()=>{
+   const image=document.querySelector('#image-A').getBoundingClientRect();
+   const stage=document.querySelector('#stage-A').getBoundingClientRect();
+   const bars=[...document.querySelectorAll('.card-heading,.transport')].filter(e=>e.getBoundingClientRect().width>0&&!e.hidden).map(e=>e.getBoundingClientRect());
+   return {height:stage.height,overlap:bars.some(b=>image.left<b.right&&image.right>b.left&&image.top<b.bottom&&image.bottom>b.top)};
+ });
+ assert.equal(fitted.overlap,false,'the fitted image is entirely outside overlay bands');
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const enlarged=await page.evaluate(()=>({height:document.querySelector('#stage-A').getBoundingClientRect().height,image:document.querySelector('#image-A').getBoundingClientRect().height}));
+ assert.equal(enlarged.height,fitted.height,'fit clearance never crops or resizes the stage');
+ assert.ok(enlarged.image>fitted.height,'zoomed video can extend beneath translucent controls');
+ await page.evaluate(()=>window.voidPlayer.setViewport({offsetX:100000}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.locator('#toggle-chrome').click();
+ assert.equal(await page.locator('#recover-A').isVisible(),true,'focus mode preserves the offscreen recovery action');
+ await page.locator('#recover-A').click();
+ assert.equal(await page.locator('#toggle-chrome').getAttribute('aria-pressed'),'true','recovery does not exit focus mode');
+ assert.equal(await page.locator('#recover-A').isVisible(),false,'recovered content no longer needs a hint');
+ assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),4,'recovery preserves magnification');
+ await page.locator('#toggle-chrome').click();
+
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:1,offsetX:0,offsetY:0}));
+ await page.setViewportSize({width:1280,height:800});
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  await page.evaluate(()=>{
    window.tooltipOpens=0;
    document.getElementById('control-tooltip').addEventListener('beforetoggle',e=>{if(e.newState==='open')window.tooltipOpens++;});

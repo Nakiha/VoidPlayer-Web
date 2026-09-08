@@ -72,3 +72,18 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
   后台索引只修改索引/时长；当前帧描述仅由 session 成功展示后记录。UI 使用
   版本刷新，Agent 仍读取同一个 session；日志在同一变更入口记录有界字段差异。
   Worker 失败附带请求 ID 和最近 16 次操作（不含压缩包或像素内容）。
+
+Viewport fit uses the area unobscured by the actual header and transport bounds,
+with a small edge clearance. This is a fitting/centering constraint, not a crop:
+the presentation stage stays full size and zoomed/panned video can still appear
+beneath translucent chrome. Grid bottom headings and the transport's intersection
+with each cell are measured rather than assumed to occupy every track's bottom.
+Uniform pixel density uses the most restrictive fitted track, so portrait and
+landscape sources both fit. The resulting center displacement is shared by video,
+annotation geometry, pixel grids and recovery calculations. Focus mode preserves
+this fitted geometry while hiding chrome, avoiding a content jump on visibility
+changes; actual overlay-size changes trigger fitting through ResizeObserver.
+
+Focus mode keeps the offscreen recovery action available. It remains conditional
+on the existing visibility threshold, recenters without changing magnification,
+and does not exit focus mode.
