@@ -141,6 +141,11 @@ jobs:
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
       - run: node scripts/check-connection-guide-browser.mjs
+      - name: Verify report descriptions and explicit log submission
+        run: |
+          node --test test/log.test.ts test/server.test.ts
+          node scripts/check-log-report-browser.mjs webkit
+          node scripts/check-log-report-browser.mjs chromium
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |

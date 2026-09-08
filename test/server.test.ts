@@ -114,13 +114,14 @@ test('log upload accepts shaped documents and rejects garbage', async () => {
     const port = (server.address() as { port: number }).port;
     try {
       const base = `http://127.0.0.1:${port}`;
-      const doc = { schema: 'voidplayer-web-log', version: 1, sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [] };
+      const doc = { schema: 'voidplayer-web-log', version: 1, sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [], report: { description: '定位后没有画面\n再次打开可以恢复。' } };
       const ok = await fetch(`${base}/api/logs`, { method: 'POST', body: JSON.stringify(doc) });
       assert.equal(ok.status, 201);
       const body = await ok.json();
       assert.match(body.name, /^voidplayer-log-.*-66c47430\.json$/);
       const written = JSON.parse(await fs.readFile(path.join(logsDir, body.name), 'utf8'));
       assert.equal(written.sessionId, doc.sessionId);
+      assert.deepEqual(written.report, doc.report);
 
       const bad = await fetch(`${base}/api/logs`, { method: 'POST', body: '{"schema":"other"}' });
       assert.equal(bad.status, 400);

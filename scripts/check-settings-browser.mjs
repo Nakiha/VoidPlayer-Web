@@ -34,7 +34,7 @@ try {
    const jsonBounds=await page.locator('.log-json').boundingBox();assert.ok(jsonBounds.height>200,'JSON fills the remaining desktop pane');assert.ok(Math.abs(jsonBounds.y+jsonBounds.height-(geometry.y+geometry.height-22))<2,'JSON extends to pane bottom padding');
    assert.equal(await page.locator('.log-panel [data-action=upload]').isVisible(),true);
    assert.equal(await page.locator('.log-panel .settings-group').count(),0);
-   await page.waitForFunction(()=>document.querySelector('.log-panel textarea').value.startsWith('{'));
+   await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
    await page.locator('#log-session').focus(); await page.keyboard.press('ArrowDown');
    assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.matches(':popover-open')),true);
    const menuBox=await page.locator('#log-session-menu').boundingBox(), triggerBox=await page.locator('#log-session').boundingBox();
@@ -122,10 +122,10 @@ try {
  await page.keyboard.press('Escape');await page.locator('#settings').waitFor({state:'hidden'});
  // Archived sessions remain selectable after reload, using the same menu inside the modal.
  await page.reload(); await page.locator('#settings-open').click(); await page.locator('#settings-tab-logs').click();
- await page.waitForFunction(()=>document.querySelector('.log-panel textarea').value.startsWith('{'));
+ await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
  await page.locator('#log-session').click();
  await page.locator(`#log-session-menu [data-value="${originalSession}"]`).click();
- await page.waitForFunction(id=>JSON.parse(document.querySelector('.log-panel textarea').value).sessionId===id,originalSession);
+ await page.waitForFunction(id=>JSON.parse(document.querySelector('.log-json').value).sessionId===id,originalSession);
  await page.locator('.log-panel [data-action=refresh]').click();
  await page.waitForFunction(id=>document.querySelector(`#log-session-menu [aria-checked=true]`)?.dataset.value===id,originalSession);
  await page.locator('#log-session').click(); await page.locator('#settings-tab-appearance').click();
