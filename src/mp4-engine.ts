@@ -68,7 +68,8 @@ export class Mp4Engine {
       const color=decoder.kind==='webcodecs'?await track.getColorSpace():null;
       return {codec,decoder:decoder.kind,hardwareAcceleration:decoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...decoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
-        ...(recovered?{indexWarning:'容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。',timelineSource:'hevc-poc' as const}:{}),
+        ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
+        indexWarning: [configs.warning, recovered ? '容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。' : undefined].filter(Boolean).join(' ') || undefined,
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}
   }

@@ -1,3 +1,4 @@
+import { rangeBlobReader } from './range-bridge-reader.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
@@ -54,23 +55,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     if (payload.range) {
       ioMode = 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
-      const control = new Int32Array(shared, 0, 4), data = new Uint8Array(shared, 16);
-      // Adapter for the pinned core's existing synchronous Blob AVIO ABI.
-      // Only the decoder worker waits; HTTP runs asynchronously in its owner.
-      core.vpBlobs.set(blobHandle, {
-        blob: { slice: (start: number, end: number) => ({ start, end: Math.min(end, size) }) },
-        reader: { readAsArrayBuffer({ start, end }: { start: number; end: number }) {
-          const length = end - start;
-          if (!length) return new ArrayBuffer(0);
-          if (length < 0 || length > data.length) throw new MediaOpenError('input', 'WASM Range 请求越界。');
-          Atomics.store(control, 0, 0);
-          port.postMessage({ type: 'read-range', offset: start, length });
-          if (Atomics.wait(control, 0, 0, 30000) === 'timed-out') throw new MediaOpenError('input', '媒体 Range 读取超时。');
-          const state = Atomics.load(control, 0), count = Atomics.load(control, 1);
-          if (state !== 1) throw new MediaOpenError('input', state === -1 ? new TextDecoder().decode(data.subarray(0, count)) : '媒体读取已取消。');
-          return data.slice(0, count).buffer;
-        } },
-      });
+      core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message)));
       if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }

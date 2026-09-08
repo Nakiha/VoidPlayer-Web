@@ -159,7 +159,8 @@ jobs:
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
           node scripts/check-range-browser.mjs webkit
-          node --test test/flv-background.test.ts test/flv-open-gop.test.ts
+          node scripts/check-range-browser.mjs chromium
+          node --test test/flv-background.test.ts test/flv-open-gop.test.ts test/range-bridge-large.test.ts test/mp4-boundary.test.ts
           node --test test/flv-resolution.test.ts test/hevc-geometry.test.ts test/preroll.test.ts
           node scripts/check-flv-startup-browser.mjs chromium
           node scripts/check-flv-startup-browser.mjs webkit

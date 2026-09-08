@@ -1,17 +1,23 @@
 // Production Worker path: native-decode rejection must lead to bounded packet IO.
 import assert from 'node:assert/strict';
 import path from 'node:path';
+import os from 'node:os';
+import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mp4BoundaryFixture } from './mp4-boundary-fixture.ts';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 const root = path.resolve(import.meta.dirname, '..');
 const name = process.argv[2] ?? 'webkit';
-const server = createMediaServer({ roots: [path.join(root, 'fixtures/video')], staticDir: path.join(root, 'dist'), onLog() {} });
+const temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-range-browser-'));
+const boundary = await mp4BoundaryFixture();
+await writeFile(path.join(temporary, 'h264_boundary.mp4'), boundary.oversized);
+const server = createMediaServer({ roots: [path.join(root, 'fixtures/video'), temporary], staticDir: path.join(root, 'dist'), onLog() {} });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
   browser = await (name === 'chromium' ? chromium : webkit).launch({ headless: true });
   const base = `http://127.0.0.1:${server.address().port}`;
-  for (const file of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'ffv1_yuv422p_8bit.mkv']) {
+  for (const file of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'ffv1_yuv422p_8bit.mkv', 'h264_boundary.mp4']) {
     const page = await browser.newPage();
     const errors = [], requests = [];
     page.on('pageerror', e => errors.push(e.message));
@@ -37,6 +43,10 @@ try {
       // capability-first policy; VVC and FFV1 exercise mandatory WASM here.
       if (!file.startsWith('h264_')) assert.equal(result.first.tracks[0].decoder, 'ffmpeg-wasm');
       else assert.ok(['webcodecs', 'ffmpeg-wasm'].includes(result.first.tracks[0].decoder));
+      if (file === 'h264_boundary.mp4') {
+        assert.equal(result.first.tracks[0].decoder, 'webcodecs', 'intact samples in an overdeclared mdat retain native decoding');
+        assert.match(result.first.tracks[0].indexWarning, /mdat/);
+      }
       assert.ok(result.last.tracks[0].frame.ptsUs > 0);
       assert.ok(requests.length > 0 && requests.every(r => /^bytes=/.test(r.range ?? '')));
       assert.ok(!result.bench.error, JSON.stringify(result.bench));
@@ -44,4 +54,4 @@ try {
       console.log(JSON.stringify({ browser: name, file, reads: requests.length, benchmark: result.bench }));
     } finally { await page.close(); }
   }
-} finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
+} finally { await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); await rm(temporary, { recursive: true, force: true }); }

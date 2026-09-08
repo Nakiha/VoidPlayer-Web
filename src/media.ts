@@ -176,11 +176,13 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       const bytes=ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength):new Uint8Array(raw);
       if(!nativeAvcCompatible(avcGeometry(bytes)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码，浏览器能力探测不足以保证完整输出。');
     }
+    let indexWarning: string | undefined;
     if(access&&(await input.getFormat()) instanceof IsobmffInputFormat){
       const reader=new RangeReader(access);
       const detach=onLoadAbort(signal,()=>reader.close());
       try{
         const configs=await readMp4Configurations(reader,track.id);
+        indexWarning = configs.warning;
         if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');
         if(await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index'))){
           input.dispose();
@@ -211,7 +213,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       hardwareAcceleration: config.hardwareAcceleration,
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
-      colorSource: 'container',
+      colorSource: 'container', ...(indexWarning ? { indexWarning } : {}),
       ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),
     };
     // Frames carry their resource and kind; the presenter (src/presenter.ts)

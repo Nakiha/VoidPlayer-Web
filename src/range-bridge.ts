@@ -11,7 +11,7 @@ export function createRangeBridge(worker: Worker, url: string, size: number) {
   const receive = async (message: { type?: string; offset: number; length: number }) => {
     if (message.type !== 'read-range' || closed) return;
     try {
-      if (message.length > data.length) throw new MediaOpenError('input', 'WASM 请求的读取块过大。');
+      if (!Number.isSafeInteger(message.length) || message.length <= 0 || message.length > data.length) throw new MediaOpenError('input', 'WASM 请求的读取块过大。');
       const bytes = await reader.read(message.offset, message.length);
       if (closed) return;
       data.set(bytes); Atomics.store(control, 1, bytes.length); Atomics.store(control, 0, 1);
