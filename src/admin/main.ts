@@ -1,3 +1,4 @@
+import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
 import { installAnnotationAdmin } from './annotations.ts';
 import { emptyState } from './presentation.ts';
 import { installCaches } from './caches.ts';
@@ -204,5 +205,6 @@ const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); }, { once: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void poll(); }, { signal: life.signal });
 updateRootActions(); void poll();
+void chooseInitialIdentity(life.signal).then(()=>poll()).catch(error=>notice((error as Error).message,true));
 
 const initialPane=location.hash.slice(1);if(PANES.some(([id])=>id===initialPane))document.querySelector<HTMLButtonElement>(`[data-pane="${initialPane}"]`)?.click();

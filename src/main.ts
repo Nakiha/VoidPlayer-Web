@@ -105,7 +105,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
-  act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
+  identityReady: identitySettings.ready, act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
   async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
@@ -591,7 +591,7 @@ const api = {
     const result = await session.load(slot, (signal, progress) => openMedia(file, undefined, progress, signal), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
-  exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
+  shareWorkspace: workspaceTransfer.shareWorkspace, exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
   removeTrack: (slot: Slot) => apiCall('removeTrack', { slot }, () => session.removeTrack(slot)),
   reorderTracks: (order: Slot[]) => apiCall('reorderTracks', { order }, () => session.reorderTracks(order)),
   seek: (ptsUs: number) => apiCall('seek', { ptsUs }, () => session.seek(ptsUs)), step: (direction: number) => apiCall('step', { direction }, () => session.step(direction)),

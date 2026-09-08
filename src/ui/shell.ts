@@ -20,6 +20,7 @@ export function shell() {
     </div>
     <span class="toolbar-spacer"></span>
     <button id="open" class="add-video" aria-label="添加视频">${icon('filePlus')}<span>添加视频</span></button>
+    <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
     <div class="panel-switches" role="group" aria-label="工作区功能">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
       ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}

@@ -602,3 +602,14 @@ button.icon-button[aria-pressed=true] {
 .log-preview-status { flex:1; }
 
 .source-activity > progress { width:100%; height:6px; margin-top:8px; accent-color:var(--accent); }
+
+.identity-welcome { width: min(440px, calc(100vw - 32px)); padding: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.identity-welcome p { color: var(--text-secondary); }
+.identity-welcome form, .identity-welcome label { display: grid; gap: 10px; }
+.identity-welcome form { gap: 18px; }
+.identity-welcome input, .identity-welcome select { width: 100%; min-height: 36px; padding: 8px; }
+.identity-welcome-actions { display: flex; justify-content: space-between; gap: 12px; }
+.workspace-share-toast { position: fixed; z-index: 10000; top: 64px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); box-shadow: 0 8px 32px #0003; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.workspace-share-toast input { width: 100%; padding: 8px; }
+.share-spinner { animation: share-spin 1s linear infinite; }
+@keyframes share-spin { to { transform: rotate(360deg); } }

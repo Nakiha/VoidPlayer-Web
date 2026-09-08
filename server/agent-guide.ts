@@ -49,6 +49,23 @@ The optional v parameter pins the observed file version. Keep it for downloads
 and resumed reads to avoid mixing different versions of a changing recording.
 The ETag/version is a file-change identifier, not a content checksum.
 
+## Identity and workspace snapshots
+
+GET /api/health returns actor:null when no identity has been selected; it never
+creates users. GET /api/users lists named users. To attribute writes, explicitly
+POST /api/identity with {"id":"existing-id"}, {"name":"your-name"}, or {"guest":true};
+set Content-Type: application/json and X-VoidPlayer-Action: identity, and retain
+the returned cookie. Guests are not persistent user-table entries. Names are
+trusted intranet declarations, not credentials.
+
+GET /api/shares/ID reads an immutable workspace snapshot without choosing an
+identity. Open /?share=ID in the player to restore it. POST /api/shares accepts a
+workspace document with version-pinned library sources; set X-VoidPlayer-Action:
+workspace and Content-Type: application/json. It returns id and path. This writes
+a snapshot on the server, so only do it when the user asks to share. The browser
+WebMCP share_workspace tool captures the current session through the same UI
+operation. Local video bytes are never uploaded by sharing.
+
 ## Errors and scope
 
 - 400: invalid query parameters; correct the request.
@@ -57,7 +74,8 @@ The ETag/version is a file-change identifier, not a content checksum.
 - 416: unsatisfiable Range; inspect Content-Range and HEAD before retrying.
 - TLS trust errors: use the deployment's trusted certificate configuration.
 
-This guide covers read-only media retrieval. It does not expose playback control
+This guide describes media retrieval and explicit identity/snapshot operations.
+It does not expose playback control
 over HTTP MCP: the player's WebMCP tools belong to its browser session. Searching
 and downloading do not require changing settings, triggering scans, uploading
 logs, or clearing server caches.

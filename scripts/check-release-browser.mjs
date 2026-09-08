@@ -1,3 +1,4 @@
+import { chooseTestGuest } from './test-identity.mjs';
 // Browser acceptance against an extracted native release; never serves source/dist.
 // Usage: node scripts/check-release-browser.mjs /path/to/package.tar.gz [webkit|chromium]
 import assert from 'node:assert/strict';
@@ -66,7 +67,7 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
-  const page = await context.newPage(); await page.goto(base);
+  const page = await context.newPage(); await page.goto(base);await chooseTestGuest(page);
   const call = (p, name, args = {}) => p.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
   await page.waitForFunction(() => window.voidPlayer);
   if (generated) {

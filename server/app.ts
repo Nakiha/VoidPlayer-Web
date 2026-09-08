@@ -2,7 +2,7 @@ import { FLV_INDEX_BYTES } from '../src/flv-index-cache.ts';
 import { AGENT_GUIDE } from './agent-guide.ts';
 import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
-import { browserUserId, identityCookie } from './identity.ts';
+import { guestActor, browserUserId, identityCookie } from './identity.ts';
 import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import type { ServerOptions as HttpsOptions } from 'node:https';
@@ -123,7 +123,7 @@ export function createMediaServer(options: ServerOptions): Server {
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
-    let actor = options.admin?.workspaces.user(browserUserId(req)) ?? null;
+    let actor = guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null;
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
     res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
@@ -176,8 +176,10 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
         if (!adminWriteAllowed(req, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return; }
         try {
-          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown } | null;
-          if (body && typeof body.id === 'string' && body.name === undefined) {
+          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown; guest?: unknown } | null;
+          if (body?.guest === true && body.id === undefined && body.name === undefined) {
+            actor = actor?.kind === 'guest' ? actor : guestActor(`guest-${randomUUID()}`)!;
+          } else if (body && typeof body.id === 'string' && body.name === undefined) {
             const selected = options.admin.workspaces.user(body.id);
             if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
             actor = selected;
@@ -190,10 +192,6 @@ export function createMediaServer(options: ServerOptions): Server {
         return;
       }
       if (url.pathname === '/api/health' && req.method === 'GET') {
-        if (options.admin && !actor) {
-          actor = options.admin.workspaces.identify();
-          res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
-        } else if (actor && !browserUserId(req)) res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
         sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, annotations: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
@@ -203,8 +201,8 @@ export function createMediaServer(options: ServerOptions): Server {
       if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/')) {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供标注存储。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { sendJson(res, 403, { error: '请从同源页面保存标注。' }); return; }
-        if (!actor) { actor = options.admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
-        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor.id) { sendJson(res, 409, { error: '用户已切换，草稿未提交。' }); return; }
+        if (!actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return; }
+        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor?.id) { sendJson(res, 409, { error: '用户已切换，草稿未提交。' }); return; }
         const store = options.admin.annotations;
         try {
           if (url.pathname === '/api/annotations/spaces') {
@@ -215,7 +213,7 @@ export function createMediaServer(options: ServerOptions): Server {
           if (match) {
             const [, space, id, preview] = match;
             if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : {...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch}); return; }
-            if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), actor)); return; }
+            if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), actor!)); return; }
             if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return; }
             if (id && preview) {
               const revision = Number(url.searchParams.get('revision'));
@@ -235,11 +233,26 @@ export function createMediaServer(options: ServerOptions): Server {
           sendJson(res, 405, { error: '不支持的标注操作。' }); return;
         } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
       }
+      if (url.pathname === '/api/shares' || url.pathname.startsWith('/api/shares/')) {
+        if (!options.admin) { sendJson(res, 503, {error:'当前服务不支持分享。'}); return; }
+        try {
+          if (url.pathname === '/api/shares' && req.method === 'POST') {
+            if (!adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, {error:'请从同源页面分享工作区。'}); return; }
+            if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor?.id) { sendJson(res,409,{error:'用户已切换，请重新分享。'}); return; }
+            const result = options.admin.workspaces.share(await readAdminJson(req, WORKSPACE_BYTES + 2048), actor);
+            sendJson(res, 201, {...result, path: `/?share=${result.id}`}); return;
+          }
+          const id = /^\/api\/shares\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
+          if (id && req.method === 'GET') { sendJson(res, 200, options.admin.workspaces.shared(id)); return; }
+          sendJson(res, 405, {error:'分享快照不可修改。'});
+        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, {error:(error as Error).message}); }
+        return;
+      }
       if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
-        if (!actor) { actor = options.admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
-        const workspaceActor = actor;
+        if (!actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return; }
+        const workspaceActor = actor ?? { id: 'unselected', name: '访客' };
         if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return; }
         const store = options.admin.workspaces;
         const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
@@ -264,8 +277,8 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
         // Users are trusted; identity records attribution, never access rights.
-        if (!actor && !localRequest(req)) { actor = admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
-        const identity = actor ?? { id: 'local', name: '本机用户' };
+
+        const identity = actor ?? { id: localRequest(req) ? 'local' : 'guest', name: '访客' };
         try {
           if (url.pathname === '/api/admin/caches' && req.method === 'GET') { sendJson(res, 200, await admin.caches.overview()); return; }
           const cacheType = /^\/api\/admin\/caches\/([a-z-]+)$/.exec(url.pathname);

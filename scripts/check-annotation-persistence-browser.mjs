@@ -1,3 +1,4 @@
+import { chooseTestGuest } from './test-identity.mjs';
 import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import path from 'node:path';
@@ -16,7 +17,7 @@ try {
  const context=await browser.newContext({viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
  context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
  const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
- const open=async()=>{const page=await context.newPage();await page.goto(base);await page.waitForFunction(()=>window.voidPlayer);const lib=await call(page,'list_library');await call(page,'load_library_item',{slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});return page;};
+ const open=async()=>{const page=await context.newPage();await page.goto(base);await chooseTestGuest(page);await page.waitForFunction(()=>window.voidPlayer);const lib=await call(page,'list_library');await call(page,'load_library_item',{slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});return page;};
  const a=await open(),b=await open();
  const mark=await call(a,'add_review_mark',{slot:'A',text:'持久化标注'});
  await b.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),mark.id);

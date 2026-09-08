@@ -9,7 +9,7 @@ import { fetchLibraryPage, fetchLibraryItem, openLibraryItem } from './library.t
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
-type WorkspaceActions = { exportWorkspace(): unknown; importWorkspace(value: unknown): Promise<unknown> };
+type WorkspaceActions = { exportWorkspace(): unknown; shareWorkspace?(): Promise<unknown>; importWorkspace(value: unknown): Promise<unknown> };
 export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions): Tool[] {
   const tool = (name: string, description: string, properties: object, required: string[], readOnly: boolean, action: (p: Record<string, unknown>) => unknown): Tool => ({
     name, description, inputSchema: { type: 'object', properties, required, additionalProperties: false },
@@ -28,6 +28,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
   return [
     ...frameIndexTools(),
     ...(workspace ? [
+      ...(workspace.shareWorkspace ? [tool('share_workspace', 'Create an immutable server snapshot and return its share URL. Requires version-pinned library sources; does not upload video files.', {}, [], false, () => workspace.shareWorkspace!())] : []),
       tool('export_workspace', 'Export the current workspace, including absolute media service URLs, source references, marks, time and layout. No upload.', {}, [], true, () => workspace.exportWorkspace()),
       tool('import_workspace', 'Restore a workspace atomically using the same source resolution as the UI. Local sources may require the user to reselect files.', { document: { type: 'object' } }, ['document'], false, p => workspace.importWorkspace(p.document)),
     ] : []),

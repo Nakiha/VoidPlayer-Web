@@ -22,23 +22,28 @@ export class WorkspaceStore {
       if (file !== ':memory:') chmodSync(file, 0o600);
       db.exec('PRAGMA busy_timeout=3000');
       const version = db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 2) throw new Error('工作区数据库来自更新的程序，请恢复匹配的程序版本。');
-      db.exec(`PRAGMA journal_mode=WAL;
+      if (version.user_version > 3) throw new Error('工作区数据库来自更新的程序，请恢复匹配的程序版本。');
+      db.exec(`PRAGMA journal_mode=WAL; BEGIN IMMEDIATE;
         CREATE TABLE IF NOT EXISTS workspaces(id TEXT PRIMARY KEY,name TEXT NOT NULL,owner TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,updated_by TEXT NOT NULL,revision INTEGER NOT NULL,bytes INTEGER NOT NULL,tracks INTEGER NOT NULL,marks INTEGER NOT NULL,document TEXT NOT NULL);
         CREATE INDEX IF NOT EXISTS workspace_owner ON workspaces(owner,updated_at,id);
         CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY,name TEXT NOT NULL UNIQUE);
-        INSERT OR IGNORE INTO users(id,name) SELECT DISTINCT owner,owner FROM workspaces;
-        PRAGMA user_version=2;`);
+
+        `);
+      if (version.user_version < 2) db.exec('INSERT OR IGNORE INTO users(id,name) SELECT DISTINCT owner,owner FROM workspaces');
+      if (version.user_version < 3) db.exec(`ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'named';
+        UPDATE users SET kind='guest' WHERE name GLOB '用户-[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]';`);
+      db.exec(`CREATE TABLE IF NOT EXISTS workspace_shares(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,owner TEXT NOT NULL,document TEXT NOT NULL); PRAGMA user_version=3; COMMIT;`);
     } catch (error) { db.close(); throw error; }
   }
-  users(): Actor[] { return (this.db.prepare('SELECT id,name FROM users ORDER BY name,id').all() as Actor[]).map(row => ({ ...row })); }
+  users(): Actor[] { return (this.db.prepare("SELECT id,name FROM users WHERE kind='named' ORDER BY name,id").all() as Actor[]).map(row => ({ ...row })); }
   user(id: string | undefined): Actor | null {
-    const row = id ? this.db.prepare('SELECT id,name FROM users WHERE id=?').get(id) as Actor | undefined : undefined;
-    return row ? { ...row } : null;
+    const row = id ? this.db.prepare('SELECT id,name,kind FROM users WHERE id=?').get(id) as Actor | undefined : undefined;
+    return row ? { id: row.id, name: row.kind === 'guest' ? '访客' : row.name, ...(row.kind === 'guest' ? {kind: 'guest' as const} : {}) } : null;
   }
   /** A name is a trusted identity claim, not a credential. Keep IDs stable on rename. */
   identify(id?: string, value?: unknown): Actor {
     let name: string | undefined;
+    if (value === undefined) throw new AdminError(400, '请填写用户名或选择访客。');
     if (value !== undefined) {
       if (typeof value !== 'string') throw new AdminError(400, '用户名需要 1–128 个字符。');
       name = value.normalize('NFC').trim();
@@ -50,16 +55,14 @@ export class WorkspaceStore {
       let actor = name ? this.db.prepare('SELECT id,name FROM users WHERE name=?').get(name) as Actor | undefined : undefined;
       if (!actor) {
         actor = this.user(id) ?? undefined;
-        if (actor && name) { this.db.prepare('UPDATE users SET name=? WHERE id=?').run(name, actor.id); actor = { id: actor.id, name }; }
+        if (actor && name) { this.db.prepare("UPDATE users SET name=?,kind='named' WHERE id=?").run(name, actor.id); actor = { id: actor.id, name }; }
         if (!actor) {
           const nextId = randomUUID();
-          if (!name) {
-            do { name = `用户-${randomUUID().slice(0, 8)}`; } while (this.db.prepare('SELECT 1 FROM users WHERE name=?').get(name));
-          }
-          actor = { id: nextId, name };
+          actor = { id: nextId, name: name! };
           this.db.prepare('INSERT INTO users(id,name) VALUES(?,?)').run(actor.id, actor.name);
         }
       }
+      this.db.prepare("UPDATE users SET kind='named' WHERE id=?").run(actor.id);
       this.db.exec('COMMIT'); return { ...actor };
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
@@ -114,6 +117,22 @@ export class WorkspaceStore {
   private match(row: SavedWorkspace, revision?: string) {
     if (!revision) throw new AdminError(428, '此操作需要工作区版本。');
     if (revision !== `"${row.revision}"`) throw new AdminError(409, '工作区已更新，请载入服务器版本或另存为副本。');
+  }
+  share(value: unknown, actor: Actor | null) {
+    const input = this.input({ name: '分享快照', document: value });
+    if (!input.document.tracks.length) throw new AdminError(400, '请先添加视频再分享。');
+    for (const media of input.document.media) {
+      if (!media.source) throw new AdminError(400, `「${media.name}」是本地文件，请先放入服务端媒体库再分享。`);
+      if (!/^[0-9a-f]{24}$/.test(new URL(media.source.url).searchParams.get('v') ?? '')) throw new AdminError(400, '分享片源必须固定媒体库版本。');
+    }
+    const id = randomUUID(), createdAt = new Date().toISOString();
+    this.db.prepare('INSERT INTO workspace_shares VALUES(?,?,?,?)').run(id, createdAt, actor?.id ?? 'guest', input.json);
+    return { id, createdAt };
+  }
+  shared(id: string) {
+    const row = this.db.prepare('SELECT document FROM workspace_shares WHERE id=?').get(id) as {document:string} | undefined;
+    if (!row) throw new AdminError(404, '分享链接不存在或已被移除。');
+    return { document: JSON.parse(row.document) as WorkspaceFile };
   }
   close() { this.db.close(); }
 }

@@ -33,6 +33,10 @@ try {
     assert.deepEqual(errors, []);
     console.log('PASS ordinary HTTP: dedicated HTTPS guide, player not initialized');
   } else {
+  await page.locator('#identity-welcome').waitFor({state:'visible'});
+  assert.deepEqual((await page.request.get(base+'/api/users').then(r=>r.json())).users,[]);
+  await page.locator('#identity-welcome input').fill('初始用户');
+  await page.locator('#identity-welcome button[type=submit]').click();
   await settings(page);
   console.log('Identity browser: page and settings loaded');
   if (secure) {
@@ -45,7 +49,7 @@ try {
   await page.locator('#identity-name').fill('小明'); await page.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '小明' && !document.querySelector('#identity-save').disabled);
   assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
-  await other.goto(base); await settings(other);
+  await other.goto(base); await other.locator('#identity-welcome [data-guest]').click(); await settings(other);
   const otherId = await other.locator('#identity-id').getAttribute('data-tooltip'); assert.notEqual(otherId, id);
   await other.locator('#identity-users').click();
   await other.locator(`#identity-users-menu [data-value="${id}"]`).click();
@@ -77,7 +81,7 @@ try {
   await service.close(); service = await startService(config);
   console.log('Identity browser: service restarted');
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
-  await a.clearCookies(); await page.reload(); await settings(page);
+  await a.clearCookies(); await page.reload(); await page.locator('#identity-welcome [data-guest]').click(); await settings(page);
   assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-users').click();
   await page.locator(`#identity-users-menu [data-value="${id}"]`).click();
@@ -98,7 +102,7 @@ try {
   }
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
-  console.log('PASS identity: automatic users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
+  console.log('PASS identity: explicit names and guests, no read-created users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
   }
 } finally {
   console.log('Identity browser: closing browser'); await browser?.close();

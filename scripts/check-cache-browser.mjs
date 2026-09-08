@@ -1,3 +1,4 @@
+import { chooseTestGuest } from './test-identity.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -28,7 +29,7 @@ try {
  }
  const before=await page.request.get(base+'/api/admin/caches').then(r=>r.json());assert.equal(before.count,54);assert.ok(before.volume.availableBytes>0);assert.ok(before.types.every(t=>t.location.startsWith(config.dataDir)));
  assert.equal((await page.request.delete(base+'/api/admin/caches/annotation-previews',{data:{all:true}})).status(),403);
- await page.goto(base+'/admin');await page.locator('[data-pane=caches]').click();await page.locator('.cache-row').waitFor();
+ await page.goto(base+'/admin');await chooseTestGuest(page);await page.locator('[data-pane=caches]').click();await page.locator('.cache-row').waitFor();
  assert.equal(await page.locator('[data-pane=frame-indexes]').count(),0);assert.equal(await page.locator('#cache-total-count').textContent(),'54 个缓存');
  for(const scheme of ['dark','light']){await page.emulateMedia({colorScheme:scheme});await page.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await page.screenshot({path:`/tmp/voidplayer-caches-frames-${scheme}-${name}.png`});}
  await page.locator('[data-cache-kind=annotation-previews]').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);await page.locator('#cache-more').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===53);

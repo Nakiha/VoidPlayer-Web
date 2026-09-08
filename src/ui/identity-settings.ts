@@ -1,3 +1,4 @@
+import { chooseInitialIdentity } from './identity-onboarding.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { chooseIdentity, currentActor, identityHealth } from '../identity.ts';
 import type { Actor } from '../identity.ts';
@@ -11,15 +12,15 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
   let busy = false;
   function syncMenu() {
     const actor = currentActor();
-    menu.sync(actor?.id ?? '', actor?.name ?? '暂无可用用户', !busy && !!actor && userOptions.length > 0);
+    menu.sync(actor?.id ?? '', actor?.name ?? '暂无可用用户', !busy && userOptions.length > 0);
   }
   function render() {
     const actor = currentActor(); setActor(actor);
-    $('current').textContent = actor?.name ?? '正在连接服务…';
+    $('current').textContent = actor?.name ?? '尚未选择用户';
     $('id').textContent = actor ? `ID · ${actor.id.slice(0, 8)}` : '';
     $('id').dataset.tooltip = actor?.id ?? '';
-    input.value = actor?.name ?? '';
-    input.disabled = $<HTMLButtonElement>('save').disabled = busy || !actor;
+    input.value = actor?.kind === 'guest' ? '' : actor?.name ?? '';
+    input.disabled = $<HTMLButtonElement>('save').disabled = busy;
     syncMenu();
   }
   async function users() {
@@ -31,7 +32,11 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
     syncMenu();
   }
   async function refresh() {
-    try { await identityHealth(); await users(); }
+    try { const health = await identityHealth();
+      if (!health.capabilities?.admin) return;
+      await users().catch(error => { $('message').textContent = (error as Error).message; });
+      await chooseInitialIdentity(life.signal);
+    }
     catch (error) { if (!life.signal.aborted) $('message').textContent = (error as Error).message; }
   }
   async function choose(name: string, id?: string) {
@@ -50,6 +55,13 @@ export function installIdentitySettings(setActor: (actor: Actor | null) => void)
   document.getElementById('settings')!.addEventListener('settings-pane-change', event => {
     if ((event as CustomEvent).detail === 'identity') void refresh();
   }, { signal: life.signal });
-  render(); void refresh();
-  return { dispose() { life.abort(); menu.dispose(); } };
+  $('guest').onclick = () => void chooseGuest();
+  async function chooseGuest() {
+    if (busy) return; busy = true;
+    try { await chooseIdentity({guest:true}); $('message').textContent = '已切换为访客。'; }
+    catch(error) { $('message').textContent = (error as Error).message; }
+    finally { busy = false; render(); }
+  }
+  render(); const ready = refresh();
+  return { ready, dispose() { life.abort(); menu.dispose(); } };
 }

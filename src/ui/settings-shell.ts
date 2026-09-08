@@ -46,6 +46,7 @@ export function settingsShell() {
         </form>
         <div class="identity-form"><label for="identity-users">切换到已有用户</label><button type="button" id="identity-users" class="settings-choice" aria-label="切换到已有用户" aria-describedby="identity-switch-hint"></button></div>
         <p id="identity-switch-hint" class="settings-caption">切换后保留当前评审，显示所选用户的服务器工作区。</p>
+        <button id="identity-guest" type="button">切换为访客</button>
         <p id="identity-message" class="settings-caption" role="status"></p>
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>

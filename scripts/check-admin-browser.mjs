@@ -1,3 +1,4 @@
+import { chooseTestGuest } from './test-identity.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -25,10 +26,10 @@ try {
   const context = await browser.newContext({ viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
   const player = await context.newPage(); const errors = [];
   player.on('pageerror', e => errors.push(e.message));
-  await player.goto(base); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
+  await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
   let [page] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
-  await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '用户-' }).waitFor();
+  await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
   assert.equal(await player.url(), base + '/');
   // Returning to an existing player must retain its in-memory review and tab.
   await player.evaluate(() => { window.adminReturnMarker = 'preserve-review'; });
@@ -45,7 +46,7 @@ try {
   await orphan.getByRole('link', { name: '返回播放器', exact: true }).click(); await orphan.waitForURL(base + '/'); await orphan.close();
   [page] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
-  await page.locator('#identity').filter({ hasText: '用户-' }).waitFor();
+  await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
   assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
@@ -157,7 +158,7 @@ try {
   const beforeClick = healthReads;
   const [management] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   await management.getByRole('heading', { name: '概览', exact: true }).waitFor();
-  await management.locator('#identity').filter({ hasText: '用户-' }).waitFor();
+  await management.locator('#identity').filter({ hasText: '访客' }).waitFor();
   assert.equal(healthReads, beforeClick, 'clicking the entry must not trigger a health check');
   await management.close();
   await player.bringToFront();
