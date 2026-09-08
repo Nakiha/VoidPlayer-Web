@@ -20,7 +20,7 @@ test('gateway handles a fragmented HTTP method, retains peer attribution and clo
   });
   assert.match(result,/200 OK/);assert.ok(result.includes(JSON.stringify({peer:address,url:'/llms.txt?x=1'})));
   const bytes=await new Promise<Buffer>((resolve,reject)=>{
-    const client=connect(publicPort,address),chunks:Buffer[]=[];client.on('error',reject);client.on('data',chunk=>chunks.push(chunk));client.on('end',()=>resolve(Buffer.concat(chunks)));
+    const client=connect(publicPort,address),chunks:Buffer[]=[];client.on('error',reject);client.on('data',chunk=>chunks.push(typeof chunk==='string'?Buffer.from(chunk):chunk));client.on('end',()=>resolve(Buffer.concat(chunks)));
     client.on('connect',()=>{client.write('GET /large HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n');client.pause();setTimeout(()=>client.resume(),100);});
   });
   assert.deepEqual(bytes.subarray(bytes.indexOf('\r\n\r\n')+4),payload,'slow readers receive the final buffered bytes before close');
