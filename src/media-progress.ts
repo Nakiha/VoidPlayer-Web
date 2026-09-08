@@ -7,6 +7,7 @@ export const loadStages = {
   index: '正在建立帧索引',
   decoder: '正在启动软件解码器',
   'first-frame': '正在解码首帧',
+  synchronize: '正在定位到当前播放位置',
 } as const;
 export type MediaLoadStage = keyof typeof loadStages;
 export type MediaOpenProgress = (stage: MediaLoadStage) => void;
@@ -18,4 +19,7 @@ export interface MediaLoadStatus {
   startedAt: number;
   finishedAt?: number;
   error?: string;
+  targetPtsUs?: number;
+  indexedDurationUs?: number;
+  indexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
 }

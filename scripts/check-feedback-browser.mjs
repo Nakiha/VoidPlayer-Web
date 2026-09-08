@@ -66,6 +66,20 @@ try {
    assert.equal(sample.focus,sample.expectedFocus,'transient busy state preserves activation focus');
    for(const button of sample.buttons){assert.equal(button.disabled,false);assert.equal(button.opacity,'1','transport does not dim during startup');}
  }
+ // Adding a source at a nonzero paused position only presents the newcomer.
+ await page.evaluate(async()=>{
+   const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);
+   await tool('seek_review').execute({ptsUs:2000000});
+   const before=window.voidPlayer.getState();window.joinBefore=before;
+   const lib=await tool('list_library').execute({});const item=lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm');
+   const response=await fetch(`/api/media/${item.id}?v=${item.version}`);
+   await window.voidPlayer.loadFile('B',new File([await response.blob()],'local-comparison.webm'));
+ });
+ const joined=await page.evaluate(()=>({before:window.joinBefore,after:window.voidPlayer.getState()}));
+ assert.equal(joined.after.positionUs,2000000);
+ assert.deepEqual(joined.after.tracks.find(t=>t.slot==='A').frame,joined.before.tracks.find(t=>t.slot==='A').frame);
+ const added=joined.after.tracks.find(t=>t.slot==='B').frame;
+ assert.ok(added.ptsUs<=2000000&&added.ptsUs+added.durationUs>2000000);
  // A real failed load exposes the persistent notice action and selects logs.
  await page.locator('#file-B').setInputFiles({name:'broken.flv',mimeType:'video/x-flv',buffer:Buffer.from('not a media file')});
  await page.locator('#notice').waitFor({state:'visible'});

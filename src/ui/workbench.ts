@@ -303,6 +303,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       if (view.panels.sources) renderSources();
       else renderStartLibrary();
     }
+    if (loadingSource && state.mediaLoad?.state === 'loading' && loadingSource.status !== loadStages[state.mediaLoad.stage]) { loadingSource.status = loadStages[state.mediaLoad.stage]; renderSources(); }
     if (sourceBusy !== state.busy) { sourceBusy = state.busy; renderSources(); }
   }
   async function load(item: SourceItem, slot: Slot) {
@@ -371,7 +372,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       else if (loading) {
         const button = createIconButton({ glyph: 'close', label: '取消载入' });
         button.setAttribute('aria-label', `取消载入：${item.name}`);
-        button.onclick = () => { session.pause(); loadingSource = null; renderSources(); };
+        button.onclick = () => { session.cancelLoad(); loadingSource = null; renderSources(); };
         actions.append(button);
       }
       else if (item.library || item.file) {

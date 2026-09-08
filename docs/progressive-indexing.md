@@ -63,3 +63,38 @@ releasing it. A real FFmpeg packet decoder plays over one second from an indexed
 prefix while a sparse tail is still blocked. Separate tests cover no-reset
 incremental decoding, open-GOP PTS against ffprobe, cache reuse, forward stepping,
 multi-track index waits/catch-up and failure propagation.
+
+## Joining another track at the current observation time
+
+Incoming-source preparation is independent of the transport operation queue.
+Only the incoming source is sought and drawn; existing canvases, offsets,
+annotations and playback readers are retained. A pending source is not yet a
+loaded track and cannot contribute to shared-clock coverage or annotations.
+
+- Paused: request the display frame covering the current session timestamp,
+  decoding from its random-access anchor as needed. Exact seeking means the
+  display frame at that time, not a forced equality with a VFR frame's PTS.
+- Playing: the old session continues during open, index wait and initial seek.
+  Once ready, join the new source. If the clock moved during decode, mark it
+  catching-up until it covers the current clock; it must not rewind other tracks.
+  Rebuilding loop membership retains every surviving FrameQueue/iterator.
+- Unindexed target: request that prefix before clamping a timestamp to duration.
+  A startup duration of 40 ms is not evidence that a later target is out of range.
+  Report requested time, currently indexed duration and byte-scan progress while
+  waiting. A finished full index is unnecessary when the prefix covers the target.
+- Short source: seek its last display frame and hold it, preserving the existing
+  session time. Replacing the longest source can legitimately shrink the whole
+  session extent; only then clamp the global cursor to the new end.
+- Replacement: retain the old source until the incoming frame has decoded and
+  been presented. Failure/cancellation releases the incoming decoder and any
+  late frame; the old source and observation point remain intact.
+- Cancel load: explicit UI actions and `cancel_review_load` only cancel the
+  incoming source. They do not pause surviving tracks. Transport pause leaves
+  preparation running and establishes the position at which the new source joins.
+- An explicit seek, step, source removal, alignment/workspace operation or a
+  newer load supersedes pending preparation. Its cancelled status is visible;
+  there is no late commit to an obsolete observation target. Disposal cancels it.
+
+Load preparation does not set global busy. `mediaLoad.state` owns its lifecycle,
+while `busy` still represents serialized transport/workspace operations. New
+source alignment defaults to zero, including replacement, as before.

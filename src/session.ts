@@ -57,6 +57,13 @@ export class ReviewSession {
   private queue: Promise<unknown> = Promise.resolve();
   private mediaLoad: MediaLoadStatus | null = null;
   private abortLoad: (() => void) | undefined;
+  private abortIncoming: (() => void) | undefined;
+  cancelLoad() {
+    this.abortIncoming?.();
+    if (this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); }
+    this.emit();
+    return this.getState();
+  }
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
   // Playback state belongs to a source, not to its position in a track array.
@@ -135,7 +142,6 @@ export class ReviewSession {
     const wasPlaying = this.playing;
     ++this.revision;
     this.abortLoad?.();
-    if (this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); }
     this.stopPlayback?.();
     this.stopPlayback = undefined;
     this.playing = false;
@@ -147,7 +153,7 @@ export class ReviewSession {
   private run<T>(name: string, data: unknown, work: (current: () => boolean) => Promise<T>): Promise<T> {
     return traceOperation('session', name, data, () => {
       const context = operationContext();
-      this.pause();
+      this.cancelLoad(); this.pause();
       const revision = this.revision;
       this.busy = true;
       this.error = null;
@@ -171,66 +177,83 @@ export class ReviewSession {
     });
   }
   async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
-    const scoped = contextLog();
     slotValue(slot);
-    const replacing = this.tracks.get(slot)?.source.info.name;
-    const status: MediaLoadStatus = { name, slot, stage: 'queued', state: 'loading', startedAt: Date.now() };
+    const scoped = contextLog(), replacing = this.tracks.get(slot)?.source.info.name;
+    // Preparing a source is independent of the transport. A second load still
+    // supersedes the first, but opening/indexing never owns the session queue.
+    if (this.busy) this.pause();
+    this.cancelLoad();
+    const controller = new AbortController();
+    const status: MediaLoadStatus = { name, slot, stage: 'queued', state: 'loading', startedAt: Date.now(), targetPtsUs: this.positionUs };
+    let source: MediaSource | undefined, committed = false, released = false;
+    const release = () => { if (source && !released) { released = true; source.onInfoChange = undefined; source.dispose(); } };
+    const abort = () => { controller.abort(new DOMException('载入已取消。', 'AbortError')); if (!committed) release(); };
+    const current = () => !controller.signal.aborted && this.mediaLoad === status;
+    const check = () => { if (!current()) throw controller.signal.reason ?? new DOMException('载入已被取代。', 'AbortError'); };
+    const progress: MediaOpenProgress = stage => { if (current() && status.state === 'loading') { status.stage = stage; this.emit(); } };
+    this.abortIncoming = abort;
+    this.mediaLoad = status; this.error = null; this.emit();
     try {
-      const loading = this.run('load', { slot }, async current => {
-        const controller = new AbortController();
-        const abort = () => controller.abort(new DOMException('载入已取消。', 'AbortError'));
-        this.abortLoad = abort;
-        status.stage = 'inspect';
-        const progress: MediaOpenProgress = stage => {
-          if (!current() || controller.signal.aborted || status.state !== 'loading') return;
-          status.stage = stage; this.emit();
+      await traceOperation('session', 'load', { slot, replacing, targetPtsUs: status.targetPtsUs }, async () => {
+        // Keep the queued milestone observable and never call a superseded opener.
+        await Promise.resolve(); check(); progress('inspect');
+        const opened = await abortableLoad<MediaSource>(Promise.resolve().then(() => { check(); return open(controller.signal, progress); }), controller.signal, late => late.dispose());
+        source = opened; check();
+        if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
+        const updatePending = () => {
+          if (!current()) return;
+          status.indexProgress = opened.info.indexProgress;
+          status.indexedDurationUs = opened.info.durationUs;
+          this.emit();
         };
-        this.emit();
-        let source: MediaSource | undefined;
-        let committed = false;
-        let released = false;
-        const release = () => { if (source && !released) { released = true; source.dispose(); } };
+        opened.onInfoChange = updatePending;
+        let target: number;
+        do {
+          check(); target = this.positionUs; status.targetPtsUs = target;
+          progress(opened.info.indexState === 'building' && target >= opened.info.durationUs ? 'index' : 'synchronize');
+          updatePending();
+          await abortableLoad(Promise.resolve().then(() => target > 0 ? opened.ensureIndexed?.(target) : undefined), controller.signal);
+          check();
+          // The playing clock may have moved while this prefix was scanned.
+        } while (opened.ensureIndexed && opened.info.indexState === 'building' && this.positionUs >= opened.info.durationUs);
+        target = this.positionUs; status.targetPtsUs = target;
+        progress(target === 0 ? 'first-frame' : 'synchronize');
+        const localTarget = Math.max(0, Math.min(target, opened.info.durationUs - 1));
+        const frame = await abortableLoad(Promise.resolve().then(() => opened.frameAt(localTarget)), controller.signal, late => late.close());
         try {
-          const opened = await abortableLoad<MediaSource>(Promise.resolve().then(() => open(controller.signal, progress)), controller.signal, late => late.dispose());
-          source = opened;
-          if (!current()) throw new DOMException('载入已取消。', 'AbortError');
-          // Once open has returned, stop the uncommitted decoder on cancel.
-          // drawAt remains serialized with existing tracks' pending decodes.
-          this.abortLoad = () => { abort(); release(); };
-          if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
-          const next = new Map(this.tracks);
-          next.set(slot, { source: opened, frame: null, offsetUs:0 });
-          progress('first-frame');
-          const kept = this.positionUs === 0 ? new Set([...this.tracks].filter(([s, t]) => s !== slot && t.frame).map(([s]) => s)) : undefined;
-          await this.drawAt(0, current, next, () => {
-            const previous = this.tracks.get(slot);
-            if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
-            this.tracks = next;
-            this.catalog.set(opened.info.id, opened.info);
-            opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
-            committed = true;
-            status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
-          }, undefined, kept);
-        } catch (error) {
-          if (controller.signal.aborted) throw controller.signal.reason;
-          if (current()) { status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now(); }
-          throw error;
-        } finally {
-          if (!committed) release();
-          this.abortLoad = undefined;
-        }
+          check();
+          // Draw only the incoming source. Existing canvases, decode cursors,
+          // buffered frames, alignment offsets and annotation anchors survive.
+          this.draw(slot, frame); recordPresentedFrame(opened, frame);
+          const previous = this.tracks.get(slot), resume = this.playing;
+          if (resume) { ++this.revision; this.stopPlayback?.(); this.stopPlayback = undefined; }
+          if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
+          const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
+          this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, ...(behind ? { syncState: 'catching-up' as const } : {}) });
+          this.catalog.set(opened.info.id, opened.info);
+          opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
+          // Adding a short track never clamps the clock. Replacement can shrink
+          // the entire session's extent after removing its longest source.
+          this.positionUs = Math.min(this.positionUs, Math.max(0, this.durationUs - 1));
+          committed = true;
+          status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
+          this.emit();
+          if (resume) void this.playbackLoop(this.revision, this.positionUs, performance.now());
+        } finally { frame.close(); }
       });
-      this.mediaLoad = status; this.emit();
-      await loading;
     } catch (error) {
-      scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, error: errorText(error) });
-      throw error;
+      if (current()) {
+        status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now();
+        this.error = errorText(error); this.captureDiagnostics('load-error', error);
+      }
+      scoped[controller.signal.aborted ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, targetPtsUs: status.targetPtsUs, error: errorText(error) });
+      throw controller.signal.aborted ? controller.signal.reason : error;
+    } finally {
+      if (!committed) release();
+      if (this.abortIncoming === abort) this.abortIncoming = undefined;
+      if (this.mediaLoad === status) this.emit();
     }
-    const info = this.tracks.get(slot)!.source.info;
-    scoped.info('media', `轨道 ${slot} 已载入`, {
-      name: info.name, size: info.size, codec: info.codec, decoder: info.decoder,
-      width: info.width, height: info.height, durationUs: info.durationUs, replacing,
-    });
+    scoped.info('media', `轨道 ${slot} 已载入`, { name: source!.info.name, replacing, requestedUs: status.targetPtsUs, positionUs: this.positionUs, frame: this.tracks.get(slot)?.frame });
     return this.getState();
   }
   async removeTrack(slot: Slot) {
@@ -656,7 +679,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.pause();
+    this.cancelLoad(); this.pause();
     this.releaseReaders('dispose');
     await this.queue.catch(() => {});
     for (const t of this.tracks.values()) if (!t.failure) t.source.dispose();
