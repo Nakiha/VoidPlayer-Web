@@ -99,6 +99,19 @@ export class ReviewSession {
     for (const listener of this.listeners) listener();
     this.emitProgress();
   }
+  /** Capture before teardown; separate events avoid truncating nested tracks.
+   * Never include pixels, file contents or annotation bodies. */
+  captureDiagnostics(reason: string, failure?: unknown) {
+    const context = { reason, positionUs: this.positionUs, playing: this.playing, busy: this.busy };
+    log.warn('session', '故障现场：会话', { ...context, durationUs: this.durationUs, error: failure === undefined ? this.error : errorText(failure), mediaLoad: this.mediaLoad, playback: this.measurements?.snapshot() ?? null });
+    for (const [slot, track] of this.tracks) {
+      const info = track.source.info;
+      log.warn('session', '故障现场：轨道', { ...context, slot, mediaId: info.id, name: info.name, decoder: info.decoder,
+        width: info.width, height: info.height, durationUs: info.durationUs, offsetUs: track.offsetUs, frame: track.frame,
+        indexState: info.indexState, indexError: info.indexError, color: info.color });
+      log.warn('session', '故障现场：播放队列', { reason, slot, mediaId: info.id, queue: this.readers.get(track.source)?.snapshot() ?? null });
+    }
+  }
   getState() {
     return structuredClone({
       version: 1, busy: this.busy, playing: this.playing, positionUs: this.positionUs,
@@ -147,7 +160,7 @@ export class ReviewSession {
           if (!current()) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
           return result;
         } catch (e) {
-          if (current()) this.error = e instanceof Error ? e.message : String(e);
+          if (current()) { this.error = e instanceof Error ? e.message : String(e); if (!(e instanceof Error && e.name === 'AbortError')) this.captureDiagnostics('operation-error', e); }
           throw e;
         } finally {
           if (current()) { this.busy = false; withLogContext(context, () => this.emit()); }
@@ -492,6 +505,7 @@ export class ReviewSession {
       }
     } catch (error) {
       if (active()) {
+        this.captureDiagnostics('playback-error', error);
         this.playing = false;
         this.error = errorText(error);
         scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });

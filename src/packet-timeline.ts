@@ -53,11 +53,11 @@ export class PacketTimeline {
         if(!packet)return null;
         await this.configure(packet.configuration??0);continue;
       }
-      this.actualPacket=packet;this.cursor++;
+      this.actualPacket=packet;
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
-      if((this.index.codec==='hevc'||this.index.codec==='vvc')&&packet.pts<this.index.packets[this.anchorIndex()].pts)continue;
-      await this.decoder.send(await this.read(packet),packet);
+      if((this.index.codec==='hevc'||this.index.codec==='vvc')&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      if (await this.decoder.send(await this.read(packet),packet) !== false) this.cursor++;
     }
   }
   private anchor=0;

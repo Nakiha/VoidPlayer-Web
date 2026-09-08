@@ -49,6 +49,7 @@ $('app').innerHTML = shell();
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
+$('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 const removeLogPanel = installLogPanel($('diagnostic-logs'));
@@ -91,6 +92,7 @@ function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
 
 
 function showError(error: unknown) {
+  session.captureDiagnostics('ui-error', error);
   message = error instanceof Error ? error.message : String(error);
   render();
 }
@@ -266,7 +268,7 @@ function render() {
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
   $('notice').hidden = !(message || state.error);
-  $('notice').textContent = message || state.error;
+  $('notice-message').textContent = message || state.error;
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
     ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`

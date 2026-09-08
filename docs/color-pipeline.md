@@ -79,3 +79,17 @@ hdr/sourceHdr、conversion、target 和源 PTS。仅状态变化记录，避免�
 参考：[WebCodecs](https://www.w3.org/TR/webcodecs/)、
 [不透明帧的 allocationSize/copyTo 讨论](https://github.com/w3c/webcodecs/issues/920)、
 [WebKit Canvas 色彩管理](https://webkit.org/blog/12058/wide-gamut-2d-graphics-using-html-canvas/)。
+
+## 不透明帧的队列计费与背压
+
+byteLengthEstimated 仅用于资源计费，不能因 4K/8K 估算超过旧常量就误判色彩/解码失败。
+原生 packet 解码器最多保留 8 个未输出输入的窗口；提交前发现已有输出时返回未接收，
+PacketTimeline 必须先 receive 再重试同一个包，不能前移游标。浏览器输出回调不能等待消费。
+输出预算为 max(128 MiB, 8 × 已观察最大单帧计费)，并保留 32 帧异常数量上限。
+这允许已接收输入正常批量输出，不代表这些帧都已分配等量的 CPU 内存。
+默认播放队列为至少两帧预留计费空间，同时保留容量限制；显式传入字节预算的调用仍采用该限制
+（允许一帧本身大于预算）。多轨/8K 的总体内存仍需设备实测，不能承诺固定总显存上限。
+
+错误现场在播放队列清理前写入本地日志，包括会话时钟、逐轨信息和队列快照；
+解码器错误带待输出数量、队列字节、输入窗口和峰值。状态快照不包含视频像素或标注正文，
+不是屏幕截图，也不会自动上传。

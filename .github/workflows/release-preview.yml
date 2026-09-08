@@ -140,6 +140,7 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
+      - run: node scripts/check-feedback-browser.mjs chromium
       - run: node scripts/check-connection-guide-browser.mjs
       - name: Verify HTTP and HTTPS entry policy
         run: |

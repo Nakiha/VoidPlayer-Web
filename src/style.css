@@ -167,7 +167,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .selected-marks { display: flex; flex-direction: column; align-items: stretch; min-height: 0; overflow: auto; gap: 0; padding: 0; }
 .mark-entry { justify-content: flex-start; font-size: var(--text-xs); max-width: 100%; min-height: var(--control-small-height); padding: 0 var(--space-2); background: transparent; }
 .mark-entry time { font-family: var(--font-mono); color: var(--text-secondary); flex-shrink: 0; }
-#notice { padding: var(--space-3) var(--space-4); background: var(--notice-fill); color: var(--notice-text); overflow-wrap: anywhere; }
+#notice { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--notice-fill); color: var(--notice-text); overflow-wrap: anywhere; }
 dialog { width: min(420px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: 85dvh; overflow: auto; padding: var(--content-inset); background: var(--glass-fill); color: var(--text); border: var(--control-border-width) solid var(--border); border-radius: var(--radius-panel); box-shadow: var(--popover-shadow); }
 dialog::backdrop { background: var(--backdrop); }
 .dialog-heading { display: flex; align-items: center; gap: var(--content-gap); margin-bottom: var(--section-gap); }
@@ -591,3 +591,7 @@ button.icon-button[aria-pressed=true] {
 .annotation-conflict { padding: 12px 0; }
 .annotation-conflict > button { margin-right: 8px; }
 #annotation-sync-status { color: var(--text-secondary); }
+
+#notice[hidden] { display: none; }
+#notice-message { flex: 1; min-width: 0; }
+#notice-logs { flex: none; margin-left: auto; color: inherit; }

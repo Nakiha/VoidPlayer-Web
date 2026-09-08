@@ -66,6 +66,16 @@ try {
    assert.equal(sample.focus,sample.expectedFocus,'transient busy state preserves activation focus');
    for(const button of sample.buttons){assert.equal(button.disabled,false);assert.equal(button.opacity,'1','transport does not dim during startup');}
  }
+ // A real failed load exposes the persistent notice action and selects logs.
+ await page.locator('#file-B').setInputFiles({name:'broken.flv',mimeType:'video/x-flv',buffer:Buffer.from('not a media file')});
+ await page.locator('#notice').waitFor({state:'visible'});
+ await page.locator('#notice-logs').click();
+ assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
+ assert.equal(await page.locator('#settings-tab-logs').getAttribute('aria-selected'),'true');
+ assert.equal(await page.locator('#settings-pane-logs').isVisible(),true);
+ await page.locator('#settings-close').click();
+ await page.waitForFunction(()=>!document.getElementById('settings').open);
+ assert.equal(await page.evaluate(()=>document.activeElement.id),'notice-logs');
  assert.deepEqual(errors,[]);
  console.log(`PASS ${name}: click tooltip dismissal, hover re-entry, keyboard focus help, stable playback nodes/focus/opacity, no empty icon frame`);
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

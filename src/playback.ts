@@ -11,25 +11,30 @@ export class FrameQueue {
   private bytes = 0;
   private peakFrames = 0;
   private peakBytes = 0;
+  private largestFrameBytes = 0;
+  private minimumFrames: number;
+  private get effectiveBudgetBytes() { return Math.max(this.budgetBytes, Math.min(this.minimumFrames, this.capacity) * this.largestFrameBytes); }
   readonly done: Promise<void>;
   private gen: AsyncGenerator<DecodedFrame>;
   readonly capacity: number;
   readonly budgetBytes: number;
-  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes = 64 * 1024 * 1024) {
-    this.gen = gen; this.capacity = capacity; this.budgetBytes = budgetBytes;
+  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes?: number) {
+    this.gen = gen; this.capacity = capacity; this.budgetBytes = budgetBytes ?? 64 * 1024 * 1024;
+    this.minimumFrames = budgetBytes === undefined ? 2 : 1;
     this.done = this.produce();
   }
   private async produce() {
     try {
       while (!this.stopped) {
         // Bounded by both count and bytes: four 4K RGBA frames are ~133 MB.
-        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.budgetBytes)) {
+        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.effectiveBudgetBytes)) {
           await new Promise<void>(r => { this.wake = r; });
         }
         if (this.stopped) break;
         const next = await this.gen.next();
         if (next.done) { this.ended = true; break; }
         if (this.stopped) { next.value.close(); break; }
+        this.largestFrameBytes = Math.max(this.largestFrameBytes, next.value.byteSize);
         this.bytes += next.value.byteSize;
         this.frames.push(next.value);
         this.peakFrames = Math.max(this.peakFrames, this.frames.length);
@@ -58,8 +63,8 @@ export class FrameQueue {
     this.bytes = 0;
   }
   snapshot() {
-    return { frames: this.frames.length, bytes: this.bytes, peakFrames: this.peakFrames, peakBytes: this.peakBytes,
-      capacity: this.capacity, budgetBytes: this.budgetBytes };
+    return { ended: this.ended, suspended: this.suspended, stopped: this.stopped, error: this.error instanceof Error ? this.error.message : this.error == null ? null : String(this.error), frames: this.frames.length, bytes: this.bytes, peakFrames: this.peakFrames, peakBytes: this.peakBytes,
+      capacity: this.capacity, budgetBytes: this.budgetBytes, effectiveBudgetBytes: this.effectiveBudgetBytes };
   }
 }
 

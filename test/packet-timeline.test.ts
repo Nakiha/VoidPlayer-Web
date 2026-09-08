@@ -44,3 +44,24 @@ test('next after an unrelated seek discards lookahead from the old display posit
     const later=await timeline.next(20000);assert.equal(later?.pts,40000);later!.frame!.close();
   }finally{timeline.close();}
 });
+
+test('output arriving during packet IO defers submission without advancing the packet cursor', async () => {
+  const ready: FlvFrame[] = [], accepted: number[] = [];
+  const frame = (pts: number): FlvFrame => ({ pts, width: 4, height: 4, description: rgbaDescription(4, 4), pixels: new ArrayBuffer(64) });
+  const index: FlvIndex = { codec: 'h264', description: new Uint8Array(), packets: [
+    { pts: 0, dts: 0, key: true, offset: 0, size: 1 }, { pts: 40000, dts: 40000, key: false, offset: 1, size: 1 },
+  ], order: [0, 1], firstPts: 0, duration: 80000, durations: [40000, 40000] };
+  let delivered = false;
+  const decoder: PacketDecoder = { kind: 'webcodecs', reset() {}, close() {}, async drain() {}, receive() { return ready.shift() ?? null; },
+    async send(_bytes, packet) { if (ready.length) return false; accepted.push(packet.pts); if (packet.pts) ready.push(frame(packet.pts)); } };
+  const timeline = new PacketTimeline(index, decoder, async packet => {
+    if (packet.offset === 1 && !delivered) { delivered = true; ready.push(frame(0)); }
+    return new Uint8Array(1);
+  });
+  try {
+    assert.equal((await timeline.at(0)).pts, 0);
+    assert.equal((await timeline.next(0))?.pts, 40000);
+    assert.equal(await timeline.next(40000), null);
+    assert.deepEqual(accepted, [0, 40000]);
+  } finally { timeline.close(); }
+});

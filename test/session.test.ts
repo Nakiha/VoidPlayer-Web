@@ -734,3 +734,26 @@ test('removal that clamps the clock invalidates surviving producers before repos
     assert.equal(session.getState().tracks[0].frame!.ptsUs, 0, 'replay starts at zero after reaching the shorter end');
   } finally { await session.dispose(); }
 });
+
+test('playback failure records queue and track snapshots before releasing readers', async () => {
+  const { getLogEvents } = await import('../src/log.ts');
+  const fixture = media('failure-snapshot');
+  fixture.source.framesFrom = async function* () {
+    yield await fixture.source.frameAt(0);
+    throw new Error('synthetic queue failure');
+  };
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => fixture.source);
+    const cursor = getLogEvents({ limit: 2000 }).lastSeq;
+    await session.play();
+    for (let i = 0; i < 100 && !session.getState().error; i++) await new Promise(r => setTimeout(r, 5));
+    assert.match(session.getState().error!, /synthetic queue failure/);
+    const events = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events;
+    const snapshot = events.find(e => e.msg === '故障现场：播放队列');
+    assert.ok(snapshot);
+    assert.ok((snapshot.data as any).queue, 'reader still exists at capture time');
+    assert.ok(events.some(e => e.msg === '故障现场：轨道' && (e.data as any).mediaId === 'failure-snapshot'));
+    assert.ok(events.findIndex(e => e.msg === '故障现场：会话') < events.findIndex(e => e.msg === '播放中断'));
+  } finally { await session.dispose(); }
+});

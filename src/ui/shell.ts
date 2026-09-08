@@ -27,7 +27,7 @@ export function shell() {
     <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
   </header>
 <output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" class="icon-button" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
-  <main><div id="notice" role="alert" hidden></div>
+  <main><div id="notice" role="alert" hidden><span id="notice-message"></span><button id="notice-logs" type="button" aria-haspopup="dialog" aria-controls="settings">日志</button></div>
     <div class="workspace" id="workspace"><div id="sources-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整片源宽度" aria-orientation="vertical" aria-controls="sources-panel"></div><div id="inspector-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整轨道检查宽度" aria-orientation="vertical" aria-controls="inspector-panel"></div>
       <aside id="inspector-panel" class="side-panel inspector-panel glass" aria-label="轨道检查" hidden>
         <header class="panel-heading"><h2>轨道</h2><button data-close-panel="inspector" class="icon-button" aria-label="收起轨道检查">${icon('sidebar')}</button></header>
