@@ -63,16 +63,18 @@ test('bad media replacement preserves the active source and frame', async () => 
   await session.dispose();
 });
 
-test('a failed second-track decode releases the first frame and commits neither', async () => {
+test('a failed second-track seek quarantines only that source and commits healthy frames', async () => {
   const drawn: number[] = [];
   const session = new ReviewSession((_, frame) => drawn.push(frame.ptsUs));
   const a = media(), b = media('B');
   await session.load('A', async () => a.source); await session.load('B', async () => b.source);
   const closed = a.closed; const drawCount = drawn.length;
   b.source.frameAt = async () => { throw new Error('decode error'); };
-  await assert.rejects(session.seek(120000), /decode error/);
-  assert.equal(a.closed, closed + 1); assert.equal(drawn.length, drawCount);
-  assert.equal(session.getState().positionUs, 0);
+  await session.seek(120000);
+  assert.equal(a.closed, closed + 1); assert.equal(drawn.length, drawCount + 1);
+  assert.equal(session.getState().positionUs, 120000);
+  assert.match(session.getState().tracks.find(t => t.slot === 'B')!.failure!.message, /decode error/);
+  assert.equal(b.disposed, 1);
   await session.dispose();
 });
 
@@ -748,12 +750,42 @@ test('playback failure records queue and track snapshots before releasing reader
     const cursor = getLogEvents({ limit: 2000 }).lastSeq;
     await session.play();
     for (let i = 0; i < 100 && !session.getState().error; i++) await new Promise(r => setTimeout(r, 5));
-    assert.match(session.getState().error!, /synthetic queue failure/);
+    assert.match(session.getState().error!, /所有轨道/);
+    assert.match(session.getState().tracks[0].failure!.message, /synthetic queue failure/);
     const events = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events;
     const snapshot = events.find(e => e.msg === '故障现场：播放队列');
     assert.ok(snapshot);
     assert.ok((snapshot.data as any).queue, 'reader still exists at capture time');
     assert.ok(events.some(e => e.msg === '故障现场：轨道' && (e.data as any).mediaId === 'failure-snapshot'));
     assert.ok(events.findIndex(e => e.msg === '故障现场：会话') < events.findIndex(e => e.msg === '播放中断'));
+  } finally { await session.dispose(); }
+});
+
+test('a failed playback track no longer blocks healthy playback, seek, stepping or replacement', async () => {
+  const a = media('healthy', Array.from({ length: 50 }, (_, i) => i * 40000), 2000000), b = media('broken');
+  b.source.framesFrom = async function* () { yield await b.source.frameAt(0); throw new Error('broken source'); };
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.play(); await new Promise(r => setTimeout(r, 100));
+    const state = session.getState(); assert.equal(state.playing, true); assert.ok(state.positionUs > 40000);
+    assert.equal(state.error, null); assert.match(state.tracks[1].failure!.message, /broken source/);
+    session.pause(); await session.seek(80000); await session.step(1);
+    assert.ok(session.getState().positionUs > 80000);
+    assert.throws(() => session.addMark({ slot: 'B', text: 'stale' }), /有效画面/);
+    assert.equal(session.addMark({ slot: 'A', text: 'valid' }).comparison.length, 1);
+    const replacement = media('replacement'); await session.load('B', async () => replacement.source);
+    assert.equal(session.getState().tracks[1].failure, undefined);
+  } finally { await session.dispose(); }
+});
+
+test('background index rejection is isolated before seek without poisoning other sources', async () => {
+  const session = new ReviewSession(() => {}), a = media('indexed'), b = media('bad-index');
+  b.source.ensureIndexed = async () => { throw new Error('index broken'); };
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.seek(80000);
+    assert.equal(session.getState().positionUs, 80000);
+    assert.match(session.getState().tracks[1].failure!.message, /index broken/);
   } finally { await session.dispose(); }
 });

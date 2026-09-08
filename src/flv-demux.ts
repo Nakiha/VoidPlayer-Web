@@ -95,6 +95,13 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
         if (![0, 1, 2].includes(type)) bad('未知视频包类型。');
       }
       if (!current) throw new MediaOpenError('codec', 'FLV 视频编码暂不支持（支持 AVC、HEVC、AV1、VVC）。');
+      // SequenceEnd is a control message, not a decoder configuration or
+      // coded picture. Legacy muxers may write an AVC terminator for HEVC.
+      // Its timestamp must not contribute to video duration or codec selection.
+      if (type === 2) {
+        if (size !== skip) bad('序列结束标签包含多余的视频数据。');
+        offset = next; continue;
+      }
       if (codec && codec !== current) bad('不支持文件中途切换视频编码。');
       codec = current;
       if (type === 0) {

@@ -59,3 +59,21 @@ test('a decoder exception reports the actual fed packet and stops further calls'
     await assert.rejects(timeline.at(0),/offset is out of bounds/);assert.equal(receives,1);
   }finally{timeline.close();}
 });
+
+test('foreign codec sequence-end markers do not change codec or duration; coded switches remain errors', async () => {
+  const original = syntheticFlv();
+  // The same control-message rule applies in either direction and at any time.
+  const control = (payload: number[]) => {
+    const tag = Buffer.alloc(15 + payload.length); tag[0] = 9; tag.writeUIntBE(payload.length, 1, 3);
+    tag.writeUIntBE(28364800 & 0xffffff, 4, 3); tag[7] = 28364800 >>> 24;
+    tag.set(payload, 11); tag.writeUInt32BE(payload.length + 11, 11 + payload.length); return tag;
+  };
+  const expected = await index(original);
+  for (const payload of [[0x1c, 2, 0, 0, 0], [0x92, 104, 118, 99, 49]]) {
+    const recovered = await index(Buffer.concat([original, control(payload)]));
+    assert.deepEqual(recovered, expected);
+  }
+  for (const payload of [[0x1c, 0, 0, 0, 0, 1], [0x1c, 1, 0, 0, 0, 1]])
+    await assert.rejects(index(Buffer.concat([original, control(payload)])), /切换视频编码/);
+  await assert.rejects(index(Buffer.concat([original, control([0x17, 2, 0, 0, 0, 1])])), /结束标签/);
+});

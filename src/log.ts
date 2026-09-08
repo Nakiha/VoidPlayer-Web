@@ -62,7 +62,7 @@ export class SessionLog {
   private nextSeq = 1;
   private storage?: LogStorage;
   private timer?: ReturnType<typeof setTimeout>;
-  private writes: Promise<void> = Promise.resolve();
+  private writes?: Promise<void>;
   private dirty = false;
   private listeners = new Set<() => void>();
   storageState: 'memory' | 'pending' | 'saved' | 'failed' = 'memory';
@@ -94,18 +94,23 @@ export class SessionLog {
   flush(): Promise<void> {
     clearTimeout(this.timer); this.timer = undefined;
     if (!this.storage) return Promise.resolve();
-    this.writes = this.writes.then(async () => {
-      if (!this.dirty) return;
-      const document = this.snapshot(); this.dirty = false;
-      try {
-        await this.storage!.save(document);
-        this.storageState = this.dirty ? 'pending' : 'saved'; this.storageError = null;
-      } catch (error) {
-        this.dirty = true; this.storageState = 'failed';
-        this.storageError = error instanceof Error ? error.message : String(error);
+    // Coalesce flush callers and mutations while one save is in flight. A
+    // blocked IndexedDB write must not grow a chain of pending closures.
+    if (this.writes) return this.writes;
+    this.writes = (async () => {
+      while (this.dirty) {
+        const document = this.snapshot(); this.dirty = false;
+        try {
+          await this.storage!.save(document);
+          this.storageState = this.dirty ? 'pending' : 'saved'; this.storageError = null;
+        } catch (error) {
+          this.dirty = true; this.storageState = 'failed';
+          this.storageError = error instanceof Error ? error.message : String(error);
+          this.notify(); break;
+        }
+        this.notify();
       }
-      this.notify();
-    });
+    })().finally(() => { this.writes = undefined; });
     return this.writes;
   }
   async archives() { return this.storage ? this.storage.list() : []; }

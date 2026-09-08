@@ -74,7 +74,7 @@ test('events appended during an in-flight save are not lost or falsely reported 
   const journal = new SessionLog(); let release!: () => void; const snapshots: LogDocument[] = [];
   const saving = journal.attach({ save: async doc => { snapshots.push(doc); if (snapshots.length === 1) await new Promise<void>(r => { release = r; }); }, list: async () => [] }, {});
   await Promise.resolve(); journal.append('info', 'ui', 'during save'); release(); await saving;
-  assert.equal(journal.storageState, 'pending'); await journal.flush();
+  assert.equal(journal.storageState, 'saved'); assert.equal(snapshots.length, 2); await journal.flush();
   assert.equal(snapshots.at(-1)!.events[0].msg, 'during save'); assert.equal(journal.storageState, 'saved');
   await journal.dispose();
 });
@@ -138,4 +138,21 @@ test('explicit report description is lossless and never changes diagnostic event
   assert.equal(exported.report?.description, description);
   assert.ok(!JSON.stringify(exported.events).includes(description));
   assert.ok(!('report' in await exportLog()));
+});
+
+test('stalled storage coalesces repeated flushes into one writer and bounded latest state', async () => {
+  const logger = new SessionLog(10), saved: any[] = [];
+  let release!: () => void;
+  const gate = new Promise<void>(r => release = r);
+  const attached = logger.attach({ async save(doc) { saved.push(doc); if (saved.length === 1) await gate; }, async list() { return []; } }, {});
+  const first = logger.flush();
+  for (let i = 0; i < 10000; i++) {
+    logger.append('info', 'session', 'event', { i });
+    assert.equal(logger.flush(), first);
+  }
+  assert.equal(saved.length, 1); assert.equal(logger.snapshot().events.length, 10);
+  release(); await attached;
+  assert.equal(saved.length, 2); assert.equal(saved[1].events.length, 10);
+  assert.equal(saved[1].droppedEvents, 9990);
+  await logger.dispose();
 });
