@@ -2,7 +2,7 @@ import { avcGeometry } from './avc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { RangeReader } from './range-reader.ts';
 
-interface Box { type: string; data: number; end: number; truncated?: boolean; }
+interface Box { type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; }
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
 async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
   const result: Box[] = [];
@@ -17,8 +17,10 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
     if (!Number.isSafeInteger(length) || length < bytes) invalid('box 长度越界。');
     const truncated = length > end - start;
     if (truncated && !(root && type === 'mdat')) invalid(`${type} box 长度越界。`);
+    const declaredEnd = start + length;
+    if (!Number.isSafeInteger(declaredEnd)) invalid('box 末尾超出安全整数范围。');
     if (truncated) length = end - start;
-    result.push({ type, data: start + bytes, end: start + length, ...(truncated ? { truncated: true } : {}) });
+    result.push({ type, data: start + bytes, end: start + length, ...(truncated ? { truncated: true, declaredEnd } : {}) });
     if (result.length > 100000) throw new MediaOpenError('resource', 'MP4 box 数量超过上限。');
     start += length;
   }
@@ -59,9 +61,10 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
   return invalid('未找到对应的 VVC 视频轨道。');
 }
 
-export interface Mp4Configurations { warning?: string; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
+export interface Mp4Configurations { warning?: string; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
 /** Keep stsd entries and stsc's per-chunk description selection together. The
- * public packet API remains responsible for edits, sample offsets and timestamps. */
+ * public packet API remains responsible for edit lists and timestamps; these
+ * tables own validated byte offsets and the available decode-order prefix. */
 export async function readMp4Configurations(reader: RangeReader, trackId: number): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
@@ -113,19 +116,38 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
     const offsetsData=await reader.read(offsets.data,offsets.end-offsets.data),ov=new DataView(offsetsData.buffer,offsetsData.byteOffset,offsetsData.byteLength),stride=offsets.type==='co64'?8:4;
     if(offsetsData.length!==8+chunks*stride)return invalid('chunk offset 数量无效。');
     const sampleOffsets:number[]=[];let run=0;
+    const recovered = root.some(b => b.truncated);
+    const damaged = (message: string): never => { throw new MediaOpenError('input', `MP4 文件不完整，无法安全恢复：${message}`); };
     for(let chunk=1;chunk<=chunks;chunk++){
       while(run+1<count&&v.getUint32(20+run*12)<=chunk)run++;
       let offset=stride===8?Number(ov.getBigUint64(8+(chunk-1)*8)):ov.getUint32(8+(chunk-1)*4);
-      for(let n=v.getUint32(12+run*12);n>0;n--){const size=sampleSizes[sampleOffsets.length];if(!Number.isSafeInteger(offset)||!size||offset<0||offset+size>reader.size)return invalid('sample offset 越界。');sampleOffsets.push(offset);offset+=size;}
+      for(let n=v.getUint32(12+run*12);n>0;n--){
+        const size=sampleSizes[sampleOffsets.length];
+        if(!Number.isSafeInteger(offset)||!size||offset<0||!Number.isSafeInteger(offset+size)) {
+          if(recovered) damaged('样本偏移或长度无效。');
+          return invalid('sample offset 越界。');
+        }
+        if(!recovered&&offset+size>reader.size)return invalid('sample offset 越界。');
+        sampleOffsets.push(offset);offset+=size;
+      }
     }
-    const recovered = root.some(b => b.truncated);
+    let availableSamples = samples;
     if (recovered) {
       const media = root.filter(b => b.type === 'mdat');
+      let previousEnd = -1;
       for (let i = 0; i < sampleOffsets.length; i++) {
-        const offset = sampleOffsets[i]; let lo = 0, hi = media.length;
+        const offset = sampleOffsets[i], end = offset + sampleSizes[i]; let lo = 0, hi = media.length;
         while (lo < hi) { const mid = (lo + hi) >>> 1; if (media[mid].data <= offset) lo = mid + 1; else hi = mid; }
-        if (!lo || sampleSizes[i] > media[lo - 1].end - offset) return invalid('mdat 不完整：视频样本缺失或不在媒体数据范围内。');
+        const box = media[lo - 1];
+        if (!box || end > (box.declaredEnd ?? box.end)) damaged('样本不在声明的 mdat 范围内。');
+        // Recovery requires a physical decode-order prefix, never holes or
+        // arbitrary out-of-range offsets disguised as a truncated recording.
+        if (offset < previousEnd) damaged('样本偏移回退或重叠。');
+        previousEnd = end;
+        if (end > box.end && availableSamples === samples) availableSamples = i;
+        if (i >= availableSamples && end <= box.end) damaged('缺失样本之后又出现有效样本。');
       }
+      if (!availableSamples) damaged('没有完整的视频样本。');
     }
     const compositionOffsets=Array<number>(samples).fill(0),ctts=nested.find(b=>b.type==='ctts');
     if(ctts){
@@ -135,7 +157,9 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       let at=0;for(let i=0;i<cv.getUint32(4);i++){const n=cv.getUint32(8+i*8),offset=data[0]===1?cv.getInt32(12+i*8):cv.getUint32(12+i*8);if(at+n>samples)return invalid('CTTS 样本数量越界。');compositionOffsets.fill(offset,at,at+n);at+=n;}
       if(at!==samples)return invalid('CTTS 样本数量不一致。');
     }
-    return {descriptions,sampleConfigurations,compositionOffsets,sampleOffsets,sampleSizes,...(recovered ? {warning:'mdat 声明超出文件末尾；已确认视频样本完整，按实际文件范围读取。'} : {})};
+    return {descriptions,sampleConfigurations,compositionOffsets,sampleOffsets,sampleSizes,availableSamples,...(recovered ? {warning: availableSamples < samples
+      ? `文件尾部缺失：仅播放前 ${availableSamples} 个完整视频包（声明 ${samples} 个）；时长按有效前缀计算。`
+      : 'mdat 声明超出文件末尾；已确认视频样本完整，按实际文件范围读取。'} : {})};
   }
   return invalid('未找到对应的视频轨道。');
 }

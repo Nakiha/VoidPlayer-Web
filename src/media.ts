@@ -184,7 +184,8 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
         const configs=await readMp4Configurations(reader,track.id);
         indexWarning = configs.warning;
         if(configs.descriptions.length>1)throw new MediaOpenError('codec','多配置 MP4 需要按 sample description 切换解码器。');
-        if(await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index'))){
+        if ((configs.availableSamples !== undefined && configs.availableSamples < configs.sampleSizes!.length)
+          || (await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index')))) {
           input.dispose();
           const {openPacketMedia}=await import('./packet-media.ts');
           return await openPacketMedia('mp4',access,meta,{signal,onProgress});
