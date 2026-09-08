@@ -34,7 +34,7 @@ try {
     console.log('PASS ordinary HTTP: dedicated HTTPS guide, player not initialized');
   } else {
   await page.locator('#identity-welcome').waitFor({state:'visible'});
-  assert.deepEqual((await page.request.get(base+'/api/users').then(r=>r.json())).users,[]);
+  assert.deepEqual((await page.evaluate(async () => { const response = await fetch('/api/users'); if (!response.ok) throw new Error(`User listing failed: ${response.status}`); return response.json(); })).users,[]);
   await page.locator('#identity-welcome input').fill('初始用户');
   await page.locator('#identity-welcome button[type=submit]').click();
   await settings(page);
