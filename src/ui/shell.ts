@@ -92,8 +92,12 @@ export function shell() {
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="子轨道" hidden>
         <div id="dock-resize" class="dock-resize" role="separator" tabindex="0" aria-label="调整子轨道高度" aria-orientation="horizontal" aria-valuemin="128" aria-valuemax="420" aria-valuenow="180"></div>
-        <div class="subtrack-tools-clip"><aside class="subtrack-tools" aria-label="子轨道工具"><header class="panel-heading"><h2>子轨道</h2><span id="subtrack-count" class="muted"></span><span class="toolbar-spacer"></span><button id="toggle-marks" class="icon-button" aria-label="展开标注面板" aria-expanded="false" aria-controls="selected-marks" title="展开标注面板">${icon('sidebar')}</button></header><div class="mark-tools"><span id="selected-mark-label">标注</span><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="在当前帧添加标注">${icon('plusRegular')}</button></div><div id="selected-marks" class="selected-marks"></div></aside></div><div id="marks-resize" class="marks-resize" role="separator" tabindex="0" aria-label="调整标注面板宽度" aria-orientation="vertical" aria-controls="selected-marks" hidden></div>
+
         <div class="subtrack-scroll"><div class="subtrack-columns"><span class="subtrack-name-heading">轨道<span id="track-label-resize" role="separator" tabindex="0" aria-label="调整文件名列宽度" aria-orientation="vertical"></span></span><span class="track-offset">偏移</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="时间标尺"></div><span></span></div><div id="subtrack-list"></div></div>
+        <aside class="annotation-strip" aria-label="所有轨道标注">
+          <div class="annotation-strip-tools"><button id="toggle-marks" class="icon-button" aria-label="显示标注卡片" aria-expanded="false" aria-controls="selected-marks" title="显示标注卡片">${icon('grid')}</button><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="添加标注">${icon('plusRegular')}</button></div>
+          <div id="selected-marks" class="selected-marks" aria-label="标注"></div>
+        </aside>
       </section>
     </div>
   </main>

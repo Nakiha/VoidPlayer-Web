@@ -8,6 +8,7 @@ const name=process.argv[2]??'webkit',browser=await(name==='chromium'?chromium:we
 try {
  const page=await browser.newPage({viewport:{width:1200,height:900},deviceScaleFactor:2});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ await page.waitForFunction(()=>window.voidPlayer);
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  const lib=await call('list_library');await call('load_library_item',{slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});
  for (const ptsUs of [0,1083000,3000000]) {
@@ -45,19 +46,17 @@ try {
  await page.locator('#toggle-marks').click();await page.waitForTimeout(300);
  if(process.env.MARK_CARDS_SCREENSHOT)await page.screenshot({path:`/tmp/voidplayer-mark-cards-${name}.png`});
  assert.equal(await page.locator('.annotation-edit').count(),0);
- for(const width of [160,240,400]) {
-  await page.locator('#subtracks-panel').evaluate((e,width)=>e.style.setProperty('--marks-user-width',`${width}px`),width);
-  await page.waitForTimeout(260);
-  const buttons=await page.locator('#toggle-marks,#subtrack-add-mark,.annotation-remove').evaluateAll(nodes=>nodes.map(e=>{const r=e.getBoundingClientRect(),i=e.querySelector('.icon').getBoundingClientRect(),s=getComputedStyle(e);return {x:r.x+r.width/2,width:r.width,height:r.height,iconWidth:i.width,iconHeight:i.height,padding:s.padding};}));
-  assert.ok(buttons.every(b=>Math.abs(b.x-buttons[0].x)<.5 && b.width===28 && b.height===28 && b.iconWidth===18 && b.iconHeight===18 && b.padding===buttons[0].padding),JSON.stringify(buttons));
- }
- await page.locator('#subtracks-panel').evaluate(e=>e.style.removeProperty('--marks-user-width'));
- await page.waitForTimeout(260);
+ assert.equal(await page.locator('#marks-resize,.subtrack-tools').count(),0);
+ const strip=await page.locator('.annotation-strip').boundingBox(), tracks=await page.locator('.subtrack-scroll').boundingBox();
+ assert.ok(Math.abs(strip.x-tracks.x)<1 && tracks.y+tracks.height<=strip.y+1);
+ const cards=await page.locator('.annotation-row').evaluateAll(rows=>rows.map(e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};}));
+ assert.ok(cards.every(c=>c.y===cards[0].y && c.height>120 && c.width>=190),JSON.stringify(cards));
+ assert.ok(cards[1].x>cards[0].x+cards[0].width);
  assert.equal(await page.locator('#subtrack-add-mark .icon').getAttribute('data-icon'),'plusRegular');
  assert.ok((await page.locator('.annotation-remove .icon').evaluateAll(nodes=>nodes.map(e=>e.dataset.icon))).every(icon=>icon==='trash'));
  await page.mouse.move(1195, 5);
  const backgrounds=await page.locator('.annotation-row').evaluateAll(rows=>rows.map(e=>getComputedStyle(e).backgroundColor));
- assert.equal(backgrounds[0],backgrounds[2]);assert.notEqual(backgrounds[0],backgrounds[1]);
+ assert.ok(backgrounds.every(background=>background==='rgba(0, 0, 0, 0)'));
  for(const card of await page.locator('.annotation-row').all()) {
   assert.equal(await card.evaluate(e=>getComputedStyle(e).borderTopWidth),'0px');
   assert.equal(await card.evaluate(e=>getComputedStyle(e).boxShadow),'none');
@@ -71,11 +70,65 @@ try {
  const mark=(await call('get_review_session')).marks.find(m=>m.id===id);
  await call('update_review_mark',{id,text:'检查边缘细节',drawings:mark.drawings});assert.deepEqual(await identities(),before);
  await page.locator(`.annotation-row[data-mark-id="${id}"] .mark-entry`).dblclick();await page.locator('#mark-close').waitFor({state:'visible'});await page.locator('#mark-close').click();
+
+ await page.locator(`.annotation-row[data-mark-id="${id}"] .annotation-remove`).click();
+ assert.equal((await call('get_review_session')).marks.length,3,'delete requires an explicit choice');
+ await page.locator('.annotation-delete-confirm').click();assert.equal((await call('get_review_session')).marks.length,2);assert.equal(await page.locator(`.track-marker[data-mark-id="${id}"]`).count(),0);
+
+ // A second track stays in the strip even when another track is selected.
+ await call('load_library_item',{slot:'B',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});
+ await call('seek_review',{ptsUs:1000000});
+ const second=await call('add_review_mark',{slot:'B',text:'检查 B 轨道',drawings:[{id:'b-rect',tool:'rect',color:'#ff3b30',strokeWidth:3,points:[{x:.2,y:.2},{x:.5,y:.5}]}]});
+ await call('set_review_track_offset',{slot:'B',offsetUs:250000});
+ const target=second.frame.ptsUs+250000;
+ assert.equal(await page.locator('#selected-marks .annotation-row').count(),3);
+ await page.locator('.subtrack-name[data-drag-surface="A"]').click();
+ assert.equal(await page.locator('#selected-marks .annotation-row').count(),3);
+ await page.locator(`.annotation-row[data-mark-id="${second.id}"] .mark-entry`).dblclick();
+ await page.locator('#mark-close').waitFor({state:'visible'});
+ assert.equal((await call('get_review_session')).positionUs,target,'card seeks in session time including offset');
+ assert.equal(await page.locator('#drawing-B .annotation-object[data-shape-id="b-rect"]').count(),1,'editing uses the owning track');
+ await page.locator('#mark-close').click();
+ assert.equal((await call('get_review_session')).marks.find(m=>m.id===second.id).frame.ptsUs,second.frame.ptsUs,'UI does not rewrite the saved media timestamp');
+ await page.locator(`[data-mark-thumbnail="${second.id}"] img`).evaluate(image=>image.decode());
+ assert.equal(await page.locator('.mark-content > img').count(),0,'late thumbnails stay in their dedicated image region');
+ const ordered=await page.locator('#selected-marks .annotation-row').evaluateAll(rows=>rows.map(e=>e.dataset.markId));
+ assert.equal(ordered[1],second.id,'all tracks share display-time order');
+ await page.locator('#toggle-marks').click();
+ assert.equal(await page.locator('#selected-marks img:visible').count(),0,'compact mode shows symbols only, including refreshed thumbnails');
+ const compact=await page.locator('.annotation-strip').boundingBox();assert.equal(compact.height,44);
+ const bSymbol=page.locator(`.mark-entry[data-mark-id="${second.id}"]`);
+ await bSymbol.hover();await page.locator('#annotation-preview').waitFor({state:'visible'});
+ const popup=await page.locator('#annotation-preview').boundingBox();assert.ok(popup.y+popup.height<compact.y,'hover card opens above the bottom strip');
+ await page.locator('#annotation-preview .mark-thumbnail img').evaluate(image=>image.decode());
+ await page.locator('#annotation-preview .annotation-remove').click();
+ await page.locator('#annotation-preview').getByRole('button',{name:'取消',exact:true}).click();
+ assert.equal((await call('get_review_session')).marks.length,3);
+ await page.keyboard.press('Escape');assert.equal(await page.locator('#annotation-preview').isVisible(),false);
+ // Keyboard users can enter the floating card and return to its symbol.
+ await bSymbol.focus();await page.keyboard.press('ArrowUp');
+ assert.ok(await page.locator('#annotation-preview').evaluate(e=>e.contains(document.activeElement)));
+ await page.keyboard.press('Escape');assert.equal(await bSymbol.evaluate(e=>e===document.activeElement),true);
  if(process.env.MARK_CARDS_SCREENSHOT) {
-  const grip=page.locator('#dock-resize');const b=await grip.boundingBox();await page.mouse.move(b.x+b.width/2,b.y+b.height/2);await page.mouse.down();await page.mouse.move(b.x+b.width/2,b.y-220,{steps:8});await page.mouse.up();
-  await page.locator('#selected-marks').evaluate(e=>e.scrollTop=0);await page.mouse.move(1195,5);
-  await page.screenshot({path:`/tmp/voidplayer-mark-cards-${name}.png`});
+  await page.setViewportSize({width:1512,height:850});
+  for(const scheme of ['light','dark']) {
+   await page.emulateMedia({colorScheme:scheme});await page.mouse.move(1400,5);
+   await page.screenshot({path:`/tmp/voidplayer-mark-strip-${scheme}-${name}.png`});
+   await bSymbol.hover();await page.screenshot({path:`/tmp/voidplayer-mark-hover-${scheme}-${name}.png`});
+   await page.locator('#toggle-marks').click();await page.mouse.move(1400,5);
+   await page.screenshot({path:`/tmp/voidplayer-mark-cards-${scheme}-${name}.png`});
+   await page.locator('#toggle-marks').click();
+  }
  }
- await page.locator(`.annotation-row[data-mark-id="${id}"] .annotation-remove`).click();assert.equal((await call('get_review_session')).marks.length,2);assert.equal(await page.locator(`.track-marker[data-mark-id="${id}"]`).count(),0);
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: stable matching mark identities, 2px strokes, colored hover linkage, card layout/thumbnails, edit/seek/delete and collapse`);
+ await page.setViewportSize({width:480,height:800});await page.locator('#toggle-marks').click();
+ const scroll=page.locator('#selected-marks');
+ assert.ok(await scroll.evaluate(e=>e.scrollWidth>e.clientWidth),'cards scroll horizontally in a narrow window');
+ await scroll.evaluate(e=>e.scrollLeft=e.scrollWidth);
+ assert.ok(await scroll.evaluate(e=>e.scrollLeft>0));
+ const right=await page.locator('.annotation-row').last().boundingBox();assert.ok(right.x+right.width<=480);
+ assert.ok(await page.locator('#subtracks-panel,.annotation-strip').evaluateAll(nodes=>nodes.every(e=>{const r=e.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth;})),'dock and strip stay inside the narrow viewport');
+ if(process.env.MARK_CARDS_SCREENSHOT)await page.screenshot({path:`/tmp/voidplayer-mark-cards-narrow-${name}.png`});
+ await call('remove_review_track',{slot:'B'});
+ assert.equal(await page.locator('#selected-marks .annotation-row').count(),2,'removing a track removes only its strip entries');
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: stable matching mark identities, 2px strokes, colored hover linkage, card layout/thumbnails, all-track ordering, offset seek/edit, confirmed delete, keyboard hover cards and responsive strip`);
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

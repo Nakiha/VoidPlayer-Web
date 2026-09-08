@@ -85,7 +85,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {
     setPanel(panel, false); $(`toggle-${panel}`).focus();
   });
-  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs) => void act(async () => { await session.seek(ptsUs); addMark(view.selected, id); }, 'ui.mark-edit'));
+  const annotationHeightDelta = () => {
+    const style = getComputedStyle(workspace);
+    return Number.parseFloat(style.getPropertyValue('--annotation-cards-height')) - Number.parseFloat(style.getPropertyValue('--annotation-symbols-height'));
+  };
+  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()));
   let dockHeight = Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) || 180;
   const save = () => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(catalog.serializable())); } catch { /* Session access still works when storage is disabled/full. */ } };
 
@@ -191,7 +195,6 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision??0}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
-      $('subtrack-count').textContent = String(state.tracks.length);
       hideSeekPreview(); cursors.clear();
       const list = $('subtrack-list'); list.replaceChildren();
       const maxDuration = Math.max(1, ...state.tracks.map(t => t.durationUs+t.offsetUs));
@@ -270,11 +273,12 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       row.classList.toggle('selected', selected);
       row.querySelector('.subtrack-name')!.setAttribute('aria-pressed', String(selected));
     }
-    const selected = state.tracks.find(t => t.slot === view.selected);
-    const nextAnnotationSignature = `${dockSignature}/${view.selected}`;
+    const nextAnnotationSignature = dockSignature;
     if (nextAnnotationSignature !== annotationSignature) {
       annotationSignature = nextAnnotationSignature;
-      annotations.render(selected ? marksForTrack(selected, state.marks) : [], selected?.slot, selected?.offsetUs ?? 0);
+      annotations.render(state.tracks.flatMap(track => marksForTrack(track, state.marks).map(mark => ({
+        mark, slot: track.slot, offsetUs: track.offsetUs,
+      }))).sort((a, b) => (a.mark.frame.ptsUs + a.offsetUs) - (b.mark.frame.ptsUs + b.offsetUs)));
     }
     renderProgress(state.positionUs, state.durationUs);
   }
@@ -470,19 +474,23 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderSources();
   };
   const resizer = $('dock-resize');
-  const resize = (value: number) => {
-    dockHeight = Math.round(Math.max(128, Math.min(Math.min(420, window.innerHeight * .55), value)));
-    workspace.style.setProperty('--dock-height', `${dockHeight}px`);
-    resizer.setAttribute('aria-valuenow', String(dockHeight));
-    resizer.setAttribute('aria-valuetext', `${dockHeight} 像素`);
-    resizer.setAttribute('aria-valuemax', String(Math.round(Math.min(420, window.innerHeight * .55))));
-  };
   const dock = $('subtracks-panel');
-  const dockBounds = () => ({min:128,max:Math.min(420,window.innerHeight*.55)});
+  const dockBounds = () => {
+    const max = Math.round(Math.min(420, window.innerHeight * .55));
+    const min = annotations.expanded() ? Number.parseFloat(getComputedStyle(dock).getPropertyValue('--annotation-cards-height')) + 90 : 128;
+    return { min: Math.min(min, max), max };
+  };
+  const resize = (value: number) => {
+    const { min, max } = dockBounds();
+    dockHeight = Math.round(Math.max(min, Math.min(max, value)));
+    workspace.style.setProperty('--dock-height', `${dockHeight}px`);
+    resizer.setAttribute('aria-valuemin', String(min)); resizer.setAttribute('aria-valuemax', String(max));
+    resizer.setAttribute('aria-valuenow', String(dockHeight)); resizer.setAttribute('aria-valuetext', `${dockHeight} 像素`);
+  };
   installResizeGesture(resizer, {
     axis:'y',direction:-1,size:()=>dockHeight,bounds:dockBounds,resize,
     threshold:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--panel-collapse-distance')),
-    reset:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')),
+    reset:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) + (annotations.expanded() ? annotationHeightDelta() : 0),
     dragging(active) { workspace.classList.toggle('panel-dragging',active); dock.classList.toggle('panel-pushing',active); if(!active) animatePanelLayout(workspace); },
     preview(push,veil) { workspace.style.setProperty('--dock-push-space',`${push}px`); dock.style.setProperty('--panel-push',`${push}px`); dock.style.setProperty('--panel-veil-opacity',String(veil)); },
     collapse() { setPanel('subtracks',false); $('toggle-subtracks').focus(); },
@@ -495,12 +503,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), marksWidth: annotations.width() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width() }),
     restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
-      view.panels = { ...layout.panels }; view.selected = layout.selected; resize(layout.dockHeight);
-      annotations.setExpanded(layout.marksExpanded);
+      view.panels = { ...layout.panels }; view.selected = layout.selected;
+      annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
-      if (layout.marksWidth !== undefined) annotations.resize(layout.marksWidth);
       dockSignature = ''; trackSignature = ''; annotationSignature = ''; syncPanels(); panelResize.refresh(); render(session.getState());
     },
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },
