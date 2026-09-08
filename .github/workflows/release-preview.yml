@@ -175,6 +175,7 @@ jobs:
           node scripts/check-annotation-persistence-browser.mjs chromium
           node scripts/check-cache-browser.mjs webkit
           node scripts/check-cache-browser.mjs chromium
+          node scripts/check-sharing-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

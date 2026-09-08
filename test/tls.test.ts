@@ -50,9 +50,22 @@ test('trusted HTTPS serves remote media, isolation headers and identity with sam
     const response = await httpFetch(base + '/api/health', { ca, servername: 'voidplayer.test', headers: { host } });
     assert.equal(response.status, 200); assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
     assert.equal(response.headers.get('cross-origin-embedder-policy'), 'require-corp');
-    assert.match(response.headers.get('set-cookie')!, /; Secure/);
-    const actor = (await response.json()).actor;
-    const cookie = response.headers.get('set-cookie')!.split(';')[0];
+    assert.equal(response.headers.get('set-cookie'), null);
+    assert.equal((await response.json()).actor, null);
+    const users = async () => (await (await httpFetch(base + '/api/users', { ca, headers: { host } })).json()).users;
+    assert.deepEqual(await users(), []);
+    const choose = (body: unknown) => httpFetch(base + '/api/identity', { ca, method: 'POST', headers: { host, origin: `https://${host}`, 'x-voidplayer-action': 'identity', 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const visitor = await choose({ guest: true }); assert.equal(visitor.status, 200);
+    assert.match(visitor.headers.get('set-cookie')!, /; Secure/);
+    assert.equal((await visitor.json()).actor.kind, 'guest'); assert.deepEqual(await users(), []);
+    const selected = await choose({ name: '初始HTTPS用户' }); assert.equal(selected.status, 200);
+    assert.match(selected.headers.get('set-cookie')!, /; Secure/);
+    assert.match(selected.headers.get('set-cookie')!, /; HttpOnly; SameSite=Lax/);
+    const actor = (await selected.json()).actor;
+    const cookie = selected.headers.get('set-cookie')!.split(';')[0];
+    const recognized = await httpFetch(base + '/api/health', { ca, headers: { host, cookie } });
+    assert.deepEqual((await recognized.json()).actor, actor);
+    assert.equal(recognized.headers.get('set-cookie'), null);
     for (const [origin, expected] of [[`https://${host}`, 200], [`http://${host}`, 403], ['https://other.test', 403]] as const) {
       const change = await httpFetch(base + '/api/identity', { ca, method: 'POST', headers: { host, origin, cookie, 'x-voidplayer-action': 'identity', 'content-type': 'application/json' }, body: JSON.stringify({ name: 'HTTPS用户' }) });
       assert.equal(change.status, expected); if (expected === 200) assert.equal((await change.json()).actor.id, actor.id);

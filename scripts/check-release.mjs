@@ -84,7 +84,12 @@ try {
   const portableConfig = JSON.parse(await readFile(path.join(portableData, 'voidplayer.config.json'), 'utf8'));
   assert.deepEqual(portableConfig.mediaRoots, []);
   assert.equal((await (await fetch(portableBase + '/api/library')).json()).entries.length, 0);
-  const portableIdentityResponse = await fetch(portableBase + '/api/health');
+  const health = await fetch(portableBase + '/api/health');
+  assert.equal((await health.json()).actor, null); assert.equal(health.headers.get('set-cookie'), null);
+  assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
+  const portableIdentityResponse = await fetch(portableBase + '/api/identity', { method: 'POST', headers: { origin: portableBase, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ guest: true }) });
+  assert.equal(portableIdentityResponse.status, 200);
+  assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
   const portableActor = (await portableIdentityResponse.json()).actor;
   const portableCookie = portableIdentityResponse.headers.get('set-cookie').split(';')[0];
   assert.equal((await (await fetch(portableBase + '/api/admin/roots')).json()).writable, true);
@@ -140,7 +145,8 @@ try {
     const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } });
     return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
   }, listing.entries[0]);
-  const identityResponse = await fetch(base + '/api/health');
+  const identityResponse = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: '工作区发布测试' }) });
+  assert.equal(identityResponse.status, 200);
   const workspaceActor = (await identityResponse.json()).actor;
   const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
   const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };
