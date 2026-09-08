@@ -1,3 +1,5 @@
+import { annotationMediaKey } from './annotation-record.ts';
+import type { AnnotationDocument } from './annotation-record.ts';
 import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad } from './media-abort.ts';
@@ -21,6 +23,35 @@ export class ReviewSession {
   private tracks = new Map<Slot, Track>();
   private catalog = new Map<string, MediaInfo>();
   private marks: Mark[] = [];
+  private markListeners = new Set<(id: string, document: AnnotationDocument | null) => void>();
+  subscribeMarkChanges(listener: (id: string, document: AnnotationDocument | null) => void) { this.markListeners.add(listener); return () => this.markListeners.delete(listener); }
+  private markChanged(id: string) {
+    const mark = this.marks.find(mark => mark.id === id);
+    const ids = new Set(mark ? [mark.mediaId, ...mark.comparison.map(item => item.mediaId)] : []);
+    const document = mark ? structuredClone({ mark, media: [...this.catalog.values()].filter(media => ids.has(media.id)) }) : null;
+    for (const listener of this.markListeners) listener(id, document);
+  }
+  /** Persistence ingress only: update annotations without touching decoder/clock state. */
+  applyStoredAnnotations(documents: AnnotationDocument[], removeIds: string[]) {
+    const loaded = [...this.tracks.values()].map(track => track.source.info);
+    const incoming: Mark[] = [];
+    for (const document of documents) {
+      const saved = document.media.find(media => media.id === document.mark.mediaId);
+      const target = saved && loaded.find(media => annotationMediaKey(media) === annotationMediaKey(saved));
+      if (!target) continue;
+      for (const media of document.media) if (!this.catalog.has(media.id)) this.catalog.set(media.id, media);
+      const mark = structuredClone(document.mark); mark.mediaId = target.id;
+      mark.comparison = mark.comparison.map(item => {
+        const media = document.media.find(media => media.id === item.mediaId);
+        const current = media && loaded.find(candidate => annotationMediaKey(candidate) === annotationMediaKey(media));
+        return current ? { ...item, mediaId: current.id } : item;
+      });
+      incoming.push(mark);
+    }
+    const replace = new Set([...removeIds, ...incoming.map(mark => mark.id)]);
+    const next = [...this.marks.filter(mark => !replace.has(mark.id)), ...incoming];
+    if (JSON.stringify(next) !== JSON.stringify(this.marks)) { this.marks = next; this.emit(); }
+  }
   private actor: { id: string; name: string } | null = null;
   setActor(actor: { id: string; name: string } | null) { this.actor = actor ? { id: actor.id, name: actor.name } : null; }
   private queue: Promise<unknown> = Promise.resolve();
@@ -492,7 +523,7 @@ export class ReviewSession {
       frame: this.frameInfo(track.frame), offsetUs:track.offsetUs, sessionPtsUs:this.positionUs, region: regionValue(input.region), ...(drawings.length ? { drawings } : {}),
       comparison: [...this.tracks].filter(([, t]) => t.frame).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
     };
-    this.marks.push(mark);
+    this.marks.push(mark); this.markChanged(mark.id);
     log.info('session', '添加标注', { id: mark.id, authorId: this.actor?.id ?? null, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
     this.emit();
     return structuredClone(mark);
@@ -506,13 +537,13 @@ export class ReviewSession {
     const text = input.text === undefined ? mark.text : input.text;
     const drawings = input.drawings === undefined ? mark.drawings ?? [] : drawingsValue(input.drawings);
     if (typeof text !== 'string' || text.length > 2000 || (!text.trim() && !drawings.length)) throw new Error('标注不能为空。');
-    mark.text = text.trim(); mark.drawings = drawings;
+    mark.text = text.trim(); mark.drawings = drawings; this.markChanged(id);
     log.info('session', '修改标注', { id, frameUs: mark.frame.ptsUs }); this.emit();
     return structuredClone(mark);
   }
   deleteMark(id: string) {
     if (!this.marks.some(mark => mark.id === id)) throw new Error('标注不存在。');
-    this.marks = this.marks.filter(mark => mark.id !== id);
+    this.marks = this.marks.filter(mark => mark.id !== id); this.markChanged(id);
     log.info('session', '删除标注', { id });
     this.emit();
     return this.getState();

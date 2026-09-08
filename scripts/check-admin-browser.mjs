@@ -136,7 +136,7 @@ try {
   await page.unroute('**/api/admin/measurements/*/transfer');
   for (const width of [1512, 1280, 720, 390]) {
     await page.setViewportSize({ width, height: 820 });
-    for (const name of ['概览', '媒体库', '帧索引缓存', '工作区', '日志', '测速']) {
+    for (const name of ['概览', '媒体库', '缓存', '标注', '工作区', '日志', '测速']) {
       await page.getByRole('button', { name, exact: true }).click();
       const fits = await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth && [...document.querySelectorAll('.admin-content > section:not([hidden])')].every(e => e.scrollWidth <= e.clientWidth + 1));
       assert.equal(fits, true, `${name} overflows at ${width}px`);

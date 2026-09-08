@@ -579,3 +579,15 @@ button.icon-button[aria-pressed=true] {
 .source-activity[data-state="idle"] .source-activity-meta { display: none; }
 @keyframes source-activity-pulse { from { transform: translateX(0); } to { transform: translateX(180%); } }
 @media (prefers-reduced-motion: reduce) { .source-activity-meter span { animation: none; width: 100%; opacity: .55; } }
+
+#annotation-save-state { color: var(--text-secondary); }
+#annotation-save-state[data-state=error] { color: var(--action-danger); }
+#annotation-save-state[data-state=pending] { color: var(--accent); }
+#annotation-sync-dialog { width: min(480px, calc(100vw - 24px)); border: 0; }
+.annotation-sync-scope, .annotation-new-space, .annotation-sync-actions { display: flex; align-items: center; gap: 8px; }
+.annotation-sync-scope > .choice-trigger, .annotation-new-space input { flex: 1; min-width: 0; }
+.annotation-sync-actions { margin-top: 20px; flex-wrap: wrap; }
+.annotation-new-space button { flex-shrink: 0; }
+.annotation-conflict { padding: 12px 0; }
+.annotation-conflict > button { margin-right: 8px; }
+#annotation-sync-status { color: var(--text-secondary); }

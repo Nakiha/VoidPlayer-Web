@@ -46,8 +46,8 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[]) {
 export function installWorkspaceTransfer(session: ReviewSession, options: {
   act(action: () => unknown | Promise<unknown>, name: string): Promise<void>;
   capture(): Pick<WorkspaceFile, 'viewport' | 'layout'>;
-  restore(document: WorkspaceFile): void;
-  beforeRestore(): void;
+  restore(document: WorkspaceFile): void | Promise<void>;
+  beforeRestore(): void | (() => void);
   closeSettings(): Promise<void>;
 }) {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
@@ -55,7 +55,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   function exportWorkspace() {
     const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture() };
-    document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image ? [{ id: mark.id, ...image }] : []; });
+    document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
   async function importWorkspace(value: unknown, supplied: File[] = []) {
@@ -67,15 +67,16 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
       const files = await resolveLocalFiles(active.filter(m => !m.source), supplied);
       if (!files) return false;
-      options.beforeRestore();
-      await session.restoreWorkspace(document, async info => {
+      const rollback=options.beforeRestore();
+      try { await session.restoreWorkspace(document, async info => {
         if (!info.source) return openMedia(files.get(info.id)!);
         const reference = await pinLibraryReference(info, location.href);
         const source = await openMediaFromUrl(reference.url, info); updateMediaInfo(source,{source:reference},'identity'); return source;
       });
+      } catch(error) { rollback?.(); throw error; }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      options.restore(document); saved?.detach(); return true;
+      await options.restore(document); saved?.detach(); return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }

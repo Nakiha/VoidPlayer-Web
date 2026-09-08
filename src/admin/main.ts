@@ -1,5 +1,6 @@
+import { installAnnotationAdmin } from './annotations.ts';
 import { emptyState } from './presentation.ts';
-import { installFrameIndexes } from './frame-indexes.ts';
+import { installCaches } from './caches.ts';
 import { randomUUID } from '../uuid.ts';
 import '../themes/silver-glass.css';
 import '../themes/dark.css';
@@ -152,14 +153,16 @@ function renderRequests() {
     return row;
   }));
 }
-const frameIndexes = installFrameIndexes(life.signal, notice);
+const caches = installCaches(life.signal, notice);
+const annotationAdmin = installAnnotationAdmin(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const measurements = installMeasurements(life.signal, notice);
 for (const [id] of PANES) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
-  pane = id; measurements.activate(id === 'measurements'); notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
+  history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(''); for (const [item] of PANES) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
   if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
-  if (id === 'frame-indexes') frameIndexes.activate();
+  if (id === 'caches') caches.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
+  if (id === 'annotations') annotationAdmin.activate();
   if (id === 'logs') void act(loadLogs);
 };
 $('add-root').onclick = () => { const row = rootRow({ id: randomUUID().replaceAll('-', '').slice(0, 16), name: '', path: '' }); $('root-editor').append(row); renderRootStates(); row.querySelector('input')!.focus(); rootDirty = true; updateRootActions(); };
@@ -201,3 +204,5 @@ const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); }, { once: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void poll(); }, { signal: life.signal });
 updateRootActions(); void poll();
+
+const initialPane=location.hash.slice(1);if(PANES.some(([id])=>id===initialPane))document.querySelector<HTMLButtonElement>(`[data-pane="${initialPane}"]`)?.click();

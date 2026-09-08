@@ -14,6 +14,7 @@ import path from 'node:path';
 import { allowReveal, localRequest, revealFile } from './reveal.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
 import { AdminError, adminWriteAllowed, readAdminJson } from './admin.ts';
+import { ANNOTATION_BYTES } from './annotations.ts';
 import { WORKSPACE_BYTES } from './workspaces.ts';
 import type { AdminController } from './admin.ts';
 
@@ -181,11 +182,46 @@ export function createMediaServer(options: ServerOptions): Server {
           actor = options.admin.workspaces.identify();
           res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
         } else if (actor && !browserUserId(req)) res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
+        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, annotations: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
+      }
+      if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/')) {
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供标注存储。' }); return; }
+        if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { sendJson(res, 403, { error: '请从同源页面保存标注。' }); return; }
+        if (!actor) { actor = options.admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
+        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor.id) { sendJson(res, 409, { error: '用户已切换，草稿未提交。' }); return; }
+        const store = options.admin.annotations;
+        try {
+          if (url.pathname === '/api/annotations/spaces') {
+            if (req.method === 'GET') { sendJson(res, 200, store.spaces()); return; }
+            if (req.method === 'POST') { sendJson(res, 201, store.createSpace((await readAdminJson(req) as { name: unknown }).name)); return; }
+          }
+          const match = /^\/api\/annotations\/spaces\/([a-zA-Z0-9_-]{1,200})(?:\/([a-zA-Z0-9_-]{1,200}))?(?:\/(preview))?$/.exec(url.pathname);
+          if (match) {
+            const [, space, id, preview] = match;
+            if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : {...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch}); return; }
+            if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), actor)); return; }
+            if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return; }
+            if (id && preview) {
+              const revision = Number(url.searchParams.get('revision'));
+              if (req.method === 'GET') {
+                const data = store.preview(space, id, revision);
+                if (!data) throw new AdminError(404, '预览尚未生成。');
+                res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': data.byteLength, 'cache-control': 'private, max-age=60' }); res.end(data); return;
+              }
+              if (req.method === 'PUT') {
+                const chunks: Buffer[] = []; let bytes = 0;
+                for await (const chunk of req) { bytes += chunk.length; if (bytes > 128 * 1024) throw new AdminError(413, '预览过大。'); chunks.push(chunk); }
+                sendJson(res, 200, store.putPreview(space, id, revision, Buffer.concat(chunks), Number(url.searchParams.get('epoch') ?? -1))); return;
+              }
+            }
+            if (id && req.method === 'GET') { const record = store.read(space, id); if (!record) throw new AdminError(404, '标注不存在。'); sendJson(res, 200, record); return; }
+          }
+          sendJson(res, 405, { error: '不支持的标注操作。' }); return;
+        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
       }
       if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return; }
@@ -219,6 +255,10 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!actor && !localRequest(req)) { actor = admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
         const identity = actor ?? { id: 'local', name: '本机用户' };
         try {
+          if (url.pathname === '/api/admin/caches' && req.method === 'GET') { sendJson(res, 200, await admin.caches.overview()); return; }
+          const cacheType = /^\/api\/admin\/caches\/([a-z-]+)$/.exec(url.pathname);
+          if (cacheType && req.method === 'GET') { sendJson(res, 200, admin.caches.list(cacheType[1]!, Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }
+          if (cacheType && req.method === 'DELETE') { sendJson(res, 200, admin.caches.remove(cacheType[1]!, await readAdminJson(req))); return; }
           if (url.pathname === '/api/admin/frame-indexes') {
             if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.list(Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }
             if (req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove()); return; }

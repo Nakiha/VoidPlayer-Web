@@ -16,7 +16,7 @@ function markContent(mark: Mark, slot: Slot) {
   const thumbnail = document.createElement('span'); thumbnail.className = 'mark-thumbnail'; thumbnail.dataset.markThumbnail = mark.id;
   const preview = annotationThumbnails.get(mark.id);
   if (preview) {
-    const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = '标注画面'; thumbnail.append(image);
+    const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = '标注画面'; image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
   } else { thumbnail.textContent = mark.text || '暂无预览'; }
   content.append(thumbnail);
   const footer = document.createElement('span'); footer.className = 'mark-footer';

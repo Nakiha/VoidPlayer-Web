@@ -1,3 +1,5 @@
+import { AnnotationClient } from './annotation-client.ts';
+import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
@@ -97,11 +99,12 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
+const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
-  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
-  restore(document) { viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
+  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
+  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
@@ -586,8 +589,18 @@ const api = {
   tools: reviewTools(session, workspaceTransfer),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
-window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+const annotationLink = new URL(location.href).searchParams;
+if (annotationLink.has('annotation')) void act(async () => {
+  const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
+  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error('标注地址无效。');
+  const record=await new AnnotationClient(uiEvents.signal).read(space,id);
+  if(record.deleted)throw new Error('这条标注已在回收站。');
+  const mark=record.document.mark;
+  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
+  if(opened)await annotationSync.openSpace(space);
+},'annotation.open');
+
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 
 $('benchmark').addEventListener('click', () => {

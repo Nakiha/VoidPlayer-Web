@@ -1,5 +1,5 @@
 export type Actor = { id: string; name: string };
-type Health = { service: string; actor: Actor | null; capabilities?: { admin?: boolean; workspaces?: boolean; reveal?: boolean } };
+type Health = { service: string; actor: Actor | null; capabilities?: { admin?: boolean; workspaces?: boolean; annotations?: boolean; reveal?: boolean } };
 let actor: Actor | null = null;
 let pending: Promise<Health> | undefined;
 let queue: Promise<unknown> = Promise.resolve();

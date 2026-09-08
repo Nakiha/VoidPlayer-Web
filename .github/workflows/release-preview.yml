@@ -2,7 +2,7 @@ name: Build and verify standalone releases
 
 on:
   push:
-    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor]
+    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor, codex/annotation-persistence]
     tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
@@ -156,6 +156,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libnss3-tools
           node scripts/make-playback-fixtures.mjs
+      - name: Verify annotation persistence and unified cache management
+        run: |
+          node --test test/annotations-store.test.ts test/frame-index-cache.test.ts
+          node scripts/check-annotation-persistence-browser.mjs webkit
+          node scripts/check-annotation-persistence-browser.mjs chromium
+          node scripts/check-cache-browser.mjs webkit
+          node scripts/check-cache-browser.mjs chromium
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: annotation-cache-screenshots
+          path: |
+            /tmp/voidplayer-annotation-*.png
+            /tmp/voidplayer-caches-*.png
+          if-no-files-found: ignore
       - name: Test FLV native decode policy
         env:
           FLV_CASE: standard-h264
