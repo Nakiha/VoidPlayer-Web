@@ -3,7 +3,7 @@ import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { hevcDisplayOrder } from './hevc-timeline.ts';
 import { RangeReader } from './range-reader.ts';
-import { sampleDescription, validateDescription } from './frame-description.ts';
+import { sampleDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 export type { MediaOpenProgress } from './media-progress.ts';
@@ -220,9 +220,9 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     // Frames carry their resource and kind; the presenter (src/presenter.ts)
     // decides how to paint them.
     const wrap = (sample: VideoSample): DecodedFrame => {
-      const byteSize=sampleByteSize(sample);
-      const description=sampleDescription(sample,byteSize);
-      try {validateDescription(description);} catch(error) {sample.close();throw error;}
+      let description: FrameDescription;
+      try { description=sampleDescription(sample); } catch(error) {sample.close();throw error;}
+      const byteSize=description.byteLength;
       return {
       description,
       kind: 'video-sample',
@@ -314,10 +314,4 @@ export async function firstDecodableSample(sink: Pick<VideoSampleSink, 'getSampl
     try { await frames.return(undefined); }
     catch (error) { decoded?.close(); throw error; }
   }
-}
-
-/** Pixel storage estimate, not a claim about total decoder/GPU memory. */
-export function sampleByteSize(sample: Pick<VideoSample, 'allocationSize' | 'displayWidth' | 'displayHeight'>): number {
-  try { return sample.allocationSize(); }
-  catch { return sample.displayWidth * sample.displayHeight * 4; } // Opaque GPU frames may hide their format.
 }

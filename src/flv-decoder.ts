@@ -1,8 +1,7 @@
 import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
-import { sampleDescription } from './frame-description.ts';
+import { videoFrameDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
-import { VideoSample } from 'mediabunny';
 import { hevcGeometry, verifyHevcFrame } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
@@ -128,10 +127,8 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       const output = frames.shift();
       if (!output) return null;
       const { frame, pts } = output;
-      const sample=new VideoSample(frame.clone());
-      try {return {pts,width:frame.displayWidth,height:frame.displayHeight,frame,description:sampleDescription(sample,frame.allocationSize())};}
+      try {return {pts,width:frame.displayWidth,height:frame.displayHeight,frame,description:videoFrameDescription(frame)};}
       catch (error) { frame.close(); throw error; }
-      finally {sample.close();}
     },
     async drain() { await decoder.flush(); check(); },
     close() { clearFrames(); if (decoder.state !== 'closed') decoder.close(); },

@@ -24,6 +24,13 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   for (const file of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'ffv1_yuv422p_8bit.mkv', 'h264_boundary.mp4', 'h264_truncated.mp4']) {
     const page = await browser.newPage();
+    // Exercise unreadable main-thread resources after real packet open and
+    // transfer, through playback and seek. Worker receive is covered separately
+    // in decoder-policy.test.ts; this does not emulate hardware decoding.
+    if (file === 'h264_truncated.mp4') await page.addInitScript(() => {
+      Object.defineProperty(VideoFrame.prototype, 'format', { configurable: true, get() { return null; } });
+      VideoFrame.prototype.allocationSize = function() { throw new DOMException('Opaque frame', 'NotSupportedError'); };
+    });
     const errors = [], requests = [];
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
