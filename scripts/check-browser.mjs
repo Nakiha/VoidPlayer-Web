@@ -106,9 +106,13 @@ try {
     await page.locator('#reset-view').click(); await settle(page);
     assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().zoom), 1);
     const beforeFocus = await page.locator('#stage-A').boundingBox();
+    const focusButton = await page.locator('#toggle-chrome').boundingBox();
+    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式');
     await page.locator('#toggle-chrome').click(); await settle(page);
     assert.equal(await page.locator('.transport').evaluate(el => el.inert), true);
     assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus);
+    assert.deepEqual(await page.locator('#toggle-chrome').boundingBox(), focusButton, 'focus toggle stays in place');
+    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式');
     await page.locator('#toggle-chrome').click();
     await page.locator('#remove-track-B').click();
     await page.waitForFunction(() => !window.voidPlayer.getState().tracks.some(track => track.slot === 'B'));
@@ -141,7 +145,10 @@ try {
       const activity = await page.locator('#source-activity').boundingBox();
       const files = await page.locator('#source-list').boundingBox();
       const importButton = await page.locator('#sources-import').boundingBox();
-      assert.ok(activity.y >= files.y + files.height - 1 && activity.y + activity.height <= importButton.y + 1, 'status stays between the scroll area and import button');
+      const refreshButton = await page.locator('#sources-refresh').boundingBox();
+      assert.ok(activity.y >= files.y + files.height - 1, 'load status stays below the scroll area');
+      assert.ok(importButton.y + importButton.height <= files.y && importButton.x >= refreshButton.x + refreshButton.width - 1, 'import stays beside refresh above the list');
+      assert.equal(importButton.y, refreshButton.y);
       await page.screenshot({ path: path.join(screenshots, `${browserName}-loading.png`) });
       await page.setViewportSize({ width: 1280, height: 800 });
       await settle(page);

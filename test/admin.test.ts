@@ -27,19 +27,19 @@ async function fixture(run: (f: Fixture) => Promise<void>) {
 }
 const mutation = (base: string, method: string, value?: unknown, extra = {}) => ({ method, headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'admin', ...extra }, body: value === undefined ? undefined : JSON.stringify(value) });
 
-test('admin requires a loopback host or an allowlisted self-selected identity', async () => {
+test('admin trusts all users while requiring same-origin mutations', async () => {
   await fixture(async ({ base }) => {
     const status = await (await fetch(base + '/api/admin/status')).json();
     assert.equal(status.identity.id, 'local'); assert.equal(status.version, 'test-version'); assert.ok(status.memory.rss > 0); assert.ok(status.http.connections > 0);
     const rebound = await new Promise<number>(resolve => { const req = request(base + '/api/admin/status', { headers: { host: 'attacker.example' } }, res => { res.resume(); res.on('end', () => resolve(res.statusCode!)); }); req.end(); });
-    assert.equal(rebound, 403);
+    assert.equal(rebound, 200);
     assert.equal((await fetch(base + '/api/admin/scan', mutation('https://attacker.example', 'POST', { action: 'cancel' }))).status, 403);
     assert.equal((await fetch(base + '/api/admin/scan', { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: '{}' })).status, 403);
   });
   await fixture(async ({ base, admin }) => {
-    const actor = admin.workspaces.identify(undefined, 'owner');
+    const actor = admin.workspaces.identify(undefined, 'not-allowlisted');
     const headers = { host: 'intranet.test', cookie: `voidplayer-user=${actor.id}` };
-    assert.equal((await fetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 403);
+    assert.equal((await fetch(base + '/api/admin/status', { headers: { host: 'intranet.test' } })).status, 200);
     const response = await fetch(base + '/api/admin/status', { headers });
     assert.equal(response.status, 200); assert.equal((await response.json()).identity.id, actor.id);
     assert.equal((await fetch(base + '/api/admin/scan', mutation('https://intranet.test', 'POST', { action: 'cancel' }, headers))).status, 403);

@@ -13,7 +13,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { allowReveal, localRequest, revealFile } from './reveal.ts';
 import { MediaLibraryIndex, fileVersion } from './library.ts';
-import { AdminError, adminIdentity, adminWriteAllowed, readAdminJson } from './admin.ts';
+import { AdminError, adminWriteAllowed, readAdminJson } from './admin.ts';
 import { WORKSPACE_BYTES } from './workspaces.ts';
 import type { AdminController } from './admin.ts';
 
@@ -181,33 +181,32 @@ export function createMediaServer(options: ServerOptions): Server {
           actor = options.admin.workspaces.identify();
           res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
         } else if (actor && !browserUserId(req)) res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req)));
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin && !!adminIdentity(req, options.admin.config.adminUsers, actor), workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
+        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
         return;
       }
       if (url.pathname === '/api/ready' && req.method === 'GET') {
         status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
       }
       if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
-        const workspaceActor = actor;
-        if (!workspaceActor || !options.admin) { sendJson(res, 403, { error: '请先连接服务以创建用户身份。' }); return; }
+        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
+        if (!actor) { actor = options.admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
+        const workspaceActor = actor;
         if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return; }
         const store = options.admin.workspaces;
-        const isAdmin = !!adminIdentity(req, options.admin.config.adminUsers, actor);
         const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
         try {
           if (url.pathname === '/api/workspaces') {
             if (req.method === 'GET') {
-              if (url.searchParams.get('all') === '1' && !isAdmin) throw new AdminError(403, '只有管理员可以检视全部工作区。');
-              sendJson(res, 200, store.list(workspaceActor, isAdmin && url.searchParams.get('all') === '1', url.searchParams.get('before') ?? '', url.searchParams.get('search') ?? '')); return;
+              sendJson(res, 200, store.list(workspaceActor, url.searchParams.get('all') === '1', url.searchParams.get('before') ?? '', url.searchParams.get('search') ?? '')); return;
             }
             if (req.method === 'POST') { sendJson(res, 201, store.create(await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return; }
           }
           if (id) {
-            if (req.method === 'GET') { const value = store.read(id, workspaceActor, isAdmin); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return; }
+            if (req.method === 'GET') { const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return; }
             const revision = typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined;
-            if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor, isAdmin)); return; }
-            if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor, isAdmin)); return; }
+            if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return; }
+            if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return; }
           }
           sendJson(res, 405, { error: '不支持的工作区操作。' }); return;
         } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
@@ -215,9 +214,10 @@ export function createMediaServer(options: ServerOptions): Server {
       if (url.pathname.startsWith('/api/admin/')) {
         const admin = options.admin;
         if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
-        const identity = adminIdentity(req, admin.config.adminUsers, actor);
-        if (!identity) { sendJson(res, 403, { error: '当前用户没有管理权限，请在服务器配置的 adminUsers 中添加用户名。' }); return; }
         if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
+        // Users are trusted; identity records attribution, never access rights.
+        if (!actor && !localRequest(req)) { actor = admin.workspaces.identify(); res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); }
+        const identity = actor ?? { id: 'local', name: '本机用户' };
         try {
           if (url.pathname === '/api/admin/frame-indexes') {
             if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.list(Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }

@@ -1,3 +1,4 @@
+import {updateMediaInfo} from './media-state.ts';
 import type { MediaSource, MediaOpenProgress } from './media.ts';
 import { openMediaFromUrl } from './media.ts';
 import { contextLog } from './log.ts';
@@ -24,7 +25,7 @@ export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpe
   if (entry.state && entry.state !== 'ready') throw new Error(entry.state === 'pending' ? '片源仍在写入，请稍后重试。' : '片源已从媒体库移除。');
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
   const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal);
-  source.info.source = { kind: 'library', id: entry.id, url: mediaUrl(entry.id, entry.version) };
+  updateMediaInfo(source,{source:{kind:'library',id:entry.id,url:mediaUrl(entry.id,entry.version)}},'identity');
   return source;
 }
 
@@ -43,7 +44,7 @@ export async function fetchLibraryPage(query: LibraryQuery, signal?: AbortSignal
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, typeof value === 'boolean' ? value ? '1' : '0' : String(value));
   const response = await fetch(`/api/library/browse?${params}`, { cache: 'no-store', signal });
-  if (response.status === 409) throw new LibraryChangedError('媒体库已更新，已返回第一页');
+  if (response.status === 409) throw new LibraryChangedError('媒体库已更新，请重新读取');
   if (!response.ok) throw new Error(response.status === 404 ? '媒体服务需要升级，才能使用目录浏览' : '媒体库未连接，仍可添加本地文件');
   return response.json();
 }

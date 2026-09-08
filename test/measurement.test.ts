@@ -34,17 +34,16 @@ async function until<T>(read: () => T | null, predicate: (v: T) => boolean) {
   assert.fail('measurement did not reach expected state');
 }
 
-test('measurement is idle until explicitly started and rejects invalid or unauthorized work', () => fixture(async ({ base, call, admin }) => {
+test('measurement is idle until explicitly started and allows all users while rejecting invalid and cross-origin work', () => fixture(async ({ base, call, admin }) => {
   assert.deepEqual(await (await call(endpoint)).json(), { job: null });
-  assert.equal((await call(endpoint, 'POST', settings, 'viewer')).status, 403);
   assert.equal((await fetch(base + endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(settings) })).status, 403);
   for (const value of [{ ...settings, seconds: 100 }, { ...settings, limitMiB: -1 }, { ...settings, kind: 'arbitrary' }, { ...settings, kind: 'storage', mediaId: '/etc/passwd' }]) assert.ok([400, 409].includes((await call(endpoint, 'POST', value)).status));
   assert.equal(admin.measurements.status().job, null);
-  const { job } = await (await call(endpoint, 'POST', settings)).json();
+  const response = await call(endpoint, 'POST', settings, 'viewer'); assert.equal(response.status, 202);
+  const { job } = await response.json();
   assert.equal((await call(endpoint, 'POST', settings)).status, 409);
-  assert.equal((await call(`${endpoint}/${job.id}`, 'DELETE', undefined, 'other')).status, 403);
-  assert.equal((await call(`${endpoint}/${job.id}/transfer`, 'POST', undefined, 'other')).status, 403);
-  assert.equal((await call(`${endpoint}/${job.id}`, 'DELETE')).status, 200);
+  const transfer = await call(`${endpoint}/${job.id}/transfer`, 'POST', undefined, 'other'); assert.equal(transfer.status, 200); await transfer.arrayBuffer();
+  assert.equal((await call(`${endpoint}/${job.id}`, 'DELETE', undefined, 'other')).status, 200);
   assert.equal(admin.measurements.status().job?.state, 'cancelled');
 }, true));
 

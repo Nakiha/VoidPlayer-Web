@@ -12,8 +12,8 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     }
     button.innerHTML = icon(focused ? 'eyeClosed' : 'eye');
     button.setAttribute('aria-pressed', String(focused));
-    button.setAttribute('aria-label', focused ? '显示标题和播放控件' : '隐藏标题和播放控件');
-    button.dataset.tooltip = focused ? '退出专注观察：恢复标题和控制栏' : '专注观察：隐藏标题、控制栏和提示';
+    button.setAttribute('aria-label', '专注模式');
+    button.dataset.tooltip = '专注模式';
   }
   button.onclick = () => setFocused(!focused);
   return {

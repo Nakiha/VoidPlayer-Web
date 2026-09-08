@@ -182,10 +182,11 @@ function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`$
 function render() {
   const state = session.getState();
   $('decoder-environment').textContent = !globalThis.isSecureContext
-    ? '当前页面不是安全上下文，WebCodecs 不可用。远程硬件解码请使用受信任的 HTTPS 地址打开。'
-    : typeof VideoDecoder === 'undefined' ? '安全上下文已启用，但当前浏览器未提供 WebCodecs。'
-      : `安全上下文与 WebCodecs 已启用${globalThis.crossOriginIsolated ? '；支持多线程 WASM 回退' : ''}。`;
+    ? '原生解码不可用，请通过受信任的 HTTPS 地址访问。'
+    : typeof VideoDecoder === 'undefined' ? '此浏览器不支持原生解码（WebCodecs）。'
+      : `原生解码可用（WebCodecs）${globalThis.crossOriginIsolated ? ' · 多线程备用解码可用' : ''}`;
   const loaded = state.tracks.length > 0;
+  $('performance-current').hidden = !loaded;
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');
   screens.classList.toggle('single', state.tracks.length < 2);

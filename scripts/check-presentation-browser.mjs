@@ -20,7 +20,8 @@ try {
       const original = source.getContext.bind(source);
       source.getContext = (...args) => { if (args[0] === '2d') sourceContexts++; return original(...args); };
       const colors = new Uint8ClampedArray([255,0,0,255, 0,255,0,255, 0,0,255,255, 255,255,255,255]);
-      const rgba = pixels => ({ kind: 'rgba8', width: 2, height: 2, pixels });
+      const {rgbaDescription,sampleDescription}=await import('/src/frame-description.ts');
+      const rgba = pixels => ({ description:rgbaDescription(2,2),kind: 'rgba8', width: 2, height: 2, pixels });
       paintFrame(source, rgba(colors));
       const eager = sourceContexts;
       const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, source.width, source.height).data];
@@ -29,14 +30,14 @@ try {
       input.getContext('2d').putImageData(new ImageData(colors, 2, 2), 0, 0);
       const sample = new VideoSample(new VideoFrame(input, { timestamp: 0 }));
       const beforeNative = sourceContexts;
-      paintFrame(source, { kind: 'video-sample', width: 2, height: 2, sample }); sample.close();
+      paintFrame(source, { description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample }); sample.close();
       const nativeEager = sourceContexts - beforeNative;
       setPresentationGeometry(source, { ...geometry, zoom: 3, offsetX: 80 });
       const native = pixels();
       const rotated = new VideoSample(new VideoFrame(input, { timestamp: 0 }), { rotation: 90 });
       const expected = document.createElement('canvas'); expected.width = expected.height = 2;
       rotated.draw(expected.getContext('2d'), 0, 0, 2, 2);
-      paintFrame(source, { kind: 'video-sample', width: 2, height: 2, sample: rotated }); rotated.close();
+      paintFrame(source, { description:sampleDescription(rotated,16),kind: 'video-sample', width: 2, height: 2, sample: rotated }); rotated.close();
       const rotation = pixels(), rotationExpected = [...expected.getContext('2d').getImageData(0,0,2,2).data];
       const recycled = new Uint8ClampedArray(colors); paintFrame(source, rgba(recycled)); recycled.fill(0);
       const retained = pixels();
@@ -68,7 +69,8 @@ try {
           format: 'I420', codedWidth: 2, codedHeight: 2, timestamp,
           colorSpace: { primaries: 'bt2020', transfer, matrix: 'bt2020-ncl', fullRange: false },
         }));
-        const frame = sample => ({ kind: 'video-sample', width: 2, height: 2, sample });
+        const {sampleDescription}=await import('/src/frame-description.ts');
+        const frame = sample => ({ description:sampleDescription(sample,16),kind: 'video-sample', width: 2, height: 2, sample });
         const pixels = () => [...captureFrame(source).getContext('2d').getImageData(0, 0, 2, 2).data];
         const primed = makeSample(0), clone = primed.clone();
         // Exactly the application sequence: draw first, then create the surface.

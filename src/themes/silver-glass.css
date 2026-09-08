@@ -30,7 +30,6 @@
   --section-gap: var(--space-4); --list-gap: var(--space-2);
   --timeline-column-gap: var(--space-4);
   --popover-padding: var(--space-4); --tooltip-padding-block: var(--space-3);
-  --rail-padding-inline: calc((var(--dock-rail-width) - var(--button-size)) / 2);
   --radius-small: 4px; --radius-control: 7px; --radius-panel: 12px;
   --surface: #f5f5f7; --surface-panel: #f0f1f3; --surface-table: #f8f9fa;
   --surface-control: #ffffff94; --surface-group: #e5e7eb;
@@ -69,7 +68,7 @@
   --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
   --notice-fill: #fff0dd; --notice-text: #754617; --backdrop: #10182240;
   --disabled-opacity: .4; --inspector-width: 200px; --sources-width: 240px;
-  --dock-rail-width: 40px; --annotation-preview-width: 280px;
+  --annotation-symbols-height: 44px; --annotation-cards-height: 166px; --annotation-preview-width: 300px;
   /* UI identity colors are themeable; annotation ink is saved content. */
   --mark-red: #c84440; --mark-ochre: #b36b16; --mark-green: #488027; --mark-teal: #168177;
   --mark-blue: #246ac1; --mark-indigo: #5662bb; --mark-purple: #8051b7; --mark-rose: #b23f79;
@@ -81,7 +80,6 @@
   --contrast-text-secondary: #323840; --contrast-text-subtle: #424a54;
   --annotation-handle: #397ac7; --annotation-outline-light: #fff; --annotation-outline-dark: #1d1d1f;
   --annotation-toolbar-selected: color-mix(in srgb, var(--accent) 9%, transparent);
-  --dock-tools-width: var(--marks-min-width); --marks-min-width: 160px; --marks-max-width: 400px; --marks-timeline-min-width: 240px; --dock-tools-narrow-width: 160px;
   --dock-default-height: 180px; --track-label-width: 210px; --offset-column-width: 64px; --offset-field-gap: 4px; --zoom-control-width: 92px; --time-input-padding: var(--space-2); --time-input-caret-space: 1ch; --time-input-width: calc(var(--time-input-chars, 9) * 1ch + 2 * var(--time-input-padding) + var(--time-input-caret-space));
   --header-actions-breakpoint: 180px; --header-divider-width: 1px; --side-panel-min-width: 160px; --side-panel-max-width: 480px; --comparison-min-width: 360px; --panel-resize-hit-width: 10px; --panel-resize-line-width: 2px; --panel-collapse-distance: 32px;
   --panel-motion-duration: 220ms; --panel-motion-easing: cubic-bezier(.2,.8,.2,1); --panel-dismiss-veil: color-mix(in srgb, var(--surface-panel) 60%, transparent);

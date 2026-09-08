@@ -97,8 +97,10 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
       const source = captureFrame(sources[slot]), thumb = document.createElement('canvas'); thumb.width = 320; thumb.height = Math.max(1, Math.round(320 / aspect(slot)));
       const ctx = thumb.getContext('2d')!; ctx.drawImage(source, 0, 0, thumb.width, thumb.height); drawAnnotations(ctx, g.drawings.filter(d => d.tool !== 'text' || d.text?.trim()), thumb.width, thumb.height, DEFAULT_ANNOTATION_COLOR, thumb.width / annotationFrameRect(layer(slot)).width);
       const url = thumb.toDataURL('image/jpeg', .78); annotationThumbnails.set(g.markId, { url, width: thumb.width, height: thumb.height });
-      for (const content of document.querySelectorAll<HTMLElement>('[data-mark-content]')) if (content.dataset.markContent === g.markId) {
-        let image = content.querySelector('img'); if (!image) { image = document.createElement('img'); image.alt = '标注画面'; content.append(image); } image.src = url;
+      for (const thumbnail of document.querySelectorAll<HTMLElement>('[data-mark-thumbnail]')) if (thumbnail.dataset.markThumbnail === g.markId) {
+        let image = thumbnail.querySelector('img');
+        if (!image) { image = document.createElement('img'); image.alt = '标注画面'; thumbnail.replaceChildren(image); }
+        image.width = thumb.width; image.height = thumb.height; image.src = url;
       }
     }
   }

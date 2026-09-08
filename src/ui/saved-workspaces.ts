@@ -4,9 +4,9 @@ import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { icon } from './icons.ts';
 export function savedWorkspaceShell() {
-  return `<h4 class="settings-section-title">服务器工作区</h4><p class="settings-caption">主动保存到当前服务器，按当前用户整理。保存视频引用和标注，不上传视频文件。</p>
-    <div class="saved-workspace-editor"><label>工作区名称<input id="saved-workspace-name" maxlength="200" placeholder="为这次评审命名"></label><button id="saved-workspace-copy" hidden>另存副本</button><button id="saved-workspace-save">${icon('check')}保存到服务器</button></div>
-    <p id="saved-workspace-binding" class="settings-caption">尚未关联服务器工作区</p><p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
+  return `<h4 class="settings-section-title">服务器工作区</h4><p class="settings-caption">保存到当前用户名下，不上传视频文件。</p>
+    <div class="saved-workspace-editor"><label>工作区名称<input id="saved-workspace-name" maxlength="200" placeholder="工作区名称"></label><button id="saved-workspace-copy" hidden>另存副本</button><button id="saved-workspace-save">${icon('check')}保存到服务器</button></div>
+    <p id="saved-workspace-binding" class="settings-caption">尚未保存到服务器</p><p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
     <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>当前会话保持不变。可以载入服务器版本，或把当前内容另存为副本。</span><button id="saved-workspace-reload">载入服务器版本</button><button id="saved-workspace-conflict-copy">另存副本</button></div>
     <div class="saved-workspace-search"><input id="saved-workspace-search" type="search" aria-label="搜索服务器工作区" placeholder="搜索自己的工作区"><button id="saved-workspace-search-button">搜索</button><button id="saved-workspace-refresh" class="icon-button" aria-label="刷新服务器工作区">${icon('refresh')}</button></div>
     <div id="saved-workspace-list" class="saved-workspace-list"></div><div class="saved-workspace-pages"><button id="saved-workspace-first" disabled>返回最新</button><button id="saved-workspace-next" disabled>下一页</button></div>
@@ -24,7 +24,10 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     for (const id of ['copy', 'name', 'reload', 'conflict-copy', 'delete-confirm']) $(id).toggleAttribute('disabled', busy);
     $('reload').toggleAttribute('disabled', busy || $('reload').dataset.unavailable === 'true');
     $('first').toggleAttribute('disabled', busy || !before); $('next').toggleAttribute('disabled', busy || !next);
-    $('binding').textContent = binding ? `已关联「${binding.name}」· 版本 ${binding.revision} · 最后保存 ${new Date(binding.updatedAt).toLocaleString()}` : '尚未关联服务器工作区';
+    $('binding').hidden = !binding;
+    for (const selector of ['.saved-workspace-editor', '.saved-workspace-search', '#saved-workspace-list']) document.querySelector<HTMLElement>(selector)!.hidden = !available;
+    document.querySelector<HTMLElement>('.saved-workspace-pages')!.hidden = !available || (!before && !next);
+    $('binding').textContent = binding ? `已关联「${binding.name}」· 版本 ${binding.revision} · 最后保存 ${new Date(binding.updatedAt).toLocaleString()}` : '尚未保存到服务器';
   }
   async function act(work: () => Promise<void>) {
     if (busy) return; busy = true; controls();
@@ -88,7 +91,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   const settings = document.getElementById('settings')!;
   settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') void act(async () => {
     const health = await identityHealth(); available = !!health.capabilities?.workspaces; controls();
-    if (available) await list(); else message('当前服务尚未提供工作区保存。导出文件仍然可用。');
+    if (available) await list(); else message('此服务器不支持保存工作区，可导出到本机。');
   }); }, { signal: options.signal });
   controls();
   return { detach() { binding = undefined; $('conflict').hidden = true; controls(); }, open(id: string) { return act(() => load(id)); }, update: controls };

@@ -1,8 +1,9 @@
+import { rangeBlobReader } from './range-bridge-reader.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
-import { checkedHeap } from './flv-decoder.ts';
+import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -37,6 +38,7 @@ const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: st
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
+  requireFrameAbi(core);
   core.vpBlobs = new Map();
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
@@ -53,23 +55,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     if (payload.range) {
       ioMode = 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
-      const control = new Int32Array(shared, 0, 4), data = new Uint8Array(shared, 16);
-      // Adapter for the pinned core's existing synchronous Blob AVIO ABI.
-      // Only the decoder worker waits; HTTP runs asynchronously in its owner.
-      core.vpBlobs.set(blobHandle, {
-        blob: { slice: (start: number, end: number) => ({ start, end: Math.min(end, size) }) },
-        reader: { readAsArrayBuffer({ start, end }: { start: number; end: number }) {
-          const length = end - start;
-          if (!length) return new ArrayBuffer(0);
-          if (length < 0 || length > data.length) throw new MediaOpenError('input', 'WASM Range 请求越界。');
-          Atomics.store(control, 0, 0);
-          port.postMessage({ type: 'read-range', offset: start, length });
-          if (Atomics.wait(control, 0, 0, 30000) === 'timed-out') throw new MediaOpenError('input', '媒体 Range 读取超时。');
-          const state = Atomics.load(control, 0), count = Atomics.load(control, 1);
-          if (state !== 1) throw new MediaOpenError('input', state === -1 ? new TextDecoder().decode(data.subarray(0, count)) : '媒体读取已取消。');
-          return data.slice(0, count).buffer;
-        } },
-      });
+      core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message)));
       if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
@@ -144,15 +130,7 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
     throw new Error(`WASM 解码未能命中索引帧 ${index}（结果 ${result}）。`);
   }
-  const width = core.ccall('vp_width', 'number', ['number'], [ctx]);
-  const height = core.ccall('vp_height', 'number', ['number'], [ctx]);
-  const ptr = core.ccall('vp_pixels', 'number', ['number'], [ctx]);
-  const len = width * height * 4;
-  // Reuse the client's recycled buffer when it fits: at 60 fps an 8 MB frame
-  // allocation per extract is pure GC churn.
-  const out = recycle && recycle.byteLength === len ? new Uint8Array(recycle) : new Uint8Array(len);
-  out.set(checkedHeap(heap(), ptr, len, '读取解码像素').subarray(ptr, ptr + len));
-  return out.buffer;
+  return readWasmFrame(core, heap, ctx, recycle);
 }
 
 port.onmessage = async (event: { data: any }) => {
@@ -161,8 +139,8 @@ port.onmessage = async (event: { data: any }) => {
     if (type === 'init') {
       port.postMessage({ id, ok: true, data: await init(payload, progress => port.postMessage({ id, type: 'progress', progress })) });
     } else if (type === 'extract') {
-      const buffer = extract(payload.ctx, payload.index, payload.recycle);
-      port.postMessage({ id, ok: true, data: buffer }, [buffer]);
+      const frame = extract(payload.ctx, payload.index, payload.recycle);
+      port.postMessage({ id, ok: true, data: frame }, [frame.pixels]);
     } else if (type === 'dispose') {
       const ctx = payload.ctx;
       const entry = contexts.get(ctx);

@@ -21,7 +21,7 @@ export function shell() {
     <span class="toolbar-spacer"></span>
     <button id="open" class="add-video" aria-label="添加视频">${icon('filePlus')}<span>添加视频</span></button>
     <div class="panel-switches" role="group" aria-label="工作区功能">
-      <span class="connection-control"><button id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接" data-tooltip="媒体库连接：正在检查…"><span class="connection-dot" aria-hidden="true"></span></button></span>
+      <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
       ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}
     </div>
     <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
@@ -56,7 +56,7 @@ export function shell() {
             <button id="fullscreen" class="icon-button" aria-label="全屏" title="全屏">${icon('fit')}</button>
           </div><span id="status" class="sr-only" role="status"></span>
         </section>
-        ${iconButton({ glyph: 'eye', label: '隐藏标题和播放控件', tooltip: '专注观察：隐藏标题、控制栏和提示', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
+        ${iconButton({ glyph: 'eye', label: '专注模式', tooltip: '专注模式', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
 
 <section id="annotation-toolbar" class="annotation-toolbar" aria-label="标注工具条" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="标注工具">
@@ -79,7 +79,7 @@ export function shell() {
       </section>
       <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="片源" hidden>
         <header class="panel-heading"><h2>片源</h2><button data-close-panel="sources" class="icon-button" aria-label="收起片源">${icon('sidebar', 'mirror')}</button></header>
-        <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button></div>
+        <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button><button id="sources-import" class="icon-button" aria-label="添加片源" data-tooltip="添加片源">${icon('filePlus')}</button></div>
         <label class="search-field">${icon('search')}<input id="source-search" type="search" placeholder="搜索片源" aria-label="搜索片源"></label>
         <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
         <section id="source-activity" class="source-activity" aria-label="片源载入状态" data-state="idle">
@@ -88,12 +88,16 @@ export function shell() {
           <div class="source-activity-meter" aria-hidden="true"><span></span></div>
           <div class="source-activity-meta"><span id="source-activity-time"></span><span id="source-activity-hint"></span></div>
         </section>
-        <footer class="panel-foot"><button id="sources-import">${icon('filePlus')}添加片源</button><input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden></footer>
+        <input id="source-files" type="file" multiple accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" hidden>
       </aside>
       <section id="subtracks-panel" class="subtracks-panel marks-collapsed" aria-label="子轨道" hidden>
         <div id="dock-resize" class="dock-resize" role="separator" tabindex="0" aria-label="调整子轨道高度" aria-orientation="horizontal" aria-valuemin="128" aria-valuemax="420" aria-valuenow="180"></div>
-        <div class="subtrack-tools-clip"><aside class="subtrack-tools" aria-label="子轨道工具"><header class="panel-heading"><h2>子轨道</h2><span id="subtrack-count" class="muted"></span><span class="toolbar-spacer"></span><button id="toggle-marks" class="icon-button" aria-label="展开标注面板" aria-expanded="false" aria-controls="selected-marks" title="展开标注面板">${icon('sidebar')}</button></header><div class="mark-tools"><span id="selected-mark-label">标注</span><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="在当前帧添加标注">${icon('plusRegular')}</button></div><div id="selected-marks" class="selected-marks"></div></aside></div><div id="marks-resize" class="marks-resize" role="separator" tabindex="0" aria-label="调整标注面板宽度" aria-orientation="vertical" aria-controls="selected-marks" hidden></div>
+
         <div class="subtrack-scroll"><div class="subtrack-columns"><span class="subtrack-name-heading">轨道<span id="track-label-resize" role="separator" tabindex="0" aria-label="调整文件名列宽度" aria-orientation="vertical"></span></span><span class="track-offset">偏移</span><div id="subtrack-ruler" class="subtrack-ruler" aria-label="时间标尺"></div><span></span></div><div id="subtrack-list"></div></div>
+        <aside class="annotation-strip" aria-label="所有轨道标注">
+          <div class="annotation-strip-tools"><button id="toggle-marks" class="icon-button" aria-label="显示标注卡片" aria-expanded="false" aria-controls="selected-marks" title="显示标注卡片">${icon('grid')}</button><button id="subtrack-add-mark" class="icon-button" aria-label="添加标注" title="添加标注">${icon('plusRegular')}</button></div>
+          <div id="selected-marks" class="selected-marks" aria-label="标注"></div>
+        </aside>
       </section>
     </div>
   </main>

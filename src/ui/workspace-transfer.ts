@@ -1,3 +1,4 @@
+import {updateMediaInfo} from '../media-state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../model.ts';
 import { openMedia, openMediaFromUrl } from '../media.ts';
@@ -70,7 +71,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       await session.restoreWorkspace(document, async info => {
         if (!info.source) return openMedia(files.get(info.id)!);
         const reference = await pinLibraryReference(info, location.href);
-        const source = await openMediaFromUrl(reference.url, info); source.info.source = reference; return source;
+        const source = await openMediaFromUrl(reference.url, info); updateMediaInfo(source,{source:reference},'identity'); return source;
       });
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);

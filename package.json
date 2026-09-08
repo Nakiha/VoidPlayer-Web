@@ -20,6 +20,7 @@
     "test:presentation:browser": "node scripts/check-presentation-browser.mjs",
     "test:connection:browser": "npm run build && node scripts/check-connection-guide-browser.mjs",
     "test:range:browser": "npm run build && node scripts/check-range-browser.mjs",
+    "test:hevc-timeline:browser": "node scripts/check-hevc-timeline-browser.mjs",
     "test:flv:startup": "npm run build && node scripts/check-flv-startup-browser.mjs chromium",
     "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
     "fixtures:library": "node scripts/make-library-fixtures.mjs",
@@ -39,7 +40,10 @@
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
     "test:saved-workspaces:browser": "npm run build && node scripts/check-saved-workspaces-browser.mjs",
     "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs",
-    "test:release:browser": "node scripts/check-release-browser.mjs"
+    "test:release:browser": "node scripts/check-release-browser.mjs",
+    "test:fate": "node scripts/check-fate.mjs",
+    "test:fate:browser": "node scripts/check-fate-browser.mjs",
+    "test:logs:browser": "npm run build && node scripts/check-log-report-browser.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

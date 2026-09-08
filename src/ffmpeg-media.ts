@@ -1,3 +1,5 @@
+import type { WasmFrameOutput } from './wasm-frame.ts';
+import { validateDescription } from './frame-description.ts';
 import type { MediaOpenProgress, MediaLoadStage } from './media-progress.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { createRangeBridge } from './range-bridge.ts';
@@ -98,6 +100,8 @@ async function createWorker(): Promise<Worker> {
 }
 
 export class WorkerRpc {
+  private workerId=randomUUID();
+  private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
   private nextId = 1;
   private failure: Error | null = null;
@@ -106,7 +110,7 @@ export class WorkerRpc {
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
       if (data.type === 'progress') {
         const entry = this.pending.get(data.id);
         if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
@@ -119,13 +123,14 @@ export class WorkerRpc {
         (payload as { frame?: VideoFrame } | null)?.frame?.close();
         return;
       }
+      if (data.diagnostics?.length) contextLog().info('media', '原生解码路径探测', { workerId: this.workerId, requestId: id, decisions: data.diagnostics });
       clearTimeout(entry.timer);
       this.pending.delete(id);
       if (ok) entry.resolve(payload);
       else {
         const failure = data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误');
         if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
-        contextLog().warn('media', '解码 worker 请求失败', { error: failure });
+        contextLog().warn('media', '解码 worker 请求失败', {workerId:this.workerId,requestId:id,recentRequests:this.requests,error:failure});
         entry.reject(failure);
       }
     };
@@ -144,6 +149,7 @@ export class WorkerRpc {
   call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
+    this.requests.push({id,type,pts:payload.pts,index:payload.index});if(this.requests.length>16)this.requests.shift();
     return new Promise<T>((resolve, reject) => {
       const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
       const entry = { resolve: resolve as (v: unknown) => void, reject, timer: setTimeout(expire, timeoutMs),
@@ -292,17 +298,20 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const payload: Record<string, unknown> = { ctx: init.ctx, index };
     const transfer: Transferable[] = [];
     if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
-    const buffer = await rpc.call<ArrayBuffer>('extract', payload, transfer);
-    const pixels = new Uint8ClampedArray(buffer);
+    const output = await rpc.call<WasmFrameOutput>('extract', payload, transfer);
+    if (disposed) throw new Error('媒体已释放。');
+    const pixels = new Uint8ClampedArray(output.pixels);
+    validateDescription(output.description,pixels.byteLength);
     let closed = false;
     return {
       kind: 'rgba8',
-      width: init.width,
-      height: init.height,
+      description: output.description,
+      width: output.description.width,
+      height: output.description.height,
       byteSize: pixels.byteLength,
       pixels,
-      ptsUs: relUs[index],
-      sourcePtsUs: ticksToUs(ticks[index]),
+      ptsUs: ticksToUs(output.pts) - firstUs,
+      sourcePtsUs: ticksToUs(output.pts),
       durationUs: durations[index],
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };

@@ -1,3 +1,4 @@
+import {PacketTimeline} from '../src/packet-timeline.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demuxFlv, scanFlv, FlvReader } from '../src/flv-demux.ts';
@@ -50,13 +51,11 @@ test('core pointer checks reject clipped/overflowing ranges before copying', () 
   for (const [ptr, size] of [[90, 11], [-1, 1], [NaN, 1], [1, -1]]) assert.throws(() => checkedHeap(heap, ptr, size, 'test'), /内存范围无效/);
 });
 
-test('a decoder exception retains packet context and blocks further calls into the failed decoder', async () => {
-  const engine = new FlvEngine({ file: new Blob([syntheticFlv()]) });
-  try {
-    await engine.prepare(); let receives = 0;
-    engine.decoder = { kind: 'ffmpeg-wasm', reset() {}, send: async () => {}, receive() { receives++; throw new RangeError('offset is out of bounds'); }, drain: async () => {}, close() {} };
-    await assert.rejects(engine.extract(0), /第 1 帧（包位置 \d+）.*offset is out of bounds/);
-    await assert.rejects(engine.extract(0), /offset is out of bounds/);
-    assert.equal(receives, 1);
-  } finally { engine.close(); }
+test('a decoder exception reports the actual fed packet and stops further calls', async () => {
+  const idx=await index(syntheticFlv());let receives=0,sent=false;
+  const timeline=new PacketTimeline(idx,{kind:'ffmpeg-wasm',reset(){},send:async()=>{sent=true;},receive(){if(sent){receives++;throw new RangeError('offset is out of bounds');}return null;},drain:async()=>{},close(){}},async()=>new Uint8Array(1));
+  try{
+    await assert.rejects(timeline.at(idx.packets[1].pts),e=>{assert.match(String(e),/offset is out of bounds/);assert.ok(String(e).includes(`offset=${idx.packets[0].offset}`));assert.ok(String(e).includes(`目标 PTS=${idx.packets[1].pts}`));return true;});
+    await assert.rejects(timeline.at(0),/offset is out of bounds/);assert.equal(receives,1);
+  }finally{timeline.close();}
 });

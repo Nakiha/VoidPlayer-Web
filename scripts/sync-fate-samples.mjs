@@ -1,6 +1,7 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-const samples=JSON.parse(await readFile(new URL('./fate-samples.json',import.meta.url)));
+const samples=[...JSON.parse(await readFile(new URL('./fate-samples.json',import.meta.url))),
+  ...JSON.parse(await readFile(new URL('./fate-timestamp-samples.json',import.meta.url)))];
 await mkdir('fixtures/fate',{recursive:true});
 for(const sample of samples){
   const path=new URL('../fixtures/fate/'+sample.file,import.meta.url);

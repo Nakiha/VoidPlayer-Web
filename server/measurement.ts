@@ -77,14 +77,13 @@ export class Measurements {
     if (abort) job.controller.abort();
     this.settle(job);
   }
-  private owned(id: string, owner: string) {
+  private task(id: string) {
     if (!this.job || this.job.result.id !== id) throw new AdminError(404, '测速任务不存在或已被新的任务替代。');
-    if (this.job.result.owner !== owner) throw new AdminError(403, '只有发起者可以操作此测速任务。');
     return this.job;
   }
-  cancel(id: string, owner: string) { this.stop(this.owned(id, owner), 'user'); return this.status(); }
+  cancel(id: string, owner: string) { this.stop(this.task(id), 'user'); return this.status(); }
   finish(id: string, owner: string, input: unknown) {
-    const job = this.owned(id, owner), value = input as MeasurementResult['client'];
+    const job = this.task(id), value = input as MeasurementResult['client'];
     if (job.result.kind === 'storage') throw new AdminError(400, '存储任务由服务器完成。');
     if (!value || !Number.isSafeInteger(value.bytes) || value.bytes < 0 || value.bytes > job.reserved || !Number.isSafeInteger(value.requests) || value.requests < 0 || value.requests > job.result.requests || !Number.isFinite(value.elapsedMs) || value.elapsedMs <= 0 || value.elapsedMs > (job.result.seconds + 30) * 1000) throw new AdminError(400, '浏览器测量结果无效。');
     if (job.result.activeRequests) throw new AdminError(409, '仍有读取正在结束，请稍后完成。');
@@ -133,7 +132,7 @@ export class Measurements {
     }
   }
   async transfer(req: IncomingMessage, res: ServerResponse, id: string, owner: string) {
-    const job = this.owned(id, owner);
+    const job = this.task(id);
     if (job.result.kind === 'storage') throw new AdminError(400, '存储任务不接受客户端传输。');
     const upload = job.result.kind === 'upload';
     const length = Number(req.headers['content-length'] ?? 0);

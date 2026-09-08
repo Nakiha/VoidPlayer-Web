@@ -5,7 +5,7 @@ import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
-export interface FlvPacket { configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; }
+export interface FlvPacket { sequenceNumber?:number; configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; originalPts?: number; }
 export interface FlvIndex {
   configurations?: Uint8Array[]; // Configuration records in decode-order segments.
   truncatedAt?: number; // Start of an incomplete trailing tag, never a playable packet.
@@ -13,7 +13,7 @@ export interface FlvIndex {
   description: Uint8Array;
   packets: FlvPacket[]; // decode order; payloads stay in the source
   order: number[]; // presentation order
-  firstPts: number;
+  firstPts: number; // Earliest indexed presentation PTS, not the media timeline origin.
   duration: number;
   durations: number[];
 }
@@ -131,6 +131,17 @@ export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Arr
   if (durations.slice(0, -1).some(d => d <= 0)) bad('视频包包含重复显示时间戳。');
   durations[durations.length - 1] = durations.length > 1 ? durations[durations.length - 2] : 40000;
   return { ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
+}
+
+/** A growing FLV index must not move the session clock. The first decode-order
+ * key packet establishes time zero; earlier presentation pictures are preroll.
+ * Keep every packet (including negative relative PTS) for decoder dependencies.
+ * Cache documents contain source timestamps, so old caches use this same rule.
+ */
+export function flvMediaTiming(index: FlvIndex) {
+  const firstPtsUs = index.packets[0].pts;
+  return { firstPtsUs, durationUs: index.firstPts + index.duration - firstPtsUs,
+    times: index.order.map(i => index.packets[i].pts - firstPtsUs), durations: index.durations };
 }
 
 export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>): VideoDecoderConfig | null {

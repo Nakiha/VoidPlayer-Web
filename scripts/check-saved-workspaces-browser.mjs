@@ -78,11 +78,12 @@ try {
   await settings(page); await page.setViewportSize({ width: 760, height: 900 });
   assert.ok(await page.locator('#settings-pane-workspace').evaluate(e => e.scrollWidth <= e.clientWidth), 'settings workspace pane must not overflow');
   await page.screenshot({ path: `/tmp/voidplayer-saved-workspaces-light-${name}.png` });
+  const storageState = await context.storageState();
   await context.close(); await service.close(); service = await startService(config); await service.library.refresh();
-  const restarted = await browser.newContext({ viewport: { width: 1200, height: 800 } }); const restored = await restarted.newPage(); restored.on('pageerror', error => errors.push(error.message));
+  const restarted = await browser.newContext({ viewport: { width: 1200, height: 800 }, storageState }); const restored = await restarted.newPage(); restored.on('pageerror', error => errors.push(error.message));
   await restored.goto(base + '/?workspace=' + copyId); await restored.waitForFunction(() => window.voidPlayer?.getState().marks.length === 2 && window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
   assert.ok((await restored.evaluate(() => window.voidPlayer.getState().marks)).some(mark => mark.text === '第一窗口尚未保存'));
-  assert.equal((await (await fetch(base + '/api/workspaces')).json()).entries.length, 1);
+  assert.equal((await (await restarted.request.get(base + '/api/workspaces')).json()).entries.length, 1);
   await restarted.close(); assert.deepEqual(errors, []);
   console.log(`PASS saved workspaces ${name}: explicit save, two-tab conflict/copy/reload, admin rename/download/versioned delete, responsive themes and real server restart restore`);
 } finally { await browser?.close(); await service?.close(); await rm(temp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }); }

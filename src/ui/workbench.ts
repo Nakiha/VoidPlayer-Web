@@ -85,7 +85,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {
     setPanel(panel, false); $(`toggle-${panel}`).focus();
   });
-  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs) => void act(async () => { await session.seek(ptsUs); addMark(view.selected, id); }, 'ui.mark-edit'));
+  const annotationHeightDelta = () => {
+    const style = getComputedStyle(workspace);
+    return Number.parseFloat(style.getPropertyValue('--annotation-cards-height')) - Number.parseFloat(style.getPropertyValue('--annotation-symbols-height'));
+  };
+  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()));
   let dockHeight = Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) || 180;
   const save = () => { try { localStorage.setItem(HISTORY_KEY, JSON.stringify(catalog.serializable())); } catch { /* Session access still works when storage is disabled/full. */ } };
 
@@ -149,7 +153,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   }
   function renderInspector(state: State) {
     const selected = state.tracks.find(t => t.slot === view.selected);
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}:${t.width}:${t.height}`).join('/') + view.selected;
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision??0}`).join('/') + view.selected;
     if (signature !== trackSignature) {
       trackSignature = signature;
       const list = $('track-selector'); list.replaceChildren();
@@ -188,10 +192,9 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     }
   }
   function renderDock(state: State) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.durationUs}:${t.indexState}`).join('/') + JSON.stringify(state.marks);
+    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision??0}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
-      $('subtrack-count').textContent = String(state.tracks.length);
       hideSeekPreview(); cursors.clear();
       const list = $('subtrack-list'); list.replaceChildren();
       const maxDuration = Math.max(1, ...state.tracks.map(t => t.durationUs+t.offsetUs));
@@ -270,11 +273,12 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       row.classList.toggle('selected', selected);
       row.querySelector('.subtrack-name')!.setAttribute('aria-pressed', String(selected));
     }
-    const selected = state.tracks.find(t => t.slot === view.selected);
-    const nextAnnotationSignature = `${dockSignature}/${view.selected}`;
+    const nextAnnotationSignature = dockSignature;
     if (nextAnnotationSignature !== annotationSignature) {
       annotationSignature = nextAnnotationSignature;
-      annotations.render(selected ? marksForTrack(selected, state.marks) : [], selected?.slot, selected?.offsetUs ?? 0);
+      annotations.render(state.tracks.flatMap(track => marksForTrack(track, state.marks).map(mark => ({
+        mark, slot: track.slot, offsetUs: track.offsetUs,
+      }))).sort((a, b) => (a.mark.frame.ptsUs + a.offsetUs) - (b.mark.frame.ptsUs + b.offsetUs)));
     }
     renderProgress(state.positionUs, state.durationUs);
   }
@@ -290,7 +294,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
     addMarkButton.disabled = !state.tracks.length;
     addMarkButton.setAttribute('aria-disabled', String(!state.tracks.length || state.busy));
-    const ids = state.tracks.map(t => `${t.slot}:${t.id}:${t.indexState}:${t.indexSource}:${t.durationUs}:${t.width}:${t.height}`).join('/');
+    const ids = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision??0}`).join('/');
     if (ids !== currentIds) {
       currentIds = ids;
       for (const track of state.tracks) catalog.remember(track, track.source?.id, referenceVersion(track.source?.url));
@@ -405,7 +409,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     $('start-library-status').textContent = items.length ? '' : libraryStatus || (startTab === 'recent' ? '暂无最近片源' : '添加文件以开始对比');
   }
   function renderSources() {
-    const query = $<HTMLInputElement>('source-search').value.trim().toLocaleLowerCase();
+    const query = (sourceTab === 'available' ? libraryBrowser.filter() : $<HTMLInputElement>('source-search').value.trim()).toLocaleLowerCase();
     const items = (sourceTab === 'recent' ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
     $('source-status').textContent = libraryStatus;
     $('source-status').hidden = !libraryStatus;
@@ -415,16 +419,28 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const signature = JSON.stringify([sourceTab, query, loadingSource, sourceLoadError, session.getState().busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
     if (signature !== sourceSignature) {
-      sourceSignature = signature; list.replaceChildren();
+      sourceSignature = signature;
+      const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+      const rows: HTMLElement[] = [];
+      const reuse = (key: string, fingerprint: string, create: () => HTMLElement) => {
+        const old = existing.get(key);
+        const row = old?.dataset.fingerprint === fingerprint ? old : create();
+        row.dataset.sourceKey = key; row.dataset.fingerprint = fingerprint; rows.push(row);
+      };
       for (const folder of folders) {
+        reuse(`folder:${folder.rootId}/${folder.path}`, JSON.stringify(folder), () => {
         const row = document.createElement('button'); row.className = 'source-row library-folder';
         const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
         const info = text('span', '', 'source-info');
         info.append(text('span', folder.name, 'filename'), text('span', page?.roots.find(root => root.id === folder.rootId)?.name ?? '', 'source-meta'));
-        row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); list.append(row);
+        row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
+        });
       }
-      for (const item of items) list.append(sourceRow(item));
-      if (!items.length && !folders.length) list.append(text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+      for (const item of items) reuse(item.key, JSON.stringify([!!item.file, item.library, loadingSource, sourceLoadError, session.getState().busy, sourceInUse(item, session.getState().tracks), page?.roots]), () => sourceRow(item));
+      if (!items.length && !folders.length) reuse('empty', `${sourceTab}/${query}`, () => text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+      // Keep unchanged nodes and their focus/scroll anchors through refreshes.
+      rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
+      while (list.children.length > rows.length) list.lastElementChild!.remove();
     }
     renderStartLibrary();
   }
@@ -458,19 +474,23 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderSources();
   };
   const resizer = $('dock-resize');
-  const resize = (value: number) => {
-    dockHeight = Math.round(Math.max(128, Math.min(Math.min(420, window.innerHeight * .55), value)));
-    workspace.style.setProperty('--dock-height', `${dockHeight}px`);
-    resizer.setAttribute('aria-valuenow', String(dockHeight));
-    resizer.setAttribute('aria-valuetext', `${dockHeight} 像素`);
-    resizer.setAttribute('aria-valuemax', String(Math.round(Math.min(420, window.innerHeight * .55))));
-  };
   const dock = $('subtracks-panel');
-  const dockBounds = () => ({min:128,max:Math.min(420,window.innerHeight*.55)});
+  const dockBounds = () => {
+    const max = Math.round(Math.min(420, window.innerHeight * .55));
+    const min = annotations.expanded() ? Number.parseFloat(getComputedStyle(dock).getPropertyValue('--annotation-cards-height')) + 90 : 128;
+    return { min: Math.min(min, max), max };
+  };
+  const resize = (value: number) => {
+    const { min, max } = dockBounds();
+    dockHeight = Math.round(Math.max(min, Math.min(max, value)));
+    workspace.style.setProperty('--dock-height', `${dockHeight}px`);
+    resizer.setAttribute('aria-valuemin', String(min)); resizer.setAttribute('aria-valuemax', String(max));
+    resizer.setAttribute('aria-valuenow', String(dockHeight)); resizer.setAttribute('aria-valuetext', `${dockHeight} 像素`);
+  };
   installResizeGesture(resizer, {
     axis:'y',direction:-1,size:()=>dockHeight,bounds:dockBounds,resize,
     threshold:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--panel-collapse-distance')),
-    reset:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')),
+    reset:()=>Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--dock-default-height')) + (annotations.expanded() ? annotationHeightDelta() : 0),
     dragging(active) { workspace.classList.toggle('panel-dragging',active); dock.classList.toggle('panel-pushing',active); if(!active) animatePanelLayout(workspace); },
     preview(push,veil) { workspace.style.setProperty('--dock-push-space',`${push}px`); dock.style.setProperty('--panel-push',`${push}px`); dock.style.setProperty('--panel-veil-opacity',String(veil)); },
     collapse() { setPanel('subtracks',false); $('toggle-subtracks').focus(); },
@@ -483,12 +503,11 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), marksWidth: annotations.width() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width() }),
     restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
-      view.panels = { ...layout.panels }; view.selected = layout.selected; resize(layout.dockHeight);
-      annotations.setExpanded(layout.marksExpanded);
+      view.panels = { ...layout.panels }; view.selected = layout.selected;
+      annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
-      if (layout.marksWidth !== undefined) annotations.resize(layout.marksWidth);
       dockSignature = ''; trackSignature = ''; annotationSignature = ''; syncPanels(); panelResize.refresh(); render(session.getState());
     },
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },

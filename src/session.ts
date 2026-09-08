@@ -1,3 +1,4 @@
+import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
@@ -27,10 +28,15 @@ export class ReviewSession {
   private abortLoad: (() => void) | undefined;
   private revision = 0;
   private stopPlayback: (() => void) | undefined;
-  private readers: FrameQueue[] | undefined;
-  private releaseReaders() {
-    this.readers?.forEach(r => r.stop());
-    this.readers = undefined;
+  // Playback state belongs to a source, not to its position in a track array.
+  private readers = new Map<MediaSource, FrameQueue>();
+  private releaseReaders(reason: string, sources: Iterable<MediaSource> = this.readers.keys()) {
+    for (const source of sources) {
+      const reader = this.readers.get(source);
+      if (!reader) continue;
+      reader.stop(); this.readers.delete(source);
+      log.debug('session', '释放播放队列', { mediaId: source.info.id, reason });
+    }
   }
   private measurements: PlaybackMeasurements | null = null;
   private busy = false;
@@ -53,10 +59,7 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot, t]) => ({ slot, id: t.source.info.id,
-      durationUs: t.source.info.durationUs, firstPtsUs: t.source.info.firstPtsUs, offsetUs: t.offsetUs,
-      indexState: t.source.info.indexState, indexError: t.source.info.indexError,
-      width: t.source.info.width, height: t.source.info.height, decoder: t.source.info.decoder, coreVariant: t.source.info.coreVariant })) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -101,7 +104,6 @@ export class ReviewSession {
     return traceOperation('session', name, data, () => {
       const context = operationContext();
       this.pause();
-      this.releaseReaders();
       const revision = this.revision;
       this.busy = true;
       this.error = null;
@@ -157,7 +159,8 @@ export class ReviewSession {
           progress('first-frame');
           const kept = this.positionUs === 0 ? new Set([...this.tracks].filter(([s, t]) => s !== slot && t.frame).map(([s]) => s)) : undefined;
           await this.drawAt(0, current, next, () => {
-            this.tracks.get(slot)?.source.dispose();
+            const previous = this.tracks.get(slot)?.source;
+            if (previous) { this.releaseReaders('replace', [previous]); previous.dispose(); }
             this.tracks = next;
             this.catalog.set(opened.info.id, opened.info);
             opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
@@ -190,6 +193,7 @@ export class ReviewSession {
     slotValue(slot);
     await this.run('removeTrack', { slot }, async current => {
       const track = this.tracks.get(slot);
+      if (track) this.releaseReaders('remove', [track.source]);
       this.tracks.delete(slot);
       track?.source.dispose();
       if (!this.tracks.size) { this.positionUs = 0; this.measurements = null; }
@@ -267,6 +271,7 @@ export class ReviewSession {
   // that steps the most tracks without skipping frames, and keep the current
   // frame on tracks the target does not move.
   private async stepForward(entries: [Slot, Track][], current: () => boolean) {
+    this.releaseReaders('step', entries.map(([, t]) => t.source));
     const probed = await Promise.allSettled(entries.map(async ([slot, t]) =>
       [slot, await t.source.framesAfter(t.frame!.ptsUs, 2)] as const));
     const gathered = new Map<Slot, (DecodedFrame | null)[]>();
@@ -292,6 +297,7 @@ export class ReviewSession {
     await this.drawAt(target, current, this.tracks, undefined, selected, kept);
   }
   private async stepBackward(entries: [Slot, Track][], current: () => boolean) {
+    this.releaseReaders('step', entries.map(([, t]) => t.source));
     const probed = await Promise.allSettled(entries.map(async ([slot, t]) => {
       const currentUs = t.frame!.ptsUs;
       if (currentUs <= 0) return [slot, null] as const;
@@ -323,6 +329,7 @@ export class ReviewSession {
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>) {
     const entries = [...tracks];
     const start = performance.now();
+    this.releaseReaders('position', entries.filter(([slot]) => !kept?.has(slot)).map(([, t]) => t.source));
     // Kept tracks hold their current frame (a fair-step target that does not
     // move them); re-resolving them by time could jump past an unseen frame.
     const results = await Promise.allSettled(entries.map(([slot, t]) => {
@@ -337,8 +344,8 @@ export class ReviewSession {
       for (let i = 0; i < entries.length; i++) {
         const r = results[i];
         if (r.status !== 'fulfilled' || !r.value) continue;
-        entries[i][1].source.info.width = r.value.width; entries[i][1].source.info.height = r.value.height;
         this.draw(entries[i][0], r.value);
+        recordPresentedFrame(entries[i][1].source,r.value);
         entries[i][1].frame = this.frameInfo(r.value);
       }
       commit?.();
@@ -376,8 +383,13 @@ export class ReviewSession {
     const scoped = contextLog();
     const active = () => this.playing && revision === this.revision;
     const entries = [...this.tracks];
-    const readers = this.readers ?? entries.map(([, t]) => new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)));
-    this.readers = readers;
+    const readers = entries.map(([slot, t]) => {
+      let reader = this.readers.get(t.source);
+      const reused = !!reader;
+      if (!reader) { reader = new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)); this.readers.set(t.source, reader); }
+      scoped.debug('session', '播放队列就绪', { slot, mediaId: t.source.info.id, reused, frameUs: t.frame!.ptsUs, buffer: reader.snapshot() });
+      return reader;
+    });
     readers.forEach(r => r.resume());
     const metrics = this.measurements = new PlaybackMeasurements();
     let lastTick = start, lastEmit = start, lastSample = start, lastProgress = start;
@@ -420,8 +432,8 @@ export class ReviewSession {
           if (!frame) continue;
           try {
             if (frame.ptsUs !== track.frame?.ptsUs) {
-              track.source.info.width = frame.width; track.source.info.height = frame.height;
               this.draw(slot, frame);
+              recordPresentedFrame(track.source,frame);
               track.frame = this.frameInfo(frame);
               metrics.draw(slot, performance.now(), dropped);
             }
@@ -457,7 +469,7 @@ export class ReviewSession {
       // Pause retains the iterator and unseen frames. A seek/replacement has
       // already detached and stopped these readers; an older loop must never
       // stop readers that a rapid resume has adopted.
-      if (revision === this.revision) this.releaseReaders();
+      if (revision === this.revision) this.releaseReaders('playback-finished');
       scoped.info('session', '播放统计', metrics.snapshot());
       if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
     }
@@ -525,10 +537,11 @@ export class ReviewSession {
           await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
-          source.info.id = info.id; // Keep mark and comparison anchors stable after reopening decoders.
+          updateMediaInfo(source,{id:info.id},'identity'); // Keep mark and comparison anchors stable after reopening decoders.
         }
         const duration = Math.max(0, ...[...next.values()].map(t => t.source.info.durationUs + t.offsetUs));
         await this.drawAt(Math.min(document.positionUs, Math.max(0, duration - 1)), current, next, () => {
+          this.releaseReaders('restore');
           for (const track of this.tracks.values()) track.source.dispose();
           this.tracks = next; this.order = [...next.keys(), ...SLOTS.filter(slot => !next.has(slot))];
           this.catalog = new Map(document.media.map(info => [info.id, info]));
@@ -552,7 +565,7 @@ export class ReviewSession {
   }
   async dispose() {
     this.pause();
-    this.releaseReaders();
+    this.releaseReaders('dispose');
     await this.queue.catch(() => {});
     for (const t of this.tracks.values()) t.source.dispose();
     this.tracks.clear();

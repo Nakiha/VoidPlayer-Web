@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SessionLog, logData, readLogPage, traceOperation, operationContext, sessionLog, log } from '../src/log.ts';
+import { SessionLog, logData, readLogPage, traceOperation, operationContext, sessionLog, log, exportLog, withLogDescription, LOG_DESCRIPTION_LIMIT } from '../src/log.ts';
 import type { LogDocument, LogStorage } from '../src/log.ts';
 import { retainLogs } from '../src/log-storage.ts';
 import { reviewTools } from '../src/agent.ts';
@@ -122,4 +122,20 @@ test('Agent mutation validation failures are logged without storing note text', 
   assert.throws(() => tool.execute({ slot: 'X', text: 'note body must not leak' }));
   const json = JSON.stringify(sessionLog.read({ sinceSeq }));
   assert.ok(!json.includes('note body must not leak')); assert.match(json, /failed/);
+});
+
+test('explicit report description is lossless and never changes diagnostic events or archives', async () => {
+  const journal = new SessionLog(), doc = journal.snapshot();
+  const description = '拖动进度后画面停止。\n复现：打开视频 → 定位到 00:05。';
+  const report = withLogDescription(doc, `  ${description}  `);
+  assert.equal(report.report?.description, description);
+  assert.deepEqual(report.events, doc.events);
+  assert.ok(!('report' in doc)); assert.ok(!('report' in journal.snapshot()));
+  assert.ok(!('report' in withLogDescription(report, '  ')));
+  assert.equal(withLogDescription(doc, '字'.repeat(LOG_DESCRIPTION_LIMIT)).report?.description.length, LOG_DESCRIPTION_LIMIT);
+  assert.throws(() => withLogDescription(doc, 'x'.repeat(LOG_DESCRIPTION_LIMIT + 1)));
+  const exported = await exportLog(undefined, description);
+  assert.equal(exported.report?.description, description);
+  assert.ok(!JSON.stringify(exported.events).includes(description));
+  assert.ok(!('report' in await exportLog()));
 });

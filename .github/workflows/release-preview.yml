@@ -2,7 +2,7 @@ name: Build and verify standalone releases
 
 on:
   push:
-    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide]
+    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor]
     tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
@@ -115,7 +115,7 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -141,6 +141,15 @@ jobs:
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
       - run: node scripts/check-connection-guide-browser.mjs
+      - name: Verify report descriptions and explicit log submission
+        run: |
+          node --test test/log.test.ts test/server.test.ts
+          node scripts/check-log-report-browser.mjs webkit
+          node scripts/check-log-report-browser.mjs chromium
+      - name: Verify annotation strip and cross-track editing
+        run: |
+          node scripts/check-mark-cards-browser.mjs webkit
+          node scripts/check-mark-cards-browser.mjs chromium
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
@@ -154,17 +163,28 @@ jobs:
           npm run fixtures:flv
           node scripts/check-flv-browser.mjs webkit
           node scripts/check-range-browser.mjs webkit
-          node --test test/flv-background.test.ts
+          node scripts/check-range-browser.mjs chromium
+          node --test test/flv-background.test.ts test/flv-open-gop.test.ts test/range-bridge-large.test.ts test/mp4-boundary.test.ts
           node --test test/flv-resolution.test.ts test/hevc-geometry.test.ts test/preroll.test.ts
           node scripts/check-flv-startup-browser.mjs chromium
           node scripts/check-flv-startup-browser.mjs webkit
-      - name: Audit targeted FATE integration samples (report only)
-        continue-on-error: true
+      - name: Verify FATE frame contracts and metadata regressions
         timeout-minutes: 6
         run: |
           node scripts/sync-fate-samples.mjs
+          node --test test/fate-oracle.test.ts test/frame-description.test.ts test/avc-geometry.test.ts test/packet-timeline.test.ts test/media-state.test.ts
           node scripts/check-fate.mjs
           node scripts/check-fate-browser.mjs
+      - name: Verify HEVC display-order recovery and seek pixels
+        timeout-minutes: 12
+        run: |
+          node --test test/hevc-timeline.test.ts
+          node scripts/check-hevc-timeline-browser.mjs
+      - name: Audit FATE transport-stream clock faults (exploratory report)
+        timeout-minutes: 8
+        run: |
+          node scripts/make-timestamp-fixtures.mjs
+          node scripts/check-timestamp-corpus.mjs --report-only
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
         run: node scripts/check-http-playback.mjs --functional-only

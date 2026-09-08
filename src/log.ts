@@ -145,11 +145,19 @@ export async function getLogSessions() {
   return { storage: sessionLog.storageState, error: sessionLog.storageError ?? historyError,
     sessions: documents.map(d => ({ sessionId: d.sessionId, startedAt: d.startedAt, updatedAt: d.updatedAt, events: d.events.length, droppedEvents: d.droppedEvents, current: d.sessionId === current.sessionId })) };
 }
-export async function exportLog(sessionId = sessionLog.snapshot().sessionId) {
+export const LOG_DESCRIPTION_LIMIT = 5000;
+/** Explicit report text is separate from diagnostic events and local archives. */
+export function withLogDescription<T extends LogDocument>(document: T, description: string) {
+  if (typeof description !== 'string' || description.length > LOG_DESCRIPTION_LIMIT) throw new Error(`问题描述最多 ${LOG_DESCRIPTION_LIMIT} 字。`);
+  const { report: _report, ...base } = document as T & { report?: { description: string } };
+  const text = description.trim();
+  return { ...base, ...(text ? { report: { description: text } } : {}) };
+}
+export async function exportLog(sessionId = sessionLog.snapshot().sessionId, description = '') {
   const current = sessionLog.snapshot();
   const document = sessionId === current.sessionId ? current : (await sessionLog.archives()).find(d => d.sessionId === sessionId);
   if (!document) throw new Error('该日志会话不存在或已超过保留期限。');
-  return { ...document, exportedAt: new Date().toISOString(), storage: sessionLog.storageState, storageError: sessionLog.storageError };
+  return withLogDescription({ ...document, exportedAt: new Date().toISOString(), storage: sessionLog.storageState, storageError: sessionLog.storageError }, description);
 }
 export async function readLogs(query: LogQuery = {}) {
   validateLogQuery(query);

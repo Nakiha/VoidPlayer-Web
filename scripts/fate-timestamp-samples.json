@@ -1,0 +1,44 @@
+[
+  {
+    "path": "mpegts/h264small.ts",
+    "file": "mpegts--h264small.ts",
+    "url": "https://fate-suite.ffmpeg.org/mpegts/h264small.ts",
+    "size": 16544,
+    "sha256": "5e999d972e3d53e5780851933dd0a8428697e14a4d6ba83034960b82e39a920c"
+  },
+  {
+    "path": "mpegts/pmtchange.ts",
+    "file": "mpegts--pmtchange.ts",
+    "url": "https://fate-suite.ffmpeg.org/mpegts/pmtchange.ts",
+    "size": 376000,
+    "sha256": "5185db2052de1174629acdf13382eb42449ebfa7ef2b09a822d9867ed8c80860"
+  },
+  {
+    "path": "mpegts/loewe.ts",
+    "file": "mpegts--loewe.ts",
+    "url": "https://fate-suite.ffmpeg.org/mpegts/loewe.ts",
+    "size": 100000,
+    "sha256": "f93d2b5d78e4f04027c635e8e1dd866dcf35c233a0fa508f3bcc6a656fba286e"
+  },
+  {
+    "path": "mpeg2/mpeg2_field_encoding.ts",
+    "file": "mpeg2--mpeg2_field_encoding.ts",
+    "url": "https://fate-suite.ffmpeg.org/mpeg2/mpeg2_field_encoding.ts",
+    "size": 800000,
+    "sha256": "9688333a145b9e2c2139b9cab6cd4966acd19788fd620b4b31db5c2891547cb8"
+  },
+  {
+    "path": "mpeg2/xdcam8mp2-1s_small.ts",
+    "file": "mpeg2--xdcam8mp2-1s_small.ts",
+    "url": "https://fate-suite.ffmpeg.org/mpeg2/xdcam8mp2-1s_small.ts",
+    "size": 507788,
+    "sha256": "c3429a5975b1e1b47602bb15cb90e72c2b8831e6349acd85f30ec834363bcb20"
+  },
+  {
+    "path": "h264/h264_intra_first-small.ts",
+    "file": "h264--h264_intra_first-small.ts",
+    "url": "https://fate-suite.ffmpeg.org/h264/h264_intra_first-small.ts",
+    "size": 1536000,
+    "sha256": "ed4793ca42c2092aea6f3a2c49942dfe0a1eebab15818bf769b1f14d765ae70a"
+  }
+]

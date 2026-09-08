@@ -78,7 +78,7 @@ SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用�
 - `--check`、`--healthcheck`、`--version`、`--help`：检查配置、就绪状态、版本和帮助。
 - `--no-logs`：禁用用户主动上传诊断日志。
 
-默认前台运行，Ctrl+C 停止。需要关闭终端后继续运行，可看 [后台运行与更新](operations.md)。管理页的远端管理用户名在 `adminUsers` 中配置，见 [服务管理](admin.md)。
+默认前台运行，Ctrl+C 停止。需要关闭终端后继续运行，可看 [后台运行与更新](operations.md)。所有内网用户都可打开管理页，见 [服务管理](admin.md)。
 
 ## 搬家、升级和旧版迁移
 

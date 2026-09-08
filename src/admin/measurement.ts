@@ -1,37 +1,48 @@
+import { installChoiceMenu } from '../ui/choice-menu.ts';
 import { icon } from '../ui/icons.ts';
 import type { MeasurementResult, MeasurementKind } from '../../server/measurement.ts';
 import type { LibraryEntry, LibraryPage } from '../library.ts';
-const kinds: Record<MeasurementKind, string> = { download: '下载吞吐', upload: '上传吞吐', storage: '存储读取', concurrent: '四路媒体读取' };
+const kinds: Record<MeasurementKind, string> = { download: '下载速度', upload: '上传速度', storage: '服务器读取速度', concurrent: '多路视频读取' };
 const descriptions: Record<MeasurementKind, string> = {
-  download: '服务器 → 当前浏览器。单路传输内存数据，排除媒体存储读取；使用当前的网关、TLS 与网络连接。',
+  download: '服务器 → 浏览器，传输内存数据，不读取媒体文件。',
   upload: '当前浏览器 → 服务器。单路上传随机数据，收到后即丢弃，不保存到磁盘。',
-  storage: '服务器直接重复读取所选媒体，每块最多 1 MiB，包含打开文件与版本校验。结果包含操作系统缓存，不能等同于磁盘物理带宽。',
-  concurrent: '当前浏览器同时发起四路媒体读取，每块最多 1 MiB，合计统计吞吐。覆盖文件读取、HTTP 与网络，包含缓存与浏览器连接调度的影响。',
+  storage: '服务器重复读取所选媒体。包含系统缓存，不代表磁盘物理带宽。',
+  concurrent: '浏览器同时读取四路媒体，统计合计吞吐。包含文件读取、网络、缓存和浏览器调度。',
 };
 const active = (r: MeasurementResult | null) => !!r && ['preparing', 'running', 'stopping'].includes(r.state);
 const MiB = 1024 ** 2;
 export function measurementShell() {
-  return `<section id="pane-measurements" hidden><header class="admin-heading"><div><h1>测速</h1><p>测量当前部署与这台浏览器之间的实际能力。</p></div></header>
-    <div class="admin-measure-options"><label>测试类型<select id="measure-kind">${Object.entries(kinds).map(([key, label]) => `<option value="${key}">${label}</option>`).join('')}</select></label><label>最长时长<select id="measure-seconds"><option value="5">5 秒</option><option value="10" selected>10 秒</option><option value="15">15 秒</option></select></label><label>数据量上限<select id="measure-limit"><option value="64">64 MiB</option><option value="256" selected>256 MiB</option><option value="1024">1 GiB</option></select></label></div>
+  return `<section id="pane-measurements" hidden><header class="admin-heading"><div><h1>测速</h1><p>选择测试类型和上限，再点击“开始测试”。</p></div></header>
+    <div class="admin-panel"><div class="admin-section-heading"><h2>测试设置</h2></div><div class="admin-measure-options">${[['kind', '测试类型'], ['seconds', '最长时长'], ['limit', '数据量上限']].map(([id, label]) => `<label>${label}<button type="button" class="admin-choice" id="measure-${id}" aria-label="${label}"></button></label>`).join('')}</div>
     <p id="measure-description" class="admin-caption"></p>
-    <div id="measure-media-picker" hidden><div class="admin-measure-search"><label>筛选媒体<input id="measure-search" type="search" placeholder="搜索媒体库" maxlength="200"></label><button id="measure-search-button">${icon('search')}搜索</button></div><label class="admin-measure-file">读取的媒体<select id="measure-media" aria-label="读取的媒体"></select></label><div class="admin-actions"><span id="measure-media-page" class="admin-caption"></span><button id="measure-media-prev">上一页</button><button id="measure-media-next">下一页</button></div></div>
-    <div class="admin-actions"><span id="measure-condition" class="admin-caption">达到时长或数据量上限即结束；一次只运行一个任务。</span><button id="measure-cancel" disabled>${icon('close')}取消测试</button><button id="measure-start">${icon('play')}开始测试</button></div>
-    <p class="admin-caption">仅在点击后运行，会占用相应的网络或存储资源。结果只保留在本次服务进程中。</p>
-    <h2>本次结果</h2><p id="measure-state" role="status" aria-live="polite">尚未运行测试</p>
-    <div class="admin-metrics admin-measure-metrics"><div><span>吞吐</span><strong id="measure-rate">—</strong></div><div><span>每秒读取 / 传输</span><strong id="measure-speed">—</strong></div><div><span>已完成数据</span><strong id="measure-bytes">—</strong></div><div><span>实际耗时</span><strong id="measure-elapsed">—</strong></div></div>
-    <dl class="admin-properties admin-measure-result"><div><dt>测试条件</dt><dd id="measure-result-condition">—</dd></div><div><dt>测量来源</dt><dd id="measure-origin">—</dd></div><div><dt>请求 / 读取块</dt><dd id="measure-count">—</dd></div><div><dt>媒体与版本</dt><dd id="measure-source">—</dd></div><div><dt>结束原因</dt><dd id="measure-reason">—</dd></div></dl>
+    <div id="measure-media-picker" hidden><div class="admin-measure-search"><label>筛选媒体<input id="measure-search" type="search" placeholder="搜索媒体库" maxlength="200"></label><button id="measure-search-button">${icon('search')}搜索</button></div><label class="admin-measure-file">读取的媒体<button type="button" class="admin-choice" id="measure-media" aria-label="读取的媒体"></button></label><div class="admin-actions"><span id="measure-media-page" class="admin-caption"></span><button id="measure-media-prev">上一页</button><button id="measure-media-next">下一页</button></div></div>
+    <div class="admin-panel-footer"><span id="measure-condition" class="admin-caption">达到任一上限即结束。</span><div class="admin-button-group"><button id="measure-cancel" hidden disabled>${icon('close')}取消测试</button><button id="measure-start" class="admin-primary">${icon('play')}开始测试</button></div></div>
+    <p class="admin-help">测试期间会占用网络或存储资源。</p></div>
+    <div class="admin-panel"><div class="admin-section-heading"><h2>测试结果</h2><span id="measure-state" class="admin-caption" role="status" aria-live="polite">尚未开始</span></div><p id="measure-empty" class="admin-caption">完成测试后显示速度、传输量和耗时。</p>
+    <div id="measure-result" hidden><div class="admin-metrics admin-measure-metrics"><div><span>网络速率</span><strong id="measure-rate">—</strong></div><div><span>传输速度</span><strong id="measure-speed">—</strong></div><div><span>已完成数据</span><strong id="measure-bytes">—</strong></div><div><span>实际耗时</span><strong id="measure-elapsed">—</strong></div></div>
+    <dl class="admin-properties admin-measure-result"><div><dt>测试条件</dt><dd id="measure-result-condition">—</dd></div><div><dt>测量来源</dt><dd id="measure-origin">—</dd></div><div><dt>请求 / 读取块</dt><dd id="measure-count">—</dd></div><div><dt>媒体与版本</dt><dd id="measure-source">—</dd></div><div><dt>结束原因</dt><dd id="measure-reason">—</dd></div></dl></div></div>
   </section>`;
 }
-export function installMeasurements(life: AbortSignal, notice: (message: string, error?: boolean) => void, identity: () => string | undefined) {
+export function installMeasurements(life: AbortSignal, notice: (message: string, error?: boolean) => void) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
   const text = (id: string, value: string) => { $(id).textContent = value; };
-  const select = (id: string) => $<HTMLSelectElement>(id);
+  const values: Record<string, string> = { 'measure-kind': 'download', 'measure-seconds': '10', 'measure-limit': '256', 'measure-media': '' };
+  const choices: Record<string, { value: string; label: string }[]> = {
+    'measure-kind': Object.entries(kinds).map(([value, label]) => ({ value, label })),
+    'measure-seconds': [5, 10, 15].map(value => ({ value: String(value), label: `${value} 秒` })),
+    'measure-limit': [{ value: '64', label: '64 MiB' }, { value: '256', label: '256 MiB' }, { value: '1024', label: '1 GiB' }],
+    'measure-media': [],
+  };
+  const menus = Object.fromEntries(Object.entries(choices).map(([id, options]) => {
+    const menu = installChoiceMenu(id, options, value => { values[id] = value; if (id === 'measure-kind') configure(); else controls(); });
+    $(`${id}-menu`).classList.add('admin-choice-menu'); return [id, menu];
+  }));
   let result: MeasurementResult | null = null, ownId: string | null = null, running = false, visible = false, pollBusy = false;
   let client: { bytes: number; requests: number; elapsedMs: number } | undefined, transfer: AbortController | null = null;
   let offset = 0, nextOffset: number | null = null, query = '', mediaSequence = 0;
   let media = new Map<string, LibraryEntry>();
   let mediaRevision: number | null = null, mediaPending = false, mediaAt = 0;
-  const kind = () => select('measure-kind').value as MeasurementKind;
+  const kind = () => values['measure-kind'] as MeasurementKind;
   async function api<T>(url: string, method = 'GET', body?: unknown): Promise<T> {
     const response = await fetch(url, { method, cache: 'no-store', headers: method === 'GET' ? {} : { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.any([life, AbortSignal.timeout(15000)]) });
     const value = await response.json(); if (!response.ok) throw Object.assign(new Error(value.error ?? `请求失败 (${response.status})`), { status: response.status }); return value;
@@ -40,12 +51,14 @@ export function installMeasurements(life: AbortSignal, notice: (message: string,
   function controls() {
     const busy = running || active(result);
     for (const id of ['measure-kind', 'measure-seconds', 'measure-limit', 'measure-search', 'measure-search-button', 'measure-media']) $(id).toggleAttribute('disabled', busy);
-    $('measure-start').toggleAttribute('disabled', busy || (['storage', 'concurrent'].includes(kind()) && !media.has(select('measure-media').value)));
-    $('measure-cancel').toggleAttribute('disabled', !active(result) || result?.state === 'stopping' || result?.owner !== identity());
+    for (const [id, menu] of Object.entries(menus)) menu.sync(values[id], choices[id].find(o => o.value === values[id])?.label ?? '选择媒体', !busy && visible);
+    $('measure-start').toggleAttribute('disabled', busy || (['storage', 'concurrent'].includes(kind()) && !media.has(values['measure-media'])));
+    $('measure-cancel').hidden = !active(result);
+    $('measure-cancel').toggleAttribute('disabled', !active(result) || result?.state === 'stopping');
     $('measure-media-prev').toggleAttribute('disabled', busy || offset === 0); $('measure-media-next').toggleAttribute('disabled', busy || nextOffset === null);
   }
   function render() {
-    controls(); if (!result) return;
+    controls(); $('measure-result').hidden = !result; $('measure-empty').hidden = !!result; if (!result) return;
     const labels = { preparing: '准备中', running: '进行中', stopping: '正在结束，等待当前读取释放', completed: '已完成', cancelled: '已取消', failed: '测试失败' };
     text('measure-state', `${kinds[result.kind]} · ${labels[result.state]}${result.error ? ` · ${result.error}` : ''}`);
     const sample = result.id === ownId && client ? client : result.client ?? result;
@@ -56,7 +69,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: string,
     text('measure-origin', result.kind === 'storage' ? '服务端文件读取（含系统缓存）' : (result.id === ownId && client) || result.client ? '发起浏览器计时（含请求往返）' : '服务端计数；浏览器结果尚未提交');
     text('measure-count', `${sample.requests} 次完成 · ${result.errors} 次错误 · ${result.activeRequests} 次处理中`);
     text('measure-source', result.media ? `${result.media.root} / ${result.media.name} · ${result.media.version}` : '随机内存数据，不写入磁盘');
-    const reasons = { duration: '达到时长上限', limit: '达到数据量上限', user: '发起者取消或连接中断', client: '浏览器完成测量', error: '发生错误', shutdown: '服务关闭' };
+    const reasons = { duration: '达到时长上限', limit: '达到数据量上限', user: '用户取消或连接中断', client: '浏览器完成测量', error: '发生错误', shutdown: '服务关闭' };
     text('measure-reason', result.reason ? reasons[result.reason] : '—');
   }
   async function poll() {
@@ -73,12 +86,12 @@ export function installMeasurements(life: AbortSignal, notice: (message: string,
     catch (error) { if ((error as { status?: number }).status === 409 && sequence === mediaSequence) { offset = 0; mediaRevision = null; return loadMedia(); } throw error; }
     if (sequence !== mediaSequence) return;
     mediaRevision = page.revision; mediaPending = page.scanning || page.entries.some(e => e.state === 'pending');
-    const previous = select('measure-media').value;
+    const previous = values['measure-media'];
     media = new Map(page.entries.filter(e => e.state === 'ready' && e.size > 0 && e.version).map(e => [e.id, e])); nextOffset = page.nextOffset;
-    const options = [...media.values()].map(e => { const option = document.createElement('option'); option.value = e.id; option.textContent = `${e.root} / ${e.name} · ${(e.size / MiB).toFixed(1)} MiB`; return option; });
-    if (!options.length) { const option = document.createElement('option'); option.value = ''; option.textContent = mediaPending ? '等待媒体写入稳定或扫描完成…' : '本页没有可读媒体'; options.push(option); }
-    select('measure-media').replaceChildren(...options);
-    if (media.has(previous)) select('measure-media').value = previous;
+    choices['measure-media'] = [...media.values()].map(e => ({ value: e.id, label: `${e.root} / ${e.name} · ${(e.size / MiB).toFixed(1)} MiB` }));
+    if (!media.size) choices['measure-media'].push({ value: '', label: mediaPending ? '等待媒体写入稳定或扫描完成…' : '本页没有可读媒体' });
+    values['measure-media'] = media.has(previous) ? previous : choices['measure-media'][0].value;
+    menus['measure-media'].setOptions(choices['measure-media']);
     text('measure-media-page', `共 ${page.total} 项 · 第 ${Math.floor(offset / 60) + 1} 页，仅显示可读的非空文件`); controls();
   }
   function configure() {
@@ -125,21 +138,20 @@ export function installMeasurements(life: AbortSignal, notice: (message: string,
   $('measure-start').onclick = () => void safe(async () => {
     if (running || active(result)) return; running = true; client = undefined; notice(''); controls();
     try {
-      const selected = media.get(select('measure-media').value);
-      result = (await api<{ job: MeasurementResult }>('/api/admin/measurements', 'POST', { kind: kind(), seconds: Number(select('measure-seconds').value), limitMiB: Number(select('measure-limit').value), ...(['storage', 'concurrent'].includes(kind()) ? { mediaId: selected?.id, version: selected?.version } : {}) })).job;
+      const selected = media.get(values['measure-media']);
+      result = (await api<{ job: MeasurementResult }>('/api/admin/measurements', 'POST', { kind: kind(), seconds: Number(values['measure-seconds']), limitMiB: Number(values['measure-limit']), ...(['storage', 'concurrent'].includes(kind()) ? { mediaId: selected?.id, version: selected?.version } : {}) })).job;
       ownId = result.id; render();
       while (result.state === 'preparing' && !life.aborted) { await new Promise(r => setTimeout(r, 100)); await poll(); }
       if (result.state === 'running' && result.kind !== 'storage') await runTransfers(result);
     } finally { running = false; render(); }
   });
-  $('measure-cancel').onclick = () => void safe(async () => { if (!result || result.owner !== identity()) return; result = (await api<{ job: MeasurementResult }>(`/api/admin/measurements/${result.id}`, 'DELETE')).job; transfer?.abort(); render(); });
-  $('measure-kind').onchange = configure;
+  $('measure-cancel').onclick = () => void safe(async () => { if (!result) return; result = (await api<{ job: MeasurementResult }>(`/api/admin/measurements/${result.id}`, 'DELETE')).job; transfer?.abort(); render(); });
   const search = () => { query = $<HTMLInputElement>('measure-search').value.trim(); offset = 0; void safe(loadMedia); };
   $('measure-search-button').onclick = search; $('measure-search').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); search(); } };
   $('measure-media-prev').onclick = () => { offset = Math.max(0, offset - 60); void safe(loadMedia); };
   $('measure-media-next').onclick = () => { if (nextOffset !== null) { offset = nextOffset; void safe(loadMedia); } };
   const timer = setInterval(() => void poll(), 750);
-  life.addEventListener('abort', () => { clearInterval(timer); transfer?.abort(); if (active(result) && result?.id === ownId) void fetch(`/api/admin/measurements/${ownId}`, { method: 'DELETE', headers: { 'x-voidplayer-action': 'admin' }, keepalive: true }).catch(() => {}); }, { once: true });
+  life.addEventListener('abort', () => { clearInterval(timer); Object.values(menus).forEach(menu => menu.dispose()); transfer?.abort(); if (active(result) && result?.id === ownId) void fetch(`/api/admin/measurements/${ownId}`, { method: 'DELETE', headers: { 'x-voidplayer-action': 'admin' }, keepalive: true }).catch(() => {}); }, { once: true });
   configure();
-  return { activate(value: boolean) { visible = value; if (value) void poll(); } };
+  return { activate(value: boolean) { visible = value; controls(); if (value) void poll(); } };
 }

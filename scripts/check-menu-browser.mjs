@@ -86,7 +86,7 @@ try {
   assert.equal(tiles.length,12); assert.equal(tiles[0].right,tiles[1].left); assert.equal(tiles[0].top,tiles[11].top);
   const spectrumTiles = await page.getByRole('group',{name:'色盘',exact:true}).locator('.color-swatch').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().toJSON()));
   assert.equal(spectrumTiles.length,120); assert.equal(spectrumTiles[0].right,spectrumTiles[1].left); assert.equal(spectrumTiles[0].bottom,spectrumTiles[12].top);
-  assert.equal(await page.locator('input[type=color]').count(),0,'no native system picker');
+  assert.equal(await page.locator('.annotation-toolbar input[type=color]').count(),0,'annotation controls use the shared palette');
   const square=await page.locator('#drawing-color-choice .color-swatch').boundingBox(); assert.equal(square.width,18); assert.equal(square.height,18);
   const cyan=page.getByRole('menuitemradio',{name:'青色 #5ac8fa',exact:true});
   const beforeHover=(await state()).marks[0].drawings[0].color;
@@ -117,9 +117,9 @@ try {
   if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:'/tmp/voidplayer-color-menu.png'});
   // Switching between invokers leaves exactly one menu and no tooltip.
   await page.locator('#drawing-font-choice').click();
-  assert.equal(await page.locator('.popup-menu:popover-open').count(),1);
+  assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),1);
   assert.equal(await page.locator('#drawing-font-choice-menu').evaluate(e=>e.matches(':popover-open')),true);
-  await page.mouse.click(20,20); assert.equal(await page.locator('.popup-menu:popover-open').count(),0,'outside click dismisses');
+  await page.mouse.click(20,20); assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),0,'outside click dismisses');
   await page.locator('#mark-close').click(); await page.locator('.brand').click(); await page.keyboard.press('n');
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','a fresh editing session defaults to red');
   assert.equal((await state()).marks[0].drawings[0].color,'#007aff','existing colors are preserved');
