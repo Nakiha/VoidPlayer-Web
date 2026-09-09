@@ -62,7 +62,13 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
   let published = resume?.index;
   const checkpoint = (nextOffset: number, complete: boolean) => {
     // Sort only newly discovered packets, then merge with the existing order.
-    const index = extendFlvIndex(published, codec, description, packets, configurations);
+    let index: FlvIndex;
+    try { index = extendFlvIndex(published, codec, description, packets, configurations); }
+    catch (error) {
+      if (error instanceof MediaOpenError) throw new MediaOpenError(error.stage,
+        `${error.message} scan=${JSON.stringify({ nextOffset, complete, size: reader.size, previousPackets: published?.packets.length ?? 0, packets: packets.length })}`);
+      throw error;
+    }
     published = index;
     return { index, nextOffset, complete };
   };
@@ -178,7 +184,24 @@ export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Arr
 function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPacket[], configurations: Uint8Array[] | undefined, order: number[]): FlvIndex {
   const firstPts = packets[order[0]].pts;
   const durations = order.map((p, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[p].pts : 0);
-  if (durations.slice(0, -1).some(d => d <= 0)) bad('视频包包含重复显示时间戳。');
+  const invalid = durations.findIndex((d, i) => i + 1 < durations.length && d <= 0);
+  if (invalid !== -1) {
+    const left = order[invalid], right = order[invalid + 1];
+    // A broken merge and two distinct packets with equal PTS need different
+    // investigations. Preserve bounded evidence across worker RPC serialization.
+    const reason = left === right ? '显示索引重复引用同一视频包。'
+      : durations[invalid] < 0 ? '显示索引顺序回退。' : '视频包包含重复显示时间戳。';
+    const context = {
+      codec, packets: packets.length, orderLength: order.length, displayPosition: invalid, deltaUs: durations[invalid],
+      pair: [left, right].map(packetIndex => {
+        const p = packets[packetIndex];
+        // Compact tuples keep both packets plus scan context below the logger's
+        // 800-character string limit: [index, offset, size, PTS, DTS, key, config].
+        return [packetIndex, p.offset, p.size, p.pts, p.dts, +p.key, p.configuration ?? 0];
+      }),
+    };
+    bad(`${reason} indexContext=${JSON.stringify(context)}`);
+  }
   durations[durations.length - 1] = durations.length > 1 ? durations[durations.length - 2] : 40000;
   return { ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
 }

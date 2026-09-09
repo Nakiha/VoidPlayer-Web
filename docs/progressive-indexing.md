@@ -58,6 +58,49 @@ include scan progress, index waiting and synchronization state.
 
 ## Regression evidence
 
+### Investigating timestamp/index failures
+
+Do not infer changing files, storage faults, or encoder pipelines from an index
+error alone. Raw decode-order PTS may move backwards with reordered pictures;
+the failing invariant concerns the **sorted presentation index**. The diagnostic
+distinguishes equal PTS in distinct packets, the same packet referenced twice,
+and a decreasing presentation index. None of these automatically authorizes
+dropping packets or rewriting timestamps.
+
+The error includes bounded `indexContext` JSON. `pair` contains the two offending
+entries, each `[zeroBasedPacketIndex, payloadOffset, payloadSize, ptsUs, dtsUs,
+keyFlag, configuration]`. `displayPosition` locates the first entry in the sorted
+index; `deltaUs` is the second PTS minus the first. Scanner errors also include
+`scan` with the preceding published packet count, current count, next byte offset,
+file size and completion flag. Compact tuples preserve both packets within the
+logger's 800-character string limit. The existing worker error and track-fault
+logs carry this context; no media bytes are uploaded automatically.
+
+On the machine holding a problem file, use Node 24+ and the same git revision as
+the browser build:
+
+```sh
+node scripts/diagnose-flv-index.ts /path/to/problem.flv > flv-index-report.json
+```
+
+This uses the application's TypeScript parser, startup/resume and timer-driven
+publications, compares the result with a fresh full sort, then exercises forced
+merge batches of 127, 1024 and 21567 packets. It reads through a bounded local
+RangeReader rather than loading a multi-GB video into memory. It does not exercise
+browser HTTP, cache reuse or decoding, so a passing report alone cannot exclude
+those paths.
+
+For an unresolved browser-only failure, retain the exported log with build SHA,
+`indexContext`, `scan`, index source and progress. For **each pair entry**, collect
+the small byte window `[max(0, payloadOffset-24), payloadOffset+16)` from disk and
+the same HTTP resource/version; include HTTP status, Content-Range and ETag (or
+Last-Modified). This window includes the FLV tag/video headers for both legacy
+and enhanced FLV. Compare raw DTS and signed composition time with the recorded
+PTS/DTS. Collect response headers and bytes before reloading if possible; a later
+successful download does not establish what a previous browser read contained.
+Do not disclose private URLs/cookies or video payloads when forwarding reports;
+the tuple values, decoded header values and byte-window hashes usually suffice.
+
 Tests block the next FLV range and observe an immutable partial index before
 releasing it. A real FFmpeg packet decoder plays over one second from an indexed
 prefix while a sparse tail is still blocked. Separate tests cover no-reset
