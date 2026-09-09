@@ -3,7 +3,7 @@
 import { openAsBlob } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import assert from 'node:assert/strict';
-import { FlvReader, scanFlv, buildFlvIndex, extendFlvIndex } from '../src/flv-demux.ts';
+import { FlvReader, scanFlv, buildFlvIndex, extendFlvIndex, flvIndexWarning } from '../src/flv-demux.ts';
 import type { FlvCheckpoint } from '../src/flv-demux.ts';
 
 const path = process.argv[2];
@@ -29,7 +29,7 @@ try {
     assert.deepEqual(index.order, full.order);
     assert.deepEqual(index.durations, full.durations);
   }
-  Object.assign(report, { ok: true, packets: full.packets.length, codec: full.codec, durationUs: full.duration, publications, mergeBatches: [127, 1024, 21567] });
+  Object.assign(report, { ok: true, packets: full.packets.length, codec: full.codec, duplicatePts: full.order.length - (full.displayOrder ?? full.order).length, warning: flvIndexWarning(full), durationUs: full.duration, publications, mergeBatches: [127, 1024, 21567] });
 } catch (error) {
   Object.assign(report, { ok: false, error: String(error), lastPublished: last && { packets: last.index.packets.length, nextOffset: last.nextOffset }, publications });
   process.exitCode = 1;

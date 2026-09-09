@@ -12,7 +12,8 @@ export interface FlvIndex {
   codec: FlvCodec;
   description: Uint8Array;
   packets: FlvPacket[]; // decode order; payloads stay in the source
-  order: number[]; // presentation order
+  order: number[]; // All packets in stable presentation order, including equal PTS.
+  displayOrder?: number[]; // First packet per unique PTS when timestamps collide.
   firstPts: number; // Earliest indexed presentation PTS, not the media timeline origin.
   duration: number;
   durations: number[];
@@ -184,13 +185,12 @@ export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Arr
 function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPacket[], configurations: Uint8Array[] | undefined, order: number[]): FlvIndex {
   const firstPts = packets[order[0]].pts;
   const durations = order.map((p, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[p].pts : 0);
-  const invalid = durations.findIndex((d, i) => i + 1 < durations.length && d <= 0);
+  const invalid = durations.findIndex((d, i) => i + 1 < durations.length && (d < 0 || order[i] === order[i + 1]));
   if (invalid !== -1) {
     const left = order[invalid], right = order[invalid + 1];
-    // A broken merge and two distinct packets with equal PTS need different
-    // investigations. Preserve bounded evidence across worker RPC serialization.
-    const reason = left === right ? '显示索引重复引用同一视频包。'
-      : durations[invalid] < 0 ? '显示索引顺序回退。' : '视频包包含重复显示时间戳。';
+    // Equal timestamps are supported; broken ordering or duplicate references
+    // still indicate an invalid index. Preserve evidence across worker RPC.
+    const reason = left === right ? '显示索引重复引用同一视频包。' : '显示索引顺序回退。';
     const context = {
       codec, packets: packets.length, orderLength: order.length, displayPosition: invalid, deltaUs: durations[invalid],
       pair: [left, right].map(packetIndex => {
@@ -202,8 +202,15 @@ function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPa
     };
     bad(`${reason} indexContext=${JSON.stringify(context)}`);
   }
-  durations[durations.length - 1] = durations.length > 1 ? durations[durations.length - 2] : 40000;
-  return { ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
+  // Each equal-PTS group owns one display interval. Keep all compressed
+  // packets for dependencies; neither payloads nor source timestamps change.
+  let interval = durations.findLast(d => d > 0) ?? 40000;
+  for (let i = durations.length - 1; i >= 0; i--) {
+    if (durations[i] > 0) interval = durations[i];
+    else durations[i] = interval;
+  }
+  const displayOrder = order.filter((p, i) => i === 0 || packets[p].pts !== packets[order[i - 1]].pts);
+  return { ...(displayOrder.length < order.length ? { displayOrder } : {}), ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
 }
 
 /** A growing FLV index must not move the session clock. The first decode-order
@@ -213,8 +220,13 @@ function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPa
  */
 export function flvMediaTiming(index: FlvIndex) {
   const firstPtsUs = index.packets[0].pts;
+  const times: number[] = [], durations: number[] = [];
+  for (let i = 0; i < index.order.length; i++) {
+    const pts = index.packets[index.order[i]].pts - firstPtsUs;
+    if (i === 0 || pts !== times.at(-1)) { times.push(pts); durations.push(index.durations[i]); }
+  }
   return { firstPtsUs, durationUs: index.firstPts + index.duration - firstPtsUs,
-    times: index.order.map(i => index.packets[i].pts - firstPtsUs), durations: index.durations };
+    times, durations };
 }
 
 export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>): VideoDecoderConfig | null {
@@ -240,5 +252,12 @@ export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>)
 }
 
 export function flvIndexWarning(index: FlvIndex): string | undefined {
-  return index.truncatedAt === undefined ? undefined : '文件尾部不完整，已忽略残缺标签，仅播放完整视频包。';
+  const warnings: string[] = [];
+  if (index.truncatedAt !== undefined) warnings.push('文件尾部不完整，已忽略残缺标签，仅播放完整视频包。');
+  if (index.displayOrder) {
+    const i = index.order.findIndex((p, i) => i > 0 && index.packets[p].pts === index.packets[index.order[i - 1]].pts);
+    const a = index.packets[index.order[i - 1]], b = index.packets[index.order[i]];
+    warnings.push(`视频包有 ${index.order.length - index.displayOrder.length} 个重复 PTS；保留全部解码包，同一时刻只展示首个输出画面。首处 PTS=${a.pts}，包偏移=${a.offset}/${b.offset}。`);
+  }
+  return warnings.join(' ') || undefined;
 }

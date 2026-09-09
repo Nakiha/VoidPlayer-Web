@@ -36,7 +36,11 @@ export class PacketTimeline {
     const {packets,order}=this.index;
     let lo=0,hi=order.length;
     while(lo<hi){const m=(lo+hi)>>1;if(packets[order[m]].pts<=target)lo=m+1;else hi=m;}
-    this.cursor=order[Math.max(0,lo-1)];
+    let position=Math.max(0,lo-1);
+    // Seek must choose the same first output as sequential playback, even
+    // when a later key packet shares PTS with an earlier dependent picture.
+    while(position>0&&packets[order[position-1]].pts===packets[order[position]].pts)position--;
+    this.cursor=order[position];
     const config=packets[this.cursor].configuration??0;
     while(this.cursor>0&&(packets[this.cursor-1].configuration??0)===config&&(!packets[this.cursor].key||packets[this.cursor].pts>target))this.cursor--;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
@@ -46,7 +50,8 @@ export class PacketTimeline {
     for(;;){
       const frame=this.decoder.receive(Number.MIN_SAFE_INTEGER,recycle);
       if(frame){
-        if(!Number.isSafeInteger(frame.pts)||frame.pts<=this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} <= ${this.lastPts}`);}
+        if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
+        if(frame.pts===this.lastPts){frame.frame?.close();continue;}
         this.lastPts=frame.pts;return frame;
       }
       const packet=this.index.packets[this.cursor];

@@ -124,7 +124,7 @@ export class FlvEngine {
     if (this.decodeFailure) throw this.decodeFailure;
     try { return await this.extractFrame(position, recycle); }
     catch (error) {
-      const packet = this.index?.packets[this.index.order[position]];
+      const packet = this.index?.packets[(this.index.displayOrder ?? this.index.order)[position]];
       const failure = packetDecodeError(error, `FLV ${this.index?.codec ?? ''} ${this.decoder?.kind ?? ''} 第 ${position + 1} 帧（包位置 ${packet?.offset ?? '未知'}）`);
       if (failure.stage === 'decode' || failure.stage === 'resource') this.decodeFailure = failure;
       throw failure;
@@ -136,8 +136,8 @@ export class FlvEngine {
   }
   next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
   private async extractFrame(position:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
-    if(!Number.isInteger(position)||position<0||position>=this.index.order.length)throw new MediaOpenError('input','FLV 帧位置越界。');
-    return this.at(this.index.packets[this.index.order[position]].pts,recycle);
+    if(!Number.isInteger(position)||position<0||position>=(this.index.displayOrder ?? this.index.order).length)throw new MediaOpenError('input','FLV 帧位置越界。');
+    return this.at(this.index.packets[(this.index.displayOrder ?? this.index.order)[position]].pts,recycle);
   }
   close() { this.indexingFailure = new Error('媒体已释放。'); this.growing = false; this.wake(); this.scanReader?.close(); this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
 }

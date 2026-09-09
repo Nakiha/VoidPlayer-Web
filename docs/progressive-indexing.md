@@ -62,9 +62,10 @@ include scan progress, index waiting and synchronization state.
 
 Do not infer changing files, storage faults, or encoder pipelines from an index
 error alone. Raw decode-order PTS may move backwards with reordered pictures;
-the failing invariant concerns the **sorted presentation index**. The diagnostic
-distinguishes equal PTS in distinct packets, the same packet referenced twice,
-and a decreasing presentation index. None of these automatically authorizes
+the failing invariant concerns the **sorted presentation index**. Equal PTS in
+distinct packets now produce an index warning and a single display instant (see
+`flv-timeline.md`). The same packet referenced twice and a decreasing presentation
+index remain errors with bounded diagnostics. None of these automatically authorizes
 dropping packets or rewriting timestamps.
 
 The error includes bounded `indexContext` JSON. `pair` contains the two offending

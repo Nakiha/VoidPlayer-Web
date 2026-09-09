@@ -4,6 +4,30 @@ import {PacketTimeline} from '../src/packet-timeline.ts';
 import type {PacketDecoder,FlvFrame} from '../src/flv-decoder.ts';
 import type {FlvIndex} from '../src/flv-demux.ts';
 import {rgbaDescription} from '../src/frame-description.ts';
+import { buildFlvIndex } from '../src/flv-demux.ts';
+
+test('equal-PTS outputs are released; seek across a duplicate key packet matches continuous playback', async () => {
+  const packets = [0, 40, 40, 80].map((pts, offset) => ({ pts, dts: offset * 20, offset, size: 1, key: offset === 0 || offset === 2 }));
+  const index = buildFlvIndex('hevc', new Uint8Array([0]), packets);
+  const ready: FlvFrame[] = [], sent: number[] = [], closed: number[] = [];
+  const decoder: PacketDecoder = { kind: 'webcodecs', reset() { ready.splice(0).forEach(f => f.frame!.close()); }, close() { this.reset(); },
+    async drain() {}, receive() { return ready.shift() ?? null; },
+    async send(_bytes, p) { sent.push(p.offset); ready.push({ pts: p.pts, width: 2, height: 2, pixels: new Uint8Array([p.offset]).buffer,
+      description: rgbaDescription(2, 2), frame: { close() { closed.push(p.offset); } } as VideoFrame }); } };
+  const timeline = new PacketTimeline(index, decoder, async () => new Uint8Array(1));
+  try {
+    (await timeline.at(0)).frame!.close();
+    const first = (await timeline.next(0))!;
+    assert.equal(new Uint8Array(first.pixels!)[0], 1); first.frame!.close();
+    const next = (await timeline.next(40))!; assert.equal(next.pts, 80); next.frame!.close();
+    assert.ok(closed.includes(2)); assert.deepEqual(sent, [0, 1, 2, 3]);
+    assert.equal(await timeline.next(80), null);
+    for (const target of [40, 60, 40]) {
+      const frame = await timeline.at(target);
+      assert.equal(new Uint8Array(frame.pixels!)[0], 1); frame.frame!.close();
+    }
+  } finally { timeline.close(); }
+});
 function fixture(){
   const closed:number[]=[],configurations:number[]=[];
   const f=(pts:number):FlvFrame=>({pts,width:4,height:4,description:rgbaDescription(4,4),frame:{close(){closed.push(pts);}} as VideoFrame});

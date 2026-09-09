@@ -23,6 +23,40 @@ must reject before attempting to continue beyond its startup index. Completion
 logs include the stable origin, earliest relative packet PTS, packet count, old
 and new durations, and cache source.
 
+## Equal presentation timestamps
+
+Compressed packets and display instants are different identities. Distinct FLV
+packets may carry equal PTS, including a dependent picture followed by a key
+picture with different DTS/composition offsets. This is recorded as an index
+warning rather than failing the entire track. It does not identify who produced
+the timestamp collision or prove the pictures contain identical pixels.
+
+- `packets` and stable `order` retain every packet with its original PTS/DTS.
+  Equal PTS preserve decode-order ties across incremental merges and cache reads.
+- `displayOrder`, when present, selects the first packet of each equal-PTS group.
+  Public times are unique; each group spans to the next distinct timestamp.
+  The final group uses the last positive interval, or the existing 40ms fallback
+  when the file has only one distinct timestamp. No synthetic timestamps appear.
+- The shared packet timeline accepts nondecreasing decoder output PTS. The first
+  output at each instant is displayed; subsequent equal-PTS resources are closed.
+  Actual decreasing or invalid decoder timestamps still fail explicitly. This
+  policy adds no lookahead frame or extra startup decode for normal sources.
+  Some decoders recover distinct best-effort output times from DTS despite
+  packet PTS collisions. Those distinct actual outputs remain visible; packet
+  grouping must not override a decoder's recovered display timestamps.
+- Seek selects the first packet in the target equal-PTS group before locating
+  the decode anchor. A later key packet at the same PTS must not replace an
+  earlier picture just because the user seeks. The policy relies on the decoder
+  retaining its display order for equal timestamps; it does not invent picture
+  identities for outputs whose timestamps have genuinely moved backwards.
+- Cache payloads continue to contain all original packets; derived unique times
+  and warnings are rebuilt on read. No cache schema bump or source rewrite is
+  required. Warnings include duplicate count and the first conflicting offsets.
+
+This is a temporal display policy, not a lossless inspection UI for multiple
+pictures at one instant. Such an inspector would need picture IDs beyond PTS;
+ordinary playback and stepping advance through distinct display times.
+
 ## Regression evidence
 
 `scripts/open-gop-fixture.ts` generates x264 open GOP with a fixed GOP and B-frame
