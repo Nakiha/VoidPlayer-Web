@@ -1,16 +1,18 @@
 // Local opt-in probe. Uses production FLV decoding and presenter; never changes
 // color tags or uploads files/reports. Run from repository root with Node 24+.
 import { createServer } from 'vite';
-import { chromium } from 'playwright';
+import { chromium, webkit } from 'playwright';
 import { mkdir, writeFile, stat, readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { basename, resolve } from 'node:path';
 
 const args = process.argv.slice(2), files = [];
+let browserName='chromium';
 let channel, out = 'color-evidence', times = [0, 1000000], images = false, headless = false;
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
-  if (arg === '--channel') channel = args[++i];
+  if (arg === '--browser') browserName=args[++i];
+  else if (arg === '--channel') channel = args[++i];
   else if (arg === '--out') out = args[++i];
   else if (arg === '--times-us') times = args[++i].split(',').map(Number);
   else if (arg === '--images') images = true;
@@ -18,10 +20,11 @@ for (let i = 0; i < args.length; i++) {
   else if (arg.startsWith('--')) throw new Error(`Unknown option: ${arg}`);
   else files.push(resolve(arg));
 }
+if (!['chromium','webkit'].includes(browserName) || (browserName==='webkit' && channel))throw new Error('Invalid browser/channel');
 if (!files.length || files.length > 4 || !out || times.length < 1 || times.length > 8 || times.some(t => !Number.isSafeInteger(t) || t < 0))
   throw new Error('Usage: node scripts/diagnose-sdr-color.mjs [--channel msedge|chrome] [--out DIR] [--times-us 0,1000000] [--images] FILE.flv [FILE.flv]');
 await mkdir(out, { recursive: true });
-const report = { schema: 2, startedAt: new Date().toISOString(), requestedTimesUs: times, channel: channel ?? 'bundled-chromium', headless,
+const report = { schema: 3, startedAt: new Date().toISOString(), requestedTimesUs: times, browserName, channel: channel ?? (browserName==='webkit'?'playwright-webkit':'bundled-chromium'), headless,
   measurement: 'source-sized presenter capture in sRGB bytes; excludes OS/display composition; not a color-accuracy verdict', files: [] };
 try { report.commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { report.commit = 'unknown'; }
 report.core = JSON.parse(await readFile('scripts/release-core.json', 'utf8'));
@@ -29,7 +32,7 @@ const server = await createServer({ server: { port: 0, host: '127.0.0.1' } });
 let browser;
 try {
   await server.listen();
-  browser = await chromium.launch({ channel, headless });
+  browser = await (browserName==='webkit'?webkit:chromium).launch({ ...(channel?{channel}:{}), headless });
   report.browser = browser.version();
   const page = await browser.newPage({ viewport: { width: 1000, height: 750 } });
   page.setDefaultTimeout(180000);
@@ -54,6 +57,7 @@ try {
         const { openFlvMedia } = await import('/src/flv-media.ts');
         const { paintFrame, captureFrame, setPresentationGeometry } = await import('/src/presenter.ts');
         const { presentationColor } = await import('/src/presentation-color.ts');
+        const { yuvToRgba } = await import('/src/yuv-color.ts');
         const { summarizeRgba, compareRgba } = await import('/src/color-evidence.ts');
         const { buildInfo } = await import('/src/build-info.ts');
         const { readLogs } = await import('/src/log.ts');
@@ -70,7 +74,7 @@ try {
         try {
           for (const mode of ['native', 'wasm']) {
             try {
-              const source = await openFlvMedia({ file }, file, { forceWasm: mode === 'wasm', signal: controller.signal });
+              const source = await openFlvMedia({ file }, file, { forceWasm: mode === 'wasm', preserveNativeSample: true, signal: controller.signal });
               result[mode] = { info: { ...source.info }, requested: mode };
               if (mode === 'native' && source.info.decoder !== 'webcodecs') {
                 result[mode].unavailable = 'Native attempt fell back to WASM; cannot count as a native/hardware comparison'; source.dispose();
@@ -94,22 +98,23 @@ try {
                 const data = capture.getContext('2d').getImageData(0, 0, capture.width, capture.height).data;
                 const policy = presentationColor(frame.kind, frame.description);
                 pair[mode] = { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, width: frame.width, height: frame.height,
-                  description: frame.description, policy, summary: summarizeRgba(data),
+                  description: frame.description, copyMs: frame.copyMs, policy, summary: summarizeRgba(data),
                   renderer: stage.querySelector('.frame-presentation')?.getContext('webgl') ? 'webgl' : 'canvas2d' };
                 pixels[mode] = data;
                 if (images) await window.saveEvidenceImage(`file-${fileNumber}-time-${target}-${mode}.png`, capture.toDataURL('image/png'));
-                if (mode === 'wasm' && frame.pixels) {
+                if (mode === 'wasm' && frame.kind === 'rgba8' && frame.pixels) {
                   // No source-tag reinterpretation: this only checks whether
                   // uploading/capturing the already-RGBA bytes changes them.
                   pair.wasmInputToPresenter = compareRgba(frame.pixels, data);
                 }
+                if(frame.kind==='yuv') pair[mode].shaderToCpuReference=compareRgba(yuvToRgba(frame.description,frame.pixels),data);
                 if (mode === 'native') {
                   // Reuse this exact decoded sample, not another seek/decode.
                   // A canvas without a presentation surface selects the real
                   // presenter's existing sRGB 2D path without patching globals.
                   const fallback = document.createElement('canvas');
                   try {
-                    paintFrame(fallback, frame);
+                    paintFrame(fallback, frame.kind==='yuv'?{...frame,kind:'video-sample',pixels:undefined,description:{...frame.description,yuv:undefined}}:frame);
                     pixels.nativeCanvas = fallback.getContext('2d').getImageData(0, 0, fallback.width, fallback.height).data;
                     pair.nativeCanvas = { path: 'presenter-canvas2d-srgb', sameDecodedFrame: true, summary: summarizeRgba(pixels.nativeCanvas) };
                     if (pair.native.renderer === 'webgl') pair.nativeDirectToCanvas = compareRgba(data, pixels.nativeCanvas);
@@ -126,6 +131,8 @@ try {
             else if (a.sourcePtsUs !== b.sourcePtsUs || a.width !== b.width || a.height !== b.height) pair.notCompared = 'Actual source PTS or dimensions differ; do not compare different frames';
             else if (a.policy.hdr || a.policy.sourceHdr || b.policy.hdr || b.policy.sourceHdr) pair.notCompared = 'HDR metadata detected; outside this SDR probe';
             else {
+              const resolved=p=>p?{matrix:p.matrix,fullRange:p.fullRange,transfer:p.transfer,primaries:p.primaries}:null;
+              pair.sameResolvedPlan=JSON.stringify(resolved(a.policy.plan))===JSON.stringify(resolved(b.policy.plan));
               pair.nativeToWasm = compareRgba(pixels.native, pixels.wasm);
               if (pixels.nativeCanvas) pair.nativeCanvasToWasm = compareRgba(pixels.nativeCanvas, pixels.wasm);
             }

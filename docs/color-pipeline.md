@@ -1,98 +1,94 @@
 # 色彩链路与帧资源契约
 
-本文描述当前实现和明确的能力边界。修改解码、帧描述或上屏色彩策略时必须同步更新本文。
-目标是首帧、播放、seek、截图使用同一套转换规则，而不是按文件名、编码名或横竖屏添加修正。
+首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
+本轮统一可读 SDR YUV；不承诺跨设备逐像素一致或 HDR/EDR 输出。
 
-## 两类信息必须分开
+## 信息与责任
 
-| 信息 | 所有者 | 用途 |
+- `MediaInfo.color` / `FrameDescription.sourceColor` 是码流或容器原始标签，未知保持 null。
+- `FrameDescription.color` 描述实际交付资源，不能用容器标签覆盖已经转换的浏览器资源。
+- `resolveYuvColor` 产生单独的 resolved plan，逐字段记录 resource/fallback 来源，不改原标签。
+- `yuv` 描述位深、位对齐、子采样、平面 offset/stride/尺寸及 chroma location。偏移按字节计，16 位数据为 little endian。
+- `byteLength` 是拥有的平面缓冲大小；正常 WebCodecs 复制后立即关闭 VideoSample，队列仅计拥有的平面；显式诊断保留原资源时 `DecodedFrame.byteSize` 计入两者。每源最多额外保留一个 ≤64 MiB 回收缓冲。
+- coded size、visibleRect、SAR/display size、rotation 相互独立。颜色转换在裁剪后的源尺寸执行，旋转再定位源像素，视口缩小 LINEAR、放大 NEAREST。
+
+## 实际呈现路径
+
+| 资源 | 路径 | 诊断 |
 | --- | --- | --- |
-| 容器/码流的源色彩 | MediaInfo.color、FrameDescription.sourceColor | 片源信息、诊断；不能直接覆盖已解码资源的标签 |
-| 当前资源的色彩 | FrameDescription.color | 上屏策略输入；必须对应实际交付的资源 |
-| 资源布局 | format、codedWidth/Height、visibleRect、stride | 存储、裁剪、复制校验；与显示尺寸分离 |
-| 内存计费 | byteLength、byteLengthEstimated | 队列预算；不代表整个硬件解码器的显存占用 |
+| 可读 WebCodecs SDR YUV | `copyTo` 原布局 → 共同 YUV shader 在源像素坐标转换并量化 → 视口采样 | unified-yuv-sdr |
+| WASM SDR YUV | ABI v2 原精度平面 → 同一 shader → 同一视口输出 | unified-yuv-sdr |
+| YUV 无 WebGL / 超纹理大小 / context lost 后的新帧 | 同一数学的 CPU 参考 → ImageData → 原有呈现回退 | unified-yuv-sdr；执行位置由实际 surface 能力决定 |
+| 不透明或不可读 WebCodecs SDR、非支持色彩 | 浏览器纹理导入或 Canvas 2D | browser-default + colorFallback 原因；未实现确定性统一 |
+| 原生 PQ/HLG | VideoSample.draw → sRGB Canvas 2D → WebGL | canvas2d-srgb |
+| WASM 不支持的布局或色彩 | 明确 swscale RGBA 回退 | rgba8-upload + swscale-rgba |
+| WASM PQ/HLG | 保留原 RGBA 路径及警告 | rgba8-hdr-unmanaged |
 
-primaries 描述基色，transfer 描述传递函数，matrix 描述分量转换，fullRange 描述取值范围。
-BT.2020 本身不是 HDR；PQ/HLG 才触发当前原生 HDR 呈现策略。未知字段保持 null，不能自动补成 BT.709。
-源像素格式的 10 bit、HEVC 编码、屏幕支持 HDR，都不能单独证明当前资源需要或已经完成 tone mapping。
+截图按需调用同一 shader，在源尺寸 RGB 纹理上物化并读取，不读 Y plane，不在播放中维护隐藏 RGBA 画布。
+YUV shader 的 colorAt 对整数源像素转换并量化，再做视口采样。放大取最近源像素；缩小对邻近四个已经转换、量化的 RGB 做双线性插值。颜色数学不随视口大小变化；色度重建和视口滤波是两次独立决策。
+无 WebGL 的旋转使用相同 CPU 结果。context lost 后停止使用失效纹理，下一次呈现/seek 走源画布回退；暂停帧丢失需重新 seek，不承诺从失效 GPU 恢复像素。
 
-## 原生解码：保留浏览器资源
+## SDR 数学与默认值
 
-1. mediabunny 的 VideoSample 或 packet decoder 的 VideoFrame 进入共同的 frame-description 边界。
-2. videoFrameDescription 从实际 VideoFrame 提取色彩、裁剪、编码尺寸与格式；sampleDescription 只负责适配 VideoSample。
-3. Worker 传递 VideoFrame 及帧描述，主线程将其包装为 DecodedFrame。包装、clone、seek 不应重新解释色彩。
-4. presenter 调用 presentationColor，由当前帧描述选择呈现路径。
+SDR 使用显示参照的 sRGB-like 约定：YUV 矩阵得到的非线性 R'G'B' 直接作为 SDR 显示码值。
+**不做 BT.709 OETF 的逆变换再编码为 sRGB**，两者不是同一数学函数。这是明确的观看约定，非场景线性色度学转换。
+BT.601/709 SDR 保持此约定；BT.2020 SDR 在 sRGB-like 线性化后变换到 BT.709 基色，再编码。
+BT.601 基色当前沿用 native 的普通 SDR 约定，不单独进行 601→709 色域校准。
 
-VideoFrame.format=null 是不透明资源，不等于坏帧或不支持解码。
-这种帧不能依赖 allocationSize/copyTo 获取默认像素布局，但仍应保留浏览器绘制能力。
-对它不调用 allocationSize，以 codedWidth × codedHeight × 8 作为队列预算估算并标记 byteLengthEstimated。
-这是 RGBA16 尺度的计费估算，不是实际分配的承诺，也不分配这块内存。
-可读帧使用 allocationSize 返回的复制缓冲大小；NotSupportedError 同样降为估算，其他错误继续传播。
-无效尺寸和已关闭的资源仍须拒绝。不得为计算预算增加 Canvas 读回或切换软解。
+独立解析 matrix、range、transfer、primaries；不按 codec、片名或位深推断 HDR：
 
-## 当前呈现策略
+- 未知 matrix：width ≥ 1280 或 height > 576 使用 BT.709，否则 SMPTE 170M / BT.601。
+- 未知 range：limited；仅源格式为 YUVJ 且没有显式标签时 full。
+- 未知 transfer：显示参照 SDR。支持 bt709、smpte170m、iec61966-2-1、bt2020-10/12。
+- 未知 primaries：从 resolved matrix 得出 709、601 或 2020。仅支持这些普通 SDR 基色。
+- 矩阵支持 BT.601、BT.709、BT.2020 NCL；其他显式色彩保留托管/旧 RGBA 回退，不能静默套 709。
 
-| 交付资源 | 路径 | 色彩责任 |
-| --- | --- | --- |
-| 原生 SDR、无旋转 | VideoFrame → WebGL | 浏览器处理视频纹理导入，shader 不执行自定义 tone mapping |
-| 原生 PQ/HLG | VideoSample.draw → sRGB Canvas 2D → WebGL | 委托浏览器的颜色管理/HDR 压缩；所有帧走同一入口 |
-| 原生帧有旋转，或无 WebGL | Canvas 2D | 处理旋转及浏览器颜色转换 |
-| WASM RGBA8 | 像素 → WebGL，或 ImageData → Canvas 2D | 字节上传不会自动解释源 PQ/HLG 标签 |
+位深 n 的 scale = 2^(n−8)，max = 2^n−1：limited Y=(code−16×scale)/(219×scale)，
+Cb/Cr=(code−128×scale)/(224×scale)；full Y=code/max，Cb/Cr=(code−128×scale)/max。
+按矩阵 Kr/Kb 推导 R/G/B，不加 native 历史 `−1/255` 偏移，不添加蓝通道补偿。
+直到输出 RGB 前都保留 8/9/10/12/14/16 位整数精度。
 
-目前输出画布采用 SDR/sRGB 工作目标，不承诺 HDR 显示器上的原生峰值亮度输出。
-Canvas 2D 的 HDR 转换由浏览器和平台决定；路径一致不等于跨平台绝对色准一致。
-不得在 browser 已转换成 SDR 后再用容器 PQ 标签重建资源，否则可能重复转换。
-presenter 是唯一上屏决策点，presentation-surface 负责上传、几何和采样，不按 codec 决定颜色。
-截图从当前呈现路径按需物化，不另外增加一套色彩规则。
+色度采用 nearest-block：每个源像素从 floor(x/subsampling)、floor(y/subsampling) 读取色度。
+保留 chroma location 作诊断，但本轮不按位置标签改变重建核。浏览器导入可能采用其他滤波，故托管路径仍可能不同。
+CPU 测试固定黑白端点、独立饱和色向量；GPU 与 CPU 误差预算为每通道最多 1 个 8-bit 码值。
 
-## WASM：已有信息与尚未实现的能力
+## WASM ABI v2
 
-packet 与 FFmpeg 容器回退都通过 readWasmFrame 读取 core 的逐帧描述及 RGBA8 字节。
-sourceColor 保留 FFmpeg AVFrame 的源标签；当前适配器为 RGB 字节保留源 primaries/transfer，标记 RGB/full range。
-这些标签不是经过校准的转换证明：前端无法仅凭它确认 core 的 YUV 矩阵、range 选择和精度处理正确。
-当前链路没有显式的、经验证的 WASM HDR → SDR tone mapping 契约。
+core 只在 VoidPlayer-FFmpeg-Build 构建；`scripts/release-core.json` 锁定已推送提交。
+`vp_frame_info` 返回 160 字节描述，版本必须为 2，旧 core 明确报错。
+packet 和 FFmpeg 容器统一调用 `readWasmFrame`，同一 ArrayBuffer 跨 worker transfer 和回收。
 
-因此 RGBA8 携带 PQ/HLG（或源明确为 HDR）时，日志必须显示 rgba8-hdr-unmanaged 并警告不适合色彩评审，
-不能记录成 color=null、hdr=false 来暗示正常 SDR。当前仍显示已有输出；警告不代表修正了这些像素。
-把源标签抄给 ImageData、换用 sRGB Canvas，无法恢复已经量化/裁剪的数据，也不会自动补齐 HDR 转换。
+支持无 alpha 的 planar YUV（420/422/444，8–16 位）、NV12、P010 等描述符能够明确表示的布局。
+不通过 swscale 降为 RGBA 后伪称保留高精度；不支持的布局/色彩才走标明的 RGBA 回退。
+HDR 继续旧路径，不把 PQ/HLG 平面误当 SDR。
 
-未来若实现 WASM HDR，需在 core 仓库或明确的高精度渲染边界实现并验证：
-范围展开 → 正确矩阵 → 逆传递函数 → 线性亮度/色域变换 → 明确的 tone/gamut mapping → 目标编码。
-应在降为 RGBA8 之前保留足够精度，输出契约标明实际目标颜色及已执行转换。
-届时同步修改 readWasmFrame、presentationColor 和本表，避免源 HDR 导致二次转换。
+core 每行复制有效字节，去掉 padding，支持负 linesize。descriptor 与缓冲只在下次输出/reset/destroy 前有效。
+Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深及平面非重叠；字符串 ccall 可能增长 heap，描述必须先读完，再刷新像素 heap 视图。
 
-Dolby Vision/HDR10+ 的动态元数据目前没有端到端解析、传输和应用契约。
-能解码 HEVC 基层不代表支持 Dolby Vision；不得根据文件名或容器标签宣称完整支持。
+旧 RGBA 回退仍由 swscale SWS_BICUBIC 执行：显式 AVFrame matrix/range 优先，未知 matrix 用 height≥720 的 BT.709，否则 BT.601；未知 range 为 limited。
+该回退不计入统一 YUV 验收，尤其不代表完整 HDR tone mapping。
 
-## 诊断和验收
+## WebCodecs 读取与生命周期
 
-SDR 软件/原生路径对比的显式本地取证入口见 [sdr-color-evidence.md](sdr-color-evidence.md)。
-该工具复用现有解码与 presenter，不改色彩策略；不同编码文件之间的画面差异不能直接归因于软硬解。
+mediabunny、FLV packet、MP4 packet 都通过 `prepareYuvFrame` 适配。
+`copyTo` 在 MediaSource 的异步取帧/背压范围内完成，不在 VideoDecoder 同步 output 回调中异步堆积帧。
+支持 I420/I422/I444、I420P10/P12 等可读 planar 格式和 NV12；读取完整 coded rect，再按 visibleRect 裁剪。
+不请求 RGB 格式转换，不强制软件解码。copyTo 的 GPU→CPU 成本是真实成本，`copyMs` 记录当帧耗时供本地取证。
 
-上屏路径状态变化时记录：帧类型、format、opaque、byteLengthEstimated、当前 color、sourceColor、
-hdr/sourceHdr、conversion、target 和源 PTS。仅状态变化记录，避免逐帧日志干扰性能。
-解码器类型/能力探测与色彩路径分别判断：不透明帧并不能独立证明具体硬件实现。
+format=null 不调用 allocationSize/copyTo，按 codedWidth×codedHeight×8 估算预算，标记 byteLengthEstimated。
+NotSupportedError 保留可播放资源并记录原因；其他错误继续传播，临时 clone、sample 明确 close。
+取消/释放发生在 copyTo 等待期间时，返回前关闭帧。正常路径保存独立 rotation 后关闭 sample；仅 preserveNativeSample 显式本地诊断保留原样本，并纳入预算。
 
-- 不透明帧：allocationSize 被禁止时仍能建立描述，保留资源及 PQ/HLG，不发生复制或额外 clone。
-- 生命周期：首帧、顺播、seek、切换 SDR/HDR 的策略与实际像素回归保持一致；资源显式关闭。
-- 软件 HDR：识别并记录未管理状态，不能把日志通过当成色准通过。
-- 浏览器合成 PQ/HLG 测试用于像素一致性；绝对色准还需已知亮度/色域测试图、可靠参考转换及目标设备验证。
-- 播放改动运行播放基准；没有浏览器/原片时必须在交付中注明验证缺口。
+原生 packet 最多保留 8 个未输出输入；输出预算 max(128 MiB, 8×最大帧计费)，异常数量上限 32。
+输入未被接受时先 receive 再重试同一包，不前移游标。播放队列至少为两帧保留预算，并保留容量限制。
 
-参考：[WebCodecs](https://www.w3.org/TR/webcodecs/)、
-[不透明帧的 allocationSize/copyTo 讨论](https://github.com/w3c/webcodecs/issues/920)、
-[WebKit Canvas 色彩管理](https://webkit.org/blog/12058/wide-gamut-2d-graphics-using-html-canvas/)。
+## 验证与证据边界
 
-## 不透明帧的队列计费与背压
+- `npm test`：布局/矩阵/范围/高位深/heap growth、真实 single/mt core、packet/container 与生命周期。
+- `npm run test:presentation:browser`：Chromium/WebKit shader 对 CPU 参考、裁剪/旋转/采样及旧 PQ/HLG 路径。
+- `npm run test:browser`：轨道、尺寸调度、双轨布局、关闭与恢复。
+- `node scripts/bench-playback.mjs webkit`：真实应用连续播放；Chrome 可用 BENCH_CHANNEL=chrome。
+- `scripts/diagnose-sdr-color.mjs`：同一 FLV、同 PTS 比较，新增 plane/shader 参考及 copyMs；不会自动上传片源、像素、日志。
 
-byteLengthEstimated 仅用于资源计费，不能因 4K/8K 估算超过旧常量就误判色彩/解码失败。
-原生 packet 解码器最多保留 8 个未输出输入的窗口；提交前发现已有输出时返回未接收，
-PacketTimeline 必须先 receive 再重试同一个包，不能前移游标。浏览器输出回调不能等待消费。
-输出预算为 max(128 MiB, 8 × 已观察最大单帧计费)，并保留 32 帧异常数量上限。
-这允许已接收输入正常批量输出，不代表这些帧都已分配等量的 CPU 内存。
-默认播放队列为至少两帧预留计费空间，同时保留容量限制；显式传入字节预算的调用仍采用该限制
-（允许一帧本身大于预算）。多轨/8K 的总体内存仍需设备实测，不能承诺固定总显存上限。
-
-错误现场在播放队列清理前写入本地日志，包括会话时钟、逐轨信息和队列快照；
-解码器错误带待输出数量、队列字节、输入窗口和峰值。状态快照不包含视频像素或标注正文，
-不是屏幕截图，也不会自动上传。
+路径状态变化时才记录转换计划，不能逐帧写日志。Windows 原问题必须在用户原设备重跑；Mac 证据不能代替 Windows/Edge 最终验收。
+Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮支持范围。

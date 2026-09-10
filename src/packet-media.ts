@@ -1,3 +1,4 @@
+import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { validateDescription } from './frame-description.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
@@ -72,6 +73,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified, ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
     contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined });
+    const yuvPool=createYuvBufferPool();
     let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
@@ -131,11 +133,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         try { validateDescription(frame.description,pixels?.byteLength); } catch(error) {sample?.close();throw error;}
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         let closed = false;
-        return { description:frame.description,kind: sample ? 'video-sample' : 'rgba8', width: frame.width, height: frame.height,
+        const decoded = await prepareYuvFrame({ description:frame.description,kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8', width: frame.width, height: frame.height,
           ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: frame.durationUs ?? durations[position],
           byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
-        } satisfies DecodedFrame;
+        } satisfies DecodedFrame,yuvPool,deps.preserveNativeSample);
+        if(disposed){decoded.close();throw new Error("媒体已释放。");}
+        return decoded;
       });
       serial = task.then(() => {}, () => {});
       return task;
@@ -161,7 +165,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         }
         if(frame&&disposed)frame.close();
       },
-      dispose() { if (!disposed) { disposed = true; wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
     };
     return source;
   } catch (error) { reservation.release(); rpc?.terminate(); throw error; }

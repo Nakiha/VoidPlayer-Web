@@ -10,9 +10,9 @@ export function requireFrameAbi(core: any): void {
 export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, recycle?: ArrayBuffer): WasmFrameOutput {
   const ptr=core.ccall('vp_frame_info','number',['number'],[ctx]);
   const memory=heap();
-  if (!Number.isSafeInteger(ptr)||ptr<=0||ptr+72>memory.byteLength) throw new MediaOpenError('decode','WASM 帧描述指针越界。');
-  const view=new DataView(memory.buffer,ptr,72);
-  if (view.getUint32(16,true)!==1||view.getUint32(20,true)!==72) throw new MediaOpenError('decode','WASM 帧描述版本不兼容。');
+  if (!Number.isSafeInteger(ptr)||ptr<=0||ptr+160>memory.byteLength) throw new MediaOpenError('decode','WASM 帧描述指针越界。');
+  const view=new DataView(memory.buffer,ptr,160);
+  if (view.getUint32(16,true)!==2||view.getUint32(20,true)!==160) throw new MediaOpenError('decode','WASM 帧描述版本不兼容。');
   const pts=Number(view.getBigInt64(0,true)),duration=Number(view.getBigInt64(8,true));
   if(!Number.isSafeInteger(pts)||!Number.isSafeInteger(duration))throw new MediaOpenError('decode','WASM 输出帧时间戳超出安全范围。');
   const width=view.getInt32(24,true),height=view.getInt32(28,true);
@@ -21,7 +21,20 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
   const sourceColor=ffmpegColorInfo({colorPrimaries:view.getInt32(44,true),colorTransfer:view.getInt32(48,true),colorSpace:view.getInt32(52,true),colorRange:view.getInt32(56,true)});
   const description=rgbaDescription(width,height,{revision:view.getUint32(68,true),stride:view.getInt32(32,true),byteLength:view.getInt32(36,true),
     displayWidth:Math.max(1,Math.round(width*sarNum/sarDen)),sourceColor,color:{...sourceColor,matrix:'rgb',fullRange:true},
-    sourcePixelFormat:core.ccall('vp_frame_format','string',['number'],[ctx])||null});
+    sourcePixelFormat:null});
+  const layout=view.getInt32(72,true);
+  if(layout!==0) {
+    if(layout!==1 && layout!==2)throw new MediaOpenError('decode','Unknown WASM plane layout');
+    description.format='YUV'; description.stride=null; description.color=sourceColor;
+    description.yuv={bitDepth:view.getInt32(76,true),bitShift:view.getInt32(80,true),
+      subsampleX:view.getInt32(84,true),subsampleY:view.getInt32(88,true),chromaLocation:view.getInt32(92,true),semiplanar:layout===2,
+      planes:Array.from({length:layout===2?2:3},(_,i)=>({offset:view.getInt32(96+i*16,true),stride:view.getInt32(100+i*16,true),width:view.getInt32(104+i*16,true),height:view.getInt32(108+i*16,true)}))};
+    const x=view.getInt32(144,true),y=view.getInt32(148,true);
+    description.width=width-x-view.getInt32(152,true); description.height=height-y-view.getInt32(156,true);
+    description.visibleRect={x,y,width:description.width,height:description.height};
+    description.displayWidth=Math.max(1,Math.round(description.width*sarNum/sarDen)); description.displayHeight=description.height;
+  } else description.colorFallback='swscale-rgba';
+  description.sourcePixelFormat=core.ccall('vp_frame_format','string',['number'],[ctx])||null;
   validateDescription(description,description.byteLength);
   const pixelPtr=core.ccall('vp_pixels','number',['number'],[ctx]),len=description.byteLength;
   const pixels=heap(); // ccall(string) can grow memory; refresh the view.

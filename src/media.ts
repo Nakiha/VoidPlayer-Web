@@ -1,3 +1,4 @@
+import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import type { MediaInfoChange } from './media-state.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
@@ -24,9 +25,11 @@ const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 export interface DecodedFrame extends FrameInfo {
   readonly description: FrameDescription;
-  /** Resource form: a WebCodecs sample or RGBA8 pixels. The presenter decides
+  readonly copyMs?: number;
+  readonly rotation?: number;
+  /** Resource form: a WebCodecs sample, YUV planes, or RGBA8 pixels. The presenter decides
    *  how a kind reaches the canvas; backends never paint. */
-  readonly kind: 'video-sample' | 'rgba8';
+  readonly kind: 'video-sample' | 'rgba8' | 'yuv';
   readonly width: number;
   readonly height: number;
   /** Approximate bytes held by this frame, for queue memory budgets. */
@@ -219,11 +222,12 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     };
     // Frames carry their resource and kind; the presenter (src/presenter.ts)
     // decides how to paint them.
-    const wrap = (sample: VideoSample): DecodedFrame => {
+    const yuvPool=createYuvBufferPool();
+    const wrap = async (sample: VideoSample): Promise<DecodedFrame> => {
       let description: FrameDescription;
       try { description=sampleDescription(sample); } catch(error) {sample.close();throw error;}
       const byteSize=description.byteLength;
-      return {
+      const frame = await prepareYuvFrame({
       description,
       kind: 'video-sample',
       width: sample.displayWidth,
@@ -234,7 +238,9 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       sourcePtsUs: Math.round(sample.timestamp * 1e6),
       durationUs: Math.round(sample.duration * 1e6),
       close: () => sample.close(),
-      };
+      },yuvPool);
+      if(disposed) {frame.close(); throw new DOMException("媒体已释放。", "AbortError");}
+      return frame;
     };
     let disposed = false;
     const iterators = new Set<AsyncGenerator<VideoSample>>();
@@ -259,7 +265,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
         const iterator = samples(first + Math.max(0, ptsUs - 1) / 1e6);
         try {
           for await (const sample of iterator) {
-            const frame = wrap(sample);
+            const frame = await wrap(sample);
             if (frame.ptsUs <= ptsUs) { frame.close(); continue; }
             frames.push(frame);
             if (frames.length >= count) break;
@@ -283,7 +289,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
         }
       },
       dispose: () => {
-        if (disposed) return; disposed = true;
+        if (disposed) return; disposed = true;yuvPool.dispose();
         // Return the sink iterators directly, even if an outer queue is waiting
         // on next(). This wakes the sink pump so its finally closes the decoder.
         for (const iterator of iterators) void iterator.return(undefined).catch(() => {});

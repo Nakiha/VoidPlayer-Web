@@ -38,7 +38,7 @@ test('real packet decoding retains a usable overdeclared mdat and exposes its wa
       await readFile(new URL('../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)));
     assert.match(info.indexWarning!, /mdat/); assert.equal(info.width, 160);
     for (const pts of [0, 1500000, 0]) {
-      const frame = await engine.at(pts); assert.equal(frame.pts, pts); assert.equal(frame.pixels!.byteLength, 160 * 96 * 4);
+      const frame = await engine.at(pts); assert.equal(frame.pts, pts); assert.equal(frame.pixels!.byteLength, 160 * 96 * 1.5);
     }
   } finally { engine.close(); }
 });
@@ -61,7 +61,7 @@ for (const variant of ['valid', 'oversized'] as const) test(`real FFmpeg Range A
     assert.equal(info.ticks.length, 20);
     for (const index of [0, 15, 19, 0]) {
       const frame = await rpc.call<{ pixels: ArrayBuffer }>('extract', { ctx: info.ctx, index });
-      assert.equal(frame.pixels.byteLength, 160 * 96 * 4);
+      assert.equal(frame.pixels.byteLength, 160 * 96 * 1.5);
     }
     assert.ok(requests > 0);
   } finally { rpc.terminate(); }
@@ -81,7 +81,7 @@ test('truncated MP4 indexes and decodes only complete samples, including repeat 
     assert.equal(info.durationUs, 1300000);
     for (const pts of [0, 1200000, 500000, 0]) {
       const frame = await engine.at(pts);
-      assert.equal(frame.pts, pts); assert.equal(frame.pixels!.byteLength, 160 * 96 * 4);
+      assert.equal(frame.pts, pts); assert.equal(frame.pixels!.byteLength, 160 * 96 * 1.5);
     }
   } finally { engine.close(); }
 });
@@ -118,7 +118,7 @@ test('co64 with B-frame reordering keeps decode-order prefix and presentation ti
     for (const pts of [...info.times, 0, info.times.at(-1)!]) {
       const frame = await engine.at(pts + info.firstPtsUs);
       assert.equal(frame.pts, pts + info.firstPtsUs);
-      assert.equal(frame.pixels!.byteLength, 160 * 96 * 4);
+      assert.equal(frame.pixels!.byteLength, 160 * 96 * 1.5);
     }
   } finally { engine.close(); }
 });

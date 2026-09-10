@@ -16,7 +16,7 @@ const scenarios = process.env.BENCH_SCENARIOS ? JSON.parse(process.env.BENCH_SCE
   'mpeg2ts+h264': ['mpeg2_10s_1280x720.ts', 'h264_9s_1920x1080.mp4'],
 };
 const results = [];
-const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless,
+const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless, ...(browserName === 'chromium' && process.env.BENCH_CHANNEL ? { channel: process.env.BENCH_CHANNEL } : {}),
   ...(browserName === 'chromium' && process.env.BENCH_HTTP === '1' ? { args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] } : {}) });
 try {
   for (const [scenario, files] of Object.entries(scenarios)) {
@@ -39,7 +39,8 @@ try {
               if (!entry) throw new Error(`Missing library sample: ${files[i]}`);
               await tool('load_library_item').execute({ id: entry.id, slot: i ? 'B' : 'A' });
             }
-            return tool('benchmark_review').execute({ durationMs });
+            const report=await tool('benchmark_review').execute({ durationMs });
+            return {...report,presentationSurfaces:[...document.querySelectorAll('canvas[data-color-executor]')].map(c=>({performance:c.dataset.colorPerformance,id:c.id,executor:c.dataset.colorExecutor,width:c.width,height:c.height}))};
           }, { files, durationMs });
         };
         const report = await Promise.race([run(), crashed, new Promise((_, reject) => {

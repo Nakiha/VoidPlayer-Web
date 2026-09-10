@@ -136,3 +136,19 @@ decision; this diagnostic does not assume it is already required.
 
 References: [existing Web contract](color-pipeline.md),
 [native contract](https://github.com/Nakiha/VoidPlayer/blob/881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba/native/docs/COLOR_PIPELINE.md).
+
+## ABI v2 / 统一 SDR 平面取证
+
+报告 schema 3 中，`policy.conversion=unified-yuv-sdr` 表示可控 YUV 路径。
+`description.yuv` 是实际布局，`policy.plan` 记录解析后的颜色、字段来源和显示参照 SDR 约定。
+`copyMs` 单独记录平面读取耗时，不放入逐帧元数据（避免触发不必要的 UI/日志更新）。
+`shaderToCpuReference` 比较最终 shader 像素和独立 CPU 参考；原 `wasmInputToPresenter`
+只适用于旧 RGBA 回退，不能把 YUV 字节直接当 RGBA 比较。
+`nativeCanvas` 保留同一个 VideoSample 的浏览器托管基准，和可控 YUV 结果分开标识。
+
+新增 `--browser webkit`（不能和 `--channel` 同用），用于 Playwright WebKit 本机回归，
+不能把它称为系统 Safari。Chrome 使用 `--channel chrome`，默认 headed。
+
+播放基准支持 `BENCH_CHANNEL=chrome`。`presentationSurfaces` 包含实际 CPU/GPU 执行位置，
+以及最近最多 256 帧的 copy/CPU submission p50、p95、max（每 32 帧更新一次）。
+submission 不是 GPU 完成时间或物理屏幕扫描时间；数值不能证明硬件零拷贝。

@@ -53,7 +53,7 @@ test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', 
     const tail = await source.framesAfter(1934000, 5);
     assert.deepEqual(tail.map(f => f.ptsUs), [1967000]);
     const pixels = (mid as { pixels?: Uint8ClampedArray }).pixels;
-    assert.equal(pixels?.length, 320 * 180 * 4);
+    assert.equal(pixels?.length, 320 * 180 * 2);
     assert.ok(new Set(pixels!.slice(0, 4096)).size > 1, 'frame must not be blank');
   } finally { source.dispose(); }
 });
@@ -101,7 +101,7 @@ test('WASM fallback decodes H.266/VVC through the n9.0.1 core', async () => {
     const first = await source.frameAt(0);
     assert.equal(first.ptsUs, 0);
     const pixels = (first as { pixels?: Uint8ClampedArray }).pixels;
-    assert.equal(pixels?.length, 1920 * 1080 * 4);
+    assert.equal(pixels?.length, 1920 * 1080 * 1.5);
     assert.ok(new Set(pixels!.slice(0, 8192)).size > 1, 'frame must not be blank');
   } finally { source.dispose(); }
 });
@@ -122,7 +122,7 @@ test('openMedia falls back to WASM decoding for tracks WebCodecs cannot handle',
   } finally { source.dispose(); }
 });
 
-test('WASM source metadata retains 10-bit layout and decoded BT.709 tags before RGBA conversion', async () => {
+test('WASM source metadata retains 10-bit layout and decoded BT.709 tags in original YUV planes', async () => {
   const tenBit = await openSample('ffv1_yuv444p10le.mkv');
   try { assert.equal(tenBit.info.pixelFormat, 'yuv444p10le'); }
   finally { tenBit.dispose(); }
