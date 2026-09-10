@@ -401,6 +401,10 @@ button.icon-button[aria-pressed=true] {
 #subtrack-list { flex: 1; }
 .slot-C { background: var(--slot-c); }
 .slot-D { background: var(--slot-d); }
+.slot-E { background: var(--slot-e); }
+.slot-F { background: var(--slot-f); }
+.slot-G { background: var(--slot-g); }
+.slot-H { background: var(--slot-h); }
 .side-resize { position: absolute; grid-area: 1 / 1 / 2 / -1; top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 8; }
 #inspector-resize { left: var(--inspector-user-width, var(--inspector-width)); transform: translateX(-50%); }
 #sources-resize { right: var(--sources-user-width, var(--sources-width)); transform: translateX(50%); }

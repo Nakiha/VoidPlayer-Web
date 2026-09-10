@@ -47,7 +47,7 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     tool('list_review_log_sessions', 'List current and retained local diagnostic sessions and storage status. No upload and no new log events.', {}, [], true, () => getLogSessions()),
     tool('list_library', 'Browse indexed media with bounded pages. Use nextOffset and revision for the next page; recursive defaults to true. Directory browsing uses recursive:false.', { root: { type: 'string' }, directory: { type: 'string' }, search: { type: 'string' }, recursive: { type: 'boolean' }, offset: { type: 'integer', minimum: 0 }, revision: { type: 'integer', minimum: 0 }, limit: { type: 'integer', minimum: 1, maximum: 200 } }, [], true,
       async p => fetchLibraryPage({ root: typeof p.root === 'string' ? p.root : undefined, directory: typeof p.directory === 'string' ? p.directory : undefined, search: typeof p.search === 'string' ? p.search : undefined, recursive: p.recursive !== false, offset: typeof p.offset === 'number' ? p.offset : undefined, revision: typeof p.revision === 'number' ? p.revision : undefined, limit: typeof p.limit === 'number' ? p.limit : 100 }, AbortSignal.timeout(5000))),
-    tool('load_library_item', 'Load a library media item into track A, B, C or D by its id from list_library.', { id: { type: 'string' }, slot: { enum: SLOTS } }, ['id', 'slot'], false,
+    tool('load_library_item', 'Load a library media item into a track slot (A–H) by its id from list_library.', { id: { type: 'string' }, slot: { enum: SLOTS } }, ['id', 'slot'], false,
       async p => {
         const entry = typeof p.id === 'string' ? await fetchLibraryItem(p.id, AbortSignal.timeout(5000)) : null;
         if (!entry) throw new Error('媒体库中没有该文件，或服务未连接。');
