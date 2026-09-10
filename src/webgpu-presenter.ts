@@ -1,4 +1,3 @@
-import { detectGpuProfile } from './webgpu-calibration.ts';
 import { log } from './log.ts';
 import { createExternalSurface } from './webgpu-color-surface.mjs';
 import type { GpuSurface } from './webgpu-color-surface.mjs';
@@ -7,18 +6,25 @@ import type { PresentationGeometry } from './presentation-surface.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 import { validateDescription } from './frame-description.ts';
 
-// Default profiles require the synthetic resource probe. Explicit overrides are
-// for diagnostics; no user-agent or per-file color adjustment is used.
+// Browser compensation is diagnostic-only: a neutral decoded probe cannot
+// certify other codecs, backing resources, or color tags.
 export function requestedGpuMode() {
   const mode=typeof location==='undefined'?null:new URLSearchParams(location.search).get('colorPipeline');
   return mode==='webgpu-apple709'?'hybrid':mode==='webgpu-cv-full-range'?'webkit-planes':null;
 }
 let active=false;
-export const keepNativeGpuResource=()=>active;
+let unified=false;
+let experimentalProfile=false;
+// The explicit common-plane path keeps hardware decoding but reads the native
+// resource's own planes before queuing, using the same shader as software YUV.
+// External textures are browser-managed and are not a reference for this mode.
+export const keepNativeGpuResource=()=>active&&!unified;
 const entries=new Map<HTMLCanvasElement,{canvas:HTMLCanvasElement;surface:GpuSurface;geometry:PresentationGeometry|null;disabled:boolean}>();
 export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
   if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='legacy')return;
-  const mode=requestedGpuMode()??await detectGpuProfile();if(!mode){log.info('media','WebGPU 色彩能力验证未通过，保留现有呈现路径。');return;}
+  const commonPlanes=typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='unified';
+  const requested=commonPlanes?null:requestedGpuMode();
+  const mode=requested??'planes';
   let device:unknown;
   try{
     for(const source of sources){
@@ -28,7 +34,9 @@ export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
       catch(error){canvas.remove();throw error;}
     }
     active=true;
-    log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:requestedGpuMode()?'explicit-experiment':'synthetic-resource-probe'});
+    unified=commonPlanes;
+    experimentalProfile=requested!==null;
+    log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv-sdr'});
   }catch(error){disposeGpuPresentation();log.info('media','WebGPU 初始化失败，保留现有呈现路径。',{reason:String(error)});}
 }
 export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null){
@@ -59,13 +67,14 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   catch(error){entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');log.info('media','WebGPU 资源呈现失败，使用现有呈现路径。',{reason:String(error)});return false;}
   finally{resource?.close();}
   source.dataset.colorExecutor=frame.kind==='yuv'?'webgpu-yuv':'webgpu-external';
+  source.dataset.colorContract=frame.kind==='yuv'?(experimentalProfile?'profile-yuv-sdr':'common-yuv-sdr'):'browser-managed';
   const timing=timings.get(source)??{values:[],count:0},values=timing.values;values.push(performance.now()-start);if(values.length>128)values.shift();timing.count++;timings.set(source,timing);
   if(timing.count%32===0){const sorted=[...values].sort((a,b)=>a-b);source.dataset.colorPerformance=JSON.stringify({submitP50:sorted[Math.floor(sorted.length*.5)],submitP95:sorted[Math.floor(sorted.length*.95)],submitMax:sorted.at(-1)});}
   return true;
 }
 export function gpuCapture(source:HTMLCanvasElement){const entry=entries.get(source);return entry&&!entry.disabled?entry.surface.captureSource(source):undefined;}
 export function disposeGpuPresentation(){
-  active=false;
+  active=false;unified=false;experimentalProfile=false;
   for(const [source,entry] of [...entries].reverse()){entry.surface.dispose();entry.canvas.remove();source.classList.remove('frame-source');}
   entries.clear();
 }

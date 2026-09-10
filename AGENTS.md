@@ -49,6 +49,9 @@ npm run test:library:browser # 目录分页、搜索、离线恢复与版本引�
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
 npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
+npm run test:webgpu:browser -- chrome msedge # 有窗口的 Windows Chrome/Edge 呈现回归
+npm run test:color:windows # 默认资源契约、彩色色块、H264/HEVC/10-bit 与独立 FFmpeg 平面对照
+npm run repro:color:native # 独立浏览器原生/内存帧及 GPU 导入入口诊断，不代表验收通过
 npm run test:connection:browser # HTTP 引导、Windows/macOS 步骤与公开证书下载
 node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 ```

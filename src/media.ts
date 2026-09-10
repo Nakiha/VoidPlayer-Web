@@ -225,7 +225,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const yuvPool=createYuvBufferPool();
     const wrap = async (sample: VideoSample): Promise<DecodedFrame> => {
       let description: FrameDescription;
-      try { description=sampleDescription(sample); } catch(error) {sample.close();throw error;}
+      try { description=sampleDescription(sample);if(info.color)description.sourceColor={...info.color}; } catch(error) {sample.close();throw error;}
       const byteSize=description.byteLength;
       const frame = await prepareYuvFrame({
       description,

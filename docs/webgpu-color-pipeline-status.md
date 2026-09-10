@@ -1,6 +1,8 @@
 # WebGPU 色彩与性能修复：2026-09-10
 
-当前分支为 `codex/unified-color-pipeline`。这是 Mac 上已验证的实现，尚未合并主线；Windows/Edge、系统 Safari 和 HDR/EDR 不在本次验证结论内。
+**后续修订：默认自动 profile 已撤下。** Windows 独立复现证明中性探针不能认证其他资源。当前默认保留原生 GPU 入口，软件平面使用无 Apple/CV 补偿的资源契约；原 profile 仅显式实验可用。以下 Mac profile 对齐结果属于先前实现，不能作为当前默认模式的验收结果。Mac 默认视觉变化需要重新验证，契约以 [color-pipeline.md](color-pipeline.md) 为准。
+
+当前分支为 `codex/unified-color-pipeline`。这是 Mac 上已验证的实现，尚未合并主线；下述结果不覆盖系统 Safari 和 HDR/EDR。Windows Chrome/Edge 已补测试，但发现尚未通过的彩色差异，见 [Windows 验证记录](windows-color-validation.md)，不能按 Mac 结果放行。
 
 ## 实现与根因
 

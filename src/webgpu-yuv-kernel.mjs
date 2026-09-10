@@ -1,5 +1,5 @@
-// Raw-plane kernel. apple709 is the named Chromium/CoreVideo transfer profile,
-// verified at startup without user-agent sniffing or changing source tags.
+// Raw-plane kernel. Apple/CV compensation is available only through explicit
+// diagnostic modes, never inferred from a neutral startup probe.
 export const yuvKernel = `
 @group(0) @binding(0) var<storage,read> bytes:array<u32>;
 @group(0) @binding(1) var<uniform> p:array<vec4f,9>;

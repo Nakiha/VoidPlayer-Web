@@ -1,9 +1,10 @@
 # 色彩链路与帧资源契约
 
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
-默认先验证浏览器资源 profile，再使用 WebGPU 原生资源/原精度 YUV 双入口；探针失败保留旧路径。不承诺跨设备逐像素一致或 HDR/EDR 输出。
+默认使用 WebGPU 原生资源/原精度 YUV 双入口，分别标明 browser-managed 和 common-yuv-sdr；不再用中性探针自动认证资源 profile。初始化失败保留旧路径。不承诺两入口、跨设备逐像素一致或 HDR/EDR 输出。
 
 当前实测结果与边界见 [WebGPU 修复记录](webgpu-color-pipeline-status.md)。
+Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipeline=unified` 共同平面路径；设计取舍、未解决资源与性能限制见 [设计审查](color-pipeline-design-review.md)。它尚未替换默认路径。
 
 ## 信息与责任
 
@@ -16,16 +17,22 @@
 
 ## 默认 WebGPU 路径
 
-启动时 `webgpu-calibration.ts` 解码内嵌中性渐变，以预先计算的有限参考验证 Apple 709、sRGB 或 CV full-range profile。不从用户帧提取颜色拟合参数，也不按 UA 或片名选择修正。验证失败、初始化失败或无 WebGPU 时不启用。
+默认初始化无 Apple/CV 补偿的 `planes` kernel，不调用 `webgpu-calibration.ts`。Windows 独立复现已经证明：相同公开标签的 H264 与 HEVC 原生资源可能走出不同颜色结果，中性渐变不足以认证其他资源。硬件输出用于对比，不作为软件颜色真值。初始化失败或无 WebGPU 时沿用旧路径。
 
 - WebCodecs：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB GPU 画布。播放无应用层 copyTo/readback。
 - WASM：ABI v2 原始 YUV → GPU storage buffer → `webgpu-yuv-kernel.mjs` 的 range/matrix/transfer/primaries 转换 → 同一输出。8–16 位精度保留到运算；无需 memory VideoFrame。
-- Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。
+- Apple/CV profile 仅保留在显式 `colorPipeline=webgpu-apple709` / `webgpu-cv-full-range` 实验参数下，不能自动选择。Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。
 - profile 是独立的资源呈现约定，不覆盖源标签。旧 `resolveYuvColor` 的默认值与新 profile 需区分；未知的显式色彩不强制套 709。
 - 两入口对整数源像素转换为 RGB，缩小对四点 RGB 做双线性，放大 NEAREST；避免两路分别在 YUV/RGB 域滤波。共享设备和微任务提交，引用的资源覆写前先提交，旧 clone 在提交后关闭。
 - 每个 surface 只保留当前 clone 或已上传 YUV buffer；截图按需用同一 shader 渲染源尺寸，旋转后物化 2D 画布。播放不维护隐藏 RGBA 中间画布。
 - GPU 丢失、资源超限/导入失败、RGBA 或 PQ/HLG 使用下述旧路径，记本地原因。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
 - 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
+
+## 显式统一平面路径
+
+`colorPipeline=unified` 不运行自动资源 profile 探针，直接初始化无 Apple/CV 补偿的 GPU 平面 kernel。可读原生帧通过现有异步 `prepareYuvFrame` 复制原布局后关闭 sample，与软件 YUV 共用 GPU 转换/采样。初始化失败沿用旧 WebGL/CPU 路径。不改解码器选择。
+
+`data-color-contract` 区分 `common-yuv-sdr`、`profile-yuv-sdr`、`browser-managed` 和 `rgba-resource`。默认的软件平面也标为 common-yuv-sdr；profile-yuv-sdr 仅用于显式补偿实验。统一模式下仍然可能出现 browser-managed，不代表一致性通过。源标签和资源标签不一致时不擅自覆盖；高位深不透明资源不降精度伪装为 YUV。该模式存在真实 GPU→CPU 复制成本，尚不适合直接作为默认播放路径。
 
 ## 旧路径及能力回退
 
@@ -101,6 +108,7 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 
 - `npm test`：布局/矩阵/范围/高位深/heap growth、真实 single/mt core、packet/container 与生命周期。
 - `npm run test:webgpu:browser`：自动资源探针、原生 clone 生命周期、按需截图、旋转/缩放与直接高位深平面。
+- `npm run test:webgpu:browser -- chrome msedge`：Windows 有窗口浏览器；`npm run test:color:windows` 补合成彩色与独立 FFmpeg 平面对照，`-- --file <MP4>` 补原片同 PTS 取证。当前未通过项和 WASM 证据边界见 [Windows 验证记录](windows-color-validation.md)。
 - `npm run test:presentation:browser`：Chromium/WebKit shader 对 CPU 参考、裁剪/旋转/采样及旧 PQ/HLG 路径。
 - `npm run test:browser`：轨道、尺寸调度、双轨布局、关闭与恢复。
 - `node scripts/bench-playback.mjs webkit`：真实应用连续播放；Chrome 可用 BENCH_CHANNEL=chrome。

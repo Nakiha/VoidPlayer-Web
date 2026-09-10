@@ -14,6 +14,7 @@ import { log } from './log.ts';
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   if(gpuPaint(canvas,frame))return;
+  canvas.dataset.colorContract=frame.kind==='yuv'?'common-yuv-sdr':frame.kind==='rgba8'?'rgba-resource':'browser-managed';
   const fallbackGeometry=gpuFallbackGeometry(canvas);
   if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createPresentationSurface(canvas);if(surface){surfaces.set(canvas,surface);surface.geometry(fallbackGeometry);}}
   const start=performance.now();

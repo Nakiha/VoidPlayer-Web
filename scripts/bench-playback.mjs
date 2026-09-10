@@ -17,6 +17,7 @@ const scenarios = process.env.BENCH_SCENARIOS ? JSON.parse(process.env.BENCH_SCE
 };
 const results = [];
 const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless, ...(browserName === 'chromium' && process.env.BENCH_CHANNEL ? { channel: process.env.BENCH_CHANNEL } : {}),
+  ...(browserName === 'chromium' && process.env.CHROME_EXECUTABLE_PATH && process.env.BENCH_CHANNEL==='chrome' ? {executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}),
   ...(browserName === 'chromium' && process.env.BENCH_HTTP === '1' ? { args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] } : {}) });
 try {
   for (const [scenario, files] of Object.entries(scenarios)) {
