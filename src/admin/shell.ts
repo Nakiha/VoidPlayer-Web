@@ -1,8 +1,9 @@
-import { frameIndexShell } from './frame-indexes.ts';
+import { annotationAdminShell } from './annotations.ts';
+import { cacheShell } from './caches.ts';
 import { workspaceAdminShell } from './workspaces.ts';
 import { measurementShell } from './measurement.ts';
 import { icon } from '../ui/icons.ts';
-export const PANES = [['overview', '概览', 'diagnostics'], ['library', '媒体库', 'open'], ['frame-indexes', '帧索引缓存', 'film'], ['workspaces', '工作区', 'film'], ['logs', '日志', 'note'], ['measurements', '测速', 'diagnostics']] as const;
+export const PANES = [['overview', '概览', 'diagnostics'], ['library', '媒体库', 'open'], ['caches', '缓存', 'film'], ['workspaces', '工作区', 'film'], ['annotations', '标注', 'note'], ['logs', '日志', 'note'], ['measurements', '测速', 'diagnostics']] as const;
 export function adminShell() {
   return `<div class="admin-layout">
     <nav class="admin-navigation" aria-label="管理分类"><a class="admin-brand" href="/">${icon('film')}<span>VoidPlayer</span></a><span class="admin-nav-caption">服务管理</span>
@@ -16,8 +17,9 @@ export function adminShell() {
         <p class="admin-caption">CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。</p>
         <h2>媒体索引</h2><dl class="admin-properties"><div><dt>根目录</dt><dd id="root-summary">—</dd></div><div><dt>扫描任务</dt><dd id="scan-summary">—</dd></div><div><dt>目录监听</dt><dd id="watch-summary">—</dd></div></dl>
       </section>
-      ${frameIndexShell()}
+      ${cacheShell()}
       ${workspaceAdminShell()}
+      ${annotationAdminShell()}
       ${measurementShell()}
       <section id="pane-library" hidden><header class="admin-heading"><div><h1>媒体库</h1><p>添加服务器目录，保存后即可在播放器中浏览视频。</p></div></header>
         <form id="roots-form" class="admin-panel"><div class="admin-section-heading"><h2>媒体目录</h2><button type="button" id="add-root">${icon('plus')}添加目录</button></div>

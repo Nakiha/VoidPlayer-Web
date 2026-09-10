@@ -63,16 +63,18 @@ test('bad media replacement preserves the active source and frame', async () => 
   await session.dispose();
 });
 
-test('a failed second-track decode releases the first frame and commits neither', async () => {
+test('a failed second-track seek quarantines only that source and commits healthy frames', async () => {
   const drawn: number[] = [];
   const session = new ReviewSession((_, frame) => drawn.push(frame.ptsUs));
   const a = media(), b = media('B');
   await session.load('A', async () => a.source); await session.load('B', async () => b.source);
   const closed = a.closed; const drawCount = drawn.length;
   b.source.frameAt = async () => { throw new Error('decode error'); };
-  await assert.rejects(session.seek(120000), /decode error/);
-  assert.equal(a.closed, closed + 1); assert.equal(drawn.length, drawCount);
-  assert.equal(session.getState().positionUs, 0);
+  await session.seek(120000);
+  assert.equal(a.closed, closed + 1); assert.equal(drawn.length, drawCount + 1);
+  assert.equal(session.getState().positionUs, 120000);
+  assert.match(session.getState().tracks.find(t => t.slot === 'B')!.failure!.message, /decode error/);
+  assert.equal(b.disposed, 1);
   await session.dispose();
 });
 
@@ -116,7 +118,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
@@ -612,7 +614,7 @@ test('cancelling while showing the first frame releases the incoming decoder exa
   const loading = session.load('A', async () => incoming.source);
   const rejected = assert.rejects(loading, { name: 'AbortError' });
   await started.promise;
-  session.pause();
+  session.cancelLoad();
   await rejected;
   assert.equal(incoming.disposed, 1);
   assert.equal(session.getState().error, null);
@@ -631,7 +633,7 @@ test('shared load status reports stages and terminal results, ignoring progress 
   assert.equal(session.getState().mediaLoad?.name, 'capture.ts');
   assert.equal(session.getState().mediaLoad?.stage, 'index');
   assert.equal(session.getState().mediaLoad?.state, 'loading');
-  session.pause();
+  session.cancelLoad();
   await rejected;
   assert.equal(session.getState().mediaLoad?.state, 'cancelled');
   assert.ok(session.getState().mediaLoad?.finishedAt);
@@ -732,5 +734,190 @@ test('removal that clamps the clock invalidates surviving producers before repos
     assert.equal(session.getState().positionUs, 79999); assert.equal(seeks, before + 1);
     await session.play(); await new Promise(r => setTimeout(r, 0)); session.pause();
     assert.equal(session.getState().tracks[0].frame!.ptsUs, 0, 'replay starts at zero after reaching the shorter end');
+  } finally { await session.dispose(); }
+});
+
+test('playback failure records queue and track snapshots before releasing readers', async () => {
+  const { getLogEvents } = await import('../src/log.ts');
+  const fixture = media('failure-snapshot');
+  fixture.source.framesFrom = async function* () {
+    yield await fixture.source.frameAt(0);
+    throw new Error('synthetic queue failure');
+  };
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => fixture.source);
+    const cursor = getLogEvents({ limit: 2000 }).lastSeq;
+    await session.play();
+    for (let i = 0; i < 100 && !session.getState().error; i++) await new Promise(r => setTimeout(r, 5));
+    assert.match(session.getState().error!, /所有轨道/);
+    assert.match(session.getState().tracks[0].failure!.message, /synthetic queue failure/);
+    const events = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events;
+    const snapshot = events.find(e => e.msg === '故障现场：播放队列');
+    assert.ok(snapshot);
+    assert.ok((snapshot.data as any).queue, 'reader still exists at capture time');
+    assert.ok(events.some(e => e.msg === '故障现场：轨道' && (e.data as any).mediaId === 'failure-snapshot'));
+    assert.ok(events.findIndex(e => e.msg === '故障现场：会话') < events.findIndex(e => e.msg === '播放中断'));
+  } finally { await session.dispose(); }
+});
+
+test('a failed playback track no longer blocks healthy playback, seek, stepping or replacement', async () => {
+  const a = media('healthy', Array.from({ length: 50 }, (_, i) => i * 40000), 2000000), b = media('broken');
+  b.source.framesFrom = async function* () { yield await b.source.frameAt(0); throw new Error('broken source'); };
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.play(); await new Promise(r => setTimeout(r, 100));
+    const state = session.getState(); assert.equal(state.playing, true); assert.ok(state.positionUs > 40000);
+    assert.equal(state.error, null); assert.match(state.tracks[1].failure!.message, /broken source/);
+    session.pause(); await session.seek(80000); await session.step(1);
+    assert.ok(session.getState().positionUs > 80000);
+    assert.throws(() => session.addMark({ slot: 'B', text: 'stale' }), /有效画面/);
+    assert.equal(session.addMark({ slot: 'A', text: 'valid' }).comparison.length, 1);
+    const replacement = media('replacement'); await session.load('B', async () => replacement.source);
+    assert.equal(session.getState().tracks[1].failure, undefined);
+  } finally { await session.dispose(); }
+});
+
+test('background index rejection is isolated before seek without poisoning other sources', async () => {
+  const session = new ReviewSession(() => {}), a = media('indexed'), b = media('bad-index');
+  b.source.ensureIndexed = async () => { throw new Error('index broken'); };
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.seek(80000);
+    assert.equal(session.getState().positionUs, 80000);
+    assert.match(session.getState().tracks[1].failure!.message, /index broken/);
+  } finally { await session.dispose(); }
+});
+
+
+test('a track waiting for an index lets healthy clocks advance and rejoins after catching up', async () => {
+  const session = new ReviewSession(() => {}), gate = deferred<void>();
+  const starts = Array.from({ length: 50 }, (_, i) => i * 20000);
+  const a = media('ready', starts, 1000000), b = media('indexing', starts, 1000000);
+  b.source.info.indexState = 'building'; b.source.info.indexWaiting = true;
+  const frames = b.source.framesFrom.bind(b.source);
+  b.source.framesFrom = async function* (pts) { await gate.promise; yield* frames(pts); };
+  try {
+    await session.load('A', async () => a.source); await session.load('B', async () => b.source);
+    await session.play(); await new Promise(resolve => setTimeout(resolve, 120));
+    assert.ok(session.getState().positionUs > 40000, 'healthy A advances while B has no index data');
+    assert.equal(session.getState().tracks[1].syncState, 'index-wait');
+    session.pause(); assert.throws(() => session.addMark({ slot: 'B', text: 'stale image' }), /尚未同步/);
+    b.source.info.indexWaiting = false; b.source.info.indexState = 'complete'; gate.resolve();
+    await session.play(); await new Promise(resolve => setTimeout(resolve, 160));
+    assert.equal(session.getState().tracks[1].syncState, undefined);
+    assert.ok(session.getState().tracks[1].frame!.ptsUs > 40000);
+    assert.equal(session.getState().error, null);
+  } finally { gate.resolve(); await session.dispose(); }
+});
+
+test('forward stepping requests the current prefix, never the entire unfinished index', async () => {
+  const session = new ReviewSession(() => {}), fixture = media();
+  const requested: (number | undefined)[] = [];
+  fixture.source.info.indexState = 'building';
+  fixture.source.ensureIndexed = async pts => { requested.push(pts); if (pts === undefined || pts === Infinity) throw new Error('full index requested'); };
+  try { await session.load('A', async () => fixture.source); await session.step(1); assert.ok(requested.every(Number.isFinite)); assert.equal(session.getState().positionUs, 40000); }
+  finally { await session.dispose(); }
+});
+
+
+test('adding at a VFR observation time seeks only the incoming track and keeps existing frame and offsets', async () => {
+  const draws: string[] = [], session = new ReviewSession((slot, frame) => draws.push(`${slot}:${frame.ptsUs}`));
+  const a = media('A'), b = media('B'); let aSeeks = 0;
+  const original = a.source.frameAt; a.source.frameAt = async pts => { aSeeks++; return original(pts); };
+  try {
+    await session.load('A', async () => a.source); await session.setTrackOffset('A', 20000); await session.seek(65000);
+    const before = session.getState(), count = aSeeks, drawCount = draws.length;
+    const bTargets: number[] = [], bFrame = b.source.frameAt;
+    b.source.frameAt = async pts => { bTargets.push(pts); return bFrame(pts); };
+    await session.load('B', async () => b.source);
+    const after = session.getState();
+    assert.equal(after.positionUs, 65000); assert.equal(aSeeks, count);
+    assert.deepEqual(after.tracks[0].frame, before.tracks[0].frame); assert.equal(after.tracks[0].offsetUs, 20000);
+    assert.equal(draws.length, drawCount + 1); assert.deepEqual(bTargets, [65000]);
+    assert.equal(after.tracks[1].frame!.ptsUs, 40000, 'seek returns the display frame covering the VFR target');
+  } finally { await session.dispose(); }
+});
+
+test('incoming short tracks hold their last frame without shortening the observation time', async () => {
+  const session = new ReviewSession(() => {}), short = media('short', [0, 20000, 40000], 60000);
+  try {
+    await session.load('A', async () => media('long').source); await session.seek(160000);
+    await session.load('B', async () => short.source);
+    assert.equal(session.getState().positionUs, 160000);
+    assert.equal(session.getState().tracks[1].frame!.ptsUs, 40000);
+    assert.equal(session.getState().tracks[0].frame!.ptsUs, 160000);
+  } finally { await session.dispose(); }
+});
+
+test('waiting for an incoming index keeps the old replacement and clock usable, and cancel is local', async () => {
+  const session = new ReviewSession(() => {}), gate = deferred<void>(), entered = deferred<void>();
+  const starts = Array.from({ length: 100 }, (_, i) => i * 20000);
+  const old = media('old', starts, 2000000), incoming = media('incoming', starts, 2000000);
+  incoming.source.info.durationUs = 40000; incoming.source.info.indexState = 'building';
+  incoming.source.ensureIndexed = async target => { assert.ok(target! > 40000); entered.resolve(); await gate.promise; incoming.source.info.durationUs = 2000000; };
+  try {
+    await session.load('A', async () => old.source); await session.seek(100000); await session.play();
+    const load = session.load('A', async () => incoming.source); const rejected = assert.rejects(load, { name: 'AbortError' });
+    await entered.promise; const at = session.getState().positionUs;
+    await new Promise(resolve => setTimeout(resolve, 100));
+    assert.ok(session.getState().positionUs > at); assert.equal(session.getState().busy, false);
+    assert.equal(session.getState().tracks[0].id, 'old'); assert.equal(old.disposed, 0);
+    assert.equal(session.getState().mediaLoad!.stage, 'index');
+    await reviewTools(session).find(t => t.name === 'cancel_review_load')!.execute({}); await rejected;
+    assert.equal(session.getState().playing, true); assert.equal(incoming.disposed, 1); assert.equal(old.disposed, 0);
+  } finally { gate.resolve(); await session.dispose(); }
+});
+
+test('pausing transport during index preparation retains the load and joins exactly at the paused target', async () => {
+  const session = new ReviewSession(() => {}), gate = deferred<void>(), entered = deferred<void>();
+  const starts = Array.from({ length: 100 }, (_, i) => i * 20000);
+  const a = media('A', starts, 2000000), b = media('B', starts, 2000000);
+  b.source.info.durationUs = 40000; b.source.info.indexState = 'building';
+  b.source.ensureIndexed = async () => { entered.resolve(); await gate.promise; b.source.info.durationUs = 2000000; };
+  try {
+    await session.load('A', async () => a.source); await session.seek(100000); await session.play();
+    const load = session.load('B', async () => b.source); await entered.promise;
+    await new Promise(resolve => setTimeout(resolve, 60)); session.pause(); const target = session.getState().positionUs;
+    assert.equal(session.getState().mediaLoad!.state, 'loading'); gate.resolve(); await load;
+    assert.equal(session.getState().positionUs, target); assert.equal(session.getState().playing, false);
+    const f = session.getState().tracks[1].frame!; assert.ok(f.ptsUs <= target && f.ptsUs + f.durationUs > target);
+    assert.equal(session.getState().tracks[1].indexState, 'building', 'joining does not require a finished index');
+  } finally { gate.resolve(); await session.dispose(); }
+});
+
+test('joining during playback retains the surviving decoder iterator and advancing clock', async () => {
+  const session = new ReviewSession(() => {}), starts = Array.from({ length: 100 }, (_, i) => i * 20000);
+  const a = media('A', starts, 2000000), b = media('B', starts, 2000000);
+  let seeks = 0, generators = 0; const originalFrame = a.source.frameAt, originalFrames = a.source.framesFrom;
+  a.source.frameAt = async pts => { seeks++; return originalFrame(pts); };
+  a.source.framesFrom = pts => { generators++; return originalFrames(pts); };
+  try {
+    await session.load('A', async () => a.source); await session.seek(100000); await session.play();
+    await new Promise(resolve => setTimeout(resolve, 80)); const before = session.getState().positionUs, count = seeks;
+    await session.load('B', async () => b.source);
+    assert.ok(session.getState().positionUs >= before); assert.equal(session.getState().playing, true);
+    await new Promise(resolve => setTimeout(resolve, 80));
+    assert.ok(session.getState().positionUs > before); assert.equal(seeks, count); assert.equal(generators, 1);
+    assert.ok(session.getState().tracks[1].frame!.ptsUs >= before - 20000);
+    assert.equal(session.getState().error, null);
+  } finally { await session.dispose(); }
+});
+
+test('failed synchronization preserves the old nonzero frame and releases a late cancelled seek result', async () => {
+  const session = new ReviewSession(() => {}), old = media('old'), bad = media('bad'), late = media('late');
+  const gate = deferred<Awaited<ReturnType<MediaSource['frameAt']>>>(), entered = deferred<void>();
+  try {
+    await session.load('A', async () => old.source); await session.seek(120000);
+    bad.source.frameAt = async () => { throw new Error('target decode failed'); };
+    await assert.rejects(session.load('A', async () => bad.source), /target decode failed/);
+    assert.equal(session.getState().positionUs, 120000); assert.equal(session.getState().tracks[0].frame!.ptsUs, 120000); assert.equal(old.disposed, 0);
+    late.source.frameAt = async () => { entered.resolve(); return gate.promise; };
+    const pending = session.load('A', async () => late.source), rejected = assert.rejects(pending, { name: 'AbortError' });
+    await entered.promise; session.cancelLoad(); await rejected;
+    let closed = 0; const frame = await old.source.frameAt(120000); gate.resolve({ ...frame, close() { closed++; frame.close(); } });
+    await new Promise(resolve => setImmediate(resolve)); assert.equal(closed, 1); assert.equal(late.disposed, 1);
+    assert.equal(session.getState().tracks[0].id, 'old');
   } finally { await session.dispose(); }
 });

@@ -38,12 +38,16 @@
     "test:workspace:browser": "npm run build && node scripts/check-workspace-browser.mjs",
     "test:identity:browser": "npm run build && node scripts/check-identity-browser.mjs",
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
+    "test:sharing:browser": "npm run build && node scripts/check-sharing-browser.mjs",
     "test:saved-workspaces:browser": "npm run build && node scripts/check-saved-workspaces-browser.mjs",
     "test:admin:browser": "npm run build && node scripts/check-admin-browser.mjs",
     "test:release:browser": "node scripts/check-release-browser.mjs",
     "test:fate": "node scripts/check-fate.mjs",
     "test:fate:browser": "node scripts/check-fate-browser.mjs",
-    "test:logs:browser": "npm run build && node scripts/check-log-report-browser.mjs"
+    "test:logs:browser": "npm run build && node scripts/check-log-report-browser.mjs",
+    "test:caches:browser": "npm run build && node scripts/check-cache-browser.mjs",
+    "test:annotations:persistence": "npm run build && node scripts/check-annotation-persistence-browser.mjs",
+    "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

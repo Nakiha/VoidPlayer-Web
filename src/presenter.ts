@@ -1,4 +1,5 @@
 import { validateDescription } from './frame-description.ts';
+import { presentationColor } from './presentation-color.ts';
 import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
@@ -14,14 +15,12 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   if (canvas.width !== frame.width) canvas.width = frame.width;
   if (canvas.height !== frame.height) canvas.height = frame.height;
   const surface = surfaces.get(canvas);
-  const color = frame.sample?.colorSpace;
-  // lib.dom's transfer union omits the HDR values exposed by native decoders.
-  const transfer: string | null | undefined = color?.transfer;
-  const hdr = transfer === 'pq' || transfer === 'hlg';
-  const colorState = JSON.stringify({ kind: frame.kind, color, hdr });
+  const policy = presentationColor(frame.kind, frame.description);
+  const colorState = JSON.stringify({ kind: frame.kind, ...policy });
   if (colorStates.get(canvas) !== colorState) {
     colorStates.set(canvas, colorState);
-    log.info('media', '上屏色彩路径', { canvas: canvas.id, color, hdr, conversion: hdr ? 'canvas2d-srgb' : 'browser-default', sourcePtsUs: frame.sourcePtsUs });
+    log.info('media', '上屏色彩路径', { canvas: canvas.id, kind: frame.kind, ...policy, sourcePtsUs: frame.sourcePtsUs });
+    if (policy.unsupportedHdr) log.warn('media', '软件 RGBA8 输出未完成 HDR 到 SDR 的色彩转换，当前画面不适合色彩评审。', { canvas: canvas.id, ...policy });
   }
   if (surface?.directUpload) {
     if (frame.kind === 'rgba8') {
@@ -30,7 +29,7 @@ export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
       return;
     }
     if (!frame.sample) throw new Error('视频帧缺少采样内容。');
-    if (frame.sample.rotation === 0 && !hdr) {
+    if (frame.sample.rotation === 0 && !policy.canvasConversion) {
       const resource = frame.sample.toVideoFrame();
       try { surface.upload(resource); } finally { resource.close(); }
       return;

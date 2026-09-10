@@ -1,5 +1,5 @@
-export type Actor = { id: string; name: string };
-type Health = { service: string; actor: Actor | null; capabilities?: { admin?: boolean; workspaces?: boolean; reveal?: boolean } };
+export type Actor = { id: string; name: string; kind?: 'named' | 'guest' };
+type Health = { service: string; actor: Actor | null; capabilities?: { admin?: boolean; workspaces?: boolean; annotations?: boolean; reveal?: boolean } };
 let actor: Actor | null = null;
 let pending: Promise<Health> | undefined;
 let queue: Promise<unknown> = Promise.resolve();
@@ -21,7 +21,7 @@ export function identityHealth(): Promise<Health> {
     remember(health.actor); return health;
   }).finally(() => { pending = undefined; });
 }
-export function chooseIdentity(input: { name: string } | { id: string }): Promise<Actor> {
+export function chooseIdentity(input: { name: string } | { id: string } | { guest: true }): Promise<Actor> {
   return serialize(async () => {
     const response = await fetch('/api/identity', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify(input), signal: AbortSignal.timeout(10000) });
     const result = await response.json();

@@ -12,7 +12,8 @@ export interface FlvIndex {
   codec: FlvCodec;
   description: Uint8Array;
   packets: FlvPacket[]; // decode order; payloads stay in the source
-  order: number[]; // presentation order
+  order: number[]; // All packets in stable presentation order, including equal PTS.
+  displayOrder?: number[]; // First packet per unique PTS when timestamps collide.
   firstPts: number; // Earliest indexed presentation PTS, not the media timeline origin.
   duration: number;
   durations: number[];
@@ -44,7 +45,7 @@ export async function demuxFlv(reader: FlvReader, onProgress?: () => void): Prom
 }
 
 /** Stop after the first video packet for startup; resume at the next tag. */
-export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false): Promise<FlvCheckpoint> {
+export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
   const header = await reader.read(0, 9);
   if (header[0] !== 70 || header[1] !== 76 || header[2] !== 86 || header[3] !== 1) bad('不是有效的 FLV 1 文件。');
   let offset = u32(header, 5);
@@ -59,8 +60,39 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
   const packets: FlvPacket[] = resume ? resume.index.packets.slice() : [];
   let truncatedAt: number | undefined;
   let reported = performance.now();
+  let published = resume?.index;
+  const checkpoint = (nextOffset: number, complete: boolean) => {
+    // Sort only newly discovered packets, then merge with the existing order.
+    let index: FlvIndex;
+    try { index = extendFlvIndex(published, codec, description, packets, configurations); }
+    catch (error) {
+      if (error instanceof MediaOpenError) throw new MediaOpenError(error.stage,
+        `${error.message} scan=${JSON.stringify({ nextOffset, complete, size: reader.size, previousPackets: published?.packets.length ?? 0, packets: packets.length })}`);
+      throw error;
+    }
+    published = index;
+    return { index, nextOffset, complete };
+  };
+  let publicationFailure: unknown;
+  let publishedOffset = resume?.nextOffset ?? offset;
+  const publishProgress = () => {
+    if (!publish || !packets.length || offset <= publishedOffset || publicationFailure) return;
+    try { publish(checkpoint(offset, false)); publishedOffset = offset; onProgress?.(); }
+    catch (error) { publicationFailure = error; }
+  };
+  // Publish the validated prefix even if the next HTTP read is still pending.
+  // Never emit heartbeats for unchanged bytes: stalled IO must still time out.
+  const timer = publish ? setInterval(publishProgress, 500) : undefined;
+  try {
   while (offset < reader.size) {
-    if (performance.now() - reported >= 250) { onProgress?.(); reported = performance.now(); await new Promise<void>(resolve => setTimeout(resolve, 0)); }
+    if (publicationFailure) throw publicationFailure;
+    if (performance.now() - reported >= 500) {
+      onProgress?.();
+      publishProgress();
+      if (publicationFailure) throw publicationFailure;
+      reported = performance.now();
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
     if (reader.size - offset < 11) { truncatedAt = offset; break; }
     const tag = await reader.read(offset, 11);
     const size = u24(tag, 1), start = offset + 11, next = start + size + 4;
@@ -95,6 +127,13 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
         if (![0, 1, 2].includes(type)) bad('未知视频包类型。');
       }
       if (!current) throw new MediaOpenError('codec', 'FLV 视频编码暂不支持（支持 AVC、HEVC、AV1、VVC）。');
+      // SequenceEnd is a control message, not a decoder configuration or
+      // coded picture. Legacy muxers may write an AVC terminator for HEVC.
+      // Its timestamp must not contribute to video duration or codec selection.
+      if (type === 2) {
+        if (size !== skip) bad('序列结束标签包含多余的视频数据。');
+        offset = next; continue;
+      }
       if (codec && codec !== current) bad('不支持文件中途切换视频编码。');
       codec = current;
       if (type === 0) {
@@ -118,19 +157,60 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
     }
     offset = next;
   }
-  const index = buildFlvIndex(codec, description, packets, configurations);
+  if (publicationFailure) throw publicationFailure;
+  const { index } = checkpoint(reader.size, true);
   if (truncatedAt !== undefined) index.truncatedAt = truncatedAt;
   return { index, nextOffset: reader.size, complete: true };
+  } finally { clearInterval(timer); }
+}
+
+export function extendFlvIndex(previous: FlvIndex | undefined, codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[], configurations?: Uint8Array[]): FlvIndex {
+  if (!previous) return buildFlvIndex(codec, description, packets.slice(), configurations?.slice());
+  if (packets.length === previous.packets.length && (configurations?.length ?? 1) === (previous.configurations?.length ?? 1)) return previous;
+  const added = packets.slice(previous.packets.length).map((_, i) => previous.packets.length + i).sort((a, b) => packets[a].pts - packets[b].pts);
+  const order: number[] = [];
+  let a = 0, b = 0;
+  while (a < previous.order.length || b < added.length) {
+    if (b === added.length || (a < previous.order.length && packets[previous.order[a]].pts <= packets[added[b]].pts)) order.push(previous.order[a++]);
+    else order.push(added[b++]);
+  }
+  return finishFlvIndex(codec!, description!, packets.slice(), configurations?.slice(), order);
 }
 
 export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Array | undefined, packets: FlvPacket[], configurations?: Uint8Array[]): FlvIndex {
   if (!codec || !description || !packets.length || !packets[0].key) bad('没有带配置头和起始关键帧的有效视频。');
   const order = packets.map((_, i) => i).sort((a, b) => packets[a].pts - packets[b].pts);
+  return finishFlvIndex(codec!, description!, packets, configurations, order);
+}
+function finishFlvIndex(codec: FlvCodec, description: Uint8Array, packets: FlvPacket[], configurations: Uint8Array[] | undefined, order: number[]): FlvIndex {
   const firstPts = packets[order[0]].pts;
   const durations = order.map((p, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[p].pts : 0);
-  if (durations.slice(0, -1).some(d => d <= 0)) bad('视频包包含重复显示时间戳。');
-  durations[durations.length - 1] = durations.length > 1 ? durations[durations.length - 2] : 40000;
-  return { ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
+  const invalid = durations.findIndex((d, i) => i + 1 < durations.length && (d < 0 || order[i] === order[i + 1]));
+  if (invalid !== -1) {
+    const left = order[invalid], right = order[invalid + 1];
+    // Equal timestamps are supported; broken ordering or duplicate references
+    // still indicate an invalid index. Preserve evidence across worker RPC.
+    const reason = left === right ? '显示索引重复引用同一视频包。' : '显示索引顺序回退。';
+    const context = {
+      codec, packets: packets.length, orderLength: order.length, displayPosition: invalid, deltaUs: durations[invalid],
+      pair: [left, right].map(packetIndex => {
+        const p = packets[packetIndex];
+        // Compact tuples keep both packets plus scan context below the logger's
+        // 800-character string limit: [index, offset, size, PTS, DTS, key, config].
+        return [packetIndex, p.offset, p.size, p.pts, p.dts, +p.key, p.configuration ?? 0];
+      }),
+    };
+    bad(`${reason} indexContext=${JSON.stringify(context)}`);
+  }
+  // Each equal-PTS group owns one display interval. Keep all compressed
+  // packets for dependencies; neither payloads nor source timestamps change.
+  let interval = durations.findLast(d => d > 0) ?? 40000;
+  for (let i = durations.length - 1; i >= 0; i--) {
+    if (durations[i] > 0) interval = durations[i];
+    else durations[i] = interval;
+  }
+  const displayOrder = order.filter((p, i) => i === 0 || packets[p].pts !== packets[order[i - 1]].pts);
+  return { ...(displayOrder.length < order.length ? { displayOrder } : {}), ...(configurations && configurations.length > 1 ? { configurations } : {}), codec: codec!, description: description!, packets, order, firstPts, durations, duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)! };
 }
 
 /** A growing FLV index must not move the session clock. The first decode-order
@@ -140,8 +220,13 @@ export function buildFlvIndex(codec: FlvCodec | undefined, description: Uint8Arr
  */
 export function flvMediaTiming(index: FlvIndex) {
   const firstPtsUs = index.packets[0].pts;
+  const times: number[] = [], durations: number[] = [];
+  for (let i = 0; i < index.order.length; i++) {
+    const pts = index.packets[index.order[i]].pts - firstPtsUs;
+    if (i === 0 || pts !== times.at(-1)) { times.push(pts); durations.push(index.durations[i]); }
+  }
   return { firstPtsUs, durationUs: index.firstPts + index.duration - firstPtsUs,
-    times: index.order.map(i => index.packets[i].pts - firstPtsUs), durations: index.durations };
+    times, durations };
 }
 
 export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>): VideoDecoderConfig | null {
@@ -167,5 +252,12 @@ export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>)
 }
 
 export function flvIndexWarning(index: FlvIndex): string | undefined {
-  return index.truncatedAt === undefined ? undefined : '文件尾部不完整，已忽略残缺标签，仅播放完整视频包。';
+  const warnings: string[] = [];
+  if (index.truncatedAt !== undefined) warnings.push('文件尾部不完整，已忽略残缺标签，仅播放完整视频包。');
+  if (index.displayOrder) {
+    const i = index.order.findIndex((p, i) => i > 0 && index.packets[p].pts === index.packets[index.order[i - 1]].pts);
+    const a = index.packets[index.order[i - 1]], b = index.packets[index.order[i]];
+    warnings.push(`视频包有 ${index.order.length - index.displayOrder.length} 个重复 PTS；保留全部解码包，同一时刻只展示首个输出画面。首处 PTS=${a.pts}，包偏移=${a.offset}/${b.offset}。`);
+  }
+  return warnings.join(' ') || undefined;
 }

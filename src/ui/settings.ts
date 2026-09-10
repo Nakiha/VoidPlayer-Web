@@ -66,5 +66,8 @@ export function installSettings() {
   document.addEventListener('keydown', event => {
     if ((event.metaKey || event.ctrlKey) && event.key === ',' && !event.altKey && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
-  return { close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };
+  return { openPane(id: string, invoker: HTMLElement | null = trigger) {
+    if (!SETTINGS_PANES.some(([key]) => key === id)) throw new Error('未知设置页面。');
+    select(id); open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus();
+  }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };
 }

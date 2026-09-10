@@ -1,4 +1,5 @@
 import './connection-guide.css';
+import { connectionTarget, probeHttps, type ConnectionInfo } from './connection.ts';
 import { observeTheme } from './ui/theme.ts';
 import lock from '@phosphor-icons/core/assets/regular/lock-simple.svg?raw';
 import certificate from '@phosphor-icons/core/assets/regular/certificate.svg?raw';
@@ -9,15 +10,16 @@ import apple from '@phosphor-icons/core/assets/regular/apple-logo.svg?raw';
 import windows from '@phosphor-icons/core/assets/regular/windows-logo.svg?raw';
 const icon = (svg: string) => svg.replace('<svg ', '<svg class="connection-icon" aria-hidden="true" focusable="false" ');
 
-type Connection = { configured: boolean; httpsUrl: string | null; certificateUrl: string | null; fingerprint: string | null };
-export async function showConnectionGuide() {
+export async function showConnectionGuide({automatic=false}={}) {
+  const requested=automatic?location.pathname+location.search+location.hash:new URL(location.href).searchParams.get('next')??'/';
+  let destination:URL|null=null, checking=false, loaded=false;
   observeTheme();
-  document.title = '证书设置 · VoidPlayer';
+  document.title = automatic?'正在连接 · VoidPlayer':'证书设置 · VoidPlayer';
   document.body.classList.add('connection-page');
   document.getElementById('app')!.innerHTML = `
     <main class="connection-guide">
       <header class="connection-header">
-        <h1 id="connection-title"><span class="connection-brand">VoidPlayer</span><span class="connection-title-divider">-</span>证书设置</h1>
+        <h1 id="connection-title"><span class="connection-brand">VoidPlayer</span><span class="connection-title-divider">-</span><span id="connection-page-title">${automatic?'连接':'证书设置'}</span></h1>
         <details id="connection-about" class="connection-about"><summary>为什么需要证书？</summary><p>信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。</p></details>
       </header>
       <div id="connection-status-row" class="connection-status-row">
@@ -45,7 +47,7 @@ export async function showConnectionGuide() {
           </section>
         </section>
         <section id="connection-enter" class="connection-enter" hidden>
-          <div><div class="connection-step-heading"><span id="connection-enter-number" class="connection-number">3</span><h2>打开播放器</h2></div><p id="connection-enter-hint">保存信任设置后，退出并重新打开浏览器。</p><p id="connection-address" class="connection-address"></p></div>
+          <div><div class="connection-step-heading"><span id="connection-enter-number" class="connection-number">3</span><h2>打开播放器</h2></div><p id="connection-enter-hint">安装完成后，点击“打开播放器”重新检查。</p><p id="connection-address" class="connection-address"></p></div>
           <a id="connection-open" class="connection-button" href="/">打开播放器 ${icon(arrow)}</a>
         </section>
         <section id="connection-unavailable" class="connection-help" hidden><span class="connection-emblem">${icon(lock)}</span><h2>服务器未开启 HTTPS</h2><p>请联系管理员开启 HTTPS。</p><details><summary>查看服务器设置说明</summary><p>独立程序启动示例：</p><code>./voidplayer --https 服务器IP</code><p>默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。</p></details></section>
@@ -87,32 +89,40 @@ export async function showConnectionGuide() {
     } catch (error) { setStatus('error', (error as Error).message); $('download-label').textContent = '重试下载'; }
     finally { downloading = false; $('download').removeAttribute('aria-busy'); }
   };
-  async function refresh() {
+  $('open').onclick=event=>{event.preventDefault();void refresh(true);};
+  async function refresh(enterWhenTrusted=automatic) {
+    if(checking)return;checking=true;
     const retry = $('retry') as HTMLButtonElement; retry.disabled = true;
     setStatus('loading', '正在检查连接配置…');
-    $('setup').hidden = $('enter').hidden = $('unavailable').hidden = true;
+    if(!loaded)$('setup').hidden = $('enter').hidden = $('unavailable').hidden = true;
     try {
       const response = await fetch('/api/connection', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
       if (!response.ok) throw new Error('暂时无法读取连接配置，请确认服务已启动后重试。');
-      const info = await response.json() as Connection;
+      const info = await response.json() as ConnectionInfo;
       if (!info.configured) {
-        setStatus('waiting', '服务器尚未开启 HTTPS。'); $('unavailable').hidden = false; return;
+        destination=null;
+        setStatus('waiting', '服务器尚未开启 HTTPS。'); $('unavailable').hidden = false;$('setup').hidden=$('enter').hidden=true; return;
       }
-      const target = info.httpsUrl ? new URL(info.httpsUrl) : null;
+      const target = info.httpsUrl ? connectionTarget(info.httpsUrl,requested) : null;
       if (!target || target.protocol !== 'https:') {
         setStatus('waiting', '服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。'); return;
       }
+      destination=target;
+      if(enterWhenTrusted && await probeHttps(target)){location.replace(target.href);return;}
+      if(automatic){history.replaceState(null,'',`/connection?next=${encodeURIComponent(requested)}`);document.title='证书设置 · VoidPlayer';}
+      $('page-title').textContent='证书设置';$('unavailable').hidden=true;loaded=true;
       const install = info.certificateUrl === '/api/connection/certificate';
       $('setup').hidden = !install; $('enter').hidden = false;
       $('enter-number').textContent = install ? '3' : '1';
       $('fingerprint').textContent = info.fingerprint ?? '';
       ($('open') as HTMLAnchorElement).href = target.href;
       $('address').textContent = target.origin;
-      $('enter-hint').textContent = install ? '保存信任设置后，退出并重新打开浏览器。' : '此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。';
-      setStatus('ready');
+      $('enter-hint').textContent = install ? '安装完成后，点击“打开播放器”重新检查。' : '此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。';
+      setStatus(enterWhenTrusted?'waiting':'ready',enterWhenTrusted?'暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。':'');
     } catch (error) { setStatus('error', (error as Error).message); }
-    finally { retry.disabled = false; }
+    finally { retry.disabled = false;checking=false; }
   }
-  $('retry').onclick = () => void refresh();
+  $('retry').onclick = () => {void refresh(true);};
+  window.addEventListener('focus',()=>{if(automatic && loaded && destination)void refresh(true);});
   await refresh();
 }

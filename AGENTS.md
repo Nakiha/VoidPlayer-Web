@@ -23,6 +23,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 硬约束
 
+- 色彩链路契约见 `docs/color-pipeline.md`；修改色彩处理必须同步该文档，区分源标签与实际输出资源，禁止按片源堆叠 HDR/SDR 修正。
+
 - UI 与 Agent 必须共用 `session.ts` 的行为，不允许各自实现。
 - 日志只留本地（IndexedDB），上传仅由用户在日志面板显式触发。
 - 解码路径选择按失败阶段决定（`MediaOpenError.stage`），不要新增“整体 try/catch 换路径”。

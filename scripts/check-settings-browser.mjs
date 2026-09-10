@@ -125,7 +125,7 @@ try {
  await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
  await page.locator('#log-session').click();
  await page.locator(`#log-session-menu [data-value="${originalSession}"]`).click();
- await page.waitForFunction(id=>JSON.parse(document.querySelector('.log-json').value).sessionId===id,originalSession);
+ await page.waitForFunction(id=>document.querySelector('.log-json').dataset.sessionId===id,originalSession);
  await page.locator('.log-panel [data-action=refresh]').click();
  await page.waitForFunction(id=>document.querySelector(`#log-session-menu [aria-checked=true]`)?.dataset.value===id,originalSession);
  await page.locator('#log-session').click(); await page.locator('#settings-tab-appearance').click();

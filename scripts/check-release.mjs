@@ -84,7 +84,12 @@ try {
   const portableConfig = JSON.parse(await readFile(path.join(portableData, 'voidplayer.config.json'), 'utf8'));
   assert.deepEqual(portableConfig.mediaRoots, []);
   assert.equal((await (await fetch(portableBase + '/api/library')).json()).entries.length, 0);
-  const portableIdentityResponse = await fetch(portableBase + '/api/health');
+  const health = await fetch(portableBase + '/api/health');
+  assert.equal((await health.json()).actor, null); assert.equal(health.headers.get('set-cookie'), null);
+  assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
+  const portableIdentityResponse = await fetch(portableBase + '/api/identity', { method: 'POST', headers: { origin: portableBase, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ guest: true }) });
+  assert.equal(portableIdentityResponse.status, 200);
+  assert.deepEqual((await (await fetch(portableBase + '/api/users')).json()).users, []);
   const portableActor = (await portableIdentityResponse.json()).actor;
   const portableCookie = portableIdentityResponse.headers.get('set-cookie').split(';')[0];
   assert.equal((await (await fetch(portableBase + '/api/admin/roots')).json()).writable, true);
@@ -102,7 +107,9 @@ try {
   const guideBase = `http://127.0.0.1:${guidePort}`;
   assert.equal((await fetch(guideBase)).status, 200);
   assert.equal(await (await fetch(guideBase + '/api/connection/certificate')).text(), ca);
-  assert.equal((await fetch(guideBase + '/api/library')).status, 404);
+  assert.equal((await fetch(guideBase + '/api/library')).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${securePort}/llms.txt`)).status, 200);
+  assert.equal((await fetch(`http://127.0.0.1:${securePort}/admin`)).status, 200);
   const secureResponse = await httpFetch(secureBase + '/api/health', { ca, servername: 'voidplayer.test', headers: { host: `voidplayer.test:${securePort}`, cookie: portableCookie } });
   assert.equal(secureResponse.status, 200);
   assert.deepEqual((await secureResponse.json()).actor, portableActor, 'HTTP to HTTPS retains server identity');
@@ -138,7 +145,8 @@ try {
     const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base } });
     return { status: response.status, body: Buffer.from(await response.arrayBuffer()) };
   }, listing.entries[0]);
-  const identityResponse = await fetch(base + '/api/health');
+  const identityResponse = await fetch(base + '/api/identity', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ name: '工作区发布测试' }) });
+  assert.equal(identityResponse.status, 200);
   const workspaceActor = (await identityResponse.json()).actor;
   const workspaceCookie = identityResponse.headers.get('set-cookie').split(';')[0];
   const workspaceTransport = async (url, options) => { const response = await fetch(base + url, { ...options, headers: { ...options.headers, origin: base, cookie: workspaceCookie } }); return { status: response.status, body: Buffer.from(await response.arrayBuffer()) }; };

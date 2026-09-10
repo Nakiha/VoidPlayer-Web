@@ -1,6 +1,6 @@
 import { randomUUID } from '../uuid.ts';
 import { captureFrame } from '../presenter.ts';
-import { annotationThumbnails } from './annotation-thumbnails.ts';
+import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
 import { SLOTS } from '../model.ts';
@@ -91,18 +91,38 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     }
     controls();
   }
-  function refreshThumbnails() {
-    for (const [slot, draft] of drafts) for (const g of draft.groups) {
-      if (!g.markId || !g.drawings.length) continue;
-      const source = captureFrame(sources[slot]), thumb = document.createElement('canvas'); thumb.width = 320; thumb.height = Math.max(1, Math.round(320 / aspect(slot)));
-      const ctx = thumb.getContext('2d')!; ctx.drawImage(source, 0, 0, thumb.width, thumb.height); drawAnnotations(ctx, g.drawings.filter(d => d.tool !== 'text' || d.text?.trim()), thumb.width, thumb.height, DEFAULT_ANNOTATION_COLOR, thumb.width / annotationFrameRect(layer(slot)).width);
-      const url = thumb.toDataURL('image/jpeg', .78); annotationThumbnails.set(g.markId, { url, width: thumb.width, height: thumb.height });
-      for (const thumbnail of document.querySelectorAll<HTMLElement>('[data-mark-thumbnail]')) if (thumbnail.dataset.markThumbnail === g.markId) {
-        let image = thumbnail.querySelector('img');
-        if (!image) { image = document.createElement('img'); image.alt = '标注画面'; thumbnail.replaceChildren(image); }
-        image.width = thumb.width; image.height = thumb.height; image.src = url;
+  let encodingThumbnail = false;
+  async function refreshThumbnails() {
+    if (encodingThumbnail) { thumbnails(); return; }
+    const state = session.getState();
+    if (state.playing || state.busy || !annotationAnchorsCurrent([...drafts].map(([slot, draft]) => ({ slot, ...draft })), state.tracks)) return;
+    const jobs = [...drafts].flatMap(([slot, draft]) => draft.groups.map(group => ({slot, group: structuredClone(group)})));
+    encodingThumbnail = true;
+    try {
+      for (const {slot, group: g} of jobs) {
+        const mark = state.marks.find(mark=>mark.id===g.markId);
+        if (!mark || !g.drawings.length) continue;
+        const signature = thumbnailSignature(mark);
+        if (annotationThumbnails.get(mark.id)?.url.startsWith('data:') && annotationThumbnails.get(mark.id)?.signature === signature) continue;
+        const current = session.getState();
+        if (current.playing || current.busy || current.tracks.find(track=>track.slot===slot)?.frame?.ptsUs!==mark.frame.ptsUs) break;
+        const source = captureFrame(sources[slot]), thumb = document.createElement('canvas'); thumb.width = 320; thumb.height = Math.max(1, Math.round(320 / aspect(slot)));
+        const ctx = thumb.getContext('2d')!; ctx.drawImage(source, 0, 0, thumb.width, thumb.height);
+        drawAnnotations(ctx, g.drawings.filter(d=>d.tool!=='text'||d.text?.trim()), thumb.width, thumb.height, DEFAULT_ANNOTATION_COLOR, thumb.width / annotationFrameRect(layer(slot)).width);
+        const blob = await new Promise<Blob|null>(resolve=>thumb.toBlob(resolve,'image/jpeg',.78));
+        if (!blob || blob.size>128*1024) continue;
+        const latest = session.getState().marks.find(candidate=>candidate.id===mark.id);
+        if (!latest || thumbnailSignature(latest)!==signature) continue;
+        const url = await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
+        const preview = {url,width:thumb.width,height:thumb.height,signature}; annotationThumbnails.set(mark.id,preview);
+        window.dispatchEvent(new CustomEvent('voidplayer-annotation-preview',{detail:{id:mark.id,preview}}));
+        for (const thumbnail of document.querySelectorAll<HTMLElement>('[data-mark-thumbnail]')) if (thumbnail.dataset.markThumbnail===mark.id) {
+          let image=thumbnail.querySelector('img');if(!image){image=document.createElement('img');image.alt='标注画面';thumbnail.replaceChildren(image);} image.width=thumb.width;image.height=thumb.height;image.src=url;
+        }
+        await new Promise(resolve=>setTimeout(resolve,0));
       }
-    }
+    } catch { /* Preview generation never interrupts drawing or persistence. */ }
+    finally {encodingThumbnail=false;}
   }
   function thumbnails() { clearTimeout(thumbTimer); thumbTimer = setTimeout(refreshThumbnails, 180); }
   function persist() {

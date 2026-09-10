@@ -1,3 +1,4 @@
+import { indexProgressLabel } from '../index-progress.ts';
 import { installSourceActivity } from './source-activity.ts';
 import { loadStages } from '../media-progress.ts';
 import type { MediaLoadStage } from '../media-progress.ts';
@@ -140,7 +141,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     return [
       ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
       ...(track.indexWarning ? [['文件完整性', track.indexWarning]] : []),
-      ...(track.indexState ? [['帧索引', track.indexState === 'building' ? '后台建立中，时长暂为已索引范围' : track.indexState === 'error' ? `索引失败：${track.indexError}` : track.indexSource === 'server' ? '已复用服务器缓存' : '已完成']] : []),
+      ...(track.indexState ? [['帧索引', track.indexState === 'building' ? `${indexProgressLabel(track)} · 时长为已索引范围` : track.indexState === 'error' ? `索引失败：${track.indexError}` : track.indexSource === 'server' ? '已复用服务器缓存' : '已完成']] : []),
       ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
       ['加速请求', track.decoder === 'ffmpeg-wasm' ? '软件解码' : track.hardwareAcceleration === 'prefer-hardware' ? '硬件优先（实际硬件使用未验证）' : '浏览器自动选择'],
       [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
@@ -302,6 +303,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       if (view.panels.sources) renderSources();
       else renderStartLibrary();
     }
+    if (loadingSource && state.mediaLoad?.state === 'loading' && loadingSource.status !== loadStages[state.mediaLoad.stage]) { loadingSource.status = loadStages[state.mediaLoad.stage]; renderSources(); }
     if (sourceBusy !== state.busy) { sourceBusy = state.busy; renderSources(); }
   }
   async function load(item: SourceItem, slot: Slot) {
@@ -370,7 +372,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       else if (loading) {
         const button = createIconButton({ glyph: 'close', label: '取消载入' });
         button.setAttribute('aria-label', `取消载入：${item.name}`);
-        button.onclick = () => { session.pause(); loadingSource = null; renderSources(); };
+        button.onclick = () => { session.cancelLoad(); loadingSource = null; renderSources(); };
         actions.append(button);
       }
       else if (item.library || item.file) {

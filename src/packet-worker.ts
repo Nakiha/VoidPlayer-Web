@@ -15,9 +15,13 @@ async function start() {
   const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; pts:number; recycle?: ArrayBuffer }) => {
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
-      // Scanning yields to extraction; commit metadata between extracts.
-      void current.completeIndex(progress => send({ id, type: 'progress', progress }), undefined, () => chain)
+      // Incremental commits never await the extraction chain: an extract may
+      // itself be waiting for the next index publication.
+      chain = chain.then(() => {
+      current.onIndexWaiting = waiting => send({ id, type: 'index-waiting', data: waiting });
+      void current.completeIndex(progress => send({ id, type: 'progress', progress }), undefined, data => send({ id, type: 'index-progress', data }))
         .then(data => send({ id, ok: true, data }), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
+      });
       return;
     }
     chain = chain.then(async () => {
@@ -39,6 +43,12 @@ async function start() {
         } else if (['extract','at','next'].includes(type) && engine) {
           const result = type==='at'?await engine.at(message.pts,message.recycle):type==='next'?await engine.next(message.pts,message.recycle):await engine.extract(message.position, message.recycle);
           if(!result){send({id,ok:true,data:null});return;}
+          if (engine instanceof FlvEngine) {
+          const { index } = engine;
+          let lo = 0, hi = index.order.length;
+          while (lo < hi) { const mid = (lo + hi) >> 1; if (index.packets[index.order[mid]].pts <= result.pts) lo = mid + 1; else hi = mid; }
+          result.durationUs = index.durations[Math.max(0, lo - 1)];
+          }
           try { send({ id, ok: true, data: result }, result.frame ? [result.frame] : [result.pixels!]); }
           finally { result.frame?.close(); }
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');

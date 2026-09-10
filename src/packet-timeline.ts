@@ -15,6 +15,9 @@ export class PacketTimeline {
   private failure:unknown;
   private operation=0;
   private actualPacket:FlvPacket|undefined;
+  private growth?: () => Promise<void>;
+  setGrowth(wait?: () => Promise<void>) { this.growth = wait; }
+  appendIndex(index: FlvIndex) { this.index = index; }
   index:FlvIndex;
   readonly decoder:PacketDecoder;
   readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
@@ -33,31 +36,36 @@ export class PacketTimeline {
     const {packets,order}=this.index;
     let lo=0,hi=order.length;
     while(lo<hi){const m=(lo+hi)>>1;if(packets[order[m]].pts<=target)lo=m+1;else hi=m;}
-    this.cursor=order[Math.max(0,lo-1)];
+    let position=Math.max(0,lo-1);
+    // Seek must choose the same first output as sequential playback, even
+    // when a later key packet shares PTS with an earlier dependent picture.
+    while(position>0&&packets[order[position-1]].pts===packets[order[position]].pts)position--;
+    this.cursor=order[position];
     const config=packets[this.cursor].configuration??0;
     while(this.cursor>0&&(packets[this.cursor-1].configuration??0)===config&&(!packets[this.cursor].key||packets[this.cursor].pts>target))this.cursor--;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
   private async pull(recycle?:ArrayBuffer):Promise<FlvFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;return f;}
-    const {packets}=this.index;
     for(;;){
       const frame=this.decoder.receive(Number.MIN_SAFE_INTEGER,recycle);
       if(frame){
-        if(!Number.isSafeInteger(frame.pts)||frame.pts<=this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} <= ${this.lastPts}`);}
+        if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
+        if(frame.pts===this.lastPts){frame.frame?.close();continue;}
         this.lastPts=frame.pts;return frame;
       }
-      const packet=packets[this.cursor];
+      const packet=this.index.packets[this.cursor];
+      if (!packet && this.growth) { await this.growth(); continue; }
       if(!packet||(packet.configuration??0)!==this.configuration){
         if(!this.drained){this.drained=true;await this.decoder.drain();continue;}
         if(!packet)return null;
         await this.configure(packet.configuration??0);continue;
       }
-      this.actualPacket=packet;this.cursor++;
+      this.actualPacket=packet;
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
-      if((this.index.codec==='hevc'||this.index.codec==='vvc')&&packet.pts<this.index.packets[this.anchorIndex()].pts)continue;
-      await this.decoder.send(await this.read(packet),packet);
+      if((this.index.codec==='hevc'||this.index.codec==='vvc')&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      if (await this.decoder.send(await this.read(packet),packet) !== false) this.cursor++;
     }
   }
   private anchor=0;

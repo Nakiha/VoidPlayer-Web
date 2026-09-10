@@ -116,3 +116,25 @@ test('background index failure during a yielded frame rejects playback instead o
     assert.ok(!calls.includes('next'), 'never confuse an incomplete index with decoder EOF');
   } finally { source.dispose(); }
 });
+
+
+test('scanner publishes immutable validated prefixes while the next range is blocked', async () => {
+  const file = new Blob([syntheticFlv()]), reader = new FlvReader({ file });
+  const startup = await scanFlv(reader, undefined, undefined, true);
+  const read = reader.read.bind(reader);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  reader.read = async (offset, size) => { if (offset > 65536) await gate; return read(offset, size); };
+  const prefixes: import('../src/flv-demux.ts').FlvCheckpoint[] = [];
+  const scan = scanFlv(reader, undefined, startup, false, prefix => prefixes.push(prefix));
+  try {
+    await new Promise(resolve => setTimeout(resolve, 650));
+    assert.equal(prefixes.length, 1);
+    assert.equal(prefixes[0].complete, false);
+    assert.equal(prefixes[0].index.packets.length, 3);
+    assert.ok(prefixes[0].index.duration > startup.index.duration);
+    release(); const complete = await scan;
+    assert.equal(complete.index.packets.length, 4);
+    assert.equal(prefixes[0].index.packets.length, 3, 'future scan must not mutate a published packet array');
+  } finally { release(); await scan; reader.close(); }
+});
