@@ -133,11 +133,12 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         try { validateDescription(frame.description,pixels?.byteLength); } catch(error) {sample?.close();throw error;}
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         let closed = false;
-        const decoded = await prepareYuvFrame({ description:frame.description,kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8', width: frame.width, height: frame.height,
+        const rawFrame = { description:frame.description,kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8', width: frame.width, height: frame.height,
           ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: frame.durationUs ?? durations[position],
           byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
-        } satisfies DecodedFrame,yuvPool,deps.preserveNativeSample);
+        } satisfies DecodedFrame;
+        const decoded = deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
         if(disposed){decoded.close();throw new Error("媒体已释放。");}
         return decoded;
       });

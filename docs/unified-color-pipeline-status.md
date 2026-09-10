@@ -72,3 +72,7 @@ npm run serve -- --port 5190 --folder fixtures/video --no-logs
 BASE_URL=http://127.0.0.1:5190 BENCH_REPEATS=1 BENCH_DURATION_MS=4000 node scripts/bench-playback.mjs webkit
 BASE_URL=http://127.0.0.1:5190 BENCH_CHANNEL=chrome BENCH_REPEATS=1 BENCH_DURATION_MS=4000 node scripts/bench-playback.mjs chromium
 ```
+
+## WebGPU 后续实验（2026-09-10）
+
+见 [webgpu-color-experiment.md](webgpu-color-experiment.md)：已实测原生外部纹理、GPU 复制及严格 YUV 对照。保留原生 GPU 资源显著提高探针吞吐，但颜色一致性和 WebKit 格式覆盖未通过，仍未接入默认播放器。

@@ -92,3 +92,13 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 
 路径状态变化时才记录转换计划，不能逐帧写日志。Windows 原问题必须在用户原设备重跑；Mac 证据不能代替 Windows/Edge 最终验收。
 Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮支持范围。
+
+## Opt-in WebGPU experiment (not production)
+
+See [webgpu-color-experiment.md](webgpu-color-experiment.md). Packet media accepts
+`nativeColorMode: 'browser'` to retain native resources without YUV readback for this
+probe. Both inputs then use browser-managed external-texture conversion into sRGB.
+This is distinct from the strict application's YUV shader convention; source tags
+remain intact. Default playback is unchanged. Chrome/WebKit probes now run: pixel parity fails,
+and WebKit rejects high-depth and 4:2:2/4:4:4 memory frames. Throughput improves,
+but this path is not ready for default playback. Unsupported layouts are reported rather than silently reinterpreted.

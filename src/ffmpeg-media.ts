@@ -50,6 +50,8 @@ export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm'
 export interface FallbackDeps {
   /** Local same-frame color diagnostics only; normal playback releases native samples after copying. */
   preserveNativeSample?: boolean;
+  /** Opt-in external-texture experiment: keep native GPU resources, no plane readback. */
+  nativeColorMode?: 'browser';
   onProgress?: MediaOpenProgress;
   signal?: AbortSignal;
   /** Glue module URL (browser default: served from public/; tests: file URL). */
