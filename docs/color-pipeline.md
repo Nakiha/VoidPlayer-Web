@@ -66,6 +66,9 @@ Dolby Vision/HDR10+ 的动态元数据目前没有端到端解析、传输和应
 
 ## 诊断和验收
 
+SDR 软件/原生路径对比的显式本地取证入口见 [sdr-color-evidence.md](sdr-color-evidence.md)。
+该工具复用现有解码与 presenter，不改色彩策略；不同编码文件之间的画面差异不能直接归因于软硬解。
+
 上屏路径状态变化时记录：帧类型、format、opaque、byteLengthEstimated、当前 color、sourceColor、
 hdr/sourceHdr、conversion、target 和源 PTS。仅状态变化记录，避免逐帧日志干扰性能。
 解码器类型/能力探测与色彩路径分别判断：不透明帧并不能独立证明具体硬件实现。
