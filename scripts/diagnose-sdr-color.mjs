@@ -21,7 +21,7 @@ for (let i = 0; i < args.length; i++) {
 if (!files.length || files.length > 4 || !out || times.length < 1 || times.length > 8 || times.some(t => !Number.isSafeInteger(t) || t < 0))
   throw new Error('Usage: node scripts/diagnose-sdr-color.mjs [--channel msedge|chrome] [--out DIR] [--times-us 0,1000000] [--images] FILE.flv [FILE.flv]');
 await mkdir(out, { recursive: true });
-const report = { schema: 1, startedAt: new Date().toISOString(), requestedTimesUs: times, channel: channel ?? 'bundled-chromium', headless,
+const report = { schema: 2, startedAt: new Date().toISOString(), requestedTimesUs: times, channel: channel ?? 'bundled-chromium', headless,
   measurement: 'source-sized presenter capture in sRGB bytes; excludes OS/display composition; not a color-accuracy verdict', files: [] };
 try { report.commit = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(); } catch { report.commit = 'unknown'; }
 report.core = JSON.parse(await readFile('scripts/release-core.json', 'utf8'));
@@ -36,7 +36,7 @@ try {
   await page.route('**/color-evidence', route => route.fulfill({ contentType: 'text/html', body: '<title>Local SDR color evidence</title><input type="file"><p>Local diagnostic in progress. No media upload.</p>' }));
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/color-evidence`);
   await page.exposeFunction('saveEvidenceImage', async (name, data) => {
-    if (!images || !/^file-\d+-time-\d+-(native|wasm)\.png$/.test(name)) throw new Error('Invalid evidence image');
+    if (!images || !/^file-\d+-time-\d+-(native|native-canvas|wasm)\.png$/.test(name)) throw new Error('Invalid evidence image');
     await writeFile(resolve(out, name), Buffer.from(data.split(',')[1], 'base64'));
   });
   for (const [fileNumber, path] of files.entries()) {
@@ -98,6 +98,26 @@ try {
                   renderer: stage.querySelector('.frame-presentation')?.getContext('webgl') ? 'webgl' : 'canvas2d' };
                 pixels[mode] = data;
                 if (images) await window.saveEvidenceImage(`file-${fileNumber}-time-${target}-${mode}.png`, capture.toDataURL('image/png'));
+                if (mode === 'wasm' && frame.pixels) {
+                  // No source-tag reinterpretation: this only checks whether
+                  // uploading/capturing the already-RGBA bytes changes them.
+                  pair.wasmInputToPresenter = compareRgba(frame.pixels, data);
+                }
+                if (mode === 'native') {
+                  // Reuse this exact decoded sample, not another seek/decode.
+                  // A canvas without a presentation surface selects the real
+                  // presenter's existing sRGB 2D path without patching globals.
+                  const fallback = document.createElement('canvas');
+                  try {
+                    paintFrame(fallback, frame);
+                    pixels.nativeCanvas = fallback.getContext('2d').getImageData(0, 0, fallback.width, fallback.height).data;
+                    pair.nativeCanvas = { path: 'presenter-canvas2d-srgb', sameDecodedFrame: true, summary: summarizeRgba(pixels.nativeCanvas) };
+                    if (pair.native.renderer === 'webgl') pair.nativeDirectToCanvas = compareRgba(data, pixels.nativeCanvas);
+                    else pair.nativeCanvas.notCompared = 'Production capture already used Canvas 2D; no WebGL baseline';
+                    if (images) await window.saveEvidenceImage(`file-${fileNumber}-time-${target}-native-canvas.png`, fallback.toDataURL('image/png'));
+                  } catch (e) { pair.nativeCanvas = { error: String(e) }; }
+                  finally { fallback.width = fallback.height = 1; }
+                }
               } catch (e) { pair[mode] = { error: String(e) }; }
               finally { frame?.close(); setPresentationGeometry(canvas, null); stage.remove(); }
             }
@@ -105,7 +125,10 @@ try {
             if (!pixels.native || !pixels.wasm) pair.notCompared = 'Both decode paths did not produce a capture';
             else if (a.sourcePtsUs !== b.sourcePtsUs || a.width !== b.width || a.height !== b.height) pair.notCompared = 'Actual source PTS or dimensions differ; do not compare different frames';
             else if (a.policy.hdr || a.policy.sourceHdr || b.policy.hdr || b.policy.sourceHdr) pair.notCompared = 'HDR metadata detected; outside this SDR probe';
-            else pair.nativeToWasm = compareRgba(pixels.native, pixels.wasm);
+            else {
+              pair.nativeToWasm = compareRgba(pixels.native, pixels.wasm);
+              if (pixels.nativeCanvas) pair.nativeCanvasToWasm = compareRgba(pixels.nativeCanvas, pixels.wasm);
+            }
           }
           result.diagnostics = await readLogs({ sinceSeq, limit: 200 });
           return result;

@@ -54,12 +54,59 @@ unknown tags remain unknown. Hardware implementations can have small rounding
 differences. Capture excludes OS/ICC/display composition. A failed launch or
 decoder/capture failure remains visible in `report.json`.
 
-At most a native and WASM capture pair is retained for one requested time; captures
+At most three captures (native direct, native Canvas, WASM) are retained for one requested time; captures
 over 16M pixels are rejected. This is an explicit diagnostic, not a per-frame
 playback logger. Pauses/seeks are exercised; continuous-playback parity and
 full native/WASM GPU resource accounting remain separate validation work.
 
 ## Interpreting the evidence
+
+Schema 2 adds isolation within the same decoded frame:
+
+| Field | A → B, signed difference is B minus A | Purpose |
+| --- | --- | --- |
+| `nativeToWasm` | Native production presenter → WASM production presenter | Existing same-file backend comparison |
+| `nativeDirectToCanvas` | Native WebGL upload → native sRGB Canvas 2D | Same VideoSample, no additional seek/decode; isolate the browser presentation entry |
+| `nativeCanvasToWasm` | Native sRGB Canvas → WASM production presenter | Determine whether a shared browser presentation entry changes the observed gap |
+| `wasmInputToPresenter` | Decoded RGBA bytes → captured production output | Check byte upload/capture independently of YUV conversion |
+
+`nativeDirectToCanvas` is omitted if WebGL was unavailable. Native/WASM
+comparisons still require matching actual PTS/dimensions and no detected HDR.
+The Canvas probe uses the existing presenter without a WebGL surface; it does
+not replace the production path or alter tags. Optional PNGs include a
+`native-canvas` image. `pixelsOver2` and `pixelsOver8` count pixels whose maximum
+RGB-channel difference exceeds those code-value thresholds; they supplement the
+exact-equality count, not perceptual visibility or color-accuracy claims.
+
+If native direct and native Canvas differ while Canvas and WASM agree much more
+closely, investigate the browser import/conversion boundary first. If native
+direct and Canvas agree, investigate decoded samples and swscale conversion.
+If WASM input and captured output differ, inspect upload/capture before blaming
+YUV conversion. None of these comparisons alone establishes which image is
+correct; that needs a declared conversion target and independent reference.
+
+### First field report (Edge 152, two SDR files)
+
+The supplied summary reports HEVC native/WASM MAE 1.69 and 1.97 at two times,
+with signed blue differences about -2.5 and -2.3. It reports native NV12 tagged
+BT.709 limited, while WASM source matrix/transfer/primaries are unknown and
+source range is explicitly limited. VVC has only a WASM capture. This is
+evidence of a backend-dependent difference for those HEVC captures; it does not
+prove rounding, chroma interpolation, or a particular matrix error.
+
+- Unknown source tags do not mean swscale uses no matrix: the pinned core
+  `c0d3c369` chooses BT.709 for an unspecified matrix when height >=720.
+  Thus the reported 1080x1920 HEVC already has an effective BT.709 fallback.
+- Limited YUV becoming full-range RGB is expected after range expansion;
+  `matrix=rgb, fullRange=true` on RGBA is not itself an erroneous relabel.
+- VVC lacking native support prevents a VVC same-codec backend comparison. It
+  does **not** eliminate the backend difference from the user's HEVC-native vs
+  VVC-WASM viewing comparison.
+- ffprobe stream/frame output is not an independent SPS/VUI bit parser, and
+  WebCodecs/NV12 alone does not prove hardware execution.
+- A near-100% nonidentical-pixel count can arise from one-code-value differences;
+  two-frame MAE cannot establish either perceptual invisibility or whole-file
+  color correctness. Do not compensate the blue channel with a constant offset.
 
 1. Compare the **same HEVC file** between native and WASM. If it differs, first
    inspect per-frame range/matrix/transfer/primaries, then pixel differences.

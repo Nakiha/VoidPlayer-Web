@@ -8,10 +8,19 @@ test('RGB evidence measures signed channel shifts and ignores alpha', () => {
   const diff = compareRgba(a, b);
   assert.equal(diff.mae, 40 / 6); assert.equal(diff.rmse, Math.sqrt(400 / 6));
   assert.equal(diff.max, 10); assert.equal(diff.differentPixels, 2);
+  assert.equal(diff.pixelsOver2, 2); assert.equal(diff.pixelsOver8, 2);
   assert.deepEqual(diff.meanSignedRgb, [10, -10, 0]);
   assert.deepEqual(summarizeRgba(a).rgb[0], { mean: 10, min: 0, max: 20, zeros: 1, saturated: 0 });
   assert.equal(summarizeRgba(a).rgb[2].saturated, 1);
   assert.equal(compareRgba(a, a).mae, 0);
+});
+
+test('one-code-value differences are not counted as large color differences', () => {
+  const a = new Uint8ClampedArray([100, 100, 100, 255, 100, 100, 100, 255]);
+  const b = new Uint8ClampedArray([101, 101, 101, 255, 100, 102, 100, 255]);
+  const diff = compareRgba(a, b);
+  assert.equal(diff.differentPixels, 2);
+  assert.equal(diff.pixelsOver2, 0); assert.equal(diff.pixelsOver8, 0);
 });
 
 test('invalid evidence buffers do not produce reassuring NaN or partial statistics', () => {
