@@ -46,6 +46,11 @@ try {
         const report = await Promise.race([run(), crashed, new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error('scenario timeout (including navigation/load)')), durationMs + 45000);
         })]);
+        if(process.env.BENCH_DIAGNOSTICS==='1') report.scheduling=await page.evaluate(async()=>{
+          const start=performance.now();let frames=0;
+          await new Promise(resolve=>{const tick=()=>{frames++;if(performance.now()-start>=1000)resolve();else requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+          return{frames,wallMs:performance.now()-start,visible:document.visibilityState,focused:document.hasFocus(),canvases:[...document.querySelectorAll('.frame-presentation')].map(c=>({rect:c.getBoundingClientRect().toJSON(),hidden:c.hidden,display:getComputedStyle(c).display,visibility:getComputedStyle(c).visibility}))};
+        });
         results.push({ scenario, repeat, browserName, headless, ...report });
       } catch (error) {
         results.push({ scenario, repeat, browserName, headless, passed: false, error: String(error.message ?? error) });

@@ -1,3 +1,4 @@
+import { initializeGpuPresentation } from './webgpu-presenter.ts';
 import { indexProgressLabel } from './index-progress.ts';
 import { AnnotationClient } from './annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
@@ -52,7 +53,9 @@ const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
 $('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
+await initializeGpuPresentation(Object.values(canvases));
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
 const removeLogPanel = installLogPanel($('diagnostic-logs'));
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';

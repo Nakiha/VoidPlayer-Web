@@ -6,7 +6,9 @@ import {createHash} from 'node:crypto';
 import {platform,release,arch} from 'node:os';
 import {resolve} from 'node:path';
 const gpuMode=process.env.PROBE_GPU_MODE??'external', skipThroughput=process.env.PROBE_SKIP_THROUGHPUT==='1';
-if(!['external','copy','strict'].includes(gpuMode))throw new Error('Invalid GPU mode');
+if(!['external','copy','strict','hybrid','planes','webkit-planes'].includes(gpuMode))throw new Error('Invalid GPU mode');
+const maxColorError=process.env.PROBE_MAX_COLOR_ERROR===undefined?null:Number(process.env.PROBE_MAX_COLOR_ERROR);
+if(maxColorError!==null&&(!Number.isFinite(maxColorError)||maxColorError<0))throw new Error('Invalid color error limit');
 const browserName=process.env.PROBE_BROWSER??'chromium';
 if(!['chromium','webkit'].includes(browserName))throw new Error('Invalid browser');
 if (!process.argv.slice(2).length) throw new Error('Pass one or more FLV fixture paths');
@@ -15,7 +17,7 @@ await mkdir(output,{recursive:true});
 const server=await createServer({configLoader:'runner',cacheDir:resolve('artifacts/color/webgpu-vite-cache'),server:{host:'127.0.0.1',port:0}});
 let browser, deadline;
 const probeDigest=createHash('sha256');
-for(const name of ['diagnose-webgpu-color.mjs','webgpu-color-surface.mjs'])probeDigest.update(await readFile(new URL(name,import.meta.url)));
+for(const name of ['diagnose-webgpu-color.mjs','../src/webgpu-color-surface.mjs','../src/webgpu-yuv-kernel.mjs'])probeDigest.update(await readFile(new URL(name,import.meta.url)));
 const report={probeDigest:probeDigest.digest('hex'),environment:{platform:platform(),release:release(),arch:arch()},startedAt:new Date().toISOString(),browserName,gpuMode,skipThroughput,measurement:'SDR source-sized GPU capture; excludes physical display. Throughput probe is not session playback benchmark.'};
 try {
  await server.listen();
@@ -38,7 +40,7 @@ try {
   const result={buildInfo,files:[],synthetic:[],readbacksDuringThroughput:0};
   const canvas=document.createElement('canvas');document.querySelector('main').append(canvas);
   const gpu=await createExternalSurface(canvas,undefined,gpuMode==='strict'?'external':gpuMode);result.adapter=gpu.adapter;
-  const convert=f=>f.kind==='video-sample'?f.sample.toVideoFrame():wasmVideoFrame(f,resolveYuvColor,validateYuv);
+  const convert=f=>['hybrid','planes','webkit-planes'].includes(gpuMode)&&f.kind==='yuv'?{...f,displayWidth:f.description.width,displayHeight:f.description.height,colorSpace:{toJSON:()=>f.description.color},close(){}}:f.kind==='video-sample'?f.sample.toVideoFrame():wasmVideoFrame(f,resolveYuvColor,validateYuv);
   try {
    // Known black/white/neutral and chromatic values exercise constructor and GPU.
    for(const layoutName of (gpuMode==='strict'?[]:['I420','I422','I444','NV12']))for(const depth of (layoutName==='NV12'?[8]:[8,10,12]))for(const matrix of ['bt709','smpte170m','bt2020-ncl'])for(const fullRange of [false,true]){
@@ -62,7 +64,7 @@ try {
       color:{matrix,fullRange,transfer:'bt709',primaries:matrix==='bt2020-ncl'?'bt2020':'bt709'},
       yuv:{bitDepth:depth,bitShift:0,subsampleX,subsampleY,semiplanar,planes}};
     let frame;
-    try{frame=wasmVideoFrame({kind:'yuv',pixels:raw,description:d,sourcePtsUs:0},resolveYuvColor,validateYuv);gpu.present(frame);const pixels=await gpu.capture();result.synthetic.push({layoutName,depth,matrix,fullRange,resource:frame.colorSpace.toJSON(),toStrictReference:compareRgba(yuvToRgba(d,raw),pixels),black:[...pixels.slice(0,3)],white:[...pixels.slice(8,11)]});}
+    try{frame=convert({kind:'yuv',pixels:raw,description:d,sourcePtsUs:0});gpu.present(frame);const pixels=await gpu.capture();result.synthetic.push({layoutName,depth,matrix,fullRange,resource:frame.colorSpace.toJSON(),toStrictReference:compareRgba(yuvToRgba(d,raw),pixels),black:[...pixels.slice(0,3)],white:[...pixels.slice(8,11)]});}
     catch(e){result.synthetic.push({layoutName,depth,matrix,fullRange,error:String(e)});}finally{frame?.close();}
    }
    for(const file of document.querySelector('input').files){
@@ -71,16 +73,17 @@ try {
     try {
      for(const mode of ['native','wasm']){sources[mode]=await openPacketMedia(container,{file},file,{forceWasm:mode==='wasm',nativeColorMode:gpuMode==='strict'?undefined:'browser'});if(mode==='native'&&sources[mode].info.decoder!=='webcodecs')throw new Error('Native decoder unavailable');}
      for(const pts of (gpuMode==='strict'?[]:[0,1000000])){
-      const pair={requestedPtsUs:pts},pixels={},strict={};let nativePlanes;item.pairs.push(pair);
+      const pair={requestedPtsUs:pts},pixels={},strict={},viewport={};let nativePlanes;item.pairs.push(pair);
       for(const mode of ['native','wasm']){
-       const f=await sources[mode].frameAt(pts);let resource;
-       try{resource=convert(f);gpu.present(resource);pixels[mode]=await gpu.capture();pair[mode]={sourcePtsUs:f.sourcePtsUs,width:resource.displayWidth,height:resource.displayHeight,kind:f.kind,copyMs:f.copyMs??0,description:f.description,resourceColor:resource.colorSpace.toJSON()};
+       const f=await sources[mode].frameAt(pts);let resource,copiedDiagnostic;
+       try{if(mode==='native')copiedDiagnostic=await prepareYuvFrame({...f,close(){}});resource=convert(f);gpu.present(resource);pixels[mode]=await gpu.capture();pair[mode]={sourcePtsUs:f.sourcePtsUs,width:resource.displayWidth,height:resource.displayHeight,kind:f.kind,copyMs:f.copyMs??0,description:f.description,resourceColor:resource.colorSpace.toJSON()};
         const canvasPixels=v=>{const c=new OffscreenCanvas(v.displayWidth,v.displayHeight);const ctx=c.getContext('2d',{colorSpace:'srgb'});ctx.drawImage(v,0,0);return ctx.getImageData(0,0,c.width,c.height).data;};
-        pair[mode].externalToCanvas=compareRgba(pixels[mode],canvasPixels(resource));
+        // Native resources stay exclusively in the GPU path during this comparison.
+        gpu.present(resource,640,360);viewport[mode]=await gpu.capture(true);
         if(mode==='native'){
           // Explicit diagnostic only: borrow the sample; the enclosing finally
           // owns f.close(). Exact copied planes retain resource tags unchanged.
-          const copied=await prepareYuvFrame({...f,close(){}});let rebuilt;
+          const copied=copiedDiagnostic;let rebuilt;
           try{
             if(copied.kind==='yuv'){
               strict[mode]=yuvToRgba(copied.description,copied.pixels);nativePlanes={description:copied.description,pixels:copied.pixels};
@@ -89,6 +92,7 @@ try {
               pair.nativeOriginalToRebuilt=compareRgba(pixels.native,pixels.rebuilt);
               pair.rebuiltDescription=copied.description;
               pair.native.externalToStrict=compareRgba(pixels.native,strict[mode]);
+              pair.native.samples=Array.from({length:17},(_,i)=>{const x=Math.min(copied.description.width-1,Math.floor(i*copied.description.width/17)),y=Math.floor(copied.description.height/2),j=(y*copied.description.width+x)*4;return{x,y,yuv:[0,1,2].map(c=>yuvSample(copied.pixels,copied.description.yuv,c,x,y)),native:[...pixels.native.slice(j,j+3)],strict:[...strict[mode].slice(j,j+3)]};});
               if(copied.description.color.transfer==='bt709'&&copied.description.color.primaries==='bt709'){
                 const converted=new Uint8ClampedArray(strict[mode]);
                 for(let j=0;j<converted.length;j++)if(j%4!==3){const v=converted[j]/255;const linear=v<0.081?v/4.5:((v+0.099)/1.099)**(1/0.45);converted[j]=Math.round(255*(linear<=0.0031308?12.92*linear:1.055*linear**(1/2.4)-0.055));}
@@ -98,7 +102,7 @@ try {
             }
           }finally{rebuilt?.close();copied.close();}
         }else{
-          strict[mode]=yuvToRgba(f.description,f.pixels);
+          strict[mode]=yuvToRgba(f.description,f.pixels);pair.wasm.samples=pair.native.samples?.map(({x,y})=>({x,y,yuv:[0,1,2].map(c=>yuvSample(f.pixels,f.description.yuv,c,x,y))}));
           if(nativePlanes){
             const a=nativePlanes.description,b=f.description,la=a.yuv,lb=b.yuv;
             if(a.codedWidth===b.codedWidth&&a.codedHeight===b.codedHeight&&la.bitDepth===lb.bitDepth&&la.subsampleX===lb.subsampleX&&la.subsampleY===lb.subsampleY){
@@ -115,6 +119,7 @@ try {
        finally{resource?.close();f.close();}
       }
       if(pair.native.sourcePtsUs===pair.wasm.sourcePtsUs&&pair.native.width===pair.wasm.width&&pair.native.height===pair.wasm.height)pair.nativeToWasm=compareRgba(pixels.native,pixels.wasm);else pair.notCompared='PTS or dimensions differ';
+      if(!pair.notCompared&&viewport.native&&viewport.wasm)pair.nativeToWasmViewport=compareRgba(viewport.native,viewport.wasm);
       if(!pair.notCompared&&strict.native&&strict.wasm)pair.nativeToWasmStrict=compareRgba(strict.native,strict.wasm);
       if(!pair.notCompared&&pixels.rebuilt)pair.nativeRebuiltToWasm=compareRgba(pixels.rebuilt,pixels.wasm);
      }
@@ -148,6 +153,8 @@ try {
  },{gpuMode,skipThroughput});
  const pairs=report.result.files.flatMap(f=>f.pairs);
  report.summary={comparedPairs:pairs.filter(p=>p.nativeToWasm).length,identicalPairs:pairs.filter(p=>p.nativeToWasm?.max===0).length,supportedFormatCases:report.result.synthetic.filter(s=>!s.error).length,rejectedFormatCases:report.result.synthetic.filter(s=>s.error).length,throughputRuns:report.result.files.flatMap(f=>f.throughput).length};
+ report.summary.colorErrorLimit=maxColorError;
+ if(pairs.some(p=>!p.nativeToWasm||!p.nativeToWasmViewport||p.error||(maxColorError!==null&&(p.nativeToWasm.max>maxColorError||p.nativeToWasmViewport.max>maxColorError))))process.exitCode=1;
  if(report.result?.errors?.length || report.result?.files?.some(f=>f.error) || report.result?.synthetic?.some(s=>s.error)) process.exitCode=1;
 }catch(e){report.error=String(e);process.exitCode=1;}
 finally{clearTimeout(deadline);await browser?.close();await server.close();await writeFile(resolve(output,'report.json'),JSON.stringify(report,null,2));}

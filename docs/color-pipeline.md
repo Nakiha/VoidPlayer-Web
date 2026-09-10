@@ -1,7 +1,9 @@
 # 色彩链路与帧资源契约
 
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
-本轮统一可读 SDR YUV；不承诺跨设备逐像素一致或 HDR/EDR 输出。
+默认先验证浏览器资源 profile，再使用 WebGPU 原生资源/原精度 YUV 双入口；探针失败保留旧路径。不承诺跨设备逐像素一致或 HDR/EDR 输出。
+
+当前实测结果与边界见 [WebGPU 修复记录](webgpu-color-pipeline-status.md)。
 
 ## 信息与责任
 
@@ -9,10 +11,23 @@
 - `FrameDescription.color` 描述实际交付资源，不能用容器标签覆盖已经转换的浏览器资源。
 - `resolveYuvColor` 产生单独的 resolved plan，逐字段记录 resource/fallback 来源，不改原标签。
 - `yuv` 描述位深、位对齐、子采样、平面 offset/stride/尺寸及 chroma location。偏移按字节计，16 位数据为 little endian。
-- `byteLength` 是拥有的平面缓冲大小；正常 WebCodecs 复制后立即关闭 VideoSample，队列仅计拥有的平面；显式诊断保留原资源时 `DecodedFrame.byteSize` 计入两者。每源最多额外保留一个 ≤64 MiB 回收缓冲。
+- `byteLength` 是拥有的平面缓冲大小；WebGPU 路径保留并计费原生 VideoSample；旧路径复制后立即关闭 VideoSample，队列仅计拥有的平面；显式诊断保留原资源时 `DecodedFrame.byteSize` 计入两者。每源最多额外保留一个 ≤64 MiB 回收缓冲。
 - coded size、visibleRect、SAR/display size、rotation 相互独立。颜色转换在裁剪后的源尺寸执行，旋转再定位源像素，视口缩小 LINEAR、放大 NEAREST。
 
-## 实际呈现路径
+## 默认 WebGPU 路径
+
+启动时 `webgpu-calibration.ts` 解码内嵌中性渐变，以预先计算的有限参考验证 Apple 709、sRGB 或 CV full-range profile。不从用户帧提取颜色拟合参数，也不按 UA 或片名选择修正。验证失败、初始化失败或无 WebGPU 时不启用。
+
+- WebCodecs：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB GPU 画布。播放无应用层 copyTo/readback。
+- WASM：ABI v2 原始 YUV → GPU storage buffer → `webgpu-yuv-kernel.mjs` 的 range/matrix/transfer/primaries 转换 → 同一输出。8–16 位精度保留到运算；无需 memory VideoFrame。
+- Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。
+- profile 是独立的资源呈现约定，不覆盖源标签。旧 `resolveYuvColor` 的默认值与新 profile 需区分；未知的显式色彩不强制套 709。
+- 两入口对整数源像素转换为 RGB，缩小对四点 RGB 做双线性，放大 NEAREST；避免两路分别在 YUV/RGB 域滤波。共享设备和微任务提交，引用的资源覆写前先提交，旧 clone 在提交后关闭。
+- 每个 surface 只保留当前 clone 或已上传 YUV buffer；截图按需用同一 shader 渲染源尺寸，旋转后物化 2D 画布。播放不维护隐藏 RGBA 中间画布。
+- GPU 丢失、资源超限/导入失败、RGBA 或 PQ/HLG 使用下述旧路径，记本地原因。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
+- 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
+
+## 旧路径及能力回退
 
 | 资源 | 路径 | 诊断 |
 | --- | --- | --- |
@@ -28,7 +43,7 @@
 YUV shader 的 colorAt 对整数源像素转换并量化，再做视口采样。放大取最近源像素；缩小对邻近四个已经转换、量化的 RGB 做双线性插值。颜色数学不随视口大小变化；色度重建和视口滤波是两次独立决策。
 无 WebGL 的旋转使用相同 CPU 结果。context lost 后停止使用失效纹理，下一次呈现/seek 走源画布回退；暂停帧丢失需重新 seek，不承诺从失效 GPU 恢复像素。
 
-## SDR 数学与默认值
+## 旧路径 SDR 数学与默认值
 
 SDR 使用显示参照的 sRGB-like 约定：YUV 矩阵得到的非线性 R'G'B' 直接作为 SDR 显示码值。
 **不做 BT.709 OETF 的逆变换再编码为 sRGB**，两者不是同一数学函数。这是明确的观看约定，非场景线性色度学转换。
@@ -68,7 +83,7 @@ Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深�
 旧 RGBA 回退仍由 swscale SWS_BICUBIC 执行：显式 AVFrame matrix/range 优先，未知 matrix 用 height≥720 的 BT.709，否则 BT.601；未知 range 为 limited。
 该回退不计入统一 YUV 验收，尤其不代表完整 HDR tone mapping。
 
-## WebCodecs 读取与生命周期
+## 旧路径 WebCodecs 读取与生命周期
 
 mediabunny、FLV packet、MP4 packet 都通过 `prepareYuvFrame` 适配。
 `copyTo` 在 MediaSource 的异步取帧/背压范围内完成，不在 VideoDecoder 同步 output 回调中异步堆积帧。
@@ -77,7 +92,7 @@ mediabunny、FLV packet、MP4 packet 都通过 `prepareYuvFrame` 适配。
 
 format=null 不调用 allocationSize/copyTo，按 codedWidth×codedHeight×8 估算预算，标记 byteLengthEstimated。
 NotSupportedError 保留可播放资源并记录原因；其他错误继续传播，临时 clone、sample 明确 close。
-取消/释放发生在 copyTo 等待期间时，返回前关闭帧。正常路径保存独立 rotation 后关闭 sample；仅 preserveNativeSample 显式本地诊断保留原样本，并纳入预算。
+取消/释放发生在 copyTo 等待期间时，返回前关闭帧。旧路径保存独立 rotation 后关闭 sample；该路径仅 preserveNativeSample 显式本地诊断保留原样本，并纳入预算。
 
 原生 packet 最多保留 8 个未输出输入；输出预算 max(128 MiB, 8×最大帧计费)，异常数量上限 32。
 输入未被接受时先 receive 再重试同一包，不前移游标。播放队列至少为两帧保留预算，并保留容量限制。
@@ -85,6 +100,7 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 ## 验证与证据边界
 
 - `npm test`：布局/矩阵/范围/高位深/heap growth、真实 single/mt core、packet/container 与生命周期。
+- `npm run test:webgpu:browser`：自动资源探针、原生 clone 生命周期、按需截图、旋转/缩放与直接高位深平面。
 - `npm run test:presentation:browser`：Chromium/WebKit shader 对 CPU 参考、裁剪/旋转/采样及旧 PQ/HLG 路径。
 - `npm run test:browser`：轨道、尺寸调度、双轨布局、关闭与恢复。
 - `node scripts/bench-playback.mjs webkit`：真实应用连续播放；Chrome 可用 BENCH_CHANNEL=chrome。
@@ -92,13 +108,3 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 
 路径状态变化时才记录转换计划，不能逐帧写日志。Windows 原问题必须在用户原设备重跑；Mac 证据不能代替 Windows/Edge 最终验收。
 Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮支持范围。
-
-## Opt-in WebGPU experiment (not production)
-
-See [webgpu-color-experiment.md](webgpu-color-experiment.md). Packet media accepts
-`nativeColorMode: 'browser'` to retain native resources without YUV readback for this
-probe. Both inputs then use browser-managed external-texture conversion into sRGB.
-This is distinct from the strict application's YUV shader convention; source tags
-remain intact. Default playback is unchanged. Chrome/WebKit probes now run: pixel parity fails,
-and WebKit rejects high-depth and 4:2:2/4:4:4 memory frames. Throughput improves,
-but this path is not ready for default playback. Unsupported layouts are reported rather than silently reinterpreted.

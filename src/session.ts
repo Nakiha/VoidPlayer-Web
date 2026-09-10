@@ -1,3 +1,4 @@
+import { schedulePresentationTick } from './presentation-tick.ts';
 import { annotationMediaKey } from './annotation-record.ts';
 import type { AnnotationDocument } from './annotation-record.ts';
 import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
@@ -497,13 +498,7 @@ export class ReviewSession {
     this.stopPlayback = stop;
     const tick = () => new Promise<void>(resolve => {
       const finish = () => { cancelTick = undefined; resolve(); };
-      if (typeof requestAnimationFrame === 'function') {
-        const id = requestAnimationFrame(finish);
-        cancelTick = () => { cancelAnimationFrame(id); finish(); };
-      } else {
-        const id = setTimeout(finish, 8);
-        cancelTick = () => { clearTimeout(id); finish(); };
-      }
+      cancelTick = schedulePresentationTick(finish);
     });
     try {
       while (active()) {

@@ -1,5 +1,7 @@
 # WebGPU SDR experiment — tested 2026-09-10
 
+> 历史阶段记录：以下结论对应 CPU / memory-VideoFrame 实验，已由 [原生 WebGPU + raw YUV 修复记录](webgpu-color-pipeline-status.md) 续接。默认路径与当前验收以新记录为准。
+
 **Not ready for default playback.** Keeping native frames on the GPU improves probe
 throughput, but common browser import does not deliver native/WASM color parity,
 and WebKit lacks required memory-frame formats.

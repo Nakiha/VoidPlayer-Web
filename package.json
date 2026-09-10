@@ -47,7 +47,8 @@
     "test:logs:browser": "npm run build && node scripts/check-log-report-browser.mjs",
     "test:caches:browser": "npm run build && node scripts/check-cache-browser.mjs",
     "test:annotations:persistence": "npm run build && node scripts/check-annotation-persistence-browser.mjs",
-    "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs"
+    "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs",
+    "test:webgpu:browser": "node scripts/check-webgpu-presentation.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

@@ -1,3 +1,4 @@
+import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
 import { yuvToRgba } from './yuv-color.ts';
 import { validateDescription } from './frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
@@ -12,6 +13,9 @@ import { log } from './log.ts';
 // sRGB Canvas 2D path before upload, consistently from the first frame onward.
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
+  if(gpuPaint(canvas,frame))return;
+  const fallbackGeometry=gpuFallbackGeometry(canvas);
+  if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createPresentationSurface(canvas);if(surface){surfaces.set(canvas,surface);surface.geometry(fallbackGeometry);}}
   const start=performance.now();
   paintFrameContent(canvas,frame);
   if(frame.kind!=='yuv')canvas.dataset.colorExecutor=frame.kind==='rgba8'?'rgba-upload':'browser-managed';
@@ -91,10 +95,11 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
 }
 
 /** Materialize source-sized pixels on demand; playback never calls this. */
-export function captureFrame(canvas: HTMLCanvasElement) { return surfaces.get(canvas)?.captureSource() ?? canvas; }
+export function captureFrame(canvas: HTMLCanvasElement) { return gpuCapture(canvas) ?? surfaces.get(canvas)?.captureSource() ?? canvas; }
 
 const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
+  if(gpuGeometry(canvas,geometry))return;
   if (!geometry) {
     if (surfaces.has(canvas)) { surfaces.get(canvas)!.dispose(); surfaces.delete(canvas); canvas.width = canvas.height = 1; }
     return;
@@ -102,4 +107,4 @@ export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: Pre
   if (!surfaces.has(canvas) && geometry) { const surface = createPresentationSurface(canvas); if (surface) surfaces.set(canvas, surface); }
   surfaces.get(canvas)?.geometry(geometry);
 }
-export function disposePresentation() { for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }
+export function disposePresentation() { disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }

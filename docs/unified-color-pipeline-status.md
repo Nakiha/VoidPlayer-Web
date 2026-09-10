@@ -1,5 +1,7 @@
 # 统一 SDR 色彩管线：Mac 实现与验证状态
 
+> 历史阶段记录：以下结论对应 CPU / memory-VideoFrame 实验，已由 [原生 WebGPU + raw YUV 修复记录](webgpu-color-pipeline-status.md) 续接。默认路径与当前验收以新记录为准。
+
 状态：**实验分支，颜色验证有进展，性能验收未通过，不应直接合并主线。**
 
 ## 代码来源
