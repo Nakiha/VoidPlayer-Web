@@ -70,6 +70,19 @@ try{
     const expected=[y+2*(1-kr)*v,y-2*kb*(1-kb)/kg*u-2*kr*(1-kr)/kg*v,y+2*(1-kb)*u].map(n=>Math.round(Math.max(0,Math.min(1,n))*255));
     paintFrame(source,{kind:'yuv',description:d,pixels,width:2,height:2});colorVectors.push({matrix,fullRange,expected,got:pixelRead().bytes.slice(0,3)});
    }
+   const {yuvToRgba}=await import('/src/yuv-color.ts');
+   const chromaCases=[];
+   const glStage=document.createElement('div');glStage.className='frame-stage';const glSource=document.createElement('canvas');glStage.append(glSource);document.body.append(glStage);setPresentationGeometry(glSource,geometry);
+   for(const depth of [8,10,16])for(const semi of [false,true])for(const siting of [null,1,2,3,4,5,6]){
+    const bytes=depth===8?1:2,scale=2**(depth-8),shift=depth===10?6:0,pixels=new Uint8ClampedArray(24*bytes),view=new DataView(pixels.buffer);
+    const codes=Array(16).fill(100*scale).concat(semi?[64,80,192,170,90,200,160,60].map(n=>n*scale):[64,192,90,160,80,170,200,60].map(n=>n*scale));
+    codes.forEach((n,i)=>bytes===1?pixels[i]=n:view.setUint16(i*2,n*2**shift,true));
+    const planes=[{offset:0,stride:4*bytes,width:4,height:4},{offset:16*bytes,stride:(semi?4:2)*bytes,width:2,height:2},...semi?[]:[{offset:20*bytes,stride:2*bytes,width:2,height:2}]];
+    const d={revision:1,width:4,height:4,codedWidth:4,codedHeight:4,visibleRect:{x:0,y:0,width:4,height:4},displayWidth:4,displayHeight:4,stride:null,byteLength:pixels.length,format:'YUV',color:{matrix:'bt709',primaries:'bt709',transfer:'bt709',fullRange:false},yuv:{bitDepth:depth,bitShift:shift,subsampleX:1,subsampleY:1,semiplanar:semi,chromaLocation:siting,planes}};
+    const expected=yuvToRgba(d,pixels);paintFrame(source,{kind:'yuv',description:d,pixels,width:4,height:4});const got=pixelRead().bytes;
+    paintFrame(glSource,{kind:'yuv',description:d,pixels,width:4,height:4});const glCapture=captureFrame(glSource),glPixels=glCapture.getContext('2d').getImageData(0,0,4,4).data;
+    chromaCases.push({depth,semi,siting,max:Math.max(...got.map((v,i)=>Math.abs(v-expected[i]))),glMax:Math.max(...glPixels.map((v,i)=>Math.abs(v-expected[i]))),glExecutor:glSource.dataset.colorExecutor});
+   }
    const executor=source.dataset.colorExecutor,contract=source.dataset.colorContract;
    paintFrame(source,{kind:'rgba8',description:rgbaDescription(3,2),pixels:colors,width:3,height:2});
    const fallback={executor:source.dataset.colorExecutor,pixels:pixelRead()};
@@ -78,12 +91,13 @@ try{
    paintFrame(source,{kind:'video-sample',description:sampleDescription(resumed),sample:resumed,width:3,height:2});resumed.close();
    const resumedExecutor=source.dataset.colorExecutor;disposePresentation();
    const {readLogs}=await import('/src/log.ts');
-   return{environment,logs:await readLogs({limit:50}),results,depths,colorVectors,executor,contract,fallback,resumedExecutor,remaining:document.querySelectorAll('.frame-presentation').length};
+   return{environment,logs:await readLogs({limit:50}),results,depths,colorVectors,chromaCases,executor,contract,fallback,resumedExecutor,remaining:document.querySelectorAll('.frame-presentation').length};
   },unified);
   evidence.results.push({name,version:browser.version(),report});
   assert.equal(report.executor,'webgpu-yuv');assert.equal(report.remaining,0);assert.equal(report.fallback.executor,'rgba-upload');assert.deepEqual(report.fallback.pixels.bytes,report.results[0].reference);assert.equal(report.resumedExecutor,'webgpu-external');
   assert.equal(report.contract,'common-yuv-sdr');
   for(const c of report.colorVectors)assert.ok(c.got.every((v,i)=>Math.abs(v-c.expected[i])<=1),JSON.stringify(c));
+  for(const c of report.chromaCases){assert.ok(c.max<=1&&c.glMax<=1,JSON.stringify(c));assert.equal(c.glExecutor,'webgl-yuv');}
   for(const [i,r]of report.results.entries()){
    if(!i)assert.equal(r.eager,0,'native playback must not touch source 2D canvas');
    assert.deepEqual(r.got.bytes,r.reference,`${name} rotation ${r.rotation}`);assert.deepEqual(r.moved,r.got,'paused capture must not change with viewport');

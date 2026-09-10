@@ -1,5 +1,5 @@
-// Production resource contracts vs independently decoded FFmpeg planes. No WASM core
-// is required: this tests presentation parity, not the WASM ABI/decoder itself.
+// Production resource contracts vs independently decoded FFmpeg planes.
+// --wasm additionally decodes with the real vendored core and presents its frames.
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
 import {mkdir,readFile,writeFile} from 'node:fs/promises';
@@ -10,11 +10,12 @@ import {chromium} from 'playwright';
 import {createHash} from 'node:crypto';
 
 const channels=[],args=process.argv.slice(2);let localFile,pipeline='auto';
+const realWasm=args.includes('--wasm');if(realWasm)args.splice(args.indexOf('--wasm'),1);
 for(let i=0;i<args.length;i++){if(args[i]==='--file'){assert.ok(args[i+1],'--file needs a local path');localFile=resolve(args[++i]);}else if(args[i]==='--pipeline'){pipeline=args[++i];assert.ok(['auto','unified'].includes(pipeline));}else channels.push(args[i]);}
 if(!channels.length)channels.push('chrome','msedge');
 if(channels.some(c=>!['chrome','msedge'].includes(c)))throw new Error('Expected chrome and/or msedge');
 if(platform()!=='win32')throw new Error('Run Windows acceptance on Windows');
-const out=resolve((localFile?'artifacts/color/windows-file':'artifacts/color/windows')+(pipeline==='unified'?'-unified':''));await mkdir(out,{recursive:true});
+const out=resolve((localFile?'artifacts/color/windows-file':'artifacts/color/windows')+(pipeline==='unified'?'-unified':'')+(realWasm?'-wasm':''));await mkdir(out,{recursive:true});
 const w=192,h=144,limit=2;
 const cases=localFile?[]:[
  {name:'h264-709-limited',encoder:'libx264',depth:8,matrix:'bt709',primaries:'bt709',fullRange:false},
@@ -72,10 +73,10 @@ if(localFile){
   times:selected.map(i=>Math.round(Number(probe.frames[i].best_effort_timestamp_time)*1e6)),indices:[0,1,2],
   probe:stream,referenceFrames:selected.map(i=>probe.frames[i]),referenceSha256:createHash('sha256').update(raw).digest('hex')});
 }
-const evidence={pipeline,startedAt:new Date().toISOString(),environment:{platform:platform(),release:release(),arch:arch()},
+const evidence={pipeline,realWasm,startedAt:new Date().toISOString(),environment:{platform:platform(),release:release(),arch:arch()},
  revision:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),
  ffmpeg:execFileSync('ffmpeg',['-version'],{encoding:'utf8'}).split('\n')[0],
- measurement:'Production auto-profile source capture, native decoder vs FFmpeg CLI raw planes; no WASM ABI, physical display or independently proven hardware decode coverage',
+ measurement:realWasm?'Production native vs real WASM source capture; WASM bytes independently verified against FFmpeg CLI; no physical display or independently proven hardware decode coverage':'Production native vs FFmpeg CLI raw-plane source capture; no WASM decoder, physical display or independently proven hardware decode coverage',
  interiorMaxErrorLimit:limit,results:[]};
 const server=await createServer({server:{host:'127.0.0.1',port:0}});let browser;
 let failed=false;
@@ -95,7 +96,7 @@ try{
     await tracing.send('Tracing.start',{categories:'disabled-by-default-webgpu',transferMode:'ReportEvents'});
    }
    entry.pageErrors=[];page.on('pageerror',e=>entry.pageErrors.push(String(e)));
-   await page.route(/\/windows-color(?:\?.*)?$/,r=>r.fulfill({contentType:'text/html',body:'<input type="file"><div class="frame-stage"><canvas id="native"></canvas></div><div class="frame-stage"><canvas id="planes"></canvas></div>'}));
+   await page.route(/\/windows-color(?:\?.*)?$/,r=>r.fulfill({headers:{'cross-origin-opener-policy':'same-origin','cross-origin-embedder-policy':'require-corp'},contentType:'text/html',body:'<input type="file"><div class="frame-stage"><canvas id="native"></canvas></div><div class="frame-stage"><canvas id="planes"></canvas></div>'}));
    await page.route('**/color-reference/*',async r=>{const c=cases.find(c=>r.request().url().endsWith('/'+c.name));if(!c)return r.abort();await r.fulfill({contentType:'application/octet-stream',body:await readFile(c.reference)});});
    await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/windows-color${pipeline==='unified'?'?colorPipeline=unified':''}`);
    entry.environment=await page.evaluate(async()=>{
@@ -103,14 +104,14 @@ try{
     await initializeGpuPresentation([...document.querySelectorAll('canvas')]);
     const adapter=await navigator.gpu?.requestAdapter(),i=adapter?.info;
     const {buildInfo}=await import('/src/build-info.ts');
-    return{buildInfo,active:document.querySelectorAll('.frame-presentation').length===2,retainsNative:keepNativeGpuResource(),userAgent:navigator.userAgent,adapter:i?{vendor:i.vendor,architecture:i.architecture,device:i.device,description:i.description,isFallbackAdapter:i.isFallbackAdapter}:null};
+    return{buildInfo,crossOriginIsolated,active:document.querySelectorAll('.frame-presentation').length===2,retainsNative:keepNativeGpuResource(),userAgent:navigator.userAgent,adapter:i?{vendor:i.vendor,architecture:i.architecture,device:i.device,description:i.description,isFallbackAdapter:i.isFallbackAdapter}:null};
    });
    assert.equal(entry.environment.active,true,'Automatic production probe must enable WebGPU');
    assert.ok(entry.environment.adapter&&!entry.environment.adapter.isFallbackAdapter,'Hardware GPU adapter required');
    for(const c of cases){
     try{
     await page.locator('input').setInputFiles(c.video);
-    const result=await page.evaluate(async({c,w,h,pipeline,sourceProbe})=>{
+    const result=await page.evaluate(async({c,w,h,pipeline,sourceProbe,realWasm})=>{
      const {openMedia}=await import('/src/media.ts');
      const {paintFrame,captureFrame,setPresentationGeometry}=await import('/src/presenter.ts');
      const {compareRgba}=await import('/src/color-evidence.ts');
@@ -118,6 +119,7 @@ try{
      const file=document.querySelector('input').files[0];
      const reference=new Uint8Array(await(await fetch(`/color-reference/${c.name}`)).arrayBuffer());
      const source=await openMedia(file,async()=>{const {readLogs}=await import('/src/log.ts');throw new Error(`Native decoder unavailable: ${JSON.stringify((await readLogs({limit:10})).events)}`);});
+     let software;
      const canvases=[document.querySelector('#native'),document.querySelector('#planes')];
      const result={name:c.name,info:source.info,ffprobe:c.probe,referenceFrames:c.referenceFrames,referenceSha256:c.referenceSha256,pairs:[]};
      const geometry={width:w,height:h,imageWidth:w,imageHeight:h,zoom:1,offsetX:0,offsetY:0,dpr:1};
@@ -127,8 +129,9 @@ try{
       a.push(...data.slice((y*w+x)*4,(y*w+x)*4+4));
      }return new Uint8ClampedArray(a);};
      try{
+      if(realWasm){const {openPacketMedia}=await import('/src/packet-media.ts');software=await openPacketMedia('mp4',{file},file,{forceWasm:true});result.softwareInfo=software.info;}
       for(const [index,pts] of c.times.entries()){
-       let frame;
+       let frame,softwareFrame;
        try{
         frame=await source.frameAt(pts);
         if(!['video-sample','yuv'].includes(frame.kind))throw new Error(`Expected native decoded resource, got ${frame.kind}`);
@@ -140,7 +143,15 @@ try{
         const description={revision:1,width:w,height:h,codedWidth:w,codedHeight:h,visibleRect:{x:0,y:0,width:w,height:h},displayWidth:w,displayHeight:h,stride:null,byteLength:raw.length,format:'YUV',color,sourceColor:color,
          yuv:{bitDepth:c.depth,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:false,planes:[{offset:0,stride:w*bytes,width:w,height:h},{offset:w*h*bytes,stride:w/2*bytes,width:w/2,height:h/2},{offset:w*h*5/4*bytes,stride:w/2*bytes,width:w/2,height:h/2}]}};
         for(const canvas of canvases)setPresentationGeometry(canvas,geometry);
-        paintFrame(canvases[0],frame);paintFrame(canvases[1],{kind:'yuv',description,pixels:raw,width:w,height:h});
+        let softwareDecodeMs,softwareRawMax;
+        if(software){const start=performance.now();softwareFrame=await software.frameAt(pts);softwareDecodeMs=performance.now()-start;
+         if(softwareFrame.kind!=='yuv'||softwareFrame.sourcePtsUs!==pts)throw Error(`WASM frame mismatch ${softwareFrame.kind}/${softwareFrame.sourcePtsUs}/${pts}`);
+         if(softwareFrame.pixels.length!==raw.length)throw Error('WASM/reference byte length mismatch');
+         softwareRawMax=0;for(let i=0;i<raw.length;i++)softwareRawMax=Math.max(softwareRawMax,Math.abs(raw[i]-softwareFrame.pixels[i]));
+         if(softwareRawMax!==0)throw Error(`WASM raw bytes differ: ${softwareRawMax}`);
+        }
+        const paintStart=performance.now();paintFrame(canvases[0],frame);const nativeSubmitMs=performance.now()-paintStart;
+        const softwareStart=performance.now();paintFrame(canvases[1],softwareFrame??{kind:'yuv',description,pixels:raw,width:w,height:h});const softwareSubmitMs=performance.now()-softwareStart;
         const a=pixels(canvases[0]),b=pixels(canvases[1]);
         // Opt-in source investigation: fixed, named equations, never fitted
         // parameters and never used to alter the actual native/reference pair.
@@ -170,14 +181,14 @@ try{
            centers:samplePoints.map(({x,y})=>({native:[0,1,2].map(i=>yuvSample(data,nativeLayout,i,x,y)),reference:[0,1,2].map(i=>yuvSample(raw,description.yuv,i,x,y))}))};
          }
         }catch(e){copied={error:String(e)};}finally{resource?.close();}
-        result.pairs.push({pts,sourcePtsUs:frame.sourcePtsUs,copyMs:frame.copyMs,description:frame.description,executors:canvases.map(v=>v.dataset.colorExecutor),contracts:canvases.map(v=>v.dataset.colorContract),full:compareRgba(a,b),interior:compareRgba(interior(a),interior(b)),
+        result.pairs.push({pts,sourcePtsUs:frame.sourcePtsUs,copyMs:frame.copyMs,softwareDecodeMs,softwareSubmitMs,nativeSubmitMs,softwareRawMax,softwareDescription:softwareFrame?.description,description:frame.description,executors:canvases.map(v=>v.dataset.colorExecutor),contracts:canvases.map(v=>v.dataset.colorContract),full:compareRgba(a,b),interior:compareRgba(interior(a),interior(b)),
          nativeExternalToCanvas:nativeCanvasBytes?compareRgba(a,nativeCanvasBytes):null,copied,sourceHypotheses,
          centers:samplePoints.map(({x,y})=>({x,y,native:[...a.slice((y*w+x)*4,(y*w+x)*4+3)],planes:[...b.slice((y*w+x)*4,(y*w+x)*4+3)]}))});
-       }finally{frame?.close();for(const canvas of canvases)setPresentationGeometry(canvas,null);}
+       }finally{frame?.close();softwareFrame?.close();for(const canvas of canvases)setPresentationGeometry(canvas,null);}
       }
-     }finally{source.dispose();}
+     }finally{source.dispose();software?.dispose();}
      return result;
-    },{c,w:c.width,h:c.height,pipeline,sourceProbe:process.env.COLOR_TRACE==='1'});
+    },{c,w:c.width,h:c.height,pipeline,sourceProbe:process.env.COLOR_TRACE==='1',realWasm});
     entry.cases.push(result);
     result.passed=result.pairs.length===3&&result.pairs.every(pair=>(pipeline==='unified'?pair.full.max:pair.interior.max)<=limit&&pair.executors.join(',')===(pipeline==='unified'?'webgpu-yuv,webgpu-yuv':'webgpu-external,webgpu-yuv'));
     if(!result.passed)failed=true;

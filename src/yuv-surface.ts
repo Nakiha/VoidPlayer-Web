@@ -1,5 +1,5 @@
 import type { FrameDescription } from './frame-description.ts';
-import { resolveYuvColor, yuvCoefficients, validateYuv } from './yuv-color.ts';
+import { resolveYuvColor, yuvCoefficients, validateYuv, chromaOffset } from './yuv-color.ts';
 
 /** Source-coordinate color conversion, quantization, then viewport sampling.
  * Only explicit capture materializes a full RGB texture. Byte channels preserve
@@ -15,7 +15,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
     uniform sampler2D planeY; uniform sampler2D planeU; uniform sampler2D planeV;
     uniform vec2 shapeY; uniform vec2 shapeU; uniform vec2 shapeV;
     uniform vec2 outputSize; uniform vec2 visibleSize; uniform vec2 crop;
-    uniform vec2 subsample; uniform float bytes; uniform float shift;
+    uniform vec2 subsample; uniform vec2 chromaOrigin; uniform vec2 chromaSize; uniform float bytes; uniform float shift;
     uniform float semi; uniform float maximum; uniform float codeScale;
     uniform float fullRange; uniform vec2 coefficients; uniform float wide;
     uniform float rotation; uniform vec2 origin; uniform vec2 imageSize; uniform float direct; uniform float bilinear;
@@ -24,16 +24,22 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
     }
     vec3 linear(vec3 x){x=max(x,0.0);return mix(x/12.92,pow((x+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),x));}
     vec3 encoded(vec3 x){x=max(x,0.0);return mix(x*12.92,1.055*pow(x,vec3(1.0/2.4))-0.055,step(vec3(0.0031308),x));}
-    vec4 colorAt(vec2 pixel){
-      pixel=clamp(pixel,crop,crop+visibleSize-1.0);
-      vec2 chroma=floor(pixel/subsample);
-      float y=code(texture2D(planeY,(pixel+0.5)/shapeY));
+    vec2 chromaAt(vec2 chroma){
+      chroma=clamp(chroma,vec2(0.0),chromaSize-1.0);
       vec4 uv=texture2D(planeU,(chroma+0.5)/shapeU);
       float u; float vv;
       if(semi>0.5){
         u=floor((floor(uv.r*255.0+0.5)+(bytes>1.0?floor(uv.g*255.0+0.5)*256.0:0.0))/shift);
         vv=floor((bytes>1.0?floor(uv.b*255.0+0.5)+floor(uv.a*255.0+0.5)*256.0:floor(uv.a*255.0+0.5))/shift);
       }else {u=code(uv);vv=code(texture2D(planeV,(chroma+0.5)/shapeV));}
+      return vec2(u,vv);
+    }
+    vec4 colorAt(vec2 pixel){
+      pixel=clamp(pixel,crop,crop+visibleSize-1.0);
+      vec2 pos=(pixel-chromaOrigin)/subsample,base=floor(pos),weight=fract(pos);
+      vec2 uv=mix(mix(chromaAt(base),chromaAt(base+vec2(1.0,0.0)),weight.x),mix(chromaAt(base+vec2(0.0,1.0)),chromaAt(base+vec2(1.0,1.0)),weight.x),weight.y);
+      float u=uv.x,vv=uv.y;
+      float y=code(texture2D(planeY,(pixel+0.5)/shapeY));
       y=(y-(fullRange>0.5?0.0:16.0*codeScale))/(fullRange>0.5?maximum:219.0*codeScale);
       float cb=(u-128.0*codeScale)/(fullRange>0.5?maximum:224.0*codeScale);
       float cr=(vv-128.0*codeScale)/(fullRange>0.5?maximum:224.0*codeScale);
@@ -63,7 +69,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
   const textures=[gl.createTexture()!,gl.createTexture()!,gl.createTexture()!];
   const framebuffer=gl.createFramebuffer()!;
   const sizes=textures.map(()=>[0,0,0]);
-  const locations=new Map(['planeY','planeU','planeV','shapeY','shapeU','shapeV','outputSize','visibleSize','crop','subsample','bytes','shift','semi','maximum','codeScale','fullRange','coefficients','wide','rotation','origin','imageSize','direct','bilinear'].map(name=>[name,gl.getUniformLocation(program,name)]));
+  const locations=new Map(['planeY','planeU','planeV','shapeY','shapeU','shapeV','outputSize','visibleSize','crop','subsample','chromaOrigin','chromaSize','bytes','shift','semi','maximum','codeScale','fullRange','coefficients','wide','rotation','origin','imageSize','direct','bilinear'].map(name=>[name,gl.getUniformLocation(program,name)]));
   const loc=(name:string)=>locations.get(name)!;
   const position=gl.getAttribLocation(program,'position');
   const max=gl.getParameter(gl.MAX_TEXTURE_SIZE);
@@ -112,6 +118,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
       gl.uniform2f(loc('origin'),rect.x,rect.y);gl.uniform2f(loc('imageSize'),rect.width,rect.height);gl.uniform1f(loc('direct'),target?0:1);gl.uniform1f(loc('bilinear'),bilinear?1:0);
       gl.uniform2f(loc('outputSize'),width,height);gl.uniform2f(loc('visibleSize'),d.width,d.height);gl.uniform2f(loc('crop'),d.visibleRect.x,d.visibleRect.y);
       gl.uniform2f(loc('subsample'),2**l.subsampleX,2**l.subsampleY);
+      gl.uniform2f(loc('chromaOrigin'),...chromaOffset(l));gl.uniform2f(loc('chromaSize'),l.planes[1].width,l.planes[1].height);
       for(const [key,value]of Object.entries({bytes:l.bitDepth>8?2:1,shift:2**l.bitShift,semi:Number(l.semiplanar),maximum:2**l.bitDepth-1,codeScale:2**(l.bitDepth-8),fullRange:Number(plan.fullRange),wide:Number(plan.primaries==='bt2020'),rotation}))gl.uniform1f(loc(key),value);
       gl.uniform2f(loc('coefficients'),...yuvCoefficients(plan.matrix));
       gl.drawArrays(gl.TRIANGLES,0,3);gl.bindFramebuffer(gl.FRAMEBUFFER,null);

@@ -25,7 +25,14 @@ export function resolveYuvColor(d: FrameDescription) {
     && ['bt709', 'smpte170m', 'iec61966-2-1', 'bt2020-10', 'bt2020-12'].includes(transfer);
   return { matrix, fullRange, primaries, transfer, supported,
     provenance: Object.fromEntries(['matrix','fullRange','primaries','transfer'].map(k => [k, c[k as keyof ColorInfo] == null ? 'fallback' : 'resource'])),
-    target: 'srgb', sdrTransfer: 'display-referred-srgb-like', chromaSampling: 'nearest-block' };
+    target: 'srgb', sdrTransfer: 'display-referred-srgb-like', chromaSampling: 'bilinear-sited' };
+}
+// AVChromaLocation positions in luma pixel coordinates. Unknown uses center;
+// never infer chroma siting from the decoder brand or from image content.
+export function chromaOffset(l: YuvLayout): [number,number] {
+  const n=l.chromaLocation??0;
+  return [l.subsampleX?(n>=1&&n<=6?(n%2===0?.5:0):.5):0,
+    l.subsampleY?(n===3||n===4?0:n===5||n===6?1:.5):0];
 }
 export function yuvCoefficients(matrix: string): [number, number] {
   return matrix === 'bt709' ? [0.2126, 0.0722] : matrix === 'bt2020-ncl' ? [0.2627, 0.0593] : [0.299, 0.114];
@@ -55,6 +62,14 @@ export function yuvSample(pixels: Uint8Array | Uint8ClampedArray, l: YuvLayout, 
   return ((pixels[offset] + (bytes === 2 ? pixels[offset + 1] * 256 : 0)) >>> l.bitShift) & (2 ** l.bitDepth - 1);
 }
 const linear = (v: number) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+export function yuvReconstructedSample(pixels: Uint8Array | Uint8ClampedArray,l:YuvLayout,c:number,x:number,y:number) {
+  if(!c)return yuvSample(pixels,l,c,x,y);
+  const [ox,oy]=chromaOffset(l),sx=2**l.subsampleX,sy=2**l.subsampleY;
+  const px=(x-ox)/sx,py=(y-oy)/sy,bx=Math.floor(px),by=Math.floor(py),wx=px-bx,wy=py-by;
+  const plane=l.planes[l.semiplanar?1:c];
+  const at=(i:number,j:number)=>yuvSample(pixels,l,c,Math.max(0,Math.min(plane.width-1,i))*sx,Math.max(0,Math.min(plane.height-1,j))*sy);
+  return (at(bx,by)*(1-wx)+at(bx+1,by)*wx)*(1-wy)+(at(bx,by+1)*(1-wx)+at(bx+1,by+1)*wx)*wy;
+}
 const encoded = (v: number) => v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
 /** Independent CPU reference and no-WebGL fallback. High depth stays intact
  * through range/matrix arithmetic, quantized only at final RGB output. */
@@ -68,8 +83,8 @@ export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8Clamped
   for(let y=0;y<d.height;y++) for(let x=0;x<d.width;x++) {
     const sx=x+d.visibleRect.x, sy=y+d.visibleRect.y;
     const yy=(yuvSample(pixels,l,0,sx,sy)-(plan.fullRange?0:16*scale))/(plan.fullRange?max:219*scale);
-    const cb=(yuvSample(pixels,l,1,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
-    const cr=(yuvSample(pixels,l,2,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
+    const cb=(yuvReconstructedSample(pixels,l,1,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
+    const cr=(yuvReconstructedSample(pixels,l,2,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
     let rgb=[yy+2*(1-kr)*cr,yy-2*kb*(1-kb)/kg*cb-2*kr*(1-kr)/kg*cr,yy+2*(1-kb)*cb];
     if(plan.primaries==='bt2020') {
       const [r,g,b]=rgb.map(v=>linear(Math.max(0,v)));

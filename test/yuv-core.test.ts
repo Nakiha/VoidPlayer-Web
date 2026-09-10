@@ -23,6 +23,12 @@ for(const mt of [false,true])test(`real ${mt?'mt':'single'} core planes equal in
       const raw=execFileSync('ffmpeg',['-v','error','-threads','1','-i',fileURLToPath(url),'-frames:v','1','-f','rawvideo','-pix_fmt',first.description.sourcePixelFormat!,'pipe:1'],{maxBuffer:64*1024*1024});
       assert.equal(hash(first.pixels!),hash(raw),`${name}: original precision and plane order`);
       const saved=first.pixels!.slice();first.close();
+      if(source.framesFollowing){
+        const following=source.framesFollowing(0),next=await following.next();
+        assert.equal(next.done,false);assert.ok(next.value!.ptsUs>0,`${name}: continuation skips the already displayed frame`);
+        const nextHash=hash(next.value!.pixels!),nextPts=next.value!.ptsUs;next.value!.close();await following.return(undefined);
+        const sought=await source.frameAt(nextPts);assert.equal(hash(sought.pixels!),nextHash,`${name}: continuation equals independently repositioned output`);sought.close();
+      }
       const later=await source.frameAt(500000);later.close();
       const back=await source.frameAt(0);assert.equal(hash(back.pixels!),hash(saved),`${name}: seek owns its pixels`);back.close();
     }finally{source.dispose();}

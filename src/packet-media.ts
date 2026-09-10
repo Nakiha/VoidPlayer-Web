@@ -166,6 +166,14 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         }
         if(frame&&disposed)frame.close();
       },
+      async *framesFollowing(pts){
+        while(!disposed){
+          await ensureIndexed(pts);
+          const frame=await extract(pts,true);if(!frame)return;
+          pts=frame.ptsUs;yield frame;
+          if (info.indexState === 'building') void completeIndex().catch(() => {});
+        }
+      },
       dispose() { if (!disposed) { disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
     };
     return source;

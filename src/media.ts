@@ -1,4 +1,6 @@
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
+import { getColorMode,getReferenceDecode } from './color-mode.ts';
+import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfoChange } from './media-state.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
@@ -47,6 +49,8 @@ export interface MediaSource {
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
   /** Sequential presentation-order frames starting at ptsUs, for playback. */
   framesFrom(ptsUs: number): AsyncGenerator<DecodedFrame>;
+  /** Continue after an already displayed frame without re-decoding its GOP. */
+  framesFollowing?(ptsUs: number): AsyncGenerator<DecodedFrame>;
   dispose(): void;
 }
 export async function inspectVideoTrack(input: Input) {
@@ -84,6 +88,7 @@ interface OpenPlan {
   fallback(): Promise<MediaSource>;
   onProgress?: MediaOpenProgress;
   signal?: AbortSignal;
+  reference?: boolean;
 }
 
 function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
@@ -93,7 +98,20 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
     let nativeError: unknown;
     try {
       plan.onProgress?.('decode');
-      const source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress,plan.input);
+      let source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress,plan.input,plan.reference);
+      if(plan.reference){
+        try{
+          const witness=referenceSource(await plan.fallback());
+          let reference:DecodedFrame|undefined,probe:DecodedFrame|undefined;
+          try{
+            reference=await witness.frameAt(0);
+            const {nativeYuvSource,verifyNativeWitness}=await import('./native-yuv-source.ts');
+            source=referenceSource(nativeYuvSource(source,getReferenceDecode().depth,reference.description.yuv?.chromaLocation??null));
+            probe=await source.frameAt(0);verifyNativeWitness(probe,reference);
+          }finally{probe?.close();reference?.close();witness.dispose();}
+        }
+        catch(error){source.dispose();throw error;}
+      }
       log.info('media', '使用 WebCodecs 解码路径', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (error) {
@@ -107,7 +125,7 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
       plan.onProgress?.('decode');
       const source = await plan.fallback();
       log.info('media', 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
-      return source;
+      return plan.reference?referenceSource(source):source;
     } catch (fallbackError) {
       loadAborted(plan.signal);
       log.warn('media', 'WASM 回退也不支持', { name: plan.meta.name, error: errorText(fallbackError) });
@@ -121,13 +139,15 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
 export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   loadAborted(signal);
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
+  const reference=getColorMode()==='reference';
+  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openLocalFallback(file,{signal,onProgress}));
   if (await isFlvFile(file)) {
     const { openFlvMedia } = await import('./flv-media.ts');
-    return openFlvMedia({ file }, file, { signal, onProgress });
+    const source=await openFlvMedia({ file }, file, { signal, onProgress,forceWasm:reference });return reference?referenceSource(source):source;
   }
   return openWithFallback({
     meta: file, input: { file },
-    onProgress, signal,
+    onProgress, signal,reference,
     nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
     fallback: () => openFallback ? openFallback(file) : openLocalFallback(file,{signal,onProgress}),
   });
@@ -142,25 +162,41 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
+  const reference=getColorMode()==='reference';
+  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openFFmpegMediaFromUrl(url,meta,{signal,onProgress}));
   if (/\.flv$/i.test(meta.name)) {
     const { openFlvMedia } = await import('./flv-media.ts');
-    return openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress });
+    const source=await openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress,forceWasm:reference });return reference?referenceSource(source):source;
   }
   return openWithFallback({
-    meta, input: { url, size: meta.size }, onProgress, signal,
+    meta, input: { url, size: meta.size }, onProgress, signal,reference,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
     fallback: () => openFallback ? openFallback(url, meta) : openFFmpegMediaFromUrl(url, meta, { signal, onProgress }),
   });
 }
 
 async function openLocalFallback(file:File,deps:import('./ffmpeg-media.ts').FallbackDeps):Promise<MediaSource>{
+  if(await isFlvFile(file)){const {openFlvMedia}=await import('./flv-media.ts');return openFlvMedia({file},file,{...deps,forceWasm:true});}
   const {openPacketMedia}=await import('./packet-media.ts');
   try{return await openPacketMedia('mp4',{file},file,{...deps,forceWasm:true});}
   catch(error){loadAborted(deps.signal);if(!(error instanceof MediaOpenError)||!['container','codec'].includes(error.stage))throw error;}
   return openFFmpegMedia(file,deps);
 }
 
-async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput): Promise<MediaSource> {
+function referenceSource(source:MediaSource):MediaSource {
+  const verify=(frame:DecodedFrame)=>{
+    if(frame.kind!=='yuv'||!resolveYuvColor(frame.description).supported){frame.close();throw new MediaOpenError('decode','正确颜色模式目前仅支持可读取原始平面的 SDR 视频。请使用匹配浏览器模式查看此资源。');}
+    return frame;
+  };
+  const at=source.frameAt.bind(source),after=source.framesAfter.bind(source),from=source.framesFrom.bind(source),following=source.framesFollowing?.bind(source);
+  source.frameAt=async pts=>verify(await at(pts));
+  source.framesAfter=async(pts,count)=>{const frames=await after(pts,count);try{return frames.map(verify);}catch(error){frames.forEach(f=>f.close());throw error;}};
+  source.framesFrom=async function*(pts){for await(const frame of from(pts))yield verify(frame);};
+  if(following)source.framesFollowing=async function*(pts){for await(const frame of following(pts))yield verify(frame);};
+  return source;
+}
+
+async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {
   const detachAbort = onLoadAbort(signal, () => input.dispose());
   let primed: VideoSample | null = null;
   try {
@@ -227,7 +263,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       let description: FrameDescription;
       try { description=sampleDescription(sample);if(info.color)description.sourceColor={...info.color}; } catch(error) {sample.close();throw error;}
       const byteSize=description.byteLength;
-      const frame = await prepareYuvFrame({
+      const nativeFrame:DecodedFrame = {
       description,
       kind: 'video-sample',
       width: sample.displayWidth,
@@ -238,7 +274,8 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       sourcePtsUs: Math.round(sample.timestamp * 1e6),
       durationUs: Math.round(sample.duration * 1e6),
       close: () => sample.close(),
-      },yuvPool);
+      };
+      const frame=rawNative?nativeFrame:await prepareYuvFrame(nativeFrame,yuvPool);
       if(disposed) {frame.close(); throw new DOMException("媒体已释放。", "AbortError");}
       return frame;
     };

@@ -22,6 +22,9 @@ const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ he
 try {
   for (const [scenario, files] of Object.entries(scenarios)) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    if(process.env.BENCH_COLOR_MODE)await page.addInitScript(mode=>localStorage.setItem('voidplayer.color-mode',mode),process.env.BENCH_COLOR_MODE);
+    if(process.env.BENCH_REFERENCE_DECODE)await page.addInitScript(value=>localStorage.setItem('voidplayer.reference-decode',value),process.env.BENCH_REFERENCE_DECODE);
+    if(process.env.BENCH_FORCE_WASM==='1')await page.addInitScript(()=>{globalThis.VideoDecoder=undefined;});
     // Repeat in the same page to exercise replacement/worker cleanup, not just cold starts.
     for (let repeat = 1; repeat <= repeats; repeat++) {
       let timer;

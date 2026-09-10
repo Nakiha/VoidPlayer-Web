@@ -1,5 +1,5 @@
 import { yuvKernel } from './webgpu-yuv-kernel.mjs';
-import { resolveYuvColor, validateYuv, yuvCoefficients } from './yuv-color.ts';
+import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from './yuv-color.ts';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.
 const batches=new WeakMap();
@@ -59,7 +59,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   const yuvInfo=await yuvModule.getCompilationInfo();if(yuvInfo.messages.some(m=>m.type==='error'))throw new Error(yuvInfo.messages.map(m=>m.message+' at '+m.lineNum).join('\n'));
   const yuvPipelines=new Map();
   for(const target of new Set([format,'rgba8unorm']))yuvPipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module:yuvModule,entryPoint:'vs'},fragment:{module:yuvModule,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
-  yuvUniform=device.createBuffer({size:144,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
+  yuvUniform=device.createBuffer({size:160,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   externalUniform=device.createBuffer({size:32,usage:GPUBufferUsage.UNIFORM|GPUBufferUsage.COPY_DST});
   const samplers = {nearest:device.createSampler(),linear:device.createSampler({minFilter:'linear',magFilter:'linear'})};
   function render(texture, target, linear=false, capture=false) {
@@ -95,9 +95,10 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
         if(yuvSize!==length){yuvBuffer?.destroy();yuvBuffer=device.createBuffer({size:length,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});yuvSize=length;}
         const data=frame.pixels.byteLength===length?frame.pixels:new Uint8Array(length);if(data!==frame.pixels)data.set(frame.pixels);
         device.queue.writeBuffer(yuvBuffer,0,data);
-        yuvParams=new Float32Array(36);yuvParams.set([d.width,d.height,plan.primaries==='bt2020'?3:mode==='hybrid'?(plan.primaries==='smpte170m'?1:plan.primaries==='bt470bg'?2:0):0,0,d.visibleRect.x,d.visibleRect.y,2**l.subsampleX,2**l.subsampleY,l.bitDepth>8?2:1,l.bitShift,Number(l.semiplanar),2**l.bitDepth-1]);
+        yuvParams=new Float32Array(40);yuvParams.set([d.width,d.height,plan.primaries==='bt2020'?3:mode==='hybrid'?(plan.primaries==='smpte170m'?1:plan.primaries==='bt470bg'?2:0):0,0,d.visibleRect.x,d.visibleRect.y,2**l.subsampleX,2**l.subsampleY,l.bitDepth>8?2:1,l.bitShift,Number(l.semiplanar),2**l.bitDepth-1]);
         l.planes.forEach((p,i)=>new Uint32Array(yuvParams.buffer).set([p.offset,p.stride,p.width,p.height],12+i*4));
         yuvParams.set([2**(l.bitDepth-8),Number(plan.fullRange),...yuvCoefficients(plan.matrix),mode==='hybrid'&&plan.transfer==='bt709'?1.961:0,0,Number(mode==='webkit-planes'&&l.bitDepth===8),0],24);
+        yuvParams.set(chromaOffset(l),36);
         width??=d.width;height??=d.height;
       }
       const next=isYuv?{yuv:true,displayWidth:frame.description.width,displayHeight:frame.description.height,close(){}}:frame.clone();const previous=current;current=next;

@@ -50,7 +50,8 @@
     "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs",
     "test:webgpu:browser": "node scripts/check-webgpu-presentation.mjs",
     "test:color:windows": "node scripts/check-windows-color.mjs",
-    "repro:color:native": "node scripts/repro-native-yuv-color.mjs"
+    "repro:color:native": "node scripts/repro-native-yuv-color.mjs",
+    "test:color:modes": "node scripts/check-color-modes.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

@@ -2,14 +2,22 @@
 // diagnostic modes, never inferred from a neutral startup probe.
 export const yuvKernel = `
 @group(0) @binding(0) var<storage,read> bytes:array<u32>;
-@group(0) @binding(1) var<uniform> p:array<vec4f,9>;
+@group(0) @binding(1) var<uniform> p:array<vec4f,10>;
 fn byteAt(i:u32)->u32{return (bytes[i/4u]>>((i%4u)*8u))&255u;}
 fn codeAt(i:u32)->f32 {var v=byteAt(i);if(p[2].x>1){v=v|(byteAt(i+1u)<<8u);}return f32(v>>u32(p[2].y));}
-fn component(c:u32,xy:vec2f)->f32{
- var pos=xy;var plane=c;if(c>0u){pos=floor(pos/p[1].zw);if(p[2].z>0){plane=1u;}}
- let planeInfo=p[3u+plane];var offset=bitcast<u32>(planeInfo.x)+u32(pos.y)*bitcast<u32>(planeInfo.y)+u32(pos.x)*u32(p[2].x);
+fn planeCode(c:u32,xy:vec2f)->f32{
+ var plane=c;if(c>0u&&p[2].z>0){plane=1u;}
+ let planeInfo=p[3u+plane];
+ let shape=planeInfo;
+ let pos=clamp(xy,vec2f(0),vec2f(f32(bitcast<u32>(shape.z)),f32(bitcast<u32>(shape.w)))-1);
+ var offset=bitcast<u32>(planeInfo.x)+u32(pos.y)*bitcast<u32>(planeInfo.y)+u32(pos.x)*u32(p[2].x);
  if(c>0u&&p[2].z>0){offset=bitcast<u32>(planeInfo.x)+u32(pos.y)*bitcast<u32>(planeInfo.y)+u32(pos.x)*u32(p[2].x)*2u+select(0u,u32(p[2].x),c==2u);}
  return codeAt(offset);
+}
+fn component(c:u32,xy:vec2f)->f32{
+ if(c==0u){return planeCode(c,xy);}
+ let pos=(xy-p[9].xy)/p[1].zw;let base=floor(pos);let w=fract(pos);
+ return mix(mix(planeCode(c,base),planeCode(c,base+vec2f(1,0)),w.x),mix(planeCode(c,base+vec2f(0,1)),planeCode(c,base+vec2f(1,1)),w.x),w.y);
 }
 fn srgb(x:vec3f)->vec3f {return select(12.92*x,1.055*pow(max(x,vec3f(0)),vec3f(1.0/2.4))-0.055,x>vec3f(0.0031308));}
 fn pixelAt(xy0:vec2f)->vec3f {

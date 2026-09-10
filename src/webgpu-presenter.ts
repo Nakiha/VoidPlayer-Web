@@ -1,4 +1,6 @@
 import { log } from './log.ts';
+import { getColorMode } from './color-mode.ts';
+import { detectGpuProfile } from './webgpu-calibration.ts';
 import { createExternalSurface } from './webgpu-color-surface.mjs';
 import type { GpuSurface } from './webgpu-color-surface.mjs';
 import type { DecodedFrame } from './media.ts';
@@ -23,7 +25,8 @@ const entries=new Map<HTMLCanvasElement,{canvas:HTMLCanvasElement;surface:GpuSur
 export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
   if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='legacy')return;
   const commonPlanes=typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='unified';
-  const requested=commonPlanes?null:requestedGpuMode();
+  const policy=getColorMode();
+  const requested=policy==='reference'?null:policy==='browser'?await detectGpuProfile():commonPlanes?null:requestedGpuMode();
   const mode=requested??'planes';
   let device:unknown;
   try{
@@ -38,6 +41,11 @@ export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
     experimentalProfile=requested!==null;
     log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv-sdr'});
   }catch(error){disposeGpuPresentation();log.info('media','WebGPU 初始化失败，保留现有呈现路径。',{reason:String(error)});}
+}
+export async function refreshGpuColorMode(){
+  const saved=[...entries].map(([source,entry])=>({source,geometry:entry.geometry}));
+  disposeGpuPresentation();await initializeGpuPresentation(saved.map(e=>e.source));
+  saved.forEach(({source,geometry})=>gpuGeometry(source,geometry));
 }
 export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null){
   const entry=entries.get(source);if(!entry)return false;

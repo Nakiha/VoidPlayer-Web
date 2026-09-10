@@ -386,7 +386,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 
 @container (max-width: 440px) { .subtrack-ruler span:nth-child(2), .subtrack-ruler span:nth-child(4) { display: none; } }
 
-.ui-tooltip { position: fixed; inset: auto; margin: 0; z-index: 1100; border: 0; width: max-content; max-width: min(var(--tooltip-max-width), calc(100vw - 16px)); padding: var(--tooltip-padding-block) var(--popover-padding); background: var(--preview-fill); color: var(--text); border-radius: var(--radius-control); box-shadow: var(--popover-shadow); white-space: pre-line; overflow-wrap: anywhere; font: var(--text-xs)/1.6 var(--font-ui); }
+.ui-tooltip { pointer-events: none; position: fixed; inset: auto; margin: 0; z-index: 1100; border: 0; width: max-content; max-width: min(var(--tooltip-max-width), calc(100vw - 16px)); padding: var(--tooltip-padding-block) var(--popover-padding); background: var(--preview-fill); color: var(--text); border-radius: var(--radius-control); box-shadow: var(--popover-shadow); white-space: pre-line; overflow-wrap: anywhere; font: var(--text-xs)/1.6 var(--font-ui); }
 
 /* Keep the full hit target, with breathing room around its painted surface.
    Apply after state fills so background shorthands cannot reset the clip. */
