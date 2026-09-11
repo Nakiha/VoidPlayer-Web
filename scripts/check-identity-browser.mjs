@@ -96,9 +96,22 @@ try {
       await api.seek(200000);
       api.addMark({ slot: 'A', text: 'HTTP smoke' });
       const state = api.getState();
-      return { decoder: state.tracks[0].decoder, variant: state.tracks[0].coreVariant, frame: !!state.tracks[0].frame, marks: state.marks.length };
+      return { decoder: state.tracks[0].decoder, variant: state.tracks[0].coreVariant, frame: !!state.tracks[0].frame, marks: state.marks.length, isolated: crossOriginIsolated };
     });
-    assert.deepEqual(state, secure ? { decoder: 'webcodecs', variant: undefined, frame: true, marks: 1 } : { decoder: 'ffmpeg-wasm', variant: 'single-thread', frame: true, marks: 1 });
+    // Reference SDR mode decodes in WASM by default; the multi-thread core
+    // requires cross-origin isolation, not a particular hostname.
+    assert.equal(state.isolated, !insecure);
+    assert.deepEqual(state, { decoder: 'ffmpeg-wasm', variant: state.isolated ? 'multi-thread' : 'single-thread', frame: true, marks: 1, isolated: !insecure });
+    if (secure) {
+      // Browser matching keeps the WebCodecs coverage this probe originally asserted.
+      const matched = await page.evaluate(async () => {
+        const api = window.voidPlayer;
+        await api.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' });
+        const state = api.getState();
+        return { decoder: state.tracks[0].decoder, variant: state.tracks[0].coreVariant };
+      });
+      assert.deepEqual(matched, { decoder: 'webcodecs', variant: undefined });
+    }
   }
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);

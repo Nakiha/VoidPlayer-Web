@@ -98,8 +98,19 @@ export class ReviewSession {
       });
       incoming.push(mark);
     }
-    const replace = new Set([...removeIds, ...incoming.map(mark => mark.id)]);
-    const next = [...this.marks.filter(mark => !replace.has(mark.id)), ...incoming];
+    // Replacements keep their position; only genuinely new marks append.
+    // Moving echoed marks to the end would reshuffle the annotation strip on
+    // every sync roundtrip.
+    const incomingById = new Map(incoming.map(mark => [mark.id, mark]));
+    const removed = new Set(removeIds.filter(id => !incomingById.has(id)));
+    const existing = new Set(this.marks.map(mark => mark.id));
+    const next: Mark[] = [];
+    for (const mark of this.marks) {
+      const replacement = incomingById.get(mark.id);
+      if (replacement) next.push(replacement);
+      else if (!removed.has(mark.id)) next.push(mark);
+    }
+    for (const mark of incoming) if (!existing.has(mark.id)) next.push(mark);
     if (JSON.stringify(next) !== JSON.stringify(this.marks)) { this.marks = next; this.emit(); }
   }
   private actor: { id: string; name: string } | null = null;
