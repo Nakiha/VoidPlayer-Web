@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { openFlvMedia } from '../src/flv-media.ts';
 import { openFFmpegMedia } from '../src/ffmpeg-media.ts';
 import { openPacketMedia } from '../src/packet-media.ts';
-import { pixelSignature, checkFrame, checkSequence, expectedAt, classify } from './fate-oracle.ts';
+import { pixelSignature, planeSignature, checkFrame, checkSequence, expectedAt, classify } from './fate-oracle.ts';
+import { yuvToRgba } from '../src/yuv-color.ts';
 const manifest = JSON.parse(await readFile(new URL('./fate-samples.json', import.meta.url)));
 const reference = JSON.parse(await readFile(new URL('./fate-reference.json', import.meta.url)));
 const expectations = JSON.parse(await readFile(new URL('./fate-expectations.json', import.meta.url)));
@@ -18,8 +19,17 @@ for (const item of manifest) {
     const deps = {glueURL: new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.js`,import.meta.url).href,
       wasmBinary:await readFile(new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.wasm`,import.meta.url)),forceWasm:true};
     const row = {sample:item.path,backend,referenceFrames:ref.frames.length,frames:[],seeks:[],failures:[],phase:'open'};
-    const observe = frame => ({ptsUs:frame.ptsUs,width:frame.width,height:frame.height,bytes:frame.pixels?.byteLength,
-      signature:frame.pixels && pixelSignature(frame.pixels,frame.width,frame.height)});
+    // ABI v2 delivers raw YUV planes; fingerprint 8-bit planar frames directly
+    // (bit-exact decode gate) alongside the shared CPU reference RGB conversion
+    // for frames whose reference predates plane fingerprints.
+    const observe = frame => {
+      const layout = frame.description?.yuv;
+      const yuv = frame.kind === 'yuv' && frame.pixels ? frame : null;
+      const planes = yuv && layout && layout.bitDepth === 8 && !layout.semiplanar ? planeSignature(yuv.pixels, layout) : undefined;
+      const pixels = yuv ? yuvToRgba(frame.description, yuv.pixels) : frame.pixels;
+      return { ptsUs: frame.ptsUs, width: frame.width, height: frame.height, planeSignature: planes,
+        bytes: pixels?.byteLength, signature: pixels && pixelSignature(pixels, frame.width, frame.height) };
+    };
     let source;
     try {
       source = await (backend==='flv-packets' ? openFlvMedia({file},file,deps) : backend==='mp4-packets' ? openPacketMedia('mp4',{file},file,deps) : openFFmpegMedia(file,deps));

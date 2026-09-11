@@ -33,7 +33,7 @@ for(const [browserName,engine] of Object.entries({chromium,webkit})){
             const observe=frame=>{
               paintFrame(canvas,frame);const image=captureFrame(canvas);
               const pixels=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
-              return {ptsUs:frame.ptsUs,width:frame.width,height:frame.height,bytes:frame.pixels?.byteLength,signature:pixelSignature(pixels,image.width,image.height)};
+              return {ptsUs:frame.ptsUs,width:frame.width,height:frame.height,bytes:pixels.byteLength,signature:pixelSignature(pixels,image.width,image.height)};
             };
             const first=await source.frameAt(0);try{row.failures.push(...checkFrame(observe(first),ref.frames[0],'first'));}finally{first.close();}
             setPresentationGeometry(canvas,{width:320,height:240,imageWidth:320,imageHeight:240,zoom:1,offsetX:0,offsetY:0,dpr:1});
@@ -50,7 +50,7 @@ for(const [browserName,engine] of Object.entries({chromium,webkit})){
           }catch(e){row.error={message:e.message,stage:e.stage};row.failures.push({code:`${row.phase}:${e.stage??'decode'}`,detail:e.message});}finally{source?.dispose();disposePresentation();}
           rows.push(row);
         }return rows;
-      },{url:base+'/fixtures/fate/'+sample.file,name:sample.file,remote,ref:reference.samples[sample.path]}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('case exceeded 60 seconds')),60000);})]);
+      },{url:base+'/fixtures/fate/'+sample.file,name:sample.file,remote,ref:{...reference.samples[sample.path],frames:reference.samples[sample.path].frames.map(({planeSignature,...f})=>f)}}),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error('case exceeded 60 seconds')),60000);})]);
       for(const row of rows)row.status=classify(row.failures,expectations.browser[sample.path]?.[browserName+'/'+(remote?'http':'local')]??{});
       results.push({browser:browserName,sample:sample.path,remote,rows});
       console.log(JSON.stringify({browser:browserName,sample:sample.path,remote,rows:rows.map(r=>({status:r.status,frames:r.frames.length,failures:r.failures}))}));
