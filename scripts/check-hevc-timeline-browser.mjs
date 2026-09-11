@@ -4,6 +4,7 @@ import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 import {Input,BlobSource,ALL_FORMATS,EncodedPacketSink} from 'mediabunny';
 import {wasmFlvDecoder} from '../src/flv-decoder.ts';
+import {yuvPixelRgb} from '../src/yuv-color.ts';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
 const name='h265_10s_1920x1080.mp4',bytes=await readFile(new URL('../fixtures/video/'+name,import.meta.url));
@@ -14,8 +15,8 @@ const track=await input.getPrimaryVideoTrack(),config=await track.getDecoderConf
 const core=new URL('../public/vendor/voidplayer-core/',import.meta.url);
 const decoder=await wasmFlvDecoder({codec:'hevc',description:new Uint8Array(config.description)},new URL('voidplayer-core.js',core).href,await readFile(new URL('voidplayer-core.wasm',core)));
 const refs=[];
-const collect=()=>{for(;;){const f=decoder.receive(Number.MIN_SAFE_INTEGER);if(!f)break;const p=new Uint8Array(f.pixels),sig=[];
-  for(let y=0;y<18;y++)for(let x=0;x<32;x++){const k=(Math.floor((y+.5)*f.height/18)*f.width+Math.floor((x+.5)*f.width/32))*4;sig.push(p[k],p[k+1],p[k+2]);}refs.push(sig);f.frame?.close();}};
+const collect=()=>{for(;;){const f=decoder.receive(Number.MIN_SAFE_INTEGER);if(!f)break;const p=f.description.yuv?null:new Uint8Array(f.pixels),sig=[];
+  for(let y=0;y<18;y++)for(let x=0;x<32;x++){const px=Math.floor((x+.5)*f.width/32),py=Math.floor((y+.5)*f.height/18);if(p){const k=(py*f.width+px)*4;sig.push(p[k],p[k+1],p[k+2]);}else sig.push(...yuvPixelRgb(f.description,new Uint8Array(f.pixels),px,py));}refs.push(sig);f.frame?.close();}};
 try{for await(const p of new EncodedPacketSink(track).packets()){await decoder.send(p.data,{pts:Math.round(p.timestamp*1e6),dts:Math.round(p.timestamp*1e6),key:p.type==='key'});collect();}await decoder.drain();collect();}
 finally{decoder.close();input.dispose();}
 assert.equal(refs.length,600);
@@ -32,6 +33,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
       const rows=await page.evaluate(async({name,remote,refs,order})=>{
         const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
         const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presenter.ts');
+        const {yuvPixelRgb}=await import('/src/yuv-color.ts');
         const url='/fixtures/video/'+name,bytes=await(await fetch(url)).arrayBuffer(),rows=[];
         const sourceCanvas=document.querySelector('canvas');
         const control=new OffscreenCanvas(1920,1080),controlContext=control.getContext('2d',{willReadFrequently:true});
@@ -85,9 +87,13 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               // RGB differences across backends remain diagnostic. Native
               // frame identity above is exact; software retains its RGB oracle.
               // GPU readback is checked against this browser's Canvas2D output.
-              if(f.sample)f.sample.draw(controlContext,0,0,1920,1080);
-              else controlContext.putImageData(new ImageData(f.pixels,1920,1080),0,0);
-              const pixels=controlContext.getImageData(0,0,1920,1080).data;
+              // Only the 32×18 sample offsets below are ever read; converting
+              // whole 1080p software frames per step would dominate the audit.
+              let pixels;
+              if(f.sample){f.sample.draw(controlContext,0,0,1920,1080);pixels=controlContext.getImageData(0,0,1920,1080).data;}
+              else if(f.description.yuv){pixels=new Uint8ClampedArray(1920*1080*4);
+                for(let y=0;y<18;y++)for(let x=0;x<32;x++){const px=Math.floor((x+.5)*1920/32),py=Math.floor((y+.5)*1080/18),k=(py*1920+px)*4,[r,g,b]=yuvPixelRgb(f.description,f.pixels,px,py);pixels[k]=r;pixels[k+1]=g;pixels[k+2]=b;pixels[k+3]=255;}}
+              else{controlContext.putImageData(new ImageData(f.pixels,1920,1080),0,0);pixels=controlContext.getImageData(0,0,1920,1080).data;}
               paintFrame(sourceCanvas,f);const image=captureFrame(sourceCanvas);
               const gpu=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
               let error=0,n=0;const signature=[];
