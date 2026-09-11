@@ -65,7 +65,7 @@
   --viewport-grid-line: #a5aebb55;
   --viewport-grid-label: #6c7785;
   --viewport-caption-inset: var(--space-4);
-  --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
+  --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --slot-e: #3d7f8c; --slot-f: #a84a6e; --slot-g: #6e7a2e; --slot-h: #4f5d75; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
   --notice-fill: #fff0dd; --notice-text: #754617; --backdrop: #10182240;
   --disabled-opacity: .4; --inspector-width: 200px; --sources-width: 240px;
   --annotation-symbols-height: 44px; --annotation-cards-height: 166px; --annotation-preview-width: 300px;

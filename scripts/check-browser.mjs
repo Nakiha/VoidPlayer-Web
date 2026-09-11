@@ -61,14 +61,14 @@ try {
   }
 
   await check('resize, split/grid layout, focus mode and track-close focus', async page => {
-    const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4'];
+    const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'vp9_10s_1920x1080.webm', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'av1_10s_1920x1080.webm'];
     const ids = names.map(name => {
       const entry = listing.entries.find(item => item.name === name);
       assert.ok(entry, `Missing fixture: ${name}`); return entry.id;
     });
     await page.evaluate(async ids => {
       const load = window.voidPlayer.tools.find(tool => tool.name === 'load_library_item');
-      for (const [i, id] of ids.entries()) await load.execute({ id, slot: ['A', 'B', 'C', 'D'][i] });
+      for (const [i, id] of ids.entries()) await load.execute({ id, slot: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'][i] });
       window.voidPlayer.setViewport({ arrangement: 'grid' });
     }, ids);
     for (const width of [1280, 600]) {
@@ -90,7 +90,7 @@ try {
           });
           assert.equal(geometry.overflow, false);
           assert.equal(geometry.height, geometry.expectedHeight);
-          assert.equal(geometry.visibleTracks, mode === 'split' ? 2 : 4);
+          assert.equal(geometry.visibleTracks, mode === 'split' ? 2 : 8);
           assert.ok(geometry.images.every(([w, h]) => w > 0 && h > 0));
         }
       }
@@ -117,7 +117,7 @@ try {
     await page.locator('#remove-track-B').click();
     await page.waitForFunction(() => !window.voidPlayer.getState().tracks.some(track => track.slot === 'B'));
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.dragSurface), 'A');
-    for (const slot of ['C', 'D', 'A']) await page.locator(`#remove-track-${slot}`).click();
+    for (const slot of ['C', 'D', 'E', 'F', 'G', 'H', 'A']) await page.locator(`#remove-track-${slot}`).click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
   });
 

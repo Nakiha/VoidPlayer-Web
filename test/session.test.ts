@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../src/session.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../src/color-mode.ts';
-import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs } from '../src/model.ts';
+import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../src/model.ts';
 import { reviewTools } from '../src/agent.ts';
 import type { MediaSource } from '../src/media.ts';
 
@@ -432,18 +432,18 @@ test('closing cancels an in-flight replacement before disposing the current trac
 });
 
 
-test('four tracks share seeks, frame stepping and annotations across reorder and removal', async () => {
+test('eight tracks share seeks, frame stepping and annotations across reorder and removal', async () => {
   const drawn: string[] = [];
   const session = new ReviewSession(slot => { drawn.push(slot); });
-  const sources = ['A','B','C','D'].map(name => media(name));
-  for (const [i, slot] of (['A','B','C','D'] as const).entries()) await session.load(slot, async () => sources[i].source);
+  const sources = SLOTS.map(name => media(name));
+  for (const [i, slot] of SLOTS.entries()) await session.load(slot, async () => sources[i].source);
   await session.seek(40000);
-  assert.equal(session.getState().tracks.length, 4);
+  assert.equal(session.getState().tracks.length, 8);
   assert.ok(session.getState().tracks.every(t => t.frame?.ptsUs === 40000));
-  const mark = session.addMark({ slot: 'C', text: 'four-way comparison' });
-  assert.equal(mark.comparison.length, 4);
-  session.reorderTracks(['D','B','C','A']);
-  assert.deepEqual(session.getState().tracks.map(t => t.slot), ['D','B','C','A']);
+  const mark = session.addMark({ slot: 'C', text: 'eight-way comparison' });
+  assert.equal(mark.comparison.length, 8);
+  session.reorderTracks(['H','G','F','E','D','C','B','A']);
+  assert.deepEqual(session.getState().tracks.map(t => t.slot), ['H','G','F','E','D','C','B','A']);
   assert.equal(session.getState().marks[0].slot, 'C');
   await session.step(1);
   assert.ok(session.getState().tracks.every(t => t.frame?.ptsUs === 120000));
@@ -452,9 +452,9 @@ test('four tracks share seeks, frame stepping and annotations across reorder and
   await session.removeTrack('C');
   assert.equal(sources[2].disposed, 1);
   assert.equal(session.exportReview().marks[0].mediaId, 'C');
-  assert.deepEqual(session.getState().tracks.map(t => t.slot), ['D','B','A']);
-  assert.ok(drawn.includes('D'));
-  await assert.rejects(session.load('E' as never, async () => media().source), /轨道/);
+  assert.deepEqual(session.getState().tracks.map(t => t.slot), ['H','G','F','E','D','B','A']);
+  assert.ok(drawn.includes('H'));
+  await assert.rejects(session.load('I' as never, async () => media().source), /轨道/);
   await session.dispose();
   assert.ok(sources.every(s => s.disposed === 1));
 });

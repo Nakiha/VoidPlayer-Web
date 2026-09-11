@@ -1,6 +1,6 @@
 import type { FrameDescription } from './frame-description.ts';
 import type { Drawing } from './annotation.ts';
-export const SLOTS = ['A', 'B', 'C', 'D'] as const;
+export const SLOTS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'] as const;
 export type Slot = typeof SLOTS[number];
 export type Region = { left: number; top: number; width: number; height: number };
 export type FrameInfo = { ptsUs: number; sourcePtsUs: number; durationUs: number };
@@ -51,7 +51,7 @@ export function timeUs(value: unknown): number {
   return value;
 }
 export function slotValue(value: unknown): Slot {
-  if (!SLOTS.includes(value as Slot)) throw new Error('轨道必须是 A、B、C 或 D。');
+  if (!SLOTS.includes(value as Slot)) throw new Error(`轨道必须是 ${SLOTS[0]} 到 ${SLOTS[SLOTS.length - 1]} 之间的字母。`);
   return value as Slot;
 }
 export function regionValue(value: unknown): Region | null {

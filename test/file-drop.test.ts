@@ -10,11 +10,12 @@ test('file drop targets explicit tracks, fills empty slots, and rejects overflow
   assert.deepEqual(dropSlots(1, ['A', 'B'], 'A'), ['A']);
   assert.deepEqual(dropSlots(2, ['A'], 'B'), ['B', 'C']);
   assert.deepEqual(dropSlots(4, []), ['A', 'B', 'C', 'D']);
+  assert.deepEqual(dropSlots(8, []), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']);
   assert.deepEqual(dropSlots(1, ['A', 'B']), ['C']);
-  assert.deepEqual(dropSlots(2, ['A', 'B', 'C']), ['D', 'A']);
+  assert.deepEqual(dropSlots(2, ['A', 'B', 'C']), ['D', 'E']);
   assert.deepEqual(dropSlots(1, ['A', 'B', 'C', 'D'], 'D'), ['D']);
   assert.throws(() => dropSlots(0, []));
-  assert.throws(() => dropSlots(5, []));
+  assert.throws(() => dropSlots(9, []));
 });
 
 function harness() {
@@ -55,7 +56,7 @@ test('text drags stay native; empty and oversized file drops do not load anythin
   const h = harness();
   assert.equal(h.send('drop', [], ['text/plain']).event.defaultPrevented, false);
   h.send('drop', []);
-  h.send('drop', [1, 2, 3, 4, 5].map(i => new File(['a'], `${i}.mp4`)));
+  h.send('drop', [1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => new File(['a'], `${i}.mp4`)));
   assert.equal(h.loads.length, 0); assert.equal(h.errors.length, 2);
   h.dispose();
 });
