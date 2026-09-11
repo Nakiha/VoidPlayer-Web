@@ -19,7 +19,7 @@
 
 | 样本 | 发现 |
 | --- | --- |
-| `h264/brokensps.flv` | FLV 包路径完成 79 帧及往返定位。普通 FFmpeg core 没有 FLV 解封装入口，那个入口失败不是回归。 |
+| `h264/brokensps.flv` | FLV 包路径完成 79 帧及往返定位。普通 FFmpeg core 没有 FLV 解封装入口，那个入口失败不是回归。浏览器端 Linux CI 的 WebKit（GStreamer/openh264）对该破 SPS 样本的原生解码画面与 FFmpeg 参考完全不同（呈黑图），Mac WebKit 与 Linux Chromium 均正常；Node 侧已有原始平面位精确门禁，浏览器预期中 webkit 的 pixels 记为已知差异（见 fate-expectations.json）。 |
 | `h264/test-4867.flv` | 系统 FFmpeg 可输出 359 帧；播放器严格拒绝 PreviousTagSize 不一致。需要明确录播容错策略，不能直接删除校验。 |
 | `h264/extradata-reload-multi-stsd.mov` | 三条路径都可输出 4 帧，但参考尺寸从 256×128 变为 128×128，播放器始终标成 128×128。只检查帧数会误报通过。 |
 | `hevc/extradata-reload-multi-stsd.mov` | 普通回退的尺寸标记也不随参考帧变化；包路径首帧之后出现目标 PTS 不匹配。 |
