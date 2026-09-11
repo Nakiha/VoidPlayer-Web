@@ -20,7 +20,13 @@ try {
   await page.goto(base);await page.locator('#identity-welcome [data-guest]').click();
   await page.evaluate(async()=>{
     const api=window.voidPlayer, tools=api.tools;
-    const library=await tools.find(t=>t.name==='list_library').execute({});
+    // Freshly written sources stay pending until the settle rescan confirms them.
+    let library;
+    for(let i=0;i<100;i++){
+      library=await tools.find(t=>t.name==='list_library').execute({});
+      if(library.entries[0]?.state==='ready')break;
+      await new Promise(r=>setTimeout(r,100));
+    }
     await tools.find(t=>t.name==='load_library_item').execute({slot:'A',id:library.entries[0].id});
     await api.seek(200000);api.addMark({slot:'A',text:'分享时的标注'});
   });

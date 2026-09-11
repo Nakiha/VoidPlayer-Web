@@ -1,5 +1,5 @@
 import { drawingsValue } from './annotation.ts';
-import { regionValue, slotValue, timeUs } from './model.ts';
+import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import { Viewport } from './viewport.ts';
 import type { ViewportSnapshot } from './viewport.ts';
@@ -61,13 +61,14 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   });
   const ids = new Set(media.map(m => m.id));
   if (ids.size !== media.length || ids.has('')) throw new Error('工作区媒体 ID 重复或为空。');
-  const tracks = array(d.tracks, 4).map(value => { const t = object(value); return { slot: slotValue(t.slot), mediaId: text(t.mediaId, 200), offsetUs: integer(t.offsetUs) }; });
+  const tracks = array(d.tracks, SLOTS.length).map(value => { const t = object(value); return { slot: slotValue(t.slot), mediaId: text(t.mediaId, 200), offsetUs: integer(t.offsetUs) }; });
   if (new Set(tracks.map(t => t.slot)).size !== tracks.length || new Set(tracks.map(t => t.mediaId)).size !== tracks.length) throw new Error('工作区轨道重复。');
   for (const t of tracks) { const m = media.find(m => m.id === t.mediaId); if (!m || m.durationUs + t.offsetUs <= 0 || !Number.isSafeInteger(m.durationUs + t.offsetUs)) throw new Error('工作区轨道引用或时间范围无效。'); }
   const marks: Mark[] = array(d.marks, 10000).map(value => {
     const m = object(value), mediaId = text(m.mediaId, 200), severity = integer(m.severity);
     if (!ids.has(mediaId) || severity < 1 || severity > 5 || !['human', 'agent'].includes(m.origin)) throw new Error('工作区标注引用或属性无效。');
-    const mark: Mark = { id: text(m.id, 200), text: text(m.text), severity, origin: m.origin, createdAt: text(m.createdAt, 100), slot: slotValue(m.slot), mediaId, frame: frame(m.frame), region: regionValue(m.region), drawings: drawingsValue(m.drawings), comparison: array(m.comparison, 4).map(value => {
+    const drawings = drawingsValue(m.drawings);
+    const mark: Mark = { id: text(m.id, 200), text: text(m.text), severity, origin: m.origin, createdAt: text(m.createdAt, 100), slot: slotValue(m.slot), mediaId, frame: frame(m.frame), region: regionValue(m.region), ...(drawings.length ? { drawings } : {}), comparison: array(m.comparison, SLOTS.length).map(value => {
       const c = object(value); if (!ids.has(c.mediaId)) throw new Error('标注对比片源不存在。');
       return { slot: slotValue(c.slot), mediaId: text(c.mediaId, 200), frame: frame(c.frame), ...(c.offsetUs === undefined ? {} : { offsetUs: integer(c.offsetUs) }) };
     }) };
