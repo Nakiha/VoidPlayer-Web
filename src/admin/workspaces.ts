@@ -19,7 +19,7 @@ export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: strin
   const client = new SavedWorkspaceClient(signal);
   let selected: WorkspaceRecord | null = null, busy = false, before = '', next: string | null = null, search = '', generation = 0;
   const users = new Map<string, string>();
-  const userName = (id: string) => users.get(id) ?? id;
+  const userName = (id: string) => users.get(id) ?? (id.startsWith('guest-') ? `访客 · ${id.slice(6,14)}` : id);
   void fetch('/api/users', { signal }).then(r => r.json()).then(value => { for (const user of value.users ?? []) users.set(user.id, user.name); }).catch(() => {});
   function controls() {
     for (const id of ['rename', 'download', 'delete', 'name', 'reload', 'copy', 'confirm-delete']) $(`admin-workspace-${id}`).toggleAttribute('disabled', !selected || busy);

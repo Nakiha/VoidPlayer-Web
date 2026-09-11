@@ -42,7 +42,7 @@ test('MP4 packet worker shares the session frame contract, handles EOF and relea
     glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)),
   });
   try {
-    const first = await source.frameAt(0); assert.equal(first.kind, 'rgba8'); first.close();
+    const first = await source.frameAt(0); assert.equal(first.kind, 'yuv'); first.close();
     const frames = await source.framesAfter(0, 2); assert.equal(frames.length, 2); frames.forEach(f => f.close());
     assert.deepEqual(await source.framesAfter(source.info.durationUs, 2), []);
     source.dispose(); await assert.rejects(source.frameAt(0), /释放/);

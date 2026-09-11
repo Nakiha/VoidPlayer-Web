@@ -23,6 +23,8 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 
 ## 硬约束
 
+- 色彩链路契约见 `docs/color-pipeline.md`；修改色彩处理必须同步该文档，区分源标签与实际输出资源，禁止按片源堆叠 HDR/SDR 修正。
+
 - UI 与 Agent 必须共用 `session.ts` 的行为，不允许各自实现。
 - 日志只留本地（IndexedDB），上传仅由用户在日志面板显式触发。
 - 解码路径选择按失败阶段决定（`MediaOpenError.stage`），不要新增“整体 try/catch 换路径”。
@@ -47,6 +49,9 @@ npm run test:library:browser # 目录分页、搜索、离线恢复与版本引�
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
 npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
 npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
+npm run test:webgpu:browser -- chrome msedge # 有窗口的 Windows Chrome/Edge 呈现回归
+npm run test:color:windows # 默认资源契约、彩色色块、H264/HEVC/10-bit 与独立 FFmpeg 平面对照
+npm run repro:color:native # 独立浏览器原生/内存帧及 GPU 导入入口诊断，不代表验收通过
 npm run test:connection:browser # HTTP 引导、Windows/macOS 步骤与公开证书下载
 node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 ```

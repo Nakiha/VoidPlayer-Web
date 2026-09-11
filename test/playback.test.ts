@@ -107,10 +107,10 @@ test('suspending an in-flight oversized frame retains its successor without pull
   const q = new FrameQueue(frames());
   q.suspend(); release(); await turn();
   assert.equal(produced, 1);
-  q.resume(); await turn(); assert.equal(produced, 1, 'oversized frame still enforces backpressure');
+  q.resume(); await turn(); assert.equal(produced, 2, 'default budget reserves two oversized frames, then applies backpressure');
   assert.equal(q.take(0).frame?.ptsUs, 0); closed++;
   await turn(); q.suspend(); await turn();
-  assert.equal(produced, 2);
+  assert.equal(produced, 3);
   assert.equal(q.frames[0].ptsUs, 1, 'unseen successor is retained, not discarded');
   q.stop(); await q.done; assert.equal(closed, produced);
 });

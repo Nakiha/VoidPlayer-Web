@@ -2,7 +2,6 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { probeTsVideo, explainMediaFailure } from '../src/media-diagnostics.ts';
 import { MediaOpenError } from '../src/media-errors.ts';
-import { sampleByteSize } from '../src/media.ts';
 
 function section(body: number[]) {
   const length = body.length + 1;
@@ -57,8 +56,4 @@ test('failed opens retain declared codecs without overriding resource/network fa
   assert.equal(await explainMediaFailure(input, generic, coreUnavailable), coreUnavailable);
   const controller = new AbortController(); controller.abort();
   await assert.rejects(explainMediaFailure(input, generic, generic, controller.signal), { name: 'AbortError' });
-});
-test('native frame accounting uses pixel allocation and safely estimates opaque surfaces', () => {
-  assert.equal(sampleByteSize({ displayWidth: 7680, displayHeight: 4320, allocationSize: () => 49766400 }), 49766400);
-  assert.equal(sampleByteSize({ displayWidth: 7680, displayHeight: 4320, allocationSize: () => { throw new Error('opaque'); } }), 132710400);
 });

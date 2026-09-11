@@ -2,7 +2,7 @@ name: Build and verify standalone releases
 
 on:
   push:
-    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor]
+    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor, codex/annotation-persistence]
     tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
@@ -140,7 +140,19 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - run: node scripts/check-presentation-browser.mjs
+      - run: node scripts/check-feedback-browser.mjs chromium
       - run: node scripts/check-connection-guide-browser.mjs
+      - name: Verify HTTP and HTTPS entry policy
+        run: |
+          node --test test/protocol-server.test.ts test/connection-routing.test.ts test/connection-guide.test.ts
+          node scripts/check-http-entry-browser.mjs chromium
+          node scripts/check-http-entry-browser.mjs webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: http-entry-screenshots
+          path: /tmp/voidplayer-http-*.png
+          if-no-files-found: ignore
       - name: Verify report descriptions and explicit log submission
         run: |
           node --test test/log.test.ts test/server.test.ts
@@ -156,6 +168,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libnss3-tools
           node scripts/make-playback-fixtures.mjs
+      - name: Verify annotation persistence and unified cache management
+        run: |
+          node --test test/annotations-store.test.ts test/frame-index-cache.test.ts
+          node scripts/check-annotation-persistence-browser.mjs webkit
+          node scripts/check-annotation-persistence-browser.mjs chromium
+          node scripts/check-cache-browser.mjs webkit
+          node scripts/check-cache-browser.mjs chromium
+          node scripts/check-sharing-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: annotation-cache-screenshots
+          path: |
+            /tmp/voidplayer-annotation-*.png
+            /tmp/voidplayer-caches-*.png
+          if-no-files-found: ignore
       - name: Test FLV native decode policy
         env:
           FLV_CASE: standard-h264

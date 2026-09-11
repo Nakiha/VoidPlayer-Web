@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  PanMomentumFilter, Viewport, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, normalizeWheelDelta,
+  PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, wheelZoomFactor, ZOOM_MAX, classifyWheel, fitContain, fittedSize, normalizeWheelDelta,
 } from '../src/viewport.ts';
 
 test('fitContain letterboxes without upscaling past the slot', () => {
@@ -209,4 +209,41 @@ test('wipe seam and opaque stroke share physical pixel boundaries at fractional 
     assert.ok(Math.abs(result.x-fraction*749.5)<=.5/dpr+1e-9);
     assert.ok(Math.abs((left+result.x-result.strokeWidth/2)*dpr-Math.round(physical-1))<1e-9);
   }
+});
+
+
+test('fit reserves header/transport bands and centers tall video between unequal overlays', () => {
+  const area = unobscuredFitArea(800, 600, [
+    { left: 0, right: 800, top: 0, bottom: 40 },
+    { left: 0, right: 800, top: 520, bottom: 590 },
+  ]);
+  assert.equal(area.height, 472); assert.equal(area.centerY, -20);
+  const fit = fitContain(area.width, area.height, 720, 1280);
+  const top = 300 + area.centerY - fit.height / 2;
+  assert.ok(top >= 44); assert.ok(top + fit.height <= 516);
+});
+
+test('only physically intersecting chrome reserves space in grid and split cells', () => {
+  const upper = unobscuredFitArea(500, 300, [
+    { left: 0, right: 500, top: 0, bottom: 40 },
+    { left: 0, right: 1000, top: 510, bottom: 580 },
+    { left: 500, right: 1000, top: 0, bottom: 40 },
+  ]);
+  assert.equal(upper.height, 256); assert.equal(upper.centerY, 22);
+  const lower = unobscuredFitArea(500, 300, [
+    { left: 0, right: 500, top: 260, bottom: 300 },
+    { left: 0, right: 1000, top: 190, bottom: 250 },
+  ]);
+  assert.equal(lower.height, 186); assert.equal(lower.centerY, -57);
+});
+
+test('uniform fit respects every safe area for mixed portrait and landscape video', () => {
+  const tracks = [
+    { slotW: 800, slotH: 472, videoW: 3840, videoH: 2160 },
+    { slotW: 800, slotH: 386, videoW: 1080, videoH: 1920 },
+  ];
+  const reference = fitReference(tracks);
+  const sizes = tracks.map(track => fittedSize(track, reference, 'uniform'));
+  sizes.forEach((size, i) => { assert.ok(size.width <= tracks[i].slotW + 1e-8); assert.ok(size.height <= tracks[i].slotH + 1e-8); });
+  assert.ok(Math.abs(sizes[0].width / tracks[0].videoW - sizes[1].width / tracks[1].videoW) < 1e-8);
 });

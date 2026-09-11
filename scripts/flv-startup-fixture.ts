@@ -6,7 +6,7 @@ import { MediaLibraryIndex } from '../server/library.ts';
 import { AdminController } from '../server/admin.ts';
 import { createMediaServer } from '../server/app.ts';
 
-export async function startupFixture(nodeOrigin = false) {
+export async function startupFixture(nodeOrigin = false, blockAfterVideo = false) {
   const root = path.resolve(import.meta.dirname, '..'), temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-flv-startup-'));
   const media = path.join(temporary, 'media'); await mkdir(media); await mkdir(path.join(temporary, 'data'));
   const original = await readFile(path.join(root, 'fixtures/flv/standard-h264.flv'));
@@ -35,7 +35,7 @@ export async function startupFixture(nodeOrigin = false) {
     if (nodeOrigin && req.method === 'POST' && req.url?.includes('/frame-index')) req.headers.origin = base;
     if (/^\/api\/media\/[a-f0-9]{24}(\?|$)/.test(req.url ?? '') && req.headers.range) {
       ranges++; const start = Number(/^bytes=(\d+)/.exec(req.headers.range)?.[1]);
-      if (block && start >= 65536) { delayed++; await gate; if (res.destroyed) return; }
+      if (block && start >= (blockAfterVideo ? Math.max(65536, original.length) : 65536)) { delayed++; await gate; if (res.destroyed) return; }
     }
     handler(req, res);
   });

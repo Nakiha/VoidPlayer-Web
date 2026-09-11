@@ -52,7 +52,7 @@ test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge a
       if (failing) { await assert.rejects(pending, /503/); continue; }
       const init = await pending; assert.equal(init.ioMode, 'http-range'); assert.ok(init.ticks.length > 1);
       const frame = await rpc.call<import('../src/wasm-frame.ts').WasmFrameOutput>('extract', { ctx: init.ctx, index: 1 });
-      assert.equal(frame.pixels.byteLength, 320 * 180 * 4); assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
+      assert.equal(frame.pixels.byteLength, 320 * 180 * 2); assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
     } finally { rpc.terminate(); }
   }
   assert.ok(requests >= 2);

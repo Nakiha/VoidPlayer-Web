@@ -13,6 +13,8 @@ import { encryptedRequest } from './tls.ts';
 export { AdminError } from './admin-error.ts';
 import { AdminError } from './admin-error.ts';
 import { Measurements } from './measurement.ts';
+import { CacheManager } from './caches.ts';
+import { AnnotationStore } from './annotations.ts';
 import { WorkspaceStore } from './workspaces.ts';
 export function adminWriteAllowed(req: IncomingMessage, action = 'admin') {
   if (req.headers['x-voidplayer-action'] !== action) return false;
@@ -45,12 +47,14 @@ export class AdminController {
   readonly library: MediaLibraryIndex;
   readonly measurements: Measurements;
   readonly workspaces: WorkspaceStore;
+  readonly annotations: AnnotationStore;
   private build: { version: string; revision: string };
   private mutation: Promise<unknown> | null = null;
   private cpu = process.cpuUsage();
   private cpuAt = performance.now();
   private cpuPercent = 0;
-  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); }
+  constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
+  get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations); }
   status() {
     const now = performance.now(), elapsed = now - this.cpuAt;
     if (elapsed >= 500) {
@@ -134,5 +138,5 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); this.workspaces.close(); }
+  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); this.workspaces.close(); this.annotations.close(); }
 }

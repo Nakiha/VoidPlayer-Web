@@ -8,7 +8,7 @@ import { startService } from '../server/runtime.ts';
 import { connectionDetails } from '../server/connection-guide.ts';
 import { httpFetch } from './http-request.ts';
 
-test('HTTP guide exposes the public CA and a certificate-matching HTTPS URL, without media or admin APIs', async () => {
+test('HTTP and HTTPS share pages and APIs, with a certificate-matching player destination', async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'vp-guide-')); let service;
   try {
     await mkdir(path.join(temp, 'media')); await mkdir(path.join(temp, 'dist'));
@@ -25,8 +25,15 @@ test('HTTP guide exposes the public CA and a certificate-matching HTTPS URL, wit
     assert.equal(await cert.text(), service.tls!.ca);
     assert.match(cert.headers.get('content-disposition')!, /attachment/);
     assert.equal((await fetch(base + info.certificateUrl, { method: 'HEAD' })).status, 200);
-    for (const url of ['/api/library', '/api/health', '/api/admin/status', '/api/workspaces', '/data/tls/authority.json', '/data/tls/server.json', '/admin']) assert.equal((await fetch(base + url)).status, 404, url);
-    assert.equal((await fetch(base + '/api/connection/certificate', { method: 'POST' })).status, 404);
+    for(const origin of [base,`http://127.0.0.1:${(service.server.address() as {port:number}).port}`]){
+      for(const url of ['/api/library','/api/health','/api/admin/status','/api/workspaces','/llms.txt'])assert.equal((await fetch(origin+url)).status,200,url);
+      for(const url of ['/data/tls/authority.json','/data/tls/server.json'])assert.equal((await fetch(origin+url)).status,404,url);
+      assert.match(await (await fetch(origin+'/llms.txt')).text(),/HTTP and HTTPS both/);
+      assert.equal((await fetch(origin+'/api/connection/probe')).status,409);
+    }
+    const probe=await httpFetch(`https://127.0.0.1:${(service.server.address() as {port:number}).port}/api/connection/probe`,{ca:service.tls!.ca,servername:'player.test'});
+    assert.equal(probe.status,200);assert.equal(probe.headers.get('access-control-allow-origin'),'*');assert.deepEqual(await probe.json(),{service:'voidplayer-connection',https:true});
+    assert.equal((await fetch(base + '/api/connection/certificate', { method: 'POST' })).status, 405);
     const hostile = await (await httpFetch(base + '/api/connection', { headers: { host: 'untrusted.example' } })).json();
     assert.equal(hostile.httpsUrl, info.httpsUrl);
     assert.equal(connectionDetails().configured, false);

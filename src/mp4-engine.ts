@@ -34,12 +34,14 @@ export class Mp4Engine {
       const codec:FlvCodec=id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
       if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
       const configs=await readMp4Configurations(this.reader,track.id);
+      const available = configs.availableSamples ?? configs.sampleSizes!.length;
+      const truncated = available < configs.sampleSizes!.length;
       onProgress?.('index');this.sink=new EncodedPacketSink(track);
       for await(const packet of this.sink.packets(undefined,undefined,{metadataOnly:true})){
-        this.packets.push(packet);if(this.packets.length>2_000_000)throw new MediaOpenError('resource','MP4 包索引超过上限。');
+        this.packets.push(packet);if(this.packets.length===available)break;if(this.packets.length>2_000_000)throw new MediaOpenError('resource','MP4 包索引超过上限。');
       }
       if(!this.packets.length||this.packets[0].type!=='key')throw new MediaOpenError('container','MP4 缺少起始关键帧。');
-      if(configs.sampleConfigurations?.length!==this.packets.length)throw new MediaOpenError('container','MP4 包数量与 sample 表不一致。');
+      if(available!==this.packets.length)throw new MediaOpenError('container','MP4 包数量与 sample 表不一致。');
       const resolution=await track.getTimeResolution();
       const packets:FlvPacket[]=this.packets.map((p,i)=>{
         const configuration=configs.sampleConfigurations?.[i]??0;
@@ -47,7 +49,8 @@ export class Mp4Engine {
         if(configs.sampleSizes?.[i]!==p.byteLength)throw new MediaOpenError('container','MP4 sample 长度与包索引不一致。');
         return {configuration,sequenceNumber:i,offset:configs.sampleOffsets![i],size:p.byteLength,pts:Math.round(p.timestamp*1e6),dts:Math.round(p.timestamp*1e6-(configs.compositionOffsets![i]/resolution)*1e6),key:p.type==='key'};
       });
-      const displayOrder=codec==='hevc'?await hevcDisplayOrder(this.reader,configs,()=>onProgress?.('index')):null;
+      const prefixConfigs = { ...configs, sampleOffsets: configs.sampleOffsets!.slice(0, available), sampleSizes: configs.sampleSizes!.slice(0, available), compositionOffsets: configs.compositionOffsets!.slice(0, available) };
+      const displayOrder=codec==='hevc'?await hevcDisplayOrder(this.reader,prefixConfigs,()=>onProgress?.('index')):null;
       const recovered=displayOrder&&recoveredHevcTimes(displayOrder,packets.map(p=>p.pts),this.packets.map(p=>Math.round(p.duration*1e6)));
       if(displayOrder&&!recovered)throw new MediaOpenError('container','HEVC 图片顺序与容器时间不一致，但无法从非等距时间线恢复显示时间。');
       if(recovered)packets.forEach((p,i)=>{p.originalPts=p.pts;p.pts=recovered[i];});
@@ -56,13 +59,10 @@ export class Mp4Engine {
       const durations=order.map((p,i)=>recovered&&i+1<pts.length?pts[i+1]-pts[i]:Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
       this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations};
-      const nativeConfig=!forceWasm&&recovered?await track.getDecoderConfig():null;
+      const nativeConfig=!forceWasm&&(recovered||truncated)?await track.getDecoderConfig():null;
       onProgress?.('decoder');const native=nativeConfig&&await nativeFlvDecoder(this.index,nativeConfig);
       const decoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-      this.timeline=new PacketTimeline(this.index,decoder,async packet=>{
-        const meta=this.packets[packet.sequenceNumber!];const p=await this.sink.getPacket(meta.timestamp);
-        if(!p||p.sequenceNumber!==meta.sequenceNumber)throw new MediaOpenError('container','MP4 压缩包与索引不一致。');return p.data;
-      });
+      this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
       onProgress?.('first-frame');this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
       const firstPtsUs=this.primed.pts;
       const color=decoder.kind==='webcodecs'?await track.getColorSpace():null;

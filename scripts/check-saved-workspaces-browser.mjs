@@ -17,6 +17,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', page => { page.setDefaultTimeout(20000); page.on('pageerror', error => errors.push(error.message)); });
   const page = await context.newPage(); await page.goto(base);
+  await page.locator('#identity-welcome input').fill('工作区测试用户'); await page.locator('#identity-welcome button[type=submit]').click();
   const identity = await page.request.get(base + '/api/health').then(r => r.json());
   const fetch = (url, options = {}) => context.request.fetch(url, { method: options.method, headers: options.headers, data: options.body }).then(r => ({ status: r.status(), json: () => r.json() }));
   const tool = (page, name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(tool => tool.name === name).execute(args), { name, args });

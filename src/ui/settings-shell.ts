@@ -46,6 +46,7 @@ export function settingsShell() {
         </form>
         <div class="identity-form"><label for="identity-users">切换到已有用户</label><button type="button" id="identity-users" class="settings-choice" aria-label="切换到已有用户" aria-describedby="identity-switch-hint"></button></div>
         <p id="identity-switch-hint" class="settings-caption">切换后保留当前评审，显示所选用户的服务器工作区。</p>
+        <button id="identity-guest" type="button">切换为访客</button>
         <p id="identity-message" class="settings-caption" role="status"></p>
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>
@@ -60,6 +61,9 @@ export function settingsShell() {
         </section>
       <section id="settings-pane-performance" role="tabpanel" aria-labelledby="settings-tab-performance" tabindex="0" hidden>
         ${paneTitle('性能')}
+        <h4 class="settings-section-title"><label for="color-mode">色彩路径</label></h4>
+        <div class="settings-group"><div class="settings-action-row"><div><select id="color-mode"><option value="reference">正确颜色（SDR）</option><option value="browser">匹配浏览器（近似拟合）</option></select><p id="color-mode-description" role="status"></p></div></div></div>
+        <div id="reference-decode-settings" class="settings-group"><div class="settings-action-row"><div><label for="reference-decoder">解码路径</label><select id="reference-decoder"><option value="hardware">优先硬件解码</option><option value="software">强制软件解码</option></select><p>硬件路径可降低 CPU 开销；不支持的资源自动使用软件解码，部分设备上读回速度可能较慢。</p></div></div><div id="hardware-depth-row" class="settings-action-row"><div><label for="hardware-buffer-depth">硬件缓冲深度</label><select id="hardware-buffer-depth"><option value="1">1 帧</option><option value="2">2 帧（推荐）</option><option value="4">4 帧</option><option value="8">8 帧</option></select><p>每条轨道独立缓冲。更多帧会增加内存和等待时间，不保证更快。切换设置会暂停并重新载入视频。</p></div></div></div>
         <div class="settings-group"><div class="settings-action-row"><div><h4>解码环境</h4><p id="decoder-environment"></p></div></div><div id="performance-current" class="settings-action-row" hidden><div><h4>当前视频</h4><p class="evidence"><span id="alignment"></span><span id="decode"></span></p></div></div></div>
         <h4 class="settings-section-title">播放检查</h4><div class="settings-group"><div class="settings-action-row"><div><h4>测量播放流畅度</h4><p>从头播放，检查结束后暂停。</p></div><button id="benchmark">开始检查</button></div></div><details class="settings-disclosure"><summary>如何判断是否使用硬件解码？</summary><p class="settings-caption">WebCodecs 可用不代表正在硬解，实际取决于浏览器、显卡和视频编码。</p></details>
         <div id="benchmark-result" hidden><p id="benchmark-summary" role="status"></p><details><summary>性能报告</summary><textarea id="benchmark-json" aria-label="播放性能报告 JSON" readonly rows="8"></textarea></details></div>

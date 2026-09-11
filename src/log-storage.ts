@@ -1,17 +1,24 @@
 import { buildInfo } from './build-info.ts';
-import { contextLog, log, sessionLog } from './log.ts';
-import type { LogDocument, LogStorage } from './log.ts';
+import { contextLog, log, sessionLog, logSummary } from './log.ts';
+import type { LogDocument, LogStorage, LogSummary } from './log.ts';
 
 export const LOG_RETENTION = { sessions: 3, days: 7 };
-export function retainLogs(documents: LogDocument[], current: LogDocument, now = Date.now()) {
+export function retainLogs<T extends Pick<LogDocument, 'sessionId' | 'startedAt' | 'updatedAt'>>(documents: T[], current: T, now = Date.now()) {
   return [current, ...documents.filter(d => d.sessionId !== current.sessionId && Date.parse(d.updatedAt) >= now - LOG_RETENTION.days * 86400000)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, LOG_RETENTION.sessions - 1)];
 }
 export function indexedDBLogStorage(): LogStorage {
   const database = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('voidplayer-diagnostics', 1);
+    const request = indexedDB.open('voidplayer-diagnostics', 2);
     let blocked = false;
-    request.onupgradeneeded = () => request.result.createObjectStore('sessions', { keyPath: 'sessionId' });
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      const sessions = db.objectStoreNames.contains('sessions') ? request.transaction!.objectStore('sessions') : db.createObjectStore('sessions', { keyPath: 'sessionId' });
+      const summaries = db.createObjectStore('summaries', { keyPath: 'sessionId' });
+      // One-time upgrade; routine writes never read report bodies back.
+      const cursor = sessions.openCursor();
+      cursor.onsuccess = () => { if (cursor.result) { summaries.put(logSummary(cursor.result.value)); cursor.result.continue(); } };
+    };
     request.onerror = () => reject(request.error);
     request.onblocked = () => { blocked = true; reject(new Error('日志存储被其他页面阻塞。')); };
     request.onsuccess = () => {
@@ -24,16 +31,33 @@ export function indexedDBLogStorage(): LogStorage {
     async save(document) {
       const db = await database;
       await new Promise<void>((resolve, reject) => {
-        const tx = db.transaction('sessions', 'readwrite');
+        const tx = db.transaction(['sessions', 'summaries'], 'readwrite');
         tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error ?? new Error('日志保存事务中断。'));
         const store = tx.objectStore('sessions');
-        const read = store.getAll();
+        const summaries = tx.objectStore('summaries');
+        const read = summaries.getAll();
         read.onsuccess = () => {
-          const existing = read.result as LogDocument[];
-          const retained = new Set(retainLogs(existing, document).map(d => d.sessionId));
-          for (const old of existing) if (!retained.has(old.sessionId)) store.delete(old.sessionId);
-          store.put(document);
+          const existing = read.result as LogSummary[];
+          const retained = new Set(retainLogs(existing, logSummary(document)).map(d => d.sessionId));
+          for (const old of existing) if (!retained.has(old.sessionId)) { store.delete(old.sessionId); summaries.delete(old.sessionId); }
+          store.put(document); summaries.put(logSummary(document));
         };
+      });
+    },
+    async summaries() {
+      const db = await database;
+      return new Promise<LogSummary[]>((resolve, reject) => {
+        const request = db.transaction('summaries').objectStore('summaries').getAll();
+        request.onsuccess = () => resolve(request.result.filter((d: LogSummary) => Date.parse(d.updatedAt) >= Date.now() - LOG_RETENTION.days * 86400000));
+        request.onerror = () => reject(request.error);
+      });
+    },
+    async get(id) {
+      const db = await database;
+      return new Promise<LogDocument | undefined>((resolve, reject) => {
+        const request = db.transaction('sessions').objectStore('sessions').get(id);
+        request.onsuccess = () => { const d = request.result as LogDocument | undefined; resolve(d && Date.parse(d.updatedAt) >= Date.now() - LOG_RETENTION.days * 86400000 ? d : undefined); };
+        request.onerror = () => reject(request.error);
       });
     },
     async list() {

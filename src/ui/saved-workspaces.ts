@@ -4,7 +4,7 @@ import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { icon } from './icons.ts';
 export function savedWorkspaceShell() {
-  return `<h4 class="settings-section-title">服务器工作区</h4><p class="settings-caption">保存到当前用户名下，不上传视频文件。</p>
+  return `<h4 class="settings-section-title">服务器工作区</h4><p class="settings-caption">保存到当前身份下，不上传视频文件。访客记录由当前浏览器的 cookie 关联。</p>
     <div class="saved-workspace-editor"><label>工作区名称<input id="saved-workspace-name" maxlength="200" placeholder="工作区名称"></label><button id="saved-workspace-copy" hidden>另存副本</button><button id="saved-workspace-save">${icon('check')}保存到服务器</button></div>
     <p id="saved-workspace-binding" class="settings-caption">尚未保存到服务器</p><p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
     <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>当前会话保持不变。可以载入服务器版本，或把当前内容另存为副本。</span><button id="saved-workspace-reload">载入服务器版本</button><button id="saved-workspace-conflict-copy">另存副本</button></div>

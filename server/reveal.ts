@@ -4,10 +4,13 @@ import { promisify } from 'node:util';
 
 export const isLoopback = (host: string) => ['localhost', '127.0.0.1', '::1', '[::1]', '::ffff:127.0.0.1'].includes(host);
 
+const peers = new WeakMap<IncomingMessage,string>();
+export const setClientAddress = (req: IncomingMessage, address: string) => peers.set(req,address);
+
 /** A remote browser must never open a file manager on the server's desktop. */
 export function localRequest(req: IncomingMessage) {
   try {
-    return isLoopback(req.socket.remoteAddress ?? '') && isLoopback(new URL(`http://${req.headers.host}`).hostname);
+    return isLoopback(peers.get(req) ?? req.socket.remoteAddress ?? '') && isLoopback(new URL(`http://${req.headers.host}`).hostname);
   } catch { return false; }
 }
 

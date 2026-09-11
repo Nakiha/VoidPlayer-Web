@@ -167,7 +167,7 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .selected-marks { display: flex; flex-direction: column; align-items: stretch; min-height: 0; overflow: auto; gap: 0; padding: 0; }
 .mark-entry { justify-content: flex-start; font-size: var(--text-xs); max-width: 100%; min-height: var(--control-small-height); padding: 0 var(--space-2); background: transparent; }
 .mark-entry time { font-family: var(--font-mono); color: var(--text-secondary); flex-shrink: 0; }
-#notice { padding: var(--space-3) var(--space-4); background: var(--notice-fill); color: var(--notice-text); overflow-wrap: anywhere; }
+#notice { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--notice-fill); color: var(--notice-text); overflow-wrap: anywhere; }
 dialog { width: min(420px, calc(100vw - 24px)); max-width: calc(100vw - 24px); max-height: 85dvh; overflow: auto; padding: var(--content-inset); background: var(--glass-fill); color: var(--text); border: var(--control-border-width) solid var(--border); border-radius: var(--radius-panel); box-shadow: var(--popover-shadow); }
 dialog::backdrop { background: var(--backdrop); }
 .dialog-heading { display: flex; align-items: center; gap: var(--content-gap); margin-bottom: var(--section-gap); }
@@ -386,7 +386,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 
 @container (max-width: 440px) { .subtrack-ruler span:nth-child(2), .subtrack-ruler span:nth-child(4) { display: none; } }
 
-.ui-tooltip { position: fixed; inset: auto; margin: 0; z-index: 1100; border: 0; width: max-content; max-width: min(var(--tooltip-max-width), calc(100vw - 16px)); padding: var(--tooltip-padding-block) var(--popover-padding); background: var(--preview-fill); color: var(--text); border-radius: var(--radius-control); box-shadow: var(--popover-shadow); white-space: pre-line; overflow-wrap: anywhere; font: var(--text-xs)/1.6 var(--font-ui); }
+.ui-tooltip { pointer-events: none; position: fixed; inset: auto; margin: 0; z-index: 1100; border: 0; width: max-content; max-width: min(var(--tooltip-max-width), calc(100vw - 16px)); padding: var(--tooltip-padding-block) var(--popover-padding); background: var(--preview-fill); color: var(--text); border-radius: var(--radius-control); box-shadow: var(--popover-shadow); white-space: pre-line; overflow-wrap: anywhere; font: var(--text-xs)/1.6 var(--font-ui); }
 
 /* Keep the full hit target, with breathing room around its painted surface.
    Apply after state fills so background shorthands cannot reset the clip. */
@@ -504,7 +504,7 @@ button.icon-button[aria-pressed=true] {
 .viewport-eye { position: absolute; right: var(--viewport-eye-inset); bottom: calc(var(--transport-bottom, 0px) + (var(--transport-height) - var(--button-size)) / 2); z-index: 5; color: var(--transport-text); background: transparent; }
 .viewport-eye:hover, .viewport-eye[aria-pressed=true] { color: var(--transport-text); background: var(--viewport-eye-fill); }
 .viewport-surface.chrome-hidden .card-heading, .viewport-surface.chrome-hidden .transport,
-.viewport-surface.chrome-hidden .pixel-grid-label, .viewport-surface.chrome-hidden .recover-view,
+.viewport-surface.chrome-hidden .pixel-grid-label,
 .viewport-surface.chrome-hidden .frame-annotations, .viewport-surface.chrome-hidden .image-wrap svg { visibility: hidden; pointer-events: none; }
 .viewport-surface.chrome-hidden #divider { top: 0; }
 
@@ -583,3 +583,37 @@ button.icon-button[aria-pressed=true] {
 .source-activity[data-state="idle"] .source-activity-meta { display: none; }
 @keyframes source-activity-pulse { from { transform: translateX(0); } to { transform: translateX(180%); } }
 @media (prefers-reduced-motion: reduce) { .source-activity-meter span { animation: none; width: 100%; opacity: .55; } }
+
+#annotation-save-state { color: var(--text-secondary); }
+#annotation-save-state[data-state=error] { color: var(--action-danger); }
+#annotation-save-state[data-state=pending] { color: var(--accent); }
+#annotation-sync-dialog { width: min(480px, calc(100vw - 24px)); border: 0; }
+.annotation-sync-scope, .annotation-new-space, .annotation-sync-actions { display: flex; align-items: center; gap: 8px; }
+.annotation-sync-scope > .choice-trigger, .annotation-new-space input { flex: 1; min-width: 0; }
+.annotation-sync-actions { margin-top: 20px; flex-wrap: wrap; }
+.annotation-new-space button { flex-shrink: 0; }
+.annotation-conflict { padding: 12px 0; }
+.annotation-conflict > button { margin-right: 8px; }
+#annotation-sync-status { color: var(--text-secondary); }
+
+#notice[hidden] { display: none; }
+#notice-message { flex: 1; min-width: 0; }
+#notice-logs { flex: none; margin-left: auto; color: inherit; }
+
+.track-failure { position: absolute; inset: auto 12px 12px; z-index: 6; padding: 10px 12px; background: var(--notice-fill); color: var(--notice-text); border-radius: 6px; max-height: 40%; overflow: auto; font-size: var(--text-sm); overflow-wrap: anywhere; }
+
+.log-preview-navigation { display:flex; align-items:center; gap:8px; padding:8px; font-size:12px; }
+.log-preview-status { flex:1; }
+
+.source-activity > progress { width:100%; height:6px; margin-top:8px; accent-color:var(--accent); }
+
+.identity-welcome { width: min(440px, calc(100vw - 32px)); padding: 24px; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-control); }
+.identity-welcome p { color: var(--text-secondary); }
+.identity-welcome form, .identity-welcome label { display: grid; gap: 10px; }
+.identity-welcome form { gap: 18px; }
+.identity-welcome input, .identity-welcome select { width: 100%; min-height: 36px; padding: 8px; }
+.identity-welcome-actions { display: flex; justify-content: space-between; gap: 12px; }
+.workspace-share-toast { position: fixed; z-index: 10000; top: 64px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); box-shadow: 0 8px 32px #0003; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.workspace-share-toast input { width: 100%; padding: 8px; }
+.share-spinner { animation: share-spin 1s linear infinite; }
+@keyframes share-spin { to { transform: rotate(360deg); } }

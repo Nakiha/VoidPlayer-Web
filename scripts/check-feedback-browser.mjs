@@ -10,7 +10,38 @@ try {
  const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:2});
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ // The entry page loads the player with a dynamic import after the HTTPS check.
+ await page.waitForFunction(()=>!!window.voidPlayer?.tools);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
+ // Fit is unobscured, but the full stage remains available beneath glass at zoom.
+ await page.setViewportSize({width:1280,height:520});
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:1,offsetX:0,offsetY:0}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const fitted=await page.evaluate(()=>{
+   const image=document.querySelector('#image-A').getBoundingClientRect();
+   const stage=document.querySelector('#stage-A').getBoundingClientRect();
+   const bars=[...document.querySelectorAll('.card-heading,.transport')].filter(e=>e.getBoundingClientRect().width>0&&!e.hidden).map(e=>e.getBoundingClientRect());
+   return {height:stage.height,overlap:bars.some(b=>image.left<b.right&&image.right>b.left&&image.top<b.bottom&&image.bottom>b.top)};
+ });
+ assert.equal(fitted.overlap,false,'the fitted image is entirely outside overlay bands');
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ const enlarged=await page.evaluate(()=>({height:document.querySelector('#stage-A').getBoundingClientRect().height,image:document.querySelector('#image-A').getBoundingClientRect().height}));
+ assert.equal(enlarged.height,fitted.height,'fit clearance never crops or resizes the stage');
+ assert.ok(enlarged.image>fitted.height,'zoomed video can extend beneath translucent controls');
+ await page.evaluate(()=>window.voidPlayer.setViewport({offsetX:100000}));
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await page.locator('#toggle-chrome').click();
+ assert.equal(await page.locator('#recover-A').isVisible(),true,'focus mode preserves the offscreen recovery action');
+ await page.locator('#recover-A').click();
+ assert.equal(await page.locator('#toggle-chrome').getAttribute('aria-pressed'),'true','recovery does not exit focus mode');
+ assert.equal(await page.locator('#recover-A').isVisible(),false,'recovered content no longer needs a hint');
+ assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),4,'recovery preserves magnification');
+ await page.locator('#toggle-chrome').click();
+
+ await page.evaluate(()=>window.voidPlayer.setViewport({zoom:1,offsetX:0,offsetY:0}));
+ await page.setViewportSize({width:1280,height:800});
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  await page.evaluate(()=>{
    window.tooltipOpens=0;
    document.getElementById('control-tooltip').addEventListener('beforetoggle',e=>{if(e.newState==='open')window.tooltipOpens++;});
@@ -66,6 +97,30 @@ try {
    assert.equal(sample.focus,sample.expectedFocus,'transient busy state preserves activation focus');
    for(const button of sample.buttons){assert.equal(button.disabled,false);assert.equal(button.opacity,'1','transport does not dim during startup');}
  }
+ // Adding a source at a nonzero paused position only presents the newcomer.
+ await page.evaluate(async()=>{
+   const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);
+   await tool('seek_review').execute({ptsUs:2000000});
+   const before=window.voidPlayer.getState();window.joinBefore=before;
+   const lib=await tool('list_library').execute({});const item=lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm');
+   const response=await fetch(`/api/media/${item.id}?v=${item.version}`);
+   await window.voidPlayer.loadFile('B',new File([await response.blob()],'local-comparison.webm'));
+ });
+ const joined=await page.evaluate(()=>({before:window.joinBefore,after:window.voidPlayer.getState()}));
+ assert.equal(joined.after.positionUs,2000000);
+ assert.deepEqual(joined.after.tracks.find(t=>t.slot==='A').frame,joined.before.tracks.find(t=>t.slot==='A').frame);
+ const added=joined.after.tracks.find(t=>t.slot==='B').frame;
+ assert.ok(added.ptsUs<=2000000&&added.ptsUs+added.durationUs>2000000);
+ // A real failed load exposes the persistent notice action and selects logs.
+ await page.locator('#file-B').setInputFiles({name:'broken.flv',mimeType:'video/x-flv',buffer:Buffer.from('not a media file')});
+ await page.locator('#notice').waitFor({state:'visible'});
+ await page.locator('#notice-logs').click();
+ assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
+ assert.equal(await page.locator('#settings-tab-logs').getAttribute('aria-selected'),'true');
+ assert.equal(await page.locator('#settings-pane-logs').isVisible(),true);
+ await page.locator('#settings-close').click();
+ await page.waitForFunction(()=>!document.getElementById('settings').open);
+ assert.equal(await page.evaluate(()=>document.activeElement.id),'notice-logs');
  assert.deepEqual(errors,[]);
  console.log(`PASS ${name}: click tooltip dismissal, hover re-entry, keyboard focus help, stable playback nodes/focus/opacity, no empty icon frame`);
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

@@ -1,3 +1,7 @@
+import { initializeGpuPresentation } from './webgpu-presenter.ts';
+import { indexProgressLabel } from './index-progress.ts';
+import { AnnotationClient } from './annotation-client.ts';
+import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
@@ -36,8 +40,8 @@ import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperat
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
 import { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
-import { PanMomentumFilter, Viewport, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
-import type { LayoutMode, PixelSizeMode, TrackGeometry, ViewportSnapshot } from './viewport.ts';
+import { PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
+import type { LayoutMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
@@ -47,8 +51,29 @@ $('app').innerHTML = shell();
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
+$('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
+const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
+try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
+let savedColorMode:'reference'|'browser'='reference';
+try{if(localStorage.getItem('voidplayer.color-mode')==='browser')savedColorMode='browser';}catch{}
+// Explicit diagnostic URLs retain their original backend-selection semantics.
+if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
+await initializeGpuPresentation(Object.values(canvases));
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
+const colorChoice=$<HTMLSelectElement>('color-mode');
+const renderColorMode=()=>{const state=session.getState();colorChoice.value=state.colorMode??savedColorMode;colorChoice.disabled=state.busy;
+  $('reference-decode-settings').hidden=state.colorMode!=='reference';
+  const decoder=$<HTMLSelectElement>('reference-decoder'),depth=$<HTMLSelectElement>('hardware-buffer-depth');
+  decoder.value=state.referenceDecode.decoder;depth.value=String(state.referenceDecode.depth);decoder.disabled=depth.disabled=state.busy;
+  $('hardware-depth-row').hidden=state.referenceDecode.decoder!=='hardware';
+  $('color-mode-description').textContent=state.colorMode==='browser'?'原生视频沿用浏览器呈现；软件回退按探针近似拟合，未保证每个编码与资源一致。切换会暂停并重新载入当前视频。':'使用原始平面按明确规则呈现 SDR；可能增加解码负担。暂不支持此模式的 HDR 等资源会提示错误。切换保留时间、对齐和标注。';};
+session.subscribe(renderColorMode);renderColorMode();
+colorChoice.onchange=()=>{void act(()=>session.setColorMode(colorChoice.value as 'reference'|'browser')).finally(renderColorMode);};
+const changeReferenceDecode=()=>{void act(()=>session.setReferenceDecode({decoder:$<HTMLSelectElement>('reference-decoder').value as 'hardware'|'software',depth:Number($<HTMLSelectElement>('hardware-buffer-depth').value) as 1|2|4|8})).finally(renderColorMode);};
+$('reference-decoder').onchange=changeReferenceDecode;$('hardware-buffer-depth').onchange=changeReferenceDecode;
+window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
 const removeLogPanel = installLogPanel($('diagnostic-logs'));
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
@@ -89,6 +114,7 @@ function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
 
 
 function showError(error: unknown) {
+  session.captureDiagnostics('ui-error', error);
   message = error instanceof Error ? error.message : String(error);
   render();
 }
@@ -97,19 +123,27 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
+const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
-  act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
-  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); },
-  restore(document) { viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
+  identityReady: identitySettings.ready, act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
+  beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
+  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
-const fittedTracks = new Map<Slot, { width: number; height: number; sourceWidth: number; sourceHeight: number }>();
-function trackGeometry(track: { slot: Slot; width: number; height: number }): TrackGeometry {
-  const stage = $(`stage-${track.slot}`);
-  return { slotW: stage.clientWidth, slotH: stage.clientHeight, videoW: track.width, videoH: track.height };
+const fittedTracks = new Map<Slot, { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number }>();
+function trackGeometry(track: { slot: Slot; width: number; height: number }) {
+  const stage = $(`stage-${track.slot}`), rect = stage.getBoundingClientRect();
+  // Measure actual bands: lower grid headings live at the bottom, and the
+  // global transport overlaps only the grid cells it physically intersects.
+  // Visibility-hidden focus chrome retains its geometry to avoid image jumps.
+  const overlays = [...document.querySelectorAll<HTMLElement>('.viewport-surface .card-heading, .viewport-surface .transport')]
+    .filter(el => !el.hidden && getComputedStyle(el).display !== 'none')
+    .map(el => { const box = el.getBoundingClientRect(); return { left: box.left - rect.left, right: box.right - rect.left, top: box.top - rect.top, bottom: box.bottom - rect.top }; });
+  const area = unobscuredFitArea(rect.width, rect.height, overlays);
+  return { slotW: area.width, slotH: area.height, videoW: track.width, videoH: track.height, centerY: area.centerY };
 }
 let primaryFitted: { width: number; height: number } | null = null;
 function applyViewTransform() {
@@ -120,7 +154,8 @@ function applyViewTransform() {
     if (image.style.transform !== value) image.style.transform = value;
     const stage = $(`stage-${slot}`);
     const fitted = fittedTracks.get(slot);
-    const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY, dpr: devicePixelRatio } : null;
+    const displayOffsetY = offsetY + (fitted?.centerY ?? 0);
+    const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY: displayOffsetY, dpr: devicePixelRatio } : null;
     setPresentationGeometry(canvases[slot], presentation);
     for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted ? fitted.sourceWidth / fitted.sourceHeight : 1);
     const split = viewport.mode === 'split' && fittedTracks.size === 2;
@@ -128,9 +163,9 @@ function applyViewTransform() {
     const cut = Math.max(0, Math.min(1, viewport.splitPos));
     const left = split && !first ? cut : 0, right = split && first ? cut : 1;
     const recovery = $(`recover-${slot}`);
-    recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY }, left, right);
+    recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY: displayOffsetY }, left, right);
     recovery.style.left = `${(left + right) / 2 * 100}%`;
-    grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: offsetY } : null);
+    grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: displayOffsetY } : null);
   }
   drawingEditor.viewChanged();
 }
@@ -147,15 +182,16 @@ function fitAll() {
   const allTracks = session.getState().tracks;
   const tracks = viewport.mode === 'split' ? allTracks.slice(0, 2) : allTracks;
   if (!tracks.length) { primaryFitted = null; applyViewTransform(); return; }
-  // uniformVideoPixels reference: the track with the most pixels.
-  const reference = tracks.reduce((a, b) => (a.width * a.height >= b.width * b.height ? a : b));
-  const referenceGeometry = trackGeometry(reference);
+  const geometries = new Map(tracks.map(track => [track.slot, trackGeometry(track)]));
+  const referenceGeometry = fitReference([...geometries.values()]);
   for (const track of tracks) {
-    const geometry = trackGeometry(track);
+    const geometry = geometries.get(track.slot)!;
     const size = fittedSize(geometry, referenceGeometry, viewport.pixelSize);
-    fittedTracks.set(track.slot, { ...size, sourceWidth: track.width, sourceHeight: track.height });
+    fittedTracks.set(track.slot, { ...size, sourceWidth: track.width, sourceHeight: track.height, centerY: geometry.centerY });
     const image = $(`image-${track.slot}`);
     const width = `${size.width}px`, height = `${size.height}px`;
+    const top = `${geometry.centerY}px`;
+    if (image.style.top !== top) image.style.top = top;
     if (image.style.width !== width) image.style.width = width;
     if (image.style.height !== height) image.style.height = height;
     if (track === (tracks.find(t => t.slot === 'A') ?? tracks[0])) {
@@ -171,6 +207,7 @@ function fitAll() {
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
 for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
+for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport')) resizeObserver.observe(el);
 const zoomMenu = installChoiceMenu('zoom-select',ZOOM_PRESETS.map(p=>({value:String(p),label:`${p}×`})),value=>{
   viewport.setZoom(Number(value)); log.info('ui','缩放预设',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true);
 },'search');
@@ -223,7 +260,9 @@ function render() {
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.indexState === 'building' ? ' · 后台建立索引中' : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? ' · 等待索引，画面暂未同步' : ' · 正在追赶播放位置') : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
+    $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
+    $(`failure-${slot}`).textContent = t?.failure ? `轨道 ${slot} 已停用 · 画面已停止更新。${t.failure.message} 请重新载入此片源。` : t?.syncState ? `轨道 ${slot} ${t.syncState === 'index-wait' ? '等待索引数据' : '正在追赶播放位置'} · 当前画面暂未同步，其他轨道继续播放。` : '';
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }
@@ -262,8 +301,9 @@ function render() {
   $('duration').textContent = formatTime(state.durationUs);
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
-  $('notice').hidden = !(message || state.error);
-  $('notice').textContent = message || state.error;
+  const trackFailures = state.tracks.filter(t => t.failure).map(t => `轨道 ${t.slot} 已停用：${t.failure!.message}`).join('；');
+  $('notice').hidden = !(message || state.error || trackFailures);
+  $('notice-message').textContent = message || state.error || trackFailures;
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
     ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`
@@ -572,11 +612,12 @@ const api = {
     const result = await session.load(slot, (signal, progress) => openMedia(file, undefined, progress, signal), file.name); workbench.rememberFile(file); return result;
   }),
   getWorkspace: () => workbench.getState(),
-  exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
+  shareWorkspace: workspaceTransfer.shareWorkspace, exportWorkspace: workspaceTransfer.exportWorkspace, importWorkspace: workspaceTransfer.importWorkspace,
   removeTrack: (slot: Slot) => apiCall('removeTrack', { slot }, () => session.removeTrack(slot)),
   reorderTracks: (order: Slot[]) => apiCall('reorderTracks', { order }, () => session.reorderTracks(order)),
   seek: (ptsUs: number) => apiCall('seek', { ptsUs }, () => session.seek(ptsUs)), step: (direction: number) => apiCall('step', { direction }, () => session.step(direction)),
   play: () => apiCall('play', {}, () => session.play()), pause: () => apiCall('pause', {}, () => session.pause()),
+  cancelLoad: () => apiCall('cancelLoad', {}, () => session.cancelLoad()),
   addMark: (input: Parameters<ReviewSession['addMark']>[0]) => apiCall('addMark', input, () => session.addMark(input)),
   setTrackOffset: (slot:Slot,offsetUs:number)=>apiCall('setTrackOffset',{slot,offsetUs},()=>session.setTrackOffset(slot,offsetUs)),
   deleteMark: (id: string) => apiCall('deleteMark', { id }, () => session.deleteMark(id)), exportReview: () => session.exportReview(),
@@ -586,8 +627,18 @@ const api = {
   tools: reviewTools(session, workspaceTransfer),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
-window.addEventListener('beforeunload', e => { if (session.getState().marks.length) { e.preventDefault(); e.returnValue = ''; } });
-import.meta.hot?.dispose(() => { unregister(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+const annotationLink = new URL(location.href).searchParams;
+if (annotationLink.has('annotation')) void act(async () => {
+  const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
+  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error('标注地址无效。');
+  const record=await new AnnotationClient(uiEvents.signal).read(space,id);
+  if(record.deleted)throw new Error('这条标注已在回收站。');
+  const mark=record.document.mark;
+  const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
+  if(opened)await annotationSync.openSpace(space);
+},'annotation.open');
+
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 
 $('benchmark').addEventListener('click', () => {
