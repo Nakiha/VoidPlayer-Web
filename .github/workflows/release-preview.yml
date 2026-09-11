@@ -204,9 +204,9 @@ jobs:
           node scripts/check-fate.mjs
           node scripts/check-fate-browser.mjs
       - name: Verify HEVC display-order recovery and seek pixels
-        # 8 full 600-frame sweeps on a software-rendered runner need more than
-        # 12 minutes; the assertions themselves stay unchanged.
-        timeout-minutes: 30
+        # 8 full 600-frame sweeps on a software-rendered runner measure about
+        # 40 minutes; the assertions themselves stay unchanged.
+        timeout-minutes: 50
         run: |
           node --test test/hevc-timeline.test.ts
           node scripts/check-hevc-timeline-browser.mjs
