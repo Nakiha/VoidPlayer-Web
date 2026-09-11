@@ -60,8 +60,16 @@
     "h264/brokensps.flv": {
       "chromium/local": {},
       "chromium/http": {},
-      "webkit/local": {},
-      "webkit/http": {}
+      "webkit/local": {
+        "known": [
+          "pixels"
+        ]
+      },
+      "webkit/http": {
+        "known": [
+          "pixels"
+        ]
+      }
     },
     "h264/extradata-reload-multi-stsd.mov": {
       "chromium/local": {},
