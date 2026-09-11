@@ -61,7 +61,7 @@ try {
   }
 
   await check('resize, split/grid layout, focus mode and track-close focus', async page => {
-    const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'dolby_hlg_1080p30.mp4', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'ffv1_yuv444p_8bit.mkv'];
+    const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'vp9_10s_1920x1080.webm', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'av1_10s_1920x1080.webm'];
     const ids = names.map(name => {
       const entry = listing.entries.find(item => item.name === name);
       assert.ok(entry, `Missing fixture: ${name}`); return entry.id;
