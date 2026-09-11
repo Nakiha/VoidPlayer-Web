@@ -71,28 +71,33 @@ export function yuvReconstructedSample(pixels: Uint8Array | Uint8ClampedArray,l:
   return (at(bx,by)*(1-wx)+at(bx+1,by)*wx)*(1-wy)+(at(bx,by+1)*(1-wx)+at(bx+1,by+1)*wx)*wy;
 }
 const encoded = (v: number) => v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
+/** Single source pixel through the shared range/matrix/transfer plan. */
+export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, x: number, y: number): [number, number, number] {
+  const l = d.yuv!, plan = resolveYuvColor(d);
+  const [kr, kb] = yuvCoefficients(plan.matrix), kg = 1 - kr - kb;
+  const scale = 2 ** (l.bitDepth - 8), max = 2 ** l.bitDepth - 1;
+  const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;
+  const yy = (yuvSample(pixels, l, 0, sx, sy) - (plan.fullRange ? 0 : 16 * scale)) / (plan.fullRange ? max : 219 * scale);
+  const cb = (yuvReconstructedSample(pixels, l, 1, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
+  const cr = (yuvReconstructedSample(pixels, l, 2, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
+  let rgb = [yy + 2 * (1 - kr) * cr, yy - 2 * kb * (1 - kb) / kg * cb - 2 * kr * (1 - kr) / kg * cr, yy + 2 * (1 - kb) * cb];
+  if (plan.primaries === 'bt2020') {
+    const [r, g, b] = rgb.map(v => linear(Math.max(0, v)));
+    rgb = [1.660491 * r - 0.587641 * g - 0.072850 * b, -0.124550 * r + 1.132900 * g - 0.008349 * b, -0.018151 * r - 0.100579 * g + 1.118730 * b].map(encoded);
+  }
+  return [Math.round(Math.max(0, Math.min(1, rgb[0])) * 255), Math.round(Math.max(0, Math.min(1, rgb[1])) * 255), Math.round(Math.max(0, Math.min(1, rgb[2])) * 255)];
+}
 /** Independent CPU reference and no-WebGL fallback. High depth stays intact
  * through range/matrix arithmetic, quantized only at final RGB output. */
 export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
   validateYuv(d,pixels.byteLength);
   const l=d.yuv!, plan=resolveYuvColor(d);
   if (!plan.supported) throw new Error('Unsupported YUV color plan');
-  const [kr,kb]=yuvCoefficients(plan.matrix), kg=1-kr-kb;
-  const scale=2 ** (l.bitDepth-8), max=2 ** l.bitDepth-1;
   const out=new Uint8ClampedArray(d.width*d.height*4);
   for(let y=0;y<d.height;y++) for(let x=0;x<d.width;x++) {
-    const sx=x+d.visibleRect.x, sy=y+d.visibleRect.y;
-    const yy=(yuvSample(pixels,l,0,sx,sy)-(plan.fullRange?0:16*scale))/(plan.fullRange?max:219*scale);
-    const cb=(yuvReconstructedSample(pixels,l,1,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
-    const cr=(yuvReconstructedSample(pixels,l,2,sx,sy)-128*scale)/(plan.fullRange?max:224*scale);
-    let rgb=[yy+2*(1-kr)*cr,yy-2*kb*(1-kb)/kg*cb-2*kr*(1-kr)/kg*cr,yy+2*(1-kb)*cb];
-    if(plan.primaries==='bt2020') {
-      const [r,g,b]=rgb.map(v=>linear(Math.max(0,v)));
-      rgb=[1.660491*r-0.587641*g-0.072850*b,-0.124550*r+1.132900*g-0.008349*b,-0.018151*r-0.100579*g+1.118730*b].map(encoded);
-    }
+    const [r,g,b]=yuvPixelRgb(d,pixels,x,y);
     const i=(y*d.width+x)*4;
-    for(let c=0;c<3;c++)out[i+c]=Math.round(Math.max(0,Math.min(1,rgb[c]))*255);
-    out[i+3]=255;
+    out[i]=r;out[i+1]=g;out[i+2]=b;out[i+3]=255;
   }
   return out;
 }
