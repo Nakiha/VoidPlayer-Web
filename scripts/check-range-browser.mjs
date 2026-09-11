@@ -36,6 +36,9 @@ try {
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     try {
       await page.goto(base); await page.waitForFunction(() => !!window.voidPlayer);
+      // Decoder-capability policy is asserted in browser matching mode; the
+      // default reference SDR mode decodes everything in WASM.
+      await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
       const result = await page.evaluate(async file => {
         const call = (name, params = {}) => window.voidPlayer.tools.find(t => t.name === name).execute(params);
         const listing = await call('list_library', { search: file });

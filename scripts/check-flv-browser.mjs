@@ -28,6 +28,10 @@ try {
         const item = listing.entries.find(e => e.name === name + '.flv');
         if (!item) throw new Error('Missing FLV library fixture: ' + name);
         await call('load_library_item', { id: item.id, slot: 'A' });
+        // Default reference SDR mode deliberately forces WASM for FLV; the
+        // native-decode policy below is exercised in browser matching mode.
+        const defaultDecoder = (await call('get_review_session')).tracks[0].decoder;
+        await call('set_review_color_mode', { mode: 'browser' });
         const states = [];
         for (const ptsUs of [0, 500000, 0, reference.times.at(-1) - reference.times[0]]) {
           await call('seek_review', { ptsUs }); states.push(await call('get_review_session'));
@@ -38,11 +42,12 @@ try {
         // Leave a margin above the 1000 ms minimum: the last rendered frame
         // can precede the polling deadline by one refresh interval.
         const benchmark = await call('benchmark_review', { durationMs: 1200 });
-        return { states, benchmark };
+        return { states, benchmark, defaultDecoder };
       }, { name, reference });
       assert.deepEqual(errors, []);
       assert.ok(mediaRequests.length > 0);
       assert.ok(mediaRequests.every(r => /^bytes=/.test(r.range ?? '')), 'FLV must never download the whole library file');
+      assert.equal(result.defaultDecoder, 'ffmpeg-wasm', 'reference mode forces WASM for FLV');
       const first = result.states[0].tracks[0];
       assert.equal(first.codec, reference.codec);
       if (name === 'standard-h264') assert.equal(first.decoder, 'webcodecs');

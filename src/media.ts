@@ -163,11 +163,13 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
   const reference=getColorMode()==='reference';
-  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openFFmpegMediaFromUrl(url,meta,{signal,onProgress}));
+  // FLV keeps its own demuxer in every mode; the FFmpeg container path does
+  // not accept it.
   if (/\.flv$/i.test(meta.name)) {
     const { openFlvMedia } = await import('./flv-media.ts');
     const source=await openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress,forceWasm:reference });return reference?referenceSource(source):source;
   }
+  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openFFmpegMediaFromUrl(url,meta,{signal,onProgress}));
   return openWithFallback({
     meta, input: { url, size: meta.size }, onProgress, signal,reference,
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
