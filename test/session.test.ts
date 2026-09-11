@@ -6,6 +6,7 @@ import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '.
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../src/model.ts';
 import { reviewTools } from '../src/agent.ts';
 import type { MediaSource } from '../src/media.ts';
+import type { AnnotationDocument } from '../src/annotation-record.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
 test('reference decoder changes reload tracks and roll back failed depth changes',async()=>{
@@ -428,6 +429,22 @@ test('closing cancels an in-flight replacement before disposing the current trac
   await rejected; await closing;
   assert.equal(original.disposed, 1); assert.equal(incoming.disposed, 1);
   assert.equal(session.getState().tracks.length, 0);
+  await session.dispose();
+});
+
+
+test('stored annotation sync replaces marks in place, appends new and removes deleted', async () => {
+  const session = new ReviewSession(() => {});
+  const m = media('sync-source');
+  await session.load('A', async () => m.source);
+  const doc = (id: string, pts: number): AnnotationDocument => ({ media: [{ ...m.source.info }], mark: { id, text: '', severity: 3, origin: 'human', createdAt: '2026-01-01', slot: 'A', mediaId: 'sync-source', frame: { ptsUs: pts, sourcePtsUs: pts, durationUs: 1 }, comparison: [], region: null } });
+  session.applyStoredAnnotations([doc('m1', 0), doc('m2', 40000), doc('m3', 80000)], []);
+  assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m1', 'm2', 'm3']);
+  // An echo for an existing mark must not move it to the end of the strip.
+  session.applyStoredAnnotations([doc('m2', 40000)], []);
+  assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m1', 'm2', 'm3']);
+  session.applyStoredAnnotations([doc('m4', 120000)], ['m1']);
+  assert.deepEqual(session.getState().marks.map(mark => mark.id), ['m2', 'm3', 'm4']);
   await session.dispose();
 });
 
