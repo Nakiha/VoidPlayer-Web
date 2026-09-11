@@ -16,7 +16,7 @@ function buildInfo() {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const relative = `${prefix}${entry.name}`;
       if (entry.isDirectory()) hashSources(resolve(directory, entry.name), `${relative}/`);
-      else if (/\.(ts|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
+      else if (/\.(ts|mjs|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
     }
   }
   hashSources(sourceDir);

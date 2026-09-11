@@ -109,6 +109,58 @@ try {
       assert.ok(new Set(r.first.filter((_, i) => i % 4 !== 3)).size > 1, 'HDR ramp is not blank');
     }
     console.log(`PASS ${name}: PQ/HLG clone metadata and first/play/seek pixel consistency; SDR direct upload restored`);
+    const yuvResults=await page.evaluate(async()=>{
+      const {paintFrame,captureFrame,setPresentationGeometry,disposePresentation}=await import('/src/presenter.ts');
+      const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
+      const {yuvToRgba}=await import('/src/yuv-color.ts');
+      const source=document.getElementById('source'),results=[];
+      for(const depth of [8,10,12,16])for(const semi of [false,true])for(const full of [false,true])for(const matrix of ['bt709','smpte170m','bt2020-ncl']){
+        const f=yuvFixture(depth,semi,full,matrix);
+        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
+        // CPU first-frame path then GPU playback, independently quantized.
+        paintFrame(source,frame);
+        const reference=yuvToRgba(f.description,f.pixels);
+        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});
+        paintFrame(source,frame);
+        const actual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+        results.push({depth,semi,full,matrix,max:Math.max(...actual.map((v,i)=>Math.abs(v-reference[i])))});
+        disposePresentation();
+      }
+      const f=yuvFixture(10,true,false,'bt709',5,3,6);
+      f.description.visibleRect={x:1,y:1,width:3,height:1};f.description.width=3;f.description.height=1;
+      const reference=yuvToRgba(f.description,f.pixels);
+      for(const rotation of [0,90,180,270]){
+        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:3,height:1,sample:{rotation}};
+        paintFrame(source,frame);
+        const expected=source.getContext('2d').getImageData(0,0,source.width,source.height).data;
+        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});paintFrame(source,frame);
+        const actual=captureFrame(source).getContext('2d').getImageData(0,0,source.width,source.height).data;
+        results.push({rotation,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});disposePresentation();
+      }
+      for(const zoom of [.25,.6,1,3]){
+        const f=yuvFixture(),rgba=yuvToRgba(f.description,f.pixels);
+        const {rgbaDescription}=await import('/src/frame-description.ts');
+        setPresentationGeometry(source,{width:13,height:11,imageWidth:5,imageHeight:3,zoom,offsetX:1.2,offsetY:-.4,dpr:2});
+        const read=()=>{const gl=document.querySelector('.frame-presentation').getContext('webgl');const out=new Uint8Array(gl.drawingBufferWidth*gl.drawingBufferHeight*4);gl.readPixels(0,0,gl.drawingBufferWidth,gl.drawingBufferHeight,gl.RGBA,gl.UNSIGNED_BYTE,out);return out;};
+        paintFrame(source,{kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3});const actual=read();
+        paintFrame(source,{kind:'rgba8',description:rgbaDescription(5,3),pixels:rgba,width:5,height:3});const expected=read();
+        results.push({viewportZoom:zoom,max:Math.max(...actual.map((v,i)=>Math.abs(v-expected[i])))});disposePresentation();
+      }
+      const loss=yuvFixture();
+      const lossFrame={kind:'yuv',description:loss.description,pixels:loss.pixels,width:5,height:3};
+      setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:1});paintFrame(source,lossFrame);
+      const surface=document.querySelector('.frame-presentation');
+      const lost=new Promise(resolve=>surface.addEventListener('webglcontextlost',resolve,{once:true}));
+      surface.getContext('webgl').getExtension('WEBGL_lose_context').loseContext();await lost;
+      paintFrame(source,lossFrame);
+      const recovered=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+      const cpu=yuvToRgba(loss.description,loss.pixels);
+      results.push({contextLoss:source.dataset.colorExecutor,max:Math.max(...recovered.map((v,i)=>Math.abs(v-cpu[i])))});
+      disposePresentation();
+      return results;
+    });
+    for(const r of yuvResults)assert.ok(r.max<=1,JSON.stringify(r));
+    console.log(`PASS ${name}: ${yuvResults.length} YUV reference cases, range/matrix/depth/layout/crop/rotation`);
     await browser.close(); browser = null;
   }
 } finally { await browser?.close(); await server.close(); }

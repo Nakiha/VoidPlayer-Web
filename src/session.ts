@@ -1,3 +1,5 @@
+import { schedulePresentationTick } from './presentation-tick.ts';
+import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode,type ReferenceDecode,type ColorMode} from './color-mode.ts';
 import { annotationMediaKey } from './annotation-record.ts';
 import type { AnnotationDocument } from './annotation-record.ts';
 import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
@@ -19,6 +21,54 @@ const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up' };
 export class ReviewSession {
+  private openers=new WeakMap<MediaSource,(signal:AbortSignal,onProgress:MediaOpenProgress)=>Promise<MediaSource>>();
+  private changingColor=false;
+  onColorModeChange?:()=>Promise<void>;
+  async setReferenceDecode(options:ReferenceDecode){return this.setColorMode(getColorMode()??'reference',options);}
+  async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode()){
+    if(mode!=='reference'&&mode!=='browser')throw new Error('未知色彩模式。');
+    if(this.changingColor)throw new Error('正在切换色彩模式。');
+    if(!['hardware','software'].includes(decode.decoder)||![1,2,4,8].includes(decode.depth))throw new Error('无效的解码路径或缓冲深度。');
+    if(getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode))return this.getState();
+    this.changingColor=true;
+    try{await this.run('color-mode',{mode},async current=>{
+      const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame}[]=[];
+      const controller=new AbortController();let committed=false;
+      try{
+        setColorMode(mode);setReferenceDecode(decode);
+        for(const [slot,track] of this.tracks){
+          const open=this.openers.get(track.source);if(!open)throw new Error('当前片源无法重新载入。');
+          const source=await open(controller.signal,()=>{});
+          try{
+            source.info.id=track.source.info.id;
+            const frame=await source.frameAt(Math.max(0,Math.min(this.positionUs-track.offsetUs,source.info.durationUs-1)));
+            prepared.push({slot,track,source,frame});this.openers.set(source,open);
+          }catch(error){source.dispose();throw error;}
+          if(!current())throw new DOMException('切换已取消。','AbortError');
+        }
+        await this.onColorModeChange?.();
+        if(!current())throw new DOMException('切换已取消。','AbortError');
+        for(const p of prepared)this.draw(p.slot,p.frame);
+        this.releaseReaders('color-mode');
+        for(const p of prepared){
+          p.track.source.onInfoChange=undefined;p.track.source.dispose();
+          recordPresentedFrame(p.source,p.frame);
+          this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs});
+          this.catalog.set(p.source.info.id,p.source.info);
+          p.source.onInfoChange=()=>this.emit();
+        }
+        committed=true;
+        try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
+      }catch(error){
+        setColorMode(previous);setReferenceDecode(previousDecode);await this.onColorModeChange?.();
+        if(current())for(const [slot,track] of this.tracks){
+          try{const frame=await track.source.frameAt(Math.max(0,this.positionUs-track.offsetUs));try{this.draw(slot,frame);}finally{frame.close();}}catch{}
+        }
+        throw error;
+      }
+      finally{if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed)p.source.dispose();}}
+    });return this.getState();}finally{this.changingColor=false;}
+  }
   private order: Slot[] = [...SLOTS];
   private tracks = new Map<Slot, Track>();
   private catalog = new Map<string, MediaInfo>();
@@ -125,7 +175,7 @@ export class ReviewSession {
       durationUs: this.durationUs, error: this.error, lastDecodeMs: this.decodeMs,
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
-      frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: 'browser-managed-unverified',
+      frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: getColorMode()==='reference'?'reference-sdr':'browser-match-approximate',colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState }] : []; }),
       marks: this.marks,
     });
@@ -177,6 +227,7 @@ export class ReviewSession {
     });
   }
   async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
+    if(this.changingColor)throw new Error('请等待色彩模式切换完成。');
     slotValue(slot);
     const scoped = contextLog(), replacing = this.tracks.get(slot)?.source.info.name;
     // Preparing a source is independent of the transport. A second load still
@@ -230,6 +281,7 @@ export class ReviewSession {
           if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
           this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, ...(behind ? { syncState: 'catching-up' as const } : {}) });
+          this.openers.set(opened,open);
           this.catalog.set(opened.info.id, opened.info);
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
           // Adding a short track never clamps the clock. Replacement can shrink
@@ -485,7 +537,7 @@ export class ReviewSession {
     const readers = entries.map(([slot, t]) => {
       let reader = this.readers.get(t.source);
       const reused = !!reader;
-      if (!reader) { reader = new FrameQueue(t.source.framesFrom(t.frame!.ptsUs)); this.readers.set(t.source, reader); }
+      if (!reader) { reader = new FrameQueue(t.source.framesFollowing?.(t.frame!.ptsUs)??t.source.framesFrom(t.frame!.ptsUs)); this.readers.set(t.source, reader); }
       scoped.debug('session', '播放队列就绪', { slot, mediaId: t.source.info.id, reused, frameUs: t.frame!.ptsUs, buffer: reader.snapshot() });
       return reader;
     });
@@ -497,13 +549,7 @@ export class ReviewSession {
     this.stopPlayback = stop;
     const tick = () => new Promise<void>(resolve => {
       const finish = () => { cancelTick = undefined; resolve(); };
-      if (typeof requestAnimationFrame === 'function') {
-        const id = requestAnimationFrame(finish);
-        cancelTick = () => { cancelAnimationFrame(id); finish(); };
-      } else {
-        const id = setTimeout(finish, 8);
-        cancelTick = () => { clearTimeout(id); finish(); };
-      }
+      cancelTick = schedulePresentationTick(finish);
     });
     try {
       while (active()) {

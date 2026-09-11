@@ -16,11 +16,15 @@ const scenarios = process.env.BENCH_SCENARIOS ? JSON.parse(process.env.BENCH_SCE
   'mpeg2ts+h264': ['mpeg2_10s_1280x720.ts', 'h264_9s_1920x1080.mp4'],
 };
 const results = [];
-const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless,
+const browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless, ...(browserName === 'chromium' && process.env.BENCH_CHANNEL ? { channel: process.env.BENCH_CHANNEL } : {}),
+  ...(browserName === 'chromium' && process.env.CHROME_EXECUTABLE_PATH && process.env.BENCH_CHANNEL==='chrome' ? {executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}),
   ...(browserName === 'chromium' && process.env.BENCH_HTTP === '1' ? { args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] } : {}) });
 try {
   for (const [scenario, files] of Object.entries(scenarios)) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+    if(process.env.BENCH_COLOR_MODE)await page.addInitScript(mode=>localStorage.setItem('voidplayer.color-mode',mode),process.env.BENCH_COLOR_MODE);
+    if(process.env.BENCH_REFERENCE_DECODE)await page.addInitScript(value=>localStorage.setItem('voidplayer.reference-decode',value),process.env.BENCH_REFERENCE_DECODE);
+    if(process.env.BENCH_FORCE_WASM==='1')await page.addInitScript(()=>{globalThis.VideoDecoder=undefined;});
     // Repeat in the same page to exercise replacement/worker cleanup, not just cold starts.
     for (let repeat = 1; repeat <= repeats; repeat++) {
       let timer;
@@ -39,12 +43,18 @@ try {
               if (!entry) throw new Error(`Missing library sample: ${files[i]}`);
               await tool('load_library_item').execute({ id: entry.id, slot: i ? 'B' : 'A' });
             }
-            return tool('benchmark_review').execute({ durationMs });
+            const report=await tool('benchmark_review').execute({ durationMs });
+            return {...report,presentationSurfaces:[...document.querySelectorAll('canvas[data-color-executor]')].map(c=>({performance:c.dataset.colorPerformance,id:c.id,executor:c.dataset.colorExecutor,width:c.width,height:c.height}))};
           }, { files, durationMs });
         };
         const report = await Promise.race([run(), crashed, new Promise((_, reject) => {
           timer = setTimeout(() => reject(new Error('scenario timeout (including navigation/load)')), durationMs + 45000);
         })]);
+        if(process.env.BENCH_DIAGNOSTICS==='1') report.scheduling=await page.evaluate(async()=>{
+          const start=performance.now();let frames=0;
+          await new Promise(resolve=>{const tick=()=>{frames++;if(performance.now()-start>=1000)resolve();else requestAnimationFrame(tick);};requestAnimationFrame(tick);});
+          return{frames,wallMs:performance.now()-start,visible:document.visibilityState,focused:document.hasFocus(),canvases:[...document.querySelectorAll('.frame-presentation')].map(c=>({rect:c.getBoundingClientRect().toJSON(),hidden:c.hidden,display:getComputedStyle(c).display,visibility:getComputedStyle(c).visibility}))};
+        });
         results.push({ scenario, repeat, browserName, headless, ...report });
       } catch (error) {
         results.push({ scenario, repeat, browserName, headless, passed: false, error: String(error.message ?? error) });

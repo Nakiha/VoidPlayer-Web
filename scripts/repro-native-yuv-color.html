@@ -1,0 +1,118 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Native YUV backing color reproduction</title>
+<h1>Native YUV backing color reproduction</h1>
+<p>Synthetic frames only. No player code, calibration, or network uploads. Serve on localhost and press Run.</p>
+<button id="run">Run</button><pre id="result"></pre>
+<script id="fixtures" type="application/json">__FIXTURES__</script>
+<script>
+const fixtures = JSON.parse(document.querySelector('#fixtures').textContent);
+const bytes = text => Uint8Array.from(atob(text), c => c.charCodeAt(0));
+function difference(a, b, interior = true) {
+  let max = 0, sum = 0, count = 0;
+  for (let y = 0; y < 144; y++) for (let x = 0; x < 192; x++) {
+    if (interior && (x % 48 < 8 || x % 48 >= 40 || y % 48 < 8 || y % 48 >= 40)) continue;
+    for (let c = 0; c < 3; c++) { const d = Math.abs(a[(y*192+x)*4+c]-b[(y*192+x)*4+c]); max = Math.max(max,d); sum += d; count++; }
+  }
+  return {max, mae: sum/count, samples: count};
+}
+function reference(raw, matrix) {
+  const out = new Uint8Array(192*144*4), kr = matrix === 'bt709' ? .2126 : .299, kb = matrix === 'bt709' ? .0722 : .114, kg = 1-kr-kb;
+  for (let y = 0; y < 144; y++) for (let x = 0; x < 192; x++) {
+    const i=y*192+x, uv=Math.floor(y/2)*96+Math.floor(x/2), l=(raw[i]-16)/219, u=(raw[27648+uv]-128)/224, v=(raw[34560+uv]-128)/224;
+    const rgb=[l+2*(1-kr)*v,l-2*kb*(1-kb)/kg*u-2*kr*(1-kr)/kg*v,l+2*(1-kb)*u];
+    rgb.forEach((n,c)=>out[i*4+c]=Math.round(Math.min(1,Math.max(0,n))*255)); out[i*4+3]=255;
+  }
+  return out;
+}
+function canvasPixels(frame) {
+  const canvas = document.createElement('canvas'); canvas.width=192; canvas.height=144;
+  const ctx=canvas.getContext('2d',{colorSpace:'srgb'}); ctx.drawImage(frame,0,0,192,144);
+  return ctx.getImageData(0,0,192,144).data;
+}
+async function gpuRenderer() {
+  const adapter=await navigator.gpu.requestAdapter(); if (!adapter) throw Error('No GPU adapter');
+  const device=await adapter.requestDevice();
+  const shader=device.createShaderModule({code:`
+    @group(0) @binding(0) var frame: texture_external;
+    @group(0) @binding(1) var s: sampler;
+    @vertex fn vs(@builtin(vertex_index) i:u32)->@builtin(position) vec4f {
+      var p=array<vec2f,3>(vec2f(-1,-1),vec2f(3,-1),vec2f(-1,3));return vec4f(p[i],0,1);
+    }
+    @fragment fn fs(@builtin(position) p:vec4f)->@location(0) vec4f {
+      return textureSampleBaseClampToEdge(frame,s,p.xy/vec2f(192,144));
+    }`});
+  const pipeline=device.createRenderPipeline({layout:'auto',vertex:{module:shader,entryPoint:'vs'},fragment:{module:shader,entryPoint:'fs',targets:[{format:'rgba8unorm'}]}});
+  const sampler=device.createSampler({minFilter:'nearest',magFilter:'nearest'});
+  return {close:()=>device.destroy(),async copyPixels(source) {
+    const texture=device.createTexture({size:[192,144],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_DST|GPUTextureUsage.COPY_SRC|GPUTextureUsage.TEXTURE_BINDING});
+    const buffer=device.createBuffer({size:768*144,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    device.pushErrorScope('validation');
+    try {
+      device.queue.copyExternalImageToTexture({source},{texture,colorSpace:'srgb'},[192,144]);
+      const encoder=device.createCommandEncoder();encoder.copyTextureToBuffer({texture},{buffer,bytesPerRow:768},[192,144]);device.queue.submit([encoder.finish()]);
+      await buffer.mapAsync(GPUMapMode.READ);return new Uint8Array(buffer.getMappedRange().slice(0));
+    } finally {buffer.destroy();texture.destroy();const error=await device.popErrorScope();if(error)throw Error(error.message);}
+  },async pixels(frame) {
+    const texture=device.createTexture({size:[192,144],format:'rgba8unorm',usage:GPUTextureUsage.RENDER_ATTACHMENT|GPUTextureUsage.COPY_SRC});
+    const buffer=device.createBuffer({size:768*144,usage:GPUBufferUsage.COPY_DST|GPUBufferUsage.MAP_READ});
+    try {
+      const external=device.importExternalTexture({source:frame,colorSpace:'srgb'});
+      const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:[{binding:0,resource:external},{binding:1,resource:sampler}]});
+      const encoder=device.createCommandEncoder(),pass=encoder.beginRenderPass({colorAttachments:[{view:texture.createView(),loadOp:'clear',storeOp:'store',clearValue:[0,0,0,1]}]});
+      pass.setPipeline(pipeline);pass.setBindGroup(0,group);pass.draw(3);pass.end();
+      encoder.copyTextureToBuffer({texture},{buffer,bytesPerRow:768},[192,144]);device.queue.submit([encoder.finish()]);
+      await buffer.mapAsync(GPUMapMode.READ);return new Uint8Array(buffer.getMappedRange().slice(0));
+    } finally {buffer.destroy();texture.destroy();}
+  }};
+}
+window.runRepro = async () => {
+  const results=[], gpu=await gpuRenderer();
+  try {for (const fixture of fixtures) for (const hardwareAcceleration of ['prefer-hardware','prefer-software']) {
+    const row={name:fixture.name,hardwareAcceleration}; results.push(row);
+    let decoder; const frames=[];
+    try {
+      const config={codec:fixture.codec,codedWidth:192,codedHeight:144,hardwareAcceleration,colorSpace:{primaries:'bt709',transfer:'bt709',matrix:fixture.matrix,fullRange:false}};
+      row.supported=(await VideoDecoder.isConfigSupported(config)).supported; if (!row.supported) continue;
+      let decodeError;
+      decoder=new VideoDecoder({output:frame=>frames.push(frame),error:error=>decodeError=error.message});
+      decoder.configure(config);decoder.decode(new EncodedVideoChunk({type:'key',timestamp:0,data:bytes(fixture.annexb)}));await decoder.flush();
+      if(decodeError) throw Error(decodeError); if(frames.length!==1) throw Error(`Expected one frame, got ${frames.length}`);
+      const native=frames[0];row.format=native.format;row.colorSpace=native.colorSpace.toJSON();
+      if (!native.format) throw Error('Opaque frame; cannot perform identical-byte backing test');
+      const data=new Uint8Array(native.allocationSize()),layout=await native.copyTo(data);
+      const reconstructed=new VideoFrame(data,{format:native.format,codedWidth:native.visibleRect.width,codedHeight:native.visibleRect.height,layout,timestamp:0,colorSpace:row.colorSpace});frames.push(reconstructed);
+      const clone=native.clone();frames.push(clone);
+      // Independent raw reference uses packed I420; compare each native plane.
+      const ref=bytes(fixture.reference);let rawMax=0;
+      for(let y=0;y<144;y++)for(let x=0;x<192;x++)rawMax=Math.max(rawMax,Math.abs(data[layout[0].offset+y*layout[0].stride+x]-ref[y*192+x]));
+      for(let p=1;p<3;p++)for(let y=0;y<72;y++)for(let x=0;x<96;x++){
+        const address=native.format==='NV12'?layout[1].offset+y*layout[1].stride+x*2+p-1:layout[p].offset+y*layout[p].stride+x;
+        rawMax=Math.max(rawMax,Math.abs(data[address]-ref[27648+(p-1)*6912+y*96+x]));
+      }
+      if(!['NV12','I420'].includes(native.format))throw Error(`Unhandled format ${native.format}`);
+      row.rawMax=rawMax;row.reconstructedColorSpace=reconstructed.colorSpace.toJSON();
+      const a=canvasPixels(native),b=canvasPixels(reconstructed),c=canvasPixels(clone),ga=await gpu.pixels(native),gb=await gpu.pixels(reconstructed);
+      row.canvasBackingDifference=difference(a,b);row.gpuBackingDifference=difference(ga,gb);row.cloneDifference=difference(a,c,false);
+      row.nativeCanvasVsGPU=difference(a,ga);row.nativeVs709=difference(a,reference(ref,'bt709'));row.nativeVs601=difference(a,reference(ref,'smpte170m'));
+      row.nativeGPUVs709=difference(ga,reference(ref,'bt709'));row.nativeGPUVs601=difference(ga,reference(ref,'smpte170m'));
+      row.memoryGPUVs709=difference(gb,reference(ref,'bt709'));row.memoryGPUVs601=difference(gb,reference(ref,'smpte170m'));
+      // Alternative browser conversion entrances; no readback feeds these paths.
+      row.routes={};
+      for(const route of ['copy-video-frame','copy-image-bitmap','copy-canvas']) {
+        let bitmap;
+        try {
+          let source=native;
+          if(route==='copy-image-bitmap'){bitmap=await createImageBitmap(native);source=bitmap;}
+          if(route==='copy-canvas') {source=document.createElement('canvas');source.width=192;source.height=144;source.getContext('2d',{colorSpace:'srgb'}).drawImage(native,0,0,192,144);}
+          const output=await gpu.copyPixels(source);
+          row.routes[route]={vs709:difference(output,reference(ref,'bt709')),vs601:difference(output,reference(ref,'smpte170m')),vsExternal:difference(output,ga)};
+        }catch(error){row.routes[route]={error:String(error)};}finally{bitmap?.close();}
+      }
+      row.memoryVs709=difference(b,reference(ref,'bt709'));row.memoryVs601=difference(b,reference(ref,'smpte170m'));
+    } catch(error) {row.error=String(error);} finally {for(const frame of frames)frame.close();if(decoder && decoder.state!=='closed')decoder.close();}
+  }} finally {gpu.close();}
+  document.querySelector('#result').textContent=JSON.stringify(results,null,2);return results;
+};
+document.querySelector('#run').onclick=()=>window.runRepro().catch(error=>document.querySelector('#result').textContent=String(error));
+</script>

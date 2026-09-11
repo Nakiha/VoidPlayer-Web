@@ -2,11 +2,37 @@ import { rgbaDescription } from '../src/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../src/session.ts';
+import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../src/color-mode.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs } from '../src/model.ts';
 import { reviewTools } from '../src/agent.ts';
 import type { MediaSource } from '../src/media.ts';
 
 function deferred<T>() { let resolve!: (v: T) => void; const promise = new Promise<T>(r => resolve = r); return { promise, resolve }; }
+test('reference decoder changes reload tracks and roll back failed depth changes',async()=>{
+ const previous=getColorMode(),decode=getReferenceDecode();setColorMode('reference');setReferenceDecode({decoder:'software',depth:2});
+ const session=new ReviewSession(()=>{});let fail=false,opens=0;
+ try{
+  await session.load('A',async()=>{opens++;if(fail)throw Error('copy failed');return media('decoder').source;});
+  await session.seek(40000);session.addMark({slot:'A',text:'keep'});const before=session.getState();
+  await session.setReferenceDecode({decoder:'hardware',depth:4});const after=session.getState();
+  assert.equal(opens,2);assert.equal(after.positionUs,before.positionUs);assert.equal(after.tracks[0].id,before.tracks[0].id);assert.deepEqual(after.marks,before.marks);
+  assert.deepEqual(after.referenceDecode,{decoder:'hardware',depth:4});
+  fail=true;await assert.rejects(session.setReferenceDecode({decoder:'hardware',depth:8}),/copy failed/);
+  assert.deepEqual(getReferenceDecode(),{decoder:'hardware',depth:4});assert.deepEqual(session.getState().tracks,after.tracks);
+  await assert.rejects(session.setReferenceDecode({decoder:'hardware',depth:3 as 2}),/无效/);
+ }finally{await session.dispose();setColorMode(previous);setReferenceDecode(decode);}
+});
+test('color mode reload preserves identity, marks and offset; failed replacement rolls back',async()=>{
+ const previous=getColorMode();setColorMode(null);
+ const session=new ReviewSession(()=>{});let count=0,fail=false;
+ try{
+  await session.load('A',async()=>{if(fail)throw Error('unsupported color resource');return media(`version-${++count}`).source;});
+  await session.setTrackOffset('A',10000);await session.seek(50000);session.addMark({slot:'A',text:'color check'});
+  const before=session.getState();await session.setColorMode('browser');const after=session.getState();
+  assert.equal(after.tracks[0].id,before.tracks[0].id);assert.equal(after.tracks[0].offsetUs,10000);assert.equal(after.positionUs,before.positionUs);assert.deepEqual(after.marks,before.marks);
+  fail=true;await assert.rejects(session.setColorMode('reference'),/unsupported/);assert.equal(getColorMode(),'browser');assert.deepEqual(session.getState().tracks,after.tracks);
+ }finally{await session.dispose();setColorMode(previous);}
+});
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   let closed = 0, disposed = 0;
   const frame = (pts: number) => ({
@@ -118,7 +144,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));

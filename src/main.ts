@@ -1,3 +1,4 @@
+import { initializeGpuPresentation } from './webgpu-presenter.ts';
 import { indexProgressLabel } from './index-progress.ts';
 import { AnnotationClient } from './annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
@@ -52,7 +53,27 @@ const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
 $('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
+const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
+try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
+let savedColorMode:'reference'|'browser'='reference';
+try{if(localStorage.getItem('voidplayer.color-mode')==='browser')savedColorMode='browser';}catch{}
+// Explicit diagnostic URLs retain their original backend-selection semantics.
+if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
+await initializeGpuPresentation(Object.values(canvases));
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
+const colorChoice=$<HTMLSelectElement>('color-mode');
+const renderColorMode=()=>{const state=session.getState();colorChoice.value=state.colorMode??savedColorMode;colorChoice.disabled=state.busy;
+  $('reference-decode-settings').hidden=state.colorMode!=='reference';
+  const decoder=$<HTMLSelectElement>('reference-decoder'),depth=$<HTMLSelectElement>('hardware-buffer-depth');
+  decoder.value=state.referenceDecode.decoder;depth.value=String(state.referenceDecode.depth);decoder.disabled=depth.disabled=state.busy;
+  $('hardware-depth-row').hidden=state.referenceDecode.decoder!=='hardware';
+  $('color-mode-description').textContent=state.colorMode==='browser'?'原生视频沿用浏览器呈现；软件回退按探针近似拟合，未保证每个编码与资源一致。切换会暂停并重新载入当前视频。':'使用原始平面按明确规则呈现 SDR；可能增加解码负担。暂不支持此模式的 HDR 等资源会提示错误。切换保留时间、对齐和标注。';};
+session.subscribe(renderColorMode);renderColorMode();
+colorChoice.onchange=()=>{void act(()=>session.setColorMode(colorChoice.value as 'reference'|'browser')).finally(renderColorMode);};
+const changeReferenceDecode=()=>{void act(()=>session.setReferenceDecode({decoder:$<HTMLSelectElement>('reference-decoder').value as 'hardware'|'software',depth:Number($<HTMLSelectElement>('hardware-buffer-depth').value) as 1|2|4|8})).finally(renderColorMode);};
+$('reference-decoder').onchange=changeReferenceDecode;$('hardware-buffer-depth').onchange=changeReferenceDecode;
+window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
 const removeLogPanel = installLogPanel($('diagnostic-logs'));
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';

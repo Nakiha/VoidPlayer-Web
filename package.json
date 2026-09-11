@@ -47,7 +47,11 @@
     "test:logs:browser": "npm run build && node scripts/check-log-report-browser.mjs",
     "test:caches:browser": "npm run build && node scripts/check-cache-browser.mjs",
     "test:annotations:persistence": "npm run build && node scripts/check-annotation-persistence-browser.mjs",
-    "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs"
+    "test:http-entry:browser": "npm run build && node scripts/check-http-entry-browser.mjs",
+    "test:webgpu:browser": "node scripts/check-webgpu-presentation.mjs",
+    "test:color:windows": "node scripts/check-windows-color.mjs",
+    "repro:color:native": "node scripts/repro-native-yuv-color.mjs",
+    "test:color:modes": "node scripts/check-color-modes.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",
