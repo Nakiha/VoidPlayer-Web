@@ -5,6 +5,7 @@ import { chromium, webkit } from 'playwright';
 import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
 import { openGopFlv } from './open-gop-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
+import { chooseTestGuest } from './test-identity.mjs';
 import { formatTime } from '../src/model.ts';
 const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
 let browser;
@@ -32,6 +33,11 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', req => { if (/voidplayer-core.*\.(js|wasm)$/.test(req.url())) wasmRequests.push(req.url()); });
   await page.goto(fixture.base); await page.waitForFunction(() => !!window.voidPlayer);
+  const welcome = page.locator('#identity-welcome [data-guest]');
+  await welcome.click();
+  // Native startup assertions require browser matching mode; reference SDR
+  // mode deliberately forces WASM for FLV (covered by check-flv-browser).
+  await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
   const call = (name, params = {}) => page.evaluate(({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
   const start = performance.now();
   const first = await within(call('load_library_item', { id: fixture.entry.id, slot: 'A' }), 8000);
@@ -46,7 +52,11 @@ try {
   await within(call('seek_review', { ptsUs: 0 }), 3000);
   let finished = false; const seek = call('seek_review', { ptsUs: 2500000 }).then(s => { finished = true; return s; });
   await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
-  fixture.release(); const complete = await seek; assert.equal(complete.tracks[0].indexState, 'complete');
+  fixture.release(); await seek;
+  // Progressive indexing resolves the seek on the validated prefix; the full
+  // index completes asynchronously.
+  await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete');
+  const complete = await call('get_review_session');
   const expectedDuration = formatTime(complete.tracks[0].durationUs);
   await page.waitForFunction(text => document.querySelector('.track-duration').textContent === text, expectedDuration);
   const completeDock = await dock();
@@ -62,12 +72,14 @@ try {
   const benchmark = await call('benchmark_review', { durationMs: 1500 }); assert.equal(benchmark.passed, true, JSON.stringify(benchmark));
   const list = await call('list_frame_indexes'); assert.equal(list.count, 1);
   const admin = await browser.newPage(); await admin.goto(fixture.base + '/admin');
-  await admin.locator('[data-pane="frame-indexes"]').click();
-  await admin.locator('.admin-frame-index-row').waitFor();
+  await chooseTestGuest(admin);
+  await admin.locator('[data-pane="caches"]').click();
+  await admin.locator('[data-cache-kind="frame-indexes"]').click();
+  await admin.locator('.cache-row').waitFor();
   await admin.screenshot({ path: `.run/playback-reports/frame-indexes-${browserName}.png` });
-  await admin.getByRole('button', { name: '清理 startup.flv 的帧索引', exact: true }).click();
-  await admin.locator('#frame-index-confirm-delete').click();
-  await admin.waitForFunction(() => document.querySelector('#frame-index-summary').textContent.startsWith('0 个'));
+  await admin.locator('.cache-row button').click();
+  await admin.locator('#cache-confirm-clear').click();
+  await admin.getByText('暂无帧索引缓存', { exact: true }).waitFor();
   assert.equal((await call('list_frame_indexes')).count, 0);
   await admin.setViewportSize({ width: 390, height: 844 });
   await admin.screenshot({ path: `.run/playback-reports/frame-indexes-mobile-${browserName}.png` });
