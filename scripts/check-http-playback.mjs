@@ -54,6 +54,9 @@ try {
     page.on('request', request => { if (/\/api\/media\/[^/]+(?:\?|$)/.test(new URL(request.url()).pathname)) requests.push(request.url()); });
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
     assert.deepEqual(await page.evaluate(() => [isSecureContext, typeof VideoDecoder, crossOriginIsolated]), secure ? [true, 'function', true] : [false, 'undefined', false]);
+    // This probe covers the WebCodecs lifecycle; the default reference SDR
+    // (WASM) mode is covered by the identity playback probe.
+    await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
     await page.locator('#start-library-more').click();
     const entry = listing.entries.find(e => e.name === 'http-1080p-a.mp4');
     const row = page.locator('#source-list .source-row').filter({ hasText: entry.name });

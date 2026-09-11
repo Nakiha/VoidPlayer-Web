@@ -608,7 +608,7 @@ test('workspace round trip retains track order, offsets, media anchors and mark 
   await session.restoreWorkspace(document, async info => { const m = media('new-decoder-id'); reopened.push(m); return m.source; });
   const state = session.getState();
   assert.deepEqual(state.tracks.map(t => [t.slot,t.id,t.offsetUs]), [['B','workspace-B',40000],['A','workspace-A',0]]);
-  assert.equal(state.positionUs,120000); assert.equal(state.playing,false); assert.deepEqual(state.marks,[{...mark,drawings:[]}]);
+  assert.equal(state.positionUs,120000); assert.equal(state.playing,false); assert.deepEqual(state.marks,[mark]);
   assert.equal(a.disposed,1); assert.equal(b.disposed,1); assert.ok(reopened.every(m=>m.closed===1));
   await session.dispose(); assert.ok(reopened.every(m=>m.disposed===1));
 });
