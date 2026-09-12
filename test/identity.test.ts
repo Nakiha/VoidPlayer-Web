@@ -25,6 +25,20 @@ test('user IDs survive rename, existing names switch without merging, normalized
   } finally { store.close(); }
 });
 
+test('explicit rename and create never switch or rename another identity', () => {
+  const store = new WorkspaceStore(':memory:');
+  try {
+    const a = store.identify(undefined, '甲'), b = store.identify(undefined, '乙');
+    assert.throws(() => store.identify(a.id, '乙', 'rename'), /已被使用/);
+    assert.deepEqual(store.user(a.id), a); assert.deepEqual(store.user(b.id), b);
+    assert.throws(() => store.identify(a.id, '乙', 'create'), /已被使用/);
+    const c = store.identify(a.id, '丙', 'create');
+    assert.notEqual(c.id, a.id); assert.deepEqual(store.user(a.id), a);
+    assert.equal(store.identify(a.id, '改名', 'rename').id, a.id);
+    assert.throws(() => store.identify(undefined, '新名字', 'rename'), /先选择/);
+  } finally { store.close(); }
+});
+
 test('legacy owners migrate without changing IDs and new identities survive restart', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-users-'));
   const file = path.join(root, 'workspaces.sqlite');
@@ -64,6 +78,8 @@ test('intranet HTTP explicitly chooses cookie identity, lists users and atomical
     assert.deepEqual((await (await fetch(base+'/api/users')).json()).users,[]);
     const response = await identify('', '小明'); const a = (await response.json()).actor;
     const cookie = response.headers.get('set-cookie')!.split(';')[0];
+    const downgrade = await fetch(base+'/api/identity', { method: 'POST', headers: { cookie, origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify({ guest: true }) });
+    assert.equal(downgrade.status, 409); assert.equal(downgrade.headers.get('set-cookie'), null);
     assert.ok(cookie.includes(a.id)); assert.match(response.headers.get('set-cookie')!, /Max-Age=/);
     assert.deepEqual((await (await fetch(base + '/api/health', { headers: { cookie } })).json()).actor, a);
     const contenders = await Promise.all(Array.from({ length: 12 }, () => identify('', '共同用户').then(r => r.json())));

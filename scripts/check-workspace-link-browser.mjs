@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { webkit } from 'playwright';
+import { createServer } from 'vite';
+import { loadConfig } from '../server/config.ts';
+import { startService } from '../server/runtime.ts';
+const root = await mkdtemp(path.join(os.tmpdir(), 'vp-link-controls-'));
+let service, vite, browser;
+try {
+  await mkdir(path.join(root, 'media'));
+  const config = await loadConfig(['--folder', path.join(root, 'media'), '--data-dir', root], 'production'); config.port = 0; config.logsDir = null;
+  service = await startService(config);
+  vite = await createServer({ configFile: false, cacheDir: path.join(root, 'vite-cache'), optimizeDeps: { noDiscovery: true }, server: { host: '127.0.0.1', port: 0, proxy: { '/api': { target: `http://127.0.0.1:${service.server.address().port}`, changeOrigin: false } } } }); await vite.listen();
+  browser = await webkit.launch(); const page = await browser.newPage();
+  await page.route('**/controls.html', route => route.fulfill({ contentType: 'text/html', body: '<body></body>' }));
+  // Pinning metadata is a fixture; identity, share storage and workspace writes use the real service.
+  await page.route('**/api/media/*/metadata*', route => route.fulfill({ json: { id: 'a'.repeat(24), version: 'b'.repeat(24), size: 100, lastModified: 10, state: 'ready' } }));
+  await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/controls.html`);
+  await page.evaluate(async () => {
+    const { savedWorkspaceShell, installSavedWorkspaces } = await import('/src/ui/saved-workspaces.ts');
+    const { installWorkspaceSharing } = await import('/src/ui/workspace-sharing.ts');
+    const { chooseIdentity } = await import('/src/identity.ts');
+    const { Viewport } = await import('/src/viewport.ts');
+    document.body.innerHTML = `<button id="workspace-share"></button><div id="settings"><div id="settings-pane-workspace">${savedWorkspaceShell()}</div></div>`;
+    await chooseIdentity({ name: '测试用户', mode: 'create' });
+    const life = new AbortController();
+    const snapshot = () => ({ schema: 'voidplayer-workspace', version: 1, name: saved.name(), generatedAt: new Date().toISOString(), serverUrl: location.origin, positionUs: 0, tracks: [{ slot: 'A', mediaId: 'sample', offsetUs: 0 }], media: [{ id: 'sample', name: 'sample.mp4', size: 100, lastModified: 10, codec: 'h264', decoder: 'webcodecs', width: 100, height: 100, durationUs: 1000, firstPtsUs: 0, source: { kind: 'library', id: 'a'.repeat(24), url: `${location.origin}/api/media/${'a'.repeat(24)}?v=${'b'.repeat(24)}` } }], marks: [], viewport: new Viewport().snapshot() });
+    const saved = installSavedWorkspaces({ signal: life.signal, snapshot, open: async () => true, canSave: () => true, report: e => { throw e; } });
+    Object.defineProperty(navigator.clipboard, 'writeText', { value: async value => { window.copied = value; } });
+    installWorkspaceSharing({ signal: life.signal, ready: Promise.resolve(), snapshot, created: document => saved.shared(document), open: async () => true, canShare: () => true, report: e => { throw e; } });
+  });
+  let release; const gate = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/shares', async route => { await gate; await route.continue(); });
+  await page.locator('#saved-workspace-name').fill('初次评审'); await page.locator('#saved-workspace-share').click();
+  assert.equal(await page.locator('#saved-workspace-share .share-spinner').count(), 1);
+  assert.equal(await page.locator('#saved-workspace-share').innerHTML(), await page.locator('#workspace-share').innerHTML());
+  assert.equal(await page.locator('#saved-workspace-share').isDisabled(), true); release();
+  await page.waitForFunction(() => !!window.copied);
+  const link = await page.evaluate(() => window.copied); assert.equal(await page.locator('#saved-workspace-uri').count(), 0); assert.equal(await page.locator('#saved-workspace-share').innerHTML(), await page.locator('#workspace-share').innerHTML());
+  await page.locator('.saved-workspace-open strong').filter({ hasText: '初次评审' }).waitFor();
+  await page.locator('#saved-workspace-name').fill('更名评审'); await page.locator('#saved-workspace-name').press('Enter');
+  await page.locator('.saved-workspace-open strong').filter({ hasText: '更名评审' }).waitFor();
+  const shared = await page.request.get(link.replace('/?share=', '/api/shares/')); assert.equal((await shared.json()).document.name, '初次评审');
+  const records = await page.request.get(new URL('/api/workspaces?all=1', link).href).then(r => r.json()); assert.equal(records.entries.length, 1); assert.equal(records.entries[0].name, '更名评审');
+  await page.locator('#workspace-share').click(); await page.waitForFunction(old => window.copied !== old, link);
+  assert.equal(await page.locator('#saved-workspace-share').innerText(), '分享');
+  console.log('PASS: both share buttons use the same generator, visible copied URI, stored name, automatic rename and immutable old links');
+} finally { await browser?.close(); await vite?.close(); await service?.close(); await rm(root, { recursive: true, force: true }); }

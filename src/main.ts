@@ -1,3 +1,4 @@
+import { updateColorFlow } from './ui/color-flow.ts';
 import { initializeGpuPresentation } from './webgpu-presenter.ts';
 import { indexProgressLabel } from './index-progress.ts';
 import { AnnotationClient } from './annotation-client.ts';
@@ -15,9 +16,6 @@ import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
-import './themes/silver-glass.css';
-import './themes/dark.css';
-import './themes/accents.css';
 import './themes/accessibility.css';
 import './style.css';
 import './themes/settings.css';
@@ -55,24 +53,37 @@ $('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
 try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
-let savedColorMode:'reference'|'browser'='reference';
-try{if(localStorage.getItem('voidplayer.color-mode')==='browser')savedColorMode='browser';}catch{}
+let savedColorMode:'reference'|'browser'='browser';
+try{if(localStorage.getItem('voidplayer.color-mode')==='reference')savedColorMode='reference';}catch{}
 // Explicit diagnostic URLs retain their original backend-selection semantics.
 if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
 await initializeGpuPresentation(Object.values(canvases));
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
-const colorChoice=$<HTMLSelectElement>('color-mode');
-const renderColorMode=()=>{const state=session.getState();colorChoice.value=state.colorMode??savedColorMode;colorChoice.disabled=state.busy;
-  $('reference-decode-settings').hidden=state.colorMode!=='reference';
-  const decoder=$<HTMLSelectElement>('reference-decoder'),depth=$<HTMLSelectElement>('hardware-buffer-depth');
-  decoder.value=state.referenceDecode.decoder;depth.value=String(state.referenceDecode.depth);decoder.disabled=depth.disabled=state.busy;
-  $('hardware-depth-row').hidden=state.referenceDecode.decoder!=='hardware';
-  $('color-mode-description').textContent=state.colorMode==='browser'?'原生视频沿用浏览器呈现；软件回退按探针近似拟合，未保证每个编码与资源一致。切换会暂停并重新载入当前视频。':'使用原始平面按明确规则呈现 SDR；可能增加解码负担。暂不支持此模式的 HDR 等资源会提示错误。切换保留时间、对齐和标注。';};
+const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
+const decoderButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-reference-decoder]')];
+const depthMenu = installChoiceMenu('hardware-buffer-depth', [1,2,4,8].map(n=>({value:String(n),label:`${n} 帧`})), value=>{
+  void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,depth:Number(value) as 1|2|4|8})).finally(renderColorMode);
+});
+let flowKey = '';
+const renderColorMode=()=>{
+  const state=session.getState(), mode=state.colorMode??savedColorMode, decoder=state.referenceDecode.decoder;
+  for(const button of colorButtons){button.setAttribute('aria-pressed',String(button.dataset.colorMode===mode));button.disabled=state.busy;}
+  for(const button of decoderButtons){button.setAttribute('aria-pressed',String(button.dataset.referenceDecoder===decoder));button.disabled=state.busy;}
+  $('reference-decode-settings').hidden=mode!=='reference';
+  $('hardware-depth-row').style.visibility=decoder==='hardware'?'visible':'hidden';
+  $('hardware-depth-row').inert=decoder!=='hardware';
+  depthMenu.sync(String(state.referenceDecode.depth),`${state.referenceDecode.depth} 帧`,!state.busy);
+  $('color-mode').setAttribute('aria-busy',String(state.busy));
+  const key=`${mode}/${decoder}`;
+  if(key!==flowKey){
+    flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
+    $('color-mode-description').textContent=mode==='browser'?'软件回退仅近似匹配，颜色可能与原生帧不同。':decoder==='hardware'?'首帧核对失败则改用软件解码；读回帧有额外开销。':'保留原始帧精度，按统一规则转换；仅支持 SDR。';
+  }
+};
 session.subscribe(renderColorMode);renderColorMode();
-colorChoice.onchange=()=>{void act(()=>session.setColorMode(colorChoice.value as 'reference'|'browser')).finally(renderColorMode);};
-const changeReferenceDecode=()=>{void act(()=>session.setReferenceDecode({decoder:$<HTMLSelectElement>('reference-decoder').value as 'hardware'|'software',depth:Number($<HTMLSelectElement>('hardware-buffer-depth').value) as 1|2|4|8})).finally(renderColorMode);};
-$('reference-decoder').onchange=changeReferenceDecode;$('hardware-buffer-depth').onchange=changeReferenceDecode;
+for(const button of colorButtons)button.onclick=()=>{void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
+for(const button of decoderButtons)button.onclick=()=>{void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
 window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
 const removeLogPanel = installLogPanel($('diagnostic-logs'));
 const removeTooltips = installTooltips();
@@ -128,7 +139,7 @@ const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   identityReady: identitySettings.ready, act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
-  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); workbench.restore(document.layout ?? workbench.getState()); render(); },
+  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
@@ -219,11 +230,16 @@ function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`$
 function render() {
   const state = session.getState();
   $('decoder-environment').textContent = !globalThis.isSecureContext
-    ? '原生解码不可用，请通过受信任的 HTTPS 地址访问。'
-    : typeof VideoDecoder === 'undefined' ? '此浏览器不支持原生解码（WebCodecs）。'
-      : `原生解码可用（WebCodecs）${globalThis.crossOriginIsolated ? ' · 多线程备用解码可用' : ''}`;
+    ? '原生解码不可用 · 需要受信任的 HTTPS'
+    : typeof VideoDecoder === 'undefined' ? '仅软件解码可用'
+      : `原生解码可用${globalThis.crossOriginIsolated ? ' · 支持多线程软件解码' : ''}`;
   const loaded = state.tracks.length > 0;
   $('performance-current').hidden = !loaded;
+  $('color-runtime-tracks').textContent=state.tracks.map(track=>{
+    const native=track.decoder==='webcodecs', label=native?'浏览器原生解码':'软件解码';
+    const fallback=!native && (state.colorMode==='browser'||state.referenceDecode.decoder==='hardware');
+    return `${track.slot} · ${track.name}\n${label}${fallback?'（已回退）':''} · ${track.output?.yuv?'原始平面':track.output?.format??'等待帧'}`;
+  }).join('\n');
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');
   screens.classList.toggle('single', state.tracks.length < 2);
@@ -288,7 +304,6 @@ function render() {
   document.querySelector('.transport')!.setAttribute('aria-busy', String(state.busy));
   $<HTMLInputElement>('position').disabled = !loaded;
   $<HTMLButtonElement>('benchmark').disabled = benchmarkRunning || !loaded || state.busy || state.playing;
-  $<HTMLButtonElement>('export').disabled = !loaded && !state.marks.length;
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
   }
@@ -307,7 +322,7 @@ function render() {
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
     ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`
-    : '静音 · SDR · 本地文件';
+    : loaded ? `${state.tracks.length} 条轨道` : '';
   drawingEditor.render(state);
   workbench.render(state);
   sourceActions.render(state);

@@ -5,10 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="description" content="在浏览器本地对比视频、逐帧查看并导出评审标注。">
     <script src="/theme-init.js"></script>
+    <link rel="stylesheet" href="/src/themes/silver-glass.css">
+    <link rel="stylesheet" href="/src/themes/dark.css">
+    <link rel="stylesheet" href="/src/themes/accents.css">
+    <link rel="stylesheet" href="/src/startup.css">
     <title>VoidPlayer · 视频对比</title>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app" data-initializing aria-busy="true" inert></div>
     <script type="module" src="/src/bootstrap.ts"></script>
   </body>
 </html>

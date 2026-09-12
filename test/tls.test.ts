@@ -50,6 +50,7 @@ test('trusted HTTPS serves remote media, isolation headers and identity with sam
     const response = await httpFetch(base + '/api/health', { ca, servername: 'voidplayer.test', headers: { host } });
     assert.equal(response.status, 200); assert.equal(response.headers.get('cross-origin-opener-policy'), 'same-origin');
     assert.equal(response.headers.get('cross-origin-embedder-policy'), 'require-corp');
+    assert.equal(response.headers.get('cross-origin-resource-policy'), 'same-origin');
     assert.equal(response.headers.get('set-cookie'), null);
     assert.equal((await response.json()).actor, null);
     const users = async () => (await (await httpFetch(base + '/api/users', { ca, headers: { host } })).json()).users;

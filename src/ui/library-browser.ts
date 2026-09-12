@@ -88,6 +88,14 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
   }, 3000);
   signal.addEventListener('abort', () => { clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose(); }, { once: true });
   return {
+    snapshot: () => ({ root, directory, search, all }),
+    async restore(state: { root: string; directory: string; search: string; all: boolean }) {
+      clearTimeout(searchTimer); request?.abort(); sequence++;
+      ({ root, directory, search, all } = state);
+      page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false; note = '';
+      render();
+      await load(false, true);
+    },
     navigate, page: () => page, refresh, filter: () => appliedSearch,
     load: () => load(),
     search(value: string) {

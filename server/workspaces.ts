@@ -9,7 +9,7 @@ import { parseWorkspace } from '../src/workspace-file.ts';
 import type { WorkspaceFile } from '../src/workspace-file.ts';
 
 export const WORKSPACE_BYTES = 32 * 1024 * 1024;
-export type SavedWorkspace = { id: string; name: string; owner: string; createdAt: string; updatedAt: string; updatedBy: string; revision: number; bytes: number; tracks: number; marks: number };
+export type SavedWorkspace = { id: string; name: string; owner: string; ownerName?: string; createdAt: string; updatedAt: string; updatedBy: string; revision: number; bytes: number; tracks: number; marks: number };
 const columns = 'id,name,owner,created_at AS createdAt,updated_at AS updatedAt,updated_by AS updatedBy,revision,bytes,tracks,marks';
 /** User-authored documents are separate from the rebuildable media index.
  * SQLite transactions commit metadata, content and revision together. */
@@ -41,7 +41,7 @@ export class WorkspaceStore {
     return row ? { id: row.id, name: row.kind === 'guest' ? '访客' : row.name, ...(row.kind === 'guest' ? {kind: 'guest' as const} : {}) } : null;
   }
   /** A name is a trusted identity claim, not a credential. Keep IDs stable on rename. */
-  identify(id?: string, value?: unknown): Actor {
+  identify(id?: string, value?: unknown, mode: 'claim' | 'rename' | 'create' = 'claim'): Actor {
     let name: string | undefined;
     if (value === undefined) throw new AdminError(400, '请填写用户名或选择访客。');
     if (value !== undefined) {
@@ -53,8 +53,10 @@ export class WorkspaceStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       let actor = name ? this.db.prepare('SELECT id,name FROM users WHERE name=?').get(name) as Actor | undefined : undefined;
+      if (mode === 'rename' && !this.user(id)) throw new AdminError(400, '请先选择要修改名字的用户。');
+      if (actor && (mode === 'create' || (mode === 'rename' && actor.id !== id))) throw new AdminError(409, '这个名字已被使用，请换一个名字，或通过切换用户选择已有用户。');
       if (!actor) {
-        actor = this.user(id) ?? undefined;
+        actor = this.user(mode === 'create' ? undefined : id) ?? undefined;
         if (actor && name) { this.db.prepare("UPDATE users SET name=?,kind='named' WHERE id=?").run(name, actor.id); actor = { id: actor.id, name }; }
         if (!actor) {
           const nextId = randomUUID();
@@ -71,15 +73,15 @@ export class WorkspaceStore {
     if (search.length > 200) throw new AdminError(400, '搜索文本过长。');
     const conditions = [], values: string[] = [];
     if (!all) { conditions.push('owner=?'); values.push(actor.id); }
-    if (search) { conditions.push('instr(lower(name),lower(?))>0'); values.push(search); }
+    if (search) { conditions.push('(instr(lower(name),lower(?))>0 OR owner IN (SELECT id FROM users WHERE instr(lower(name),lower(?))>0))'); values.push(search, search); }
     if (before) { const [time, id] = before.split('|'); conditions.push('(updated_at<? OR (updated_at=? AND id<?))'); values.push(time, time, id); }
-    const rows = this.db.prepare(`SELECT ${columns} FROM workspaces ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''} ORDER BY updated_at DESC,id DESC LIMIT 41`).all(...values) as unknown as SavedWorkspace[];
+    const rows = this.db.prepare(`SELECT ${columns},COALESCE((SELECT name FROM users WHERE users.id=workspaces.owner),'访客') AS ownerName FROM workspaces ${conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''} ORDER BY updated_at DESC,id DESC LIMIT 41`).all(...values) as unknown as SavedWorkspace[];
     const entries = rows.slice(0, 40), last = entries.at(-1);
     return { entries, next: rows.length > 40 && last ? `${last.updatedAt}|${last.id}` : null };
   }
   private row(id: string, content = false) {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new AdminError(404, '工作区不存在。');
-    const row = this.db.prepare(`SELECT ${columns}${content ? ",document" : ""} FROM workspaces WHERE id=?`).get(id) as unknown as (SavedWorkspace & { document?: string }) | undefined;
+    const row = this.db.prepare(`SELECT ${columns},COALESCE((SELECT name FROM users WHERE users.id=workspaces.owner),'访客') AS ownerName${content ? ",document" : ""} FROM workspaces WHERE id=?`).get(id) as unknown as (SavedWorkspace & { document?: string }) | undefined;
     if (!row) throw new AdminError(404, '工作区不存在。');
     return row;
   }

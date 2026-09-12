@@ -1,6 +1,7 @@
 /** Shared top-layer menu behavior for choices and actions. */
 export function installMenu(button: HTMLButtonElement, menu: HTMLElement, options: {
   align?: 'start' | 'end';
+  anchor?: () => DOMRect;
   columns?: number;
   selected?: () => HTMLButtonElement | undefined;
   bounds?: () => DOMRect | undefined;
@@ -46,7 +47,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   const open = (last = false) => {
     if (button.disabled) return;
     clearExit();
-    const rect = button.getBoundingClientRect();
+    const rect = options.anchor?.() ?? button.getBoundingClientRect();
     const bounds = options.bounds?.() ?? new DOMRect(0, 0, innerWidth, innerHeight);
     menu.style.setProperty('--menu-trigger-width', `${Math.max(0, Math.min(rect.width, bounds.width - 8))}px`);
     button.setAttribute('aria-expanded', 'true');

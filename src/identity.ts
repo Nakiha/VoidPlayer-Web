@@ -21,7 +21,7 @@ export function identityHealth(): Promise<Health> {
     remember(health.actor); return health;
   }).finally(() => { pending = undefined; });
 }
-export function chooseIdentity(input: { name: string } | { id: string } | { guest: true }): Promise<Actor> {
+export function chooseIdentity(input: { name: string; mode?: 'rename' | 'create' } | { id: string } | { guest: true }): Promise<Actor> {
   return serialize(async () => {
     const response = await fetch('/api/identity', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'identity' }, body: JSON.stringify(input), signal: AbortSignal.timeout(10000) });
     const result = await response.json();

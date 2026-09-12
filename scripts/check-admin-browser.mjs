@@ -27,7 +27,9 @@ try {
   const player = await context.newPage(); const errors = [];
   player.on('pageerror', e => errors.push(e.message));
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
-  let [page] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
+  await player.locator('#server-status').hover();
+  await player.locator('#control-tooltip').filter({ hasText: '打开服务管理' }).waitFor({ state: 'visible' });
+  let [page] = await Promise.all([context.waitForEvent('page', { timeout: 5000 }), player.locator('#server-status').click()]);
   page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
   await page.waitForURL(base + '/admin'); await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
   assert.equal(await player.url(), base + '/');

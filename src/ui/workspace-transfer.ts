@@ -3,7 +3,7 @@ import {updateMediaInfo} from '../media-state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../model.ts';
 import { openMedia, openMediaFromUrl } from '../media.ts';
-import { compressWorkspace, parseWorkspace, readWorkspaceFile } from '../workspace-file.ts';
+import { parseWorkspace, readWorkspaceFile } from '../workspace-file.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { pinLibraryReference } from '../media-reference.ts';
@@ -56,7 +56,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   const lifetime = new AbortController(); let importing = false;
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   function exportWorkspace() {
-    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture() };
+    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? '未命名工作区' };
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
@@ -78,21 +78,15 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       } catch(error) { rollback?.(); throw error; }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      await options.restore(document); saved?.detach(); return true;
+      await options.restore(document); saved?.detach(document.name); return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, created: document => saved!.shared(document), open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing.update(); });
   const savedId = new URL(location.href).searchParams.get('workspace');
   if (!new URL(location.href).searchParams.has('share') && savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));
-  document.getElementById('workspace-import')!.addEventListener('click', () => input.click(), { signal: lifetime.signal });
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
-  document.getElementById('export')!.addEventListener('click', () => void options.act(async () => {
-    const blob = await compressWorkspace(exportWorkspace()), url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = `VoidPlayer-${new Date().toISOString().slice(0, 10)}.voidplayer`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  }, 'workspace.export'), { signal: lifetime.signal });
   return { exportWorkspace, importWorkspace, importFile, shareWorkspace: sharing.create, dispose() { lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }

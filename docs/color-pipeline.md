@@ -1,7 +1,7 @@
 # 色彩链路与帧资源契约
 
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
-应用提供“正确颜色（SDR）”和“匹配浏览器（近似拟合）”两个选项，默认正确颜色。设置位于“性能 → 色彩路径”，UI/Agent 共用 `session.setColorMode`。不承诺跨设备逐像素一致或 HDR/EDR 输出。
+应用提供“自有色彩”（SDR）和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩；已保存的选择继续沿用。设置位于“色彩与解码 → 色彩转换”，UI/Agent 共用 `session.setColorMode`。不承诺跨设备逐像素一致或 HDR/EDR 输出。
 
 ## 用户选择的两条路径
 
@@ -10,6 +10,7 @@
 - 硬件准入目前限 NV12/I420 8-bit SDR。载入时临时打开真实 WASM 取得同 PTS 首帧，核对全部原始 YUV 样本、coded/crop、位深、子采样及 resolved matrix/range/primaries/transfer；通过后沿用该帧确认的 chroma location，释放 WASM 源。保留硬件资源原始 color 和容器 sourceColor，不用源标签覆盖资源，也不拟合 RGB。容器 range 可以与实际帧不同；源 HDR 或 primaries/matrix 冲突拒绝。此验证增加首帧载入成本，不增加逐帧 WASM 解码。首帧证据不是动态码流全程认证；后续公开格式、尺寸、裁剪或色彩标签变化明确报错，提示切换软件，不静默沿用旧契约。
 - 硬件能力/读回/首帧核对失败进入现有 decode 阶段软件回退；input/resource 失败不换后端。播放中的错误继续由会话处理，不新增整体 catch 换路径。每次关闭/seek 归还预取帧，源释放时终止 Worker 并拒绝待处理请求；已交付缓冲只在 frame.close 后回收，每 Worker 最多一个空闲缓冲。
 - **匹配浏览器（browser）**：WebCodecs 优先，原生资源沿用浏览器输出；WASM 回退使用中性探针选择的 Apple/CV/普通 SDR 候选。这个选择仅是近似兼容，不认证未测编码、位深或资源；无有效探针时软件保留普通 SDR 转换。不会按 UA/文件名加 BT601 或 GAMMA22 修正，因此 Windows Edge 的已知资源差异不能承诺消除。
+  原生资源的托管归属不依赖 WebGPU 是否成功初始化；无 WebGPU 时仍保留原生 sample，经浏览器纹理导入或 Canvas 绘制。切换模式准备首帧时也按目标用户模式决定，不能因旧 GPU 状态而先转换为自有 YUV 路径。
 - 切换暂停播放，重新准备全部现有轨道的相同时间位置；保留媒体 ID、标注、对齐偏移。全部准备成功后再替换。失败恢复旧模式、旧源和画面；不自动恢复播放。成功选择只保存在本地 localStorage。
 - Agent 工具 `set_review_color_mode` 接受 `reference` / `browser`；`set_reference_decode` 接受 decoder=hardware/software、depth=1/2/4/8，UI 共用 session.setReferenceDecode 的重载/失败回滚。状态返回 `colorMode`、`referenceDecode` 及实际轨道 decoder。配置成功后保存到本地，刷新恢复。首帧、播放、seek、截图使用同一选择。
 - 显式 `colorPipeline` URL 仍供底层诊断，启动时不读取用户模式；它不是第三个用户菜单选项。没有 WebGPU 时仍能用共同 WebGL/CPU 呈现正确 SDR，但浏览器拟合不作保证。

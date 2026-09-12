@@ -1,0 +1,6 @@
+/* Loaded by HTML before modules: preserve the selected theme during startup. */
+:root { color-scheme: light; background: var(--surface); color: var(--text); font: var(--text-ui)/1.4 var(--font-ui); }
+:root[data-theme=dark] { color-scheme: dark; }
+#app[data-initializing] { visibility: hidden; }
+.startup-error { max-width: 32rem; margin: 20vh auto; padding: 24px; line-height: 1.6; }
+.startup-error a { color: var(--accent); }

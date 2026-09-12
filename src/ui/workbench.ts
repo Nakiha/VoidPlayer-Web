@@ -40,7 +40,7 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void) {
   const view = new WorkspaceState();
   const catalog = new SourceCatalog(readHistory());
-  let sourceTab = 'available';
+  let sourceTab: 'available' | 'recent' = 'available';
   let startTab = 'available';
   let libraryStatus = '';
   let refreshing: Promise<void> | undefined;
@@ -469,7 +469,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     input.value = ''; save(); renderSources();
   };
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-source-tab]')) button.onclick = () => {
-    sourceTab = button.dataset.sourceTab!;
+    sourceTab = button.dataset.sourceTab as 'available' | 'recent';
     if (sourceTab === 'available') libraryBrowser.search($<HTMLInputElement>('source-search').value);
     else void refreshRecent();
     for (const tab of document.querySelectorAll('[data-source-tab]')) tab.setAttribute('aria-pressed', String((tab as HTMLElement).dataset.sourceTab === sourceTab));
@@ -505,12 +505,19 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width() }),
-    restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: { ...libraryBrowser.snapshot(), tab: sourceTab, query: $<HTMLInputElement>('source-search').value } }),
+    async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
+      const sources = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };
+      sourceTab = sources.tab;
+      $<HTMLInputElement>('source-search').value = sources.query;
+      for (const tab of document.querySelectorAll<HTMLElement>('[data-source-tab]')) tab.setAttribute('aria-pressed', String(tab.dataset.sourceTab === sourceTab));
+      const browsing = libraryBrowser.restore(sources);
       dockSignature = ''; trackSignature = ''; annotationSignature = ''; syncPanels(); panelResize.refresh(); render(session.getState());
+      await browsing;
+      if (sourceTab === 'recent') await refreshRecent();
     },
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },
   };

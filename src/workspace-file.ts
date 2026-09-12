@@ -8,9 +8,10 @@ export type WorkspaceLayout = {
   panels: { inspector: boolean; subtracks: boolean; sources: boolean };
   selected: Slot; dockHeight: number; marksExpanded: boolean;
   filenameWidth?: number; marksWidth?: number;
+  sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
 };
 export type WorkspaceFile = {
-  schema: 'voidplayer-workspace'; version: 1; generatedAt: string; serverUrl: string;
+  schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
   thumbnails?: { id: string; url: string; width: number; height: number }[];
@@ -85,13 +86,18 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
     const l = object(d.layout), p = object(l.panels);
     layout = { panels: { inspector: boolean(p.inspector), subtracks: boolean(p.subtracks), sources: boolean(p.sources) }, selected: slotValue(l.selected), dockHeight: timeUs(l.dockHeight), marksExpanded: boolean(l.marksExpanded) };
     for (const key of ['filenameWidth', 'marksWidth'] as const) if (l[key] !== undefined) layout[key] = timeUs(l[key]);
+    if (l.sources !== undefined) {
+      const s = object(l.sources);
+      if (s.tab !== 'available' && s.tab !== 'recent') throw new Error('工作区媒体库标签无效。');
+      layout.sources = { tab: s.tab, query: text(s.query, 1000), root: text(s.root, 200), directory: text(s.directory, 4096), search: text(s.search, 1000), all: boolean(s.all) };
+    }
   }
   const thumbnails = array(d.thumbnails ?? [], 10000).map(value => {
     const t = object(value), url = text(t.url, 2 * 1024 * 1024), id = text(t.id, 200);
     if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
-  return { schema: 'voidplayer-workspace', version: 1, generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
+  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
 }
 export async function readWorkspaceFile(file: Blob, baseUrl: string): Promise<WorkspaceFile> {
   if (file.size > MAX_BYTES) throw new Error('工作区文件超过 32 MiB。');

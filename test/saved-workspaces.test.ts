@@ -137,3 +137,22 @@ test('share HTTP API permits anonymous readers without creating users and refuse
     assert.deepEqual((await (await fetch(base+'/api/users')).json()).users,[]);
   } finally { await service.close(); }
 }));
+
+
+test('workspace search matches current owner names across users and orders newest first', () => temporary(async root => {
+  const store = new WorkspaceStore(path.join(root, 'workspaces.sqlite'));
+  try {
+    const firstUser = store.identify(undefined, '小明', 'create');
+    const secondUser = store.identify(undefined, '小红', 'create');
+    const first = store.create({ name: 'First review', document: document() }, firstUser);
+    await new Promise(resolve => setTimeout(resolve, 5));
+    const second = store.create({ name: 'Second review', document: document() }, secondUser);
+    assert.deepEqual(store.list(firstUser, true).entries.map(row => row.id), [second.id, first.id]);
+    assert.equal(store.list(firstUser, true, '', '小红').entries[0].id, second.id);
+    assert.equal(store.list(firstUser, true, '', 'FIRST').entries[0].ownerName, '小明');
+    store.identify(secondUser.id, '新名字', 'rename');
+    assert.equal(store.list(firstUser, true, '', '小红').entries.length, 0);
+    assert.equal(store.list(firstUser, true, '', '新名字').entries[0].id, second.id);
+    assert.equal(store.list(firstUser, false, '', '新名字').entries.length, 0);
+  } finally { store.close(); }
+}));

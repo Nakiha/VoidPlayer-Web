@@ -1,0 +1,65 @@
+import assert from 'node:assert/strict';
+import path from 'node:path';
+import { webkit } from 'playwright';
+import { createMediaServer } from '../server/app.ts';
+const root=path.resolve(import.meta.dirname,'..');
+const server=createMediaServer({roots:[path.join(root,'fixtures/video')],staticDir:path.join(root,'dist'),onLog(){}});
+await new Promise(r=>server.listen(0,'127.0.0.1',r));
+const browser=await webkit.launch({headless:true});
+try {
+ const page=await browser.newPage({viewport:{width:1280,height:850},colorScheme:'dark'}),errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(`http://127.0.0.1:${server.address().port}`);
+ await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();
+ const pane=page.locator('#settings-pane-performance');
+ await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
+ assert.equal(await page.locator('#settings-tab-performance').innerText(),'色彩与解码');
+ assert.equal(await pane.locator('select,details,summary').count(),0);
+ assert.equal(await page.locator('[data-color-mode=browser]').getAttribute('aria-pressed'),'true','fresh profiles default to browser color');
+ assert.equal(await pane.locator('.color-flow-lane').count(),2);
+ await page.locator('[data-color-mode=reference]').click();
+ await page.waitForFunction(()=>localStorage.getItem('voidplayer.color-mode')==='reference');
+ assert.equal(await pane.locator('.color-flow-lane').count(),1);
+ const stable = await page.locator('#color-flow-diagram .color-flow-lane').elementHandle();
+ const memory = await page.locator('#color-flow-diagram .color-flow-unit').nth(1).elementHandle();
+ const before = await page.locator('.color-settings-card').boundingBox();
+ await page.locator('[data-reference-decoder=hardware]').click();
+ await page.waitForFunction(()=>document.querySelector('[data-reference-decoder=hardware]').getAttribute('aria-pressed')==='true');
+ assert.match(await page.locator('#color-flow-diagram').innerText(),/读回/);
+ assert.equal(await stable.evaluate(e=>e.isConnected),true,'decoder switch preserves the lane');
+ assert.equal(await memory.evaluate(e=>e.isConnected),true,'unchanged units stay mounted');
+ assert.deepEqual(await page.locator('.color-settings-card').boundingBox(),before,'decoder switch preserves card geometry');
+ assert.equal(await stable.evaluate(e=>getComputedStyle(e).opacity),'1','lane never fades');
+ const stroke=await page.locator('.color-flow-connector path').first().evaluate(e=>({stroke:getComputedStyle(e).stroke,width:getComputedStyle(e).strokeWidth,parent:getComputedStyle(e.closest('.color-flow-link')).color}));
+ assert.equal(stroke.stroke,stroke.parent);assert.equal(stroke.width,'2.25px');
+ assert.equal(await pane.locator('[data-icon=arrowRight]').count(),0);
+ await page.locator('#hardware-buffer-depth').click();
+ await page.locator('#hardware-buffer-depth-menu').getByRole('menuitemradio',{name:'4 帧',exact:true}).click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.reference-decode')).depth===4);
+ await page.locator('#settings').screenshot({animations:'disabled',path:'/tmp/vp-color-settings-hardware.png'});
+ await page.locator('[data-color-mode=browser]').click();
+ await page.waitForFunction(()=>localStorage.getItem('voidplayer.color-mode')==='browser');
+ assert.equal(await page.locator('#reference-decode-settings').isVisible(),false);
+ assert.equal(await pane.locator('.color-flow-lane').count(),2);
+ await page.locator('#settings').screenshot({animations:'disabled',path:'/tmp/vp-color-settings-browser.png'});
+ await page.locator('[data-color-mode=reference]').click();await page.locator('[data-reference-decoder=software]').click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.reference-decode')).decoder==='software');
+ assert.equal(await page.locator('#hardware-depth-row').isVisible(),false);
+ await page.locator('#settings').screenshot({animations:'disabled',path:'/tmp/vp-color-settings-software.png'});
+ await page.emulateMedia({colorScheme:'light'});await page.locator('#settings').screenshot({animations:'disabled',path:'/tmp/vp-color-settings-light.png'});
+ await page.setViewportSize({width:600,height:760});
+ await page.locator('#settings').screenshot({animations:'disabled',path:'/tmp/vp-color-settings-narrow.png'});
+ assert.equal(await pane.evaluate(e=>e.scrollWidth<=e.clientWidth+1),true,'no horizontal pane overflow');
+ const alignment=await pane.locator('.color-flow-lane').evaluateAll(lanes=>lanes.flatMap(lane=>{
+   const units=[...lane.querySelectorAll('.color-flow-unit > svg')].map(e=>e.getBoundingClientRect());
+   return [...lane.querySelectorAll('.color-flow-link')].map((e,i)=>{
+     const r=e.querySelector('svg').getBoundingClientRect(),label=e.querySelector('span').getBoundingClientRect();
+     return {y:Math.abs(r.y+r.height/2-units[i].y-units[i].height/2),x:Math.abs(r.x+r.width/2-(units[i].x+units[i].width/2+units[i+1].x+units[i+1].width/2)/2),label:Math.abs(label.x+label.width/2-r.x-r.width/2)};
+   });
+ }));
+ for(const a of alignment){assert.ok(a.x<1);assert.ok(a.y<1);assert.ok(a.label<1);}
+ await page.reload();await page.waitForFunction(()=>window.voidPlayer);
+ assert.equal(await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({}).colorMode),'reference','saved explicit choice survives reload');
+ assert.deepEqual(errors,[]);
+ console.log('PASS color settings: custom controls, diagram changes, persisted decoder/depth/mode, light/dark and narrow layout');
+} finally {await browser.close();await new Promise(r=>server.close(r));}

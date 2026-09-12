@@ -1,8 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareYuvFrame } from '../src/yuv-frame.ts';
+import { getColorMode, setColorMode } from '../src/color-mode.ts';
 import { rgbaDescription } from '../src/frame-description.ts';
 import type { DecodedFrame } from '../src/media.ts';
+
+test('browser mode retains native color ownership without an active GPU surface',async()=>{
+  const previous=getColorMode();let copied=0,closed=0;
+  const frame={kind:'video-sample',description:rgbaDescription(2,2,{format:'I420'}),
+    sample:{toVideoFrame(){copied++;throw new Error('must retain native resource');}},
+    close(){closed++;}} as unknown as DecodedFrame;
+  try{
+    setColorMode('browser');
+    assert.equal(await prepareYuvFrame(frame),frame);
+    assert.equal(copied,0);assert.equal(closed,0);
+  }finally{setColorMode(previous);}
+});
 
 test('native YUV copy owns bytes, budgets both resources, and keeps timings out of metadata',async()=>{
   let clonesClosed=0,samplesClosed=0;

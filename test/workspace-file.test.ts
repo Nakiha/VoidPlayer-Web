@@ -20,3 +20,12 @@ test('old review exports remain readable with current-host relative sources and 
  const d=document();const old={schema:'voidplayer-web-review',version:1,generatedAt:d.generatedAt,media:d.media,marks:[],alignment:d.tracks};
  const restored=parseWorkspace(old,'http://old-server/');assert.equal(restored.positionUs,0);assert.equal(restored.media[0].source!.url,'http://old-server/api/media/server-id');
 });
+
+test('workspace library navigation and pending search survive plain and compressed round trips',async()=>{
+ const sources={tab:'recent',query:'最新片源',root:'root-1',directory:'评审/镜头 A',search:'hevc',all:false};
+ const value=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true},selected:'A',dockHeight:180,marksExpanded:false,sources}});
+ assert.deepEqual(value.layout?.sources,sources);
+ assert.deepEqual((await readWorkspaceFile(await compressWorkspace(value),'http://localhost/')).layout?.sources,sources);
+ for(const invalid of [{...sources,tab:'invalid'},{...sources,all:'yes'},{...sources,query:'x'.repeat(1001)}])assert.throws(()=>parseWorkspace({...value,layout:{...value.layout,sources:invalid}}));
+ assert.equal(parseWorkspace(document()).layout,undefined);
+});

@@ -6,16 +6,23 @@ import { icon } from './icons.ts';
 /** Immutable server snapshots reuse the same restore contract as workspace files. */
 export function installWorkspaceSharing(options: {
   signal: AbortSignal; ready: Promise<void>; snapshot(): WorkspaceFile;
-  open(value: unknown): Promise<boolean>; canShare(): boolean; report(error: unknown): void;
+  created?(document: WorkspaceFile): Promise<void>; open(value: unknown): Promise<boolean>; canShare(): boolean; report(error: unknown): void;
 }) {
   const button = document.getElementById('workspace-share') as HTMLButtonElement;
+  const settingsButton = document.getElementById('saved-workspace-share') as HTMLButtonElement;
   const toast = document.createElement('div'); toast.className = 'workspace-share-toast'; toast.hidden = true;
   toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
   document.body.append(toast);
   let busy = false, timer: ReturnType<typeof setTimeout> | undefined;
-  function update() { button.disabled = busy || !options.canShare(); }
+  function update() {
+    for (const control of [button, settingsButton]) {
+      control.disabled = busy || !options.canShare();
+      control.setAttribute('aria-busy', String(busy));
+      control.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
+    }
+  }
   function notify(message: string, link?: string) {
-    clearTimeout(timer); toast.replaceChildren(); toast.hidden = false;
+    clearTimeout(timer); (document.querySelector<HTMLDialogElement>('#settings[open]') ?? document.body).append(toast); toast.replaceChildren(); toast.hidden = false;
     const label = document.createElement('span'); label.textContent = message; toast.append(label);
     if (link) { const input = document.createElement('input'); input.readOnly = true; input.value = link; input.setAttribute('aria-label', '分享链接'); input.onclick = () => input.select(); toast.append(input); }
     const close = document.createElement('button'); close.textContent = '关闭'; close.onclick = () => { toast.hidden = true; }; toast.append(close);
@@ -26,7 +33,7 @@ export function installWorkspaceSharing(options: {
     if (!options.canShare()) throw new Error('请等待视频载入后再分享。');
     // Capture before any await: playback and later edits cannot alter this link.
     const actorId = currentActor()?.id;
-    busy = true; update(); button.setAttribute('aria-busy', 'true'); button.innerHTML = `${icon('refresh', 'share-spinner')}<span>正在分享</span>`;
+    busy = true; update();
     try {
       const snapshot = structuredClone(options.snapshot());
       for (const media of snapshot.media) {
@@ -37,12 +44,14 @@ export function installWorkspaceSharing(options: {
       const result = await response.json();
       if (!response.ok) throw new Error(result.error ?? '分享创建失败。');
       const link = new URL(result.path, location.origin).href;
+      await options.created?.(snapshot);
       try { await navigator.clipboard.writeText(link); notify('分享链接已在服务端创建，并已复制。'); }
       catch { notify('分享链接已在服务端创建，请复制下方链接。', link); }
       return { id: result.id as string, url: link };
     } catch(error) { if (!options.signal.aborted) { notify((error as Error).message); options.report(error); } throw error; }
-    finally { busy = false; button.removeAttribute('aria-busy'); button.innerHTML = `${icon('export')}<span>分享</span>`; update(); }
+    finally { busy = false; update(); }
   }
+  settingsButton.addEventListener('click', () => void create().catch(() => {}), { signal: options.signal });
   button.addEventListener('click', () => void create().catch(() => {}), {signal:options.signal});
   const id = new URL(location.href).searchParams.get('share');
   if (id) void options.ready.then(async () => {

@@ -61,6 +61,7 @@ function sendJson(res: ServerResponse, status: number, body: unknown) {
 const ISOLATION_HEADERS = {
   'cross-origin-opener-policy': 'same-origin',
   'cross-origin-embedder-policy': 'require-corp',
+  'cross-origin-resource-policy': 'same-origin',
 };
 
 function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
@@ -176,16 +177,19 @@ export function createMediaServer(options: ServerOptions): Server {
         if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
         if (!adminWriteAllowed(req, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return; }
         try {
-          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown; guest?: unknown } | null;
+          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown; guest?: unknown; mode?: unknown } | null;
+          if (body?.mode !== undefined && ((body.mode !== 'rename' && body.mode !== 'create') || typeof body.name !== 'string' || body.id !== undefined || body.guest !== undefined)) throw new AdminError(400, '无效的用户操作。');
           if (body?.guest === true && body.id === undefined && body.name === undefined) {
+            if (actor && actor.kind !== 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
             actor = actor?.kind === 'guest' ? actor : guestActor(`guest-${randomUUID()}`)!;
           } else if (body && typeof body.id === 'string' && body.name === undefined) {
             const selected = options.admin.workspaces.user(body.id);
             if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
+            if (actor && actor.kind !== 'guest' && selected.kind === 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
             actor = selected;
           } else {
             if (!body || typeof body.name !== 'string' || body.id !== undefined) throw new AdminError(400, '请填写用户名。');
-            actor = options.admin.workspaces.identify(actor?.id, body.name);
+            actor = options.admin.workspaces.identify(actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
           }
           res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); sendJson(res, 200, { actor });
         } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); }

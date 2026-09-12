@@ -7,12 +7,15 @@ export function installLogPanel(container: HTMLElement) {
   const dialog = document.getElementById('settings') as HTMLDialogElement;
   const pane = document.getElementById('settings-pane-logs')!;
   const panel = document.createElement('div'); panel.className = 'log-panel';
-  panel.innerHTML = `<div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="日志会话"></button><button type="button" class="icon-button" data-action="refresh" aria-label="更新日志" data-tooltip="更新日志">${icon('refresh')}</button><button type="button" class="icon-button" id="log-help-toggle" aria-label="日志说明" data-tooltip="日志说明" popovertarget="log-help">${icon('info')}</button></div>
+  panel.innerHTML = `<div class="settings-section"><h4 class="settings-section-title">上传日志</h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="日志会话"></button><button type="button" class="icon-button" data-action="refresh" aria-label="更新日志" data-tooltip="更新日志">${icon('refresh')}</button><button type="button" class="icon-button" id="log-help-toggle" aria-label="日志说明" data-tooltip="日志说明" popovertarget="log-help">${icon('info')}</button></div>
     <div class="log-description-field"><label for="log-description">问题描述 <span>选填</span></label><textarea id="log-description" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="3" placeholder="遇到了什么问题？如何复现？" spellcheck="false"></textarea></div>
-    <section class="log-report" aria-label="日志报告"><header class="log-report-toolbar"><span>报告预览</span><div class="log-actions"><button type="button" class="icon-button" data-action="copy" aria-label="复制报告" data-tooltip="复制报告">${icon('copy')}</button><button type="button" class="icon-button" data-action="download" aria-label="下载报告" data-tooltip="下载报告">${icon('download')}</button><button type="button" data-action="upload">${icon('export')}上传报告</button></div></header><div class="log-preview-navigation"><button type="button" data-page="previous">上一页</button><span class="log-preview-status"></span><button type="button" data-page="next">下一页</button></div><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div></section>`;
+    <div class="log-send-footer"><p class="settings-caption log-destination">发送到 <span></span><br>仅在点击发送时上传</p><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}下载日志</button><button type="button" class="primary" data-action="upload">${icon('export')}发送日志</button></div></div>
+    </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
+    </div><section class="settings-section log-details"><h4 class="settings-section-title">本地日志</h4><section class="log-report" aria-label="本地日志"><header class="log-report-toolbar"><span class="log-preview-status" role="status"></span><div class="log-detail-actions"><div class="log-preview-navigation" role="group" aria-label="日志分页"><button type="button" data-page="previous">上一页</button><button type="button" data-page="next">下一页</button></div><button type="button" data-action="copy">${icon('copy')}复制日志</button></div></header><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea><p class="log-preview-hint">预览已截短，下载或复制可获取完整日志。</p></section></section>`;
   container.append(panel);
+  panel.querySelector('.log-destination span')!.textContent = location.host;
   const help = document.createElement('div'); help.id = 'log-help'; help.className = 'log-help'; help.setAttribute('popover', 'auto');
-  help.innerHTML = '<strong>日志说明</strong><p>本机保留最近 3 次会话，最长 7 天。</p><p>报告包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。</p><p>仅点击“上传报告”后，才发送到当前服务器。</p>';
+  help.innerHTML = '<strong>日志说明</strong><p>本机保留最近 3 次会话，最长 7 天。</p><p>日志包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。</p><p>仅点击“发送日志”后，才发送到当前服务器。</p>';
   dialog.append(help);
   help.addEventListener('beforetoggle', event => {
     if ((event as ToggleEvent).newState !== 'open') return;
@@ -42,7 +45,7 @@ export function installLogPanel(container: HTMLElement) {
   const showFeedback = () => { storage.hidden = !storage.textContent; result.hidden = !result.textContent; feedback.hidden = storage.hidden && result.hidden; };
   const message = (text = '', error = false) => { result.textContent = text; result.dataset.error = String(error); showFeedback(); };
   const storageStatus = () => {
-    storage.textContent = sessionLog.storageState === 'failed' ? '本地保存失败，请下载报告备份。' : '';
+    storage.textContent = sessionLog.storageState === 'failed' ? '本地保存失败，请下载日志备份。' : '';
     showFeedback();
   };
   const unsubscribe = sessionLog.subscribe(storageStatus);
@@ -50,7 +53,7 @@ export function installLogPanel(container: HTMLElement) {
   const renderReport = () => {
     if (!reportDocument) return;
     const preview = logPreview(reportDocument, previewPage); previewPage = preview.page;
-    textarea.value = preview.text; textarea.dataset.sessionId = reportDocument.sessionId;
+    textarea.value = preview.text; textarea.rows = Math.max(1, Math.min(12, preview.text.split('\n').length)); textarea.dataset.sessionId = reportDocument.sessionId;
     panel.querySelector('.log-preview-status')!.textContent = preview.label;
     panel.querySelector<HTMLButtonElement>('[data-page="previous"]')!.disabled = preview.page === 0;
     panel.querySelector<HTMLButtonElement>('[data-page="next"]')!.disabled = preview.page === preview.pages - 1;
@@ -112,20 +115,20 @@ export function installLogPanel(container: HTMLElement) {
   }));
   panel.querySelector('[data-action="copy"]')!.addEventListener('click', () => void action('copy', async () => {
     const { json } = await snapshot(true);
-    try { await navigator.clipboard.writeText(json); message('报告已复制。'); }
+    try { await navigator.clipboard.writeText(json); message('日志已复制。'); }
     catch (error) {
       log.warn('ui', '剪贴板复制失败', { error });
-      message('复制失败，请使用下载报告保存完整内容。');
+      message('复制失败，请使用下载日志保存完整内容。');
     }
   }));
   panel.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
     const { json } = await snapshot(true);
     let response: Response;
     try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: json }); }
-    catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error('无法连接当前服务器，请重试或下载报告。'); }
+    catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error('无法连接当前服务器，请重试或下载日志。'); }
     if (!response.ok) {
       const body = await response.json().catch(() => null);
-      throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '，可改用下载报告。'}`);
+      throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '，可改用下载日志。'}`);
     }
     const body = await response.json();
     message('已上传。');

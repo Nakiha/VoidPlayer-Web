@@ -12,14 +12,24 @@ try {
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
  assert.equal(await page.locator('#more-actions').count(),0);assert.equal(await page.locator('#help').count(),0);assert.equal(await page.locator('dialog.log-panel').count(),0);
  await page.locator('#settings-open').click();await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));const geometry=await page.locator('#settings').boundingBox();
- assert.equal(await page.locator('#settings select').count(),0,'settings use shared choice menus');
+ assert.equal(await page.locator('#settings details, #settings summary').count(),0,'settings contain no disclosure controls');
+ assert.equal(await page.locator('#settings [role=tabpanel]:not(#settings-pane-performance) select').count(),0,'settings use shared choice menus');
  for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
   await page.locator(`#settings-tab-${pane}`).click();assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);assert.equal(await page.locator('dialog[open]').count(),1);
   assert.deepEqual(await page.locator('#settings').boundingBox(),geometry,'panes keep a stable window');
   assert.equal(await page.locator(`#settings-tab-${pane}`).getAttribute('aria-selected'),'true');
   assert.equal(await page.locator(`#settings-pane-${pane}`).isVisible(),true);
+  const sectionSpacing = await page.locator(`#settings-pane-${pane} .settings-section`).evaluateAll(sections => sections.flatMap(section => {
+   const checks = [], next = section.nextElementSibling;
+   if(next?.classList.contains('settings-section')) checks.push({kind:'section',gap:next.getBoundingClientRect().top-section.getBoundingClientRect().bottom});
+   const heading = section.firstElementChild, body = heading?.nextElementSibling;
+   if(heading && body) checks.push({kind:'heading',gap:body.getBoundingClientRect().top-heading.getBoundingClientRect().bottom});
+   return checks;
+  }));
+  for(const check of sectionSpacing) assert.ok(Math.abs(check.gap-(check.kind==='section'?12:6))<1,`${pane} ${check.kind} spacing: ${check.gap}`);
+  if(process.env.SETTINGS_SCREENSHOTS) await page.locator('#settings').screenshot({path:`${process.env.SETTINGS_SCREENSHOTS}-${pane}.png`});
   if(pane==='workspace') {
-   for(const id of ['export','workspace-import']) {
+   for(const id of ['saved-workspace-share']) {
     const size=await page.locator(`#${id}`).boundingBox();assert.ok(size.height<40,'workspace actions stay on one line');
    }
   }
@@ -29,9 +39,7 @@ try {
    for(const href of links.filter(h=>h.startsWith('/'))) { const response=await page.request.get(new URL(href,page.url()).href);assert.equal(response.status(),200);assert.ok(!(await response.text()).includes('<!doctype html>')); }
   }
   if(pane==='logs') {
-   assert.equal(await page.locator('.log-panel details').count(),0);
    assert.equal(await page.locator('.log-json').isVisible(),true);
-   const jsonBounds=await page.locator('.log-json').boundingBox();assert.ok(jsonBounds.height>200,'JSON fills the remaining desktop pane');assert.ok(Math.abs(jsonBounds.y+jsonBounds.height-(geometry.y+geometry.height-22))<2,'JSON extends to pane bottom padding');
    assert.equal(await page.locator('.log-panel [data-action=upload]').isVisible(),true);
    assert.equal(await page.locator('.log-panel .settings-group').count(),0);
    await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
@@ -98,12 +106,14 @@ try {
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-mobile-${name}.png`});
  await page.locator('#settings-close').click();await page.locator('#settings').waitFor({state:'hidden'});await page.keyboard.press('Control+,');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.setViewportSize({width:1280,height:700});
+ if (!process.argv.includes('--ui-only')) {
  await page.evaluate(async()=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});await tools.find(t=>t.name==='load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});});
  await page.locator('#settings-tab-performance').click();await page.locator('#benchmark').click();
  await page.waitForFunction(()=>document.querySelector('#benchmark-json').value.includes('voidplayer-playback-benchmark'),{},{timeout:20000});
  assert.equal(await page.locator('dialog[open]').count(),1);assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),false);
  assert.equal(await page.locator('#benchmark').isDisabled(),false);
+ }
  await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
  // A drag starting inside the window must not dismiss it when released outside.
  const bounds=await page.locator('#settings').boundingBox();

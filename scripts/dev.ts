@@ -9,6 +9,6 @@ let closing = false;
 const close = async () => { if (closing) return; closing = true; await web?.close(); await api.close(); };
 process.on('SIGINT', close); process.on('SIGTERM', close);
 try {
-  web = await createServer({ server: { host: config.host, port: config.devPort, strictPort: true, proxy: { '/api': `http://${config.host === '::1' ? '[::1]' : config.host}:${config.port}` } } });
+  web = await createServer({ server: { host: config.host, port: config.devPort, strictPort: true, proxy: { '/api': { target: `http://${config.host === '::1' ? '[::1]' : config.host}:${config.port}`, changeOrigin: false } } } });
   await web.listen(); web.printUrls();
 } catch (error) { await close(); console.error(error instanceof Error ? error.message : error); process.exitCode = 1; }

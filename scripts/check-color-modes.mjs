@@ -5,8 +5,8 @@ const reports=[];
 for(const channel of ['chrome','msedge']){
  const browser=await chromium.launch({headless:false,...(channel==='chrome'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{channel})});
  try{
-  const page=await browser.newPage();await page.goto(process.env.BASE_URL??'http://127.0.0.1:5193/');await page.waitForFunction(()=>window.voidPlayer);
-  await page.getByRole('button',{name:'以访客继续'}).click();
+  const page=await browser.newPage();await page.addInitScript(()=>{if(localStorage.getItem('voidplayer.color-mode')===null)localStorage.setItem('voidplayer.color-mode','reference');});await page.goto(process.env.BASE_URL??'http://127.0.0.1:5193/');await page.waitForFunction(()=>window.voidPlayer);
+  await page.locator('#identity-welcome [data-guest]').click();
   const result=await page.evaluate(async()=>{
    const call=(name,args={})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args);
    const library=await call('list_library'),item=library.entries.find(e=>e.name==='mhw_hevc_fullrange_bt709_3s.mp4');
@@ -41,13 +41,14 @@ for(const channel of ['chrome','msedge']){
   await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='set_reference_decode').execute({decoder:'software',depth:2}));
   for(const state of [result.matched,result.after]){assert.equal(state.positionUs,result.before.positionUs);assert.equal(state.tracks[0].id,result.before.tracks[0].id);assert.deepEqual(state.marks,result.before.marks);assert.equal(state.playing,false);}
   await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();
-  await page.locator('#reference-decoder').selectOption('hardware');
-  await page.waitForFunction(()=>!document.querySelector('#hardware-buffer-depth').disabled&&!document.querySelector('#hardware-depth-row').hidden);
-  await page.locator('#hardware-buffer-depth').selectOption('4');
+  await page.locator('[data-reference-decoder=hardware]').click();
+  await page.waitForFunction(()=>!document.querySelector('#hardware-buffer-depth').disabled&&getComputedStyle(document.querySelector('#hardware-depth-row')).visibility==='visible');
+  await page.locator('#hardware-buffer-depth').click();
+  await page.locator('#hardware-buffer-depth-menu').getByRole('menuitemradio',{name:'4 帧',exact:true}).click();
   await page.waitForFunction(()=>localStorage.getItem('voidplayer.reference-decode')===JSON.stringify({decoder:'hardware',depth:4}));
   await page.screenshot({path:`artifacts/color/hardware-settings-${channel}.png`});
-  await page.locator('#color-mode').selectOption('browser');
-  await page.waitForFunction(()=>document.querySelector('#color-mode')?.disabled===false&&document.querySelector('#color-mode')?.value==='browser');
+  await page.locator('[data-color-mode=browser]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-color-mode=browser]')?.disabled===false&&document.querySelector('[data-color-mode=browser]')?.getAttribute('aria-pressed')==='true');
   await page.waitForFunction(async()=>{const t=window.voidPlayer.tools.find(t=>t.name==='get_review_session');return (await t.execute({})).colorMode==='browser';});
   await mkdir('artifacts/color',{recursive:true});await page.screenshot({path:`artifacts/color/modes-${channel}.png`});
   await page.reload();await page.waitForFunction(()=>window.voidPlayer);

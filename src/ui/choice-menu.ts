@@ -2,7 +2,7 @@ import { icon } from './icons.ts';
 import { installMenu } from './menu.ts';
 
 /** Theme-owned radio menu in the popover top layer, with keyboard selection and focus return. */
-export function installChoiceMenu(id:string, options:{value:string;label:string}[], choose:(value:string)=>void, glyph?: Parameters<typeof icon>[0], preview?: (value:string)=>HTMLElement) {
+export function installChoiceMenu(id:string, options:{value:string;label:string}[], choose:(value:string)=>void, glyph?: Parameters<typeof icon>[0], preview?: (value:string)=>HTMLElement, anchor?: () => DOMRect) {
   const button = document.getElementById(id) as HTMLButtonElement;
   const menu = document.createElement('div'); menu.id = `${id}-menu`; menu.className = 'choice-menu';
   menu.setAttribute('popover','auto'); menu.setAttribute('role','menu'); menu.setAttribute('aria-label',button.getAttribute('aria-label')!);
@@ -26,7 +26,7 @@ export function installChoiceMenu(id:string, options:{value:string;label:string}
     });
   }
   renderOptions();
-  const controller = installMenu(button, menu, { selected: () => buttons[options.findIndex(o => o.value === value)], bounds: () => button.closest('.annotation-toolbar')?.parentElement?.getBoundingClientRect() });
+  const controller = installMenu(button, menu, { anchor, selected: () => buttons[options.findIndex(o => o.value === value)], bounds: () => button.closest('.annotation-toolbar')?.parentElement?.getBoundingClientRect() });
   dialog?.addEventListener('close', controller.close);
   dialog?.addEventListener('settings-pane-change', controller.close);
   return {

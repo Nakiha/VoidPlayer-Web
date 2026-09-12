@@ -35,7 +35,7 @@ try{
    await page.waitForFunction(()=>document.querySelector('.log-panel').getAttribute('aria-busy')==='false');
    return report;
  };
- await open();const session=(await read()).sessionId;
+ await open();assert.equal(await page.locator('.log-json').isVisible(),true);assert.equal(uploads,0);const session=(await read()).sessionId;
  await page.locator('#log-session').click();await page.locator('#log-session-menu [data-value="migration-large-history"]').click();
  await page.waitForFunction(()=>document.querySelector('.log-json').dataset.sessionId==='migration-large-history'&&document.querySelector('.log-panel').getAttribute('aria-busy')==='false');
  assert.ok((await page.locator('.log-json').inputValue()).length<=24000);
@@ -59,7 +59,7 @@ try{
  for(const theme of ['dark','light']){
   await page.locator('#settings-tab-appearance').click();await page.locator(`[data-theme-choice=${theme}]`).click();await page.locator('#settings-tab-logs').click();
   await page.waitForFunction(()=>document.querySelector('.log-panel').getAttribute('aria-busy')==='false');
-  assert.ok(await page.locator('#settings-pane-logs').evaluate(el=>el.scrollHeight<=el.clientHeight+1),'no outer scrolling on a 14-inch desktop viewport');
+  assert.ok(await page.locator('#settings-pane-logs').evaluate(el=>el.scrollWidth<=el.clientWidth+1),'no horizontal overflow with expanded logs');
   assert.equal(await page.locator('.log-feedback').isVisible(),false);
   await page.locator('#settings').screenshot({path:`/tmp/voidplayer-log-report-${theme}-${name}.png`});
  }

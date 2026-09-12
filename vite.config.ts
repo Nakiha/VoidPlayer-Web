@@ -6,6 +6,11 @@ import { resolve } from 'node:path';
 const sourceDir = resolve(import.meta.dirname, 'src');
 const infoFile = resolve(sourceDir, 'build-info.ts');
 const coreDir = resolve(import.meta.dirname, 'public/vendor/voidplayer-core');
+const isolationHeaders = {
+  'cross-origin-opener-policy': 'same-origin',
+  'cross-origin-embedder-policy': 'require-corp',
+  'cross-origin-resource-policy': 'same-origin',
+};
 function buildInfo() {
   let revision = 'unknown';
   try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { encoding: 'utf8' }).trim(); } catch { /* Archive without Git. */ }
@@ -28,8 +33,26 @@ function buildInfo() {
   return { revision, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
 export default defineConfig({
+  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8')).version) },
   build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
   plugins: [{
+    name: 'voidplayer-admin-entry',
+    configureServer(server) {
+      // Vite's conditional module responses bypass server.headers. WebKit
+      // validates isolation on those 304s too, including shared Worker imports.
+      server.middlewares.use((_req, res, next) => {
+        for (const [name, value] of Object.entries(isolationHeaders)) res.setHeader(name, value);
+        next();
+      });
+      // Vite only resolves directory index.html for paths ending in a slash.
+      // Match the packaged server's /admin route before the SPA fallback.
+      server.middlewares.use((req, _res, next) => {
+        const url = new URL(req.url ?? '/', 'http://localhost');
+        if (url.pathname === '/admin' || url.pathname === '/admin/') req.url = `/admin/index.html${url.search}`;
+        next();
+      });
+    },
+  }, {
     name: 'voidplayer-build-evidence',
     transform(code, id) {
       if (id.split('?')[0] === infoFile) return { code: `export const buildInfo = ${JSON.stringify(buildInfo())}`, map: null };
@@ -42,10 +65,7 @@ export default defineConfig({
     },
   }],
   server: {
-    proxy: { '/api': 'http://127.0.0.1:5180' },
-    headers: {
-      'cross-origin-opener-policy': 'same-origin',
-      'cross-origin-embedder-policy': 'require-corp',
-    },
+    proxy: { '/api': { target: 'http://127.0.0.1:5180', changeOrigin: false } },
+    headers: isolationHeaders,
   },
 });
