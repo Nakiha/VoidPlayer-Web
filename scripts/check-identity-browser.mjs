@@ -157,6 +157,9 @@ try {
     await page.locator('#settings-close').click();
     const state = await page.evaluate(async () => {
       const api = window.voidPlayer;
+      if (api.getState().colorMode !== 'browser') throw new Error('Fresh profiles must default to browser colors');
+      await api.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'reference' });
+      await api.tools.find(t => t.name === 'set_reference_decode').execute({ decoder: 'software', depth: 2 });
       const listing = await api.tools.find(t => t.name === 'list_library').execute({});
       await api.tools.find(t => t.name === 'load_library_item').execute({ slot: 'A', id: listing.entries.find(e => e.name === 'http-smoke.mp4').id });
       await api.seek(200000);
@@ -164,11 +167,11 @@ try {
       const state = api.getState();
       return { decoder: state.tracks[0].decoder, variant: state.tracks[0].coreVariant, frame: !!state.tracks[0].frame, marks: state.marks.length, isolated: crossOriginIsolated };
     });
-    // Reference SDR mode decodes in WASM by default; the multi-thread core
+    // Explicit reference software decoding uses WASM; the multi-thread core
     // requires cross-origin isolation, not a particular hostname.
     assert.equal(state.isolated, !insecure);
     assert.deepEqual(state, { decoder: 'ffmpeg-wasm', variant: state.isolated ? 'multi-thread' : 'single-thread', frame: true, marks: 1, isolated: !insecure });
-    if (secure) {
+    {
       // Browser matching keeps the WebCodecs coverage this probe originally asserted.
       const matched = await page.evaluate(async () => {
         const api = window.voidPlayer;
