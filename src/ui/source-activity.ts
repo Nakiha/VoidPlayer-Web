@@ -56,6 +56,11 @@ export function installSourceActivity(session: ReviewSession, signal: AbortSigna
   }
   cancel.addEventListener('click', () => session.cancelLoad(), { signal });
   const unsubscribe = session.subscribe(render);
-  signal.addEventListener('abort', () => { unsubscribe(); clearInterval(timer); progress.remove(); }, { once: true });
+  // The foot (local files + activity) floats over the panel bottom; its
+  // height varies, so reserve exactly its measured height for the list above.
+  const foot = document.getElementById('source-foot')!;
+  const reserve = () => foot.parentElement?.style.setProperty('--foot-h', `${foot.offsetHeight}px`);
+  const observer = new ResizeObserver(reserve); observer.observe(foot); reserve();
+  signal.addEventListener('abort', () => { unsubscribe(); clearInterval(timer); observer.disconnect(); progress.remove(); }, { once: true });
   render();
 }

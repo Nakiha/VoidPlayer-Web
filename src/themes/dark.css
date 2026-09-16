@@ -1,15 +1,15 @@
 /* Palette only: share component geometry, opacity and blur with the light theme. */
 :root[data-theme=dark] {
   color-scheme: dark;
-  --surface: #202125; --surface-panel: #27292e; --surface-table: #222429;
+  --surface: #212121; --surface-panel: #2b2b2b; --surface-table: #242424;
   --surface-control: #ffffff0d; --surface-group: #34363c;
   --surface-input: #14161bb8; --surface-input-solid: #191b20;
   --surface-hover: #3b3e46; --surface-selected: #263e5b; --surface-stripe: #ffffff06;
   --segment-fill: #ffffff06; --segment-selected-fill: #ffffff14; --segment-selected-solid: #3b3f46;
   --search-fill: #ffffff0b; --search-solid: #30343b;
-  --text: #eceef2; --text-secondary: #b0b6c0; --text-subtle: #9ba3af;
+  --text: #eceef2; --text-secondary: #b6b6b6; --text-subtle: #a3a3a3;
   --accent: #6aaeff; --accent-on: #102239;
-  --border: #494d57; --border-soft: #3c4048; --divider: #e3eaff14;
+  --border: #4e4e4e; --border-soft: #404040; --divider: #ffffff14;
   --viewport-chrome-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --transport-muted: #dce1e9;
   --glass-highlight: #ffffff12;
@@ -19,8 +19,8 @@
   --preview-fill: #303239; --timeline-track: #555b66;
   --action-danger: #ff8a85; --action-danger-fill: #ff8a851a;
   --connection-ok: #72c69a; --connection-error: #f68c8c; --connection-waiting: #dcb970;
-  --viewport-background: #1c1e23; --viewport-text: #e2e6ed; --viewport-muted: #b0b8c4;
-  --viewport-border: #e3eaff22; --viewport-grid-line: #7b879724; --viewport-grid-label: #a2adbc;
+  --viewport-background: #1e1e1e; --viewport-text: #e2e6ed; --viewport-muted: #b6b6b6;
+  --viewport-border: #ffffff22; --viewport-grid-line: #80808024; --viewport-grid-label: #ababab;
   /* Slot badges keep a light foreground on their stable, darker identity colors. */
   --slot-text: #ffffff;
   --track-playhead: #a4a9b3; --track-fill: #393e48; --track-active: #304c70;

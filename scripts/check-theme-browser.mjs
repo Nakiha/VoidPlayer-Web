@@ -43,7 +43,7 @@ try {
  });
   assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'library scope trigger uses a light overlay');
  assert.match(surfaces.search,/rgba\(255, 255, 255,/,'search uses a light overlay');
- assert.equal(surfaces.placeholder,'rgb(176, 182, 192)');
+  assert.equal(surfaces.placeholder,'rgb(182, 182, 182)');
  assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');
 
  const after=await evidence();assert.deepEqual(after,before,'theme changes preserve session, pixels, mark shape and geometry');
