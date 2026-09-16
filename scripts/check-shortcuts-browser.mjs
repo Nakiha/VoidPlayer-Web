@@ -47,7 +47,7 @@ try {
   await page.locator('#position').fill('00:01.000');await page.keyboard.press('Space');
   assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
   await page.keyboard.press('Escape');
-  await page.locator('#toggle-sources').click();await page.locator('#source-search').fill('sample');
+  await page.locator('#toggle-sources').click();await page.locator('#sources-search-toggle').click();await page.locator('#source-search').fill('sample');
   await page.keyboard.press('Space');assert.equal(await page.locator('#source-search').inputValue(),'sample ');assert.equal(await playing(),false);
   await page.locator('#toggle-sources').click();
   await page.locator('.brand').click();await page.keyboard.press('n');

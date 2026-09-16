@@ -78,6 +78,7 @@ try {
     await page.locator('#source-list').evaluate(el => { el.scrollTop = el.scrollHeight; });
     for (let attempt = 0; attempt < 20 && !await page.locator('#source-list').evaluate(el => el.textContent.includes('clip-00180')); attempt++) { await page.locator('#source-list').evaluate(el => { el.scrollTop = el.scrollHeight; }); await page.waitForTimeout(150); }
     assert.ok(await page.locator('#source-list').evaluate(el => el.textContent.includes('clip-00180')), 'scrolling reaches later items without page controls');
+    await page.locator('#sources-search-toggle').click();
     await page.locator('#source-search').fill('clip-00777');
     await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 1);
     await page.locator('#source-list').getByRole('button', { name: '添加到视图：分页目录/clip-00777.mp4', exact: true }).click();

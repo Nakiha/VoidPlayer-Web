@@ -144,11 +144,15 @@ try {
       await page.locator('#source-list').evaluate(element => { element.scrollTop = element.scrollHeight; });
       const activity = await page.locator('#source-activity').boundingBox();
       const files = await page.locator('#source-list').boundingBox();
-      const importButton = await page.locator('#sources-import').boundingBox();
-      const refreshButton = await page.locator('#sources-refresh').boundingBox();
+      const searchToggle = await page.locator('#sources-search-toggle').boundingBox();
+      const scopeTrigger = await page.locator('#library-root').boundingBox();
       assert.ok(activity.y >= files.y + files.height - 1, 'load status stays below the scroll area');
-      assert.ok(importButton.y + importButton.height <= files.y && importButton.x >= refreshButton.x + refreshButton.width - 1, 'import stays beside refresh above the list');
-      assert.equal(importButton.y, refreshButton.y);
+      assert.ok(searchToggle.y + searchToggle.height <= files.y && searchToggle.x >= scopeTrigger.x + scopeTrigger.width - 1, 'search toggle stays beside the scope trigger above the list');
+      assert.equal(searchToggle.y, scopeTrigger.y);
+      await page.locator('#sources-search-toggle').click();
+      assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true, 'search toggle focuses the input');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#source-search-field').isHidden(), true, 'escape closes search');
       await page.screenshot({ path: path.join(screenshots, `${browserName}-loading.png`) });
       await page.setViewportSize({ width: 1280, height: 800 });
       await settle(page);
@@ -204,7 +208,8 @@ try {
     // Re-add, then remove the same source from the recent list.
     await firstRow.getByRole('button', { name: '添加到视图：same.mp4', exact: true }).click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2);
-    await page.locator('[data-source-tab="recent"]').click();
+    await page.locator('#library-root').click();
+    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
     await firstRow.getByRole('button', { name: '从视图移除：same.mp4', exact: true }).click();
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
     assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.source.id)), [entries[1].id]);

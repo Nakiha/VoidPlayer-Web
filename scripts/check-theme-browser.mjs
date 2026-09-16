@@ -39,9 +39,9 @@ try {
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  const surfaces=await page.evaluate(()=>{
   const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
-  return {segment:bg('.source-tools .segmented [aria-pressed=true]'),search:bg('.search-field'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+  return {segment:bg('#library-root'),search:bg('.search-field'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
  });
- assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay');
+  assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'library scope trigger uses a light overlay');
  assert.match(surfaces.search,/rgba\(255, 255, 255,/,'search uses a light overlay');
  assert.equal(surfaces.placeholder,'rgb(176, 182, 192)');
  assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');

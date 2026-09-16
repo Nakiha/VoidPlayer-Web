@@ -26,6 +26,7 @@ import note from '@phosphor-icons/core/assets/regular/note-pencil.svg?raw';
 import refresh from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?raw';
 import search from '@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw';
 import down from '@phosphor-icons/core/assets/regular/caret-down.svg?raw';
+import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
 import film from '@phosphor-icons/core/assets/regular/film-strip.svg?raw';
 import fit from '@phosphor-icons/core/assets/regular/arrows-out.svg?raw';
 import marker from '@phosphor-icons/core/assets/regular/diamond.svg?raw';
@@ -54,7 +55,7 @@ import select from '@phosphor-icons/core/assets/regular/cursor.svg?raw';
 import eraser from '@phosphor-icons/core/assets/regular/eraser.svg?raw';
 import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
-const icons = { cpu, memory, gpu, monitor, appearance, keyboard, diagnostics, info, check, settings, plusRegular, select, eraser, redo, trash, filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, film, fit, marker };
+const icons = { cpu, memory, gpu, monitor, appearance, keyboard, diagnostics, info, check, settings, plusRegular, select, eraser, redo, trash, filePlus, eye, eyeClosed, grid, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, caretLeft, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

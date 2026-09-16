@@ -79,13 +79,12 @@ export function shell() {
       </div>
       </section>
       <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="片源" hidden>
-        <header class="panel-heading"><h2>片源</h2><button data-close-panel="sources" class="icon-button" aria-label="收起片源">${icon('sidebar', 'mirror')}</button></header>
-        <div class="source-tools"><div class="segmented" role="group" aria-label="片源范围"><button data-source-tab="available" aria-pressed="true">可用</button><button data-source-tab="recent" aria-pressed="false">最近</button></div><button id="sources-refresh" class="icon-button" aria-label="刷新片源" title="刷新片源">${icon('refresh')}</button><button id="sources-import" class="icon-button" aria-label="添加片源" data-tooltip="添加片源">${icon('filePlus')}</button></div>
-        <label class="search-field">${icon('search')}<input id="source-search" type="search" placeholder="搜索片源" aria-label="搜索片源"></label>
+        <div class="source-tools" id="source-tools"></div>
         <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
+        <section id="local-sources" class="local-sources" aria-label="本地文件"><h3 class="source-section"><span id="local-sources-heading">本地文件</span><button id="local-add" class="icon-button" aria-label="选择本地文件" data-tooltip="选择本地文件加入列表（仅本机预览，不上传）">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="片源载入状态" data-state="idle">
           <div class="source-activity-heading"><span id="source-activity-stage" role="status" aria-live="polite" aria-atomic="true">等待添加片源</span><button id="source-activity-cancel" hidden>取消</button></div>
-          <div id="source-activity-name" class="source-activity-name">点击片源旁的 + 添加到视图</div>
+          <div id="source-activity-name" class="source-activity-name" hidden></div>
           <div class="source-activity-meter" aria-hidden="true"><span></span></div>
           <div class="source-activity-meta"><span id="source-activity-time"></span><span id="source-activity-hint"></span></div>
         </section>

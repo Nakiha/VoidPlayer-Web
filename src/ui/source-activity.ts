@@ -20,13 +20,17 @@ export function installSourceActivity(session: ReviewSession, signal: AbortSigna
     elapsed.textContent = `${status.state === 'loading' ? '已等待' : '用时'} ${duration}`;
     hint.textContent = status.state === 'error' ? `${loadStages[status.stage].replace('正在', '')}时失败：${status.error ?? '请重试或选择其他片源'}` : status.state === 'loading' && seconds >= 10 ? '仍在处理，可取消或选择其他视频' : '';
     if (status.state === 'loading' && status.targetPtsUs !== undefined && ['index', 'synchronize'].includes(status.stage)) {
-      hint.textContent = `目标 ${(status.targetPtsUs / 1e6).toFixed(3)} 秒 · 已索引 ${((status.indexedDurationUs ?? 0) / 1e6).toFixed(3)} 秒。新片准备好后加入，已有轨道可继续播放或暂停；可单独取消载入。`;
+      // Index progress lives in the progress bar; keep the hint line empty so
+      // the panel height stays put while it advances.
+      hint.textContent = '';
     }
   }
   function render() {
     status = session.getState().mediaLoad;
     const active = status?.state === 'loading';
     panel.dataset.state = status?.state ?? 'idle';
+    // The meter is overlaid (no layout shift), so loading visuals appear immediately.
+    panel.classList.toggle('show-loading', active);
     let label = !status ? '等待添加片源' : active ? loadStages[status.stage] : { complete: '已上屏', cancelled: '已取消载入', error: '载入失败', loading: '' }[status.state];
     const building = session.getState().tracks.filter(t => !t.failure && t.indexState === 'building');
     progress.hidden = active ? !status?.indexProgress : !building.length;
@@ -41,7 +45,8 @@ export function installSourceActivity(session: ReviewSession, signal: AbortSigna
     }
     // Do not re-announce elapsed time or unrelated session updates to screen readers.
     if (stage.textContent !== label) stage.textContent = label;
-    name.textContent = status ? `${status.name} · 轨道 ${status.slot}` : '点击片源旁的 + 添加到视图';
+    name.textContent = status ? `${status.name} · 轨道 ${status.slot}` : '';
+    name.hidden = !status;
     name.title = status?.name ?? '';
     cancel.hidden = !active;
     clock();

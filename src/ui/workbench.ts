@@ -40,7 +40,6 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void) {
   const view = new WorkspaceState();
   const catalog = new SourceCatalog(readHistory());
-  let sourceTab: 'available' | 'recent' = 'available';
   let startTab = 'available';
   let libraryStatus = '';
   let refreshing: Promise<void> | undefined;
@@ -53,6 +52,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   let sourceSignature = '';
   let sourceBusy = false;
   let loadingSource: { key: string; status: string } | null = null;
+  let loadingConfirmed = false;
+  let confirmTimer: ReturnType<typeof setTimeout> | undefined;
   let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
   let recentRequest = 0;
@@ -63,7 +64,10 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     catalog.setLibrary(page?.entries ?? []); libraryStatus = status;
     if (page && recentRevision !== page.revision) { recentRevision = page.revision; void refreshRecent(); }
     renderSources();
-  }, lifecyle.signal);
+  }, lifecyle.signal, recent => {
+    if (recent) void refreshRecent();
+    renderSources();
+  });
   async function refreshRecent() {
     const ticket = ++recentRequest;
     const ids = [...new Set(catalog.serializable().flatMap(item => item.libraryId ? [item.libraryId] : []))];
@@ -309,7 +313,12 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   async function load(item: SourceItem, slot: Slot) {
     if (loadingSource?.key === item.key || (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
     const pendingLoad = { key: item.key, status: '正在载入' };
-    loadingSource = pendingLoad; sourceLoadError = null; renderSources();
+    loadingSource = pendingLoad; loadingConfirmed = false; sourceLoadError = null;
+    clearTimeout(confirmTimer);
+    // Loading visuals only appear once the load proves it is not instant;
+    // fast loads never touch the list DOM.
+    confirmTimer = setTimeout(() => { if (loadingSource === pendingLoad) { loadingConfirmed = true; renderSources(); } }, 250);
+    renderSources();
     const progress = (stage: MediaLoadStage) => {
       if (loadingSource !== pendingLoad) return;
       pendingLoad.status = loadStages[stage];
@@ -331,25 +340,37 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
           throw error;
         }
       }, 'ui.source-load', { name: item.name, slot });
-    } finally { if (loadingSource === pendingLoad) loadingSource = null; renderSources(); }
+    } finally { clearTimeout(confirmTimer); if (loadingSource === pendingLoad) { loadingSource = null; loadingConfirmed = false; } renderSources(); }
+  }
+  function sourceDisplayName(name: string) {
+    const base = name.split('/').pop() ?? name;
+    return { base, dir: name.includes('/') ? name.slice(0, name.lastIndexOf('/')) : '' };
   }
   function sourceRow(item: SourceItem) {
       const row = document.createElement('div'); row.className = 'source-row';
       const used = sourceInUse(item, session.getState().tracks);
-      const loading = loadingSource?.key === item.key ? loadingSource.status : null;
+      const loading = loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status : null;
       const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
       const blocked = !!loadingSource || session.getState().busy;
       row.setAttribute('aria-busy', String(!!loading));
       row.classList.toggle('in-use', used);
       const info = document.createElement('div'); info.className = 'source-info';
-      const name = text('span', item.name, 'filename');
-      const origin = item.library ? ` · ${item.library.root}` : '';
-      name.title = item.name;
+      const { base, dir } = sourceDisplayName(item.name);
+      const name = text('span', base, 'filename');
+      const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
+      // Full path lives in the tooltip; the visible name stays a basename.
+      row.dataset.tooltip = item.library ? `${item.name}（${item.library.root}）` : `${item.name}（本地文件，仅本机预览）`;
+      const isLocal = !!item.file && !item.library;
       const pending = item.library?.state === 'pending';
       const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-      const status = text('span', `${sizeText(item.size)} · ${loading ?? (failed ? `载入失败：${failed}` : used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : item.library ? '媒体库' : item.file ? '本次添加' : item.libraryId ? '内容已改变或不可用' : '需重新选择')}${origin}`, 'source-meta');
-      if (loading || failed) { status.setAttribute('role', 'status'); status.dataset.tooltip = loading ?? failed!; }
-      info.append(name, status);
+      const stateLabel = loading ?? (failed ? `载入失败：${failed}` : used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : isLocal ? '本地文件' : '媒体库');
+      const status = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}`, 'source-meta');
+      status.dataset.tooltip = row.dataset.tooltip;
+      if (loading || failed) { status.setAttribute('role', 'status'); }
+      const titleLine = document.createElement('span'); titleLine.className = 'source-title';
+      titleLine.append(name);
+      name.dataset.tooltip = row.dataset.tooltip;
+      info.append(titleLine, status);
       const actions = document.createElement('div'); actions.className = 'source-actions';
       if (used) {
         const button = createIconButton({ glyph: 'close', label: '从视图移除' });
@@ -411,15 +432,39 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     $('start-library-status').textContent = items.length ? '' : libraryStatus || (startTab === 'recent' ? '暂无最近片源' : '添加文件以开始对比');
   }
   function renderSources() {
-    const query = (sourceTab === 'available' ? libraryBrowser.filter() : $<HTMLInputElement>('source-search').value.trim()).toLocaleLowerCase();
-    const items = (sourceTab === 'recent' ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
+    const recent = libraryBrowser.isRecent();
+    const query = (recent ? $<HTMLInputElement>('source-search').value.trim() : libraryBrowser.filter()).toLocaleLowerCase();
+    const scoped = (recent ? catalog.recent() : catalog.available()).filter(item => item.name.toLocaleLowerCase().includes(query));
+    // Local files live in their own section pinned above the activity panel.
+    const local = scoped.filter(item => item.file && !item.library);
+    const items = scoped.filter(item => !(item.file && !item.library));
     $('source-status').textContent = libraryStatus;
     $('source-status').hidden = !libraryStatus;
-    libraryBrowser.visible(sourceTab === 'available');
     const page = libraryBrowser.page();
-    const folders = sourceTab === 'available' ? page?.directories ?? [] : [];
-    const signature = JSON.stringify([sourceTab, query, loadingSource, sourceLoadError, session.getState().busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)])]);
+    const folders = !recent ? page?.directories ?? [] : [];
+    const busy = session.getState().busy;
+    const loadingKey = loadingSource?.key ?? null;
+    const failedKey = sourceLoadError?.key ?? null;
+    // The signature tracks which row loads, not the live stage text: stage
+    // transitions must not rebuild the list. Per-row fingerprints below stay
+    // stable across busy flips (e.g. seeks); disabled states sync in place.
+    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), page?.roots]);
+    const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
+      const byKey = new Map(pool.map(entry => [entry.key, entry]));
+      const mediaLoading = session.getState().mediaLoad?.state === 'loading';
+      for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
+        const item = byKey.get(row.dataset.sourceKey ?? '');
+        const button = row.querySelector<HTMLButtonElement>(':scope > .source-actions > button');
+        if (!item || !button || button.getAttribute('aria-label')?.startsWith('取消载入')) continue;
+        const used = sourceInUse(item, session.getState().tracks);
+        const pending = item.library?.state === 'pending';
+        const offline = page?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
+        if (used) button.disabled = !!loadingSource || busy;
+        else if (item.library || item.file) button.disabled = (busy && !mediaLoading) || !!pending || !!offline;
+      }
+    };
     if (signature !== sourceSignature) {
       sourceSignature = signature;
       const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
@@ -434,22 +479,38 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
         const row = document.createElement('button'); row.className = 'source-row library-folder';
         const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
         const info = text('span', '', 'source-info');
-        info.append(text('span', folder.name, 'filename'), text('span', page?.roots.find(root => root.id === folder.rootId)?.name ?? '', 'source-meta'));
+        info.append(text('span', folder.name, 'filename'), text('span', `媒体库 · ${page?.roots.find(root => root.id === folder.rootId)?.name ?? ''}`, 'source-meta'));
         row.setAttribute('aria-label', `打开目录：${folder.name}`); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
         });
       }
-      for (const item of items) reuse(item.key, JSON.stringify([!!item.file, item.library, loadingSource, sourceLoadError, session.getState().busy, sourceInUse(item, session.getState().tracks), page?.roots]), () => sourceRow(item));
-      if (!items.length && !folders.length) reuse('empty', `${sourceTab}/${query}`, () => text('p', query ? '没有匹配的片源' : sourceTab === 'recent' ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
+      for (const item of items) reuse(item.key, fingerprintOf(item), () => sourceRow(item));
+      if (!items.length && !folders.length) reuse('empty', `${recent ? 'recent' : 'available'}/${query}`, () => text('p', query ? '没有匹配的片源' : recent ? '暂无最近片源' : '当前目录没有片源', 'panel-empty'));
       // Keep unchanged nodes and their focus/scroll anchors through refreshes.
       rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
       while (list.children.length > rows.length) list.lastElementChild!.remove();
+      syncActions(list, items);
+      const localList = $('local-list');
+      $('local-sources-heading').textContent = local.length ? `本地文件（${local.length}）` : '本地文件';
+      const localExisting = new Map([...localList.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+      const localRows: HTMLElement[] = [];
+      for (const item of local) {
+        const old = localExisting.get(item.key);
+        const fp = fingerprintOf(item);
+        const row = old?.dataset.fingerprint === fp ? old : sourceRow(item);
+        row.dataset.sourceKey = item.key; row.dataset.fingerprint = fp; localRows.push(row);
+      }
+      localRows.forEach((row, index) => { if (localList.children[index] !== row) localList.insertBefore(row, localList.children[index] ?? null); });
+      while (localList.children.length > localRows.length) localList.lastElementChild!.remove();
+      syncActions(localList, local);
     }
     renderStartLibrary();
   }
-  function refreshLibrary(force = false) {
+  // The library refreshes itself (3 s poll plus server file watchers); the
+  // panel loads once when opened and the list stays live after that.
+  function refreshLibrary() {
     if (refreshing) return refreshing;
     libraryChecked = true;
-    refreshing = Promise.all([force ? libraryBrowser.refresh() : libraryBrowser.load(), refreshRecent()]).then(() => {}).finally(() => { refreshing = undefined; });
+    refreshing = Promise.all([libraryBrowser.load(), refreshRecent()]).then(() => {}).finally(() => { refreshing = undefined; });
     return refreshing;
   }
 
@@ -460,21 +521,32 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderStartLibrary();
   };
   $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
-  $('sources-refresh').onclick = () => void refreshLibrary(true);
-  $('source-search').oninput = () => { if (sourceTab === 'available') libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
-  $('sources-import').onclick = () => $<HTMLInputElement>('source-files').click();
+  $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
+  function setSearching(open: boolean) {
+    const tools = $('source-tools');
+    const field = $('source-search-field');
+    const input = $<HTMLInputElement>('source-search');
+    const toggle = $('sources-search-toggle');
+    if (!open && input.value) {
+      input.value = '';
+      if (!libraryBrowser.isRecent()) libraryBrowser.search('');
+      renderSources();
+    }
+    tools.classList.toggle('searching', open);
+    field.hidden = !open;
+    toggle.setAttribute('aria-expanded', String(open));
+    if (open) input.focus();
+    else toggle.focus();
+  }
+  $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));
+  $('source-search-close').onclick = () => setSearching(false);
+  $('source-search').onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); setSearching(false); } };
   $('source-files').onchange = () => {
     const input = $<HTMLInputElement>('source-files');
     for (const file of input.files ?? []) catalog.addFile(file);
     input.value = ''; save(); renderSources();
   };
-  for (const button of document.querySelectorAll<HTMLButtonElement>('[data-source-tab]')) button.onclick = () => {
-    sourceTab = button.dataset.sourceTab as 'available' | 'recent';
-    if (sourceTab === 'available') libraryBrowser.search($<HTMLInputElement>('source-search').value);
-    else void refreshRecent();
-    for (const tab of document.querySelectorAll('[data-source-tab]')) tab.setAttribute('aria-pressed', String((tab as HTMLElement).dataset.sourceTab === sourceTab));
-    renderSources();
-  };
+  $('local-add').onclick = () => $<HTMLInputElement>('source-files').click();
   const resizer = $('dock-resize');
   const dock = $('subtracks-panel');
   const dockBounds = () => {
@@ -505,19 +577,17 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary, selected: () => view.selected,
     rememberFile(file: File) { catalog.addFile(file); save(); if (view.panels.sources) renderSources(); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: { ...libraryBrowser.snapshot(), tab: sourceTab, query: $<HTMLInputElement>('source-search').value } }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: { ...libraryBrowser.snapshot(), tab: (libraryBrowser.isRecent() ? 'recent' : 'available') as 'recent' | 'available', query: $<HTMLInputElement>('source-search').value } }),
     async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
       const sources = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };
-      sourceTab = sources.tab;
       $<HTMLInputElement>('source-search').value = sources.query;
-      for (const tab of document.querySelectorAll<HTMLElement>('[data-source-tab]')) tab.setAttribute('aria-pressed', String(tab.dataset.sourceTab === sourceTab));
-      const browsing = libraryBrowser.restore(sources);
+      const browsing = libraryBrowser.restore({ ...sources, recent: (sources as { recent?: boolean }).recent ?? sources.tab === 'recent' });
       dockSignature = ''; trackSignature = ''; annotationSignature = ''; syncPanels(); panelResize.refresh(); render(session.getState());
       await browsing;
-      if (sourceTab === 'recent') await refreshRecent();
+      if (libraryBrowser.isRecent()) await refreshRecent();
     },
     dispose() { disposed = true; annotations.dispose(); lifecyle.abort(); },
   };

@@ -28,6 +28,7 @@ try {
   await tool(page, 'add_review_mark', { slot: 'A', text: '原始标注', drawings: [{ id: 'box', tool: 'rect', color: '#ff3b30', strokeWidth: 4, points: [{ x: .2, y: .2 }, { x: .6, y: .5 }] }] });
   await page.locator('#toggle-sources').click();
   await page.locator('#library-root').click();await page.locator('#library-root-menu').getByRole('menuitemradio',{name:'全部媒体',exact:true}).click();
+  await page.locator('#sources-search-toggle').click();
   await page.locator('#source-search').fill('h264');
   const settings=async p=>{if(!await p.locator('#settings').evaluate(e=>e.open))await p.locator('#settings-open').click();await p.locator('#settings-tab-workspace').click();await p.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);};
   await settings(page);await page.locator('#saved-workspace-name').fill('镜头评审');await page.locator('#saved-workspace-share').click();

@@ -32,6 +32,7 @@ try {
   });
   await page.locator('#toggle-sources').click();
   await page.locator('#library-root').click();await page.locator('#library-root-menu').getByRole('menuitemradio',{name:'全部媒体',exact:true}).click();
+  await page.locator('#sources-search-toggle').click();
   await page.locator('#source-search').fill('sample');
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
   await page.locator('#saved-workspace-name').fill('分享评审');
