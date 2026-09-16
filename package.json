@@ -37,6 +37,8 @@
     "test:mark-cards:browser": "npm run build && node scripts/check-mark-cards-browser.mjs",
     "test:theme:browser": "npm run build && node scripts/check-theme-browser.mjs",
     "test:workspace:browser": "npm run build && node scripts/check-workspace-browser.mjs",
+    "test:workspace:link:browser": "npm run build && node scripts/check-workspace-link-browser.mjs",
+    "test:workspace:list:browser": "npm run build && node scripts/check-workspace-list-browser.mjs",
     "test:identity:browser": "npm run build && node scripts/check-identity-browser.mjs",
     "test:settings:browser": "npm run build && node scripts/check-settings-browser.mjs",
     "test:sharing:browser": "npm run build && node scripts/check-sharing-browser.mjs",
@@ -52,7 +54,8 @@
     "test:webgpu:browser": "node scripts/check-webgpu-presentation.mjs",
     "test:color:windows": "node scripts/check-windows-color.mjs",
     "repro:color:native": "node scripts/repro-native-yuv-color.mjs",
-    "test:color:modes": "node scripts/check-color-modes.mjs"
+    "test:color:modes": "node scripts/check-color-modes.mjs",
+    "test:color:settings:browser": "npm run build && node scripts/check-color-settings-browser.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

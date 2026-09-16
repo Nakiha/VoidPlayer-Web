@@ -1,18 +1,15 @@
 import { schedulePresentationTick } from './presentation-tick.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode,type ReferenceDecode,type ColorMode} from './color-mode.ts';
-import { annotationMediaKey } from './annotation-record.ts';
-import type { AnnotationDocument } from './annotation-record.ts';
-import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
+import type { AnnotationDocument } from './annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad } from './media-abort.ts';
-import { randomUUID } from './uuid.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
 import { SLOTS } from './model.ts';
-import { drawingsValue } from './annotation.ts';
+import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
-import { planBackwardStep, planForwardStep, regionValue, slotValue, timeUs } from './model.ts';
+import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
@@ -84,34 +81,8 @@ export class ReviewSession {
   /** Persistence ingress only: update annotations without touching decoder/clock state. */
   applyStoredAnnotations(documents: AnnotationDocument[], removeIds: string[]) {
     const loaded = [...this.tracks.values()].map(track => track.source.info);
-    const incoming: Mark[] = [];
-    for (const document of documents) {
-      const saved = document.media.find(media => media.id === document.mark.mediaId);
-      const target = saved && loaded.find(media => annotationMediaKey(media) === annotationMediaKey(saved));
-      if (!target) continue;
-      for (const media of document.media) if (!this.catalog.has(media.id)) this.catalog.set(media.id, media);
-      const mark = structuredClone(document.mark); mark.mediaId = target.id;
-      mark.comparison = mark.comparison.map(item => {
-        const media = document.media.find(media => media.id === item.mediaId);
-        const current = media && loaded.find(candidate => annotationMediaKey(candidate) === annotationMediaKey(media));
-        return current ? { ...item, mediaId: current.id } : item;
-      });
-      incoming.push(mark);
-    }
-    // Replacements keep their position; only genuinely new marks append.
-    // Moving echoed marks to the end would reshuffle the annotation strip on
-    // every sync roundtrip.
-    const incomingById = new Map(incoming.map(mark => [mark.id, mark]));
-    const removed = new Set(removeIds.filter(id => !incomingById.has(id)));
-    const existing = new Set(this.marks.map(mark => mark.id));
-    const next: Mark[] = [];
-    for (const mark of this.marks) {
-      const replacement = incomingById.get(mark.id);
-      if (replacement) next.push(replacement);
-      else if (!removed.has(mark.id)) next.push(mark);
-    }
-    for (const mark of incoming) if (!existing.has(mark.id)) next.push(mark);
-    if (JSON.stringify(next) !== JSON.stringify(this.marks)) { this.marks = next; this.emit(); }
+    const next = mergeStoredMarks(this.marks, documents, removeIds, loaded, this.catalog);
+    if (next) { this.marks = next; this.emit(); }
   }
   private actor: { id: string; name: string } | null = null;
   setActor(actor: { id: string; name: string } | null) { this.actor = actor ? { id: actor.id, name: actor.name } : null; }
@@ -651,21 +622,12 @@ export class ReviewSession {
     const track = this.tracks.get(slot);
     if (track?.syncState) throw new Error('当前轨道尚未同步，请等待追赶完成或定位后再标注。');
     if (!track?.frame || track.failure) throw new Error('当前轨道没有可标注的有效画面，请重新载入停用的片源。');
-    const drawings = drawingsValue(input.drawings);
-    if (typeof input.text !== 'string' || input.text.length > 2000 || (!input.text.trim() && !drawings.length)) throw new Error('写点文字或在画面上画一笔即可保存。');
-    const severity = input.severity ?? 3;
-    if (!Number.isInteger(severity) || Number(severity) < 1 || Number(severity) > 5) throw new Error('严重度必须是 1–5。');
-    const origin = input.origin ?? 'human';
-    if (origin !== 'human' && origin !== 'agent') throw new Error('标注来源无效。');
-    const mark: Mark = {
-      ...(this.actor ? { author: { ...this.actor } } : {}),
-      id: randomUUID(), text: input.text.trim(), severity: Number(severity), origin,
-      createdAt: new Date().toISOString(), slot, mediaId: track.source.info.id,
-      frame: this.frameInfo(track.frame), offsetUs:track.offsetUs, sessionPtsUs:this.positionUs, region: regionValue(input.region), ...(drawings.length ? { drawings } : {}),
-      comparison: [...this.tracks].filter(([, t]) => t.frame && !t.failure && !t.syncState).map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs:t.offsetUs })),
-    };
+    const peers = [...this.tracks].filter(([, t]) => t.frame && !t.failure && !t.syncState)
+      .map(([s, t]) => ({ slot: s, mediaId: t.source.info.id, frame: this.frameInfo(t.frame!), offsetUs: t.offsetUs }));
+    const mark = buildMark(input, { slot, mediaId: track.source.info.id, frame: this.frameInfo(track.frame), offsetUs: track.offsetUs },
+      peers, this.positionUs, this.actor);
     this.marks.push(mark); this.markChanged(mark.id);
-    log.info('session', '添加标注', { id: mark.id, authorId: this.actor?.id ?? null, slot, severity: mark.severity, origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
+    log.info('session', '添加标注', { id: mark.id, authorId: this.actor?.id ?? null, slot, severity: mark.severity, origin: mark.origin, frameUs: mark.frame.ptsUs, hasRegion: !!mark.region });
     this.emit();
     return structuredClone(mark);
   }
@@ -675,10 +637,7 @@ export class ReviewSession {
     if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再编辑标注。');
     const track = [...this.tracks.values()].find(t => t.source.info.id === mark.mediaId);
     if (!track?.frame || track.failure || track.syncState || track.frame.ptsUs !== mark.frame.ptsUs) throw new Error('请返回标注对应的画面后再编辑。');
-    const text = input.text === undefined ? mark.text : input.text;
-    const drawings = input.drawings === undefined ? mark.drawings ?? [] : drawingsValue(input.drawings);
-    if (typeof text !== 'string' || text.length > 2000 || (!text.trim() && !drawings.length)) throw new Error('标注不能为空。');
-    mark.text = text.trim(); mark.drawings = drawings; this.markChanged(id);
+    applyMarkEdit(mark, input); this.markChanged(id);
     log.info('session', '修改标注', { id, frameUs: mark.frame.ptsUs }); this.emit();
     return structuredClone(mark);
   }

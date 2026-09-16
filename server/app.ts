@@ -1,23 +1,21 @@
-import { FLV_INDEX_BYTES } from '../src/flv-index-cache.ts';
-import { AGENT_GUIDE } from './agent-guide.ts';
-import { pipeline } from 'node:stream/promises';
 import { randomUUID } from 'node:crypto';
-import { guestActor, browserUserId, identityCookie } from './identity.ts';
+import { guestActor, browserUserId } from './identity.ts';
 import { createServer } from 'node:http';
 import { createServer as createSecureServer } from 'node:https';
 import type { ServerOptions as HttpsOptions } from 'node:https';
 import { encryptedRequest } from './tls.ts';
-import { connectionDetails } from './connection-guide.ts';
 import type { ConnectionOptions } from './connection-guide.ts';
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { allowReveal, localRequest, revealFile, setClientAddress } from './reveal.ts';
-import { MediaLibraryIndex, fileVersion } from './library.ts';
-import { AdminError, adminWriteAllowed, readAdminJson } from './admin.ts';
-import { ANNOTATION_BYTES } from './annotations.ts';
-import { WORKSPACE_BYTES } from './workspaces.ts';
+import { localRequest, setClientAddress } from './reveal.ts';
+import { MediaLibraryIndex } from './library.ts';
 import type { AdminController } from './admin.ts';
+import { ISOLATION_HEADERS, sendJson, serveFile } from './http-utils.ts';
+import { handleConnectionRoutes } from './routes/connection.ts';
+import { handleStateRoutes } from './routes/state.ts';
+import { handleContentRoutes } from './routes/content.ts';
+import type { RouteContext } from './routes/context.ts';
 
 // Narrow read-only HTTP API for the web player:
 //   GET /api/library        -> media list under the whitelisted folders
@@ -42,75 +40,6 @@ export interface ServerOptions {
   onLog?: (entry: Record<string, unknown>) => void;
 }
 
-const MIME: Record<string, string> = {
-  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css',
-  '.json': 'application/json', '.wasm': 'application/wasm', '.svg': 'image/svg+xml',
-  '.png': 'image/png', '.jpg': 'image/jpeg', '.txt': 'text/plain; charset=utf-8',
-  '.md': 'text/markdown; charset=utf-8', '.flv': 'video/x-flv', '.mp4': 'video/mp4', '.webm': 'video/webm',
-};
-
-function sendJson(res: ServerResponse, status: number, body: unknown) {
-  const payload = JSON.stringify(body);
-  res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-  res.end(payload);
-}
-
-// Cross-origin isolation headers enable SharedArrayBuffer for the
-// multi-threaded WASM decoder core. Everything we serve is same-origin, so
-// require-corp is safe here.
-const ISOLATION_HEADERS = {
-  'cross-origin-opener-policy': 'same-origin',
-  'cross-origin-embedder-policy': 'require-corp',
-  'cross-origin-resource-policy': 'same-origin',
-};
-
-function parseRange(header: string | undefined, size: number): { start: number; end: number } | 'unsatisfiable' | null {
-  if (!header) return null;
-  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim());
-  if (!match || (match[1] === '' && match[2] === '')) return 'unsatisfiable';
-  let start: number, end: number;
-  if (match[1] === '') { // suffix: last N bytes
-    const n = Number(match[2]);
-    if (!Number.isSafeInteger(n) || n <= 0) return 'unsatisfiable';
-    start = Math.max(0, size - n); end = size - 1;
-  } else {
-    start = Number(match[1]);
-    end = match[2] === '' ? size - 1 : Number(match[2]);
-    if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end) return 'unsatisfiable';
-    if (start >= size) return 'unsatisfiable';
-    end = Math.min(end, size - 1);
-  }
-  return { start, end };
-}
-
-async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: string, contentType?: string, expectedVersion?: string) {
-  const handle = await fs.open(absPath, 'r').catch(() => null);
-  if (!handle) { sendJson(res, 404, { error: 'not found' }); return; }
-  try {
-    const stat = await handle.stat().catch(() => null);
-    if (!stat?.isFile()) { sendJson(res, 404, { error: 'not found' }); return; }
-    if (expectedVersion && fileVersion(stat) !== expectedVersion) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
-    const size = stat.size;
-    const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-    const base = { etag: `"${fileVersion(stat)}"`, 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
-    const range = parseRange(req.headers.range, size);
-    if (range === 'unsatisfiable') {
-      res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });
-      res.end();
-      return;
-    }
-    const { start, end } = range ?? { start: 0, end: size - 1 };
-    res.writeHead(range ? 206 : 200, {
-      ...base,
-      'content-length': end - start + 1,
-      ...(range ? { 'content-range': `bytes ${start}-${end}/${size}` } : {}),
-    });
-    if (req.method === 'HEAD') { res.end(); return; }
-    if (size === 0) { res.end(); return; }
-    await pipeline(handle.createReadStream({ start, end, autoClose: false }), res);
-  } finally { await handle.close(); }
-}
-
 export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots);
@@ -124,7 +53,6 @@ export function createMediaServer(options: ServerOptions): Server {
   const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     if(options.clientAddress)setClientAddress(req,options.clientAddress(req));
     const started = performance.now();
-    let actor = guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null;
     const requestId = randomUUID();
     res.setHeader('x-request-id', requestId);
     res.setHeader('link', '</llms.txt>; rel="describedby"; type="text/plain"');
@@ -133,303 +61,30 @@ export function createMediaServer(options: ServerOptions): Server {
     if (encryptedRequest(req) || hostname === 'localhost' || hostname.endsWith('.localhost') || hostname === '[::1]' || /^127\./.test(hostname)) {
       for (const [key, value] of Object.entries(ISOLATION_HEADERS)) res.setHeader(key, value);
     }
-    let status = 200, logged = false;
+    let logged = false;
     traffic.activeRequests++;
+    const ctx: RouteContext = {
+      options, library, requestId,
+      actor: guestActor(browserUserId(req)) ?? options.admin?.workspaces.user(browserUserId(req)) ?? null,
+      adminExtra: { traffic, sockets, recentRequests },
+    };
     const finish = () => {
       if (logged) return; logged = true;
       traffic.activeRequests--; traffic.completedRequests++; if (!res.writableFinished) traffic.abortedRequests++;
       const pathname = (req.url ?? '/').split('?')[0];
       if (pathname === '/api/health' || pathname === '/api/ready') return;
-      const entry = { t: new Date().toISOString(), requestId, actorId: actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
+      const entry = { t: new Date().toISOString(), requestId, actorId: ctx.actor?.id ?? (localRequest(req) ? 'local' : null), method: req.method, url: pathname, status: res.statusCode, completed: res.writableFinished, ms: Math.round(performance.now() - started) };
       logLine(entry);
       if (!pathname.startsWith('/api/admin/') || req.method !== 'GET') { recentRequests.push(entry); if (recentRequests.length > 200) recentRequests.shift(); }
     };
     res.once('finish', finish); res.once('close', finish);
     try {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (url.pathname === '/api/connection/probe' && req.method === 'GET') {
-        res.setHeader('access-control-allow-origin', '*');
-        res.setHeader('cross-origin-resource-policy', 'cross-origin');
-        sendJson(res, encryptedRequest(req) ? 200 : 409, { service: 'voidplayer-connection', https: encryptedRequest(req) }); return;
-      }
-      if (url.pathname === '/api/connection' && req.method === 'GET') {
-        sendJson(res, 200, connectionDetails(options.connection, req.headers.host)); return;
-      }
-      if (url.pathname === '/api/connection/certificate' && ['GET', 'HEAD'].includes(req.method ?? '')) {
-        if (!options.connection?.ca) { sendJson(res, 404, { error: '当前服务没有可下载的本地根证书。' }); return; }
-        const certificate = Buffer.from(options.connection.ca);
-        res.writeHead(200, { 'content-type': 'application/x-x509-ca-cert', 'content-disposition': 'attachment; filename="voidplayer-ca.crt"', 'content-length': certificate.length, 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-        res.end(req.method === 'HEAD' ? undefined : certificate); return;
-      }
-      if (url.pathname === '/llms.txt') {
-        if (!['GET', 'HEAD'].includes(req.method ?? '')) {
-          res.setHeader('allow', 'GET, HEAD'); sendJson(res, 405, { error: 'read only' }); return;
-        }
-        res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8', 'content-length': Buffer.byteLength(AGENT_GUIDE), 'cache-control': 'no-cache' });
-        res.end(req.method === 'HEAD' ? undefined : AGENT_GUIDE); return;
-      }
-      if (url.pathname === '/favicon.ico' && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return; }
-      if (url.pathname === '/api/users' && req.method === 'GET') {
-        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
-        sendJson(res, 200, { users: options.admin.workspaces.users() }); return;
-      }
-      if (url.pathname === '/api/identity' && req.method === 'POST') {
-        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供用户存储。' }); return; }
-        if (!adminWriteAllowed(req, 'identity')) { sendJson(res, 403, { error: '请从同源页面设置用户名。' }); return; }
-        try {
-          const body = await readAdminJson(req, 2048) as { name?: unknown; id?: unknown; guest?: unknown; mode?: unknown } | null;
-          if (body?.mode !== undefined && ((body.mode !== 'rename' && body.mode !== 'create') || typeof body.name !== 'string' || body.id !== undefined || body.guest !== undefined)) throw new AdminError(400, '无效的用户操作。');
-          if (body?.guest === true && body.id === undefined && body.name === undefined) {
-            if (actor && actor.kind !== 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
-            actor = actor?.kind === 'guest' ? actor : guestActor(`guest-${randomUUID()}`)!;
-          } else if (body && typeof body.id === 'string' && body.name === undefined) {
-            const selected = options.admin.workspaces.user(body.id);
-            if (!selected) throw new AdminError(404, '该用户已不存在，请刷新用户列表。');
-            if (actor && actor.kind !== 'guest' && selected.kind === 'guest') throw new AdminError(409, '已命名用户不能切换为匿名身份。');
-            actor = selected;
-          } else {
-            if (!body || typeof body.name !== 'string' || body.id !== undefined) throw new AdminError(400, '请填写用户名。');
-            actor = options.admin.workspaces.identify(actor?.id, body.name, body.mode as 'rename' | 'create' | undefined);
-          }
-          res.setHeader('set-cookie', identityCookie(actor, encryptedRequest(req))); sendJson(res, 200, { actor });
-        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); }
-        return;
-      }
-      if (url.pathname === '/api/health' && req.method === 'GET') {
-        sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, annotations: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
-        return;
-      }
-      if (url.pathname === '/api/ready' && req.method === 'GET') {
-        status = library.ready ? 200 : 503; sendJson(res, status, { ready: library.ready }); return;
-      }
-      if (url.pathname === '/api/annotations/spaces' || url.pathname.startsWith('/api/annotations/spaces/')) {
-        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供标注存储。' }); return; }
-        if (req.method !== 'GET' && !adminWriteAllowed(req, 'annotation')) { sendJson(res, 403, { error: '请从同源页面保存标注。' }); return; }
-        if (!actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return; }
-        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor?.id) { sendJson(res, 409, { error: '用户已切换，草稿未提交。' }); return; }
-        const store = options.admin.annotations;
-        try {
-          if (url.pathname === '/api/annotations/spaces') {
-            if (req.method === 'GET') { sendJson(res, 200, store.spaces()); return; }
-            if (req.method === 'POST') { sendJson(res, 201, store.createSpace((await readAdminJson(req) as { name: unknown }).name)); return; }
-          }
-          const match = /^\/api\/annotations\/spaces\/([a-zA-Z0-9_-]{1,200})(?:\/([a-zA-Z0-9_-]{1,200}))?(?:\/(preview))?$/.exec(url.pathname);
-          if (match) {
-            const [, space, id, preview] = match;
-            if (!id && req.method === 'GET') { sendJson(res, 200, url.searchParams.has('list') ? store.list(space, url.searchParams.get('search') ?? '', url.searchParams.get('deleted') === '1', Number(url.searchParams.get('before') ?? Number.MAX_SAFE_INTEGER)) : {...store.changes(space, Number(url.searchParams.get('after') ?? 0)), previewEpoch: store.previewEpoch}); return; }
-            if (!id && req.method === 'POST') { sendJson(res, 200, store.mutate(space, await readAdminJson(req, ANNOTATION_BYTES), actor!)); return; }
-            if (id === 'previews' && req.method === 'DELETE') { sendJson(res, 200, store.clearPreviews(space)); return; }
-            if (id && preview) {
-              const revision = Number(url.searchParams.get('revision'));
-              if (req.method === 'GET') {
-                const data = store.preview(space, id, revision);
-                if (!data) throw new AdminError(404, '预览尚未生成。');
-                res.writeHead(200, { 'content-type': 'image/jpeg', 'content-length': data.byteLength, 'cache-control': 'private, max-age=60' }); res.end(data); return;
-              }
-              if (req.method === 'PUT') {
-                const chunks: Buffer[] = []; let bytes = 0;
-                for await (const chunk of req) { bytes += chunk.length; if (bytes > 128 * 1024) throw new AdminError(413, '预览过大。'); chunks.push(chunk); }
-                sendJson(res, 200, store.putPreview(space, id, revision, Buffer.concat(chunks), Number(url.searchParams.get('epoch') ?? -1))); return;
-              }
-            }
-            if (id && req.method === 'GET') { const record = store.read(space, id); if (!record) throw new AdminError(404, '标注不存在。'); sendJson(res, 200, record); return; }
-          }
-          sendJson(res, 405, { error: '不支持的标注操作。' }); return;
-        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
-      }
-      if (url.pathname === '/api/shares' || url.pathname.startsWith('/api/shares/')) {
-        if (!options.admin) { sendJson(res, 503, {error:'当前服务不支持分享。'}); return; }
-        try {
-          if (url.pathname === '/api/shares' && req.method === 'POST') {
-            if (!adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, {error:'请从同源页面分享工作区。'}); return; }
-            if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== actor?.id) { sendJson(res,409,{error:'用户已切换，请重新分享。'}); return; }
-            const result = options.admin.workspaces.share(await readAdminJson(req, WORKSPACE_BYTES + 2048), actor);
-            sendJson(res, 201, {...result, path: `/?share=${result.id}`}); return;
-          }
-          const id = /^\/api\/shares\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
-          if (id && req.method === 'GET') { sendJson(res, 200, options.admin.workspaces.shared(id)); return; }
-          sendJson(res, 405, {error:'分享快照不可修改。'});
-        } catch (error) { sendJson(res, error instanceof AdminError ? error.status : 500, {error:(error as Error).message}); }
-        return;
-      }
-      if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
-        if (!options.admin) { sendJson(res, 503, { error: '当前服务未提供工作区存储。' }); return; }
-        if (req.method !== 'GET' && !adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面保存工作区。' }); return; }
-        if (!actor && req.method !== 'GET') { sendJson(res, 409, { error: '请先选择用户或以访客继续。' }); return; }
-        const workspaceActor = actor ?? { id: 'unselected', name: '访客' };
-        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== workspaceActor.id) { sendJson(res, 409, { error: '用户已切换，请刷新工作区列表后重试。' }); return; }
-        const store = options.admin.workspaces;
-        const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
-        try {
-          if (url.pathname === '/api/workspaces') {
-            if (req.method === 'GET') {
-              sendJson(res, 200, store.list(workspaceActor, url.searchParams.get('all') === '1', url.searchParams.get('before') ?? '', url.searchParams.get('search') ?? '')); return;
-            }
-            if (req.method === 'POST') { sendJson(res, 201, store.create(await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return; }
-          }
-          if (id) {
-            if (req.method === 'GET') { const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return; }
-            const revision = typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined;
-            if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return; }
-            if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return; }
-          }
-          sendJson(res, 405, { error: '不支持的工作区操作。' }); return;
-        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
-      }
-      if (url.pathname.startsWith('/api/admin/')) {
-        const admin = options.admin;
-        if (!admin) { sendJson(res, 404, { error: '此服务尚未提供管理后台。' }); return; }
-        if (req.method !== 'GET' && !adminWriteAllowed(req)) { sendJson(res, 403, { error: '管理操作必须由同源页面发起。' }); return; }
-        // Users are trusted; identity records attribution, never access rights.
-
-        const identity = actor ?? { id: localRequest(req) ? 'local' : 'guest', name: '访客' };
-        try {
-          if (url.pathname === '/api/admin/caches' && req.method === 'GET') { sendJson(res, 200, await admin.caches.overview()); return; }
-          const cacheType = /^\/api\/admin\/caches\/([a-z-]+)$/.exec(url.pathname);
-          if (cacheType && req.method === 'GET') { sendJson(res, 200, admin.caches.list(cacheType[1]!, Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }
-          if (cacheType && req.method === 'DELETE') { sendJson(res, 200, admin.caches.remove(cacheType[1]!, await readAdminJson(req))); return; }
-          if (url.pathname === '/api/admin/frame-indexes') {
-            if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.list(Number(url.searchParams.get('offset') ?? 0), url.searchParams.get('search') ?? '')); return; }
-            if (req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove()); return; }
-          }
-          const frameIndex = /^\/api\/admin\/frame-indexes\/([0-9a-f]{24})$/.exec(url.pathname);
-          if (frameIndex && req.method === 'DELETE') { sendJson(res, 200, library.frameIndexes.remove(frameIndex[1], url.searchParams.get('v') ?? undefined)); return; }
-          if (url.pathname === '/api/admin/measurements') {
-            if (req.method === 'GET') { sendJson(res, 200, admin.measurements.status()); return; }
-            if (req.method === 'POST') { sendJson(res, 202, admin.measurements.start(await readAdminJson(req), identity.id)); return; }
-          }
-          const measurement = /^\/api\/admin\/measurements\/([a-f0-9-]{36})(?:\/(transfer|finish))?$/.exec(url.pathname);
-          if (measurement) {
-            if (req.method === 'POST' && measurement[2] === 'transfer') { await admin.measurements.transfer(req, res, measurement[1], identity.id); return; }
-            if (req.method === 'POST' && measurement[2] === 'finish') { sendJson(res, 200, admin.measurements.finish(measurement[1], identity.id, await readAdminJson(req))); return; }
-            if (req.method === 'DELETE' && !measurement[2]) { sendJson(res, 200, admin.measurements.cancel(measurement[1], identity.id)); return; }
-          }
-          if (url.pathname === '/api/admin/status' && req.method === 'GET') {
-            sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests:traffic.activeRequests, connections:sockets.size, completedRequests:traffic.completedRequests, abortedRequests:traffic.abortedRequests }, recentRequests }); return;
-          }
-          if (url.pathname === '/api/admin/roots') {
-            if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return; }
-            if (req.method === 'PUT') { sendJson(res, 200, await admin.saveRoots(await readAdminJson(req))); return; }
-          }
-          if (url.pathname === '/api/admin/scan') {
-            if (req.method === 'GET') {
-              const offset = Number(url.searchParams.get('offset') ?? 0);
-              if (!Number.isSafeInteger(offset) || offset < 0) throw new AdminError(400, '错误分页位置无效。');
-              sendJson(res, 200, { ...library.status(), errors: library.errors(100, offset), offset }); return;
-            }
-            if (req.method === 'POST') {
-              const body = await readAdminJson(req) as { action?: unknown } | null;
-              if (body?.action === 'refresh') void library.refresh().catch(() => {});
-              else if (body?.action === 'cancel') library.cancel();
-              else throw new AdminError(400, '未知扫描操作。');
-              sendJson(res, 202, library.status()); return;
-            }
-          }
-          if (url.pathname === '/api/admin/logs' && req.method === 'GET') { sendJson(res, 200, await admin.logs(url.searchParams.get('before') ?? '')); return; }
-          const log = /^\/api\/admin\/logs\/([^/]+)$/.exec(url.pathname);
-          if (log) {
-            const name = decodeURIComponent(log[1]);
-            if (req.method === 'GET') { sendJson(res, 200, await admin.readLog(name, url.searchParams.get('v'))); return; }
-            if (req.method === 'DELETE') { sendJson(res, 200, await admin.deleteLog(name, typeof req.headers['if-match'] === 'string' ? req.headers['if-match'].replace(/^"|"$/g, '') : null)); return; }
-          }
-          sendJson(res, 405, { error: '不支持的管理操作。' }); return;
-        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); else if (!res.destroyed) res.destroy(); return; }
-      }
-      if (url.pathname === '/api/library/scan' && req.method === 'GET') {
-        sendJson(res, 200, { ...library.status(), errors: library.errors() }); return;
-      }
-      if (url.pathname === '/api/library/scan' && req.method === 'POST') {
-        let sameOrigin = false;
-        try { const origin = new URL(req.headers.origin ?? ''); sameOrigin = origin.host === req.headers.host && origin.protocol === (encryptedRequest(req) ? 'https:' : 'http:'); } catch {}
-        if (!sameOrigin || req.headers['x-voidplayer-action'] !== 'scan') { sendJson(res, 403, { error: '请从播放器或管理页面操作扫描。' }); return; }
-        if (url.searchParams.get('action') === 'cancel') library.cancel();
-        else if (!url.searchParams.has('action') || url.searchParams.get('action') === 'refresh') void library.refresh().catch(() => {});
-        else { sendJson(res, 400, { error: '未知扫描操作。' }); return; }
-        sendJson(res, 202, library.status()); return;
-      }
-      if (url.pathname === '/api/library/browse' && req.method === 'GET') {
-        const limit = Number(url.searchParams.get('limit') ?? 100), offset = Number(url.searchParams.get('offset') ?? 0);
-        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 200 || !Number.isSafeInteger(offset) || offset < 0) { sendJson(res, 400, { error: '无效分页参数。' }); return; }
-        const revision = url.searchParams.has('revision') ? Number(url.searchParams.get('revision')) : undefined;
-        if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 0)) { sendJson(res, 400, { error: '无效版本参数。' }); return; }
-        try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision })); }
-        catch (error) { sendJson(res, (error as {code?: string}).code === 'INDEX_CHANGED' ? 409 : 400, { error: (error as Error).message }); }
-        return;
-      }
-      const indexMatch = /^\/api\/media\/([0-9a-f]{24})\/frame-index$/.exec(url.pathname);
-      if (indexMatch) {
-        try {
-          if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
-          if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
-          const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
-          if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
-          if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
-          if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.get(entry.id, version)); return; }
-          const body = await readAdminJson(req, FLV_INDEX_BYTES + 1024) as { index?: unknown; epoch?: unknown } | null;
-          if (!body || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
-          sendJson(res, 201, library.frameIndexes.put(entry.id, version, entry.size, body.index, body.epoch)); return;
-        } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return; }
-      }
-      const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal|metadata)$/.exec(url.pathname);
-      if (actionMatch) {
-        const action = actionMatch[2];
-        if (action === 'metadata') {
-          if (req.method !== 'GET') { sendJson(res, 405, { error: 'method not allowed' }); return; }
-          const entry = library.metadata(actionMatch[1]);
-          sendJson(res, entry ? 200 : 404, entry ?? { error: 'unknown media id' }); return;
-        }
-        if (action === 'reveal' && (req.method !== 'POST' || !options.allowLocalReveal || !allowReveal(req))) {
-          status = 403; sendJson(res, 403, { error: '仅本机页面可请求文件定位。' }); return;
-        }
-        if (action === 'location' && req.method !== 'GET') { status = 405; sendJson(res, 405, { error: 'method not allowed' }); return; }
-        const abs = await library.resolve(actionMatch[1]);
-        if (!abs) { status = 404; sendJson(res, 404, { error: 'unknown media id' }); return; }
-        if (action === 'reveal') await (options.reveal ?? revealFile)(abs);
-        sendJson(res, 200, action === 'location' ? { absolutePath: abs, reveal: !!options.allowLocalReveal && localRequest(req) } : { ok: true });
-        return;
-      }
-      // Users explicitly submit a problem log from
-      // the log panel. Bounded body, JSON shape-checked, written to logsDir.
-      if (url.pathname === '/api/logs' && req.method === 'POST') {
-        if (!options.logsDir) { status = 404; sendJson(res, 404, { error: 'log upload not enabled' }); return; }
-        const chunks: Buffer[] = [];
-        let size = 0;
-        for await (const chunk of req) {
-          size += (chunk as Buffer).length;
-          if (size > 10 * 1024 * 1024) { status = 413; sendJson(res, 413, { error: '日志过大' }); req.destroy(); return; }
-          chunks.push(chunk as Buffer);
-        }
-        let doc: { schema?: unknown; sessionId?: unknown };
-        try { doc = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-        catch { status = 400; sendJson(res, 400, { error: '不是有效的 JSON' }); return; }
-        if (doc?.schema !== 'voidplayer-web-log' || typeof doc.sessionId !== 'string' || !/^[0-9a-zA-Z-]{1,100}$/.test(doc.sessionId)) {
-          status = 400; sendJson(res, 400, { error: '不是有效的日志文档' }); return;
-        }
-        await fs.mkdir(options.logsDir, { recursive: true });
-        const receivedAt = new Date().toISOString();
-        const name = `voidplayer-log-${receivedAt.replace(/[:.]/g, '-')}-${requestId}-${doc.sessionId.slice(0, 8)}.json`;
-        await fs.writeFile(path.join(options.logsDir, name), JSON.stringify({ ...doc, serverReceipt: { id: requestId, receivedAt, actorId: actor?.id ?? (localRequest(req) ? 'local' : null) } }), { flag: 'wx', mode: 0o600 });
-        status = 201; sendJson(res, 201, { ok: true, name });
-        return;
-      }
+      if (await handleConnectionRoutes(ctx, req, res, url)) return;
+      if (await handleStateRoutes(ctx, req, res, url)) return;
+      if (await handleContentRoutes(ctx, req, res, url)) return;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        status = 405; sendJson(res, 405, { error: 'read only' }); return;
-      }
-      if (url.pathname === '/api/library') {
-        const listing = await library.list(url.searchParams.get('refresh') === '1');
-        sendJson(res, 200, listing);
-        return;
-      }
-      const mediaMatch = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname);
-      if (mediaMatch) {
-        const requestedVersion = url.searchParams.get('v') ?? undefined;
-        const metadata = library.metadata(mediaMatch[1]);
-        if (requestedVersion && metadata && requestedVersion !== metadata.version) { status = 409; sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
-        const abs = await library.resolve(mediaMatch[1], requestedVersion);
-        if (!abs) { status = 404; sendJson(res, 404, { error: 'unknown media id' }); return; }
-        if (url.searchParams.has('download')) res.setHeader('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(abs))}`);
-        await serveFile(req, res, abs, undefined, metadata?.version);
-        return;
+        sendJson(res, 405, { error: 'read only' }); return;
       }
       if (staticDir) {
         const rel = decodeURIComponent(['/', '/connection'].includes(url.pathname) ? '/index.html' : ['/admin', '/admin/'].includes(url.pathname) ? '/admin/index.html' : url.pathname);
@@ -440,12 +95,11 @@ export function createMediaServer(options: ServerOptions): Server {
           await serveFile(req, res, real);
           return;
         }
-        status = 404; sendJson(res, 404, { error: 'not found' });
+        sendJson(res, 404, { error: 'not found' });
         return;
       }
-      status = 404; sendJson(res, 404, { error: 'not found' });
+      sendJson(res, 404, { error: 'not found' });
     } catch (error) {
-      status = 500;
       if (!res.headersSent) sendJson(res, 500, { error: error instanceof Error ? error.message : String(error) });
       else res.end();
     }

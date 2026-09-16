@@ -6,7 +6,6 @@ import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
-import { setAnnotationViewport } from './ui/annotation-svg.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
 import { installSettings } from './ui/settings.ts';
 import { createFrameTask } from './ui/frame-task.ts';
@@ -22,10 +21,11 @@ import './themes/settings.css';
 import { shell } from './ui/shell.ts';
 import { icon } from './ui/icons.ts';
 import { installWorkbench } from './ui/workbench.ts';
-import { needsViewRecovery } from './ui/view-recovery.ts';
 import { installSourceActions } from './ui/source-actions.ts';
 import { bindTimelinePreview, syncTimelineProgress } from './ui/seek-preview.ts';
 import { installTrackDrag } from './ui/track-drag.ts';
+import { createViewBindings } from './ui/view-bindings.ts';
+import { installViewportGestures } from './ui/viewport-gestures.ts';
 import { installViewportChrome } from './ui/viewport-chrome.ts';
 import { installPixelGrid } from './ui/pixel-grid.ts';
 import { openMedia } from './media.ts';
@@ -37,9 +37,9 @@ import { bindFileDrop } from './file-drop.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
-import { paintFrame, captureFrame, setPresentationGeometry, disposePresentation } from './presenter.ts';
-import { PanMomentumFilter, Viewport, unobscuredFitArea, fitReference, splitPixelGeometry, wheelZoomFactor, ZOOM_PRESETS, classifyWheel, fittedSize, normalizeWheelDelta } from './viewport.ts';
-import type { LayoutMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
+import { paintFrame, captureFrame, disposePresentation } from './presenter.ts';
+import { Viewport, ZOOM_PRESETS } from './viewport.ts';
+import type { PixelSizeMode, ViewportSnapshot } from './viewport.ts';
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
@@ -144,77 +144,8 @@ const workspaceTransfer = installWorkspaceTransfer(session, {
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
 const grids = Object.fromEntries(SLOTS.map(slot => [slot, installPixelGrid($<HTMLCanvasElement>(`grid-${slot}`), $(`grid-label-${slot}`))])) as Record<Slot, ReturnType<typeof installPixelGrid>>;
-const fittedTracks = new Map<Slot, { width: number; height: number; sourceWidth: number; sourceHeight: number; centerY: number }>();
-function trackGeometry(track: { slot: Slot; width: number; height: number }) {
-  const stage = $(`stage-${track.slot}`), rect = stage.getBoundingClientRect();
-  // Measure actual bands: lower grid headings live at the bottom, and the
-  // global transport overlaps only the grid cells it physically intersects.
-  // Visibility-hidden focus chrome retains its geometry to avoid image jumps.
-  const overlays = [...document.querySelectorAll<HTMLElement>('.viewport-surface .card-heading, .viewport-surface .transport')]
-    .filter(el => !el.hidden && getComputedStyle(el).display !== 'none')
-    .map(el => { const box = el.getBoundingClientRect(); return { left: box.left - rect.left, right: box.right - rect.left, top: box.top - rect.top, bottom: box.bottom - rect.top }; });
-  const area = unobscuredFitArea(rect.width, rect.height, overlays);
-  return { slotW: area.width, slotH: area.height, videoW: track.width, videoH: track.height, centerY: area.centerY };
-}
-let primaryFitted: { width: number; height: number } | null = null;
-function applyViewTransform() {
-  const { zoom, offsetX, offsetY } = viewport;
-  const value = zoom === 1 && !offsetX && !offsetY ? '' : `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
-  for (const slot of SLOTS) {
-    const image = $(`image-${slot}`);
-    if (image.style.transform !== value) image.style.transform = value;
-    const stage = $(`stage-${slot}`);
-    const fitted = fittedTracks.get(slot);
-    const displayOffsetY = offsetY + (fitted?.centerY ?? 0);
-    const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY: displayOffsetY, dpr: devicePixelRatio } : null;
-    setPresentationGeometry(canvases[slot], presentation);
-    for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted ? fitted.sourceWidth / fitted.sourceHeight : 1);
-    const split = viewport.mode === 'split' && fittedTracks.size === 2;
-    const first = stage.closest('.video-card')!.classList.contains('view-first');
-    const cut = Math.max(0, Math.min(1, viewport.splitPos));
-    const left = split && !first ? cut : 0, right = split && first ? cut : 1;
-    const recovery = $(`recover-${slot}`);
-    recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY: displayOffsetY }, left, right);
-    recovery.style.left = `${(left + right) / 2 * 100}%`;
-    grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: displayOffsetY } : null);
-  }
-  drawingEditor.viewChanged();
-}
-function syncSplitGeometry() {
-  const rect=screens.getBoundingClientRect();
-  const seam=splitPixelGeometry(viewport.splitPos,rect.width,rect.left,devicePixelRatio);
-  for (const [name, value] of [['--split-x', `${seam.x}px`], ['--split-stroke-width', `${seam.strokeWidth}px`]]) {
-    if (screens.style.getPropertyValue(name) !== value) screens.style.setProperty(name, value);
-  }
-}
-function fitAll() {
-  syncSplitGeometry();
-  fittedTracks.clear();
-  const allTracks = session.getState().tracks;
-  const tracks = viewport.mode === 'split' ? allTracks.slice(0, 2) : allTracks;
-  if (!tracks.length) { primaryFitted = null; applyViewTransform(); return; }
-  const geometries = new Map(tracks.map(track => [track.slot, trackGeometry(track)]));
-  const referenceGeometry = fitReference([...geometries.values()]);
-  for (const track of tracks) {
-    const geometry = geometries.get(track.slot)!;
-    const size = fittedSize(geometry, referenceGeometry, viewport.pixelSize);
-    fittedTracks.set(track.slot, { ...size, sourceWidth: track.width, sourceHeight: track.height, centerY: geometry.centerY });
-    const image = $(`image-${track.slot}`);
-    const width = `${size.width}px`, height = `${size.height}px`;
-    const top = `${geometry.centerY}px`;
-    if (image.style.top !== top) image.style.top = top;
-    if (image.style.width !== width) image.style.width = width;
-    if (image.style.height !== height) image.style.height = height;
-    if (track === (tracks.find(t => t.slot === 'A') ?? tracks[0])) {
-      if (primaryFitted && (viewport.zoom !== 1 || viewport.offsetX || viewport.offsetY) &&
-        (Math.abs(primaryFitted.width - size.width) > 0.5 || Math.abs(primaryFitted.height - size.height) > 0.5)) {
-        viewport.rescaleOffset(size.width / primaryFitted.width, size.height / primaryFitted.height);
-      }
-      primaryFitted = size;
-    }
-  }
-  applyViewTransform();
-}
+const viewBindings = createViewBindings({ $, screens, canvases, grids, viewport, session, drawingEditor });
+const { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll } = viewBindings;
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
 for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
@@ -382,146 +313,8 @@ for (const slot of SLOTS) {
   }, { signal: uiEvents.signal });
   for (const event of ['pointerup', 'pointercancel']) stage.addEventListener(event, () => { drawingStart = undefined; }, { signal: uiEvents.signal });
 }
-// Viewport gestures (desktop parity): right-drag pans, wheel/pinch zooms at the
-// cursor, trackpad two-finger scroll pans. Pan/zoom are shared by both tracks.
-function wrapAnchor(target: Element | null, clientX: number, clientY: number) {
-  const wrap = (target?.closest('.image-wrap') ?? target?.closest('.video-card')?.querySelector('.image-wrap') ?? document.querySelector('.image-wrap:not([hidden])')) as HTMLElement | null;
-  if (!wrap) return { x: 0, y: 0 };
-  const rect = wrap.getBoundingClientRect();
-  // The rect center is post-transform (C + offset); recover the layout center.
-  return { x: clientX - (rect.left + rect.width / 2) + viewport.offsetX, y: clientY - (rect.top + rect.height / 2) + viewport.offsetY };
-}
-let gestureLogTimer: ReturnType<typeof setTimeout> | undefined;
-// Safari.app has been observed leaving stale composited tiles ("trails") in the
-// stage area after zoom/pan gestures on a transformed canvas. Not reproducible
-// in Playwright WebKit; as a mitigation, force the view to re-composite once
-// when a gesture settles.
-let flushScheduled = false;
-function flushView() {
-  if (flushScheduled) return;
-  flushScheduled = true;
-  requestAnimationFrame(() => {
-    screens.style.transform = 'translateZ(0)';
-    requestAnimationFrame(() => { screens.style.transform = ''; flushScheduled = false; });
-  });
-}
-function logViewSettled(msg: string) {
-  clearTimeout(gestureLogTimer);
-  gestureLogTimer = setTimeout(() => {
-    log.info('ui', msg, { zoom: Math.round(viewport.zoom * 1000) / 1000, offsetX: Math.round(viewport.offsetX), offsetY: Math.round(viewport.offsetY), trigger: inputTrigger });
-    flushView();
-  }, 400);
-}
-const panMomentum = new PanMomentumFilter();
-for (const slot of SLOTS) {
-  const stage = $(`stage-${slot}`);
-  stage.addEventListener('contextmenu', e => e.preventDefault());
-  let pan: { pointer: number; x: number; y: number } | null = null;
-  stage.addEventListener('pointerdown', e => {
-    if (e.button !== 2 || !session.getState().tracks.length) return;
-    e.preventDefault();
-    pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY };
-    stage.setPointerCapture(e.pointerId);
-  });
-  stage.addEventListener('pointermove', e => {
-    if (!pan || pan.pointer !== e.pointerId) return;
-    viewport.panBy(e.clientX - pan.x, e.clientY - pan.y);
-    pan.x = e.clientX;
-    pan.y = e.clientY;
-    applyViewTransform();
-  });
-  const endPan = (e: PointerEvent) => {
-    if (!pan || pan.pointer !== e.pointerId) return;
-    pan = null;
-    log.info('ui', '视口平移', { offsetX: Math.round(viewport.offsetX), offsetY: Math.round(viewport.offsetY) });
-    flushView();
-  };
-  stage.addEventListener('pointerup', endPan);
-  stage.addEventListener('pointercancel', endPan);
-}
-screens.addEventListener('wheel', e => {
-  if (!session.getState().tracks.length) return;
-  e.preventDefault();
-  const inverted = (e as WheelEvent & { webkitDirectionInvertedFromDevice?: boolean }).webkitDirectionInvertedFromDevice;
-  if (classifyWheel(e.deltaY, e.deltaMode, e.ctrlKey, inverted) === 'pan') {
-    const dx = -normalizeWheelDelta(e.deltaX, e.deltaMode);
-    const dy = -normalizeWheelDelta(e.deltaY, e.deltaMode);
-    if (!panMomentum.accept(dx, dy, e.timeStamp)) return;
-    viewport.panBy(dx, dy);
-    applyViewTransform();
-    logViewSettled('触控板滚动平移');
-    return;
-  }
-  const factor = wheelZoomFactor(e.deltaY, e.deltaMode, e.ctrlKey);
-  const anchor = wrapAnchor(e.target as Element | null, e.clientX, e.clientY);
-  if (viewport.zoomAt(factor, anchor.x, anchor.y)) { applyViewTransform(); syncZoomSelect(true); logViewSettled('视口缩放'); }
-}, { passive: false });
-// Safari delivers trackpad pinch as gesture events instead of ctrl+wheel.
-let gestureScale = 1;
-for (const type of ['gesturestart', 'gesturechange', 'gestureend'] as const) {
-  screens.addEventListener(type, e => {
-    e.preventDefault();
-    const event = e as Event & { scale?: number; clientX?: number; clientY?: number };
-    const scale = event.scale ?? 1;
-    if (type === 'gesturestart') { gestureScale = scale; return; }
-    if (type === 'gestureend') { logViewSettled('视口缩放'); return; }
-    if (!session.getState().tracks.length) { gestureScale = scale; return; }
-    const anchor = wrapAnchor(e.target as Element | null, event.clientX ?? 0, event.clientY ?? 0);
-    if (viewport.zoomAt(scale / gestureScale, anchor.x, anchor.y)) { applyViewTransform(); syncZoomSelect(true); }
-    gestureScale = scale;
-  });
-}
-// Splitter: draggable divider (unclamped while dragging, clamped on release,
-// like the desktop) with a 5% keyboard step.
-const divider = $('divider');
-let dividerDrag: number | null = null;
-divider.addEventListener('pointerdown', e => {
-  if (e.button !== 0) return;
-  e.preventDefault();
-  dividerDrag = e.pointerId;
-  divider.setPointerCapture(e.pointerId);
-});
-divider.addEventListener('pointermove', e => {
-  if (dividerDrag !== e.pointerId) return;
-  const rect = screens.getBoundingClientRect();
-  viewport.setSplitPos((e.clientX - rect.left) / rect.width);
-  syncSplitGeometry();
-  applyViewTransform();
-});
-const endDividerDrag = (e: PointerEvent) => {
-  if (dividerDrag !== e.pointerId) return;
-  dividerDrag = null;
-  viewport.setSplitPos(viewport.splitPos, true);
-  syncSplitGeometry();
-  divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
-  applyViewTransform();
-  log.info('ui', '分割线拖拽结束', { splitPos: Math.round(viewport.splitPos * 1000) / 1000 });
-};
-divider.addEventListener('pointerup', endDividerDrag);
-divider.addEventListener('pointercancel', endDividerDrag);
-divider.addEventListener('keydown', e => {
-  if (e.code !== 'ArrowLeft' && e.code !== 'ArrowRight') return;
-  e.preventDefault();
-  e.stopPropagation();
-  viewport.setSplitPos(viewport.splitPos + (e.code === 'ArrowRight' ? 0.05 : -0.05), true);
-  syncSplitGeometry();
-  divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
-  applyViewTransform();
-  log.info('ui', '分割线键盘调整', { splitPos: Math.round(viewport.splitPos * 1000) / 1000, trigger: 'keyboard' });
-});
-$('arrangement').onclick = () => {
-  viewport.apply({ arrangement: viewport.arrangement === 'grid' ? 'horizontal' : 'grid', mode: 'side-by-side' });
-  render();
-};
-for (const button of document.querySelectorAll<HTMLButtonElement>('#layout-mode button')) {
-  button.onclick = () => {
-    const mode = button.dataset.mode as LayoutMode;
-    if (viewport.mode === mode) return;
-    viewport.setMode(mode);
-    log.info('ui', '切换布局模式', { mode, trigger: inputTrigger });
-    render();
-  };
-}
+installViewportGestures({ $, screens, viewport, session, getTrigger: () => inputTrigger,
+  applyViewTransform, syncSplitGeometry, syncZoomSelect, render });
 installTimeInput($<HTMLInputElement>('position'),{
   read:()=>session.getState().positionUs,format:formatTime,parse:parseTimeInput,
   begin:()=>session.pause(),commit:ptsUs=>act(()=>session.seek(ptsUs),'seek.time',{ptsUs}),
