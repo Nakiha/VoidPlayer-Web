@@ -149,7 +149,7 @@ try {
       const scopeTrigger = await page.locator('#library-root').boundingBox();
       const listPadBottom = await page.locator('#source-list').evaluate(el => parseFloat(getComputedStyle(el).paddingBottom));
       assert.ok(Math.abs(listPadBottom - footBox.height) <= 1, 'list bottom padding reserves exactly the floating foot height');
-      assert.ok(Math.abs(footBox.bottom - panelBox.bottom) <= 1, 'foot pinned to panel bottom');
+      assert.ok(Math.abs((footBox.y + footBox.height) - (panelBox.y + panelBox.height)) <= 1, 'foot pinned to panel bottom');
       const localBox = await page.locator('#local-sources').boundingBox();
       const activityBox = await page.locator('#source-activity').boundingBox();
       assert.ok(localBox.y + localBox.height <= activityBox.y + 1, 'local section stacks above activity inside the foot');

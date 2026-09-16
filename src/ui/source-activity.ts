@@ -58,8 +58,19 @@ export function installSourceActivity(session: ReviewSession, signal: AbortSigna
   const unsubscribe = session.subscribe(render);
   // The foot (local files + activity) floats over the panel bottom; its
   // height varies, so reserve exactly its measured height for the list above.
+  // The reserve resizes the observed list, so it must not land synchronously
+  // inside delivery: coalesce to rAF or WebKit reports the undeliverable
+  // follow-up notification as a page error.
   const foot = document.getElementById('source-foot')!;
-  const reserve = () => foot.parentElement?.style.setProperty('--foot-h', `${foot.offsetHeight}px`);
+  let reserveQueued = false;
+  const reserve = () => {
+    if (reserveQueued) return;
+    reserveQueued = true;
+    requestAnimationFrame(() => {
+      reserveQueued = false;
+      foot.parentElement?.style.setProperty('--foot-h', `${foot.offsetHeight}px`);
+    });
+  };
   const observer = new ResizeObserver(reserve); observer.observe(foot); reserve();
   signal.addEventListener('abort', () => { unsubscribe(); clearInterval(timer); observer.disconnect(); progress.remove(); }, { once: true });
   render();

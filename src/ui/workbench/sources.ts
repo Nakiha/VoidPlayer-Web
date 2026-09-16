@@ -184,9 +184,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
       const row = document.createElement('button');
       row.className = 'start-recent-row';
       row.setAttribute('aria-label', `打开：${item.name}`);
-      const { base } = sourceDisplayName(item.name);
+      const { base, dir } = sourceDisplayName(item.name);
       const name = text('span', base, 'filename');
-      const meta = text('span', `${sizeText(item.size)} · ${item.library ? '媒体库' : '本地文件'}`, 'source-meta');
+      const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
+      const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}` : `${sizeText(item.size)} · 本地文件`, 'source-meta');
       const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
       const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
       row.append(info, go);
