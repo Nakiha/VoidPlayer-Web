@@ -43,8 +43,8 @@ export function installWorkspaceSharing(options: {
       if (!response.ok) throw new Error(result.error ?? '分享创建失败。');
       const link = new URL(result.path, location.origin).href;
       await options.created?.(snapshot);
-      try { await navigator.clipboard.writeText(link); notify('分享链接已在服务端创建，并已复制。'); }
-      catch { notify('分享链接已在服务端创建，请复制下方链接。', link); }
+      try { await navigator.clipboard.writeText(link); notify('分享链接已在服务端创建，并已复制'); }
+      catch { notify('分享链接已在服务端创建，请复制下方链接', link); }
       return { id: result.id as string, url: link };
     } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } throw error; }
     finally { busy = false; update(); }
@@ -66,8 +66,8 @@ export function installWorkspaceSharing(options: {
         const old = new URL(media.source.url); media.source.url = new URL(old.pathname + old.search, location.origin).href;
       }
       snapshot.serverUrl = location.origin + '/';
-      if (await options.open(snapshot)) notify('已还原分享快照，后续编辑不会改变原链接。');
-      else notify('已取消还原分享快照。');
+      if (await options.open(snapshot)) notify('已还原分享快照，后续编辑不会改变原链接');
+      else notify('已取消还原分享快照');
     } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } }
   });
   update();

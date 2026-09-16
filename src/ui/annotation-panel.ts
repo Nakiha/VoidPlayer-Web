@@ -8,11 +8,13 @@ import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 type AnnotationEntry = { mark: Mark; slot: Slot; offsetUs: number };
 
 /** Both strip cards and hover cards share content and actions. */
-function markContent(mark: Mark, slot: Slot) {
+function markContent(mark: Mark, slot: Slot, actions?: HTMLElement) {
   const content = document.createElement('span'); content.className = 'mark-content';
   const meta = document.createElement('span'); meta.className = 'mark-meta';
   const time = document.createElement('time'); time.textContent = `${slot} · ${formatTime(mark.frame.ptsUs)}`;
-  meta.append(markSymbol(mark.id), time); content.append(meta);
+  meta.append(markSymbol(mark.id), time);
+  if (actions) meta.append(actions);
+  content.append(meta);
   const thumbnail = document.createElement('span'); thumbnail.className = 'mark-thumbnail'; thumbnail.dataset.markThumbnail = mark.id;
   const preview = annotationThumbnails.get(mark.id);
   if (preview) {
@@ -52,9 +54,10 @@ export function installAnnotationPanel(
     const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
     const editButton = createIconButton({ glyph: 'note', label: '编辑标注', tooltip: '编辑标注' });
     editButton.disabled = mark.frame.ptsUs < 0;
-    editButton.onclick = () => { hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); };
+    editButton.onclick = e => { e.stopPropagation(); hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); };
     const removeButton = createIconButton({ glyph: 'trash', className: 'annotation-remove', label: `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`, tooltip: '删除标注' });
-    removeButton.onclick = () => {
+    removeButton.onclick = e => {
+      e.stopPropagation();
       const confirmation = document.createElement('div'); confirmation.className = 'annotation-confirm';
       const label = document.createElement('span'); label.textContent = '删除这条标注？';
       const cancel = document.createElement('button'); cancel.textContent = '取消';
@@ -104,6 +107,7 @@ export function installAnnotationPanel(
     expanded: () => expanded, setExpanded, hidePreview,
     render(entries: AnnotationEntry[]) {
       const scrollLeft = list.scrollLeft;
+      dock.classList.toggle('annotations-empty', !entries.length);
       hidePreview(); list.replaceChildren();
       if (!entries.length) {
         const empty = document.createElement('span'); empty.className = 'marks-empty'; empty.textContent = '暂无标注'; list.append(empty);
@@ -112,7 +116,6 @@ export function installAnnotationPanel(
         const mark = { ...savedMark, frame: { ...savedMark.frame, ptsUs: savedMark.frame.ptsUs + offsetUs } };
         const button = document.createElement('button'); button.className = 'mark-entry';
         identifyMark(button, mark.id); bindMarkHover(button, mark.id);
-        button.append(markContent(mark, slot));
         button.setAttribute('aria-label', `轨道 ${slot} 标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
         button.setAttribute('aria-haspopup', expanded ? 'false' : 'dialog');
         button.setAttribute('aria-controls', preview.id);
@@ -124,7 +127,7 @@ export function installAnnotationPanel(
         };
         button.ondblclick = () => { if (mark.frame.ptsUs >= 0) { hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); } };
         const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
-        row.append(button, actions(mark, slot, row)); list.append(row);
+        button.append(markContent(mark, slot, actions(mark, slot, row))); row.append(button); list.append(row);
       }
       list.scrollLeft = scrollLeft;
     },
