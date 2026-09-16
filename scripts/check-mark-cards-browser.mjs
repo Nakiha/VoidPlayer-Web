@@ -96,7 +96,7 @@ try {
  assert.equal(ordered[1],second.id,'all tracks share display-time order');
  await page.locator('#toggle-marks').click();
  assert.equal(await page.locator('#selected-marks img:visible').count(),0,'compact mode shows symbols only, including refreshed thumbnails');
- const compact=await page.locator('.annotation-strip').boundingBox();assert.equal(compact.height,44);
+  const compact=await page.locator('.annotation-strip').boundingBox();assert.equal(compact.height,36);
  const bSymbol=page.locator(`.mark-entry[data-mark-id="${second.id}"]`);
  await bSymbol.hover();await page.locator('#annotation-preview').waitFor({state:'visible'});
  const popup=await page.locator('#annotation-preview').boundingBox();assert.ok(popup.y+popup.height<compact.y,'hover card opens above the bottom strip');

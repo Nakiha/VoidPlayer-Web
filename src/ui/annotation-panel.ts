@@ -45,7 +45,7 @@ export function installAnnotationPanel(
   let dismiss: ReturnType<typeof setTimeout> | undefined;
   const cancelDismiss = () => { clearTimeout(dismiss); };
   function hidePreview() {
-    cancelDismiss(); preview.hidden = true; anchor?.setAttribute('aria-expanded', 'false'); anchor = null;
+    cancelDismiss(); preview.hidden = true; preview.replaceChildren(); anchor?.setAttribute('aria-expanded', 'false'); anchor = null;
   }
   const deferHide = () => { cancelDismiss(); dismiss = setTimeout(() => {
     if (!preview.contains(document.activeElement)) hidePreview();
@@ -67,9 +67,11 @@ export function installAnnotationPanel(
     };
     actions.append(editButton, removeButton); return actions;
   }
-  function markRow(mark: Mark, slot: Slot) {
+  // Strip cards and the hover preview share one layout; only the wrapper
+  // differs (a seeking button in the strip, inert content in the dialog).
+  function markRow(mark: Mark, slot: Slot, entryTag: 'button' | 'span' = 'button') {
     const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
-    const entry = document.createElement('button'); entry.className = 'mark-entry';
+    const entry = document.createElement(entryTag); entry.className = 'mark-entry';
     identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
     entry.append(markContent(mark, slot, actions(mark, slot, row))); row.append(entry);
     return { row, entry };
@@ -78,10 +80,7 @@ export function installAnnotationPanel(
     if (expanded || anchor === button) return;
     hidePreview(); anchor = button; button.setAttribute('aria-expanded', 'true');
     identifyMark(preview, mark.id);
-    const { row, entry } = markRow(mark, slot);
-    entry.setAttribute('aria-label', `轨道 ${slot} 标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
-    entry.onclick = () => { if (mark.frame.ptsUs >= 0) seek(mark.frame.ptsUs); };
-    preview.replaceChildren(row); preview.hidden = false;
+    preview.replaceChildren(markRow(mark, slot, 'span').row); preview.hidden = false;
     const rect = button.getBoundingClientRect();
     const box = preview.getBoundingClientRect();
     preview.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - box.width - 8))}px`;
