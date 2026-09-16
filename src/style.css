@@ -670,7 +670,13 @@ button.icon-button[aria-pressed=true] {
 .identity-welcome .welcome-enter[data-guest]:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-group), var(--text) 6%); color: var(--text); filter: none; }
 .welcome-enter span { min-width: 0; overflow-wrap: anywhere; }
 .welcome-enter:active:not(:disabled) { transform: scale(.985); }
-.workspace-share-toast { position: fixed; z-index: 10000; top: 64px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); padding: 12px 16px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); color: var(--text); box-shadow: 0 8px 32px #0003; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
-.workspace-share-toast input { width: 100%; padding: 8px; }
+.toast-stack { position: fixed; z-index: 10000; top: 64px; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 12px; width: max-content; max-width: calc(100vw - 32px); padding: 10px 8px 10px 16px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--glass-fill); color: var(--text); box-shadow: var(--popover-shadow); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); font-size: var(--text-ui); overflow-wrap: anywhere; transition: opacity var(--toast-enter-duration, 120ms) ease-out, transform var(--toast-enter-duration, 120ms) ease-out; }
+.toast-enter { opacity: 0; transform: translateY(-8px); }
+.toast-leaving { opacity: 0; transform: translateY(-6px); transition: opacity var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out), transform var(--toast-exit-duration, 220ms) var(--panel-motion-easing, ease-out); }
+.toast-message { flex: 1; min-width: 0; }
+.toast-error { background: var(--toast-error-fill); color: var(--toast-error-text); border-color: var(--toast-error-border); }
+.toast-action { flex: none; }
+.toast-close { flex: none; }
 .share-spinner { animation: share-spin 1s linear infinite; }
 @keyframes share-spin { to { transform: rotate(360deg); } }

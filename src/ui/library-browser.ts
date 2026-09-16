@@ -140,7 +140,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
   }, 3000);
   signal.addEventListener('abort', () => { clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose(); }, { once: true });
   return {
-    snapshot: () => ({ root, directory, search, all, recent }),
+    snapshot: () => ({ root, directory, search, all }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;
       ({ root, directory, search, all } = state);

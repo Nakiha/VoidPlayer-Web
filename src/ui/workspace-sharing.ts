@@ -2,6 +2,7 @@ import { currentActor } from '../identity.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { pinLibraryReference } from '../media-reference.ts';
 import { icon } from './icons.ts';
+import { installToasts } from './toast.ts';
 
 /** Immutable server snapshots reuse the same restore contract as workspace files. */
 export function installWorkspaceSharing(options: {
@@ -10,10 +11,8 @@ export function installWorkspaceSharing(options: {
 }) {
   const button = document.getElementById('workspace-share') as HTMLButtonElement;
   const settingsButton = document.getElementById('saved-workspace-share') as HTMLButtonElement;
-  const toast = document.createElement('div'); toast.className = 'workspace-share-toast'; toast.hidden = true;
-  toast.setAttribute('role', 'status'); toast.setAttribute('aria-live', 'polite');
-  document.body.append(toast);
-  let busy = false, timer: ReturnType<typeof setTimeout> | undefined;
+  const toasts = installToasts(options.signal);
+  let busy = false;
   function update() {
     for (const control of [button, settingsButton]) {
       control.disabled = busy || !options.canShare();
@@ -21,12 +20,11 @@ export function installWorkspaceSharing(options: {
       control.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
     }
   }
-  function notify(message: string, link?: string) {
-    clearTimeout(timer); (document.querySelector<HTMLDialogElement>('#settings[open]') ?? document.body).append(toast); toast.replaceChildren(); toast.hidden = false;
-    const label = document.createElement('span'); label.textContent = message; toast.append(label);
-    if (link) { const input = document.createElement('input'); input.readOnly = true; input.value = link; input.setAttribute('aria-label', '分享链接'); input.onclick = () => input.select(); toast.append(input); }
-    const close = document.createElement('button'); close.textContent = '关闭'; close.onclick = () => { toast.hidden = true; }; toast.append(close);
-    if (!link) timer = setTimeout(() => { toast.hidden = true; }, 7000);
+  function notify(message: string, link?: string, kind?: 'info' | 'error') {
+    // A modal settings dialog traps focus; show the toast where it is reachable.
+    (document.querySelector<HTMLDialogElement>('#settings[open]') ?? document.body).append(toasts.stack);
+    if (!link) { toasts.show(message, { kind, durationMs: kind === 'error' ? 0 : 7000 }); return; }
+    toasts.show(message, { kind, durationMs: 0, action: { label: '复制链接', onClick: () => void navigator.clipboard.writeText(link).catch(() => {}) } });
   }
   async function create() {
     if (busy) throw new Error('分享正在创建，请等待完成。');
@@ -48,7 +46,7 @@ export function installWorkspaceSharing(options: {
       try { await navigator.clipboard.writeText(link); notify('分享链接已在服务端创建，并已复制。'); }
       catch { notify('分享链接已在服务端创建，请复制下方链接。', link); }
       return { id: result.id as string, url: link };
-    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message); options.report(error); } throw error; }
+    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } throw error; }
     finally { busy = false; update(); }
   }
   settingsButton.addEventListener('click', () => void create().catch(() => {}), { signal: options.signal });
@@ -70,8 +68,8 @@ export function installWorkspaceSharing(options: {
       snapshot.serverUrl = location.origin + '/';
       if (await options.open(snapshot)) notify('已还原分享快照，后续编辑不会改变原链接。');
       else notify('已取消还原分享快照。');
-    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message); options.report(error); } }
+    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } }
   });
   update();
-  return { create, update, dispose() { clearTimeout(timer); toast.remove(); } };
+  return { create, update, dispose() { toasts.dispose(); } };
 }
