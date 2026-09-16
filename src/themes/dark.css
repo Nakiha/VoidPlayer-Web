@@ -25,7 +25,7 @@
   --slot-text: #ffffff;
   --track-playhead: #a4a9b3; --track-fill: #393e48; --track-active: #304c70;
   --notice-fill: #443620; --notice-text: #f0c686; --backdrop: #0009;
-  --toast-error-fill: color-mix(in srgb, #f04438 22%, var(--glass-fill)); --toast-error-text: #ffb4ab; --toast-error-border: color-mix(in srgb, #f04438 45%, var(--border));
+  --toast-error-fill: color-mix(in srgb, #f04438 22%, var(--viewport-chrome-fill)); --toast-error-text: #ffb4ab; --toast-error-border: color-mix(in srgb, #f04438 45%, var(--border));
   --mark-red: #f0837d; --mark-ochre: #dbad62; --mark-green: #9dc66b; --mark-teal: #69c5b6;
   --mark-blue: #76b0f2; --mark-indigo: #a2aafa; --mark-purple: #c197ef; --mark-rose: #e58fb9;
   --annotation-edit-outline: #80b6ff; --annotation-toolbar-shadow: 0 8px 24px #0005;
