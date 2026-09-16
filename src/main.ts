@@ -222,6 +222,12 @@ function render() {
     button.dataset.tooltip = button.dataset.mode === 'split' ? '擦拭对比当前排序的前两个轨道' : '独立显示所有轨道';
     button.setAttribute('aria-pressed', String(button.dataset.mode === (splitActive ? 'split' : 'side-by-side')));
   }
+  // All topbar view controls key off the same empty-session flag: no tracks,
+  // no inspector/subtracks/arrangement/reset. Sources stays enabled so an
+  // empty session can still browse the library; share keys off canShare().
+  for (const id of ['arrangement', 'reset-view', 'toggle-inspector', 'toggle-subtracks']) {
+    $<HTMLButtonElement>(id).disabled = !loaded;
+  }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);
   syncZoomSelect(loaded);
   // Transient seek preparation must not dim the row or steal button focus.

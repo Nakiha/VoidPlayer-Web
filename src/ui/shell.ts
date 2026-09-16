@@ -19,7 +19,7 @@ export function shell() {
       <button id="pixel-size" class="choice-trigger" aria-label="像素尺寸模式" data-tooltip="像素尺寸模式" disabled></button>
     </div>
     <span class="toolbar-spacer"></span>
-    <button id="open" class="add-video" aria-label="添加视频">${icon('filePlus')}<span>添加视频</span></button>
+    <button id="open" class="add-video" aria-label="添加本地视频">${icon('filePlus')}<span>添加本地视频</span></button>
     <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
     <div class="panel-switches" role="group" aria-label="工作区功能">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
@@ -44,7 +44,7 @@ export function shell() {
               ${iconButton({ glyph: 'open', label: `定位轨道 ${slot} 文件`, tooltip: '定位文件', attributes: { id: `source-action-${slot}` } })}
               ${iconButton({ glyph: 'close', label: `关闭轨道 ${slot}`, tooltip: '关闭轨道', className: 'remove-track', attributes: { id: `remove-track-${slot}` } })}
             </div><input id="file-${slot}" type="file" accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" aria-label="打开视频 ${slot}" hidden></div>
-          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}"><label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加视频</span></label><span class="empty-hint">或将文件拖入这里</span>${slot === 'A' ? `<section class="start-library" aria-label="启动片源"><header><div class="segmented"><button data-start-tab="available" aria-pressed="true">可用片源</button><button data-start-tab="recent" aria-pressed="false">最近打开</button></div><button id="start-library-more">全部片源</button></header><div id="start-library-list"></div><p id="start-library-status" class="muted"></p></section>` : ''}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
+          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-library-list"></div><p id="start-library-status" class="muted"></p></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
           <div class="card-footer"><span id="meta-${slot}"></span></div></article>`).join('')}
           <div id="divider" role="slider" aria-label="分割线位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0" hidden><div class="divider-line"></div><div class="divider-grip" aria-hidden="true"></div></div>
         </div>
@@ -81,6 +81,7 @@ export function shell() {
       <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="片源" hidden>
         <div class="source-tools" id="source-tools"></div>
         <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
+        <div id="source-scrollbar" class="source-scrollbar" aria-hidden="true"><span id="source-scrollbar-thumb"></span></div>
         <div class="source-foot" id="source-foot">
         <section id="local-sources" class="local-sources" aria-label="本地文件"><h3 class="source-section"><span id="local-sources-heading">本地文件</span><button id="local-add" class="icon-button" aria-label="选择本地文件" data-tooltip="选择本地文件加入列表（仅本机预览，不上传）">${icon('filePlus')}</button></h3><div id="local-list"></div></section>
         <section id="source-activity" class="source-activity" aria-label="片源载入状态" data-state="idle">

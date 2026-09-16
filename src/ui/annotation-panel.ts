@@ -50,8 +50,7 @@ export function installAnnotationPanel(
   const deferHide = () => { cancelDismiss(); dismiss = setTimeout(() => {
     if (!preview.contains(document.activeElement)) hidePreview();
   }, 150); };
-  function actions(mark: Mark, slot: Slot, container: HTMLElement) {
-    const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
+  function actions(mark: Mark, slot: Slot, container: HTMLElement) {    const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
     const editButton = createIconButton({ glyph: 'note', label: '编辑标注', tooltip: '编辑标注' });
     editButton.disabled = mark.frame.ptsUs < 0;
     editButton.onclick = e => { e.stopPropagation(); hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); };
@@ -68,10 +67,21 @@ export function installAnnotationPanel(
     };
     actions.append(editButton, removeButton); return actions;
   }
+  function markRow(mark: Mark, slot: Slot) {
+    const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
+    const entry = document.createElement('button'); entry.className = 'mark-entry';
+    identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
+    entry.append(markContent(mark, slot, actions(mark, slot, row))); row.append(entry);
+    return { row, entry };
+  }
   function showPreview(button: HTMLElement, mark: Mark, slot: Slot) {
     if (expanded || anchor === button) return;
     hidePreview(); anchor = button; button.setAttribute('aria-expanded', 'true');
-    identifyMark(preview, mark.id); preview.replaceChildren(markContent(mark, slot), actions(mark, slot, preview)); preview.hidden = false;
+    identifyMark(preview, mark.id);
+    const { row, entry } = markRow(mark, slot);
+    entry.setAttribute('aria-label', `轨道 ${slot} 标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
+    entry.onclick = () => { if (mark.frame.ptsUs >= 0) seek(mark.frame.ptsUs); };
+    preview.replaceChildren(row); preview.hidden = false;
     const rect = button.getBoundingClientRect();
     const box = preview.getBoundingClientRect();
     preview.style.left = `${Math.max(8, Math.min(rect.left, innerWidth - box.width - 8))}px`;
@@ -114,8 +124,7 @@ export function installAnnotationPanel(
       }
       for (const { mark: savedMark, slot, offsetUs } of entries) {
         const mark = { ...savedMark, frame: { ...savedMark.frame, ptsUs: savedMark.frame.ptsUs + offsetUs } };
-        const button = document.createElement('button'); button.className = 'mark-entry';
-        identifyMark(button, mark.id); bindMarkHover(button, mark.id);
+        const { row, entry: button } = markRow(mark, slot);
         button.setAttribute('aria-label', `轨道 ${slot} 标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
         button.setAttribute('aria-haspopup', expanded ? 'false' : 'dialog');
         button.setAttribute('aria-controls', preview.id);
@@ -126,8 +135,7 @@ export function installAnnotationPanel(
           if (!expanded && event.key === 'ArrowUp') { event.preventDefault(); showPreview(button, mark, slot); preview.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus(); }
         };
         button.ondblclick = () => { if (mark.frame.ptsUs >= 0) { hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); } };
-        const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
-        button.append(markContent(mark, slot, actions(mark, slot, row))); row.append(button); list.append(row);
+        list.append(row);
       }
       list.scrollLeft = scrollLeft;
     },

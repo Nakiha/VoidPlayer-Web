@@ -71,8 +71,8 @@ try {
   assert.match(await page.locator('#library-root').innerText(),/最近使用/);
   assert.equal(await page.locator('#source-search').inputValue(),'最近搜索');
   assert.equal((await page.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources.search,'');
-  await page.reload(); await page.locator('[data-start-tab=recent]').click();
-  await page.locator('#start-library-list').getByRole('button', { name: '添加到视图：实验一/clip-069.mp4', exact: true }).waitFor();
+  await page.reload();
+  await page.locator('#start-library-list').getByRole('button', { name: '打开：实验一/clip-069.mp4', exact: true }).waitFor();
   await page.locator('#toggle-sources').click(); await choose('项目归档');
   await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
   await choose('全部媒体'); await openSearch(); await page.locator('#source-search').fill('deep');

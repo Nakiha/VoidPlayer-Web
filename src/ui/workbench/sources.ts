@@ -9,6 +9,7 @@ import type { LibraryEntry } from '../../library.ts';
 import { referenceVersion } from '../../media-reference.ts';
 import { openMedia } from '../../media.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
+import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse } from '../source-catalog.ts';
 import type { SourceItem } from '../source-catalog.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
@@ -23,7 +24,6 @@ const text = (tag: string, value: string, className = '') => {
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
   const save = () => shared.save();
-  let startTab = 'available';
   let libraryStatus = '';
   let refreshing: Promise<void> | undefined;
   let libraryChecked = false;
@@ -176,10 +176,32 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   function renderStartLibrary() {
-    const list = $('start-library-list'); list.replaceChildren();
-    const items = startTab === 'recent' ? catalog.recent() : catalog.available();
-    for (const item of items.slice(0, 8)) list.append(sourceRow(item));
-    $('start-library-status').textContent = items.length ? '' : libraryStatus || (startTab === 'recent' ? '暂无最近片源' : '添加文件以开始对比');
+    const list = $('start-library-list');
+    if (!list) return;
+    list.replaceChildren();
+    const items = catalog.recent().slice(0, 5);
+    for (const item of items) {
+      const row = document.createElement('button');
+      row.className = 'start-recent-row';
+      row.setAttribute('aria-label', `打开：${item.name}`);
+      const { base } = sourceDisplayName(item.name);
+      const name = text('span', base, 'filename');
+      const meta = text('span', `${sizeText(item.size)} · ${item.library ? '媒体库' : '本地文件'}`, 'source-meta');
+      const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
+      const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
+      row.append(info, go);
+      row.dataset.tooltip = item.name;
+      row.onclick = () => {
+        if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
+        const tracks = session.getState().tracks;
+        const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
+        if (empty) void load(item, empty);
+        else shared.setPanel('sources', true);
+      };
+      list.append(row);
+    }
+    const status = $('start-library-status');
+    if (status) status.textContent = items.length ? '' : (libraryStatus || '暂无最近片源，可从右侧媒体库或本地文件开始');
   }
 
   function renderSources() {
@@ -255,6 +277,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       syncActions(localList, local);
     }
     renderStartLibrary();
+    scrollbar.update();
   }
 
   /** Remember freshly loaded tracks; called from the core render path. */
@@ -323,13 +346,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
     else toggle.focus();
   }
 
+  const scrollbar = installSourceScrollbar($('source-list'), $('source-scrollbar'), $('source-scrollbar-thumb'), lifecyle.signal);
   function wireSourceControls() {
-    $('start-library-more').onclick = () => shared.setPanel('sources', true);
-    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-start-tab]')) button.onclick = () => {
-      startTab = button.dataset.startTab!;
-      for (const tab of document.querySelectorAll<HTMLElement>('[data-start-tab]')) tab.setAttribute('aria-pressed', String(tab.dataset.startTab === startTab));
-      renderStartLibrary();
-    };
+    const more = $('start-library-more');
+    if (more) more.onclick = () => shared.setPanel('sources', true);
     $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
     $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
     $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));

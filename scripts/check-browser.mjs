@@ -223,9 +223,8 @@ try {
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1);
     assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.source.id)), [entries[1].id]);
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
-    await page.locator('[data-start-tab="recent"]').click();
-    await page.waitForFunction(() => document.querySelectorAll('#start-library-list .source-row').length === 2);
-    const rows = await page.locator('#start-library-list .source-row').allTextContents();
+    await page.waitForFunction(() => document.querySelectorAll('#start-library-list .start-recent-row').length === 2);
+    const rows = await page.locator('#start-library-list .start-recent-row').allTextContents();
     assert.ok(entries.every(entry => rows.some(text => text.includes(entry.root))));
   });
   await check('canvas grid repaints for system theme changes without geometry changes', async page => {
