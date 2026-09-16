@@ -1,3 +1,5 @@
+import { icon } from './icons.ts';
+
 export type ToastKind = 'info' | 'error';
 
 export type ToastAction = { label: string; onClick: () => void };
@@ -55,9 +57,9 @@ export function installToasts(signal?: AbortSignal) {
     }
     const close = document.createElement('button');
     close.type = 'button';
-    close.className = 'toast-close icon-button';
+    close.className = 'toast-close icon-button remove-track';
     close.setAttribute('aria-label', '关闭通知');
-    close.textContent = '×';
+    close.innerHTML = icon('close');
     close.onclick = () => dismiss(el, timer);
     el.append(close);
     // Fast enter: mount hidden, then release in the next frame.
