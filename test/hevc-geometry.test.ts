@@ -110,6 +110,23 @@ test('coded mismatch still falls back instead of relabeling', () => {
   const { frame } = mockFrame([1280, 736], [0, 0, 1280, 720], [1280, 720]);
   assert.throws(() => verifyHevcFrame(frame, parseHevcSpsGeometry(sps())), /编码尺寸/);
 });
+test('browser pre-cropped resource keeps WebCodecs when visible matches SPS', () => {
+  // WebKit reports the resource already cropped to the conformance window
+  // (coded=visible=320×180 for SPS coded 320×192): every expected pixel is
+  // present, so native decoding stays instead of falling back to software.
+  const geometry = { codedWidth: 320, codedHeight: 192, x: 0, y: 0, width: 320, height: 180, sarNum: 1, sarDen: 1 };
+  const { frame, wasClosed } = mockFrame([320, 180], [0, 0, 320, 180], [320, 180]);
+  const events: Record<string, unknown>[] = [];
+  assert.equal(verifyHevcFrame(frame, geometry, e => events.push(e)), frame as unknown as VideoFrame);
+  assert.equal(wasClosed(), false);
+  assert.equal(events.length, 1); assert.equal(events[0].reason, 'hevc-coded-size-pre-cropped');
+  assert.deepEqual(events[0].spsCoded, [320, 192]); assert.deepEqual(events[0].coded, [320, 180]);
+});
+test('pre-cropped size with shifted visible rect still falls back', () => {
+  const geometry = { codedWidth: 320, codedHeight: 192, x: 0, y: 0, width: 320, height: 180, sarNum: 1, sarDen: 1 };
+  const { frame } = mockFrame([320, 180], [0, 4, 320, 176], [320, 176]);
+  assert.throws(() => verifyHevcFrame(frame, geometry), /编码尺寸/);
+});
 test('correct visible rect with wrong display only fixes aspect', () => {
   const restore = installVideoFrameMock();
   try {
