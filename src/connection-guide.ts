@@ -1,3 +1,4 @@
+import './themes/accessibility.css';
 import './connection-guide.css';
 import { connectionTarget, probeHttps, type ConnectionInfo } from './connection.ts';
 import { observeTheme } from './ui/theme.ts';

@@ -3,9 +3,8 @@ import { installAnnotationAdmin } from './annotations.ts';
 import { emptyState } from './presentation.ts';
 import { installCaches } from './caches.ts';
 import { randomUUID } from '../uuid.ts';
-import '../themes/silver-glass.css';
-import '../themes/dark.css';
-import '../themes/accents.css';
+// Theme palettes load via render-blocking links in admin/index.html (same as the
+// player entry); feature styles load here in cascade order.
 import '../themes/accessibility.css';
 import '../style.css';
 import './style.css';

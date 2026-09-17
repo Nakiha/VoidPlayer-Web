@@ -15,9 +15,11 @@ import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
+// Feature styles in cascade order: accessibility overrides, component layout,
+// then the settings window (scoped so it never depends on import position).
 import './themes/accessibility.css';
 import './style.css';
-import './themes/settings.css';
+import './ui/settings.css';
 import { shell } from './ui/shell.ts';
 import { icon } from './ui/icons.ts';
 import { installWorkbench } from './ui/workbench.ts';

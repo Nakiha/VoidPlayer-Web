@@ -1,5 +1,7 @@
-/* Reading surfaces stay opaque. Use tonal grouping, not nested frames or glass. */
-dialog { background: var(--surface-panel); border: 0; }
+/* Reading surfaces stay opaque. Use tonal grouping, not nested frames or glass.
+   Scoped to .settings-window so the generic dialog material in style.css keeps
+   working regardless of import order. */
+dialog.settings-window { background: var(--surface-panel); border: 0; }
 .settings-window { width: min(780px, calc(100vw - 32px)); height: min(560px, calc(100dvh - 48px)); max-height: none; padding: 0; overflow: hidden; }
 .settings-window[open] { animation: settings-enter 180ms cubic-bezier(.2, .8, .2, 1) both; }
 .settings-window[open]::backdrop { animation: settings-backdrop-enter 180ms ease-out both; }

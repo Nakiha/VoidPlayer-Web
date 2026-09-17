@@ -1,4 +1,6 @@
-@import './themes/accessibility.css';
+/* Connection guide: base palettes come from the render-blocking theme links in
+   index.html plus themes/accessibility.css imported by connection-guide.ts.
+   Keep all rules scoped under .connection-page/.connection-guide. */
 
 /* This entry page uses the player's Silver Glass palette. Keep certificate
    readiness neutral: it does not mean the client has trusted the certificate. */
