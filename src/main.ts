@@ -59,7 +59,12 @@ let savedColorMode:'reference'|'browser'='browser';
 try{if(localStorage.getItem('voidplayer.color-mode')==='reference')savedColorMode='reference';}catch{}
 // Explicit diagnostic URLs retain their original backend-selection semantics.
 if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(savedColorMode);
-await initializeGpuPresentation(Object.values(canvases));
+// GPU warmup runs after first paint: early frames use the canvas path, surface
+// creation failures already fall back inside initializeGpuPresentation, and
+// color policy (set above) is only read lazily at decode time.
+void initializeGpuPresentation(Object.values(canvases)).catch(error => {
+  log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
+});
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
@@ -456,6 +461,10 @@ if (annotationLink.has('annotation')) void act(async () => {
 
 import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
+// First frame is rendered and handlers are wired; only GPU warmup (background)
+// and the annotation deep-link restore (already async) are still outstanding,
+// so bootstrap can reveal without waiting for them.
+window.dispatchEvent(new Event('voidplayer:shell-ready'));
 
 $('benchmark').addEventListener('click', () => {
   void act(async () => {

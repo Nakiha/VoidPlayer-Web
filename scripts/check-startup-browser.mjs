@@ -42,11 +42,12 @@ try {
       });
       await page.goto(base);
       await page.waitForFunction(() => !!document.querySelector('#settings-open'));
-      assert.equal(await page.locator('#app').evaluate(el => getComputedStyle(el).visibility), 'hidden');
-      assert.equal(await page.locator('#app').evaluate(el => el.inert), true);
-      assert.equal(await page.locator('html').evaluate(el => getComputedStyle(el).backgroundColor), theme === 'dark' ? 'rgb(32, 33, 37)' : 'rgb(245, 245, 247)');
-      await page.evaluate(() => window.releaseStartupGpu());
+      assert.equal(await page.locator('html').evaluate(el => getComputedStyle(el).backgroundColor), theme === 'dark' ? 'rgb(33, 33, 33)' : 'rgb(245, 245, 247)');
+      // Shell-first reveal: the app is visible while GPU warmup is still gated.
       await page.waitForFunction(() => !document.querySelector('#app').hasAttribute('data-initializing'));
+      assert.notEqual(await page.locator('#app').evaluate(el => getComputedStyle(el).visibility), 'hidden');
+      assert.equal(await page.locator('#app').evaluate(el => el.inert), false);
+      await page.evaluate(() => window.releaseStartupGpu());
       await page.waitForFunction(() => window.startupFrames.length > 2);
       assert.ok((await page.evaluate(() => window.startupFrames)).every(frame => frame.ready && frame.single && !frame.inert));
       assert.deepEqual(errors, []);
@@ -66,7 +67,7 @@ try {
     await failed.locator('#settings-open').waitFor();
     await failed.close();
     await browser.close(); browser = undefined;
-    console.log(`PASS ${name}: early theme, delayed initialization, complete first UI frame, visible failure and retry`);
+    console.log(`PASS ${name}: early theme, shell-first reveal, background GPU warmup, complete first UI frame, visible failure and retry`);
   }
 } finally {
   await browser?.close(); await web?.close(); await service?.close();
