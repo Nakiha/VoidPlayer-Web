@@ -58,7 +58,7 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       outstanding = Math.max(0, outstanding - 1);
       if (error) { frame.close(); notify?.(); return; }
       try {
-        if (geometry) frame = verifyHevcFrame(frame, geometry);
+        if (geometry) frame = verifyHevcFrame(frame, geometry, diagnostic);
       }
       catch (e) { frame.close(); error = packetDecodeError(e, '浏览器输出校验'); notify?.(); return; }
       // Restore logical time in the frame envelope, not by cloning/relabeling
