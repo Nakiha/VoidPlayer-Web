@@ -1,11 +1,11 @@
 import type { MediaInfo, Mark, FrameInfo, Slot } from '../model.ts';
 
-export type Panel = 'inspector' | 'subtracks' | 'sources';
+export type Panel = 'inspector' | 'subtracks' | 'sources' | 'analysis';
 export type ReviewTrack = MediaInfo & { slot: Slot; frame: FrameInfo | null; offsetUs?:number };
 
 /** UI-only selection never replaces a media source or changes playback. */
 export class WorkspaceState {
-  panels: Record<Panel, boolean> = { inspector: false, subtracks: false, sources: false };
+  panels: Record<Panel, boolean> = { inspector: false, subtracks: false, sources: false, analysis: false };
   selected: Slot = 'A';
   setPanel(panel: Panel, open: boolean, _width = Infinity) {
     this.panels[panel] = open;

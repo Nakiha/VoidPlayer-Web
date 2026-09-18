@@ -38,9 +38,10 @@ select { max-width: 100%; }
 .segmented button[aria-pressed=true] { color: var(--accent); background: var(--segment-selected-fill); box-shadow: var(--control-shadow); }
 .view-controls select { border: var(--control-border-width) solid var(--border); background: transparent; font-size: var(--text-sm); max-width: 106px; }
 
-.workspace { --left: 0px; --right: 0px; --bottom: 0px; flex: 1; min-height: 0; display: grid; position: relative; grid-template-columns: var(--left) minmax(0,1fr) var(--right); grid-template-rows: minmax(0,1fr) var(--bottom); grid-template-areas: 'inspector comparison sources' 'subtracks subtracks subtracks'; }
+.workspace { --left: 0px; --right: 0px; --top: 0px; --bottom: 0px; flex: 1; min-height: 0; display: grid; position: relative; grid-template-columns: var(--left) minmax(0,1fr) var(--right); grid-template-rows: var(--top) minmax(0,1fr) var(--bottom); grid-template-areas: 'analysis analysis analysis' 'inspector comparison sources' 'subtracks subtracks subtracks'; }
 .workspace.has-inspector { --left: var(--inspector-user-width, var(--inspector-width)); }
 .workspace.has-sources { --right: var(--sources-user-width, var(--sources-width)); }
+.workspace.has-analysis { --top: max(0px, calc(var(--analysis-height, var(--analysis-default-height)) - var(--analysis-push-space, 0px))); }
 .workspace.has-subtracks { --bottom: var(--dock-height, var(--dock-default-height)); }
 .comparison { grid-area: comparison; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .screens { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(var(--view-columns, 2), minmax(0,1fr)); grid-template-rows: repeat(var(--view-rows, 1), minmax(0,1fr)); background: var(--viewport-background); position: relative; overflow: hidden; }
@@ -461,7 +462,7 @@ button.icon-button[aria-pressed=true] {
 /* Panel motion: fixed-size cards slide behind the workspace edge; layout space follows separately. */
 .workspace { overflow: clip; }
 .workspace.panel-motion:not(.panel-dragging) { transition: grid-template-columns var(--panel-motion-duration) var(--panel-motion-easing), grid-template-rows var(--panel-motion-duration) var(--panel-motion-easing); }
-.side-panel { position: absolute; grid-area: 1 / 1 / 2 / -1; top: 0; bottom: 0; z-index: 6; transform: translateX(var(--panel-push, 0px)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
+.side-panel { position: absolute; grid-area: 2 / 1 / 3 / -1; top: 0; bottom: 0; z-index: 6; transform: translateX(var(--panel-push, 0px)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
 .inspector-panel { left: 0; right: auto; width: var(--inspector-user-width, var(--inspector-width)); }
 .sources-panel { right: 0; left: auto; width: var(--sources-user-width, var(--sources-width)); }
 .inspector-panel.panel-closed { transform: translateX(-100%); opacity: 0; }
@@ -471,7 +472,7 @@ button.icon-button[aria-pressed=true] {
 .side-panel.panel-pushing::after { transition: none; }
 .side-panel.panel-closed::after { opacity: 1; }
 .side-resize.collapse-ready::after { background: var(--accent); }
-.subtracks-panel { position: absolute; grid-area: 2 / 1 / 3 / -1; top: 0; left: 0; right: 0; height: var(--dock-height, var(--dock-default-height)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
+.subtracks-panel { position: absolute; grid-area: 3 / 1 / 4 / -1; top: 0; left: 0; right: 0; height: var(--dock-height, var(--dock-default-height)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
 .subtracks-panel.panel-closed { transform: translateY(100%); opacity: 0; }
 .panel-closed { pointer-events: none; }
 
@@ -491,7 +492,21 @@ button.icon-button[aria-pressed=true] {
 .workspace.has-inspector { --left: max(0px, calc(var(--inspector-user-width, var(--inspector-width)) - var(--inspector-push-space, 0px))); }
 .workspace.has-sources { --right: max(0px, calc(var(--sources-user-width, var(--sources-width)) - var(--sources-push-space, 0px))); }
 .workspace.has-subtracks { --bottom: max(0px, calc(var(--dock-height, var(--dock-default-height)) - var(--dock-push-space, 0px))); }
-.subtracks-panel { grid-area: 1 / 1 / 3 / -1; top: auto; bottom: 0; }
+.subtracks-panel { grid-area: 2 / 1 / 4 / -1; top: auto; bottom: 0; }
+
+/* Top analysis panel: same push-to-close motion contract as the bottom dock. */
+.analysis-panel { position: absolute; grid-area: 1 / 1 / 2 / -1; top: 0; left: 0; right: 0; height: var(--analysis-height, var(--analysis-default-height)); transform: translateY(var(--panel-push, 0px)); transition: transform var(--panel-motion-duration) var(--panel-motion-easing), opacity var(--panel-motion-duration) var(--panel-motion-easing); }
+.analysis-panel.panel-closed { transform: translateY(-100%); opacity: 0; }
+.analysis-panel.panel-pushing { transition: none; }
+.analysis-panel::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: var(--panel-dismiss-veil); opacity: var(--panel-veil-opacity, 0); z-index: 10; transition: opacity var(--panel-motion-duration) var(--panel-motion-easing); }
+.analysis-panel.panel-closed::after { opacity: 1; }
+.analysis-panel.panel-pushing::after { transition: none; }
+
+/* Height handle on the panel's bottom edge; mirrors .dock-resize. */
+.analysis-resize { position: absolute; bottom: calc(var(--panel-resize-hit-width) / -2); left: 0; right: 0; height: var(--panel-resize-hit-width); cursor: row-resize; touch-action: none; z-index: 5; }
+.analysis-resize:hover { background: transparent; }
+.analysis-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; }
+.analysis-resize:hover::after, .analysis-resize.resizing::after { background: var(--accent); }
 .track-identity { padding-inline: var(--control-gap); touch-action: none; user-select: none; }
 .choice-trigger { display: inline-flex; align-items: center; gap: var(--control-gap); padding-inline: var(--control-gap); background: transparent; white-space: nowrap; font-size: var(--text-sm); }
 .choice-trigger > .icon:last-child { width: 12px; }

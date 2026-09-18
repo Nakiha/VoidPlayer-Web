@@ -26,7 +26,7 @@ export function installPanelMotion(workspace: HTMLElement, signal: AbortSignal) 
     if (!open && wasHidden) { el.classList.add('panel-closed'); return; }
     // Exit at the current fixed size, even if preferred width is restored after a push-to-close.
     if (!open) {
-      if (panel === 'subtracks') el.style.height = `${el.getBoundingClientRect().height}px`;
+      if (panel === 'subtracks' || panel === 'analysis') el.style.height = `${el.getBoundingClientRect().height}px`;
       else el.style.width = `${el.getBoundingClientRect().width}px`;
     } else {
       el.style.removeProperty('width'); el.style.removeProperty('height');

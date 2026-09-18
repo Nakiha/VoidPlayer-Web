@@ -13,6 +13,7 @@ import type { PreparedFlv } from './flv-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import { contextLog } from './log.ts';
 import type { MediaInfo } from './model.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult } from './analysis/types.ts';
 
 export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
@@ -147,6 +148,44 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     };
     const source: MediaSource = {
       info, ensureIndexed,
+      getAnalysisCapability(): AnalysisCapability {
+        return {
+          hasSize: true, hasDts: true, keySource: 'container',
+          pictureType: 'key-only', qp: 'unsupported',
+          indexState: info.indexState ?? 'complete',
+          ...(info.indexError ? { indexError: info.indexError } : {}),
+          ...(info.indexState === 'building' ? { note: '后台索引构建中，数值为暂定。' } : {}),
+        };
+      },
+      async queryAnalysis(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult> {
+        if (disposed) throw new Error('媒体已释放。');
+        if (query.signal?.aborted) throw query.signal.reason;
+        const complete = (info.indexState ?? 'complete') === 'complete';
+        const call = activeRpc.call<AnalysisResult>('analysis', {
+          mediaId: info.id, axis: query.axis, startUs: query.startUs, endUs: query.endUs,
+          pixelWidth: query.pixelWidth, bitrateWindowUs: query.bitrateWindowUs,
+          maxSamples: query.maxSamples ?? 5000,
+          firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
+          coverageUs: complete ? { start: 0, end: info.durationUs } : null,
+        }, [], 60000);
+        const result = query.signal
+          ? await Promise.race([call, new Promise<never>((_, reject) => {
+            query.signal!.addEventListener('abort', () => reject(query.signal!.reason), { once: true });
+          })])
+          : await call;
+        // 身份与能力以主线程视图为准；旧异步结果由调用方按 requestId 丢弃。
+        return {
+          ...result,
+          requestId: query.requestId,
+          origin: { firstPtsUs: info.firstPtsUs, offsetUs: 0 },
+          capability: {
+            ...result.capability,
+            indexState: (info.indexState ?? 'complete') as AnalysisCapability['indexState'],
+            ...(info.indexError ? { indexError: info.indexError } : {}),
+          },
+          coverageUs: complete ? { start: 0, end: info.durationUs } : null,
+        };
+      },
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){
         if(count<=0)return [];

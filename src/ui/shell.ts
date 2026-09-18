@@ -5,7 +5,7 @@ import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import type { Slot } from '../model.ts';
 
-const panelButton = (id: string, label: string, glyph: 'sidebar' | 'rows', extra = '') =>
+const panelButton = (id: string, label: string, glyph: 'sidebar' | 'rows' | 'chart', extra = '') =>
   iconButton({ glyph, label, iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
 
 export function shell() {
@@ -23,7 +23,7 @@ export function shell() {
     <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
     <div class="panel-switches" role="group" aria-label="工作区功能">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
-      ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}
+      ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}${panelButton('analysis', '码流分析', 'chart')}
     </div>
     <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
   </header>
@@ -35,6 +35,9 @@ export function shell() {
         <div id="track-selector" class="track-selector" role="group" aria-label="选择检查轨道"></div>
         <div id="track-properties" class="track-properties"></div>
       </aside>
+      <section id="analysis-panel" class="analysis-panel" aria-label="码流分析" hidden>
+        <div id="analysis-resize" class="analysis-resize" role="separator" tabindex="0" aria-label="调整码流分析高度" aria-orientation="horizontal" aria-valuemin="140" aria-valuemax="420" aria-valuenow="220"></div>
+      </section>
       <section class="comparison" aria-label="视频对比">
         <div class="viewport-surface"><div class="screens">${SLOTS.map(slot => `
           <article class="video-card" data-slot="${slot}"><div class="card-heading" data-track-drag="${slot}">

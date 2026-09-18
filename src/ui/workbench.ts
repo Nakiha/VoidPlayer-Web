@@ -6,6 +6,7 @@ import { installPanelResize } from './panel-resize.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../model.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
+import { installAnalysisPanel } from './analysis-panel.ts';
 import { WorkspaceState } from './workspace-state.ts';
 import type { Panel } from './workspace-state.ts';
 import { SourceCatalog } from './source-catalog.ts';
@@ -49,6 +50,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const tracks = createTracksPane(shared);
   const sources = createSourcesPane(shared);
   sources.wireSourceControls();
+  const analysis = installAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis });
 
   function select(slot: Slot) {
     view.selected = slot;
@@ -56,13 +58,14 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     render(session.getState());
   }
   function syncPanels() {
-    for (const panel of ['inspector', 'subtracks', 'sources'] as Panel[]) {
+    for (const panel of ['inspector', 'subtracks', 'sources', 'analysis'] as Panel[]) {
       const open = view.panels[panel];
       panelMotion.set(panel, open);
       $(`toggle-${panel}`).setAttribute('aria-expanded', String(open));
-      $(`toggle-${panel}`).title = `${open ? '收起' : '展开'}${{ inspector: '轨道检查', subtracks: '子轨道', sources: '片源' }[panel]}`;
+      $(`toggle-${panel}`).title = `${open ? '收起' : '展开'}${{ inspector: '轨道检查', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
 
     }
+    analysis.setOpen(view.panels.analysis);
   }
   function setPanel(panel: Panel, open: boolean) {
     view.setPanel(panel, open, window.innerWidth);
@@ -75,7 +78,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       sources.ensureLibrary();
     }
   }
-  for (const panel of ['inspector', 'subtracks', 'sources'] as Panel[]) {
+  for (const panel of ['inspector', 'subtracks', 'sources', 'analysis'] as Panel[]) {
     $(`toggle-${panel}`).onclick = () => setPanel(panel, !view.panels[panel]);
   }
   for (const button of document.querySelectorAll<HTMLButtonElement>('[data-close-panel]')) {
@@ -127,9 +130,42 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     preview(push, veil) { workspace.style.setProperty('--dock-push-space', `${push}px`); dock.style.setProperty('--panel-push', `${push}px`); dock.style.setProperty('--panel-veil-opacity', String(veil)); },
     collapse() { setPanel('subtracks', false); $('toggle-subtracks').focus(); },
   }, lifecyle.signal);
+  // 顶部码流分析面板：与底部子轨道同一套高度手势（下拉放大、上推过阈值收起）。
+  const analysisPanel = $('analysis-panel');
+  const analysisResizer = $('analysis-resize');
+  const ANALYSIS_HEIGHT_KEY = 'voidplayer.analysis-height.v1';
+  const analysisDefaultHeight = () => Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--analysis-default-height')) || 220;
+  let analysisHeight = analysisDefaultHeight();
+  try {
+    const savedRaw = localStorage.getItem(ANALYSIS_HEIGHT_KEY);
+    const savedHeight = savedRaw == null ? NaN : Number(JSON.parse(savedRaw));
+    if (Number.isFinite(savedHeight) && (savedHeight as number) > 0) analysisHeight = savedHeight as number;
+  } catch { /* 高度偏好缺失时用主题默认值。 */ }
+  const analysisBounds = () => {
+    const max = Math.round(Math.min(420, window.innerHeight * .55));
+    return { min: Math.min(140, max), max };
+  };
+  const applyAnalysisHeight = (value: number) => {
+    const { min, max } = analysisBounds();
+    analysisHeight = Math.round(Math.max(min, Math.min(max, value)));
+    workspace.style.setProperty('--analysis-height', `${analysisHeight}px`);
+    analysisResizer.setAttribute('aria-valuemin', String(min)); analysisResizer.setAttribute('aria-valuemax', String(max));
+    analysisResizer.setAttribute('aria-valuenow', String(analysisHeight)); analysisResizer.setAttribute('aria-valuetext', `${analysisHeight} 像素`);
+    try { localStorage.setItem(ANALYSIS_HEIGHT_KEY, JSON.stringify(analysisHeight)); } catch { /* 高度偏好可选。 */ }
+  };
+  installResizeGesture(analysisResizer, {
+    axis: 'y', direction: 1, size: () => analysisHeight, bounds: analysisBounds, resize: applyAnalysisHeight,
+    threshold: () => Number.parseFloat(getComputedStyle(workspace).getPropertyValue('--panel-collapse-distance')),
+    reset: analysisDefaultHeight,
+    dragging(active) { workspace.classList.toggle('panel-dragging', active); analysisPanel.classList.toggle('panel-pushing', active); if (!active) animatePanelLayout(workspace); },
+    preview(push, veil) { workspace.style.setProperty('--analysis-push-space', `${-push}px`); analysisPanel.style.setProperty('--panel-push', `${push}px`); analysisPanel.style.setProperty('--panel-veil-opacity', String(veil)); },
+    collapse() { setPanel('analysis', false); $('toggle-analysis').focus(); },
+  }, lifecyle.signal);
   window.addEventListener('resize', () => {
     resize(dockHeight);
+    applyAnalysisHeight(analysisHeight);
   }, { signal: lifecyle.signal });
+  applyAnalysisHeight(analysisHeight);
   resize(dockHeight); syncPanels();
   void sources.refreshLibrary();
   return {
@@ -137,7 +173,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     rememberFile(file: File) { sources.rememberFile(file); },
     getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout() }),
     async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
-      view.panels = { ...layout.panels }; view.selected = layout.selected;
+      view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
       const sourcesState = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };

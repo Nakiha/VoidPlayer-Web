@@ -5,7 +5,7 @@ import { Viewport } from './viewport.ts';
 import type { ViewportSnapshot } from './viewport.ts';
 
 export type WorkspaceLayout = {
-  panels: { inspector: boolean; subtracks: boolean; sources: boolean };
+  panels: { inspector: boolean; subtracks: boolean; sources: boolean; analysis?: boolean };
   selected: Slot; dockHeight: number; marksExpanded: boolean;
   filenameWidth?: number; marksWidth?: number;
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
@@ -84,7 +84,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   let layout: WorkspaceLayout | undefined;
   if (d.layout) {
     const l = object(d.layout), p = object(l.panels);
-    layout = { panels: { inspector: boolean(p.inspector), subtracks: boolean(p.subtracks), sources: boolean(p.sources) }, selected: slotValue(l.selected), dockHeight: timeUs(l.dockHeight), marksExpanded: boolean(l.marksExpanded) };
+    layout = { panels: { inspector: boolean(p.inspector), subtracks: boolean(p.subtracks), sources: boolean(p.sources), ...(p.analysis === undefined ? {} : { analysis: boolean(p.analysis) }) }, selected: slotValue(l.selected), dockHeight: timeUs(l.dockHeight), marksExpanded: boolean(l.marksExpanded) };
     for (const key of ['filenameWidth', 'marksWidth'] as const) if (l[key] !== undefined) layout[key] = timeUs(l[key]);
     if (l.sources !== undefined) {
       const s = object(l.sources);

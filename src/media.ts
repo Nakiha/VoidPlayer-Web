@@ -2,6 +2,7 @@ import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { getColorMode,getReferenceDecode } from './color-mode.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfoChange } from './media-state.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult } from './analysis/types.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { hevcDisplayOrder } from './hevc-timeline.ts';
@@ -18,6 +19,7 @@ import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
+import { NativeAnalysisAdapter } from './analysis/native-adapter.ts';
 import type { MediaInfo, FrameInfo } from './model.ts';
 import { openFFmpegMedia, openFFmpegMediaFromUrl } from './ffmpeg-media.ts';
 import { contextLog } from './log.ts';
@@ -51,6 +53,13 @@ export interface MediaSource {
   framesFrom(ptsUs: number): AsyncGenerator<DecodedFrame>;
   /** Continue after an already displayed frame without re-decoding its GOP. */
   framesFollowing?(ptsUs: number): AsyncGenerator<DecodedFrame>;
+  /**
+   * 可选的只读码流分析查询（顶部分析面板与 Agent 共用）。返回压缩样本
+   * 负载统计，不解码、不 seek；缺失能力时方法不存在，调用方显示
+   * pending/unsupported，不伪造数据。
+   */
+  getAnalysisCapability?(): AnalysisCapability;
+  queryAnalysis?(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult>;
   dispose(): void;
 }
 export async function inspectVideoTrack(input: Input) {
@@ -284,8 +293,14 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     let disposed = false;
     const iterators = new Set<AsyncGenerator<VideoSample>>();
     const samples = (time: number) => { const iterator = sink.samples(time); iterators.add(iterator); return iterator; };
-    return {
+    // 只读分析用独立包游标懒枚举，不干扰播放；面板从未打开则不产生额外 IO。
+    // 枚举进展经 onInfoChange 触发会话 emit，面板据此重查（只读，不重扫）。
+    let analysisNotify: (() => void) | undefined;
+    const analysis = new NativeAnalysisAdapter(track, info.id, info.firstPtsUs, info.durationUs, () => analysisNotify?.());
+    const source: MediaSource = {
       info,
+      getAnalysisCapability: () => analysis.getCapability(),
+      queryAnalysis: query => analysis.query(query),
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
@@ -329,12 +344,15 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       },
       dispose: () => {
         if (disposed) return; disposed = true;yuvPool.dispose();
+        analysis.close();
         // Return the sink iterators directly, even if an outer queue is waiting
         // on next(). This wakes the sink pump so its finally closes the decoder.
         for (const iterator of iterators) void iterator.return(undefined).catch(() => {});
         iterators.clear(); primed?.close(); primed = null; input.dispose();
       },
     };
+    analysisNotify = () => source.onInfoChange?.();
+    return source;
   } catch (error) { primed?.close(); input.dispose(); loadAborted(signal); throw error; }
   finally { detachAbort(); }
 }

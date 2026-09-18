@@ -34,6 +34,8 @@ export class FlvEngine {
     if (this.indexingFailure) throw this.indexingFailure;
   };
   private wake() { for (const resolve of this.waiters) resolve(); this.waiters.clear(); }
+  /** 后台索引是否已完整；分析面板据此区分确定值与暂定值。 */
+  get indexComplete(): boolean { return !!this.checkpoint?.complete; }
   private publishIndex(checkpoint: FlvCheckpoint) {
     this.checkpoint = checkpoint; this.index = checkpoint.index;
     this.timeline?.appendIndex(this.index);

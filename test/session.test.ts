@@ -145,7 +145,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
@@ -162,6 +162,16 @@ test('WebMCP tool contracts validate inputs and use the same session state', asy
   await get('step_review').execute({ direction: 1 });
   assert.throws(() => get('step_review').execute({ slot: 'A', direction: 1 }));
   assert.equal((get('export_review').execute({}) as { version: number }).version, 1);
+  assert.equal(get('query_analysis').annotations.readOnlyHint, true);
+  assert.equal(get('get_analysis_capabilities').annotations.readOnlyHint, true);
+  const caps = get('get_analysis_capabilities').execute({}) as { slot: string; capability: { hasSize: boolean } }[];
+  assert.equal(caps.length, 1);
+  assert.equal(caps[0].slot, 'A');
+  assert.equal(caps[0].capability.hasSize, false); // mock 源无分析能力，明确 unsupported
+  await assert.rejects(get('query_analysis').execute({ slot: 'A', startUs: 0, endUs: 1000 }) as Promise<unknown>, /暂不支持/);
+  for (const input of [{ slot: 'A', startUs: 0.5, endUs: 10 }, { slot: 'Z', startUs: 0, endUs: 10 }, { slot: 'A', startUs: 0 }]) {
+    assert.throws(() => get('query_analysis').execute(input));
+  }
   await session.dispose();
 });
 

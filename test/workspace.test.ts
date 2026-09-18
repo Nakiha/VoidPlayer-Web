@@ -11,9 +11,10 @@ const track: ReviewTrack = { id: 'new', slot: 'A', name: 'clip.mp4', size: 10, l
 
 test('clean default and independent panel selection do not lose the active inspection track', () => {
   const state = new WorkspaceState();
-  assert.deepEqual(state.panels, { inspector: false, subtracks: false, sources: false });
+  assert.deepEqual(state.panels, { inspector: false, subtracks: false, sources: false, analysis: false });
   state.selected = 'B';
   state.setPanel('inspector', true, 1440); state.setPanel('subtracks', true, 1440); state.setPanel('sources', true, 1440);
+  state.setPanel('analysis', true, 1440);
   assert.ok(Object.values(state.panels).every(Boolean));
   state.setPanel('inspector', false); state.setPanel('inspector', true);
   assert.equal(state.selected, 'B');
@@ -22,7 +23,8 @@ test('clean default and independent panel selection do not lose the active inspe
 test('narrow layout retains both independently opened side panels and the dock', () => {
   const state = new WorkspaceState(); state.setPanel('subtracks', true, 700);
   state.setPanel('inspector', true, 700); state.setPanel('sources', true, 700);
-  assert.deepEqual(state.panels, { inspector: true, sources: true, subtracks: true });
+  state.setPanel('analysis', true, 700);
+  assert.deepEqual(state.panels, { inspector: true, sources: true, subtracks: true, analysis: true });
 });
 test('marks are anchored to media identity, not a reusable A/B slot', () => {
   const make = (id: string, mediaId: string, ptsUs: number) => ({ id, mediaId, slot: 'A', frame: { ptsUs } }) as Mark;

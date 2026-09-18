@@ -73,6 +73,8 @@ export class Mp4Engine {
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}
   }
+  /** 只读分析查询共用：返回 demux 包表，不转移底层缓冲。 */
+  get analysisIndex(): FlvIndex | undefined { return (this as unknown as { index?: FlvIndex }).index; }
   async at(pts:number,recycle?:ArrayBuffer){
     if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return f;}
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);

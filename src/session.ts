@@ -12,6 +12,7 @@ import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
+import type { AnalysisQuery, AnalysisResult, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -168,6 +169,75 @@ export class ReviewSession {
     log.info('session', '调整轨道顺序', { order });
     this.emit();
     return this.getState();
+  }
+  /**
+   * 码流分析的轻量能力快照（UI 与 Agent 共用）。完整样本/桶数组永远不进
+   * getState（structuredClone 全量复制），只走 queryAnalysis 按需范围查询。
+   */
+  getAnalysisCapabilities(): AnalysisStatus[] {
+    return [...this.tracks].map(([slot, t]) => ({
+      slot,
+      mediaId: t.source.info.id,
+      capability: t.source.getAnalysisCapability?.() ?? {
+        hasSize: false, hasDts: false, keySource: 'unavailable' as const,
+        pictureType: 'unavailable' as const, qp: 'unsupported' as const,
+        indexState: 'complete' as const, note: '该解码路径暂不支持码流分析。',
+      },
+    }));
+  }
+  private analysisSeq = 0;
+  /**
+   * 会话时间区间的只读分析查询：转为片内归一化时间下发给后端，结果投影
+   * 回会话时间（sessionUs = normalizedMediaUs + offsetUs）。换 offset 只
+   * 重投影，不重扫。旧异步结果由调用方按 requestId 丢弃。
+   */
+  async queryAnalysis(slot: Slot, query: AnalysisQuery): Promise<AnalysisResult> {
+    slotValue(slot);
+    const { startUs, endUs, axis, pixelWidth, bitrateWindowUs } = query;
+    // 起点可为负：正偏移轨道的片内区间起点为 sessionStart - offset；
+    // DTS 轴本身也允许合法负时间（预滚），一律不钳到零。
+    if (!Number.isInteger(startUs) || !Number.isInteger(endUs)) {
+      throw new Error('分析查询区间必须是整数微秒。');
+    }
+    if (axis !== 'pts' && axis !== 'dts') throw new Error('时间基准必须是 pts 或 dts。');
+    if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096) throw new Error('查询像素宽度超出范围。');
+    if (!Number.isInteger(bitrateWindowUs) || bitrateWindowUs <= 0) throw new Error('码率滑窗必须为正整数微秒。');
+    const track = this.tracks.get(slot);
+    if (!track) throw new Error('轨道尚未载入。');
+    if (track.failure) throw new Error(track.failure.message);
+    if (!track.source.queryAnalysis) throw new Error('该片源的解码路径暂不支持码流分析。');
+    const requestId = ++this.analysisSeq;
+    const offsetUs = track.offsetUs;
+    const result = await track.source.queryAnalysis({
+      ...query, requestId,
+      startUs: query.startUs - offsetUs, endUs: query.endUs - offsetUs,
+    });
+    const shift = (t: number) => t + offsetUs;
+    return {
+      ...result,
+      requestId,
+      origin: { firstPtsUs: track.source.info.firstPtsUs, offsetUs },
+      samples: result.samples.map(s => ({
+        ...s,
+        effectivePtsUs: s.effectivePtsUs == null ? null : shift(s.effectivePtsUs),
+        dtsUs: s.dtsUs == null ? null : shift(s.dtsUs),
+      })),
+      buckets: result.buckets?.map(b => ({ ...b, startUs: shift(b.startUs), endUs: shift(b.endUs) })) ?? null,
+      bitrate: result.bitrate?.map(p => ({ ...p, tUs: shift(p.tUs) })) ?? null,
+      coverageUs: result.coverageUs ? { start: shift(result.coverageUs.start), end: shift(result.coverageUs.end) } : null,
+    };
+  }
+  /**
+   * 分析柱点击定位：无论 PTS 还是 DTS 图，一律定位到该样本的展示 PTS；
+   * DTS 横坐标本身不是 seek 目标。预滚/无映射样本返回原因，不伪造跳转。
+   */
+  resolveAnalysisSeek(slot: Slot, sample: { effectivePtsUs: number | null }): { sessionPtsUs: number } | { reason: string } {
+    slotValue(slot);
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
+    if (sample.effectivePtsUs == null) return { reason: '该样本没有可展示时间，无法定位。' };
+    if (sample.effectivePtsUs < 0) return { reason: '该样本位于轨道开始之前（预滚），没有可展示画面。' };
+    return { sessionPtsUs: Math.max(0, Math.round(sample.effectivePtsUs)) };
   }
   private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure).map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {
