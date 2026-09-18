@@ -18,7 +18,7 @@ async function start() {
   // 主线程只在视口需要时查询，且结果按像素宽度聚合，不逐帧全量索取。
   const querier = createSourceQuerier();
   const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; pts:number; recycle?: ArrayBuffer;
-    axis?: 'pts' | 'dts'; startUs?: number; endUs?: number; pixelWidth?: number; bitrateWindowUs?: number; maxSamples?: number; firstPtsUs?: number; durationUs?: number; coverageUs?: { start: number; end: number } | null; mediaId?: string }) => {
+    axis?: 'pts' | 'dts'; startUs?: number; endUs?: number; pixelWidth?: number; bitrateWindowUs?: number; maxSamples?: number; bucketsOnly?: boolean; bucketOriginUs?: number; firstPtsUs?: number; durationUs?: number; coverageUs?: { start: number; end: number } | null; mediaId?: string }) => {
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Incremental commits never await the extraction chain: an extract may
@@ -77,6 +77,8 @@ async function start() {
             startUs: message.startUs ?? 0, endUs: message.endUs ?? 0,
             pixelWidth: message.pixelWidth ?? 320, bitrateWindowUs: message.bitrateWindowUs ?? 1_000_000,
             maxSamples: message.maxSamples ?? 5000,
+            ...(message.bucketsOnly ? { bucketsOnly: true } : {}),
+            ...(message.bucketOriginUs !== undefined ? { bucketOriginUs: message.bucketOriginUs } : {}),
           });
           send({ id, ok: true, data });
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');

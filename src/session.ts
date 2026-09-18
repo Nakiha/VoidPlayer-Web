@@ -208,8 +208,10 @@ export class ReviewSession {
     if (!track.source.queryAnalysis) throw new Error('该片源的解码路径暂不支持码流分析。');
     const requestId = ++this.analysisSeq;
     const offsetUs = track.offsetUs;
+    // 共享桶原点：会话域 0 对齐，换算到片内归一化域（会话原点 - offset）。
+    const bucketOriginUs = (query.bucketOriginUs ?? 0) - offsetUs;
     const result = await track.source.queryAnalysis({
-      ...query, requestId,
+      ...query, requestId, bucketOriginUs,
       startUs: query.startUs - offsetUs, endUs: query.endUs - offsetUs,
     });
     const shift = (t: number) => t + offsetUs;
@@ -236,7 +238,9 @@ export class ReviewSession {
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     if (sample.effectivePtsUs == null) return { reason: '该样本没有可展示时间，无法定位。' };
-    if (sample.effectivePtsUs < 0) return { reason: '该样本位于轨道开始之前（预滚），没有可展示画面。' };
+    // 预滚判断在片内可展示映射域做：源负时间加正 offset 后变正，不等于成了可显示帧。
+    const normalizedPts = sample.effectivePtsUs - track.offsetUs;
+    if (normalizedPts < 0) return { reason: '该样本位于轨道开始之前（预滚），没有可展示画面。' };
     return { sessionPtsUs: Math.max(0, Math.round(sample.effectivePtsUs)) };
   }
   private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure).map(t => t.source.info.durationUs + t.offsetUs)); }

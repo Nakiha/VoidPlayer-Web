@@ -93,6 +93,8 @@ export class NativeAnalysisAdapter {
       coverageUs: this.done ? { start: 0, end: this.durationUs } : null,
     };
     const run = async () => this.querier(this.packets, ctx, query);
+    // signal 仅表示调用方不再等待（旧查询不覆盖新图），不撤销已开始的排序/聚合；
+    // 面板关闭只停止自己的刷新与排队查询，不取消播放器需要的容器索引。
     if (!query.signal) return run();
     return Promise.race([
       run(),

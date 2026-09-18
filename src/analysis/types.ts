@@ -57,6 +57,12 @@ export interface AnalysisQuery {
   bitrateWindowUs: number;
   /** 可选：只取聚合桶而不取逐样本。 */
   bucketsOnly?: boolean;
+  /**
+   * 桶原点（本次查询时间域）：多轨共享同一会话域原点时，
+   * 会话层按轨填入归一化原点（会话原点 - offset），避免各自 origin=0
+   * 再加 offset 导致跨轨桶边界错位。缺省 0 保持单轨兼容。
+   */
+  bucketOriginUs?: number;
   /** 单轨查询上限，防止把数十万条记录塞进主线程消息。 */
   maxSamples?: number;
   signal?: AbortSignal;

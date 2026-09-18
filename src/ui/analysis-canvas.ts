@@ -36,13 +36,22 @@ export interface CanvasModel {
   showSize: boolean;
   colorByType: boolean;
   tracks: CanvasTrack[];
-  /** 双轨且严格配对成功时为 true，组内左右并排（仍锚定共同时间）。 */
-  paired: boolean;
+  /**
+   * 合并显示：多轨同一基线按时间交错，不以严格配对为前提；
+   * 缺席留空，不复制。分轨由用户主动选择。
+   * 保留 `paired` 别名以兼容旧测试/旧偏好读取，语义同 merged。
+   */
+  merged: boolean;
+  /** @deprecated 用 merged；保留只为兼容旧调用。 */
+  paired?: boolean;
   yMaxBitrate: number;
   yMaxSize: number;
   colors: CanvasColors;
   /** 框选橡皮筋（会话时间），绘制时覆盖。 */
   rubber: { a: number; b: number } | null;
+  /** 统一几何的逐样本/桶 glyph（绘图与命中共用）；提供时优先绘制，不再各轨自算组宽。 */
+  sampleGlyphs?: import('./analysis-geometry.ts').SampleGlyph[];
+  bucketGlyphs?: import('./analysis-geometry.ts').BucketGlyph[];
 }
 
 export interface RowGeom { kind: 'bitrate' | 'size'; slot?: string; slots?: string[]; y: number; h: number }
@@ -61,10 +70,13 @@ export function plotGeometry(widthCss: number): { gutter: number; plotW: number;
   return { gutter: GUTTER, plotW: Math.max(1, width - GUTTER), width };
 }
 
+const isMerged = (model: CanvasModel): boolean => model.merged || !!model.paired;
+
 export function computeLayout(model: CanvasModel): CanvasGeom {
   const axisY = model.height - AXIS_H;
   const plotH = Math.max(0, axisY);
-  const sizeRowCount = model.showSize ? (model.paired ? 1 : Math.max(1, model.tracks.length)) : 0;
+  const merged = isMerged(model);
+  const sizeRowCount = model.showSize ? (merged ? 1 : Math.max(1, model.tracks.length)) : 0;
   let bitrateH = 0;
   if (model.showBitrate) {
     bitrateH = sizeRowCount ? Math.round(plotH * 0.42) : plotH;
@@ -74,7 +86,7 @@ export function computeLayout(model: CanvasModel): CanvasGeom {
   const perRow = sizeRowCount ? sizeH / sizeRowCount : 0;
   const sizeRows: RowGeom[] = [];
   for (let i = 0; i < sizeRowCount; i++) {
-    sizeRows.push(model.paired
+    sizeRows.push(merged
       ? { kind: 'size', slots: model.tracks.map(t => t.slot), y: bitrateH + i * perRow, h: perRow }
       : { kind: 'size', slot: model.tracks[i]?.slot, y: bitrateH + i * perRow, h: perRow });
   }
@@ -121,6 +133,19 @@ function barColor(model: CanvasModel, key: boolean | null, slotColor: string): s
   return model.colors.unknown;
 }
 
+/** 数据与刻度共用的纵轴映射：零在下，上限在上（与 geometry 一致）。 */
+export function valueToY(rowY: number, rowH: number, value: number, yMax: number): number {
+  if (!(yMax > 0)) return rowY + rowH - 4;
+  const h = Math.max(1, (Math.min(value, yMax) / yMax) * (rowH - 8));
+  return rowY + rowH - 4 - h;
+}
+
+export function formatSize(bytes: number): string {
+  if (!(bytes > 0)) return '0 B';
+  if (bytes < 1024) return `${bytes} B`;
+  return `${trimNum(bytes / 1024)} KiB`;
+}
+
 export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel): void {
   const geom = computeLayout(model);
   const { width, height } = model;
@@ -142,11 +167,16 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
   }
   ctx.stroke();
   // 码率行：折线（非贝塞尔），缺失区间断线。
+  // 纵轴与数据共用 valueToY：上限在上、零在下，边缘内收防裁切。
   if (geom.bitrate && model.showBitrate) {
     const { y, h } = geom.bitrate;
     ctx.fillStyle = model.colors.axisText;
-    ctx.fillText('Mbps', 4, y + 10);
-    if (model.yMaxBitrate > 0) ctx.fillText(trimNum(model.yMaxBitrate), 4, y + h - 8);
+    if (model.yMaxBitrate > 0) {
+      ctx.fillText(`${trimNum(model.yMaxBitrate)} Mbps`, 4, y + 10);
+      ctx.fillText('0', 4, y + h - 10);
+    } else {
+      ctx.fillText('Mbps', 4, y + 10);
+    }
     ctx.strokeStyle = model.colors.grid;
     ctx.strokeRect(geom.gutter + 0.5, y + 0.5, geom.plotW - 1, Math.max(1, h - 1));
     for (const track of model.tracks) {
@@ -166,17 +196,35 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
     ctx.lineWidth = 1;
   }
   // 大小行：放大画真实帧柱，缩小画时间桶峰值。
+  // 统一几何优先：提供 glyph 时绘图与命中共用同一份 rect，不再各轨自算组宽。
   if (model.showSize) {
+    const merged = isMerged(model);
+    const useGlyphs = !!(model.sampleGlyphs?.length || model.bucketGlyphs?.length);
     for (let r = 0; r < geom.sizeRows.length; r++) {
       const row = geom.sizeRows[r];
-      const rows = model.paired ? model.tracks : [model.tracks[r]];
+      const rows = merged ? model.tracks : [model.tracks[r]];
       if (!rows[0]) continue;
-      const label = model.paired ? rows.map(t => t.slot).join('+') : rows[0].slot;
+      const label = merged ? rows.map(t => t.slot).join('+') : rows[0].slot;
       ctx.fillStyle = model.colors.axisText;
-      ctx.fillText(label, 4, row.y + 10);
-      if (model.yMaxSize > 0) ctx.fillText(`${trimNum(model.yMaxSize / 1024)}K`, 4, row.y + row.h - 8);
+      if (model.yMaxSize > 0) {
+        ctx.fillText(formatSize(model.yMaxSize), 4, row.y + 10);
+        ctx.fillText(label, 4, row.y + row.h / 2);
+        ctx.fillText('0', 4, row.y + row.h - 10);
+      } else {
+        ctx.fillText(label, 4, row.y + 10);
+      }
       ctx.strokeStyle = model.colors.grid;
       ctx.strokeRect(geom.gutter + 0.5, row.y + 0.5, geom.plotW - 1, Math.max(1, row.h - 1));
+      if (useGlyphs) {
+        drawGlyphs(ctx, model, row);
+        for (const track of rows) {
+          if (track.provisional) {
+            ctx.fillStyle = model.colors.axisText;
+            ctx.fillText('暂定', geom.gutter + geom.plotW - 30, row.y + 10);
+          }
+        }
+        continue;
+      }
       const lanes = rows.length;
       rows.forEach((track, lane) => {
         if (track.samples && !track.truncated) drawSamples(ctx, model, geom, row, track, lane, lanes);
@@ -244,9 +292,49 @@ function drawSamples(
       ctx.fillStyle = track.color;
       ctx.fillRect(x, row.y + row.h - 2, bw, 2);
     } else {
-      const bw = Math.max(1, slotPx);
-      ctx.fillRect(gc - bw / 2, y, bw, h);
+      // 过密旧路径兜底：按轨道错开 1px，避免后画覆盖前画（新路径已用统一几何）。
+      const bw = Math.max(1, Math.min(slotPx || 1, 2));
+      const x = gc - bw / 2 + (lane - (lanes - 1) / 2) * (bw + 0.5);
+      ctx.fillRect(x, y, bw, h);
     }
+  }
+}
+
+function drawGlyphs(
+  ctx: CanvasRenderingContext2D, model: CanvasModel, row: RowGeom,
+): void {
+  const colorBySlot = new Map(model.tracks.map(t => [t.slot, t.color]));
+  const clipY = (r: { y: number; h: number }) => r.y >= row.y - 0.5 && r.y <= row.y + row.h + 0.5;
+  void clipY;
+  for (const g of model.sampleGlyphs ?? []) {
+    if (g.rect.y + g.rect.height < row.y || g.rect.y > row.y + row.h) continue;
+    const slotColor = colorBySlot.get(g.slot) ?? '#888';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = barColor(model, g.key, slotColor);
+    ctx.fillRect(g.rect.x, g.rect.y, g.rect.width, g.rect.height);
+    // 轨道身份：固定组内位置 + 轨道色底线；放大后可叠加 A/B 标签（首版用底线）。
+    ctx.fillStyle = slotColor;
+    ctx.fillRect(g.rect.x, row.y + row.h - 2, g.rect.width, 2);
+    if (g.stackedCount > 1) {
+      ctx.fillStyle = model.colors.axisText;
+      ctx.fillText(`×${g.stackedCount}`, g.rect.x + g.rect.width + 2, g.rect.y + 8);
+    }
+  }
+  for (const g of model.bucketGlyphs ?? []) {
+    if (g.rect.y + g.rect.height < row.y || g.rect.y > row.y + row.h) continue;
+    const slotColor = colorBySlot.get(g.slot) ?? '#888';
+    // 混合桶在类型着色关闭时尊重选择，用轨道色，不统一变灰；用 glyph 自带聚合数据，支持合并后的粗桶。
+    const mixed = (g.keyCount > 0 ? 1 : 0) + (g.deltaCount > 0 ? 1 : 0) + (g.unknownCount > 0 ? 1 : 0) > 1;
+    ctx.globalAlpha = g.complete ? 1 : 0.55;
+    if (!model.colorByType) ctx.fillStyle = slotColor;
+    else if (mixed) ctx.fillStyle = model.colors.unknown;
+    else if (g.keyCount > 0) ctx.fillStyle = barColor(model, true, slotColor);
+    else if (g.deltaCount > 0) ctx.fillStyle = barColor(model, false, slotColor);
+    else ctx.fillStyle = model.colors.unknown;
+    ctx.fillRect(g.rect.x, g.rect.y, g.rect.width, g.rect.height);
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = slotColor;
+    ctx.fillRect(g.rect.x, row.y + row.h - 2, g.rect.width, 2);
   }
 }
 
@@ -264,10 +352,11 @@ function drawBuckets(
     const x = lanes > 1 ? x1 + lane * laneW : x1;
     const w = Math.max(1, laneW - (lanes > 1 ? 1 : 1));
     const h = Math.max(1, (Math.min(b.maxBytes, model.yMaxSize) / (model.yMaxSize || 1)) * (row.h - 6));
-    // 混合桶用中性色，不冒充单帧类型；纯桶用类型色。
+    // 混合桶在关闭类型着色时用轨道色，不冒充单帧类型也不强制变灰。
     const mixed = (b.keyCount > 0 ? 1 : 0) + (b.deltaCount > 0 ? 1 : 0) + (b.unknownCount > 0 ? 1 : 0) > 1;
     ctx.globalAlpha = b.complete ? 1 : 0.55;
-    ctx.fillStyle = mixed ? model.colors.unknown
+    if (!model.colorByType) ctx.fillStyle = track.color;
+    else ctx.fillStyle = mixed ? model.colors.unknown
       : b.keyCount > 0 ? barColor(model, true, track.color)
       : b.deltaCount > 0 ? barColor(model, false, track.color)
       : model.colors.unknown;

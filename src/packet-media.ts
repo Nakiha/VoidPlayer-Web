@@ -165,9 +165,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           mediaId: info.id, axis: query.axis, startUs: query.startUs, endUs: query.endUs,
           pixelWidth: query.pixelWidth, bitrateWindowUs: query.bitrateWindowUs,
           maxSamples: query.maxSamples ?? 5000,
+          ...(query.bucketsOnly ? { bucketsOnly: true } : {}),
+          ...(query.bucketOriginUs !== undefined ? { bucketOriginUs: query.bucketOriginUs } : {}),
           firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
           coverageUs: complete ? { start: 0, end: info.durationUs } : null,
         }, [], 60000);
+        // signal 仅表示“结果不再消费”（调用方不再等待），worker 侧排队/执行中的
+        // 统计不会因此撤销；调用方必须按 requestId/版本丢弃旧结果，不得冒充已取消计算。
         const result = query.signal
           ? await Promise.race([call, new Promise<never>((_, reject) => {
             query.signal!.addEventListener('abort', () => reject(query.signal!.reason), { once: true });

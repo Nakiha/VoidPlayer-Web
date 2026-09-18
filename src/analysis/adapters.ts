@@ -4,7 +4,8 @@
 // 文件级配置头、容器头不分摊。sample/packet 不保证对应一张输出画面时，
 // UI 称「样本大小」。
 
-import { bitrateAt, bucketize, buildBytePrefixSum, lowerBound } from './statistics.ts';
+import { bitrateAt, buildBytePrefixSum, lowerBound } from './statistics.ts';
+import type { BucketResult } from './statistics.ts';
 import type {
   AnalysisBucket, AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample, BitratePoint,
 } from './types.ts';
@@ -88,7 +89,8 @@ export function executeSortedQuery(
   const lo = lowerBound(times, startUs);
   const hi = lowerBound(times, endUs);
   const inRange = hi - lo;
-  const truncated = inRange > maxSamples;
+  const bucketsOnly = !!query.bucketsOnly;
+  const truncated = bucketsOnly ? inRange > 0 : inRange > maxSamples;
   const samples: AnalysisSample[] = [];
   if (!truncated) {
     for (let k = lo; k < hi; k++) {
@@ -109,25 +111,60 @@ export function executeSortedQuery(
     }
   }
   const pixelWidth = Math.max(1, Math.floor(query.pixelWidth) || 1);
-  // 聚合桶锚定归一化媒体原点 0，避免平移跳变。
+  // 共享桶原点：会话层按轨填入归一化原点（会话原点 - offset），多轨在会话域对齐；
+  // 缺省 0 保持单轨兼容；固定原点避免平移跳变。
+  const originUs = Number.isFinite(query.bucketOriginUs) ? (query.bucketOriginUs as number) : 0;
   const bucketWidth = Math.max(1, Math.floor((endUs - startUs) / pixelWidth) || 1);
-  const bucketInputs = (() => {
-    const arr: { axisUs: number; sizeBytes: number; key: boolean | null; sampleId: string }[] = [];
-    for (let k = lo; k < hi; k++) {
-      const pos = order[k];
-      arr.push({ axisUs: times[k], sizeBytes: packets[pos].size, key: packets[pos].key, sampleId: `${ctx.mediaId}:v:${pos}` });
-    }
-    return arr;
-  })();
-  const rawBuckets = bucketize(bucketInputs, startUs, endUs, bucketWidth, 0);
-  const coverage = ctx.coverageUs ? [{ start: ctx.coverageUs.start, end: ctx.coverageUs.end }] : null;
-  const buckets: AnalysisBucket[] = rawBuckets.map(b => ({
-    ...b,
-    complete: coverage ? b.startUs >= coverage[0].start && b.endUs <= coverage[0].end : false,
-  }));
+  // 直接按索引累积，不为每个样本新建临时对象（长片概览 O(N) 仍只做一次整数运算）。
+  const firstIndex = Math.floor((startUs - originUs) / bucketWidth);
+  const lastIndex = Math.ceil((endUs - originUs) / bucketWidth);
+  const rawBuckets: BucketResult[] = [];
+  for (let i = firstIndex; i < lastIndex; i++) {
+    rawBuckets.push({
+      startUs: originUs + i * bucketWidth,
+      endUs: originUs + (i + 1) * bucketWidth,
+      count: 0, sumBytes: 0, maxBytes: 0, maxSampleId: null,
+      keyCount: 0, deltaCount: 0, unknownCount: 0,
+    });
+  }
+  for (let k = lo; k < hi; k++) {
+    const t = times[k];
+    if (!(t >= startUs && t < endUs)) continue;
+    const idx = Math.floor((t - originUs) / bucketWidth) - firstIndex;
+    const bucket = rawBuckets[idx];
+    if (!bucket) continue;
+    const pos = order[k];
+    const size = packets[pos].size;
+    const key = packets[pos].key;
+    bucket.count++;
+    bucket.sumBytes += size;
+    if (size > bucket.maxBytes) { bucket.maxBytes = size; bucket.maxSampleId = `${ctx.mediaId}:v:${pos}`; }
+    if (key === true) bucket.keyCount++;
+    else if (key === false) bucket.deltaCount++;
+    else bucket.unknownCount++;
+  }
+  // 轴相关的媒体边界与覆盖：DTS 合法为负，不得沿用 PTS 的 {0, duration} 排除首包。
+  const axisMin = times.length ? times[0] : startUs;
+  const axisMax = times.length ? times[times.length - 1] : endUs;
+  const mediaBounds = query.axis === 'dts'
+    ? { start: Math.min(0, axisMin), end: Math.max(ctx.durationUs, axisMax) }
+    : { start: 0, end: ctx.durationUs };
+  let coverage = ctx.coverageUs ? [{ start: ctx.coverageUs.start, end: ctx.coverageUs.end }] : null;
+  if (query.axis === 'dts' && coverage && times.length) {
+    // 完整索引下 DTS 覆盖扩展到实际最小/最大解码时间，保留负时间。
+    coverage = [{
+      start: Math.min(coverage[0].start, times[0]),
+      end: Math.max(coverage[0].end, times[times.length - 1]),
+    }];
+  }
+  const buckets: AnalysisBucket[] = rawBuckets.map(b => {
+    const insideCoverage = coverage ? b.startUs >= coverage[0].start && b.endUs <= coverage[0].end : false;
+    // 查询两端只统计了桶的一部分时标暂定，不冒充完整桶。
+    const insideQuery = b.startUs >= startUs && b.endUs <= endUs;
+    return { ...b, complete: insideCoverage && insideQuery };
+  });
   const bitrate: BitratePoint[] = [];
   const step = (endUs - startUs) / pixelWidth;
-  const mediaBounds = { start: 0, end: ctx.durationUs };
   for (let i = 0; i < pixelWidth; i++) {
     const t = startUs + (i + 0.5) * step;
     if (!(t < endUs)) break;

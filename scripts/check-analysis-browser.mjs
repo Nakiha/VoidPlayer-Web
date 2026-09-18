@@ -59,13 +59,14 @@ try {
     await load.execute({ id: ids['h264_9s_1920x1080.mp4'], slot: 'B' });
   }, ids);
   // 等两轨分析就绪（原生路径懒枚举 + 会话投影 + 双方结果落定）。
+  // 合并为默认：不再以严格配对覆盖率决定是否同行；对应统计仅作参考。
   await page.waitForFunction(() => {
     const el = document.querySelector('.analysis-status');
     return el && !el.textContent.includes('索引中') && el.textContent.includes('A') && el.textContent.includes('B')
-      && (el.textContent.includes('配对') || el.textContent.includes('分行'));
+      && (el.textContent.includes('合并') || el.textContent.includes('分轨'));
   }, { timeout: 120000 });
   const status = await page.locator('.analysis-status').textContent();
-  assert.match(status, /并排配对/);
+  assert.match(status, /合并/);
 
   // Agent 查询口径：压缩字节总数与文件大小一致（1752B 级小文件除外，按总和校验大文件）。
   const stats = await page.evaluate(async () => {
@@ -103,18 +104,48 @@ try {
   assert.match(await page.locator('.analysis-tooltip').textContent(), /KiB/);
   assert.equal(await page.locator('#position').inputValue(), posBefore);
 
-  // 单击样本柱定位到展示 PTS。
-  await page.mouse.click(box.x + box.width * 0.62, box.y + box.height * 0.62);
-  await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 30000 });
-  const posAfter = await page.locator('#position').inputValue();
-  assert.notEqual(posAfter, posBefore);
-
-  // 框选放大后跟随关闭，双击恢复完整范围。
+  // 框选放大后跟随关闭（概览为共享桶时点击只放大，不冒充定位）。
   await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', { timeout: 15000 });
+
+  // 放大到逐样本后，单击柱定位到展示 PTS（统一几何保证不误吸邻轨）。
+  // 若仍为共享桶（点击只放大），继续框选缩小直到出现逐样本 tooltip。
+  let posAfter = posBefore;
+  for (let attempt = 0; attempt < 6 && posAfter === posBefore; attempt++) {
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
+    await page.locator('.analysis-tooltip:not([hidden])').waitFor({ timeout: 10000 });
+    // 等查询落定：逐样本 tooltip 含“样本”，桶 tooltip 含“点击放大”。
+    let tip = await page.locator('.analysis-tooltip').textContent();
+    const deadline = Date.now() + 10000;
+    while (!tip.includes('样本') && !tip.includes('点击放大') && Date.now() < deadline) {
+      await page.waitForTimeout(300);
+      tip = await page.locator('.analysis-tooltip').textContent();
+    }
+    if (tip.includes('点击放大') && !tip.includes('样本')) {
+      // 桶模式：框选中心四分之一继续放大，等待查询落定。
+      await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7);
+      await page.mouse.down();
+      await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.7, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(1500);
+      continue;
+    }
+    // 逐样本或混合态：点击同一位置，命中空白则在附近多试几个 x。
+    for (const dx of [0.5, 0.55, 0.45, 0.6, 0.4]) {
+      await page.mouse.click(box.x + box.width * dx, box.y + box.height * 0.7);
+      try {
+        await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+        posAfter = await page.locator('#position').inputValue();
+        break;
+      } catch { /* 换 x 再试 */ }
+      if (posAfter !== posBefore) break;
+    }
+  }
+  assert.notEqual(posAfter, posBefore);
+
   await page.locator('#analysis-canvas').dblclick();
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', { timeout: 15000 });
 
@@ -164,7 +195,7 @@ try {
   assert.deepEqual(errors, []);
   await page.screenshot({ path: join(temp, 'analysis-panel.png') });
   await browser.close(); browser = undefined;
-  console.log('PASS analysis panel: capabilities, paired layout, read-only hover, click seek, zoom, playback coexistence');
+  console.log('PASS analysis panel: capabilities, merged layout, read-only hover, click seek, zoom, playback coexistence');
 } finally {
   await browser?.close(); server?.close();
   await rm(temp, { recursive: true, force: true });

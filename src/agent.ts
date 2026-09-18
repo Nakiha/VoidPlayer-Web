@@ -37,15 +37,15 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
     tool('get_analysis_capabilities', 'Read per-track bitstream analysis support (sample sizes, DTS axis, key flags, QP) without fetching statistics. Full sample arrays are never in session state; use query_analysis for bounded ranges.', {}, [], true, () => session.getAnalysisCapabilities()),
     tool('query_analysis', 'Read bounded bitrate/sample-size/key-flag statistics for one track over a session-time range. Same read-only query the analysis panel uses: no decode, no seek. Clicking a result still seeks by its presentation PTS via seek_review, never by DTS.', {
       slot: { enum: SLOTS }, axis: { enum: ['pts', 'dts'] },
-      startUs: { type: 'integer', minimum: 0 }, endUs: { type: 'integer', minimum: 0 },
-      pixelWidth: { type: 'integer', minimum: 32, maximum: 2048 },
+      startUs: { type: 'integer' }, endUs: { type: 'integer' },
+      pixelWidth: { type: 'integer', minimum: 32, maximum: 4096 },
       bitrateWindowUs: { type: 'integer', enum: [250000, 500000, 1000000, 2000000, 5000000] },
     }, ['slot', 'startUs', 'endUs'], true, p => {
       const startUs = p.startUs as number, endUs = p.endUs as number;
       const pixelWidth = (p.pixelWidth as number | undefined) ?? 320;
       const bitrateWindowUs = (p.bitrateWindowUs as number | undefined) ?? 1000000;
-      if (!Number.isInteger(startUs) || startUs < 0 || !Number.isInteger(endUs) || endUs < 0) throw new Error('查询区间必须是非负整数微秒。');
-      if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 2048) throw new Error('像素宽度超出范围。');
+      if (!Number.isInteger(startUs) || !Number.isInteger(endUs)) throw new Error('查询区间必须是整数微秒（DTS 轴允许负时间）。');
+      if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096) throw new Error('像素宽度超出范围。');
       if (!Number.isInteger(bitrateWindowUs) || bitrateWindowUs <= 0) throw new Error('码率滑窗必须为正整数微秒。');
       return session.queryAnalysis(slotValue(p.slot), {
         axis: (p.axis ?? 'pts') as 'pts' | 'dts',

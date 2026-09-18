@@ -3,10 +3,11 @@ import assert from 'node:assert/strict';
 import { drawAnalysis } from '../src/ui/analysis-canvas.ts';
 import type { CanvasModel } from '../src/ui/analysis-canvas.ts';
 
-function mockCtx(recorded: { fillRect: number[][] }) {
+function mockCtx(recorded: { fillRect: number[][]; fillText: unknown[][] }) {
   return new Proxy({}, {
     get(_t, p) {
       if (p === 'fillRect') return (...a: number[]) => { recorded.fillRect.push(a); };
+      if (p === 'fillText') return (...a: unknown[]) => { recorded.fillText.push(a); };
       if (typeof p === 'string') return (..._a: unknown[]) => {};
       return undefined;
     },
@@ -22,14 +23,14 @@ function model(viewStart: number, viewEnd: number): CanvasModel {
     width: 1246, height: 120, viewStart, viewEnd,
     showBitrate: false, showSize: true, colorByType: true,
     tracks: [{ slot: 'A', color: '#slot', samples, truncated: false, buckets: [], bitrate: [], provisional: false }],
-    paired: false, yMaxBitrate: 1, yMaxSize: 1000, colors, rubber: null,
+    merged: false, yMaxBitrate: 1, yMaxSize: 1000, colors, rubber: null,
   };
 }
 
 test('帧柱宽度随缩放变化：放大 10 倍柱宽约 10 倍', () => {
-  const wide: { fillRect: number[][] } = { fillRect: [] };
+  const wide = { fillRect: [] as number[][], fillText: [] as unknown[][] };
   drawAnalysis(mockCtx(wide), model(0, 1_000_000));
-  const narrow: { fillRect: number[][] } = { fillRect: [] };
+  const narrow = { fillRect: [] as number[][], fillText: [] as unknown[][] };
   drawAnalysis(mockCtx(narrow), model(0, 100_000));
   const maxWidth = (r: { fillRect: number[][] }) => Math.max(...r.fillRect.map(a => a[2]));
   const wWide = maxWidth(wide), wNarrow = maxWidth(narrow);
@@ -39,7 +40,7 @@ test('帧柱宽度随缩放变化：放大 10 倍柱宽约 10 倍', () => {
 });
 
 test('重复时间戳不产生零宽或异常柱', () => {
-  const recorded: { fillRect: number[][] } = { fillRect: [] };
+  const recorded = { fillRect: [] as number[][], fillText: [] as unknown[][] };
   const m = model(0, 1_000_000);
   m.tracks[0].samples = [
     { t: 0, size: 500, key: true },
@@ -51,4 +52,19 @@ test('重复时间戳不产生零宽或异常柱', () => {
   for (const r of recorded.fillRect) {
     assert.ok(Number.isFinite(r[0]) && Number.isFinite(r[2]) && r[2] >= 1, JSON.stringify(r));
   }
+});
+
+test('纵轴上限在上、零在下，大小单位为 KiB', () => {
+  const recorded = { fillRect: [] as number[][], fillText: [] as unknown[][] };
+  const m = model(0, 1_000_000);
+  m.yMaxSize = 500_000;
+  drawAnalysis(mockCtx(recorded), m);
+  const texts = recorded.fillText.map(a => ({ text: String(a[0]), y: Number(a[2]) }));
+  const maxLabel = texts.find(t => t.text.includes('KiB'));
+  assert.ok(maxLabel, `missing KiB label: ${JSON.stringify(texts)}`);
+  assert.ok(!texts.some(t => t.text.match(/^\d+K$/) && !t.text.includes('KiB')), '不得用有歧义的 K');
+  const zeroLabel = texts.find(t => t.text === '0');
+  assert.ok(zeroLabel, '零刻度缺失');
+  assert.ok(maxLabel!.y < zeroLabel!.y, `上限 y=${maxLabel!.y} 应在零 y=${zeroLabel!.y} 之上`);
+  assert.ok(maxLabel!.y < 30, `上限应靠近顶部，y=${maxLabel!.y}`);
 });
