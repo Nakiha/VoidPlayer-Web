@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { drawAnalysis } from '../src/ui/analysis-canvas.ts';
 import type { CanvasModel } from '../src/ui/analysis-canvas.ts';
+import { groupSamples } from '../src/analysis/grouping.ts';
+import { layoutMergedSamples } from '../src/ui/analysis-geometry.ts';
 
 function mockCtx(recorded: { fillRect: number[][]; fillText: unknown[][] }) {
   return new Proxy({}, {
@@ -27,16 +29,37 @@ function model(viewStart: number, viewEnd: number): CanvasModel {
   };
 }
 
-test('帧柱宽度随缩放变化：放大 10 倍柱宽约 10 倍', () => {
+test('统一几何柱宽一致：缩放不改变视觉柱宽（时间由锚点距离表达）', () => {
+  const mediaBySlot = new Map([['A', { mediaId: 'mA', sourceVersion: 'v', indexRevision: 1 }]]);
+  const mk = (viewStart: number, viewEnd: number) => {
+    const groups = groupSamples([
+      {
+        slot: 'A', samples: Array.from({ length: 10 }, (_, i) => ({
+          sampleId: `A${i}`, axisUs: i * 100_000, sessionPtsUs: i * 100_000,
+          sizeBytes: 1000, key: i === 0, decodeOrdinal: i,
+          mediaId: 'mA', sourceVersion: 'v', indexRevision: 1,
+        })),
+      },
+    ], 2000);
+    const glyphs = layoutMergedSamples(groups, {
+      trackOrder: ['A'], viewStart, viewEnd, gutter: 46, plotW: 600,
+      rowY: 0, rowH: 60, yMaxSize: 1000, mediaBySlot: mediaBySlot as never,
+    });
+    const m = model(viewStart, viewEnd);
+    m.sampleGlyphs = glyphs as never;
+    m.tracks[0].samples = null;
+    return m;
+  };
   const wide = { fillRect: [] as number[][], fillText: [] as unknown[][] };
-  drawAnalysis(mockCtx(wide), model(0, 1_000_000));
+  drawAnalysis(mockCtx(wide), mk(0, 1_000_000));
   const narrow = { fillRect: [] as number[][], fillText: [] as unknown[][] };
-  drawAnalysis(mockCtx(narrow), model(0, 100_000));
-  const maxWidth = (r: { fillRect: number[][] }) => Math.max(...r.fillRect.map(a => a[2]));
-  const wWide = maxWidth(wide), wNarrow = maxWidth(narrow);
-  // 全览：100ms 占 120px，柱约 108px；放大到 100ms 区间：单帧占满约 1080px。
-  assert.ok(wWide > 90 && wWide < 130, `wide=${wWide}`);
-  assert.ok(wNarrow > 500, `narrow=${wNarrow}`);
+  drawAnalysis(mockCtx(narrow), mk(0, 100_000));
+  const widths = (r: { fillRect: number[][] }) => r.fillRect.map(a => a[2]).filter(w => w >= 5 && w <= 12);
+  assert.ok(widths(wide).length > 0 && widths(narrow).length > 0);
+  // 同一视口内一致，且缩放不改变目标柱宽。
+  assert.deepEqual(new Set(widths(wide)).size, 1);
+  assert.deepEqual(new Set(widths(narrow)).size, 1);
+  assert.equal(widths(wide)[0], widths(narrow)[0]);
 });
 
 test('重复时间戳不产生零宽或异常柱', () => {

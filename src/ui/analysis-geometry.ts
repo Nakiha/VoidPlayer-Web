@@ -48,19 +48,33 @@ export type AnalysisGlyph = SampleGlyph | BucketGlyph;
 
 export interface SizeRow { y: number; h: number }
 
-/** 数据与刻度共用的纵轴映射：零在下，上限在上。 */
-export function valueToY(rowY: number, rowH: number, value: number, yMax: number): number {
+export type SizeScale = 'linear' | 'log';
+
+/** 数据与刻度共用的纵轴映射：零在下，上限在上。对数模式为共同 log10(1+v) 基准。 */
+export function valueToY(rowY: number, rowH: number, value: number, yMax: number, scale: SizeScale = 'linear'): number {
   if (!(yMax > 0)) return rowY + rowH - 4;
+  if (scale === 'log') {
+    if (!(value > 0)) return rowY + rowH - 4;
+    const h = Math.max(1, (Math.log10(1 + Math.min(value, yMax)) / Math.log10(1 + yMax)) * (rowH - 8));
+    return rowY + rowH - 4 - h;
+  }
   const h = Math.max(1, (Math.min(value, yMax) / yMax) * (rowH - 8));
   return rowY + rowH - 4 - h;
 }
 
-export function barHeight(rowH: number, value: number, yMax: number): number {
+export function barHeight(rowH: number, value: number, yMax: number, scale: SizeScale = 'linear'): number {
   if (!(yMax > 0)) return 1;
+  if (scale === 'log') {
+    if (!(value > 0)) return 1;
+    return Math.max(1, (Math.log10(1 + Math.min(value, yMax)) / Math.log10(1 + yMax)) * (rowH - 6));
+  }
   return Math.max(1, (Math.min(value, yMax) / yMax) * (rowH - 6));
 }
 
 const MAX_CELL_PX = 56;
+/** 详细模式目标柱宽（CSS px）：同一视口一致，不随稀疏/缺席变化。 */
+export const TARGET_BAR_PX = 7;
+const LANE_GAP_PX = 1;
 
 export interface MergedLayoutOptions {
   trackOrder: readonly Slot[];
@@ -74,6 +88,8 @@ export interface MergedLayoutOptions {
   mediaBySlot: ReadonlyMap<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>;
   /** 稀疏样本的单元上限，避免横跨数秒的巨柱。 */
   maxCellPx?: number;
+  /** 大小纵轴：默认线性；对数为共同 log10(1+v) 基准。 */
+  scale?: SizeScale;
 }
 
 function timeToX(viewStart: number, viewEnd: number, gutter: number, plotW: number, t: number): number {
@@ -90,48 +106,54 @@ export function layoutMergedSamples(
   opts: MergedLayoutOptions,
 ): SampleGlyph[] {
   const { trackOrder, viewStart, viewEnd, gutter, plotW, rowY, rowH, yMaxSize, mediaBySlot } = opts;
-  const maxCellPx = opts.maxCellPx ?? MAX_CELL_PX;
+  const scale = opts.scale ?? 'linear';
+  void MAX_CELL_PX;
+  void opts.maxCellPx;
   const lanes = Math.max(1, trackOrder.length);
   const slotIndex = new Map<Slot, number>(trackOrder.map((s, i) => [s, i]));
   const glyphs: SampleGlyph[] = [];
-  const inView = groups.filter(g => g.anchorUs >= viewStart && g.anchorUs <= viewEnd);
-  for (let gi = 0; gi < inView.length; gi++) {
-    const group = inView[gi];
-    const prevAnchor = gi > 0 ? inView[gi - 1].anchorUs : null;
-    const nextAnchor = gi + 1 < inView.length ? inView[gi + 1].anchorUs : null;
-    const leftT = prevAnchor == null ? viewStart : (prevAnchor + group.anchorUs) / 2;
-    const rightT = nextAnchor == null ? viewEnd : (group.anchorUs + nextAnchor) / 2;
-    let cellLeft = timeToX(viewStart, viewEnd, gutter, plotW, Math.max(viewStart, leftT));
-    let cellRight = timeToX(viewStart, viewEnd, gutter, plotW, Math.min(viewEnd, rightT));
-    if (cellRight < cellLeft) [cellLeft, cellRight] = [cellRight, cellLeft];
-    let cellW = Math.max(0, cellRight - cellLeft);
+  // 视口选择按成员范围相交（锚点在外、成员在内仍保留）；边界计算用完整组序列的
+  // 真实前后邻锚点，不因滚动裁切改变单元归属；最后裁剪实际 glyph。
+  const selected: { group: TimeGroup; prevAnchor: number | null; nextAnchor: number | null }[] = [];
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const lo = Math.min(g.memberMinUs, g.memberMaxUs, g.anchorUs);
+    const hi = Math.max(g.memberMinUs, g.memberMaxUs, g.anchorUs);
+    if (hi < viewStart || lo > viewEnd) continue;
+    selected.push({
+      group: g,
+      prevAnchor: i > 0 ? groups[i - 1].anchorUs : null,
+      nextAnchor: i + 1 < groups.length ? groups[i + 1].anchorUs : null,
+    });
+  }
+  // 一致目标宽度：稀疏不撑宽、缺席留空；局部放不下时保留身份（重叠绘制+聚合标记），
+  // 不用极近异常组把全图压成 1px，也不扩大时间容差。
+  const laneW = TARGET_BAR_PX + LANE_GAP_PX;
+  const cellTarget = laneW * lanes;
+  const plotLeft = gutter, plotRight = gutter + plotW;
+  for (const { group } of selected) {
     const anchorX = timeToX(viewStart, viewEnd, gutter, plotW, group.anchorUs);
-    // 宽度上限与真实锚点分离：稀疏时以锚点为中心收拢，不形成巨柱。
-    if (cellW > maxCellPx * lanes) {
-      const capped = maxCellPx * lanes;
-      cellLeft = anchorX - capped / 2;
-      cellRight = anchorX + capped / 2;
-      cellW = capped;
-    }
-    // 裁剪到绘图区，不盖住左侧刻度。
-    const plotLeft = gutter, plotRight = gutter + plotW;
-    cellLeft = Math.min(Math.max(cellLeft, plotLeft), plotRight);
-    cellRight = Math.min(Math.max(cellRight, plotLeft), plotRight);
-    cellW = Math.max(0, cellRight - cellLeft);
-    if (cellW <= 0) continue;
-    const laneW = cellW / lanes;
+    // 以真实时间锚点为中心，固定单元；时间关系由锚点距离表达，不由柱宽编码。
+    const cellLeftRaw = anchorX - cellTarget / 2;
+    // 注：prev/next 锚点保留用于未来密集聚合判断，当前固定宽度不随其变化。
+    const cellLeft = Math.min(Math.max(cellLeftRaw, plotLeft), plotRight);
+    const cellRight = Math.min(Math.max(cellLeftRaw + cellTarget, plotLeft), plotRight);
+    if (cellRight <= cellLeft) continue;
     for (const [slot, members] of group.membersByTrack) {
       const lane = slotIndex.get(slot);
       if (lane == null) continue;
       const laneX = cellLeft + lane * laneW;
       const media = mediaBySlot.get(slot);
       if (!media) continue;
-      if (members.length === 1) {
-        const m = members[0];
-        const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize);
-        const barW = Math.max(1, laneW - 1);
+      // 只绘制视口内成员；锚点在外、成员在内的组仍保留该成员。
+      const visible = members.filter(m => m.axisUs >= viewStart && m.axisUs <= viewEnd);
+      if (!visible.length) continue;
+      if (visible.length === 1) {
+        const m = visible[0];
+        const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize, scale);
+        const barW = TARGET_BAR_PX;
         // 柱在 lane 内居中，锚点附近；缺席轨道自然留空。
-        const x = Math.min(Math.max(laneX, plotLeft), plotRight - barW);
+        const x = Math.min(Math.max(laneX + (laneW - barW) / 2, plotLeft), plotRight - barW);
         glyphs.push({
           kind: 'sample', slot, mediaId: media.mediaId, sourceVersion: media.sourceVersion,
           sampleId: m.sampleId, indexRevision: media.indexRevision,
@@ -143,10 +165,10 @@ export function layoutMergedSamples(
         });
       } else {
         // 同轨重复时间戳：能细分则细分，否则聚合为多样本标记。
-        const subW = laneW / members.length;
+        const subW = laneW / visible.length;
         if (subW >= 2) {
-          members.forEach((m, k) => {
-            const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize);
+          visible.forEach((m, k) => {
+            const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize, scale);
             const barW = Math.max(1, subW - 1);
             const x = Math.min(Math.max(laneX + k * subW, plotLeft), plotRight - barW);
             glyphs.push({
@@ -160,18 +182,18 @@ export function layoutMergedSamples(
             });
           });
         } else {
-          const primary = [...members].sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0];
-          const h = barHeight(rowH, primary.sizeBytes ?? 0, yMaxSize);
-          const barW = Math.max(1, laneW - 1);
-          const x = Math.min(Math.max(laneX, plotLeft), plotRight - barW);
+          const primary = [...visible].sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0];
+          const h = barHeight(rowH, primary.sizeBytes ?? 0, yMaxSize, scale);
+          const barW = TARGET_BAR_PX;
+          const x = Math.min(Math.max(laneX + (laneW - barW) / 2, plotLeft), plotRight - barW);
           glyphs.push({
             kind: 'sample', slot, mediaId: media.mediaId, sourceVersion: media.sourceVersion,
             sampleId: primary.sampleId, indexRevision: media.indexRevision,
-            axisUs: group.anchorUs, sessionPtsUs: primary.sessionPtsUs,
+            axisUs: primary.axisUs, sessionPtsUs: primary.sessionPtsUs,
             rect: { x, y: rowY + rowH - 2 - h, width: barW, height: h },
             interactionRect: { x: laneX, y: rowY, width: laneW, height: rowH },
             key: primary.key, sizeBytes: primary.sizeBytes ?? 0,
-            stackedCount: members.length, stackedIds: members.map(m => m.sampleId),
+            stackedCount: visible.length, stackedIds: visible.map(m => m.sampleId),
           });
         }
       }
@@ -204,6 +226,7 @@ export function layoutMergedBuckets(
   opts: Omit<MergedLayoutOptions, 'yMaxSize' | 'mediaBySlot'> & { yMaxSize: number },
 ): BucketGlyph[] {
   const { trackOrder, viewStart, viewEnd, gutter, plotW, rowY, rowH, yMaxSize } = opts;
+  const scale = opts.scale ?? 'linear';
   const lanes = Math.max(1, trackOrder.length);
   const slotIndex = new Map<Slot, number>(trackOrder.map((s, i) => [s, i]));
   // 按完整区间归并：对齐的共享桶自然同组；未对齐的旧数据按各自区间绘制，不互相覆盖。
@@ -235,7 +258,7 @@ export function layoutMergedBuckets(
       if (lane == null) continue;
       const x = x1 + lane * laneW;
       const w = Math.max(1, laneW - 1);
-      const h = barHeight(rowH, b.maxBytes, yMaxSize);
+      const h = barHeight(rowH, b.maxBytes, yMaxSize, scale);
       const cx = Math.min(Math.max(x, plotLeft), plotRight - w);
       glyphs.push({
         kind: 'bucket', slot, bucketIndex: b.bucketIndex,
@@ -268,6 +291,7 @@ export function layoutRowSamples(
     rowY: row.y, rowH: row.h, yMaxSize: base.yMaxSize,
     mediaBySlot: new Map([[slot, base.media]]),
     maxCellPx: base.maxCellPx,
+    scale: base.scale,
   });
   return glyphs;
 }

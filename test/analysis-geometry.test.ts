@@ -103,6 +103,45 @@ test('共享桶同区间并排，不压成同一像素', () => {
   assert.ok(a.rect.x + a.rect.width <= b.rect.x + 0.5);
 });
 
+test('视口边缘组锚点在外、成员在内仍保留且可命中', () => {
+  // 组锚点 99ms、成员 99/101ms，视口从 100ms 开始：101ms 成员不得被整组丢弃。
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', [99_000, 500_000]) },
+    { slot: 'B', samples: refs('B', [101_000, 500_000]) },
+  ], 5000);
+  // 99/101 在 5ms 容差下同组，锚点 99ms。
+  assert.equal(groups.length, 2);
+  const edge = groups[0];
+  assert.ok(edge.anchorUs < 100_000);
+  assert.ok(edge.memberMaxUs >= 100_000);
+  const glyphs = layoutMergedSamples(groups, {
+    trackOrder: ['A', 'B'], viewStart: 100_000, viewEnd: 600_000,
+    gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot,
+  });
+  const b101 = glyphs.find(g => g.sampleId === 'B0' || g.sampleId === 'B1');
+  assert.ok(b101, '视口内 101ms 成员应出现');
+  const cx = b101.interactionRect.x + b101.interactionRect.width / 2;
+  const picked = pickGlyph(glyphs, cx, 30)!;
+  assert.equal(picked.slot, 'B');
+});
+
+test('同一视口柱宽一致：稀疏不撑宽、缺席留空', () => {
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', [0, 1_000_000]) },
+    { slot: 'B', samples: refs('B', [500_000]) },
+  ], 2000);
+  const glyphs = layoutMergedSamples(groups, {
+    trackOrder: ['A', 'B'], viewStart: 0, viewEnd: 2_000_000,
+    gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot,
+  });
+  const widths = new Set(glyphs.map(g => Math.round(g.rect.width)));
+  assert.equal(widths.size, 1, `柱宽应一致，实际 ${[...widths]}`);
+  // 缺席轨道留空：0ms 组只有 A，B 槽位无柱但 A 柱不加宽。
+  const at0 = glyphs.filter(g => g.axisUs === 0);
+  assert.equal(at0.length, 1);
+  assert.equal(at0[0].slot, 'A');
+});
+
 test('纵轴映射零在下、上限在上', () => {
   const top = valueToY(0, 100, 100, 100);
   const zero = valueToY(0, 100, 0, 100);

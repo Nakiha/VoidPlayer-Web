@@ -14,6 +14,8 @@ import { correspondenceCoverage, groupSamples } from '../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../analysis/view-cache.ts';
+import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth } from '../analysis/inspection.ts';
+import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
 import { layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
@@ -42,7 +44,7 @@ const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
 const LAYOUT_LABELS: Record<'merged' | 'rows', string> = { merged: '合并', rows: '分轨' };
 
 interface Prefs {
-  showBitrate: boolean; showSize: boolean; colorByType: boolean;
+  showBitrate: boolean; showSize: boolean; colorByType: boolean; logScale: boolean;
   axis: 'pts' | 'dts'; windowUs: number; layoutMode: 'merged' | 'rows';
   follow: boolean; selected: Slot[];
 }
@@ -55,7 +57,8 @@ function migrateLayoutMode(raw: unknown): Prefs['layoutMode'] {
 
 function loadPrefs(): Prefs {
   const fallback: Prefs = {
-    showBitrate: true, showSize: true, colorByType: true,
+    // 多轨比较默认主体轨道色（与曲线对应），关键用顶端 K 标记；按类型填色为可选项。
+    showBitrate: true, showSize: true, colorByType: false, logScale: false,
     axis: 'pts', windowUs: DEFAULT_BITRATE_WINDOW_US, layoutMode: 'merged',
     follow: true, selected: [],
   };
@@ -92,7 +95,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       <div class="analysis-tools" role="group" aria-label="分析选项">
         <button type="button" class="seg" data-seg="bitrate" title="视频样本负载码率，按 PTS/DTS 归集的滑动时间窗">码率</button>
         <button type="button" class="seg" data-seg="size" title="压缩样本字节（demux 负载），非解码内存">帧大小</button>
-        <button type="button" class="seg" data-seg="type" title="帧大小柱按帧类型着色；关闭后统一使用轨道色">类型着色</button>
+        <button type="button" class="seg" data-seg="type" title="按帧类型填充柱体（关键/非关键/未知）；关闭时主体为轨道色，关键用顶端 K 标记">类型填色</button>
+        <button type="button" class="seg" data-seg="log" title="帧大小纵轴改用共同对数刻度（所有轨道同一基准，便于查看小帧；默认线性可直接比较绝对高度）">对数轴</button>
         <button type="button" class="seg" disabled title="暂无可靠的 QP 来源（不填零、不伪造），后续版本支持亮度面积加权平均 QP">QP：未解析</button>
         <span id="analysis-tracks" class="analysis-tracks" role="group" aria-label="对比轨道"></span>
         <button type="button" id="analysis-axis" class="choice-trigger" aria-label="时间基准" title="PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图"></button>
@@ -100,6 +104,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         <button type="button" id="analysis-layout" class="choice-trigger" aria-label="多轨布局" title="合并：多轨同一基线按时间交错；分轨：各轨独立行"></button>
         <button type="button" class="seg" data-seg="follow" title="跟随播放范围；框选放大后自动关闭，不强制跳回播放位置">跟随：开</button>
         <button type="button" class="seg" data-seg="full" title="双击图也可恢复完整范围">完整范围</button>
+        <button type="button" class="seg" data-seg="help" title="分析图操作说明">？</button>
       </div>
       <span class="analysis-status" role="status"></span>
     </header>
@@ -108,6 +113,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       <div class="analysis-line analysis-playhead" hidden></div>
       <div class="analysis-line analysis-hover" hidden></div>
       <div class="analysis-tooltip" hidden></div>
+      <div class="analysis-pinned" hidden></div>
+      <div class="analysis-help" hidden></div>
       <div class="analysis-empty" hidden></div>
     </div>
     <output class="sr-only" aria-live="polite"></output>`);
@@ -122,8 +129,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const playheadEl = $<HTMLElement>('.analysis-playhead');
   const hoverEl = $<HTMLElement>('.analysis-hover');
   const tooltip = $<HTMLElement>('.analysis-tooltip');
+  const pinnedEl = $<HTMLElement>('.analysis-pinned');
+  const helpEl = $<HTMLElement>('.analysis-help');
   const emptyEl = $<HTMLElement>('.analysis-empty');
   const live = $<HTMLElement>('output');
+  let lastInspection: InspectionState | null = null;
+  let pinned: InspectionState | null = null;
 
   let tracks: TrackEntry[] = [];
   let caps = new Map<Slot, AnalysisCapability>();
@@ -150,9 +161,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   let lastViewSig = '';
   let lastGlyphs: AnalysisGlyph[] = [];
   let lastGroups: TimeGroup[] = [];
-  // 有序轴时间的派生缓存：数据/几何 revision 改变时计算一次，不在 pointermove 重建。
-  const medianCache = new Map<string, number>();
-  const axisCache = new Map<string, Float64Array>();
+  // 有序轴派生索引由 inspection.ts 按快照身份缓存（WeakMap），此处不再自建键控缓存。
 
   const readColors = () => {
     const styles = getComputedStyle(section);
@@ -245,11 +254,21 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   segButtons.get('bitrate')!.onclick = () => { prefs.showBitrate = !prefs.showBitrate; save(); refreshTools(); render(); };
   segButtons.get('size')!.onclick = () => { prefs.showSize = !prefs.showSize; save(); refreshTools(); render(); };
   segButtons.get('type')!.onclick = () => { prefs.colorByType = !prefs.colorByType; save(); refreshTools(); render(); };
+  segButtons.get('log')!.onclick = () => { prefs.logScale = !prefs.logScale; save(); refreshTools(); render(); };
   segButtons.get('follow')!.onclick = () => {
     if (prefs.follow) { prefs.follow = false; save(); refreshTools(); render(); }
     else setView(null, undefined, true);
   };
   segButtons.get('full')!.onclick = () => setView(null, undefined, true);
+  segButtons.get('help')!.onclick = () => {
+    if (helpEl.hidden) {
+      helpEl.innerHTML = `<div class="tt-head">分析图操作</div>
+        <div class="tt-help">悬停查看同一时间的各轨码率、帧率与参考帧；单击帧柱定位到展示帧，聚合桶点击放大；空白处点击不定位；拖拽框选放大，双击恢复完整范围；Shift+单击固定详情；方向键移动检查位置，回车定位焦点轨道，Escape 关闭。</div>
+        <button type="button" class="tt-close">关闭</button>`;
+      helpEl.hidden = false;
+      helpEl.querySelector('.tt-close')?.addEventListener('click', () => { helpEl.hidden = true; });
+    } else helpEl.hidden = true;
+  };
 
   const axisMenu = installChoiceMenu('analysis-axis', [{ value: 'pts', label: 'PTS' }], value => {
     prefs.axis = value as 'pts' | 'dts'; save(); refreshTools(); scheduleQuery(true);
@@ -269,6 +288,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     setSeg('bitrate', prefs.showBitrate);
     setSeg('size', prefs.showSize);
     setSeg('type', prefs.colorByType);
+    setSeg('log', prefs.logScale);
     setSeg('follow', prefs.follow, prefs.follow ? '跟随：开' : '跟随：关');
     // 高频手势每 tick 都经过这里：DOM 重建只在签名变化时做，label 同步很便宜。
     const sig = JSON.stringify([prefs.axis, prefs.windowUs, prefs.layoutMode, prefs.selected,
@@ -413,8 +433,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
             truncated: result.truncated, sampleCount: result.samples.length,
           });
-          medianCache.delete(t.slot);
-          axisCache.delete(t.slot);
+          // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
         } else {
           queriedBySlot.delete(t.slot);
         }
@@ -582,50 +601,35 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             trackOrder: sel.map(t => t.slot),
             viewStart: range.start, viewEnd,
             gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice, mediaBySlot,
+            scale: prefs.logScale ? 'log' : 'linear',
           });
         } else {
           // 多轨密集时选更粗的桶，保证每组仍有位置画不同轨道，不压成同一像素。
+          // 按公共粗时间下标聚合（会话域原点 0），不按非空位置分批；空桶不绘制，
+          // 但不先从时间格删除，不同稀疏度的轨道仍落到同一套边界。
           const lanes = Math.max(1, sel.length);
           const span = Math.max(1, viewEnd - range.start);
-          const coarsen = (() => {
-            const first = sel.map(t => results.get(t.slot)?.buckets?.find(b => b.count > 0)).find(Boolean);
-            if (!first) return 1;
-            const w = Math.max(1, first.endUs - first.startUs);
-            const bucketPx = (w / span) * plotW;
-            const laneW = bucketPx / lanes;
-            return laneW >= 2 ? 1 : Math.max(1, Math.ceil((2 * lanes) / Math.max(0.5, bucketPx)));
-          })();
+          const bases = sel.map(t => estimateBaseBucketWidth(results.get(t.slot)?.buckets)).filter((w): w is number => w != null && w > 0);
+          const baseMin = bases.length ? Math.min(...bases) : null;
+          const timePerPx = span / Math.max(1, plotW);
+          const needed = timePerPx * 2 * lanes;
+          const coarseWidth = baseMin != null ? baseMin * Math.max(1, Math.ceil(needed / baseMin)) : null;
           const bucketsBySlot = new Map<Slot, { slot: Slot; bucketIndex: number; startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
           sel.forEach(t => {
             const r = results.get(t.slot);
-            const raw = (r?.buckets ?? []).filter(b => b.count > 0 && b.endUs > range.start && b.startUs < viewEnd);
-            if (coarsen <= 1) {
-              bucketsBySlot.set(t.slot, raw.map((b, i) => ({
+            const inView = (r?.buckets ?? []).filter(b => b.endUs > range.start && b.startUs < viewEnd);
+            if (coarseWidth == null || (baseMin != null && coarseWidth <= baseMin)) {
+              const nonEmpty = inView.filter(b => b.count > 0);
+              bucketsBySlot.set(t.slot, nonEmpty.map((b, i) => ({
                 slot: t.slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
                 count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
                 keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
                 complete: b.complete, maxSampleId: b.maxSampleId,
               })));
             } else {
-              // 同一起源的相邻桶正确合并：count/sum 累加，max 取最大，类型计数累加。
-              const merged: typeof raw = [];
-              for (let i = 0; i < raw.length; i += coarsen) {
-                const chunk = raw.slice(i, i + coarsen);
-                if (!chunk.length) continue;
-                merged.push({
-                  startUs: chunk[0].startUs, endUs: chunk[chunk.length - 1].endUs,
-                  count: chunk.reduce((n, b) => n + b.count, 0),
-                  sumBytes: chunk.reduce((n, b) => n + b.sumBytes, 0),
-                  maxBytes: Math.max(...chunk.map(b => b.maxBytes)),
-                  maxSampleId: chunk.reduce((best: string | null, b) => (b.maxBytes > (chunk.find(c => c.maxSampleId === best)?.maxBytes ?? -1) ? b.maxSampleId : best), chunk[0].maxSampleId),
-                  keyCount: chunk.reduce((n, b) => n + b.keyCount, 0),
-                  deltaCount: chunk.reduce((n, b) => n + b.deltaCount, 0),
-                  unknownCount: chunk.reduce((n, b) => n + b.unknownCount, 0),
-                  complete: chunk.every(b => b.complete),
-                });
-              }
-              bucketsBySlot.set(t.slot, merged.map((b, i) => ({
-                slot: t.slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
+              const coarse = coarsenBucketsShared(inView, baseMin!, coarseWidth, 0);
+              bucketsBySlot.set(t.slot, coarse.map(b => ({
+                slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
                 count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
                 keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
                 complete: b.complete, maxSampleId: b.maxSampleId,
@@ -635,6 +639,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
             trackOrder: sel.map(t => t.slot),
             viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
+            scale: prefs.logScale ? 'log' : 'linear',
           });
         }
       } else {
@@ -647,6 +652,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
               trackOrder: [t.slot],
               viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
               mediaBySlot: new Map([[t.slot, mediaBySlot.get(t.slot)!]]),
+              scale: prefs.logScale ? 'log' : 'linear',
             }));
           } else {
             const r = results.get(t.slot);
@@ -660,6 +666,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             bucketGlyphs.push(...layoutMergedBuckets(bucketsBySlot, {
               trackOrder: [t.slot],
               viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
+              scale: prefs.logScale ? 'log' : 'linear',
             }));
           }
         });
@@ -669,6 +676,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       width, height,
       viewStart: range.start, viewEnd,
       showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: prefs.colorByType,
+      logScale: prefs.logScale,
       tracks: canvasTracks, merged,
       yMaxBitrate: niceCeiling(yMaxBitrate), yMaxSize: yMaxSizeNice,
       colors, rubber,
@@ -794,83 +802,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   // ---- 悬停/tooltip：绘图与命中共用统一几何 ----
-  /** 有序轴时间缓存（后端保证按轴有序），二分命中，不在 pointermove 重建。 */
-  function axisArray(slot: Slot): Float64Array | null {
-    const key = `${slot}:${prefs.axis}`;
-    const cached = axisCache.get(key);
-    const r = results.get(slot);
-    if (!r || r.truncated || !r.samples.length) return null;
-    // 结果对象不变时复用；换结果（引用变化）时重建。
-    const sig = `${r.sourceVersion}:${r.indexRevision}:${r.samples.length}`;
-    const sigKey = `${key}:${sig}`;
-    const hit = axisCache.get(sigKey) as Float64Array | undefined;
-    if (hit) return hit;
-    const arr = new Float64Array(r.samples.length);
-    for (let i = 0; i < r.samples.length; i++) {
-      arr[i] = (prefs.axis === 'pts' ? r.samples[i].effectivePtsUs : r.samples[i].dtsUs) ?? Number.NaN;
-    }
-    axisCache.set(sigKey, arr);
-    void cached;
-    // 控制缓存规模：只保留最近 16 条轨道的轴数组。
-    if (axisCache.size > 32) {
-      const first = axisCache.keys().next().value;
-      if (first) axisCache.delete(first);
-    }
-    return arr;
-  }
-
-  /** 有序样本的中位间隔，用于吸附阈值（CFR 下约等于帧间隔，VFR 空洞不误吸）。 */
-  function medianGapCached(slot: Slot): number {
-    const r = results.get(slot);
-    if (!r) return 0;
-    const key = `${slot}:${prefs.axis}:${r.sourceVersion}:${r.indexRevision}`;
-    const hit = medianCache.get(key);
-    if (hit != null) return hit;
-    const arr = axisArray(slot);
-    let median = 0;
-    if (arr && arr.length >= 3) {
-      const gaps: number[] = [];
-      for (let i = 1; i < arr.length; i++) {
-        const d = arr[i] - arr[i - 1];
-        if (d > 0 && Number.isFinite(d)) gaps.push(d);
-      }
-      if (gaps.length) {
-        gaps.sort((a, b) => a - b);
-        median = gaps[Math.floor(gaps.length / 2)];
-      }
-    }
-    medianCache.set(key, median);
-    if (medianCache.size > 32) {
-      const first = medianCache.keys().next().value;
-      if (first) medianCache.delete(first);
-    }
-    return median;
-  }
-
-  function lowerBoundArr(arr: Float64Array, value: number): number {
-    let lo = 0, hi = arr.length;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (arr[mid] < value) lo = mid + 1;
-      else hi = mid;
-    }
-    return lo;
-  }
-
-  /** 二分找最近样本（只读当前已知索引，不扫描全片、不重排）。 */
-  function nearestSample(slot: Slot, t: number): { index: number; dt: number } | null {
-    const arr = axisArray(slot);
-    if (!arr || !arr.length) return null;
-    const pos = lowerBoundArr(arr, t);
-    let best = -1, bestDt = Infinity;
-    for (const k of [pos - 1, pos]) {
-      if (k < 0 || k >= arr.length || !Number.isFinite(arr[k])) continue;
-      const dt = Math.abs(arr[k] - t);
-      if (dt < bestDt) { bestDt = dt; best = k; }
-    }
-    return best >= 0 ? { index: best, dt: bestDt } : null;
-  }
-
+  // 有序轴派生索引按不可变快照身份缓存（inspection.ts 内 WeakMap）：
+  // 换范围/换 offset/切轴必然产生新结果对象，不复用旧轴数组。
   /** 画布 CSS 坐标下的直接命中：返回唯一 glyph 身份。 */
   function pickAt(clientX: number, clientY: number): AnalysisGlyph | null {
     if (!lastGlyphs.length) return null;
@@ -878,111 +811,325 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return pickGlyph(lastGlyphs, clientX - rect.left, clientY - rect.top);
   }
 
-  function sizeText(bytes: number): string {
-    return `${(bytes / 1024).toFixed(1)} KiB (${bytes} B)`;
+  const kib = (bytes: number): string => `${(bytes / 1024).toFixed(1)}`;
+  const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  /** 当前视图步长（span/pixelWidth）：码率最近邻的保真上限。 */
+  function viewStepUs(): number {
+    const range = viewRange();
+    const span = Math.max(1, range.end - range.start);
+    const plotW = lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(body.clientWidth).plotW;
+    return span / Math.max(1, plotW);
+  }
+
+  function directTargetFromGlyph(g: AnalysisGlyph | null): DirectTarget | null {
+    if (!g) return null;
+    if (g.kind === 'sample') return { kind: 'sample', slot: g.slot, sampleId: g.sampleId };
+    return { kind: 'bucket', slot: g.slot, bucketStartUs: g.startUs, bucketEndUs: g.endUs };
+  }
+
+  /** 统一检查状态：公共 T 决定所有轨道指标，直接目标只影响高亮与点击。 */
+  function inspectAt(tUs: number, direct: DirectTarget | null): InspectionState {
+    const sel = selectedTracks();
+    return buildInspection({
+      axis: prefs.axis, inspectionTimeUs: Math.round(tUs), windowUs: prefs.windowUs,
+      stepUs: viewStepUs(), order: sel.map(t => t.slot),
+      results, caps, domain: domainBounds(), directTarget: direct,
+    });
+  }
+
+  function stateText(s: string): string {
+    switch (s) {
+      case 'pending': return '统计中';
+      case 'unsupported': return '不支持';
+      case 'outside': return '—';
+      case 'error': return '索引错';
+      default: return '—';
+    }
+  }
+
+  function fmtRate(v: number | null, approx: boolean): string {
+    if (v == null) return '—';
+    return `${v.toFixed(1)}${approx ? ' ≈' : ''}`;
+  }
+
+  function fmtFps(v: number | null): string {
+    if (v == null) return '—';
+    return v >= 100 ? String(Math.round(v)) : v.toFixed(1);
+  }
+
+  function fmtDt(dtUs: number): string {
+    const ms = Math.abs(dtUs) / 1000;
+    const dir = dtUs > 0 ? '晚' : dtUs < 0 ? '早' : '同时';
+    if (dtUs === 0) return dir;
+    return `${dir} ${ms.toFixed(3)}ms`;
+  }
+
+  /** 默认比较表：双轨为两列数值，三轨以上为紧凑每轨一行；字段、顺序、单位一致。 */
+  function inspectionTableHTML(insp: InspectionState): string {
+    const isDts = insp.axis === 'dts';
+    const rateLabel = isDts ? '解码样本率' : '局部帧率';
+    const rateUnit = isDts ? '样本/秒' : 'fps';
+    const winLabel = prefs.windowUs >= 1_000_000 ? `${prefs.windowUs / 1_000_000}s` : `${Math.round(prefs.windowUs / 1000)}ms`;
+    let html = `<div class="tt-head"><span>查看 ${formatAxis(insp.inspectionTimeUs)}</span><span class="tt-axis">${esc(insp.axis.toUpperCase())}</span></div>`;
+    if (insp.tracks.length <= 2) {
+      html += '<table class="tt-grid"><thead><tr><th></th>';
+      for (const t of insp.tracks) {
+        const c = slotColors.get(t.slot) ?? '#888';
+        html += `<th><span class="dot" style="background:${c}"></span>${esc(t.slot)}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+      html += '<tr><td>码率 Mbps</td>';
+      for (const t of insp.tracks) {
+        html += `<td class="num">${t.coverageState !== 'known' ? esc(stateText(t.coverageState)) : esc(fmtRate(t.bitrate.value, t.bitrate.approximate))}</td>`;
+      }
+      html += '</tr>';
+      html += `<tr><td>${esc(rateLabel)} ${esc(rateUnit)}</td>`;
+      for (const t of insp.tracks) {
+        html += `<td class="num">${t.coverageState !== 'known' && t.localRate.value == null ? esc(stateText(t.coverageState)) : esc(fmtFps(t.localRate.value))}</td>`;
+      }
+      html += '</tr>';
+      html += '<tr><td>参考帧 KiB</td>';
+      for (const t of insp.tracks) {
+        let cell: string;
+        if (t.coverageState !== 'known') cell = esc(stateText(t.coverageState));
+        else if (!t.reference) cell = '无新样本';
+        else {
+          const s = t.reference.sample;
+          cell = s.sizeBytes != null ? esc(kib(s.sizeBytes)) : '未知';
+          if (t.reference.relation === 'nearby') cell += ' ≈';
+        }
+        html += `<td class="num">${cell}</td>`;
+      }
+      html += '</tr>';
+      html += '<tr><td>关键</td>';
+      for (const t of insp.tracks) {
+        let cell: string;
+        if (t.coverageState !== 'known') cell = esc(stateText(t.coverageState));
+        else if (!t.reference) cell = '—';
+        else {
+          const k = t.reference.sample.randomAccess;
+          cell = k === 'yes' ? '是' : k === 'no' ? '否' : '未知';
+        }
+        html += `<td class="num">${cell}</td>`;
+      }
+      html += '</tr></tbody></table>';
+    } else {
+      html += '<table class="tt-grid"><thead><tr><th></th><th>码率</th><th>' + esc(rateLabel) + '</th><th>参考帧</th><th>关键</th></tr></thead><tbody>';
+      for (const t of insp.tracks) {
+        const c = slotColors.get(t.slot) ?? '#888';
+        const b = t.coverageState !== 'known' ? stateText(t.coverageState) : fmtRate(t.bitrate.value, t.bitrate.approximate);
+        const f = t.coverageState !== 'known' && t.localRate.value == null ? stateText(t.coverageState) : fmtFps(t.localRate.value);
+        const s = t.coverageState !== 'known' ? stateText(t.coverageState)
+          : !t.reference ? '无新样本'
+          : `${t.reference.sample.sizeBytes != null ? kib(t.reference.sample.sizeBytes) : '未知'}${t.reference.relation === 'nearby' ? ' ≈' : ''}`;
+        const k = t.coverageState !== 'known' ? stateText(t.coverageState)
+          : !t.reference ? '—'
+          : t.reference.sample.randomAccess === 'yes' ? '是' : t.reference.sample.randomAccess === 'no' ? '否' : '未知';
+        html += `<tr><td><span class="dot" style="background:${c}"></span>${esc(t.slot)}</td><td class="num">${esc(b)}</td><td class="num">${esc(f)}</td><td class="num">${esc(s)}</td><td class="num">${esc(k)}</td></tr>`;
+      }
+      html += '</tbody></table>';
+    }
+    const notes: string[] = [];
+    for (const t of insp.tracks) {
+      if (t.reference?.relation === 'nearby') notes.push(`${t.slot} 为邻近帧，${fmtDt(t.reference.dtUs)}`);
+    }
+    if (notes.length) html += `<div class="tt-note">${esc(notes.join('；'))}</div>`;
+    // 直接命中摘要：不替换表中的时间口径，只表达点击目标。
+    const d = insp.directTarget;
+    if (d?.kind === 'sample') {
+      const r = results.get(d.slot);
+      const s = r?.samples.find(v => v.sampleId === d.sampleId);
+      if (s) {
+        const k = s.randomAccess === 'yes' ? '关键' : s.randomAccess === 'no' ? '非关键' : '未知';
+        const sameRef = insp.tracks.find(t => t.slot === d.slot)?.reference?.sample.sampleId === s.sampleId;
+        if (!sameRef) {
+          html += `<div class="tt-direct">直击 ${esc(d.slot)} · ${s.sizeBytes != null ? esc(kib(s.sizeBytes)) : '未知'} KiB · ${esc(k)}（点击定位该帧）</div>`;
+        }
+      }
+    } else if (d?.kind === 'bucket') {
+      html += `<div class="tt-direct">直击 ${esc(d.slot)} · 区间 ${formatAxis(d.bucketStartUs!)}–${formatAxis(d.bucketEndUs!)}（点击放大）</div>`;
+    }
+    html += `<div class="tt-foot">码率 ${esc(winLabel)} · 帧率 1s 估计</div>`;
+    if (insp.tracks.some(t => t.bitrate.provisional || t.localRate.provisional || t.coverageState === 'pending')) {
+      html += '<div class="tt-note">索引构建中，数值为暂定。</div>';
+    }
+    return html;
+  }
+
+  function placeTooltip(clientX: number, clientY: number) {
+    // 按真实浮层宽高限位，不按固定 200×80 估算。
+    const rect = body.getBoundingClientRect();
+    const w = tooltip.offsetWidth || 220, h = tooltip.offsetHeight || 90;
+    let x = clientX - rect.left + 14;
+    let y = clientY - rect.top + 14;
+    x = Math.min(Math.max(0, x), Math.max(0, rect.width - w - 4));
+    if (y + h > rect.height - 4) y = Math.max(4, clientY - rect.top - h - 10);
+    y = Math.min(Math.max(4, y), Math.max(4, rect.height - h - 4));
+    tooltip.style.left = `${x + body.scrollLeft}px`;
+    tooltip.style.top = `${y + body.scrollTop}px`;
   }
 
   function updateTooltip(clientX: number, clientY: number) {
-    if (hoverUs == null) { tooltip.hidden = true; return; }
+    if (hoverUs == null) { tooltip.hidden = true; lastInspection = null; refreshOverlay(); return; }
     const sel = selectedTracks();
-    if (!sel.length) { tooltip.hidden = true; return; }
-    const main = pickAt(clientX, clientY);
-    const rows: string[] = [];
-    rows.push(`<div class="tt-head">${formatAxis(hoverUs)} ｜ ${prefs.axis.toUpperCase()} ｜ ${prefs.windowUs / 1000}ms滑窗</div>`);
-    if (main && main.kind === 'sample') {
-      const g = main as SampleGlyph;
-      const r = results.get(g.slot);
-      const s = r?.samples.find(v => v.sampleId === g.sampleId);
-      const color = slotColors.get(g.slot) ?? '#888';
-      const keyText = s
-        ? (s.randomAccess === 'yes' ? '关键' : s.randomAccess === 'no' ? '非关键' : '未知')
-        : (g.key === true ? '关键' : g.key === false ? '非关键' : '未知');
-      const rate = r ? rateAt(r, g.axisUs) : null;
-      const sizeLabel = s ? (s.sizeBytes != null ? sizeText(s.sizeBytes) : '大小未知') : sizeText(g.sizeBytes);
-      rows.push(`<div class="tt-row"><span class="dot" style="background:${color}"></span><span><b>${g.slot}</b> ${sizeLabel} · ${keyText}（容器标记）${rate != null ? ` · ${rate.toFixed(2)} Mbps` : ''}${g.stackedCount > 1 ? ` · 同时刻${g.stackedCount}样本` : ''}</span></div>`);
-      if (s) {
-        const parts = [
-          `样本 ${s.decodeOrdinal}`,
-          // 原始值保持原值，不钳零；展示/DTS 为会话时间。
-          s.containerPtsUs != null ? `原始PTS ${formatAxis(s.containerPtsUs)}` : '',
-          s.effectivePtsUs != null ? `展示PTS ${formatAxis(s.effectivePtsUs)}` : '',
-          s.dtsUs != null ? `DTS ${formatAxis(s.dtsUs)}` : '',
-        ].filter(Boolean).join(' ｜ ');
-        rows.push(`<div class="tt-row tt-note"><span>${parts}</span></div>`);
-      } else {
-        rows.push(`<div class="tt-row tt-note"><span>展示PTS ${g.sessionPtsUs != null ? formatAxis(g.sessionPtsUs) : '无'} ｜ 轴 ${formatAxis(g.axisUs)}</span></div>`);
-      }
-      // 邻轨参考：同一时刻附近的数据，明确标时间差或无新样本，不覆盖主命中。
-      for (const t of sel) {
-        if (t.slot === g.slot) continue;
-        const near = nearestSample(t.slot, g.axisUs);
-        const c = slotColors.get(t.slot) ?? '#888';
-        if (!near) {
-          rows.push(`<div class="tt-row tt-note"><span class="dot" style="background:${c}"></span><span><b>${t.slot}</b> 该时间无新样本</span></div>`);
-          continue;
-        }
-        const rr = results.get(t.slot)!;
-        const rs = rr.samples[near.index];
-        const axisT = (prefs.axis === 'pts' ? rs.effectivePtsUs : rs.dtsUs) ?? g.axisUs;
-        const dt = Math.round(axisT - g.axisUs);
-        const snap = Math.max(500, medianGapCached(t.slot) * 0.6);
-        if (Math.abs(dt) <= Math.max(snap, GROUP_TOLERANCE_US)) {
-          rows.push(`<div class="tt-row tt-note"><span class="dot" style="background:${c}"></span><span><b>${t.slot}</b> ${rs.sizeBytes != null ? sizeText(rs.sizeBytes) : '大小未知'} · ${dt === 0 ? '同时' : `差 ${dt > 0 ? '+' : ''}${dt}us`}</span></div>`);
-        } else {
-          rows.push(`<div class="tt-row tt-note"><span class="dot" style="background:${c}"></span><span><b>${t.slot}</b> 该时间无新样本（最近差 ${dt}us）</span></div>`);
-        }
-      }
-    } else if (main && main.kind === 'bucket') {
-      const g = main as BucketGlyph;
-      const r = results.get(g.slot);
-      const color = slotColors.get(g.slot) ?? '#888';
-      // 用 glyph 自带聚合数据（支持合并后的粗桶），不依赖原始桶下标。
-      const rate = r ? rateAt(r, (g.startUs + g.endUs) / 2) : null;
-      rows.push(`<div class="tt-row"><span class="dot" style="background:${color}"></span><span><b>${g.slot}</b> 区间峰值 ${sizeText(g.maxBytes)} · ${g.count} 样本 · 共 ${(g.sumBytes / 1024).toFixed(1)} KiB</span></div>`);
-      rows.push(`<div class="tt-row tt-note"><span>${formatAxis(g.startUs)}–${formatAxis(g.endUs)} ｜ 关键${g.keyCount}/非关键${g.deltaCount}/未知${g.unknownCount}${g.complete ? '' : ' ｜ 暂定'}${rate != null ? ` ｜ ${rate.toFixed(2)} Mbps` : ''} ｜ 点击放大，不定位到帧</span></div>`);
-    } else {
-      // 空白/曲线：只检查，不偷用第一轨最近帧冒充定位。
-      for (const t of sel) {
-        const r = results.get(t.slot);
-        const color = slotColors.get(t.slot) ?? '#888';
-        if (!r) {
-          rows.push(`<div class="tt-row"><span class="dot" style="background:${color}"></span><span><b>${t.slot}</b> 正在查询统计…</span></div>`);
-          continue;
-        }
-        const bi = (r.buckets ?? []).findIndex(b => b.count > 0 && hoverUs! >= b.startUs && hoverUs! < b.endUs);
-        if (bi >= 0) {
-          const b = r.buckets![bi];
-          rows.push(`<div class="tt-row tt-note"><span class="dot" style="background:${color}"></span><span><b>${t.slot}</b> 区间 ${b.count} 样本 · 峰值 ${sizeText(b.maxBytes)}</span></div>`);
-        } else {
-          rows.push(`<div class="tt-row tt-note"><span class="dot" style="background:${color}"></span><span><b>${t.slot}</b> 该区间无覆盖</span></div>`);
-        }
-      }
-      rows.push('<div class="tt-row tt-note"><span>空白处点击不定位；拖拽框选放大，双击恢复。</span></div>');
-    }
-    if (rProvisional()) rows.push('<div class="tt-row tt-note"><span>索引构建中，数值为暂定。</span></div>');
-    tooltip.innerHTML = rows.join('');
+    if (!sel.length) { tooltip.hidden = true; lastInspection = null; refreshOverlay(); return; }
+    const direct = directTargetFromGlyph(pickAt(clientX, clientY));
+    const insp = inspectAt(hoverUs, direct);
+    lastInspection = insp;
+    tooltip.innerHTML = inspectionTableHTML(insp);
     tooltip.hidden = false;
-    const rect = body.getBoundingClientRect();
-    const x = Math.min(Math.max(0, clientX - rect.left + 14), Math.max(0, rect.width - 200));
-    const y = Math.min(Math.max(0, clientY - rect.top + 14), Math.max(0, rect.height - 80));
-    tooltip.style.left = `${x + body.scrollLeft}px`;
-    tooltip.style.top = `${y + body.scrollTop}px`;
-    live.textContent = tooltip.textContent ?? '';
+    placeTooltip(clientX, clientY);
+    // 辅助技术播报主要在键盘步进/固定时更新，不每个鼠标帧推送整段文本。
+    if (kbInspect) live.textContent = tooltip.textContent ?? '';
+    refreshOverlay();
+    publishTestHook();
   }
 
-  const rProvisional = () => selectedTracks().some(t => {
-    const r = results.get(t.slot);
-    return r ? r.capability.indexState !== 'complete' : true;
-  });
-
-  function rateAt(r: AnalysisResult, t: number): number | null {
-    const pts = r.bitrate ?? [];
-    let best: number | null = null, bestDt = Infinity;
-    for (const p of pts) {
-      const dt = Math.abs(p.tUs - t);
-      if (dt < bestDt) { bestDt = dt; best = p.mbps; }
+  /** 跨图联动：共享检查线（DOM）+ 曲线圆点与样本高亮（Canvas 覆盖绘制）。 */
+  function refreshOverlay() {
+    if (!lastModel || !ctx || !lastGeom) return;
+    if (hoverUs == null || !lastInspection) return;
+    const model = lastModel;
+    const geom = computeLayout(model);
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawAnalysis(ctx, { ...model, height: model.height });
+    const span = model.viewEnd - model.viewStart || 1;
+    const xOfT = geom.gutter + ((lastInspection.inspectionTimeUs - model.viewStart) / span) * geom.plotW;
+    // 码率曲线圆点（轨道色），只在码率行可见时绘制。
+    if (geom.bitrate && model.showBitrate && model.yMaxBitrate > 0) {
+      for (const t of lastInspection.tracks) {
+        if (t.bitrate.value == null) continue;
+        const track = model.tracks.find(m => m.slot === t.slot);
+        if (!track) continue;
+        const { y, h } = geom.bitrate;
+        const yy = y + h - 4 - (Math.min(t.bitrate.value, model.yMaxBitrate) / (model.yMaxBitrate || 1)) * (h - 8);
+        ctx.beginPath();
+        ctx.arc(Math.min(Math.max(xOfT, geom.gutter), geom.gutter + geom.plotW), yy, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = track.color;
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        ctx.lineWidth = 1;
+      }
     }
-    return best;
+    // 参考样本轮廓高亮，直接命中更明显。
+    for (const t of lastInspection.tracks) {
+      const refId = t.reference?.sample.sampleId;
+      if (refId) {
+        const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === refId) as SampleGlyph | undefined;
+        if (g) {
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = slotColors.get(t.slot) ?? '#888';
+          ctx.strokeRect(g.rect.x - 0.5, g.rect.y - 0.5, g.rect.width + 1, g.rect.height + 1);
+          ctx.lineWidth = 1;
+        } else if (t.reference) {
+          const bg = lastGlyphs.find(v => v.kind === 'bucket' && v.slot === t.slot
+            && (v as BucketGlyph).startUs <= t.reference!.axisUs && t.reference!.axisUs < (v as BucketGlyph).endUs);
+          if (bg) {
+            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = slotColors.get(t.slot) ?? '#888';
+            ctx.strokeRect(bg.rect.x - 0.5, bg.rect.y - 0.5, bg.rect.width + 1, bg.rect.height + 1);
+            ctx.lineWidth = 1;
+          }
+        }
+      }
+    }
+    const d = lastInspection.directTarget;
+    if (d?.kind === 'sample') {
+      const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === d.sampleId) as SampleGlyph | undefined;
+      if (g) {
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#fff';
+        ctx.strokeRect(g.rect.x - 1.5, g.rect.y - 1.5, g.rect.width + 3, g.rect.height + 3);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = slotColors.get(g.slot) ?? '#888';
+        ctx.strokeRect(g.rect.x - 0.5, g.rect.y - 0.5, g.rect.width + 1, g.rect.height + 1);
+        ctx.lineWidth = 1;
+      }
+    }
+  }
+
+  /** 只读测试快照：布局 glyph 身份与当前检查状态，供浏览器回归精确断言。 */
+  function publishTestHook() {
+    try {
+      const w = window as unknown as { __vpAnalysis?: unknown };
+      w.__vpAnalysis = {
+        view: viewRange(),
+        axis: prefs.axis,
+        inspection: lastInspection ? {
+          t: lastInspection.inspectionTimeUs,
+          tracks: lastInspection.tracks.map(t => ({
+            slot: t.slot,
+            bitrate: t.bitrate.value,
+            rate: t.localRate.value,
+            refId: t.reference?.sample.sampleId ?? null,
+            refAxis: t.reference?.axisUs ?? null,
+            coverage: t.coverageState,
+          })),
+          direct: lastInspection.directTarget,
+        } : null,
+        glyphs: lastGlyphs.slice(0, 2000).map(g => {
+          if (g.kind === 'sample') {
+            const s = g as SampleGlyph;
+            return {
+              kind: 'sample', slot: s.slot, id: s.sampleId, axisUs: s.axisUs,
+              cx: s.interactionRect.x + s.interactionRect.width / 2,
+              cy: s.interactionRect.y + s.interactionRect.height / 2,
+            };
+          }
+          const b = g as BucketGlyph;
+          return {
+            kind: 'bucket', slot: b.slot, startUs: b.startUs, endUs: b.endUs,
+            cx: b.interactionRect.x + b.interactionRect.width / 2,
+            cy: b.interactionRect.y + b.interactionRect.height / 2,
+          };
+        }),
+      };
+    } catch { /* 测试钩子不得影响面板。 */ }
+  }
+
+  function pinInspection(direct: DirectTarget | null) {
+    if (hoverUs == null) return;
+    pinned = inspectAt(hoverUs, direct);
+    renderPinned();
+    live.textContent = pinnedEl.textContent ?? '';
+  }
+
+  function renderPinned() {
+    if (!pinned) { pinnedEl.hidden = true; return; }
+    const insp = pinned;
+    const isDts = insp.axis === 'dts';
+    let html = `<div class="tt-head"><span>固定检查 ${formatAxis(insp.inspectionTimeUs)} · ${esc(insp.axis.toUpperCase())}</span><span class="tt-actions"><button type="button" class="tt-copy">复制</button><button type="button" class="tt-close">关闭</button></span></div>`;
+    html += inspectionTableHTML(insp);
+    html += '<div class="tt-details">';
+    for (const t of insp.tracks) {
+      const r = results.get(t.slot);
+      const ref = t.reference?.sample;
+      const parts = [
+        `轨道 ${t.slot}`,
+        ref ? `样本 ${ref.decodeOrdinal}` : '无参考样本',
+        ref?.sampleId ? `sampleId ${ref.sampleId}` : '',
+        ref?.containerPtsUs != null ? `原始PTS ${formatAxis(ref.containerPtsUs)}` : '',
+        ref?.effectivePtsUs != null ? `展示PTS ${formatAxis(ref.effectivePtsUs)}` : '',
+        ref?.dtsUs != null ? `DTS ${formatAxis(ref.dtsUs)}` : '',
+        ref?.sizeBytes != null ? `字节 ${ref.sizeBytes}` : '',
+        `码率窗 ${prefs.windowUs}us${t.bitrate.shortWindow ? '（短窗）' : ''}${t.bitrate.approximate ? '（近似）' : ''}`,
+        `帧率窗 1000000us · ${isDts ? 'dts-interval-1s' : 'pts-interval-1s'}`,
+        `覆盖 ${t.coverageState}`,
+        r ? `版本 ${r.sourceVersion}@${r.indexRevision}` : '',
+      ].filter(Boolean).join(' ｜ ');
+      html += `<div class="tt-note">${esc(parts)}</div>`;
+    }
+    html += '</div>';
+    pinnedEl.innerHTML = html;
+    pinnedEl.hidden = false;
+    pinnedEl.querySelector('.tt-close')?.addEventListener('click', () => { pinned = null; renderPinned(); canvas.focus(); });
+    pinnedEl.querySelector('.tt-copy')?.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(pinnedEl.textContent ?? ''); } catch { /* 剪贴板不可用时仍可手动选择。 */ }
+    });
   }
 
   // ---- 指针交互 ----
@@ -1057,9 +1204,19 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       return;
     }
     rubber = null;
+    const picked = pickAt(event.clientX, event.clientY);
+    // Shift+单击固定当前检查（含详细信息），不改变播放状态。
+    if (event.shiftKey) {
+      hoverUs = Math.round(canvasT(event.clientX));
+      lastClient = { x: event.clientX, y: event.clientY };
+      positionHover();
+      updateTooltip(event.clientX, event.clientY);
+      pinInspection(directTargetFromGlyph(picked));
+      render();
+      return;
+    }
     // 单击：精确柱定位到展示 PTS（DTS 图亦然，横坐标本身不是 seek 目标）；
     // 聚合桶/重复聚合只放大，不伪造某帧精确定位；空白不定位。
-    const picked = pickAt(event.clientX, event.clientY);
     if (picked && picked.kind === 'sample') {
       const g = picked as SampleGlyph;
       // 聚合多样本（重复时间戳放不下）点击展开：放大到该组附近，不冒充 seek。
@@ -1089,8 +1246,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (pressX != null) return;
     hoverUs = null;
     kbInspect = false;
+    lastInspection = null;
     hoverEl.hidden = true;
     tooltip.hidden = true;
+    publishTestHook();
+    render();
   }, { signal });
 
   // 滚轮左右平移；Ctrl+滚轮（触摸板捏合）以 hover 点为中心缩放坐标轴。
@@ -1157,25 +1317,36 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
     } else if (event.key === 'Enter' && hoverUs != null) {
       event.preventDefault();
-      // 键盘 Enter 定位当前焦点轨道在检查点的样本，不总是第一轨。
+      // 键盘 Enter 定位当前焦点轨道在检查点的参考样本（与鼠标统一口径），不总是第一轨。
       const focus = kbTrack ?? sel[0].slot;
-      const near = nearestSample(focus, hoverUs);
-      if (near) {
-        const r = results.get(focus)!;
-        const s = r.samples[near.index];
-        const snap = Math.max(500, medianGapCached(focus) * 0.6);
-        if (near.dt <= Math.max(snap, GROUP_TOLERANCE_US)) {
-          const resolved = session.resolveAnalysisSeek(focus, { effectivePtsUs: s.effectivePtsUs });
-          if ('sessionPtsUs' in resolved) void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', {});
-          else { status.textContent = resolved.reason; live.textContent = resolved.reason; }
-          return;
-        }
+      const insp = inspectAt(hoverUs, lastInspection?.directTarget ?? null);
+      const ref = insp.tracks.find(t => t.slot === focus)?.reference;
+      if (ref) {
+        const resolved = session.resolveAnalysisSeek(focus, { effectivePtsUs: ref.sample.effectivePtsUs });
+        if ('sessionPtsUs' in resolved) void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', {});
+        else { status.textContent = resolved.reason; live.textContent = resolved.reason; }
+        return;
       }
       status.textContent = `轨道 ${focus} 在该时间无可定位样本。`;
       live.textContent = status.textContent;
+    } else if (event.key === 'i' || event.key === 'I') {
+      // 固定当前检查（含详细信息），文本可选择/复制，不改变播放。
+      event.preventDefault();
+      kbInspect = true;
+      if (hoverUs != null) {
+        const rect = canvas.getBoundingClientRect();
+        updateTooltip(rect.left + (lastGeom ? xOf(lastModel, {
+          gutter: lastGeom.gutter, plotW: lastGeom.plotW,
+        } as never, hoverUs) : 0), rect.top + 20);
+        pinInspection(lastInspection?.directTarget ?? null);
+      }
     } else if (event.key === 'Escape') {
+      if (!pinnedEl.hidden) { pinned = null; renderPinned(); return; }
+      if (!helpEl.hidden) { helpEl.hidden = true; return; }
       hoverUs = null; rubber = null; kbInspect = false;
+      lastInspection = null;
       hoverEl.hidden = true; tooltip.hidden = true;
+      publishTestHook();
       render();
     }
   }, { signal });

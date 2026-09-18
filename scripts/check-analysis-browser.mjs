@@ -96,13 +96,40 @@ try {
   });
   assert.equal(dtsFailed, true);
 
-  // 悬停只读：出现共享 tooltip，不触发 seek。
+  // 悬停只读：统一比较表，不触发 seek；只开码率图也能读两轨码率。
   const box = await page.locator('#analysis-canvas').boundingBox();
   const posBefore = await page.locator('#position').inputValue();
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
   await page.locator('.analysis-tooltip:not([hidden])').waitFor({ timeout: 10000 });
-  assert.match(await page.locator('.analysis-tooltip').textContent(), /KiB/);
+  const tip0 = await page.locator('.analysis-tooltip').textContent();
+  assert.match(tip0, /码率/);
+  assert.match(tip0, /局部帧率|解码样本率/);
+  assert.match(tip0, /参考帧/);
+  assert.doesNotMatch(tip0, /该区间无覆盖/);
   assert.equal(await page.locator('#position').inputValue(), posBefore);
+  // 等待测试快照：布局 glyph 就绪。
+  await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, { timeout: 30000 });
+  // 只开码率图：隐藏帧大小行，鼠标在曲线上仍能读两轨码率。
+  const sizePressed = await page.locator('[data-seg="size"]').getAttribute('aria-pressed');
+  if (sizePressed === 'true') await page.locator('[data-seg="size"]').click();
+  // 取两轨重叠区（A 约 4s、B 约 10s，选 25% 宽度 ≈2.5s，两轨都在覆盖内）。
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.25);
+  await page.locator('.analysis-tooltip:not([hidden])').waitFor({ timeout: 10000 });
+  await page.waitForTimeout(400);
+  const bitrateOnly = await page.evaluate(() => window.__vpAnalysis.inspection);
+  assert.ok(bitrateOnly && bitrateOnly.tracks.length === 2, '两轨检查状态');
+  assert.ok(bitrateOnly.tracks.every(t => t.bitrate != null), `只开码率图两轨码率可用：${JSON.stringify(bitrateOnly.tracks)}`);
+  if (sizePressed === 'true') await page.locator('[data-seg="size"]').click();
+  // 同一 x 上下移动：公共时间与各轨码率不变，只有直接目标可变。
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.2);
+  await page.waitForTimeout(400);
+  const top = await page.evaluate(() => window.__vpAnalysis.inspection);
+  await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.7);
+  await page.waitForTimeout(400);
+  const bottom = await page.evaluate(() => window.__vpAnalysis.inspection);
+  assert.ok(top && bottom, '上下均有检查状态');
+  assert.equal(bottom.t, top.t);
+  assert.deepEqual(bottom.tracks.map(t => t.bitrate), top.tracks.map(t => t.bitrate));
 
   // 框选放大后跟随关闭（概览为共享桶时点击只放大，不冒充定位）。
   await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);
@@ -111,21 +138,13 @@ try {
   await page.mouse.up();
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', { timeout: 15000 });
 
-  // 放大到逐样本后，单击柱定位到展示 PTS（统一几何保证不误吸邻轨）。
-  // 若仍为共享桶（点击只放大），继续框选缩小直到出现逐样本 tooltip。
-  let posAfter = posBefore;
-  for (let attempt = 0; attempt < 6 && posAfter === posBefore; attempt++) {
-    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.7);
-    await page.locator('.analysis-tooltip:not([hidden])').waitFor({ timeout: 10000 });
-    // 等查询落定：逐样本 tooltip 含“样本”，桶 tooltip 含“点击放大”。
-    let tip = await page.locator('.analysis-tooltip').textContent();
-    const deadline = Date.now() + 10000;
-    while (!tip.includes('样本') && !tip.includes('点击放大') && Date.now() < deadline) {
-      await page.waitForTimeout(300);
-      tip = await page.locator('.analysis-tooltip').textContent();
-    }
-    if (tip.includes('点击放大') && !tip.includes('样本')) {
-      // 桶模式：框选中心四分之一继续放大，等待查询落定。
+  // 放大到逐样本后，单击指定 B 柱：必须命中 B 的 sampleId 与可信展示 PTS。
+  // 若仍为共享桶（点击只放大），继续框选缩小直到出现逐样本 glyph。
+  let clicked = null;
+  for (let attempt = 0; attempt < 6 && !clicked; attempt++) {
+    await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'), { timeout: 30000 }).catch(() => {});
+    const hasSample = await page.evaluate(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'));
+    if (!hasSample) {
       await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7);
       await page.mouse.down();
       await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.7, { steps: 8 });
@@ -133,18 +152,26 @@ try {
       await page.waitForTimeout(1500);
       continue;
     }
-    // 逐样本或混合态：点击同一位置，命中空白则在附近多试几个 x。
-    for (const dx of [0.5, 0.55, 0.45, 0.6, 0.4]) {
-      await page.mouse.click(box.x + box.width * dx, box.y + box.height * 0.7);
-      try {
-        await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
-        posAfter = await page.locator('#position').inputValue();
-        break;
-      } catch { /* 换 x 再试 */ }
-      if (posAfter !== posBefore) break;
+    const target = await page.evaluate(() => window.__vpAnalysis.glyphs.find(g => g.kind === 'sample' && g.slot === 'B'));
+    assert.ok(target, '应有 B 逐样本 glyph');
+    await page.mouse.click(box.x + target.cx, box.y + target.cy);
+    try {
+      await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+      clicked = target;
+    } catch {
+      // 命中聚合标记（点击只放大）时换一个 B 柱再试。
+      await page.evaluate((exclude) => {
+        window.__vpAnalysis.glyphs = window.__vpAnalysis.glyphs.filter(g => g.id !== exclude);
+      }, target.id);
     }
   }
+  assert.ok(clicked, '指定 B 柱应能定位');
+  assert.equal(clicked.slot, 'B');
+  const posAfter = await page.locator('#position').inputValue();
   assert.notEqual(posAfter, posBefore);
+  // 点击后位置应接近该 B 样本的轴时间（±100ms 内），不得退回第一轨最近样本。
+  const statePos = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+  assert.ok(Math.abs(statePos - clicked.axisUs) < 100_000, `position=${statePos} axis=${clicked.axisUs}`);
 
   await page.locator('#analysis-canvas').dblclick();
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', { timeout: 15000 });

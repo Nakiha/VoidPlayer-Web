@@ -116,8 +116,8 @@
 .analysis-tooltip {
   position: absolute;
   z-index: 5;
-  max-width: min(340px, 80%);
-  background: var(--menu-fill, var(--surface-panel));
+  max-width: min(360px, 82%);
+  background: var(--surface-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 6px 8px;
@@ -126,11 +126,76 @@
   color: var(--text);
   pointer-events: none;
   box-shadow: var(--popover-shadow);
+  opacity: 0.98;
 }
-.analysis-tooltip .tt-head { color: var(--text-secondary); white-space: nowrap; }
+.analysis-tooltip .tt-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  margin-bottom: 4px;
+}
+.analysis-tooltip .tt-head .tt-axis { color: var(--text-secondary); font-weight: 400; }
 .analysis-tooltip .tt-row { display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
-.analysis-tooltip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; align-self: center; }
-.analysis-tooltip .tt-note { color: var(--text-secondary); }
+.analysis-tooltip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; align-self: center; display: inline-block; margin-right: 4px; }
+.analysis-tooltip .tt-note { color: var(--text-secondary); white-space: normal; overflow-wrap: anywhere; }
+.analysis-tooltip .tt-foot { color: var(--text-secondary); margin-top: 4px; white-space: nowrap; }
+.analysis-tooltip .tt-direct { color: var(--text); margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
+.analysis-tooltip .tt-grid { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.analysis-tooltip .tt-grid th,
+.analysis-tooltip .tt-grid td { padding: 1px 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.analysis-tooltip .tt-grid th { color: var(--text-secondary); font-weight: 400; }
+.analysis-tooltip .tt-grid td.num,
+.analysis-tooltip .tt-grid th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.analysis-pinned {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  max-width: min(420px, 90%);
+  max-height: 70%;
+  overflow: auto;
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  box-shadow: var(--popover-shadow);
+  opacity: 0.99;
+  user-select: text;
+}
+.analysis-pinned .tt-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px; }
+.analysis-pinned .tt-actions { display: inline-flex; gap: 4px; }
+.analysis-pinned .tt-actions button { font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-selected); color: var(--text); cursor: pointer; }
+.analysis-pinned .tt-grid { border-collapse: collapse; width: 100%; table-layout: fixed; }
+.analysis-pinned .tt-grid th,
+.analysis-pinned .tt-grid td { padding: 1px 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.analysis-pinned .tt-grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.analysis-pinned .tt-note { color: var(--text-secondary); white-space: normal; overflow-wrap: anywhere; }
+.analysis-pinned .tt-foot { color: var(--text-secondary); margin-top: 4px; }
+.analysis-pinned .tt-details { margin-top: 6px; border-top: 1px solid var(--divider); padding-top: 4px; }
+.analysis-help {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 6;
+  max-width: min(380px, 90%);
+  background: var(--surface-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+  box-shadow: var(--popover-shadow);
+}
+.analysis-help .tt-head { font-weight: 600; margin-bottom: 4px; }
+.analysis-help .tt-help { color: var(--text-secondary); white-space: normal; }
+.analysis-help .tt-close { margin-top: 6px; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-selected); color: var(--text); cursor: pointer; }
 .analysis-empty {
   position: absolute;
   inset: 0;
