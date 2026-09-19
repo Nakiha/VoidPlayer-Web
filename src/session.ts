@@ -8,6 +8,10 @@ import type { WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
 import { SLOTS } from './model.ts';
 import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
+import { offerFirstFrameCandidate, settleOffer } from './thumbnails/offer.ts';
+import { thumbnailState } from './thumbnails/state.ts';
+import { localCacheKey, serverCacheKey } from './thumbnails/contract.ts';
+import { referenceVersion } from './media-reference.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
@@ -538,6 +542,11 @@ export class ReviewSession {
           committed = true;
           status.name = opened.info.name; status.state = 'complete'; status.finishedAt = Date.now();
           this.emit();
+          // First-frame thumbnail bypass: sync offer only (validate + reference).
+          // Render/encode/upload continue off the load promise. A non-zero
+          // join position yields no verifiable file-first frame and stays
+          // missing; never seeks back for a cover.
+          this.offerThumbnail(slot, opened, frame, localTarget);
           if (resume) void this.playbackLoop(this.revision, this.positionUs, performance.now());
         } finally { frame.close(); }
       });
@@ -729,6 +738,54 @@ export class ReviewSession {
   }
   private frameInfo(frame: FrameInfo): FrameInfo {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
+  }
+  /**
+   * Thumbnail bypass for a committed first frame. Synchronous, non-throwing,
+   * and measured: validation, dedupe, budget and one independent resource
+   * reference only. file-first means the load resolved the media origin
+   * (localTarget===0) and the decoded frame is the timeline origin
+   * (frame.ptsUs===0 with its real sourcePtsUs recorded). Anything else —
+   * non-zero joins, workspace restores at an offset, track syncs — offers
+   * nothing and never seeks. No extra Range/MediaSource/frameAt/index work:
+   * see thumbnails/state.ts counters.
+   */
+  private offerThumbnail(slot: Slot, source: MediaSource, frame: DecodedFrame, localTarget: number) {
+    const started = performance.now();
+    try {
+      const isFileFirst = localTarget === 0 && frame.ptsUs === 0;
+      const libraryId = source.info.source?.id;
+      const mediaVersion = referenceVersion(source.info.source?.url);
+      let cacheKey: string;
+      let kind: 'library' | 'local';
+      let epoch: number | undefined;
+      if (libraryId) {
+        // Without a reliable media version, a replaced same-name file would
+        // inherit the old cover: stay missing instead of uploading a cache.
+        if (!mediaVersion) { thumbnailState.skip('upload:no-epoch-or-version'); return; }
+        kind = 'library';
+        cacheKey = serverCacheKey({ mediaId: libraryId, mediaVersion });
+        // Frozen at accept; a missing epoch means local-only this time, with
+        // no network wait while the full frame is held.
+        epoch = thumbnailState.cachedEpoch(cacheKey);
+      } else {
+        kind = 'local';
+        cacheKey = localCacheKey(source.info.name, source.info.size, source.info.lastModified);
+      }
+      const sourceGen = this.nextSourceGen;
+      const offered = offerFirstFrameCandidate({
+        cacheKey, kind, libraryId, mediaVersion, sourceGen,
+        sourcePtsUs: frame.sourcePtsUs, isFileFirst, epoch,
+        byteSize: frame.byteSize, isLive: () => this.tracks.get(slot)?.source === source,
+      }, frame);
+      if (typeof offered === 'string' || offered.result !== 'accepted') return;
+      // Detached continuation; the module is already cached via workbench init.
+      // An import failure must still release the held reference, never leak it.
+      void import('./thumbnails/tasks.ts').then(
+        tasks => tasks.runThumbnailTask(offered),
+        () => { try { offered.owned.close(); } catch {} settleOffer(offered.context.cacheKey, false); },
+      ).catch(() => {});
+    } catch { /* Thumbnails never fail a load. */ }
+    finally { thumbnailState.noteHook(performance.now() - started); }
   }
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {
     const entries = [...tracks].filter(([, t]) => !t.failure);

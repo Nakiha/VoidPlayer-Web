@@ -10,7 +10,7 @@ export function cacheShell() {
   return `<section id="pane-caches" hidden>
     <header class="admin-heading"><div><h1>缓存</h1><p>查看占用，清理可重新生成的数据。</p></div><button id="cache-refresh" class="icon-button" aria-label="刷新缓存">${icon('refresh')}</button></header>
     <div class="cache-overview"><div class="cache-total"><span>缓存内容</span><strong id="cache-total-bytes">—</strong><span id="cache-total-count">正在读取…</span></div><div class="cache-volume"><div class="cache-volume-heading"><span>所在磁盘</span><span id="cache-volume-free">—</span></div><div class="cache-volume-bar" role="meter" aria-label="磁盘占用"><span></span></div><div class="cache-volume-caption"><span id="cache-volume-used">—</span><span id="cache-volume-total">—</span></div></div></div>
-    <div class="cache-toolbar"><div class="cache-tabs" role="group" aria-label="缓存类型"><button data-cache-kind="frame-indexes" aria-pressed="true">帧索引 <span id="cache-frame-count">—</span></button><button data-cache-kind="annotation-previews" aria-pressed="false">标注预览 <span id="cache-preview-count">—</span></button></div><button id="cache-clear" disabled>清理帧索引</button></div>
+    <div class="cache-toolbar"><div class="cache-tabs" role="group" aria-label="缓存类型"><button data-cache-kind="frame-indexes" aria-pressed="true">帧索引 <span id="cache-frame-count">—</span></button><button data-cache-kind="annotation-previews" aria-pressed="false">标注预览 <span id="cache-preview-count">—</span></button><button data-cache-kind="media-thumbnails" aria-pressed="false">媒体缩略图 <span id="cache-thumb-count">—</span></button></div><button id="cache-clear" disabled>清理帧索引</button></div>
     <div class="cache-type-info"><div><p id="cache-description"></p><span id="cache-budget" class="admin-caption"></span><div class="cache-budget-bar" role="meter" aria-label="缓存限额占用"><span></span></div></div><details id="cache-location"><summary>存储位置</summary><div><code id="cache-path"></code><p id="cache-file-size"></p><p>与业务数据共用数据库。清理后空间可复用，文件不一定缩小。</p></div></details></div>
     <form id="cache-search-form" class="cache-search"><input id="cache-search" type="search" maxlength="200" aria-label="搜索缓存" placeholder="搜索媒体名称"><button type="submit">搜索</button></form>
     <div id="cache-confirm" class="admin-inline-confirm" hidden><span id="cache-confirm-text"></span><button id="cache-confirm-clear" class="admin-danger">确认清理</button><button id="cache-cancel">取消</button></div>
@@ -21,7 +21,7 @@ export function installCaches(signal: AbortSignal, notice: (text: string, error?
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`cache-${id}`) as T;
   let kind: CacheKind = 'frame-indexes', overview: Overview | null = null, next: number | null = null, search = '', busy = false;
   let selected: CacheEntry | 'all' | null = null;
-  const label = () => kind === 'frame-indexes' ? '帧索引' : '标注预览';
+  const label = () => kind === 'frame-indexes' ? '帧索引' : kind === 'annotation-previews' ? '标注预览' : '媒体缩略图';
   async function api<T>(url: string, body?: unknown): Promise<T> {
     const response = await fetch(url, { method: body ? 'DELETE' : 'GET', cache: 'no-store', signal: AbortSignal.any([signal, AbortSignal.timeout(15000)]), headers: body ? { 'x-voidplayer-action': 'admin', 'content-type': 'application/json' } : {}, ...(body ? { body: JSON.stringify(body) } : {}) });
     const value = await response.json(); if (!response.ok) throw new Error(value.error ?? '缓存请求失败。'); return value;
@@ -43,24 +43,24 @@ export function installCaches(signal: AbortSignal, notice: (text: string, error?
     $('volume-free').textContent = volume ? `${bytes(volume.availableBytes)} 可用` : '磁盘容量不可用';
     $('volume-used').textContent = volume ? `已用 ${bytes(volume.usedBytes)}` : ''; $('volume-total').textContent = volume ? `共 ${bytes(volume.totalBytes)}` : '';
     meter(document.querySelector('.cache-volume-bar')!, volume?.usedBytes ?? null, volume?.totalBytes ?? 0);
-    for (const type of overview.types) $(type.kind === 'frame-indexes' ? 'frame-count' : 'preview-count').textContent = String(type.count);
+    for (const type of overview.types) $(type.kind === 'frame-indexes' ? 'frame-count' : type.kind === 'annotation-previews' ? 'preview-count' : 'thumb-count').textContent = String(type.count);
     const type = overview.types.find(type => type.kind === kind)!;
-    $('description').textContent = kind === 'frame-indexes' ? '加快 FLV 视频再次打开和定位。清理后会在播放时重建。' : '标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。';
+    $('description').textContent = kind === 'frame-indexes' ? '加快 FLV 视频再次打开和定位。清理后会在播放时重建。' : kind === 'annotation-previews' ? '标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。' : '媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。';
     $('budget').textContent = `${bytes(type.bytes)} / ${bytes(type.limitBytes)} 上限 · 达到上限后自动清理旧缓存`;
     meter(document.querySelector('.cache-budget-bar')!, type.bytes, type.limitBytes);
     $('path').textContent = type.location; $('file-size').textContent = `数据库 ${bytes(type.databaseBytes)} · 写入日志 ${bytes(type.journalBytes)}`;
     $('clear').textContent = `清理${label()}`;
-    $<HTMLInputElement>('search').placeholder = kind === 'frame-indexes' ? '搜索媒体名称' : '搜索媒体、标注或评审空间';
+    $<HTMLInputElement>('search').placeholder = kind === 'frame-indexes' ? '搜索媒体名称' : kind === 'annotation-previews' ? '搜索媒体、标注或评审空间' : '搜索媒体名称';
   }
   function confirm(entry: CacheEntry | 'all') {
     selected = entry; $('confirm').hidden = false;
-    $('confirm-text').textContent = entry === 'all' ? `清理全部${label()}？${kind === 'frame-indexes' ? '保留视频文件。' : '保留标注内容。'}` : `清理「${entry.name}」的${label()}？`;
+    $('confirm-text').textContent = entry === 'all' ? `清理全部${label()}？${kind === 'frame-indexes' ? '保留视频文件。' : kind === 'annotation-previews' ? '保留标注内容。' : '保留视频文件，仅删小图。清理后从头打开可重建。'}` : `清理「${entry.name}」的${label()}？`;
     $('confirm-clear').focus(); $('confirm').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
   }
   function row(entry: CacheEntry) {
     const row = document.createElement('div'); row.className = 'cache-row'; row.dataset.cacheId = entry.id;
     const content = document.createElement('div'); content.className = 'cache-row-content';
-    const thumbnail = document.createElement('span'); thumbnail.className = 'cache-thumbnail'; thumbnail.innerHTML = icon(kind === 'frame-indexes' ? 'film' : 'note');
+    const thumbnail = document.createElement('span'); thumbnail.className = 'cache-thumbnail'; thumbnail.innerHTML = icon(kind === 'annotation-previews' ? 'note' : 'film');
     if (entry.previewUrl) { const image = document.createElement('img'); image.src = entry.previewUrl; image.alt = ''; image.loading = 'lazy'; image.onerror = () => image.remove(); thumbnail.append(image); }
     const text = document.createElement('div'), name = document.createElement('strong'), detail = document.createElement('span'); name.textContent = entry.name; name.title = entry.name; detail.textContent = entry.detail; detail.title = entry.detail; text.append(name, detail); content.append(thumbnail, text);
     const size = document.createElement('span'); size.textContent = bytes(entry.bytes); size.className = 'cache-row-size';
@@ -73,7 +73,7 @@ export function installCaches(signal: AbortSignal, notice: (text: string, error?
     next = page.nextOffset;
     if (!more) $('list').replaceChildren();
     $('list').append(...page.entries.map(row));
-    if (!more && !page.entries.length) $('list').append(emptyState(search ? '没有匹配的缓存' : `暂无${label()}缓存`, search ? '换个关键词试试。' : kind === 'frame-indexes' ? '打开 FLV 视频后，索引会自动保存在这里。' : '编辑标注后，画面预览会在播放暂停时保存。'));
+    if (!more && !page.entries.length) $('list').append(emptyState(search ? '没有匹配的缓存' : `暂无${label()}缓存`, search ? '换个关键词试试。' : kind === 'frame-indexes' ? '打开 FLV 视频后，索引会自动保存在这里。' : kind === 'annotation-previews' ? '编辑标注后，画面预览会在播放暂停时保存。' : '从头打开媒体库视频后，首帧小图会保存在这里。')); 
   }
   async function refresh() { const value = await api<Overview>('/api/admin/caches'); overview = value; renderOverview(); await list(); }
   $('refresh').onclick = () => void act(refresh);

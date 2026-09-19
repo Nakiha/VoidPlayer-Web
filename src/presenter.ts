@@ -2,6 +2,7 @@ import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPrese
 import { yuvToRgba } from './yuv-color.ts';
 import { validateDescription } from './frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
+import { THUMB_MAX_EDGE } from './thumbnails/contract.ts';
 import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
@@ -97,6 +98,77 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
 
 /** Materialize source-sized pixels on demand; playback never calls this. */
 export function captureFrame(canvas: HTMLCanvasElement) { return gpuCapture(canvas) ?? surfaces.get(canvas)?.captureSource() ?? canvas; }
+
+/**
+ * Thumbnail-only render: an independently owned first frame drawn straight to
+ * a small offscreen target using the same description, rotation, display
+ * aspect and color rules as presentation. Never reads or mutates a playback
+ * canvas or GPU state. Returns null when the fixed SDR/sRGB recipe cannot
+ * represent the resource (e.g. unmanaged HDR) so the caller stays missing.
+ */
+export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_EDGE): { canvas: OffscreenCanvas | HTMLCanvasElement; width: number; height: number } | null {
+  let policy: ReturnType<typeof presentationColor>;
+  try {
+    validateDescription(frame.description, frame.pixels?.byteLength);
+    policy = presentationColor(frame.kind, frame.description);
+  } catch { return null; }
+  if (policy.unsupportedHdr) return null;
+  const rotation = frame.rotation ?? frame.sample?.rotation ?? 0;
+  const baseW = frame.description.displayWidth ?? frame.width;
+  const baseH = frame.description.displayHeight ?? frame.height;
+  if (!Number.isFinite(baseW) || !Number.isFinite(baseH) || baseW <= 0 || baseH <= 0) return null;
+  const swapped = rotation === 90 || rotation === 270;
+  const dispW = swapped ? baseH : baseW;
+  const dispH = swapped ? baseW : baseH;
+  const scale = Math.min(1, maxEdge / Math.max(dispW, dispH));
+  const width = Math.max(1, Math.round(dispW * scale));
+  const height = Math.max(1, Math.round(dispH * scale));
+  const makeCanvas = (w: number, h: number): OffscreenCanvas | HTMLCanvasElement => {
+    if (typeof OffscreenCanvas !== 'undefined') return new OffscreenCanvas(w, h);
+    const fallback = document.createElement('canvas');
+    fallback.width = w; fallback.height = h;
+    return fallback;
+  };
+  try {
+    const canvas = makeCanvas(width, height);
+    const ctx = canvas.getContext('2d', { colorSpace: 'srgb' });
+    if (!ctx) return null;
+    // Downscale filtering only; thumbnails never upscale.
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    if (frame.kind === 'video-sample') {
+      if (!frame.sample) return null;
+      // draw() honors rotation metadata; the target is pre-sized swapped so a
+      // plain fill preserves aspect by construction.
+      frame.sample.draw(ctx, 0, 0, width, height);
+      return { canvas, width, height };
+    }
+    if (!frame.pixels) return null;
+    const rgba = frame.kind === 'yuv' ? yuvToRgba(frame.description, frame.pixels) : frame.pixels;
+    // ImageData requires ArrayBuffer-backed storage; view (no copy) or bail.
+    let view: Uint8ClampedArray<ArrayBuffer>;
+    try {
+      view = new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.length);
+    } catch { return null; }
+    const image = new ImageData(view, frame.description.width, frame.description.height);
+    const scratch = makeCanvas(image.width, image.height);
+    const scratchCtx = scratch.getContext('2d');
+    if (!scratchCtx) return null;
+    scratchCtx.putImageData(image, 0, 0);
+    if (!rotation) {
+      ctx.drawImage(scratch, 0, 0, width, height);
+    } else {
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(rotation * Math.PI / 180);
+      const alongX = swapped ? height : width;
+      const alongY = swapped ? width : height;
+      ctx.drawImage(scratch, -alongX / 2, -alongY / 2, alongX, alongY);
+      ctx.restore();
+    }
+    return { canvas, width, height };
+  } catch { return null; }
+}
 
 const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {

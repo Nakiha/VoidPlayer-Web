@@ -1,19 +1,22 @@
 import { stat, statfs } from 'node:fs/promises';
 import path from 'node:path';
 import type { FrameIndexStore } from './frame-index-store.ts';
+import type { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import type { AnnotationStore } from './annotations.ts';
 import { AdminError } from './admin-error.ts';
 
-export type CacheKind = 'frame-indexes' | 'annotation-previews';
+export type CacheKind = 'frame-indexes' | 'annotation-previews' | 'media-thumbnails';
 export type CacheEntry = { id: string; version: string; scope?: string; name: string; detail: string; bytes: number; updatedAt: number; previewUrl?: string };
 export class CacheManager {
-  private directory: string; private frames: FrameIndexStore; private annotations: AnnotationStore;
-  constructor(directory: string, frames: FrameIndexStore, annotations: AnnotationStore) { this.directory=directory; this.frames=frames; this.annotations=annotations; }
+  private directory: string; private frames: FrameIndexStore; private annotations: AnnotationStore; private thumbnails: MediaThumbnailStore | null;
+  constructor(directory: string, frames: FrameIndexStore, annotations: AnnotationStore, thumbnails: MediaThumbnailStore | null = null) { this.directory=directory; this.frames=frames; this.annotations=annotations; this.thumbnails=thumbnails; }
   async overview() {
     const frames = this.frames.list(), previews = this.annotations.previewList();
+    const thumbs = this.thumbnails?.overview() ?? { count: 0, bytes: 0, limitBytes: 256 * 1024 * 1024, epoch: 0 };
     const definitions = [
       { kind: 'frame-indexes' as const, name: '帧索引', count: frames.count, bytes: frames.bytes, limitBytes: frames.limitBytes, file: 'library.sqlite', table: 'frame_indexes' },
       { kind: 'annotation-previews' as const, name: '标注预览', count: previews.count, bytes: previews.bytes, limitBytes: previews.limitBytes, file: 'annotations.sqlite', table: 'annotation_previews' },
+      { kind: 'media-thumbnails' as const, name: '媒体缩略图', count: thumbs.count, bytes: thumbs.bytes, limitBytes: thumbs.limitBytes, file: 'library.sqlite', table: 'media_thumbnails' },
     ];
     const types = await Promise.all(definitions.map(async ({ file, ...definition }) => {
       const location = path.join(this.directory, file);
@@ -34,6 +37,20 @@ export class CacheManager {
       return { ...page, entries: page.entries.map(row => ({ id: String(row.id), version: String(row.version), name: String(row.name), detail: `${row.root} · ${row.frames} 帧`, bytes: Number(row.bytes), updatedAt: Number(row.createdAt) } satisfies CacheEntry)) };
     }
     if (kind === 'annotation-previews') return this.annotations.previewList(offset, search);
+    if (kind === 'media-thumbnails') {
+      if (!this.thumbnails) throw new AdminError(400, '媒体缩略图缓存不可用。');
+      const page = this.thumbnails.list(offset, search);
+      type ThumbRow = { id: string; version: string; recipe: string; width: number; height: number; name: string; root: string; bytes: number; createdAt: number };
+      return {
+        ...page,
+        entries: (page.entries as unknown as ThumbRow[]).map(row => ({
+          id: String(row.id), version: String(row.version), scope: String(row.recipe),
+          name: String(row.name), detail: `${row.root} · ${row.width}×${row.height}`,
+          bytes: Number(row.bytes), updatedAt: Number(row.createdAt),
+          previewUrl: `/api/media/${row.id}/thumbnail?v=${encodeURIComponent(row.version)}&recipe=${encodeURIComponent(row.recipe)}`,
+        } satisfies CacheEntry)),
+      };
+    }
     throw new AdminError(400, '缓存类型无效。');
   }
   remove(kind: string, value: unknown) {
@@ -42,9 +59,17 @@ export class CacheManager {
     if (input.all === true) {
       if (kind === 'frame-indexes') return this.frames.remove();
       if (kind === 'annotation-previews') return this.annotations.clearPreviews();
+      if (kind === 'media-thumbnails') {
+        if (!this.thumbnails) throw new AdminError(400, '媒体缩略图缓存不可用。');
+        return this.thumbnails.remove();
+      }
     } else if (typeof input.id === 'string' && typeof input.version === 'string') {
       if (kind === 'frame-indexes') return this.frames.remove(input.id, input.version);
       if (kind === 'annotation-previews' && typeof input.scope === 'string') return this.annotations.removePreview(input.scope, input.id, Number(input.version));
+      if (kind === 'media-thumbnails') {
+        if (!this.thumbnails) throw new AdminError(400, '媒体缩略图缓存不可用。');
+        return this.thumbnails.remove(input.id, input.version);
+      }
     }
     throw new AdminError(400, '请指定缓存类型及清理范围。');
   }

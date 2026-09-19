@@ -15,6 +15,8 @@ export interface LibraryEntry {
   version?: string;
   state?: string;
   rootId?: string;
+  /** Current-recipe cover presence from the browse page; advisory only. */
+  thumbnail?: boolean;
 }
 
 export function mediaUrl(id: string, version?: string): string {
@@ -36,6 +38,7 @@ export interface LibraryPage {
   roots: LibraryRoot[];
   total: number; offset: number; limit: number; nextOffset: number | null; revision: number;
   ready: boolean; scanning: boolean;
+  thumbnailEpoch?: number;
   job: { id: number; state: string; visited: number; files: number; errors: number; current_path: string | null } | null;
 }
 export interface LibraryQuery { root?: string; directory?: string; search?: string; recursive?: boolean; offset?: number; revision?: number; limit?: number }

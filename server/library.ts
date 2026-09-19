@@ -1,9 +1,11 @@
 import { FrameIndexStore } from './frame-index-store.ts';
+import { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import { createHash } from 'node:crypto';
 import { promises as fs } from 'node:fs';
 import type { Stats } from 'node:fs';
 import path from 'node:path';
 import { LibraryStore, normalizeRoots, mediaId } from './library-store.ts';
+import { THUMB_RECIPE_VERSION } from '../src/thumbnails/contract.ts';
 import type { MediaRoot, RootRecord, StoredMedia } from './library-store.ts';
 import { DirectoryChanges, DirectoryWatchHints } from './library-watch.ts';
 import type { DirectoryScope } from './library-watch.ts';
@@ -23,6 +25,7 @@ export class MediaLibraryIndex {
   readonly definitions: RootRecord[];
   private store: LibraryStore;
   readonly frameIndexes: FrameIndexStore;
+  readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
   private abort: AbortController | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -44,6 +47,7 @@ export class MediaLibraryIndex {
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
     this.frameIndexes = new FrameIndexStore(this.store.db);
+    this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
     if (this.initialized) this.refreshedAt = this.now();
@@ -85,9 +89,17 @@ export class MediaLibraryIndex {
     const where = filters.join(' AND ');
     const total = (this.store.db.prepare(`SELECT COUNT(*) AS total FROM media m JOIN roots r ON r.id=m.root_id WHERE ${where}`).get(...values) as { total: number }).total;
     const rows = this.store.db.prepare(`SELECT m.* FROM media m JOIN roots r ON r.id=m.root_id WHERE ${where} ORDER BY m.path COLLATE NOCASE,m.path,m.root_id LIMIT ? OFFSET ?`).all(...values, limit, offset) as unknown as StoredMedia[];
+    // Lightweight thumbnail presence for the current recipe, so lists render
+    // cached covers without per-item HEAD requests. Exact (id, version)
+    // matches only; a replaced file never inherits the old cover.
+    const thumbKeys = this.thumbnails.readyKeys(rows.map(r => r.id), THUMB_RECIPE_VERSION);
+    const entries = rows.map(r => {
+      const entry = this.entry(r);
+      return { ...entry, thumbnail: thumbKeys.has(`${entry.id}|${entry.version}`) };
+    });
     // Folders have their own page so a large directory cannot bypass the media limit.
     const folders = query.recursive ? [] : this.store.db.prepare(`SELECT d.root_id AS rootId,d.path,d.name FROM directories d JOIN roots r ON r.id=d.root_id WHERE r.active=1 AND d.path!='' AND d.parent=? ${query.rootId ? 'AND d.root_id=?' : ''} ${query.search ? 'AND instr(lower(d.name),lower(?))>0' : ''} ORDER BY d.name COLLATE NOCASE,d.path,d.root_id LIMIT ? OFFSET ?`).all(directory, ...(query.rootId ? [query.rootId] : []), ...(query.search ? [query.search.slice(0, 300)] : []), limit + 1, offset);
-    return { entries: rows.map(r => this.entry(r)), directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, ...this.status() };
+    return { entries, directories: folders.slice(0, limit), moreDirectories: folders.length > limit, total, offset, limit, revision, nextOffset: offset + limit < total || folders.length > limit ? offset + limit : null, thumbnailEpoch: this.thumbnails.epoch, ...this.status() };
   }
   async list(force = false): Promise<Library> {
     if (force || !this.ready || this.now() - this.refreshedAt >= (this.options.ttlMs ?? 30000)) await this.refresh();
@@ -324,7 +336,16 @@ export class MediaLibraryIndex {
       if (!signal.aborted) throw error;
     }
   }
-  metadata(id: string) { const row = this.store.find(id); return row ? this.entry(row) : null; }
+  metadata(id: string) {
+    const row = this.store.find(id);
+    if (!row) return null;
+    const entry = this.entry(row);
+    let thumbnail = false;
+    try {
+      thumbnail = entry.version ? this.thumbnails.status(entry.id, entry.version, THUMB_RECIPE_VERSION).ready : false;
+    } catch { /* Thumbnail presence is advisory; metadata must still load. */ }
+    return { ...entry, thumbnail, thumbnailEpoch: this.thumbnails.epoch };
+  }
   async resolve(id: string, version?: string): Promise<string | null> {
     if (!/^[0-9a-f]{24}$/.test(id) || this.closed) return null;
     const entry = this.store.find(id);

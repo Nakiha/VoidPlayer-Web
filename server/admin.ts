@@ -54,7 +54,7 @@ export class AdminController {
   private cpuAt = performance.now();
   private cpuPercent = 0;
   constructor(config: ServiceConfig, library: MediaLibraryIndex, build = { version: 'development', revision: 'source' }) { this.config = config; this.library = library; this.build = build; this.measurements = new Measurements(library); this.workspaces = new WorkspaceStore(path.join(config.dataDir, 'workspaces.sqlite')); this.annotations = new AnnotationStore(path.join(config.dataDir, 'annotations.sqlite')); }
-  get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations); }
+  get caches() { return new CacheManager(this.config.dataDir, this.library.frameIndexes, this.annotations, this.library.thumbnails); }
   status() {
     const now = performance.now(), elapsed = now - this.cpuAt;
     if (elapsed >= 500) {
