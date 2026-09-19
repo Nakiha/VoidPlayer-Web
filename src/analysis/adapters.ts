@@ -252,32 +252,76 @@ export function flvPacketsToViews(packets: { pts: number; dts: number; size: num
  * 见 packet-worker 的 analysis 分支说明。
  * REVIEW-04：增量只覆盖同引用尾部追加；引用/原点/轴变化仍全量重排。
  */
-export function createSourceQuerier() {
-  let cached: { packets: unknown; length: number; firstPtsUs: number; axis: string; sorted: SortedAxis } | undefined;
-  return (
+export interface SourceQuerier {
+  (
     packets: ArrayLike<PacketView> & { length: number },
     ctx: SourceQueryContext,
     query: AnalysisQuery & { requestId: number },
-  ): AnalysisResult => {
+  ): AnalysisResult;
+  /**
+   * 展示序排名：与区间查询共用同一份有序轴缓存，O(log N) 二分，
+   * 不物化样本数组。rank 为 axis 时间严格小于 tUs 的样本数
+   * （0-based 展示下标，重复时间戳共享排名）；ordinal 为与 tUs
+   * 精确相等的首个样本的包表下标（解码顺序号），无精确匹配为 null。
+   */
+  rank(
+    packets: ArrayLike<PacketView> & { length: number },
+    firstPtsUs: number,
+    axis: 'pts' | 'dts',
+    tUs: number,
+  ): { rank: number; total: number; ordinal: number | null };
+}
+export function createSourceQuerier(): SourceQuerier {
+  let cached: { packets: unknown; length: number; firstPtsUs: number; axis: string; sorted: SortedAxis } | undefined;
+  // 同一包表（引用 + 长度 + 原点 + 轴）的有序轴只排一次，区间查询与排名共用。
+  const sortedFor = (
+    packets: ArrayLike<PacketView> & { length: number },
+    firstPtsUs: number,
+    axis: 'pts' | 'dts',
+  ): SortedAxis => {
+    let sorted = cached && cached.packets === packets && cached.length === packets.length
+      && cached.firstPtsUs === firstPtsUs && cached.axis === axis ? cached.sorted : undefined;
+    if (!sorted) {
+      const prev = cached && cached.packets === packets
+        && cached.firstPtsUs === firstPtsUs && cached.axis === axis ? cached : undefined;
+      if (prev && packets.length > prev.length) {
+        sorted = mergeAppendedSort(packets, firstPtsUs, axis, prev.sorted, prev.length);
+      } else {
+        sorted = sortByAxis(packets, firstPtsUs, axis);
+      }
+      cached = { packets, length: packets.length, firstPtsUs, axis, sorted };
+    }
+    return sorted;
+  };
+  function queryFn(
+    packets: ArrayLike<PacketView> & { length: number },
+    ctx: SourceQueryContext,
+    query: AnalysisQuery & { requestId: number },
+  ): AnalysisResult {
     const startUs = Math.min(query.startUs, query.endUs);
     const endUs = Math.max(query.startUs, query.endUs);
     if (ctx.capability.hasDts === false && query.axis === 'dts') {
       throw new Error('该片源没有可用的 DTS 时间，无法按解码时间查看。');
     }
-    let sorted = cached && cached.packets === packets && cached.length === packets.length
-      && cached.firstPtsUs === ctx.firstPtsUs && cached.axis === query.axis ? cached.sorted : undefined;
-    if (!sorted) {
-      const prev = cached && cached.packets === packets
-        && cached.firstPtsUs === ctx.firstPtsUs && cached.axis === query.axis ? cached : undefined;
-      if (prev && packets.length > prev.length) {
-        sorted = mergeAppendedSort(packets, ctx.firstPtsUs, query.axis, prev.sorted, prev.length);
-      } else {
-        sorted = sortByAxis(packets, ctx.firstPtsUs, query.axis);
-      }
-      cached = { packets, length: packets.length, firstPtsUs: ctx.firstPtsUs, axis: query.axis, sorted };
-    }
+    const sorted = sortedFor(packets, ctx.firstPtsUs, query.axis);
     return executeSortedQuery(packets, ctx, query, startUs, endUs, query.maxSamples ?? MAX_SAMPLES_DEFAULT, sorted);
+  }
+  const querier = queryFn as SourceQuerier;
+  querier.rank = (
+    packets: ArrayLike<PacketView> & { length: number },
+    firstPtsUs: number,
+    axis: 'pts' | 'dts',
+    tUs: number,
+  ): { rank: number; total: number; ordinal: number | null } => {
+    if (axis !== 'pts' && axis !== 'dts') throw new Error('时间基准必须是 pts 或 dts。');
+    if (!Number.isFinite(tUs)) throw new Error('排名时间必须是有限微秒数。');
+    const sorted = sortedFor(packets, firstPtsUs, axis);
+    // 包时间戳与查询点都是整数微秒，可精确比较；命中 lowerBound 首位即
+    // (t,pos) 稳定序下该时间的首个样本，其包表下标就是解码顺序号。
+    const lo = lowerBound(sorted.times, tUs);
+    return { rank: lo, total: sorted.times.length, ordinal: sorted.times[lo] === tUs ? sorted.order[lo] : null };
   };
+  return querier;
 }
 
 /**

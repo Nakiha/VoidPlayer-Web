@@ -31,7 +31,7 @@ test('workspace library navigation and pending search survive plain and compress
 });
 
 test('analysis panel state survives workspace round trips, invalid blocks are rejected',async()=>{
-  const analysisView={view:{start:1000000,end:2000000},axis:'pts',windowUs:250000,layoutMode:'merged',showBitrate:true,showSize:false,follow:false,selected:['A','B']};
+  const analysisView={view:{start:1000000,end:2000000},axis:'pts',windowUs:250000,layoutMode:'merged',showBitrate:true,showSize:false,follow:false,selected:['A','B'],numAxis:'pts'};
   const value=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true,analysis:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView}});
   assert.deepEqual(value.layout?.analysisView,analysisView);
   assert.deepEqual((await readWorkspaceFile(await compressWorkspace(value),'http://localhost/')).layout?.analysisView,analysisView);

@@ -49,6 +49,8 @@ const LAYOUT_LABELS: Record<'merged' | 'rows', string> = { merged: '合并', row
 interface Prefs {
   showBitrate: boolean; showSize: boolean;
   axis: 'pts' | 'dts'; windowUs: number; layoutMode: 'merged' | 'rows';
+  /** 状态区帧号顺序（PTS序/解码序），与图表时间基准独立。 */
+  numAxis: 'pts' | 'dts';
   follow: boolean; selected: Slot[];
 }
 
@@ -65,6 +67,7 @@ function sanitizePrefs(p: Partial<Prefs> & { layoutMode?: unknown }, fallback: P
     showSize: typeof p.showSize === 'boolean' ? p.showSize : fallback.showSize,
     follow: typeof p.follow === 'boolean' ? p.follow : fallback.follow,
     axis: p.axis === 'dts' ? 'dts' : 'pts',
+    numAxis: p.numAxis === 'dts' ? 'dts' : 'pts',
     windowUs: BITRATE_WINDOW_OPTIONS_US.includes(p.windowUs!) ? p.windowUs! : DEFAULT_BITRATE_WINDOW_US,
     layoutMode: migrateLayoutMode(p.layoutMode),
     selected: Array.isArray(p.selected) ? p.selected.filter((s): s is Slot => SLOTS.includes(s as Slot)) : [],
@@ -76,6 +79,7 @@ function loadPrefs(): Prefs {
     // 多轨主体色恒为轨道色（与曲线对应），关键用顶端菱形/K 标记，不再按类型填色。
     showBitrate: true, showSize: true,
     axis: 'pts', windowUs: DEFAULT_BITRATE_WINDOW_US, layoutMode: 'merged',
+    numAxis: 'pts',
     follow: true, selected: [],
   };
   // v2 优先；无 v2 时从 v1 迁移可保留项，colorByType 一律丢弃（旧版本无法区分
@@ -124,6 +128,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         <button type="button" class="seg" data-seg="follow" title="跟随播放范围；框选放大后自动关闭，不强制跳回播放位置">跟随：开</button>
         <button type="button" class="seg" data-seg="full" title="双击图也可恢复完整范围">完整范围</button>
       </div>
+      <div class="analysis-status" id="analysis-status" role="group" aria-label="当前上屏帧号">
+        <div class="segmented" id="analysis-num-axis" role="group" aria-label="帧号顺序">
+          <button type="button" data-num-axis="pts">PTS</button>
+          <button type="button" data-num-axis="dts">DTS</button>
+        </div>
+        <span class="st-items" id="analysis-status-items"></span>
+      </div>
     </header>
     <div class="analysis-body" id="analysis-body">
       <div class="analysis-plot" id="analysis-plot">
@@ -139,6 +150,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const $ = <T extends Element = HTMLElement>(sel: string) => section.querySelector(sel) as unknown as T;
   const tools = $<HTMLElement>('.analysis-tools');
   const tracksEl = $<HTMLElement>('#analysis-tracks');
+  const statusEl = $<HTMLElement>('#analysis-status');
+  const numAxisEl = $<HTMLElement>('#analysis-num-axis');
+  const itemsEl = $<HTMLElement>('#analysis-status-items');
   const body = $<HTMLElement>('.analysis-body');
   const plot = $<HTMLElement>('#analysis-plot');
   const canvas = $<HTMLCanvasElement>('#analysis-canvas');
@@ -271,6 +285,117 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const allHaveDts = () => {
     const sel = selectedTracks();
     return sel.length > 0 && sel.every(t => caps.get(t.slot)?.hasDts);
+  };
+
+  // ---- 右侧状态区：当前上屏帧 PTS + 双帧号（展示序 / 解码序） ----
+  // PTS 取会话真实上屏帧（frame.ptsUs + offsetUs），与各视口 canvas 一致；
+  // PTS序是展示序排名（PTS 严格小于该帧的样本数，0-based），DTS序是解码
+  // 顺序号（包表下标）。两者经 session.rankAnalysisFrame 一次只读查询返回，
+  // 复用各后端包表的有序轴缓存，O(log N)，不解码、不物化样本。重复 PTS
+  // 共享展示排名；无精确 PTS 匹配时 DTS序显示 —；索引构建中为暂定值（~）。
+  const framesBySlot = new Map<Slot, { ptsUs: number; sourcePtsUs: number } | null>();
+  const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
+  const rankSeq = new Map<Slot, number>();
+  let lastStatusSig = '';
+  /** 展示序排名按（slot，会话 PTS）缓存；换片/重建时由调用方清理。 */
+  function fetchRank(slot: Slot, sessionPts: number) {
+    const seq = (rankSeq.get(slot) ?? 0) + 1;
+    rankSeq.set(slot, seq);
+    void session.rankAnalysisFrame(slot, sessionPts, 'pts').then(res => {
+      if (signal.aborted || rankSeq.get(slot) !== seq) return;
+      const entry = tracks.find(t => t.slot === slot);
+      const f = framesBySlot.get(slot);
+      // 只接受仍是当前上屏帧的结果，旧帧的迟到回答直接丢弃。
+      if (!entry || !f || f.ptsUs + entry.offsetUs !== sessionPts) return;
+      rankCache.set(slot, 'rank' in res
+        ? { pts: sessionPts, rank: res.rank, total: res.total, ordinal: res.ordinal, complete: res.complete }
+        : { pts: sessionPts, rank: null, total: null, ordinal: null, complete: false, note: res.reason });
+      renderStatus();
+    }).catch(() => { /* RPC 异常不覆盖显示，保留占位，下次帧变化再试。 */ });
+  }
+  function statusEntry(slot: Slot, offsetUs: number) {
+    const f = framesBySlot.get(slot);
+    const sessionPts = f ? f.ptsUs + offsetUs : null;
+    const cached = rankCache.get(slot);
+    const hit = sessionPts != null && cached?.pts === sessionPts ? cached : undefined;
+    return { frame: f ?? null, sessionPts, hit };
+  }
+  /** 同步渲染：只显示主题色点 + 槽位 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
+  function renderStatus() {
+    const sig = [prefs.numAxis, ...tracks.map(t => {
+      const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
+      const num = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      return `${t.slot}:${sessionPts ?? 'x'}:${num ?? (hit ? 'x' : '-')}${hit && !hit.complete ? '~' : ''}`;
+    })].join('|');
+    if (sig === lastStatusSig) return;
+    lastStatusSig = sig;
+    itemsEl.replaceChildren();
+    const axisLabel = prefs.numAxis === 'pts' ? 'PTS序' : 'DTS序';
+    if (!tracks.length) {
+      const empty = document.createElement('span');
+      empty.className = 'st-empty';
+      empty.textContent = '—';
+      empty.title = '尚未载入视频';
+      itemsEl.append(empty);
+      statusEl.setAttribute('aria-label', '当前上屏帧号：尚未载入视频');
+      return;
+    }
+    const summary: string[] = [];
+    for (const t of tracks) {
+      const { frame: f, sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
+      const wrap = document.createElement('span');
+      wrap.className = 'st-item';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = slotColors.get(t.slot) ?? '#888';
+      const label = document.createElement('span');
+      label.className = 'st-slot';
+      label.textContent = t.slot;
+      const num = document.createElement('span');
+      num.className = 'st-num';
+      const value = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      if (hit == null) num.textContent = '…';
+      else if (value == null) num.textContent = '—';
+      else num.textContent = `#${value}${hit.complete ? '' : '~'}`;
+      wrap.append(dot, label, num);
+      if (sessionPts == null) {
+        wrap.title = `轨道 ${t.slot}：暂无上屏帧`;
+      } else if (hit?.rank != null) {
+        wrap.title = `轨道 ${t.slot} 上屏帧：会话 PTS ${formatAxis(sessionPts)}（${sessionPts} µs）`
+          + (f != null ? ` · 源 PTS ${f.sourcePtsUs} µs` : '')
+          + ` · PTS序 #${hit.rank}${hit.total != null ? ` / 共 ${hit.total} 帧` : ''}`
+          + (hit.ordinal == null ? ' · DTS序 —（解码 PTS 不在包表内，不猜测）' : ` · DTS序 #${hit.ordinal}（解码顺序号）`)
+          + (hit.complete ? '' : '（索引构建中，暂定）');
+      } else {
+        wrap.title = `轨道 ${t.slot} 上屏帧：会话 PTS ${formatAxis(sessionPts)}（${sessionPts} µs）`
+          + (f != null ? ` · 源 PTS ${f.sourcePtsUs} µs` : '')
+          + (hit?.note ? ` · 帧号 —（${hit.note}）` : ' · 帧号查询中');
+      }
+      itemsEl.append(wrap);
+      summary.push(sessionPts == null || value == null ? `${t.slot} —` : `${t.slot} #${value}`);
+      if (sessionPts != null && !hit) fetchRank(t.slot, sessionPts);
+    }
+    statusEl.setAttribute('aria-label', `当前上屏帧号（${axisLabel}）：${summary.join('；')}`);
+  }
+  function updateStatus() {
+    // 暂定排名在索引完成后自动转正：仍是当前帧但缓存未完成时重查一次。
+    for (const t of tracks) {
+      const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
+      if (sessionPts != null && hit?.rank != null && !hit.complete) fetchRank(t.slot, sessionPts);
+    }
+    renderStatus();
+  }
+
+  // ---- 帧号顺序切换（PTS序/解码序）：复用全局 .segmented 样式 ----
+  const numAxisButtons = [...numAxisEl.querySelectorAll<HTMLButtonElement>('[data-num-axis]')];
+  function refreshNumAxis() {
+    for (const b of numAxisButtons) b.setAttribute('aria-pressed', String(b.dataset.numAxis === prefs.numAxis));
+  }
+  for (const b of numAxisButtons) b.onclick = () => {
+    const v = b.dataset.numAxis as 'pts' | 'dts';
+    if (prefs.numAxis === v) return;
+    prefs.numAxis = v;
+    save(); refreshNumAxis(); renderStatus();
   };
 
   // ---- 工具条：静态控件一次装配，动态部分（轨道、菜单标签）按需刷新 ----
@@ -474,6 +599,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         // 铸造，可能早于身份钉定（updateMediaInfo），不得参与比较。
         if (!result.sourceVersion.startsWith(`${current.sourceGen}#`)) return;
         results.set(t.slot, result);
+        // 索引进展可能使暂定排名转正，按当前帧重估状态区。
+        updateStatus();
         // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
         // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
         if (result.capability?.indexState === 'complete') {
@@ -1525,6 +1652,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       axis: prefs.axis, windowUs: prefs.windowUs, layoutMode: prefs.layoutMode,
       showBitrate: prefs.showBitrate, showSize: prefs.showSize,
       follow: prefs.follow, selected: [...prefs.selected],
+      numAxis: prefs.numAxis,
     };
   }
 
@@ -1545,10 +1673,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     prefs.layoutMode = s.layoutMode === 'rows' ? 'rows' : 'merged';
     prefs.follow = s.follow;
     prefs.selected = s.selected.filter(x => SLOTS.includes(x as Slot)) as Slot[];
+    prefs.numAxis = s.numAxis === 'dts' ? 'dts' : 'pts';
     // 以当前轨道身份为选择基准，避免后续元数据事件把快照里隐藏的轨道加回来。
     for (const e of tracks) knownTrackIds.add(`${e.slot}|${e.mediaId}`);
     save();
     refreshTools();
+    refreshNumAxis();
+    updateStatus();
     pendingAnalysisView = s.view ? { start: s.view.start, end: s.view.end } : null;
     if (tracks.length) applyPendingAnalysisView();
     else { render(); scheduleQuery(); }
@@ -1559,6 +1690,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const state = session.getState();
     positionUs = state.positionUs;
     durationUs = state.durationUs;
+    for (const t of state.tracks) {
+      const frame = (t as { frame?: { ptsUs: number; sourcePtsUs: number } | null }).frame;
+      framesBySlot.set(t.slot as Slot, frame ? { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs } : null);
+    }
+    for (const slot of [...framesBySlot.keys()]) {
+      if (!state.tracks.some(t => (t.slot as Slot) === slot)) {
+        framesBySlot.delete(slot);
+        rankCache.delete(slot);
+      }
+    }
     const entries: TrackEntry[] = state.tracks.map(t => ({
       slot: t.slot as Slot, mediaId: t.id as string, offsetUs: t.offsetUs as number,
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
@@ -1588,6 +1729,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         if (!entry || !Number.isInteger(resultGen) || resultGen !== entry.sourceGen) {
           results.delete(slot);
           queriedBySlot.delete(slot);
+          // 排名缓存随结果失效，并作废该槽位的在途查询，避免旧片排名污染状态区。
+          rankCache.delete(slot);
+          rankSeq.set(slot, (rankSeq.get(slot) ?? 0) + 1);
         }
       }
       caps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
@@ -1599,6 +1743,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       save();
       refreshTools();
       applyPendingAnalysisView();
+      updateStatus();
       scheduleQuery(true);
     } else {
       // 索引构建会改变 duration 与能力，轻量跟进。能力比较覆盖完整字段
@@ -1612,6 +1757,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         scheduleQuery(true);
       }
       positionPlayhead();
+      updateStatus();
     }
   };
 
@@ -1630,11 +1776,24 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   });
   resizer_obs.observe(body);
   resizer_obs.observe(plot);
+  // 换行检测：状态区是否被挤到工具条下一行（直接比几何位置，不猜阈值）。
+  // 同行靠右（margin-left:auto），换行独占一行时左对齐。margin 翻转不改变
+  // 换行判定本身（只吸收/释放空白），不会形成布局抖动回路。
+  const headEl = section.querySelector('.analysis-head')!;
+  const wrapObs = new ResizeObserver(() => {
+    if (signal.aborted) return;
+    const toolsBottom = tools.getBoundingClientRect().bottom;
+    const statusTop = statusEl.getBoundingClientRect().top;
+    headEl.classList.toggle('status-wrapped', statusTop - toolsBottom > 2);
+  });
+  wrapObs.observe(tools);
+  wrapObs.observe(statusEl);
 
-  const themeChanges = new MutationObserver(() => { readColors(); render(); });
+  const themeChanges = new MutationObserver(() => { readColors(); lastStatusSig = ''; updateStatus(); render(); });
   themeChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
 
   refreshTools();
+  refreshNumAxis();
   onSession();
   render();
 
@@ -1646,6 +1805,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     offSession();
     offProgress();
     resizer_obs.disconnect();
+    wrapObs.disconnect();
     themeChanges.disconnect();
     floatLayer.remove();
     for (const c of abortBySlot.values()) c.abort();

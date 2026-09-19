@@ -13,7 +13,7 @@ import type { PreparedFlv } from './flv-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import { contextLog } from './log.ts';
 import type { MediaInfo } from './model.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './analysis/types.ts';
+import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
 export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
@@ -196,6 +196,15 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         return activeRpc.call<AnalysisSample | null>('analysis-locate', {
           mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId,
         }, [], 60000);
+      },
+      async rankAnalysisTime(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank> {
+        if (disposed) throw new Error('媒体已释放。');
+        if (!Number.isFinite(tUs)) throw new Error('排名时间必须是有限微秒数。');
+        // 与 queryAnalysis 同一包表、同一有序轴缓存；complete 以主线程索引状态为准。
+        const result = await activeRpc.call<{ rank: number; total: number; ordinal: number | null }>('analysis-rank', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, tUs,
+        }, [], 60000);
+        return { ...result, complete: (info.indexState ?? 'complete') === 'complete' };
       },
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){

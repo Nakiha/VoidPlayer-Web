@@ -14,6 +14,8 @@ export type AnalysisViewState = {
   showBitrate: boolean; showSize: boolean;
   follow: boolean;
   selected: Slot[];
+  /** 状态区帧号顺序：缺省（老工作区）为 pts。 */
+  numAxis: 'pts' | 'dts';
 };
 export type WorkspaceLayout = {
   panels: { inspector: boolean; subtracks: boolean; sources: boolean; analysis?: boolean };
@@ -119,6 +121,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
         view, axis: a.axis, windowUs: a.windowUs, layoutMode: a.layoutMode,
         showBitrate: boolean(a.showBitrate), showSize: boolean(a.showSize),
         follow: boolean(a.follow), selected: array(a.selected, SLOTS.length).map(slotValue),
+        numAxis: a.numAxis === 'dts' ? 'dts' : 'pts',
       };
     }
   }

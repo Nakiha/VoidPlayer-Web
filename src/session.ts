@@ -12,7 +12,7 @@ import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
-import type { AnalysisQuery, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
+import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -333,6 +333,35 @@ export class ReviewSession {
         dtsUs: found.dtsUs == null ? null : found.dtsUs + offsetUs,
       },
     };
+  }
+  /**
+   * 展示序帧号（面板/Agent 共用，只读不解码）：会话 PTS 对应样本在
+   * axis 时间下的排名，即 axis 时间严格小于该帧的样本数（0-based，
+   * 重复时间戳共享排名）。排名与 offset 无关（同片内相对顺序），
+   * 会话层只做时间平移与实例校验；索引构建中返回暂定值。
+   */
+  async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts'): Promise<AnalysisRank | { reason: string }> {
+    slotValue(slot);
+    if (!Number.isInteger(sessionPtsUs)) return { reason: '展示时间必须是整数微秒。' };
+    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
+    const source = track.source;
+    if (!source.rankAnalysisTime) return { reason: '该片源的解码路径暂不支持展示序查询。' };
+    const gen = track.sourceGen;
+    const mediaId = source.info.id;
+    const offsetUs = track.offsetUs;
+    let rank: AnalysisRank;
+    try {
+      rank = await source.rankAnalysisTime(sessionPtsUs - offsetUs, axis);
+    } catch (error) {
+      return { reason: errorText(error) };
+    }
+    const current = this.tracks.get(slot);
+    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
+      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    }
+    return rank;
   }
   /**
    * 按样本身份定位并 seek 的统一动作入口（面板/键盘/Agent 共用）：

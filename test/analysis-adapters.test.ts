@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { runSourceQuery, locateSampleById } from '../src/analysis/adapters.ts';
+import { createSourceQuerier, runSourceQuery, locateSampleById } from '../src/analysis/adapters.ts';
 import { coverageFor } from '../src/analysis/inspection.ts';
 import type { SourceQueryContext } from '../src/analysis/adapters.ts';
 
@@ -135,4 +135,33 @@ test('曲线采样超出片长时尾部断开不断言尖峰（多轨片尾回�
   const inside = r.bitrate.filter(p => p.tUs < 2_000_000 && p.mbps != null).map(p => p.mbps as number);
   assert.ok(inside.length > 0);
   assert.ok(Math.max(...inside) < 100, `max inside=${Math.max(...inside)}`);
+});
+
+test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共享 lowerBound', () => {
+  // demux 序 0..5，PTS 含 B 帧重排：pos2 的 PTS 最小，pos0/pos1 同 PTS。
+  const mixed = [
+    { pts: 40000, dts: 0, size: 1000, key: true },
+    { pts: 40000, dts: 40000, size: 1000, key: false },
+    { pts: 0, dts: 80000, size: 1000, key: false },
+    { pts: 120000, dts: 120000, size: 1000, key: false },
+    { pts: 80000, dts: 160000, size: 1000, key: false },
+    { pts: 160000, dts: 200000, size: 1000, key: false },
+  ];
+  const querier = createSourceQuerier();
+  // PTS 排序后：0(pos2), 40000(pos0,pos1), 80000(pos4), 120000(pos3), 160000(pos5)
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', -1), { rank: 0, total: 6, ordinal: null });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 0), { rank: 0, total: 6, ordinal: 2 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 40000), { rank: 1, total: 6, ordinal: 0 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 160000), { rank: 5, total: 6, ordinal: 5 });
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 99999999), { rank: 6, total: 6, ordinal: null });
+  // DTS 轴用各自时间同一规则
+  assert.deepEqual(querier.rank(mixed, 0, 'dts', 80000), { rank: 2, total: 6, ordinal: 2 });
+  // 排名与区间查询共用缓存：查完排名再查区间，结果不受影响
+  const r = querier(mixed, ctx, {
+    requestId: 10, axis: 'pts', startUs: 0, endUs: 200000, pixelWidth: 100, bitrateWindowUs: 1_000_000,
+  });
+  assert.equal(r.samples.length, 6);
+  assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4 });
+  assert.throws(() => querier.rank(mixed, 0, 'pts' as never, NaN), /有限/);
 });

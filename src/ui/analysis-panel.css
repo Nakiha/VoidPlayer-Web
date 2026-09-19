@@ -25,12 +25,13 @@
 .analysis-head {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 4px 8px;
   min-height: 32px;
   max-height: 64px;
   padding: 2px 8px;
   overflow: hidden;
   flex: 0 0 auto;
+  flex-wrap: wrap;
 }
 .analysis-tools {
   display: flex;
@@ -87,6 +88,47 @@
 }
 .analysis-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .analysis-chip[aria-pressed="true"] { background: var(--surface-selected); color: var(--text); }
+/* 右侧状态区：当前上屏帧 PTS + 帧号。平时与功能区同行右对齐；
+   放不下时自动换到第二行（表头最多两行，仍在 64px 内）。 */
+.analysis-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  margin-left: auto;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.analysis-status .st-items {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+.analysis-status .st-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+.analysis-status .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.analysis-status .st-slot { color: var(--text-secondary); }
+.analysis-status .st-num {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+/* 换行独占一行时左对齐（JS 按实际换行状态挂 .status-wrapped，同行仍靠右）。 */
+.analysis-head.status-wrapped .analysis-status { margin-left: 0; }
+.analysis-status .st-empty { color: var(--text-secondary); }
 /* 分析图占满面板宽度；横轴下方预留固定坞，卡片在坞内滑动，不占图表布局。 */
 .analysis-body {
   position: relative;

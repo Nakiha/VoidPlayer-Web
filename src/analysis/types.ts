@@ -32,6 +32,20 @@ export interface AnalysisSample {
 
 export type DataState = 'ready' | 'pending' | 'unsupported' | 'error';
 
+/** 展示序排名（只读，不解码）：axis 时间严格小于查询点的样本数（0-based）。
+ * 重复时间戳共享同一排名；total 为参与排序的样本总数（当前索引覆盖内）。 */
+export interface AnalysisRank {
+  rank: number;
+  total: number;
+  /**
+   * 与查询点 axis 时间精确相等的首个样本的解码序号（包表下标，即解码/DTS
+   * 顺序号）；无精确匹配（解码 PTS 不在包表内）为 null，不得按邻近猜测。
+   */
+  ordinal: number | null;
+  /** false 表示索引构建中，排名与序号仅覆盖已确认部分，为暂定值，不得当精确值展示。 */
+  complete: boolean;
+}
+
 export interface AnalysisCapability {
   hasSize: boolean;
   /** DTS 可用当且仅当后端有真实容器 DTS。 */
