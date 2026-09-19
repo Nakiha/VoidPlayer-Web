@@ -14,7 +14,7 @@ import { groupSamples } from '../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../analysis/view-cache.ts';
-import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
+import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
 import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
 import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
@@ -618,9 +618,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           // 多轨密集时选更粗的桶，保证每组仍有位置画不同轨道，不压成同一像素。
           // 按公共粗时间下标聚合（会话域原点 0），不按非空位置分批；空桶不绘制，
           // 但不先从时间格删除，不同稀疏度的轨道仍落到同一套边界。
-          // R3：各轨独立查询/缓存，基础网格未必相同。优先用结果自带的
-          // bucketGrid，缺失时回退到估计；仅当该轨网格与公共粗网格兼容时
-          // 才合并，不兼容回退到原始桶（不按比例猜拆，不整体塞入起点区间）。
+          // R3/B1：公共网格由规划器一次决定、不可变下发。各轨独立查询/缓存，
+          // 基础网格未必相同。优先用结果自带的 bucketGrid，缺失时回退到估计；
+          // 仅当全部轨道都与公共粗网格兼容时才合并，否则整体回退到原始桶
+          // （不逐轨各自舍入、不把不同边界并排冒充同一时间组；未知覆盖由
+          // coarsenBucketsShared 向上传播为 complete=false）。
           const lanes = Math.max(1, sel.length);
           const span = Math.max(1, viewEnd - range.start);
           const baseBySlot = new Map<Slot, number>();
@@ -636,7 +638,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           const baseMin = bases.length ? Math.min(...bases) : null;
           const timePerPx = span / Math.max(1, plotW);
           const needed = timePerPx * 2 * lanes;
-          const coarseWidth = baseMin != null ? baseMin * Math.max(1, Math.ceil(needed / baseMin)) : null;
+          // 公共目标只定一次：找同时是所有 base 整数倍、>= needed 的最小宽度
+          //（有界，避免 10ms/11ms 之类组合爆出巨桶）。找不到则整体回退。
+          const coarseWidth = bases.length && baseMin != null && needed > baseMin
+            ? planSharedCoarseWidth(bases, needed, span)
+            : null;
           const bucketsBySlot = new Map<Slot, { slot: Slot; bucketIndex: number; startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
           const toOriginal = (slot: Slot, list: { startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]) => {
             const nonEmpty = list.filter(b => b.count > 0);
@@ -647,25 +653,30 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
               complete: b.complete, maxSampleId: b.maxSampleId,
             })));
           };
-          sel.forEach(t => {
+          const inViewBySlot = new Map<Slot, { startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
+          for (const t of sel) {
             const r = results.get(t.slot);
-            const inView = (r?.buckets ?? []).filter(b => b.endUs > range.start && b.startUs < viewEnd);
-            if (coarseWidth == null || (baseMin != null && coarseWidth <= baseMin)) {
+            inViewBySlot.set(t.slot, (r?.buckets ?? []).filter(b => b.endUs > range.start && b.startUs < viewEnd));
+          }
+          // 全轨一致判定：任一轨不兼容则整体回退，不逐轨混用不同边界。
+          const allCompatible = coarseWidth != null && baseMin != null && coarseWidth > baseMin
+            && sel.every(t => {
+              const trackBase = baseBySlot.get(t.slot) ?? baseMin!;
+              return isBucketGridCompatible(inViewBySlot.get(t.slot) ?? [], trackBase, coarseWidth, 0);
+            });
+          sel.forEach(t => {
+            const inView = inViewBySlot.get(t.slot) ?? [];
+            if (!allCompatible || coarseWidth == null || baseMin == null) {
               toOriginal(t.slot, inView);
             } else {
               const trackBase = baseBySlot.get(t.slot) ?? baseMin!;
-              // 该轨网格与公共粗网格不兼容时不合并，回退原始桶。
-              if (!isBucketGridCompatible(inView, trackBase, coarseWidth, 0)) {
-                toOriginal(t.slot, inView);
-              } else {
-                const coarse = coarsenBucketsShared(inView, trackBase, coarseWidth, 0);
-                bucketsBySlot.set(t.slot, coarse.map(b => ({
-                  slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
-                  count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-                  keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-                  complete: b.complete, maxSampleId: b.maxSampleId,
-                })));
-              }
+              const coarse = coarsenBucketsShared(inView, trackBase, coarseWidth, 0);
+              bucketsBySlot.set(t.slot, coarse.map(b => ({
+                slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
+                count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
+                keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
+                complete: b.complete, maxSampleId: b.maxSampleId,
+              })));
             }
           });
           bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {

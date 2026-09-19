@@ -1,7 +1,9 @@
 // 顶部码流分析面板回归：只读查询口径、双轨配对、悬停/定位、DTS 切换、
 // 播放共存。Usage: npm run test:analysis:browser -- [webkit|chromium]
+// 诊断与临时输入分离：截图/状态写入 .run/analysis-reports/<engine>/（CI 上传），
+// 临时目录仅放可删除的中间文件；失败时尽力保留现场后重抛。
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import path from 'node:path';
@@ -11,8 +13,37 @@ import { createMediaServer } from '../server/app.ts';
 const engineName = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(engineName), 'Expected webkit or chromium');
 const root = path.resolve(import.meta.dirname, '..');
+// B4：诊断目录固定、可上传；与临时输入分离，finally 不得删除。
+const reportDir = join(root, '.run', 'analysis-reports', engineName);
+await mkdir(reportDir, { recursive: true });
 const temp = await mkdtemp(join(tmpdir(), 'vp-analysis-'));
-let browser, server;
+let browser, server, page;
+// 失败现场暂存：catch/finally 中尽力落盘，保留原始异常。
+let failure = null;
+async function saveDiagnostics(activePage, name, extra = {}) {
+  try {
+    if (activePage) {
+      await activePage.screenshot({ path: join(reportDir, `${name}.png`) }).catch(() => {});
+    }
+    let state = null;
+    if (activePage) {
+      try {
+        state = await activePage.evaluate(() => ({
+          url: location.href,
+          view: window.__vpAnalysis?.view ?? null,
+          inspection: window.__vpAnalysis?.inspection ?? null,
+          float: window.__vpAnalysis?.float ?? null,
+          glyphs: window.__vpAnalysis?.glyphs?.length ?? null,
+          queries: document.getElementById('analysis-canvas')?.dataset?.analysisQueries ?? null,
+        }));
+      } catch (error) { state = { collectError: String(error) }; }
+    }
+    await writeFile(
+      join(reportDir, `${name}.json`),
+      JSON.stringify({ engine: engineName, name, time: new Date().toISOString(), state, ...extra }, null, 2),
+    ).catch(() => {});
+  } catch { /* 诊断落盘本身不得掩盖原始失败 */ }
+}
 try {
   server = createMediaServer({
     roots: [join(root, 'fixtures/video')], staticDir: join(root, 'dist'), onLog() {},
@@ -20,7 +51,7 @@ try {
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await (engineName === 'webkit' ? webkit : chromium).launch({ headless: true });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
   // 测试快照钩子只在 QA 显式启用时构建，生产 hover 不为测试付费。
   await page.addInitScript(() => { window.__vpAnalysisQA = true; });
   page.setDefaultTimeout(30000);
@@ -348,10 +379,29 @@ try {
   assert.equal(await page.locator('[data-seg="size"]').getAttribute('aria-pressed'), 'false', '导入后帧大小开关应还原');
 
   assert.deepEqual(errors, []);
-  await page.screenshot({ path: join(temp, 'analysis-panel.png') });
+  // 成功截图写入固定诊断目录（CI 按目录上传），同时校验落盘存在。
+  await page.screenshot({ path: join(reportDir, 'analysis-panel.png') });
+  const successState = await page.evaluate(() => ({
+    view: window.__vpAnalysis?.view ?? null,
+    inspection: window.__vpAnalysis?.inspection ?? null,
+    glyphs: window.__vpAnalysis?.glyphs?.length ?? null,
+  }));
+  await writeFile(
+    join(reportDir, 'analysis-panel.json'),
+    JSON.stringify({ engine: engineName, time: new Date().toISOString(), state: successState, errors }, null, 2),
+  );
   await browser.close(); browser = undefined;
   console.log('PASS analysis panel: capabilities, merged layout, read-only hover, click seek, zoom, playback coexistence');
+} catch (error) {
+  failure = error;
+  // 失败保留现场：截图 + 检查状态/视图/错误 + 原始异常信息；诊断失败不掩盖原错。
+  await saveDiagnostics(page, 'failure', {
+    message: error instanceof Error ? error.message : String(error),
+    stack: error instanceof Error ? error.stack : undefined,
+  });
+  throw failure;
 } finally {
-  await browser?.close(); server?.close();
-  await rm(temp, { recursive: true, force: true });
+  await browser?.close().catch(() => {}); server?.close();
+  // 只删临时输入，诊断目录保留供 CI 上传与本地排查。
+  await rm(temp, { recursive: true, force: true }).catch(() => {});
 }

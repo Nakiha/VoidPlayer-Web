@@ -2,7 +2,7 @@ import { schedulePresentationTick } from './presentation-tick.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode,type ReferenceDecode,type ColorMode} from './color-mode.ts';
 import type { AnnotationDocument } from './annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
-import { abortableLoad } from './media-abort.ts';
+import { abortableLoad, abortableWait } from './media-abort.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
@@ -300,11 +300,8 @@ export class ReviewSession {
     let found: AnalysisSample | null;
     try {
       const call = locateFn.call(source, sampleId);
-      found = opts?.signal
-        ? await Promise.race([call, new Promise<never>((_, reject) => {
-          opts.signal!.addEventListener('abort', () => reject(opts.signal!.reason ?? new DOMException('定位已取消。', 'AbortError')), { once: true });
-        })])
-        : await call;
+      // B3：共用 abortableWait，settled 后清理监听器，避免长期 signal 累积。
+      found = await abortableWait(call, opts?.signal);
     } catch (error) {
       // 旧实例在等待期间被释放（换片/重建）：按失效处理，不抛释放错误。
       const current = this.tracks.get(slot);
@@ -353,11 +350,8 @@ export class ReviewSession {
     let found: AnalysisSample | null;
     try {
       const call = locateFn.call(source, sampleId);
-      found = opts?.signal
-        ? await Promise.race([call, new Promise<never>((_, reject) => {
-          opts.signal!.addEventListener('abort', () => reject(opts.signal!.reason ?? new DOMException('定位已取消。', 'AbortError')), { once: true });
-        })])
-        : await call;
+      // B3：共用 abortableWait，settled 后清理监听器，避免长期 signal 累积。
+      found = await abortableWait(call, opts?.signal);
     } catch (error) {
       const current = this.tracks.get(slot);
       if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId) {

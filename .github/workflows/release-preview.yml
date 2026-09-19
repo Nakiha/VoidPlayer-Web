@@ -125,13 +125,19 @@ jobs:
       - name: Run analysis unit contracts
         run: node --experimental-strip-types --test test/analysis-*.test.ts
       - name: Run session analysis projection contracts
-        run: node --experimental-strip-types --test test/session.test.ts test/media-loading.test.ts
+        # 选择集回归 analysis-selection 与会话投影共用同一入口，显式列出，
+        # 不只依赖上面的 glob（B4）。
+        run: node --experimental-strip-types --test test/session.test.ts test/media-loading.test.ts test/analysis-selection.test.ts
 
   analysis-browser:
-    name: Verify analysis panel (chromium + webkit)
+    name: Verify analysis panel (${{ matrix.engine }})
     needs: decoder
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -154,18 +160,16 @@ jobs:
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run build
-      - name: Verify analysis panel on chromium
-        run: node scripts/check-analysis-browser.mjs chromium
-      - name: Verify analysis panel on webkit
-        run: node scripts/check-analysis-browser.mjs webkit
+      - name: Verify analysis panel on ${{ matrix.engine }}
+        run: node scripts/check-analysis-browser.mjs ${{ matrix.engine }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: analysis-browser-reports
-          path: |
-            /tmp/vp-analysis-*.png
-            .run/playback-reports/
-          if-no-files-found: ignore
+          name: analysis-browser-reports-${{ matrix.engine }}
+          # B4：诊断与临时输入分离，脚本写入固定目录；失败现场保留，
+          # 缺件时报错而不静默忽略。
+          path: .run/analysis-reports/${{ matrix.engine }}/
+          if-no-files-found: error
           retention-days: 14
 
   playback:

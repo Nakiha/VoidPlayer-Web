@@ -358,9 +358,11 @@ export interface CoarsenedBucket extends CoarseBucketInput {
 }
 
 /**
- * 把各轨基础桶按公共粗网格合并。originUs 一致（会话域 0），
- * coarseWidthUs 为基础桶宽的整数倍。空桶不绘制，但不先从时间格删除；
- * 不同稀疏度的轨道仍落到同一套边界，每个样本只计一次。
+ * 把各轨基础桶按公共粗网格合并。originUs 一致（会话域 0）。
+ * 公共网格不可变：coarseWidthUs 原样使用，不得逐轨舍入；调用方先用
+ * isBucketGridCompatible 判断或 planSharedCoarseWidth 规划共同网格。
+ * 数值聚合与覆盖完整性分开：零样本桶不贡献计数，但其 complete=false
+ * 与缺失子区间都会使父桶 complete=false（未知不冒充完整）。
  * R3：输入桶必须与 base 网格对齐且完全落入单个粗区间，否则输出标为
  * 不完整（complete=false），调用方应先用 isBucketGridCompatible 判断，
  * 不兼容时回退到原始桶或重查，不得将跨界桶整体塞入起点所在区间冒充完整。
@@ -370,17 +372,24 @@ export function coarsenBucketsShared(
   baseWidthUs: number, coarseWidthUs: number, originUs = 0,
 ): CoarsenedBucket[] {
   if (!(baseWidthUs > 0) || !(coarseWidthUs > 0)) return [];
+  if (!Number.isFinite(baseWidthUs) || !Number.isFinite(coarseWidthUs)) return [];
+  if (!Number.isFinite(originUs)) return [];
+  // 公共网格原样使用：禁止 Math.round(coarse/width)*width 逐轨改写。
   const width = Math.max(baseWidthUs, 1);
-  const coarse = Math.max(width, Math.round(coarseWidthUs / width) * width || width);
+  const coarse = Math.max(1, coarseWidthUs);
   const byIndex = new Map<number, CoarsenedBucket>();
+  const covered = new Map<number, number>();
   for (const b of buckets) {
-    if (!b.count) continue;
+    if (!Number.isFinite(b.startUs) || !Number.isFinite(b.endUs) || !(b.endUs > b.startUs)) {
+      continue;
+    }
     const idx = Math.floor((b.startUs - originUs) / coarse);
+    if (!Number.isFinite(idx)) continue;
     const coarseStart = originUs + idx * coarse;
     const coarseEnd = coarseStart + coarse;
     // 跨界或非对齐的细桶不得冒充完整：仍归入起点区间以保持计数守恒，
     // 但整组标为不完整，调用方优先用兼容性检查避免进入此分支。
-    const straddles = b.startUs < coarseStart || b.endUs > coarseEnd;
+    const straddles = b.startUs < coarseStart - 1e-6 || b.endUs > coarseEnd + 1e-6;
     let entry = byIndex.get(idx);
     if (!entry) {
       entry = {
@@ -389,43 +398,102 @@ export function coarsenBucketsShared(
         complete: true, maxSampleId: null, coarseIndex: idx,
       };
       byIndex.set(idx, entry);
+      covered.set(idx, 0);
     }
-    entry.count += b.count;
-    entry.sumBytes += b.sumBytes;
-    if (b.maxBytes > entry.maxBytes) { entry.maxBytes = b.maxBytes; entry.maxSampleId = b.maxSampleId; }
-    entry.keyCount += b.keyCount;
-    entry.deltaCount += b.deltaCount;
-    entry.unknownCount += b.unknownCount;
+    // 覆盖长度按与所属粗区间的交集累加（含空桶）：缺失子区间/视口裁切
+    // 使交集总和小于粗宽度时，父桶不得标完整。
+    const overlap = Math.max(0, Math.min(b.endUs, coarseEnd) - Math.max(b.startUs, coarseStart));
+    covered.set(idx, (covered.get(idx) ?? 0) + overlap);
+    // 数值聚合只计非空桶；覆盖完整性对空桶同样生效。
+    if (b.count) {
+      entry.count += b.count;
+      entry.sumBytes += b.sumBytes;
+      if (b.maxBytes > entry.maxBytes) { entry.maxBytes = b.maxBytes; entry.maxSampleId = b.maxSampleId; }
+      entry.keyCount += b.keyCount;
+      entry.deltaCount += b.deltaCount;
+      entry.unknownCount += b.unknownCount;
+    }
     if (!b.complete || straddles) entry.complete = false;
   }
-  return [...byIndex.values()].sort((a, b) => a.coarseIndex - b.coarseIndex);
+  // 缺失子区间传播：已累加的交集覆盖小于粗宽度（1us 容差）时标不完整。
+  // 视口裁切只传入局部细桶时，局部粗桶不会被误标完整。
+  for (const [idx, entry] of byIndex) {
+    const total = covered.get(idx) ?? 0;
+    if (total + 1 < coarse) entry.complete = false;
+  }
+  // 仅输出有样本的粗桶（空区域不绘制），但完整性已按上述规则计入。
+  // 纯空且不完整的粗区间不单独成 glyph：调用方以非空父桶的 complete=false
+  // 感知未知覆盖，不靠空 glyph 传递。
+  return [...byIndex.values()]
+    .filter(e => e.count > 0)
+    .sort((a, b) => a.coarseIndex - b.coarseIndex);
 }
 
 /**
- * 共享粗化前置检查：只有当所有非空输入桶宽度等于 baseWidthUs、
+ * 共享粗化前置检查：公共 coarseWidthUs 原样校验，不得先舍入再验证。
+ * 只有当 coarse 为 base 的整数倍、所有输入桶宽度等于 baseWidthUs、
  * 起点对齐 base 网格、且完全落入单个 coarse 区间时才允许合并。
  * 各轨独立查询/缓存、异步更新或复用不同分辨率缓存时，基础网格未必相同，
- * 不得仅凭“旧桶更细”假定一定能正确合并（R3）。
+ * 不得仅凭“旧桶更细”假定一定能正确合并（R3/B1）。
  */
 export function isBucketGridCompatible(
   buckets: readonly CoarseBucketInput[],
   baseWidthUs: number, coarseWidthUs: number, originUs = 0,
 ): boolean {
   if (!(baseWidthUs > 0) || !(coarseWidthUs > 0)) return false;
+  if (!Number.isFinite(baseWidthUs) || !Number.isFinite(coarseWidthUs) || !Number.isFinite(originUs)) return false;
   const width = Math.max(baseWidthUs, 1);
-  const coarse = Math.max(width, Math.round(coarseWidthUs / width) * width || width);
-  // coarse 必须为 base 的整数倍（1us 整除误差内），否则网格天然不对齐。
-  if (Math.abs(coarse / width - Math.round(coarse / width)) > 1e-6) return false;
+  const coarse = coarseWidthUs;
+  // 公共网格不可变：直接校验原始请求，不做 Math.round(coarse/width)*width。
+  // 15ms 基础无法合并成 40ms 公共网格时返回 false，由上层统一改选 60ms
+  // 或重查，不得逐轨改成 45ms 后返回“兼容”。
+  const ratio = coarse / width;
+  if (!(ratio >= 1) || Math.abs(ratio - Math.round(ratio)) > 1e-6) return false;
   for (const b of buckets) {
-    if (!b.count) continue;
+    if (!Number.isFinite(b.startUs) || !Number.isFinite(b.endUs)) return false;
     const w = b.endUs - b.startUs;
     if (!(w > 0) || Math.abs(w - width) > 1) return false;
     if (Math.abs((b.startUs - originUs) / width - Math.round((b.startUs - originUs) / width)) > 1e-6) return false;
     const idx = Math.floor((b.startUs - originUs) / coarse);
+    if (!Number.isFinite(idx)) return false;
     const coarseStart = originUs + idx * coarse;
-    if (b.startUs < coarseStart || b.endUs > coarseStart + coarse) return false;
+    if (b.startUs < coarseStart - 1e-6 || b.endUs > coarseStart + coarse + 1e-6) return false;
   }
   return true;
+}
+
+/**
+ * 公共粗网格规划器：一次决定、不可变下发。
+ * 在 >= neededUs 的前提下找同时是所有 base 的整数倍的最小宽度；
+ * 以 maxBase 为步长有界搜索，避免为最小公倍数造出异常巨桶。
+ * 找不到（或输入非法）时返回 null，调用方整体回退到原始桶并视为不可比，
+ * 不得逐轨各自舍入后并排冒充同一时间组。
+ */
+export function planSharedCoarseWidth(
+  baseWidths: readonly number[], neededUs: number, maxUs?: number,
+): number | null {
+  const bases = [...new Set(baseWidths.filter(w => Number.isFinite(w) && w > 0))];
+  if (!bases.length || !(neededUs > 0) || !Number.isFinite(neededUs)) return null;
+  const maxBase = Math.max(...bases);
+  const cap = maxUs != null && Number.isFinite(maxUs) && maxUs > 0 ? maxUs : neededUs * 4;
+  // 起点：覆盖 needed 的 maxBase 整数倍；步长 maxBase 保证恒为 maxBase 的倍数。
+  let k = Math.max(1, Math.ceil(neededUs / maxBase));
+  // 有界搜索：最多 64 步且不超过 cap，防止 10ms/11ms 之类组合爆出巨桶。
+  for (let step = 0; step < 64; step++, k++) {
+    const candidate = maxBase * k;
+    if (candidate < neededUs - 1e-6 || candidate > cap + 1e-6) {
+      if (candidate > cap) break;
+      continue;
+    }
+    let ok = true;
+    for (const w of bases) {
+      const r = candidate / w;
+      if (!(r >= 1) || Math.abs(r - Math.round(r)) > 1e-6) { ok = false; break; }
+    }
+    if (ok) return candidate;
+    if (maxBase * (k + 1) > cap + 1e-6) break;
+  }
+  return null;
 }
 
 /** 从桶数组估计基础桶宽（连续桶起止差的中位数，含空桶）。 */

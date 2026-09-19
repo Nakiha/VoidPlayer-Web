@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { getEventListeners } from 'node:events';
 import { runSourceQuery } from '../src/analysis/adapters.ts';
-import { bitrateAtT, localRateAtT, coarsenBucketsShared, isBucketGridCompatible, LOCAL_RATE_WINDOW_US } from '../src/analysis/inspection.ts';
+import { bitrateAtT, localRateAtT, coarsenBucketsShared, isBucketGridCompatible, planSharedCoarseWidth, LOCAL_RATE_WINDOW_US } from '../src/analysis/inspection.ts';
 import { canSatisfy, clampPixelWidth, bucketWidthFor } from '../src/analysis/view-cache.ts';
 import { ReviewSession } from '../src/session.ts';
 import { rgbaDescription } from '../src/frame-description.ts';
@@ -205,5 +206,84 @@ test('R2: 定位等待期间拖动 seek 使旧定位失效', async () => {
     const res = await pending;
     assert.ok('reason' in res);
     assert.equal(session.getState().positionUs, 80000);
+  } finally { await session.dispose(); }
+});
+
+test('B1: 公共网格不可变：15ms 基础不得冒充 40ms 兼容，规划器统一选 60ms', () => {
+  const mk = (start: number, w: number) => ({
+    startUs: start, endUs: start + w, count: 1,
+    maxBytes: 1000, sumBytes: 1000, keyCount: 0, deltaCount: 1, unknownCount: 0,
+    complete: true, maxSampleId: `s${start}`,
+  });
+  const a = [0, 10000, 20000, 30000].map(t => mk(t, 10000));
+  const b = [0, 15000, 30000].map(t => mk(t, 15000));
+  // 同一 40ms 请求：10ms 兼容，15ms 必须拒绝（不得偷改成 45ms）。
+  assert.equal(isBucketGridCompatible(a, 10000, 40000, 0), true);
+  assert.equal(isBucketGridCompatible(b, 15000, 40000, 0), false);
+  // 规划器一次决定共同网格：10/15ms + 40ms 需求 => 60ms，两轨同边界。
+  const planned = planSharedCoarseWidth([10000, 15000], 40000, 100000);
+  assert.equal(planned, 60000);
+  assert.equal(isBucketGridCompatible(a, 10000, planned!, 0), true);
+  assert.equal(isBucketGridCompatible(b, 15000, planned!, 0), true);
+  const ca = coarsenBucketsShared(a, 10000, planned!, 0);
+  const cb = coarsenBucketsShared(
+    [0, 15000, 30000, 45000, 60000, 75000].map(t => mk(t, 15000)), 15000, planned!, 0,
+  );
+  assert.ok(ca.length > 0 && cb.length > 0);
+  assert.ok(ca.every(x => x.endUs - x.startUs === planned));
+  assert.ok(cb.every(x => x.endUs - x.startUs === planned));
+  assert.equal(ca[0].startUs, cb[0].startUs);
+  // origin 偏移与负时间同样不可变。
+  assert.equal(isBucketGridCompatible([mk(5000, 10000)], 10000, 40000, 5000), true);
+  assert.equal(isBucketGridCompatible([mk(-20000, 10000), mk(-10000, 10000)], 10000, 20000, 0), true);
+});
+
+test('B2: 空桶未知覆盖向上传播；已知空桶保持完整与字节守恒；视口裁切不造完整粗桶', () => {
+  const bucket = (start: number, end: number, count: number, complete: boolean) => ({
+    startUs: start, endUs: end, count,
+    maxBytes: count ? 1000 : 0, sumBytes: count * 1000,
+    keyCount: 0, deltaCount: count, unknownCount: 0,
+    complete, maxSampleId: count ? 'sample' : null,
+  });
+  // 非空已知 + 空未知 => 父桶不完整。
+  const mixed = coarsenBucketsShared([bucket(0, 10000, 1, true), bucket(10000, 20000, 0, false)], 10000, 20000, 0);
+  assert.equal(mixed.length, 1);
+  assert.equal(mixed[0].complete, false);
+  assert.equal(mixed[0].count, 1);
+  // 非空已知 + 空已知 => 父桶完整且总字节不变。
+  const knownEmpty = coarsenBucketsShared([bucket(0, 10000, 1, true), bucket(10000, 20000, 0, true)], 10000, 20000, 0);
+  assert.equal(knownEmpty.length, 1);
+  assert.equal(knownEmpty[0].complete, true);
+  assert.equal(knownEmpty[0].sumBytes, 1000);
+  // 视口裁切只传入局部细桶时，局部粗桶不得标完整。
+  const clipped = coarsenBucketsShared([bucket(10000, 20000, 1, true)], 10000, 20000, 0);
+  assert.equal(clipped.length, 1);
+  assert.equal(clipped[0].complete, false);
+});
+
+test('B3: 同一 signal 连续定位/寻求后 abort 监听器回到基线（实际 session）', async () => {
+  const session = new ReviewSession(() => {});
+  const sample = (id: string, t: number) => ({
+    sampleId: id, decodeOrdinal: 0, containerPtsUs: t, effectivePtsUs: t, dtsUs: t,
+    sizeBytes: 100, randomAccess: 'no' as const, pictureType: null,
+    pictureTypeSource: 'unavailable' as const, qp: null,
+  });
+  const source = fakeMedia('m1', id => Promise.resolve(sample(id, 40000)));
+  try {
+    await session.load('A', async () => source);
+    const controller = new AbortController();
+    const before = getEventListeners(controller.signal, 'abort').length;
+    for (let i = 0; i < 50; i++) {
+      const r = await session.locateAnalysisSample('A', 'm1:v:1', { signal: controller.signal });
+      assert.ok('sample' in r);
+    }
+    assert.equal(getEventListeners(controller.signal, 'abort').length, before);
+    // 失败路径同样清理。
+    const failing = fakeMedia('m-fail', () => Promise.reject(new Error('boom')));
+    await session.load('B', async () => failing);
+    for (let i = 0; i < 10; i++) {
+      await assert.rejects(session.locateAnalysisSample('B', 'm-fail:v:0', { signal: controller.signal }), /boom/);
+    }
+    assert.equal(getEventListeners(controller.signal, 'abort').length, before);
   } finally { await session.dispose(); }
 });

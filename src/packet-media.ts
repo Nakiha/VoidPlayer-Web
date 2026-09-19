@@ -1,7 +1,7 @@
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { validateDescription } from './frame-description.ts';
-import { loadAborted, onLoadAbort } from './media-abort.ts';
+import { abortableWait, loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { VideoSample } from 'mediabunny';
@@ -175,11 +175,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         }, [], 60000);
         // signal 仅表示“结果不再消费”（调用方不再等待），worker 侧排队/执行中的
         // 统计不会因此撤销；调用方必须按 requestId/版本丢弃旧结果，不得冒充已取消计算。
-        const result = query.signal
-          ? await Promise.race([call, new Promise<never>((_, reject) => {
-            query.signal!.addEventListener('abort', () => reject(query.signal!.reason), { once: true });
-          })])
-          : await call;
+        // B3：共用 abortableWait，settled 后清理监听器。
+        const result = await abortableWait(call, query.signal ?? undefined);
         // 身份与能力以主线程视图为准；旧异步结果由调用方按 requestId 丢弃。
         return {
           ...result,

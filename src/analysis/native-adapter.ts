@@ -8,6 +8,7 @@
 import { EncodedPacketSink } from 'mediabunny';
 import type { InputVideoTrack } from 'mediabunny';
 import { createSourceQuerier, locateSampleById } from './adapters.ts';
+import { abortableWait } from '../media-abort.ts';
 import type { PacketView, SourceQueryContext } from './adapters.ts';
 import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
 
@@ -95,13 +96,9 @@ export class NativeAnalysisAdapter {
     const run = async () => this.querier(this.packets, ctx, query);
     // signal 仅表示调用方不再等待（旧查询不覆盖新图），不撤销已开始的排序/聚合；
     // 面板关闭只停止自己的刷新与排队查询，不取消播放器需要的容器索引。
+    // B3：共用 abortableWait，settled 后清理监听器。
     if (!query.signal) return run();
-    return Promise.race([
-      run(),
-      new Promise<never>((_, reject) => {
-        query.signal!.addEventListener('abort', () => reject(query.signal!.reason), { once: true });
-      }),
-    ]);
+    return abortableWait(run(), query.signal);
   }
 
   /** 按样本身份有界定位：O(1) 反查包表；索引尚未覆盖时返回 null。 */
