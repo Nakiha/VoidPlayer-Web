@@ -33,9 +33,12 @@ export class ReviewSession {
     if(getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode))return this.getState();
     ++this.analysisIntentSeq;
     this.changingColor=true;
-    try{await this.run('color-mode',{mode},async current=>{
+    try{await this.run('color-mode',{mode},async (current, signal)=>{
       const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame}[]=[];
       const controller=new AbortController();let committed=false;
+      const onAbort=()=>controller.abort(signal.reason ?? new DOMException('切换已取消。','AbortError'));
+      if(signal.aborted)controller.abort(signal.reason);
+      else signal.addEventListener('abort',onAbort,{once:true});
       try{
         setColorMode(mode);setReferenceDecode(decode);
         for(const [slot,track] of this.tracks){
@@ -43,13 +46,15 @@ export class ReviewSession {
           const source=await open(controller.signal,()=>{});
           try{
             source.info.id=track.source.info.id;
-            const frame=await source.frameAt(Math.max(0,Math.min(this.positionUs-track.offsetUs,source.info.durationUs-1)));
+            const target=Math.max(0,Math.min(this.positionUs-track.offsetUs,source.info.durationUs-1));
+            // 色彩切换的首帧准备同样可随新意图中止；迟到帧 close，不提交。
+            const frame=await abortableLoad(source.frameAt(target), signal, late=>late.close());
             prepared.push({slot,track,source,frame});this.openers.set(source,open);
           }catch(error){source.dispose();throw error;}
-          if(!current())throw new DOMException('切换已取消。','AbortError');
+          if(!current() || signal.aborted)throw new DOMException('切换已取消。','AbortError');
         }
         await this.onColorModeChange?.();
-        if(!current())throw new DOMException('切换已取消。','AbortError');
+        if(!current() || signal.aborted)throw new DOMException('切换已取消。','AbortError');
         for(const p of prepared)this.draw(p.slot,p.frame);
         this.releaseReaders('color-mode');
         for(const p of prepared){
@@ -63,12 +68,12 @@ export class ReviewSession {
         try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
       }catch(error){
         setColorMode(previous);setReferenceDecode(previousDecode);await this.onColorModeChange?.();
-        if(current())for(const [slot,track] of this.tracks){
+        if(current() && !signal.aborted)for(const [slot,track] of this.tracks){
           try{const frame=await track.source.frameAt(Math.max(0,this.positionUs-track.offsetUs));try{this.draw(slot,frame);}finally{frame.close();}}catch{}
         }
         throw error;
       }
-      finally{if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed)p.source.dispose();}}
+      finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed)p.source.dispose();}}
     });return this.getState();}finally{this.changingColor=false;}
   }
   private order: Slot[] = [...SLOTS];
@@ -96,6 +101,9 @@ export class ReviewSession {
   private mediaLoad: MediaLoadStatus | null = null;
   private abortLoad: (() => void) | undefined;
   private abortIncoming: (() => void) | undefined;
+  // REVIEW-03：定位/解码阶段的可中止生命周期。新操作进入即中止旧解码等待，
+  // 旧操作快速释放会话队列；迟到帧经 releaseLate 明确 close，不修改游标。
+  private decodeAbort: AbortController | null = null;
   cancelLoad() {
     this.abortIncoming?.();
     if (this.mediaLoad?.state === 'loading') { this.mediaLoad.state = 'cancelled'; this.mediaLoad.finishedAt = Date.now(); }
@@ -391,6 +399,9 @@ export class ReviewSession {
     const wasPlaying = this.playing;
     ++this.revision;
     this.abortLoad?.();
+    // 中止旧定位的解码等待，使其快速释放会话队列；后台 frameAt 仍在继续时，
+    // 其迟到帧由各 drawAt/step 的 releaseLate 负责 close，不提交、不改游标。
+    this.decodeAbort?.abort(new DOMException('定位已取消。', 'AbortError'));
     this.stopPlayback?.();
     this.stopPlayback = undefined;
     this.playing = false;
@@ -399,7 +410,7 @@ export class ReviewSession {
     this.emit();
     return this.getState();
   }
-  private run<T>(name: string, data: unknown, work: (current: () => boolean) => Promise<T>): Promise<T> {
+  private run<T>(name: string, data: unknown, work: (current: () => boolean, signal: AbortSignal) => Promise<T>): Promise<T> {
     return traceOperation('session', name, data, () => {
       const context = operationContext();
       this.cancelLoad(); this.pause();
@@ -408,11 +419,16 @@ export class ReviewSession {
       this.error = null;
       this.emit();
       const current = () => revision === this.revision;
+      // 本操作的解码信号：新操作进入（pause）即中止旧信号，旧等待快速失败并让出队列；
+      // 新解码与旧后台解码可能短暂重叠，旧结果一律丢弃并 close，游标只由最新提交改写。
+      const decodeController = new AbortController();
+      this.decodeAbort = decodeController;
+      const signal = decodeController.signal;
       const operation = this.queue.catch(() => {}).then(async () => {
-        if (!current()) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
+        if (!current() || signal.aborted) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
         try {
-          const result = await withLogContext(context, () => work(current));
-          if (!current()) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
+          const result = await withLogContext(context, () => (work as (c: () => boolean, s: AbortSignal) => Promise<T>)(current, signal));
+          if (!current() || signal.aborted) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
           return result;
         } catch (e) {
           if (current()) { this.error = e instanceof Error ? e.message : String(e); if (!(e instanceof Error && e.name === 'AbortError')) this.captureDiagnostics('operation-error', e); }
@@ -422,6 +438,8 @@ export class ReviewSession {
         }
       });
       this.queue = operation;
+      // 队列 settled 后清理监听：abortableLoad 已在 settled 后移除 abort 监听，
+      // 这里不长期持有 signal，避免 B3 监听器累积。
       return operation;
     });
   }
@@ -512,13 +530,13 @@ export class ReviewSession {
   async removeTrack(slot: Slot) {
     slotValue(slot);
     ++this.analysisIntentSeq;
-    await this.run('removeTrack', { slot }, async current => {
+    await this.run('removeTrack', { slot }, async (current, signal) => {
       const track = this.tracks.get(slot);
       if (track) this.releaseReaders('remove', [track.source]);
       this.tracks.delete(slot);
       if (track && !track.failure) track.source.dispose();
       if (!this.playableEntries().length) { this.positionUs = 0; this.measurements = null; }
-      else if (this.positionUs >= this.durationUs) await this.drawAt(this.durationUs - 1, current);
+      else if (this.positionUs >= this.durationUs) await this.drawAt(this.durationUs - 1, current, this.tracks, undefined, undefined, undefined, signal);
       log.info('session', '关闭轨道', { slot, mediaId: track?.source.info.id });
     });
     return this.getState();
@@ -527,13 +545,13 @@ export class ReviewSession {
     slotValue(slot);
     if(!Number.isSafeInteger(offsetUs)) throw new Error('偏移必须是整数微秒。');
     ++this.analysisIntentSeq;
-    await this.run('setTrackOffset',{slot,offsetUs},async current=>{
+    await this.run('setTrackOffset',{slot,offsetUs},async (current, signal)=>{
       const old=this.tracks.get(slot); if(!old)throw new Error('轨道尚未载入。');
       if(!Number.isSafeInteger(old.source.info.durationUs+offsetUs))throw new Error('偏移超出可用时间范围。');
       const next=new Map(this.tracks);next.set(slot,{...old,offsetUs});
       const duration=Math.max(...[...next.values()].map(t=>t.source.info.durationUs+t.offsetUs));
       if(old.source.info.durationUs+offsetUs<=0 || !Number.isSafeInteger(duration))throw new Error('偏移后没有可播放的时间范围。');
-      await this.drawAt(Math.min(this.positionUs,duration-1),current,next,()=>{this.tracks=next;});
+      await this.drawAt(Math.min(this.positionUs,duration-1),current,next,()=>{this.tracks=next;},undefined,undefined,signal);
     });
     return this.getState();
   }
@@ -567,11 +585,11 @@ export class ReviewSession {
     // 新的播放意图使旧的分析定位意图失效（拖动进度覆盖慢定位）。
     ++this.analysisIntentSeq;
     try {
-      await this.run('seek', { ptsUs }, async current => {
+      await this.run('seek', { ptsUs }, async (current, signal) => {
         if (!this.tracks.size) throw new Error('请先打开视频。');
         await this.ensureTrackIndexes(ptsUs, current);
-        if (!current()) return;
-        await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current);
+        if (!current() || signal.aborted) return;
+        await this.drawAt(Math.min(ptsUs, Math.max(0, this.durationUs - 1)), current, this.tracks, undefined, undefined, undefined, signal);
       });
     } catch (error) {
       scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', '定位失败', { ptsUs, error: errorText(error) });
@@ -588,16 +606,16 @@ export class ReviewSession {
     if (direction !== -1 && direction !== 1) throw new Error('逐帧方向必须是 -1 或 1。');
     ++this.analysisIntentSeq;
     try {
-      await this.run('step', { direction }, async current => {
+      await this.run('step', { direction }, async (current, signal) => {
         let entries = this.playableEntries();
         if (!entries.length || entries.some(([, t]) => !t.frame)) throw new Error('请先打开视频。');
         if (direction > 0) {
           await this.ensureTrackIndexes(this.positionUs, current);
           entries = this.playableEntries();
-          if (!current()) return;
-          await this.stepForward(entries, current);
+          if (!current() || signal.aborted) return;
+          await this.stepForward(entries, current, signal);
         }
-        else await this.stepBackward(entries, current);
+        else await this.stepBackward(entries, current, signal);
       });
     } catch (error) {
       scoped[error instanceof Error && error.name === 'AbortError' ? 'info' : 'warn']('session', '逐帧失败', { direction, error: errorText(error) });
@@ -613,15 +631,18 @@ export class ReviewSession {
   // track's successor (or predecessor) frames, let the planner pick the target
   // that steps the most tracks without skipping frames, and keep the current
   // frame on tracks the target does not move.
-  private async stepForward(entries: [Slot, Track][], current: () => boolean) {
+  private async stepForward(entries: [Slot, Track][], current: () => boolean, signal?: AbortSignal) {
     this.releaseReaders('step', entries.map(([, t]) => t.source));
-    const probed = await Promise.allSettled(entries.map(async ([slot, t]) =>
-      [slot, await t.source.framesAfter(t.frame!.ptsUs, 2)] as const));
+    const decodeTasks = entries.map(async ([slot, t]) =>
+      [slot, await t.source.framesAfter(t.frame!.ptsUs, 2)] as const);
+    const probed = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
+      for (const r of late) if (r.status === 'fulfilled') for (const f of r.value[1]) f?.close();
+    });
     const gathered = new Map<Slot, (DecodedFrame | null)[]>();
     for (const r of probed) if (r.status === 'fulfilled') gathered.set(r.value[0], r.value[1]);
     const closeGathered = () => { for (const frames of gathered.values()) for (const f of frames) f?.close(); };
     const failed = probed.find(r => r.status === 'rejected');
-    if (!current()) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
+    if (!current() || signal?.aborted) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
     if (failed?.status === 'rejected') {
       try { probed.forEach((r, i) => { if (r.status === 'rejected') this.failTrack(...entries[i], r.reason); }); } catch (error) { closeGathered(); throw error; }
       entries = entries.filter(([, t]) => !t.failure);
@@ -641,22 +662,25 @@ export class ReviewSession {
     const chosen = new Set(selected.values());
     for (const frames of gathered.values()) for (const f of frames) if (f && !chosen.has(f)) f.close();
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
-    await this.drawAt(target, current, this.tracks, undefined, selected, kept);
+    await this.drawAt(target, current, this.tracks, undefined, selected, kept, signal);
   }
-  private async stepBackward(entries: [Slot, Track][], current: () => boolean) {
+  private async stepBackward(entries: [Slot, Track][], current: () => boolean, signal?: AbortSignal) {
     this.releaseReaders('step', entries.map(([, t]) => t.source));
-    const probed = await Promise.allSettled(entries.map(async ([slot, t]) => {
+    const decodeTasks = entries.map(async ([slot, t]) => {
       const currentUs = t.frame!.ptsUs;
       if (currentUs <= 0) return [slot, null] as const;
       const frame = await t.source.frameAt(currentUs - 1);
       if (frame.ptsUs >= currentUs) { frame.close(); return [slot, null] as const; }
       return [slot, frame] as const;
-    }));
+    });
+    const probed = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
+      for (const r of late) if (r.status === 'fulfilled') r.value[1]?.close();
+    });
     const gathered = new Map<Slot, DecodedFrame | null>();
     for (const r of probed) if (r.status === 'fulfilled') gathered.set(r.value[0], r.value[1]);
     const closeGathered = () => { for (const f of gathered.values()) f?.close(); };
     const failed = probed.find(r => r.status === 'rejected');
-    if (!current()) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
+    if (!current() || signal?.aborted) { closeGathered(); throw new DOMException('定位已取消。', 'AbortError'); }
     if (failed?.status === 'rejected') {
       try { probed.forEach((r, i) => { if (r.status === 'rejected') this.failTrack(...entries[i], r.reason); }); } catch (error) { closeGathered(); throw error; }
       entries = entries.filter(([, t]) => !t.failure);
@@ -672,24 +696,28 @@ export class ReviewSession {
     }
     for (const [slot, f] of gathered) if (f && !selected.has(slot)) f.close();
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
-    await this.drawAt(target, current, this.tracks, undefined, selected, kept);
+    await this.drawAt(target, current, this.tracks, undefined, selected, kept, signal);
   }
   private frameInfo(frame: FrameInfo): FrameInfo {
     return { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs, durationUs: frame.durationUs };
   }
-  private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>) {
+  private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {
     const entries = [...tracks].filter(([, t]) => !t.failure);
     const start = performance.now();
     this.releaseReaders('position', entries.filter(([slot]) => !kept?.has(slot)).map(([, t]) => t.source));
     // Kept tracks hold their current frame (a fair-step target that does not
     // move them); re-resolving them by time could jump past an unseen frame.
-    const results = await Promise.allSettled(entries.map(([slot, t]) => {
+    // REVIEW-03：解码等待可随新意图中止；迟到帧在 releaseLate 中 close，不提交。
+    const decodeTasks = entries.map(([slot, t]) => {
       if (kept?.has(slot)) return Promise.resolve(null);
       const chosen = selected?.get(slot);
       return chosen ? Promise.resolve(chosen) : t.source.frameAt(Math.max(0,Math.min(t.source.info.durationUs-1,ptsUs-t.offsetUs)));
-    }));
+    });
+    const results = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
+      for (const r of late) if (r.status === 'fulfilled') r.value?.close();
+    });
     try {
-      if (!current()) throw new DOMException('定位已取消。', 'AbortError');
+      if (!current() || signal?.aborted) throw new DOMException('定位已取消。', 'AbortError');
       const failed = results.find(r => r.status === 'rejected');
       if (failed?.status === 'rejected') {
         if (tracks !== this.tracks || commit) throw failed.reason;
@@ -881,11 +909,11 @@ export class ReviewSession {
   /** Prepare all sources and frames before swapping the active session. UI and agents share this transaction. */
   async restoreWorkspace(value: unknown, open: (info: MediaInfo) => Promise<MediaSource>) {
     const document = parseWorkspace(value);
-    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async current => {
+    await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async (current, signal) => {
       const next = new Map<Slot, Track>(); let committed = false;
       try {
         for (const track of document.tracks) {
-          if (!current()) throw new DOMException('工作区导入已取消。', 'AbortError');
+          if (!current() || signal.aborted) throw new DOMException('工作区导入已取消。', 'AbortError');
           const info = document.media.find(m => m.id === track.mediaId)!;
           const source = await open(info);
           next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs, sourceGen: ++this.nextSourceGen });
@@ -905,7 +933,7 @@ export class ReviewSession {
             track.source.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === track.source)) this.emit(); };
           }
           this.marks = document.marks; this.measurements = null; committed = true;
-        });
+        }, undefined, undefined, signal);
       } finally { if (!committed) for (const track of next.values()) track.source.dispose(); }
     });
     return this.getState();

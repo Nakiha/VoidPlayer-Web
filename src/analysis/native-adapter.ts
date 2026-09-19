@@ -94,8 +94,12 @@ export class NativeAnalysisAdapter {
       coverageUs: this.done ? { start: 0, end: this.durationUs } : null,
     };
     const run = async () => this.querier(this.packets, ctx, query);
-    // signal 仅表示调用方不再等待（旧查询不覆盖新图），不撤销已开始的排序/聚合；
-    // 面板关闭只停止自己的刷新与排队查询，不取消播放器需要的容器索引。
+    // REVIEW-04：querier 已对同引用尾部追加做增量合并，渐进枚举不再每次全量重排；
+    // 但首个大索引与新轴/新原点仍是主线程同步任务，signal 仅表示调用方不再等待
+    // （旧查询不覆盖新图），不撤销已开始的排序/聚合。只传包元数据
+    // （pts/dts/size/key），不转移播放缓冲。完整 Worker 化（增量索引、
+    // 查询合并与分片取消）仍是后续专项，见 test/analysis-incremental.test.ts 的
+    // 有界与增量回归；面板关闭只停止自己的刷新与排队查询，不取消播放器需要的容器索引。
     // B3：共用 abortableWait，settled 后清理监听器。
     if (!query.signal) return run();
     return abortableWait(run(), query.signal);

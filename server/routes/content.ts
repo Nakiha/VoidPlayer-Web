@@ -72,18 +72,15 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   }
   // Users explicitly submit a problem log from
   // the log panel. Bounded body, JSON shape-checked, written to logsDir.
+  // REVIEW-05：与其他写接口一致，要求同源 Origin + x-voidplayer-action，
+  // 并经统一 JSON 读取校验 Content-Type，避免 text/plain 简单请求跨站写入。
   if (url.pathname === '/api/logs' && req.method === 'POST') {
     if (!options.logsDir) { sendJson(res, 404, { error: 'log upload not enabled' }); return true; }
-    const chunks: Buffer[] = [];
-    let size = 0;
-    for await (const chunk of req) {
-      size += (chunk as Buffer).length;
-      if (size > 10 * 1024 * 1024) { sendJson(res, 413, { error: '日志过大' }); req.destroy(); return true; }
-      chunks.push(chunk as Buffer);
-    }
+    if (!adminWriteAllowed(req, 'log')) { sendJson(res, 403, { error: '请从同源播放器提交日志。' }); return true; }
     let doc: { schema?: unknown; sessionId?: unknown };
-    try { doc = JSON.parse(Buffer.concat(chunks).toString('utf8')); }
-    catch { sendJson(res, 400, { error: '不是有效的 JSON' }); return true; }
+    try {
+      doc = await readAdminJson(req, 10 * 1024 * 1024) as { schema?: unknown; sessionId?: unknown };
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
     if (doc?.schema !== 'voidplayer-web-log' || typeof doc.sessionId !== 'string' || !/^[0-9a-zA-Z-]{1,100}$/.test(doc.sessionId)) {
       sendJson(res, 400, { error: '不是有效的日志文档' });
       return true;

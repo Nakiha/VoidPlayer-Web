@@ -6,6 +6,8 @@ import type { AnnotationDocument, AnnotationRecord } from '../annotation-record.
 import { annotationMediaKey, annotationWorkspace } from '../annotation-record.ts';
 import { currentActor, identityHealth } from '../identity.ts';
 import { randomUUID } from '../uuid.ts';
+import { AnnotationPendingQueue } from '../annotation-pending.ts';
+import type { PendingEdit } from '../annotation-pending.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { icon } from './icons.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
@@ -13,7 +15,10 @@ import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnail
 export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
   let previewEpoch = 0, editGeneration=0, localFailure='';
-  const unsaved=new Map<string,{id:string;document:AnnotationDocument|null;base:number;space:string;actorId:string}>();
+  // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
+  // stage() 只在用户新编辑时调用并递增 seq；sync() 重试复用快照 pending，
+  // 两次核对身份后才落盘，过期直接跳过，不覆盖更新的 B-new/删除。
+  const pendingQueue = new AnnotationPendingQueue();
   let scope = 'default', available = false, working = false, cursor = 0, generation = 0, error = '', saving = 0;
   let spaces = [{ id: 'default', name: '共享评审' }], drafts: AnnotationDraft[] = [];
   const versions = new Map<string, number>(), managed = new Set<string>();
@@ -40,7 +45,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     $('annotation-sync-status').textContent=message;
     const choices=[{value:'local',label:'本机快照'},...spaces.map(space=>({value:space.id,label:space.name}))];
     const signature=JSON.stringify(choices);if(signature!==choiceSignature){choiceSignature=signature;choice.setOptions(choices);}
-    choice.sync(scope, spaces.find(space=>space.id===scope)?.name ?? '本机快照', !editing() && !unsaved.size);
+    choice.sync(scope, spaces.find(space=>space.id===scope)?.name ?? '本机快照', !editing() && !pendingQueue.size);
     $<HTMLButtonElement>('annotation-space-create').disabled=!available || editing();
     $<HTMLButtonElement>('annotation-publish').textContent=scope==='local'?'另存到共享评审':'将当前标注另存到空间';
     $<HTMLButtonElement>('annotation-publish').disabled=!available || editing() || !session.getState().marks.length;
@@ -64,16 +69,29 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   async function enqueue(id: string, document: AnnotationDocument | null, base = versions.get(id) ?? 0, destination={space:scope,actorId:actor}) {
     if(document)document={mark:structuredClone(document.mark),media:document.media.map(media=>({...media,...(media.source?{source:{...media.source,url:new URL(media.source.url,location.href).href}}:{})}))};
     const {space,actorId}=destination,key=`${actorId}/${space}/${owner}/${id}`;
-    editGeneration++;const pending={id,document,base,space,actorId};unsaved.set(key,pending);
+    // 用户新编辑：产生新的 seq 与 editGeneration，重试不得走这条路径。
+    const pending=pendingQueue.stage(key,{id,document,base,space,actorId});editGeneration++;
     if(space===scope && actorId===actor)managed.add(id);saving++;state();
     try {
-      await storage.change(key,previous=>({key,space,actor:actorId,id,base:previous?.base ?? base,desired:document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
-      if(unsaved.get(key)===pending)unsaved.delete(key);if(!unsaved.size)localFailure='';
+      await pendingQueue.runIfCurrent(key,pending,async()=>{
+        await storage.change(key,previous=>({key,space,actor:actorId,id,base:previous?.base ?? base,desired:document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
+        pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
+      });
+    } catch(e) {localFailure=`本机保存失败：${(e as Error).message}`;} finally {saving--;await refreshDrafts();}
+  }
+  async function persistRetry(key: string, pending: PendingEdit) {
+    if(pendingQueue.get(key)!==pending)return;
+    saving++;state();
+    try {
+      await pendingQueue.runIfCurrent(key,pending,async()=>{
+        await storage.change(key,previous=>({key,space:pending.space,actor:pending.actorId,id:pending.id,base:previous?.base ?? pending.base,desired:pending.document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
+        pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
+      });
     } catch(e) {localFailure=`本机保存失败：${(e as Error).message}`;} finally {saving--;await refreshDrafts();}
   }
   const unsubscribeMarks=session.subscribeMarkChanges((id,document)=>{void enqueue(id,document);});
   async function apply() {
-    if (editing() || saving || unsaved.size) return;
+    if (editing() || saving || pendingQueue.size) return;
     const captured=generation,edited=editGeneration, records=await storage.records(scope); await refreshDrafts(); if(captured!==generation || editing())return;
     const pending=currentDrafts(), protectedIds=new Set(pending.map(draft=>draft.id));
     const documents:AnnotationDocument[]=[];
@@ -88,7 +106,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     }
     for(const draft of pending){managed.add(draft.id);if(draft.desired)documents.push(draft.desired);}
     for(const document of documents){const preview=await storage.preview(scope,document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))annotationThumbnails.set(document.mark.id,preview);}
-    if(captured!==generation || edited!==editGeneration || editing() || saving || unsaved.size)return;
+    if(captured!==generation || edited!==editGeneration || editing() || saving || pendingQueue.size)return;
     // Identical shared library versions remap to this window's ephemeral media IDs.
     session.applyStoredAnnotations(documents,[...managed]);
   }
@@ -116,8 +134,9 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   async function sync() {
     if(working || life.signal.aborted)return;working=true;const captured=generation,space=scope,actorId=actor;
     try {
-      for(const value of [...unsaved.values()])await enqueue(value.id,value.document,value.base,{space:value.space,actorId:value.actorId});
-      if(unsaved.size)return;
+      // REVIEW-01：重试复用快照 pending，不产生新 seq；过期（被新编辑/删除取代）直接跳过。
+      for(const [key, pending] of pendingQueue.snapshot())await persistRetry(key,pending);
+      if(pendingQueue.size)return;
       await refreshDrafts();
       if(available && space!=='local') {
         for(const queued of currentDrafts().filter(draft=>!draft.conflict)) {
@@ -153,7 +172,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     } catch(e){if(captured===generation){error=available?'连接中断 · 本机草稿保留':(e as Error).message;}}finally{working=false;await refreshDrafts();}
   }
   async function switchSpace(next:string) {
-    if(editing() || unsaved.size)return;
+    if(editing() || pendingQueue.size)return;
     generation++;scope=next;try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();session.applyStoredAnnotations([], [...managed]);managed.clear();
     await apply();void sync();
   }
@@ -181,7 +200,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   $('annotation-drafts-export').onclick=()=>void(async()=>{
     try{
       const drafts=(await storage.drafts().catch(()=>[])).filter(draft=>draft.actor===actor && draft.desired);
-      const payload=annotationWorkspace([...drafts.map(draft=>draft.desired!),...[...unsaved.values()].flatMap(value=>value.document?[value.document]:[])],location.origin+'/');
+      const payload=annotationWorkspace([...drafts.map(draft=>draft.desired!),...pendingQueue.snapshot().flatMap(([,value])=>value.document?[value.document]:[])],location.origin+'/');
       const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='VoidPlayer-annotation-drafts.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(e){error=(e as Error).message;state();}
   })();
@@ -190,7 +209,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const state=session.getState(), signature=state.tracks.map(track=>annotationMediaKey(track)).join('|');
     if(signature!==trackSignature){trackSignature=signature;void apply();}
   });
-  window.addEventListener('beforeunload',event=>{if(saving || unsaved.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
+  window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
   const interval=setInterval(()=>{if(!document.hidden)void sync();},3000);
   async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;if(available)spaces=await client.spaces();await apply();void sync();}catch{void apply();}}
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
@@ -203,7 +222,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   state();
   return {
     openSpace: switchSpace,
-    snapshotMode(){if(unsaved.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>{void switchSpace(previous);};},
+    snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>{void switchSpace(previous);};},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();choice.dispose();dialog.remove();button.remove();},
   };

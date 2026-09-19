@@ -77,7 +77,7 @@ test('invalid roots and failed persistence leave the active index intact', async
 
 test('uploaded logs get server-authored receipts and version-checked read/delete operations', async () => fixture(async ({ base, config }) => {
   const doc = { schema: 'voidplayer-web-log', sessionId: 'test-session', events: [], serverReceipt: { id: 'forged', actorId: 'fake-admin' } };
-  const upload = await fetch(base + '/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(doc) });
+  const upload = await fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: JSON.stringify(doc) });
   assert.equal(upload.status, 201); const { name } = await upload.json();
   const listing = await (await fetch(base + '/api/admin/logs')).json(); assert.equal(listing.entries.length, 1);
   const entry = listing.entries[0];

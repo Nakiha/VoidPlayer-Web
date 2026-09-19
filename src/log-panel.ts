@@ -124,7 +124,7 @@ export function installLogPanel(container: HTMLElement) {
   panel.querySelector('[data-action="upload"]')!.addEventListener('click', () => void action('upload', async () => {
     const { json } = await snapshot(true);
     let response: Response;
-    try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: json }); }
+    try { response = await fetch('/api/logs', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: json }); }
     catch (error) { log.warn('ui', '日志上传请求失败', { error }); throw new Error('无法连接当前服务器，请重试或下载日志。'); }
     if (!response.ok) {
       const body = await response.json().catch(() => null);

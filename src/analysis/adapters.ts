@@ -244,8 +244,11 @@ export function flvPacketsToViews(packets: { pts: number; dts: number; size: num
 /**
  * 带轴排序缓存的查询器：同一包表（引用 + 长度 + 原点 + 轴）复用排序与
  * 前缀和，hover/缩放的重复查询只付区间二分 + 有界物化的成本。
- * 首个大索引排序仍是同步长任务，调用方（worker/后台）不得把它放进
- * 解码链的关键路径，见 packet-worker 的 analysis 分支说明。
+ * 渐进枚举只做尾部追加时走增量合并（旧有序 + 新区间排序后归并），
+ * 避免每次长度变化都全表重排；首个大索引排序仍是同步任务，
+ * 调用方（worker/后台）不得把它放进解码链的关键路径，
+ * 见 packet-worker 的 analysis 分支说明。
+ * REVIEW-04：增量只覆盖同引用尾部追加；引用/原点/轴变化仍全量重排。
  */
 export function createSourceQuerier() {
   let cached: { packets: unknown; length: number; firstPtsUs: number; axis: string; sorted: SortedAxis } | undefined;
@@ -262,11 +265,57 @@ export function createSourceQuerier() {
     let sorted = cached && cached.packets === packets && cached.length === packets.length
       && cached.firstPtsUs === ctx.firstPtsUs && cached.axis === query.axis ? cached.sorted : undefined;
     if (!sorted) {
-      sorted = sortByAxis(packets, ctx.firstPtsUs, query.axis);
+      const prev = cached && cached.packets === packets
+        && cached.firstPtsUs === ctx.firstPtsUs && cached.axis === query.axis ? cached : undefined;
+      if (prev && packets.length > prev.length) {
+        sorted = mergeAppendedSort(packets, ctx.firstPtsUs, query.axis, prev.sorted, prev.length);
+      } else {
+        sorted = sortByAxis(packets, ctx.firstPtsUs, query.axis);
+      }
       cached = { packets, length: packets.length, firstPtsUs: ctx.firstPtsUs, axis: query.axis, sorted };
     }
     return executeSortedQuery(packets, ctx, query, startUs, endUs, query.maxSamples ?? MAX_SAMPLES_DEFAULT, sorted);
   };
+}
+
+/**
+ * 增量合并：旧表已有序（0..oldLength-1），新包只出现在尾部
+ * （oldLength..packets.length-1）。新区间独立排序后与旧有序归并，
+ * 结果与全量 sortByAxis 一致（含 (t,pos) 稳定序），前缀和重建为 O(N)。
+ */
+export function mergeAppendedSort(
+  packets: ArrayLike<PacketView>,
+  firstPtsUs: number,
+  axis: 'pts' | 'dts',
+  prev: SortedAxis,
+  oldLength: number,
+): SortedAxis {
+  const total = (packets as { length: number }).length;
+  const fresh: { pos: number; t: number }[] = [];
+  for (let i = oldLength; i < total; i++) {
+    const raw = axis === 'pts' ? packets[i].pts : packets[i].dts;
+    if (raw == null || !Number.isFinite(raw)) continue;
+    fresh.push({ pos: i, t: raw - firstPtsUs });
+  }
+  fresh.sort((a, b) => a.t - b.t || a.pos - b.pos);
+  const oldOrder = prev.order, oldTimes = prev.times;
+  const order = new Array<number>(oldOrder.length + fresh.length);
+  const times = new Float64Array(oldOrder.length + fresh.length);
+  let i = 0, j = 0, k = 0;
+  while (i < oldOrder.length && j < fresh.length) {
+    const ot = oldTimes[i], ft = fresh[j].t;
+    if (ot < ft || (ot === ft && oldOrder[i] < fresh[j].pos)) {
+      order[k] = oldOrder[i]; times[k] = ot; i++;
+    } else {
+      order[k] = fresh[j].pos; times[k] = ft; j++;
+    }
+    k++;
+  }
+  while (i < oldOrder.length) { order[k] = oldOrder[i]; times[k] = oldTimes[i]; i++; k++; }
+  while (j < fresh.length) { order[k] = fresh[j].pos; times[k] = fresh[j].t; j++; k++; }
+  const sizes = new Float64Array(order.length);
+  for (let n = 0; n < order.length; n++) sizes[n] = packets[order[n]].size;
+  return { order, times, prefix: buildBytePrefixSum(sizes) };
 }
 
 export function unsupportedCapability(note: string): AnalysisCapability {

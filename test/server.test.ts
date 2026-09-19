@@ -114,8 +114,9 @@ test('log upload accepts shaped documents and rejects garbage', async () => {
     const port = (server.address() as { port: number }).port;
     try {
       const base = `http://127.0.0.1:${port}`;
+      const headers = { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'log' };
       const doc = { schema: 'voidplayer-web-log', version: 1, sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [], report: { description: '定位后没有画面\n再次打开可以恢复。' } };
-      const ok = await fetch(`${base}/api/logs`, { method: 'POST', body: JSON.stringify(doc) });
+      const ok = await fetch(`${base}/api/logs`, { method: 'POST', headers, body: JSON.stringify(doc) });
       assert.equal(ok.status, 201);
       const body = await ok.json();
       assert.match(body.name, /^voidplayer-log-.*-66c47430\.json$/);
@@ -123,10 +124,31 @@ test('log upload accepts shaped documents and rejects garbage', async () => {
       assert.equal(written.sessionId, doc.sessionId);
       assert.deepEqual(written.report, doc.report);
 
-      const bad = await fetch(`${base}/api/logs`, { method: 'POST', body: '{"schema":"other"}' });
+      const bad = await fetch(`${base}/api/logs`, { method: 'POST', headers, body: '{"schema":"other"}' });
       assert.equal(bad.status, 400);
-      const notJson = await fetch(`${base}/api/logs`, { method: 'POST', body: 'nope' });
+      const notJson = await fetch(`${base}/api/logs`, { method: 'POST', headers, body: 'nope' });
       assert.equal(notJson.status, 400);
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
+test('log upload requires same-origin action header and JSON content type', async () => {
+  await withFixture(async root => {
+    const logsDir = path.join(root, 'logs');
+    const server = createMediaServer({ roots: [root], logsDir, onLog: () => {} });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as { port: number }).port;
+    try {
+      const base = `http://127.0.0.1:${port}`;
+      const doc = JSON.stringify({ schema: 'voidplayer-web-log', sessionId: '66c47430-e620-46de-9c72-16833e03adac', events: [] });
+      const before = await fs.readdir(logsDir).catch(() => [] as string[]);
+      // REVIEW-05：缺 Origin/action、跨站 Origin、text/plain 简单请求一律 403/415 且不落盘
+      assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', body: doc })).status, 403);
+      assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: base, 'content-type': 'application/json' }, body: doc })).status, 403);
+      assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: 'https://attacker.example', 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: doc })).status, 403);
+      assert.equal((await fetch(`${base}/api/logs`, { method: 'POST', headers: { origin: base, 'content-type': 'text/plain', 'x-voidplayer-action': 'log' }, body: doc })).status, 415);
+      const after = await fs.readdir(logsDir).catch(() => [] as string[]);
+      assert.deepEqual(after, before);
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
 });

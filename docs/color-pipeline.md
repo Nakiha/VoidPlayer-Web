@@ -37,6 +37,8 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 
 正确颜色及无用户模式的诊断默认初始化无 Apple/CV 补偿的 `planes` kernel；只有用户明确选择浏览器匹配才调用 `webgpu-calibration.ts`。Windows 独立复现已经证明：相同公开标签的 H264 与 HEVC 原生资源可能走出不同颜色结果，中性渐变不足以认证其他资源。硬件输出用于匹配模式的对比，不作为正确颜色模式的真值。初始化失败或无 WebGPU 时沿用旧路径。
 
+- 初始化/刷新共用 epoch 失效守卫（`gpu-presentation-guard.ts`）：进入即递增，旧任务迟到成功或失败只清理自己那批候选，不提交全局 entries，也不全局 dispose 新一代资源；完整 source 列表独立保存，不从已提交反推，避免启动与色彩切换重叠时旧 profile 资源晚到。
+
 - WebCodecs：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB GPU 画布。播放无应用层 copyTo/readback。
 - WASM：ABI v2 原始 YUV → GPU storage buffer → `webgpu-yuv-kernel.mjs` 的 range/matrix/transfer/primaries 转换 → 同一输出。8–16 位精度保留到运算；无需 memory VideoFrame。
 - Apple/CV profile 仅用于用户选择的近似匹配或显式 `colorPipeline=webgpu-apple709` / `webgpu-cv-full-range` 实验参数。Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。

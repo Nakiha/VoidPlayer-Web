@@ -7,6 +7,7 @@ import type { DecodedFrame } from './media.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 import { validateDescription } from './frame-description.ts';
+import { GpuPresentationGuard } from './gpu-presentation-guard.ts';
 
 // Browser compensation is diagnostic-only: a neutral decoded probe cannot
 // certify other codecs, backing resources, or color tags.
@@ -22,30 +23,68 @@ let experimentalProfile=false;
 // External textures are browser-managed and are not a reference for this mode.
 export const keepNativeGpuResource=()=>active&&!unified;
 const entries=new Map<HTMLCanvasElement,{canvas:HTMLCanvasElement;surface:GpuSurface;geometry:PresentationGeometry|null;disabled:boolean}>();
-export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
+// REVIEW-02：跨异步失效守卫。完整 source 列表独立保存，不从已提交 entries 反推；
+// 旧初始化/刷新迟到只清理自己那批，不碰新一代资源。
+const gpuGuard=new GpuPresentationGuard<HTMLCanvasElement>();
+function disposeCommittedLocked(){
+  active=false;unified=false;experimentalProfile=false;
+  for(const [source,entry] of [...entries].reverse()){try{entry.surface.dispose();}catch{}try{entry.canvas.remove();}catch{}try{source.classList.remove('frame-source');}catch{}}
+  entries.clear();
+}
+async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometryBySource?:Map<HTMLCanvasElement,PresentationGeometry|null>){
   if(typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='legacy')return;
   const commonPlanes=typeof location!=='undefined'&&new URLSearchParams(location.search).get('colorPipeline')==='unified';
   const policy=getColorMode();
+  // detectGpuProfile 本身是异步探测：旧 token 在等待期间被刷新取代后直接返回，
+  // 不继续创建 surface，避免旧 profile 资源晚到。
   const requested=policy==='reference'?null:policy==='browser'?await detectGpuProfile():commonPlanes?null:requestedGpuMode();
+  if(!gpuGuard.isCurrent(token))return;
   const mode=requested??'planes';
   let device:unknown;
+  const pending=new Map<HTMLCanvasElement,{canvas:HTMLCanvasElement;surface:GpuSurface}>();
+  const cleanupPending=()=>{for(const {canvas,surface} of pending.values()){try{surface.dispose();}catch{}try{canvas.remove();}catch{}}pending.clear();};
   try{
     for(const source of sources){
+      if(!gpuGuard.isCurrent(token)){cleanupPending();return;}
       const canvas=document.createElement('canvas');canvas.className='frame-presentation';canvas.hidden=true;
       source.closest('.frame-stage')!.prepend(canvas);
-      try{const surface=await createExternalSurface(canvas,device,mode);device=surface.device;entries.set(source,{canvas,surface,geometry:null,disabled:false});}
-      catch(error){canvas.remove();throw error;}
+      try{
+        const surface=await createExternalSurface(canvas,device,mode);
+        if(!gpuGuard.isCurrent(token)){try{surface.dispose();}catch{}try{canvas.remove();}catch{}cleanupPending();return;}
+        device=surface.device;pending.set(source,{canvas,surface});
+      }
+      catch(error){try{canvas.remove();}catch{}throw error;}
     }
+    if(!gpuGuard.isCurrent(token)){cleanupPending();return;}
+    for(const [source,{canvas,surface}] of pending){
+      const old=entries.get(source);
+      if(old){try{old.surface.dispose();}catch{}try{old.canvas.remove();}catch{}}
+      entries.set(source,{canvas,surface,geometry:geometryBySource?.get(source)??null,disabled:false});
+    }
+    pending.clear();
     active=true;
     unified=commonPlanes;
     experimentalProfile=requested!==null;
     log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv-sdr'});
-  }catch(error){disposeGpuPresentation();log.info('media','WebGPU 初始化失败，保留现有呈现路径。',{reason:String(error)});}
+  }catch(error){
+    // 只清理本批候选，不全局 dispose，避免清掉新一代已提交资源。
+    cleanupPending();
+    if(gpuGuard.isCurrent(token))log.info('media','WebGPU 初始化失败，保留现有呈现路径。',{reason:String(error)});
+  }
+}
+export async function initializeGpuPresentation(sources:HTMLCanvasElement[]) {
+  const token=gpuGuard.beginInitialize(sources);
+  await initializeLocked(sources,token);
 }
 export async function refreshGpuColorMode(){
-  const saved=[...entries].map(([source,entry])=>({source,geometry:entry.geometry}));
-  disposeGpuPresentation();await initializeGpuPresentation(saved.map(e=>e.source));
-  saved.forEach(({source,geometry})=>gpuGeometry(source,geometry));
+  const geometryBySource=new Map([...entries].map(([source,entry])=>[source,entry.geometry] as const));
+  const {token,sources}=gpuGuard.beginRefresh();
+  // 刷新只释放已提交；在途旧初始化看到 epoch 失效后会自行清理，不会被误提交。
+  disposeCommittedLocked();
+  const targets=sources.length?sources:[...geometryBySource.keys()];
+  await initializeLocked(targets,token,geometryBySource);
+  if(!gpuGuard.isCurrent(token))return;
+  for(const [source,geometry] of geometryBySource)gpuGeometry(source,geometry);
 }
 export function gpuGeometry(source:HTMLCanvasElement,g:PresentationGeometry|null){
   const entry=entries.get(source);if(!entry)return false;
@@ -82,9 +121,9 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
 }
 export function gpuCapture(source:HTMLCanvasElement){const entry=entries.get(source);return entry&&!entry.disabled?entry.surface.captureSource(source):undefined;}
 export function disposeGpuPresentation(){
-  active=false;unified=false;experimentalProfile=false;
-  for(const [source,entry] of [...entries].reverse()){entry.surface.dispose();entry.canvas.remove();source.classList.remove('frame-source');}
-  entries.clear();
+  // 显式释放同样使在途初始化失效；旧任务迟到只清理自己，不再全局清理。
+  gpuGuard.invalidate();
+  disposeCommittedLocked();
 }
 
 export function gpuFallbackGeometry(source:HTMLCanvasElement){const entry=entries.get(source);return entry?.disabled?entry.geometry:null;}
