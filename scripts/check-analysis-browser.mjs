@@ -57,13 +57,13 @@ try {
     await load.execute({ id: ids['h264_9s_1920x1080.mp4'], slot: 'B' });
   }, ids);
   // 有轨道后开关可用，展开面板，并等打开动画落定再量坐标。
-  await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, { timeout: 30000 });
+  await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, undefined, { timeout: 30000 });
   await page.locator('#toggle-analysis').click();
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden);
   await page.waitForFunction(() => {
     const r1 = document.getElementById('analysis-canvas').getBoundingClientRect();
     return r1.y > 0 && r1.height > 0;
-  }, { timeout: 15000 });
+  }, undefined, { timeout: 15000 });
   await page.waitForTimeout(500);
   // 等两轨分析就绪（原生路径懒枚举 + 会话投影 + 双方结果落定）。
   await page.waitForFunction(async () => {
@@ -113,7 +113,7 @@ try {
   const bodyBox = await page.locator('#analysis-body').boundingBox();
   assert.ok(Math.abs(bodyBox.width - box.width) <= 2, `图表应占满面板宽：body=${bodyBox.width} canvas=${box.width}`);
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
-  await page.waitForFunction(() => window.__vpAnalysis?.inspection, { timeout: 10000 });
+  await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 10000 });
   const tip0 = await page.locator('.analysis-card').textContent();
   assert.match(tip0, /码率/);
   assert.match(tip0, /帧率|样本率/);
@@ -142,7 +142,7 @@ try {
   await page.waitForTimeout(300);
   assert.equal(await page.evaluate(() => window.__vpAnalysis.float), null, '移出后卡片隐藏');
   // 等待测试快照：布局 glyph 就绪。
-  await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, { timeout: 30000 });
+  await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, undefined, { timeout: 30000 });
   // 只开码率图：隐藏帧大小行，鼠标在曲线上仍能读两轨码率。
   const sizePressed = await page.locator('[data-seg="size"]').getAttribute('aria-pressed');
   if (sizePressed === 'true') await page.locator('[data-seg="size"]').click();
@@ -182,13 +182,13 @@ try {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
 
   // 放大到逐样本后，单击指定 B 柱：必须命中 B 的 sampleId 与可信展示 PTS。
   // 若仍为共享桶（点击只放大），继续框选缩小直到出现逐样本 glyph。
   let clicked = null;
   for (let attempt = 0; attempt < 6 && !clicked; attempt++) {
-    await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'), { timeout: 30000 }).catch(() => {});
+    await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'), undefined, { timeout: 30000 }).catch(() => {});
     const hasSample = await page.evaluate(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'));
     if (!hasSample) {
       await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7);
@@ -231,19 +231,19 @@ try {
   assert.ok(Math.abs(statePos - clicked.axisUs) < 100_000, `position=${statePos} axis=${clicked.axisUs}`);
 
   await page.locator('#analysis-canvas').dblclick();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', undefined, { timeout: 15000 });
 
   // 滚轮平移：先框选放大，再滚轮，同一像素下的时间变化，且跟随关闭。
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5);
-  await page.waitForFunction(() => window.__vpAnalysis?.inspection, { timeout: 15000 });
+  await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 15000 });
   const t0 = await page.locator('.analysis-card .fl-time').textContent();
   await page.mouse.wheel(0, 400);
-  await page.waitForFunction(prev => document.querySelector('.analysis-card .fl-time')?.textContent !== prev, t0, { timeout: 10000 });
+  await page.waitForFunction(prev => document.querySelector('.analysis-card .fl-time')?.textContent !== prev, t0, undefined, { timeout: 10000 });
   assert.equal(await page.locator('[data-seg="follow"]').textContent(), '跟随：关');
   // Ctrl+滚轮（触摸板捏合）：以 hover 为中心缩放，不报错且悬停可用。
   await page.keyboard.down('Control');
@@ -256,7 +256,7 @@ try {
 
   // 播放共存：面板打开时播放推进且无错误。
   await page.evaluate(() => window.voidPlayer.play());
-  await page.waitForFunction(() => document.getElementById('position').value !== '00:00.000', { timeout: 30000 });
+  await page.waitForFunction(() => document.getElementById('position').value !== '00:00.000', undefined, { timeout: 30000 });
   await page.waitForTimeout(2000);
   await page.evaluate(() => window.voidPlayer.pause());
 
@@ -282,7 +282,7 @@ try {
     await remove.execute({ slot: 'A' });
     await remove.execute({ slot: 'B' });
   });
-  await page.waitForFunction(() => document.getElementById('analysis-panel').hidden, { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('analysis-panel').hidden, undefined, { timeout: 15000 });
   assert.equal(await page.locator('#toggle-analysis').getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('#toggle-analysis').isDisabled(), true);
 
@@ -293,24 +293,24 @@ try {
     await load.execute({ id: ids['ci_h264_smoke.mp4'], slot: 'A' });
     await load.execute({ id: ids['h264_9s_1920x1080.mp4'], slot: 'B' });
   }, ids);
-  await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, { timeout: 30000 });
+  await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, undefined, { timeout: 30000 });
   await page.locator('#toggle-analysis').click();
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden);
   await page.waitForFunction(() => {
     const r1 = document.getElementById('analysis-canvas').getBoundingClientRect();
     return r1.y > 0 && r1.height > 0;
-  }, { timeout: 15000 });
+  }, undefined, { timeout: 15000 });
   await page.waitForTimeout(500);
   // 先悬停一次让检查快照（含 glyph）发布，再框选。
   const box2 = await page.locator('#analysis-canvas').boundingBox();
   await page.mouse.move(box2.x + box2.width * 0.4, box2.y + box2.height * 0.5);
-  await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, { timeout: 60000 });
+  await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, undefined, { timeout: 60000 });
   // 框选定一个区间并关掉帧大小行，形成非默认快照。
   await page.mouse.move(box2.x + box2.width * 0.3, box2.y + box2.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box2.x + box2.width * 0.55, box2.y + box2.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', { timeout: 15000 });
+  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
   await page.locator('[data-seg="size"]').click();
   const exported = await page.evaluate(async () => {
     const t = window.voidPlayer.tools.find(t => t.name === 'export_workspace');
@@ -326,10 +326,10 @@ try {
   await page.evaluate(async (doc) => {
     await window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document: doc });
   }, exported);
-  await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden, { timeout: 60000 });
+  await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden, undefined, { timeout: 60000 });
   const box3 = await page.locator('#analysis-canvas').boundingBox();
   await page.mouse.move(box3.x + box3.width * 0.4, box3.y + box3.height * 0.5);
-  await page.waitForFunction(() => window.__vpAnalysis?.inspection, { timeout: 60000 });
+  await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 60000 });
   const restoredView = await page.evaluate(() => window.__vpAnalysis.view);
   assert.deepEqual(restoredView, savedView, '导入后分析视图区间应还原');
   assert.equal(await page.locator('[data-seg="size"]').getAttribute('aria-pressed'), 'false', '导入后帧大小开关应还原');

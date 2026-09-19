@@ -77,6 +77,27 @@ test('轴/窗口/偏移不一致不可复用', () => {
   assert.equal(canSatisfy(base, { ...req, offsetUs: 1000 }), false);
 });
 
+test('raw 缓存的粗桶网格/粗码率步长不能满足更细的聚合请求（F5 回归）', () => {
+  // 100s/100px 的 raw 缓存：桶宽 1s、码率步长约 1s。面板不会用缓存 raw
+  // 按新口径重算桶与码率序列，因此聚合请求也必须分别比较桶网格与时间分辨率。
+  const raw: ViewCacheEntry = {
+    slot: 'A', sourceVersion: 'm@4000', indexRevision: 4000,
+    axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    startUs: 0, endUs: 100_000_000, pixelWidth: 100,
+    detailMode: 'raw', bucketWidthUs: 1_000_000, truncated: false, sampleCount: 4000,
+  };
+  assert.equal(canSatisfy(raw, {
+    startUs: 40_000_000, endUs: 60_000_000, axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    pixelWidth: 100, needRaw: false, bucketWidthUs: 200_000,
+  }), false);
+  // 同范围同网格同分辨率的聚合复查仍可复用。
+  const sameGrid: ViewCacheEntry = { ...raw, startUs: 40_000_000, endUs: 60_000_000, bucketWidthUs: 200_000 };
+  assert.equal(canSatisfy(sameGrid, {
+    startUs: 40_000_000, endUs: 60_000_000, axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    pixelWidth: 100, needRaw: false, bucketWidthUs: 200_000,
+  }), true);
+});
+
 test('区间未被完整覆盖不可复用', () => {
   const cached: ViewCacheEntry = {
     ...base, startUs: 0, endUs: 10_000_000, pixelWidth: 1000,

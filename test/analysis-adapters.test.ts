@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runSourceQuery } from '../src/analysis/adapters.ts';
+import { coverageFor } from '../src/analysis/inspection.ts';
 import type { SourceQueryContext } from '../src/analysis/adapters.ts';
 
 const ctx: SourceQueryContext = {
@@ -72,4 +73,19 @@ test('B 帧重排：DTS 轴与 PTS 轴顺序不同，但样本身份一致', () 
   });
   assert.deepEqual(ptsView.samples.map(s => s.sampleId), ['m1:v:0', 'm1:v:2', 'm1:v:3', 'm1:v:1']);
   assert.deepEqual(dtsView.samples.map(s => s.sampleId), ['m1:v:0', 'm1:v:1', 'm1:v:2', 'm1:v:3']);
+});
+
+test('DTS 轴导出的覆盖与内部计算一致：负 DTS 不被判 outside（F7 回归）', () => {
+  const dtsCtx: SourceQueryContext = {
+    ...ctx, durationUs: 200_000, coverageUs: { start: 0, end: 200_000 },
+  };
+  const negDts = [0, 1, 2].map(i => ({ pts: i * 40_000, dts: -80_000 + i * 40_000, size: 10_000, key: i === 0 }));
+  const r = runSourceQuery(negDts, dtsCtx, {
+    requestId: 6, axis: 'dts', startUs: -80_000, endUs: 100_000, pixelWidth: 9, bitrateWindowUs: 250_000,
+  });
+  assert.ok(r.samples.some(s => s.dtsUs !== null && s.dtsUs < 0));
+  assert.ok(r.bitrate && r.bitrate.some(p => p.tUs < 0 && p.mbps != null));
+  // 内部按扩展覆盖计算了负 DTS 的码率，导出的覆盖也必须包含同一区间。
+  assert.ok(r.coverageUs && r.coverageUs.start <= -80_000);
+  assert.equal(coverageFor(r.capability, r, -50_000, { start: -80_000, end: 200_000 }), 'known');
 });

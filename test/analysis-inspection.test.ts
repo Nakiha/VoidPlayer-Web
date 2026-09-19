@@ -40,8 +40,30 @@ test('相同样本数的新范围不复用旧轴数组：WeakMap 按快照身份
   assert.equal(ref.axisUs, 1_000_000);
 });
 
-test('稀疏非空桶按公共粗网格合并：A[0,20)/[20,40) B 不错位', () => {
-  // 基础桶宽 10ms，A 非空下标 0/1/2/3，B 非空 0/2/4/6。
+test('视口只返回局部样本时不得报告不同的"确定" 1s 局部帧率（F1 回归）', () => {
+  // 同一合成 VFR 片源：前 1s 30fps，后 1s 60fps；T=1.1s，算法窗口固定 1s。
+  const times = [
+    ...Array.from({ length: 30 }, (_, i) => Math.round(i * 1e6 / 30)),
+    ...Array.from({ length: 60 }, (_, i) => 1e6 + Math.round(i * 1e6 / 60)),
+  ];
+  const full = makeResult(times.map(t => ({ t, size: 1000 })));
+  const fullRate = localRateAtT(full, 'pts', 1_100_000, 'known');
+  assert.ok(fullRate.value != null && !fullRate.provisional && !fullRate.shortWindow);
+  // 深度放大后查询只返回 [1.050s, 1.150s) 的样本：同一 T 的统计口径不得改变，
+  // 覆盖不了完整统计窗口时必须标记（shortWindow/provisional）或拒绝给值。
+  const clipped: AnalysisResult = {
+    ...full,
+    samples: full.samples.filter(s => s.effectivePtsUs! >= 1_050_000 && s.effectivePtsUs! < 1_150_000),
+  };
+  const partial = localRateAtT(clipped, 'pts', 1_100_000, 'known');
+  const transparent = partial.value == null || partial.provisional || partial.shortWindow;
+  assert.ok(
+    transparent || Math.abs(partial.value! - fullRate.value!) < 0.01,
+    `full=${fullRate.value}, partial=${partial.value}, provisional=${partial.provisional}, short=${partial.shortWindow}`,
+  );
+});
+
+test('稀疏非空桶按公共粗网格合并：A[0,20)/[20,40) B 不错位', () => {  // 基础桶宽 10ms，A 非空下标 0/1/2/3，B 非空 0/2/4/6。
   const mk = (idx: number) => ({
     startUs: idx * 10_000, endUs: (idx + 1) * 10_000, count: 1,
     maxBytes: 1000, sumBytes: 1000, keyCount: 0, deltaCount: 1, unknownCount: 0,
