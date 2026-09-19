@@ -3,7 +3,7 @@ import { FlvEngine } from './flv-engine.ts';
 import type { PreparedFlv } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { FlvInput } from './flv-demux.ts';
-import { createSourceQuerier } from './analysis/adapters.ts';
+import { createSourceQuerier, locateSampleById } from './analysis/adapters.ts';
 
 async function start() {
   // The production path uses the browser Worker; Node exercises this same
@@ -18,7 +18,7 @@ async function start() {
   // 主线程只在视口需要时查询，且结果按像素宽度聚合，不逐帧全量索取。
   const querier = createSourceQuerier();
   const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; pts:number; recycle?: ArrayBuffer;
-    axis?: 'pts' | 'dts'; startUs?: number; endUs?: number; pixelWidth?: number; bitrateWindowUs?: number; maxSamples?: number; bucketsOnly?: boolean; bucketOriginUs?: number; firstPtsUs?: number; durationUs?: number; coverageUs?: { start: number; end: number } | null; mediaId?: string }) => {
+    axis?: 'pts' | 'dts'; startUs?: number; endUs?: number; pixelWidth?: number; bitrateWindowUs?: number; maxSamples?: number; bucketsOnly?: boolean; bucketOriginUs?: number; firstPtsUs?: number; durationUs?: number; coverageUs?: { start: number; end: number } | null; mediaId?: string; sampleId?: string }) => {
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Incremental commits never await the extraction chain: an extract may
@@ -80,6 +80,12 @@ async function start() {
             ...(message.bucketsOnly ? { bucketsOnly: true } : {}),
             ...(message.bucketOriginUs !== undefined ? { bucketOriginUs: message.bucketOriginUs } : {}),
           });
+          send({ id, ok: true, data });
+        } else if (type === 'analysis-locate' && engine) {
+          // 按样本身份的有界定位：O(1) 反查包表，不扫描、不新建索引。
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
+          const data = locateSampleById(packets, message.mediaId ?? '', message.firstPtsUs ?? 0, message.sampleId ?? '');
           send({ id, ok: true, data });
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');
       } catch (error) {

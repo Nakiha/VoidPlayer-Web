@@ -7,9 +7,9 @@
 
 import { EncodedPacketSink } from 'mediabunny';
 import type { InputVideoTrack } from 'mediabunny';
-import { createSourceQuerier } from './adapters.ts';
+import { createSourceQuerier, locateSampleById } from './adapters.ts';
 import type { PacketView, SourceQueryContext } from './adapters.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult } from './types.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
 
 const MAX_PACKETS = 2_000_000;
 const YIELD_EVERY = 2000;
@@ -102,6 +102,12 @@ export class NativeAnalysisAdapter {
         query.signal!.addEventListener('abort', () => reject(query.signal!.reason), { once: true });
       }),
     ]);
+  }
+
+  /** 按样本身份有界定位：O(1) 反查包表；索引尚未覆盖时返回 null。 */
+  locate(sampleId: string): Promise<AnalysisSample | null> {
+    if (this.closed) return Promise.resolve(null);
+    return Promise.resolve(locateSampleById(this.packets, this.mediaId, this.firstPtsUs, sampleId));
   }
 
   close(): void {

@@ -55,7 +55,8 @@ export function detailModeFor(truncated: boolean, sampleCount: number): DetailMo
  * 1. 身份/修订/轴/窗口兼容；
  * 2. 请求区间被完整覆盖（含分组所需的边界样本由调用方的预取 margin 保证）；
  * 3. raw 请求只能由完整 raw 满足；
- * 4. 聚合请求可由 raw 重聚合，或由足够细且可正确合并的桶满足；
+ * 4. 聚合请求可由 raw 或足够细且可正确合并的桶满足，但缓存方不会按新口径
+ *    重算派生数据：桶网格与码率采样步长必须和桶缓存一样分别比较；
  * 5. 只比较点数不够，必须比较时间分辨率/桶宽；
  * 6. 未知/暂定区间不可因命中变成完整（调用方不得缓存 building 结果）。
  */
@@ -75,9 +76,8 @@ export function canSatisfy(cached: ViewCacheEntry, requested: ViewCacheRequest):
     if (cachedUspp > requestedUspp * 1.25 + 1) return false;
     return true;
   }
-  // 聚合请求：raw 可重聚合直接满足。
-  if (cached.detailMode === 'raw' && !cached.truncated) return true;
-  // 桶满足桶：缓存桶必须至少和请求一样细，且能正确合并（同一起源假设由调用方保证）。
+  // 聚合请求：raw 样本精确不代表其桶网格与码率曲线满足新口径；调用方沿用
+  // 缓存结果的派生数据而不重算，因此 raw 缓存与桶缓存走同一套网格/分辨率比较。
   // 桶宽越小越细。允许 1us 的整除误差。
   if (cached.bucketWidthUs > requested.bucketWidthUs + 1) return false;
   // 时间分辨率兜底：缓存每像素跨度不得明显大于请求。

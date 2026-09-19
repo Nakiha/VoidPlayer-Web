@@ -12,7 +12,7 @@ import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import type { DecodedFrame, MediaSource } from './media.ts';
-import type { AnalysisQuery, AnalysisResult, AnalysisStatus } from './analysis/types.ts';
+import type { AnalysisQuery, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
@@ -242,6 +242,27 @@ export class ReviewSession {
     const normalizedPts = sample.effectivePtsUs - track.offsetUs;
     if (normalizedPts < 0) return { reason: '该样本位于轨道开始之前（预滚），没有可展示画面。' };
     return { sessionPtsUs: Math.max(0, Math.round(sample.effectivePtsUs)) };
+  }
+  /**
+   * 按稳定样本身份有界定位（桶峰值定位与 Agent 共用）：不依赖某次视口查询
+   * 是否恰好返回了 raw 样本列表。返回的样本时间已投影到会话时间。
+   */
+  async locateAnalysisSample(slot: Slot, sampleId: string): Promise<{ sample: AnalysisSample } | { reason: string }> {
+    slotValue(slot);
+    if (typeof sampleId !== 'string' || !sampleId) return { reason: '样本身份无效。' };
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
+    if (!track.source.locateAnalysisSample) return { reason: '该片源的解码路径暂不支持按样本定位。' };
+    const found = await track.source.locateAnalysisSample(sampleId);
+    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    const offsetUs = track.offsetUs;
+    return {
+      sample: {
+        ...found,
+        effectivePtsUs: found.effectivePtsUs == null ? null : found.effectivePtsUs + offsetUs,
+        dtsUs: found.dtsUs == null ? null : found.dtsUs + offsetUs,
+      },
+    };
   }
   private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure).map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {

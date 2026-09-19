@@ -62,6 +62,49 @@ export interface SortedAxis {
   prefix: Float64Array;
 }
 
+/** 物化单个包的样本视图：executeSortedQuery 与按身份定位共用同一字段口径。 */
+function toSample(packets: ArrayLike<PacketView>, ctx: SourceQueryContext, pos: number): AnalysisSample {
+  const p = packets[pos];
+  return {
+    sampleId: `${ctx.mediaId}:v:${pos}`,
+    decodeOrdinal: pos,
+    containerPtsUs: p.originalPts ?? p.pts,
+    effectivePtsUs: p.pts - ctx.firstPtsUs,
+    dtsUs: p.dts == null ? null : p.dts - ctx.firstPtsUs,
+    sizeBytes: p.size,
+    randomAccess: p.key ? 'yes' : 'no',
+    pictureType: null,
+    pictureTypeSource: 'unavailable',
+    qp: null,
+  };
+}
+
+/**
+ * 按样本身份做有界定位：只有 mint 该 id 的本层可以解析它（UI 不得猜格式）。
+ * 身份不属于本媒体、序号越界（索引尚未覆盖）时返回 null，调用方如实播报。
+ */
+export function locateSampleById(
+  packets: ArrayLike<PacketView>, mediaId: string, firstPtsUs: number, sampleId: string,
+): AnalysisSample | null {
+  const prefix = `${mediaId}:v:`;
+  if (!sampleId.startsWith(prefix)) return null;
+  const pos = Number(sampleId.slice(prefix.length));
+  if (!Number.isInteger(pos) || pos < 0 || pos >= packets.length) return null;
+  const p = packets[pos];
+  return {
+    sampleId: `${mediaId}:v:${pos}`,
+    decodeOrdinal: pos,
+    containerPtsUs: p.originalPts ?? p.pts,
+    effectivePtsUs: p.pts - firstPtsUs,
+    dtsUs: p.dts == null ? null : p.dts - firstPtsUs,
+    sizeBytes: p.size,
+    randomAccess: p.key ? 'yes' : 'no',
+    pictureType: null,
+    pictureTypeSource: 'unavailable',
+    qp: null,
+  };
+}
+
 export function sortByAxis(packets: ArrayLike<PacketView>, firstPtsUs: number, axis: 'pts' | 'dts'): SortedAxis {
   const items: { pos: number; t: number }[] = [];
   for (let i = 0; i < packets.length; i++) {
@@ -93,22 +136,7 @@ export function executeSortedQuery(
   const truncated = bucketsOnly ? inRange > 0 : inRange > maxSamples;
   const samples: AnalysisSample[] = [];
   if (!truncated) {
-    for (let k = lo; k < hi; k++) {
-      const pos = order[k];
-      const p = packets[pos];
-      samples.push({
-        sampleId: `${ctx.mediaId}:v:${pos}`,
-        decodeOrdinal: pos,
-        containerPtsUs: p.originalPts ?? p.pts,
-        effectivePtsUs: p.pts - ctx.firstPtsUs,
-        dtsUs: p.dts == null ? null : p.dts - ctx.firstPtsUs,
-        sizeBytes: p.size,
-        randomAccess: p.key ? 'yes' : 'no',
-        pictureType: null,
-        pictureTypeSource: 'unavailable',
-        qp: null,
-      });
-    }
+    for (let k = lo; k < hi; k++) samples.push(toSample(packets, ctx, order[k]));
   }
   const pixelWidth = Math.max(1, Math.floor(query.pixelWidth) || 1);
   // 共享桶原点：会话层按轨填入归一化原点（会话原点 - offset），多轨在会话域对齐；
@@ -150,7 +178,7 @@ export function executeSortedQuery(
     ? { start: Math.min(0, axisMin), end: Math.max(ctx.durationUs, axisMax) }
     : { start: 0, end: ctx.durationUs };
   let coverage = ctx.coverageUs ? [{ start: ctx.coverageUs.start, end: ctx.coverageUs.end }] : null;
-  if (query.axis === 'dts' && coverage && times.length) {
+  if (query.axis === 'dts' && coverage && times.length && ctx.capability.indexState === 'complete') {
     // 完整索引下 DTS 覆盖扩展到实际最小/最大解码时间，保留负时间。
     coverage = [{
       start: Math.min(coverage[0].start, times[0]),
@@ -187,7 +215,9 @@ export function executeSortedQuery(
     buckets,
     bitrate,
     capability: ctx.capability,
-    coverageUs: ctx.coverageUs,
+    // 导出轴相关的实际覆盖：与内部桶完整性/码率计算使用同一区间，
+    // 调用方不得再用原始 PTS 水位线判断 DTS 轴的 outside。
+    coverageUs: coverage ? coverage[0] : null,
   };
 }
 

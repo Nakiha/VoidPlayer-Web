@@ -14,7 +14,7 @@ import { groupSamples } from '../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../analysis/view-cache.ts';
-import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth } from '../analysis/inspection.ts';
+import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
 import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
 import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
@@ -389,10 +389,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const pixelWidth = clampPixelWidth(Math.max(1, plotWidthCss() - 46));
     const span = Math.max(1, range.end - range.start);
     const db = domainBounds();
-    // 预取半屏 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
+    // 预取 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
+    // margin 至少覆盖局部帧率的半个统计窗口：深度放大后视口不足 1s，
+    // 否则检查器拿到的样本覆盖不了自己的 1s 邻域（口径随缩放漂移）。
     const full = span >= db.end - db.start;
-    const qStart = full ? range.start : Math.max(db.start, Math.floor(range.start - span * 0.5));
-    const qEnd = full ? range.end : Math.min(db.end, Math.ceil(range.end + span * 0.5));
+    const margin = Math.max(span * 0.5, LOCAL_RATE_WINDOW_US / 2);
+    const qStart = full ? range.start : Math.max(db.start, Math.floor(range.start - margin));
+    const qEnd = full ? range.end : Math.min(db.end, Math.ceil(range.end + margin));
     // 大 CSS 宽度 + 预取 margin 不得产生 pixelWidth>4096 的查询异常。
     const qPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (qEnd - qStart) / span));
     const visibleBucketW = bucketWidthFor(range.start, range.end, pixelWidth);
@@ -1276,20 +1279,36 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
     } else if (picked && picked.kind === 'bucket') {
       const g = picked as BucketGlyph;
-      // 区间桶按峰值样本定位到展示帧，不缩放视图；无可定位峰值时才放大区间。
-      const r = results.get(g.slot);
-      const peak = g.maxSampleId ? r?.samples.find(v => v.sampleId === g.maxSampleId) : undefined;
-      const targetPts = peak?.effectivePtsUs;
-      if (targetPts != null) {
-        const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: targetPts });
-        if ('sessionPtsUs' in resolved) {
-          kbTrack = g.slot;
-          void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
+      // 区间桶一律按峰值样本定位到展示帧，不改变视图。峰值身份经 session 有界
+      // 定位解析：不依赖本次查询是否恰好返回 raw 样本，也不从 id 字符串猜时间。
+      const peakId = g.maxSampleId;
+      if (!peakId) {
+        live.textContent = `轨道 ${g.slot}：该区间没有可定位的峰值样本。`;
+      } else {
+        const inView = results.get(g.slot)?.samples.find(v => v.sampleId === peakId);
+        if (inView) {
+          const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: inView.effectivePtsUs });
+          if ('sessionPtsUs' in resolved) {
+            kbTrack = g.slot;
+            void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
+          } else {
+            live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
+          }
         } else {
-          live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
+          void session.locateAnalysisSample(g.slot, peakId).then(found => {
+            if (signal.aborted) return;
+            if (!('sample' in found)) { live.textContent = `轨道 ${g.slot}：${found.reason}`; return; }
+            const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: found.sample.effectivePtsUs });
+            if ('sessionPtsUs' in resolved) {
+              kbTrack = g.slot;
+              void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
+            } else {
+              live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
+            }
+          }).catch(() => {
+            if (!signal.aborted) live.textContent = `轨道 ${g.slot}：峰值样本定位失败。`;
+          });
         }
-      } else if (g.count > 0) {
-        setView(Math.floor(g.startUs), Math.ceil(g.endUs), false);
       }
     }
     // 单击不重绘底图；高亮随 hover 已在覆盖层更新。

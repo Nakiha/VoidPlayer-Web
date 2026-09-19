@@ -13,7 +13,7 @@ import type { PreparedFlv } from './flv-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import { contextLog } from './log.ts';
 import type { MediaInfo } from './model.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult } from './analysis/types.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
 export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
@@ -187,8 +187,15 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
             indexState: (info.indexState ?? 'complete') as AnalysisCapability['indexState'],
             ...(info.indexError ? { indexError: info.indexError } : {}),
           },
-          coverageUs: complete ? { start: 0, end: info.durationUs } : null,
+          coverageUs: result.coverageUs ?? null,
         };
+      },
+      async locateAnalysisSample(sampleId: string): Promise<AnalysisSample | null> {
+        if (disposed) throw new Error('媒体已释放。');
+        // 身份解析只在 mint 它的 adapter 层做（worker 内 O(1) 反查），主线程不猜格式。
+        return activeRpc.call<AnalysisSample | null>('analysis-locate', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId,
+        }, [], 60000);
       },
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){

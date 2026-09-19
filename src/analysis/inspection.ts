@@ -235,6 +235,10 @@ export function localRateAtT(
   if (k < 2) return base;
   const first = derived.times[lo], last = derived.times[hi - 1];
   if (!(last > first) || !Number.isFinite(first) || !Number.isFinite(last)) return base;
+  // 窗口内样本跨度远小于声明窗口，说明本次返回的样本没覆盖统计窗口
+  // （深度放大后查询区间不足 1s）或区域过稀疏：不得报告"确定"帧率。
+  // 真实帧率下完整窗口的样本跨度 ≥ 窗口 - 1/rate，远低于半窗才可疑。
+  const spanShort = (last - first) * 2 < wb - wa;
   // 跳变检测：任一间隔超过半窗即视为时间线跳变，不输出稳定帧率。
   let maxGap = 0;
   for (let i = lo + 1; i < hi; i++) {
@@ -245,7 +249,7 @@ export function localRateAtT(
   if (maxGap > half) return base;
   const fps = ((k - 1) * 1_000_000) / (last - first);
   if (!Number.isFinite(fps) || fps <= 0 || fps > 1000) return base;
-  return { ...base, value: fps, provisional: false, shortWindow };
+  return { ...base, value: fps, provisional: false, shortWindow: shortWindow || spanShort };
 }
 
 /** 公共 T 的参考样本：exact/nearby/none，不扩大对应容差。 */

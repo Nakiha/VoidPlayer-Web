@@ -2,7 +2,7 @@ import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { getColorMode,getReferenceDecode } from './color-mode.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfoChange } from './media-state.ts';
-import type { AnalysisCapability, AnalysisQuery, AnalysisResult } from './analysis/types.ts';
+import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { hevcDisplayOrder } from './hevc-timeline.ts';
@@ -60,6 +60,11 @@ export interface MediaSource {
    */
   getAnalysisCapability?(): AnalysisCapability;
   queryAnalysis?(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult>;
+  /**
+   * 按样本身份（桶峰值等）有界定位单个样本，不依赖某次查询是否返回了 raw 列表。
+   * 身份格式由 adapter 层解析；未索引/不属于本媒体返回 null。
+   */
+  locateAnalysisSample?(sampleId: string): Promise<AnalysisSample | null>;
   dispose(): void;
 }
 export async function inspectVideoTrack(input: Input) {
@@ -301,6 +306,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       info,
       getAnalysisCapability: () => analysis.getCapability(),
       queryAnalysis: query => analysis.query(query),
+      locateAnalysisSample: sampleId => analysis.locate(sampleId),
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).
