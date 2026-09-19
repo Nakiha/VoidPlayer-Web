@@ -1,14 +1,26 @@
 import { drawingsValue } from './annotation.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
+import { BITRATE_WINDOW_OPTIONS_US } from './analysis/statistics.ts';
 import { Viewport } from './viewport.ts';
 import type { ViewportSnapshot } from './viewport.ts';
 
+/** 码流分析面板状态：可视区间（null 为完整范围）+ 显示偏好 + 对比轨道。 */
+export type AnalysisViewState = {
+  view: { start: number; end: number } | null;
+  axis: 'pts' | 'dts';
+  windowUs: number;
+  layoutMode: 'merged' | 'rows';
+  showBitrate: boolean; showSize: boolean;
+  follow: boolean;
+  selected: Slot[];
+};
 export type WorkspaceLayout = {
   panels: { inspector: boolean; subtracks: boolean; sources: boolean; analysis?: boolean };
   selected: Slot; dockHeight: number; marksExpanded: boolean;
   filenameWidth?: number; marksWidth?: number;
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
+  analysisView?: AnalysisViewState;
 };
 export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
@@ -90,6 +102,24 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       const s = object(l.sources);
       if (s.tab !== 'available' && s.tab !== 'recent') throw new Error('工作区媒体库标签无效。');
       layout.sources = { tab: s.tab, query: text(s.query, 1000), root: text(s.root, 200), directory: text(s.directory, 4096), search: text(s.search, 1000), all: boolean(s.all) };
+    }
+    if (l.analysisView !== undefined) {
+      const a = object(l.analysisView);
+      let view: { start: number; end: number } | null = null;
+      if (a.view !== null && a.view !== undefined) {
+        const v = object(a.view);
+        const start = integer(v.start), end = integer(v.end);
+        if (!(end > start)) throw new Error('分析视图范围无效。');
+        view = { start, end };
+      }
+      if (a.axis !== 'pts' && a.axis !== 'dts') throw new Error('分析时间基准无效。');
+      if (typeof a.windowUs !== 'number' || !BITRATE_WINDOW_OPTIONS_US.includes(a.windowUs)) throw new Error('分析码率窗口无效。');
+      if (a.layoutMode !== 'merged' && a.layoutMode !== 'rows') throw new Error('分析布局无效。');
+      layout.analysisView = {
+        view, axis: a.axis, windowUs: a.windowUs, layoutMode: a.layoutMode,
+        showBitrate: boolean(a.showBitrate), showSize: boolean(a.showSize),
+        follow: boolean(a.follow), selected: array(a.selected, SLOTS.length).map(slotValue),
+      };
     }
   }
   const thumbnails = array(d.thumbnails ?? [], 10000).map(value => {

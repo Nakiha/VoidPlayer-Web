@@ -1,4 +1,5 @@
 import { installWorkspaceSharing } from './workspace-sharing.ts';
+import type { ToastStack } from './toast.ts';
 import {updateMediaInfo} from '../media-state.ts';
 import type { ReviewSession } from '../session.ts';
 import type { MediaInfo } from '../model.ts';
@@ -51,6 +52,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   beforeRestore(): void | (() => void);
   closeSettings(): Promise<void>;
   identityReady: Promise<void>;
+  toasts: ToastStack;
 }) {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
@@ -83,7 +85,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, created: document => saved!.shared(document), open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing.update(); });
   const savedId = new URL(location.href).searchParams.get('workspace');
   if (!new URL(location.href).searchParams.has('share') && savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));

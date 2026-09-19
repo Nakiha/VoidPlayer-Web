@@ -13,6 +13,7 @@ import { installChoiceMenu } from './ui/choice-menu.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
 import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
+import { installToasts } from './ui/toast.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
 // Feature styles in cascade order: accessibility overrides, component layout,
@@ -101,7 +102,9 @@ const identitySettings = installIdentitySettings(actor => session.setActor(actor
 const drawingEditor = installDrawingEditor(session, canvases);
 const workbench = installWorkbench(session, act, openMarkDialog);
 const removeTrackDrag = installTrackDrag(session);
-const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); });
+const toasts = installToasts(uiEvents.signal);
+const notify = (message: string) => { toasts.show(message); };
+const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
 let timelineDragging = false;
 let pendingTimelineUs: number | null = null;
@@ -144,7 +147,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
-  identityReady: identitySettings.ready, act, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
+  identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
   async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
@@ -230,9 +233,9 @@ function render() {
     button.setAttribute('aria-pressed', String(button.dataset.mode === (splitActive ? 'split' : 'side-by-side')));
   }
   // All topbar view controls key off the same empty-session flag: no tracks,
-  // no inspector/subtracks/arrangement/reset. Sources stays enabled so an
+  // no inspector/subtracks/analysis/arrangement/reset. Sources stays enabled so an
   // empty session can still browse the library; share keys off canShare().
-  for (const id of ['arrangement', 'reset-view', 'toggle-inspector', 'toggle-subtracks']) {
+  for (const id of ['arrangement', 'reset-view', 'toggle-inspector', 'toggle-subtracks', 'toggle-analysis']) {
     $<HTMLButtonElement>(id).disabled = !loaded;
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);

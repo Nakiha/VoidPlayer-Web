@@ -67,6 +67,12 @@ export function canSatisfy(cached: ViewCacheEntry, requested: ViewCacheRequest):
   if (requested.needRaw) {
     // 逐样本请求：必须有完整 raw，桶再细也不行。
     if (cached.detailMode !== 'raw' || cached.truncated) return false;
+    // raw 样本虽精确，但码率序列按查询密度采样：全览粗查询的码率步长
+    // 满足不了放大视图（游标步长小一个量级时最近邻限位会将其剔除，
+    // 读数在值/—间闪烁）。时间分辨率必须一起比较。
+    const cachedUspp = usPerPixel(cached.startUs, cached.endUs, cached.pixelWidth);
+    const requestedUspp = usPerPixel(requested.startUs, requested.endUs, requested.pixelWidth);
+    if (cachedUspp > requestedUspp * 1.25 + 1) return false;
     return true;
   }
   // 聚合请求：raw 可重聚合直接满足。

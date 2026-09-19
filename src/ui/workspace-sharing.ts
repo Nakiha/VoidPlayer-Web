@@ -2,16 +2,16 @@ import { currentActor } from '../identity.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { pinLibraryReference } from '../media-reference.ts';
 import { icon } from './icons.ts';
-import { installToasts } from './toast.ts';
+import type { ToastStack } from './toast.ts';
 
 /** Immutable server snapshots reuse the same restore contract as workspace files. */
 export function installWorkspaceSharing(options: {
-  signal: AbortSignal; ready: Promise<void>; snapshot(): WorkspaceFile;
+  signal: AbortSignal; ready: Promise<void>; snapshot(): WorkspaceFile; toasts: ToastStack;
   created?(document: WorkspaceFile): Promise<void>; open(value: unknown): Promise<boolean>; canShare(): boolean; report(error: unknown): void;
 }) {
   const button = document.getElementById('workspace-share') as HTMLButtonElement;
   const settingsButton = document.getElementById('saved-workspace-share') as HTMLButtonElement;
-  const toasts = installToasts(options.signal);
+  const toasts = options.toasts;
   let busy = false;
   function update() {
     for (const control of [button, settingsButton]) {
@@ -71,5 +71,6 @@ export function installWorkspaceSharing(options: {
     } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } }
   });
   update();
-  return { create, update, dispose() { toasts.dispose(); } };
+  // Toast stack lifetime is owned by the caller (shared across notifiers).
+  return { create, update, dispose() {} };
 }

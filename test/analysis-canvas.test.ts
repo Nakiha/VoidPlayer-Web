@@ -50,10 +50,11 @@ test('统一几何柱宽一致：缩放不改变视觉柱宽（时间由锚点�
     m.tracks[0].samples = null;
     return m;
   };
+  // 视口带 padding，避免边缘裁剪干扰宽度断言（边缘只裁剪不移位，见几何用例）。
   const wide = { fillRect: [] as number[][], fillText: [] as unknown[][] };
-  drawAnalysis(mockCtx(wide), mk(0, 1_000_000));
+  drawAnalysis(mockCtx(wide), mk(-200_000, 1_200_000));
   const narrow = { fillRect: [] as number[][], fillText: [] as unknown[][] };
-  drawAnalysis(mockCtx(narrow), mk(0, 100_000));
+  drawAnalysis(mockCtx(narrow), mk(-50_000, 150_000));
   const widths = (r: { fillRect: number[][] }) => r.fillRect.map(a => a[2]).filter(w => w >= 5 && w <= 12);
   assert.ok(widths(wide).length > 0 && widths(narrow).length > 0);
   // 同一视口内一致，且缩放不改变目标柱宽。

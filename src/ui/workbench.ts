@@ -99,6 +99,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   function render(state: WorkbenchState) {
     view.reconcile(state.tracks);
     if (!state.tracks.length && view.panels.subtracks) { view.panels.subtracks = false; syncPanels(); }
+    if (!state.tracks.length && view.panels.analysis) { view.panels.analysis = false; syncPanels(); }
     if (view.panels.inspector) tracks.renderInspector(state);
     if (view.panels.subtracks) tracks.renderDock(state, annotations);
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
@@ -171,11 +172,12 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   return {
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
     async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
       view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
+      if (layout.analysisView) analysis.restoreAnalysisState(layout.analysisView);
       const sourcesState = layout.sources ?? { tab: 'available', query: '', root: '', directory: '', search: '', all: false };
       const browsing = sources.beginRestore(sourcesState);
       tracks.resetSignatures();

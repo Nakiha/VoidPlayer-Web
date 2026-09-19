@@ -439,7 +439,7 @@ button.icon-button[aria-pressed=true] {
 .slot-F { background: var(--slot-f); }
 .slot-G { background: var(--slot-g); }
 .slot-H { background: var(--slot-h); }
-.side-resize { position: absolute; grid-area: 1 / 1 / 2 / -1; top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 8; }
+.side-resize { position: absolute; grid-area: 2 / 1 / 3 / -1; top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 8; }
 #inspector-resize { left: var(--inspector-user-width, var(--inspector-width)); transform: translateX(-50%); }
 #sources-resize { right: var(--sources-user-width, var(--sources-width)); transform: translateX(50%); }
 .side-resize::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: var(--panel-resize-line-width); transform: translateX(-50%); background: transparent; transition: background var(--transition-fast); }
@@ -480,8 +480,8 @@ button.icon-button[aria-pressed=true] {
 
 /* One height handle for the tracks and annotation strip. */
 .dock-resize { top: calc(var(--panel-resize-hit-width) / -2); height: var(--panel-resize-hit-width); }
-.dock-resize:hover { background: transparent; }
-.dock-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; }
+.dock-resize:hover, .dock-resize.resizing { background: transparent; outline: none; }
+.dock-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; transition: background var(--transition-fast); }
 .dock-resize:hover::after, .dock-resize.resizing::after { background: var(--accent); }
 .subtracks-panel { transform: translateY(var(--panel-push, 0px)); }
 .subtracks-panel.panel-pushing { transition: none; }
@@ -504,8 +504,8 @@ button.icon-button[aria-pressed=true] {
 
 /* Height handle on the panel's bottom edge; mirrors .dock-resize. */
 .analysis-resize { position: absolute; bottom: calc(var(--panel-resize-hit-width) / -2); left: 0; right: 0; height: var(--panel-resize-hit-width); cursor: row-resize; touch-action: none; z-index: 5; }
-.analysis-resize:hover { background: transparent; }
-.analysis-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; }
+.analysis-resize:hover, .analysis-resize.resizing { background: transparent; outline: none; }
+.analysis-resize::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: var(--panel-resize-line-width); transform: translateY(-50%); background: transparent; transition: background var(--transition-fast); }
 .analysis-resize:hover::after, .analysis-resize.resizing::after { background: var(--accent); }
 .track-identity { padding-inline: var(--control-gap); touch-action: none; user-select: none; }
 .choice-trigger { display: inline-flex; align-items: center; gap: var(--control-gap); padding-inline: var(--control-gap); background: transparent; white-space: nowrap; font-size: var(--text-sm); }

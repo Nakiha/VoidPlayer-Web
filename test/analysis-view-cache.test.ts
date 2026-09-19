@@ -40,9 +40,30 @@ test('raw 请求只能由完整 raw 满足，桶再细也不行', () => {
     ...base, startUs: 0, endUs: 30_000_000, pixelWidth: 2000,
     detailMode: 'raw', bucketWidthUs: 15_000, truncated: false, sampleCount: 100,
   };
+  // 同分辨率（15ms/px）平移可复用。
   assert.equal(canSatisfy(raw, {
     startUs: 5_000_000, endUs: 10_000_000, axis: 'pts', windowUs: 1_000_000, offsetUs: 0,
-    pixelWidth: 1000, needRaw: true, bucketWidthUs: 5000,
+    pixelWidth: 333, needRaw: true, bucketWidthUs: 5000,
+  }), true);
+});
+
+test('全览 raw 的粗码率步长不能满足放大后的 raw 请求（值/—闪烁根因）', () => {
+  // 全览 10s/1190px（约 8.4ms/px，码率点同间距）；放大到 174ms 视图，
+  // 查询约 0.14ms/px。粗覆盖必须判为不满足，触发细查。
+  const fullRaw: ViewCacheEntry = {
+    slot: 'A', sourceVersion: 'm@10', indexRevision: 10,
+    axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    startUs: 0, endUs: 10_000_000, pixelWidth: 1190,
+    detailMode: 'raw', bucketWidthUs: 8403, truncated: false, sampleCount: 600,
+  };
+  assert.equal(canSatisfy(fullRaw, {
+    startUs: 3667604, endUs: 4016372, axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    pixelWidth: 2560, needRaw: true, bucketWidthUs: 136,
+  }), false);
+  // 同密度复查可以复用。
+  assert.equal(canSatisfy({ ...fullRaw, startUs: 3667604, endUs: 4016372, pixelWidth: 2560 }, {
+    startUs: 3667604, endUs: 4016372, axis: 'pts', windowUs: 250_000, offsetUs: 0,
+    pixelWidth: 2560, needRaw: true, bucketWidthUs: 136,
   }), true);
 });
 

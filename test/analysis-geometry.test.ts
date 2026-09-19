@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSamples } from '../src/analysis/grouping.ts';
-import { layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY } from '../src/ui/analysis-geometry.ts';
+import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY } from '../src/ui/analysis-geometry.ts';
 import type { Slot } from '../src/model.ts';
 
 const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>([
@@ -126,8 +126,9 @@ test('视口边缘组锚点在外、成员在内仍保留且可命中', () => {
 });
 
 test('同一视口柱宽一致：稀疏不撑宽、缺席留空', () => {
+  // 样本全部取视口内部，避免边缘裁剪干扰宽度断言（边缘行为由专门用例覆盖）。
   const groups = groupSamples([
-    { slot: 'A', samples: refs('A', [0, 1_000_000]) },
+    { slot: 'A', samples: refs('A', [200_000, 1_000_000]) },
     { slot: 'B', samples: refs('B', [500_000]) },
   ], 2000);
   const glyphs = layoutMergedSamples(groups, {
@@ -136,10 +137,75 @@ test('同一视口柱宽一致：稀疏不撑宽、缺席留空', () => {
   });
   const widths = new Set(glyphs.map(g => Math.round(g.rect.width)));
   assert.equal(widths.size, 1, `柱宽应一致，实际 ${[...widths]}`);
-  // 缺席轨道留空：0ms 组只有 A，B 槽位无柱但 A 柱不加宽。
-  const at0 = glyphs.filter(g => g.axisUs === 0);
-  assert.equal(at0.length, 1);
-  assert.equal(at0[0].slot, 'A');
+  // 缺席轨道留空：200ms 组只有 A，B 槽位无柱但 A 柱不加宽。
+  const at200 = glyphs.filter(g => g.axisUs === 200_000);
+  assert.equal(at200.length, 1);
+  assert.equal(at200[0].slot, 'A');
+});
+
+test('视口边缘只裁剪不移位：左半单元在外不把整组搬进视口', () => {
+  // A/B 同在 0ms（视口起点），单元以锚点为中心：A lane 完全在外、B lane 可见。
+  // 不得把整组右移 8px 让 A 也出现；绘图与命中共用裁剪后几何。
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', [0]) },
+    { slot: 'B', samples: refs('B', [0]) },
+  ], 2000);
+  assert.equal(groups.length, 1);
+  const glyphs = layoutMergedSamples(groups, {
+    trackOrder: ['A', 'B'], viewStart: 0, viewEnd: 200_000,
+    gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot,
+  });
+  // A 柱被裁掉（不移位），B 柱保留且左缘不早于绘图区。
+  assert.equal(glyphs.filter(g => g.slot === 'A').length, 0);
+  const b = glyphs.filter(g => g.slot === 'B');
+  assert.equal(b.length, 1);
+  assert.ok(b[0].rect.x >= 46 - 0.5, `b.x=${b[0].rect.x}`);
+  const cx = b[0].interactionRect.x + b[0].interactionRect.width / 2;
+  assert.equal(pickGlyph(glyphs, cx, 30)!.slot, 'B');
+});
+
+test('容量复核：600px/3s/双30fps 不允许 raw（固定 7px 会重叠约 5.67px）', () => {
+  // 双轨各 90 帧、锚点约 33ms 间隔：600px/3s 下锚点间距约 6.6px，远小于双轨单元 16px。
+  const aTimes = Array.from({ length: 90 }, (_, i) => i * 33_333);
+  const bTimes = Array.from({ length: 90 }, (_, i) => i * 33_333 + 1_000);
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', aTimes) },
+    { slot: 'B', samples: refs('B', bTimes) },
+  ], 2000);
+  assert.ok(groups.length > 50);
+  assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 600, 2), false);
+  // 同样数据放大 10 倍宽度后可以 raw。
+  assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 6000, 2), true);
+});
+
+test('孤立近邻做局部聚合：重叠段标记可展开，相邻正常组不受影响', () => {
+  // 正常 100ms 间隔中混入一对相距 5ms 的组（容差 2ms 下分属两组，
+  // 但 16px 固定单元重叠）：只合并该段，不污染全图。
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', [0, 100_000, 105_000, 200_000]) },
+    { slot: 'B', samples: refs('B', [0, 200_000]) },
+  ], 2000);
+  assert.equal(groups.length, 4);
+  const glyphs = layoutMergedSamples(groups, {
+    trackOrder: ['A', 'B'], viewStart: -50_000, viewEnd: 250_000,
+    gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot,
+  });
+  // 100ms 附近的 A 两帧应合并为聚合标记（带区间），远端 0/200ms 保持单样本。
+  const singles = glyphs.filter(g => g.stackedCount === 1);
+  assert.ok(singles.some(g => g.axisUs === 0), '远端 0ms 应保留单样本');
+  assert.ok(singles.some(g => g.axisUs === 200_000), '远端 200ms 应保留单样本');
+  const aggs = glyphs.filter(g => g.stackedCount > 1 && g.clusterStartUs != null);
+  assert.ok(aggs.length >= 1, `应有局部聚合标记，实际 ${glyphs.length} 个 glyph`);
+  for (const a of aggs) {
+    assert.ok(a.clusterEndUs! > a.clusterStartUs!);
+    assert.equal(a.sessionPtsUs, null);
+  }
+  // 聚合标记之间、与相邻单柱之间不重叠。
+  const rects = glyphs.map(g => g.rect).sort((x, y) => x.x - y.x);
+  for (let i = 1; i < rects.length; i++) {
+    assert.ok(rects[i].x + 0.5 >= rects[i - 1].x + rects[i - 1].width - 0.5,
+      `glyph ${i - 1} 与 ${i} 重叠`);
+  }
 });
 
 test('纵轴映射零在下、上限在上', () => {

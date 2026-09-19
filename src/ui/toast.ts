@@ -18,6 +18,9 @@ const reducedMotion = () => matchMedia('(prefers-reduced-motion: reduce)').match
 const exitDuration = (stack: HTMLElement) =>
   reducedMotion() ? 0 : Number.parseFloat(getComputedStyle(stack).getPropertyValue('--toast-exit-duration')) || 0;
 
+/** Shared toast stack handle (owned once, reused by notifiers). */
+export type ToastStack = Pick<ReturnType<typeof installToasts>, 'show' | 'stack'>;
+
 /** Liquid-glass toast stack. Vertical layout, never overlapping; fast enter,
  *  animated exit. Returns a controller; each show() returns its dismiss. */
 export function installToasts(signal?: AbortSignal) {

@@ -9,7 +9,7 @@ type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: u
 type Location = { absolutePath: string; reveal: boolean };
 const localPage = () => ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
 
-export function installSourceActions(session: ReviewSession, act: Action, onReconnect: () => void = () => {}) {
+export function installSourceActions(session: ReviewSession, act: Action, onReconnect: () => void = () => {}, notify: (message: string) => void = () => {}) {
   const status = document.getElementById('server-status')!;
   const locations = new Map<string, Location>();
   const pending = new Set<string>();
@@ -55,7 +55,7 @@ export function installSourceActions(session: ReviewSession, act: Action, onReco
       if (action.dataset.action !== (reveal ? 'reveal' : 'download')) {
         action.dataset.action = reveal ? 'reveal' : 'download'; action.innerHTML = icon(reveal ? 'open' : 'download');
       }
-      copy.onclick = () => { if (loc) void act(async () => { await navigator.clipboard.writeText(loc.absolutePath); copy.dataset.copied = 'true'; copy.title = '绝对路径已拷贝'; setTimeout(() => { delete copy.dataset.copied; if (!disposed) render(); }, 1600); }, 'ui.copy-path'); };
+      copy.onclick = () => { if (loc) void act(async () => { await navigator.clipboard.writeText(loc.absolutePath); copy.dataset.copied = 'true'; copy.title = '绝对路径已拷贝'; notify('绝对路径已拷贝'); setTimeout(() => { delete copy.dataset.copied; if (!disposed) render(); }, 1600); }, 'ui.copy-path'); };
       action.onclick = () => {
         if (!source) return;
         if (!reveal) {

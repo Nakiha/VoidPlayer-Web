@@ -9,16 +9,17 @@ import type { Slot } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { AnalysisCapability, AnalysisResult } from '../analysis/types.ts';
 import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US, niceCeiling, shouldBucketize } from '../analysis/statistics.ts';
-import { matchPairsStrict, panTimeRange, zoomTimeRange } from '../analysis/projection.ts';
-import { correspondenceCoverage, groupSamples } from '../analysis/grouping.ts';
+import { panTimeRange, zoomTimeRange } from '../analysis/projection.ts';
+import { groupSamples } from '../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../analysis/view-cache.ts';
 import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth } from '../analysis/inspection.ts';
-import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
-import { layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
+import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
+import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
+import type { AnalysisViewState } from '../workspace-file.ts';
 import {
   computeLayout, desiredHeight, drawAnalysis, formatAxis, plotGeometry, tOf, xOf,
 } from './analysis-canvas.ts';
@@ -32,7 +33,8 @@ export interface AnalysisHooks {
   isOpen: () => boolean;
 }
 
-const PREF_KEY = 'voidplayer.analysis.v1';
+const PREF_KEY = 'voidplayer.analysis.v2';
+const LEGACY_PREF_KEY = 'voidplayer.analysis.v1';
 const GROUP_TOLERANCE_US = 2000;
 const MAX_SAMPLES = 5000;
 const MIN_SPAN_US = 10_000;
@@ -44,7 +46,7 @@ const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
 const LAYOUT_LABELS: Record<'merged' | 'rows', string> = { merged: '合并', rows: '分轨' };
 
 interface Prefs {
-  showBitrate: boolean; showSize: boolean; colorByType: boolean; logScale: boolean;
+  showBitrate: boolean; showSize: boolean;
   axis: 'pts' | 'dts'; windowUs: number; layoutMode: 'merged' | 'rows';
   follow: boolean; selected: Slot[];
 }
@@ -55,30 +57,50 @@ function migrateLayoutMode(raw: unknown): Prefs['layoutMode'] {
   return 'merged';
 }
 
+function sanitizePrefs(p: Partial<Prefs> & { layoutMode?: unknown }, fallback: Prefs): Prefs {
+  return {
+    ...fallback,
+    showBitrate: typeof p.showBitrate === 'boolean' ? p.showBitrate : fallback.showBitrate,
+    showSize: typeof p.showSize === 'boolean' ? p.showSize : fallback.showSize,
+    follow: typeof p.follow === 'boolean' ? p.follow : fallback.follow,
+    axis: p.axis === 'dts' ? 'dts' : 'pts',
+    windowUs: BITRATE_WINDOW_OPTIONS_US.includes(p.windowUs!) ? p.windowUs! : DEFAULT_BITRATE_WINDOW_US,
+    layoutMode: migrateLayoutMode(p.layoutMode),
+    selected: Array.isArray(p.selected) ? p.selected.filter((s): s is Slot => SLOTS.includes(s as Slot)) : [],
+  };
+}
+
 function loadPrefs(): Prefs {
   const fallback: Prefs = {
-    // 多轨比较默认主体轨道色（与曲线对应），关键用顶端 K 标记；按类型填色为可选项。
-    showBitrate: true, showSize: true, colorByType: false, logScale: false,
+    // 多轨主体色恒为轨道色（与曲线对应），关键用顶端菱形/K 标记，不再按类型填色。
+    showBitrate: true, showSize: true,
     axis: 'pts', windowUs: DEFAULT_BITRATE_WINDOW_US, layoutMode: 'merged',
     follow: true, selected: [],
   };
+  // v2 优先；无 v2 时从 v1 迁移可保留项，colorByType 一律丢弃（旧版本无法区分
+  // 用户显式选择，新默认恒为轨道主体色）。只迁移一次，不反复覆盖 v2。
   try {
     const raw = localStorage.getItem(PREF_KEY);
-    if (!raw) return fallback;
-    const p = JSON.parse(raw) as Partial<Prefs> & { layoutMode?: unknown };
-    return {
-      ...fallback, ...p,
-      axis: p.axis === 'dts' ? 'dts' : 'pts',
-      windowUs: BITRATE_WINDOW_OPTIONS_US.includes(p.windowUs!) ? p.windowUs! : DEFAULT_BITRATE_WINDOW_US,
-      layoutMode: migrateLayoutMode(p.layoutMode),
-      selected: Array.isArray(p.selected) ? p.selected.filter((s): s is Slot => SLOTS.includes(s as Slot)) : [],
-    };
-  } catch { return fallback; }
+    if (raw) return sanitizePrefs(JSON.parse(raw) as Partial<Prefs>, fallback);
+  } catch { /* 损坏的 v2 视为无偏好，走迁移。 */ }
+  try {
+    const legacy = localStorage.getItem(LEGACY_PREF_KEY);
+    if (legacy) {
+      const next = sanitizePrefs(JSON.parse(legacy) as Partial<Prefs>, fallback);
+      try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch { /* 偏好不影响播放。 */ }
+      return next;
+    }
+  } catch { /* 损坏的 v1 视为无偏好。 */ }
+  return fallback;
 }
 
 interface TrackEntry { slot: Slot; mediaId: string; offsetUs: number; durationUs: number; name: string }
 
-export function installAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks): { setOpen(open: boolean): void } {
+export function installAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks): {
+  setOpen(open: boolean): void;
+  getAnalysisState(): AnalysisViewState;
+  restoreAnalysisState(s: AnalysisViewState): void;
+} {
   const { signal } = hooks;
   let open = hooks.isOpen();
   const prefs = loadPrefs();
@@ -91,49 +113,53 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const section = document.getElementById('analysis-panel')!;
   section.insertAdjacentHTML('afterbegin', `
     <header class="analysis-head">
-      <span class="analysis-title">码流分析</span>
       <div class="analysis-tools" role="group" aria-label="分析选项">
         <button type="button" class="seg" data-seg="bitrate" title="视频样本负载码率，按 PTS/DTS 归集的滑动时间窗">码率</button>
         <button type="button" class="seg" data-seg="size" title="压缩样本字节（demux 负载），非解码内存">帧大小</button>
-        <button type="button" class="seg" data-seg="type" title="按帧类型填充柱体（关键/非关键/未知）；关闭时主体为轨道色，关键用顶端 K 标记">类型填色</button>
-        <button type="button" class="seg" data-seg="log" title="帧大小纵轴改用共同对数刻度（所有轨道同一基准，便于查看小帧；默认线性可直接比较绝对高度）">对数轴</button>
-        <button type="button" class="seg" disabled title="暂无可靠的 QP 来源（不填零、不伪造），后续版本支持亮度面积加权平均 QP">QP：未解析</button>
         <span id="analysis-tracks" class="analysis-tracks" role="group" aria-label="对比轨道"></span>
         <button type="button" id="analysis-axis" class="choice-trigger" aria-label="时间基准" title="PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图"></button>
-        <button type="button" id="analysis-window" class="choice-trigger" aria-label="码率滑窗" title="视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）"></button>
+        <button type="button" id="analysis-window" class="choice-trigger" aria-label="码率窗口" title="码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）"></button>
         <button type="button" id="analysis-layout" class="choice-trigger" aria-label="多轨布局" title="合并：多轨同一基线按时间交错；分轨：各轨独立行"></button>
         <button type="button" class="seg" data-seg="follow" title="跟随播放范围；框选放大后自动关闭，不强制跳回播放位置">跟随：开</button>
         <button type="button" class="seg" data-seg="full" title="双击图也可恢复完整范围">完整范围</button>
-        <button type="button" class="seg" data-seg="help" title="分析图操作说明">？</button>
       </div>
-      <span class="analysis-status" role="status"></span>
     </header>
     <div class="analysis-body" id="analysis-body">
-      <canvas id="analysis-canvas" tabindex="0" role="img" aria-label="码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。"></canvas>
-      <div class="analysis-line analysis-playhead" hidden></div>
-      <div class="analysis-line analysis-hover" hidden></div>
-      <div class="analysis-tooltip" hidden></div>
-      <div class="analysis-pinned" hidden></div>
-      <div class="analysis-help" hidden></div>
-      <div class="analysis-empty" hidden></div>
+      <div class="analysis-plot" id="analysis-plot">
+        <canvas id="analysis-canvas" tabindex="0" role="img" aria-label="码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。"></canvas>
+        <canvas id="analysis-overlay" aria-hidden="true"></canvas>
+        <div class="analysis-line analysis-playhead" hidden></div>
+        <div class="analysis-line analysis-hover" hidden></div>
+        <div class="analysis-empty" hidden></div>
+      </div>
     </div>
     <output class="sr-only" aria-live="polite"></output>`);
 
   const $ = <T extends Element = HTMLElement>(sel: string) => section.querySelector(sel) as unknown as T;
   const tools = $<HTMLElement>('.analysis-tools');
   const tracksEl = $<HTMLElement>('#analysis-tracks');
-  const status = $<HTMLElement>('.analysis-status');
   const body = $<HTMLElement>('.analysis-body');
+  const plot = $<HTMLElement>('#analysis-plot');
   const canvas = $<HTMLCanvasElement>('#analysis-canvas');
   const ctx = canvas.getContext('2d');
+  const overlay = $<HTMLCanvasElement>('#analysis-overlay');
+  const overlayCtx = overlay.getContext('2d');
   const playheadEl = $<HTMLElement>('.analysis-playhead');
   const hoverEl = $<HTMLElement>('.analysis-hover');
-  const tooltip = $<HTMLElement>('.analysis-tooltip');
-  const pinnedEl = $<HTMLElement>('.analysis-pinned');
-  const helpEl = $<HTMLElement>('.analysis-help');
   const emptyEl = $<HTMLElement>('.analysis-empty');
+  // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
+  // abort 时移除，平时 pointer-events:none 不拦截输入。
+  const floatLayer = document.createElement('div');
+  floatLayer.className = 'analysis-float-layer';
+  floatLayer.setAttribute('aria-hidden', 'true');
+  const cardEl = document.createElement('div');
+  cardEl.className = 'analysis-card';
+  cardEl.hidden = true;
+  floatLayer.append(cardEl);
+  document.body.append(floatLayer);
   const live = $<HTMLElement>('output');
   let lastInspection: InspectionState | null = null;
+  /** 冻结的检查快照（Shift+单击 / I 切换，Escape 解除）；换片/清轨时失效。 */
   let pinned: InspectionState | null = null;
 
   let tracks: TrackEntry[] = [];
@@ -154,7 +180,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   let colors: CanvasColors = { key: '', delta: '', unknown: '', grid: '', text: '', axisText: '' };
   let slotColors = new Map<Slot, string>();
   let trackSig = '';
+  let selectedBuiltFor = '';
   let hoverRaf = 0;
+  let pendingHover: { x: number; y: number; t: number } | null = null;
   let lastClient: { x: number; y: number } | null = null;
   let kbInspect = false;
   let kbTrack: Slot | null = null;
@@ -253,23 +281,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   };
   segButtons.get('bitrate')!.onclick = () => { prefs.showBitrate = !prefs.showBitrate; save(); refreshTools(); render(); };
   segButtons.get('size')!.onclick = () => { prefs.showSize = !prefs.showSize; save(); refreshTools(); render(); };
-  segButtons.get('type')!.onclick = () => { prefs.colorByType = !prefs.colorByType; save(); refreshTools(); render(); };
-  segButtons.get('log')!.onclick = () => { prefs.logScale = !prefs.logScale; save(); refreshTools(); render(); };
   segButtons.get('follow')!.onclick = () => {
     if (prefs.follow) { prefs.follow = false; save(); refreshTools(); render(); }
     else setView(null, undefined, true);
   };
   segButtons.get('full')!.onclick = () => setView(null, undefined, true);
-  segButtons.get('help')!.onclick = () => {
-    if (helpEl.hidden) {
-      helpEl.innerHTML = `<div class="tt-head">分析图操作</div>
-        <div class="tt-help">悬停查看同一时间的各轨码率、帧率与参考帧；单击帧柱定位到展示帧，聚合桶点击放大；空白处点击不定位；拖拽框选放大，双击恢复完整范围；Shift+单击固定详情；方向键移动检查位置，回车定位焦点轨道，Escape 关闭。</div>
-        <button type="button" class="tt-close">关闭</button>`;
-      helpEl.hidden = false;
-      helpEl.querySelector('.tt-close')?.addEventListener('click', () => { helpEl.hidden = true; });
-    } else helpEl.hidden = true;
-  };
-
   const axisMenu = installChoiceMenu('analysis-axis', [{ value: 'pts', label: 'PTS' }], value => {
     prefs.axis = value as 'pts' | 'dts'; save(); refreshTools(); scheduleQuery(true);
   });
@@ -287,8 +303,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function refreshTools() {
     setSeg('bitrate', prefs.showBitrate);
     setSeg('size', prefs.showSize);
-    setSeg('type', prefs.colorByType);
-    setSeg('log', prefs.logScale);
     setSeg('follow', prefs.follow, prefs.follow ? '跟随：开' : '跟随：关');
     // 高频手势每 tick 都经过这里：DOM 重建只在签名变化时做，label 同步很便宜。
     const sig = JSON.stringify([prefs.axis, prefs.windowUs, prefs.layoutMode, prefs.selected,
@@ -366,10 +380,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return null;
   }
 
+  /** 绘图区真实宽度：查询/x 换算/命中统一用它。 */
+  const plotWidthCss = () => Math.max(1, Math.floor(plot.clientWidth || body.clientWidth));
+
   async function refresh() {
     if (!open || signal.aborted) return;
     const range = viewRange();
-    const pixelWidth = clampPixelWidth(Math.floor(body.clientWidth - 46));
+    const pixelWidth = clampPixelWidth(Math.max(1, plotWidthCss() - 46));
     const span = Math.max(1, range.end - range.start);
     const db = domainBounds();
     // 预取半屏 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
@@ -443,45 +460,24 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         if (abortBySlot.get(t.slot) === controller) abortBySlot.delete(t.slot);
         if (signal.aborted || seqBySlot.get(t.slot) !== mySeq) return;
         if (error instanceof Error && error.name === 'AbortError') return;
-        status.textContent = `轨道 ${t.slot} 查询失败：${error instanceof Error ? error.message : String(error)}`;
+        live.textContent = `轨道 ${t.slot} 查询失败：${error instanceof Error ? error.message : String(error)}`;
       });
     }
     render();
   }
 
   // ---- 绘制：时间分组 → 统一几何 → 绘图与命中共用 ----
-  let layoutNote = '';
-
-  const axisTimes = (r: AnalysisResult) => {
-    const arr = new Float64Array(r.samples.length);
-    r.samples.forEach((s, i) => { arr[i] = (prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs) ?? Number.NaN; });
-    return arr;
-  };
-
-  /** 严格对应统计：只用于状态/tooltip，不控制是否合并。 */
-  function correspondenceNote(): string {
-    const sel = selectedTracks();
-    if (sel.length !== 2) return '';
-    const [ra, rb] = [results.get(sel[0].slot), results.get(sel[1].slot)];
-    if (!ra || !rb || ra.truncated || rb.truncated || !ra.samples.length || !rb.samples.length) return '';
-    const ta = axisTimes(ra), tb = axisTimes(rb);
-    const { pairs, unmatchedA, unmatchedB } = matchPairsStrict(ta, tb, GROUP_TOLERANCE_US);
-    const { coverageA, coverageB } = correspondenceCoverage(pairs.length, ta.length, tb.length);
-    const maxDt = pairs.reduce((m, p) => Math.max(m, Math.abs(p.dtUs)), 0);
-    return `对应 ±${GROUP_TOLERANCE_US / 1000}ms · A${Math.round(coverageA * 100)}%/B${Math.round(coverageB * 100)}%` +
-      (unmatchedA.length || unmatchedB.length ? ` · 未对应 A${unmatchedA.length}/B${unmatchedB.length}` : '') +
-      (pairs.length ? ` · 最大差 ${Math.round(maxDt)}us` : '');
-  }
 
   function buildModel(): (CanvasModel & { glyphs: AnalysisGlyph[]; groups: TimeGroup[] }) | null {
     const sel = selectedTracks();
     if (!sel.length) return null;
     const range = viewRange();
     const inView = (t: number) => t >= range.start && t <= range.end;
-    const width = Math.max(1, Math.floor(body.clientWidth));
+    // 图宽来自左侧绘图区，不含右侧固定检查区；x 换算、查询、命中统一用它。
+    const width = plotWidthCss();
     const merged = prefs.layoutMode === 'merged';
     const plotW = Math.max(1, width - 46);
-    // LOD：最终柱宽决定 raw 是否可用（目标 ≥2.5px/样本），初版全图统一 LOD。
+    // LOD：平均密度（≥2.5px/样本）只是必要条件；固定 7px 柱还需相邻组容量复核。
     // 逐样本可用当且仅当全部选中轨都有完整 raw；否则用共享桶，仍保持合并。
     // 计数只看视口内（查询含预取 margin，视口外不参与），放大后可从桶切回 raw。
     let totalRawInView = 0;
@@ -496,14 +492,40 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
       totalRawInView += n;
     }
+    // 分组先行：容量复核需要真实组锚点，不能只看平均密度。
+    // 分组只取视口 + 容差 halo，避免视口裁切改变边缘组组成，也避免长片全量分组。
+    const groupInputs: { slot: Slot; samples: GroupSampleRef[] }[] = [];
+    if (allRaw && totalRawInView > 0) {
+      const halo = GROUP_TOLERANCE_US + 1000;
+      for (const t of sel) {
+        const r = results.get(t.slot)!;
+        const refs: GroupSampleRef[] = [];
+        for (const s of r.samples) {
+          const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+          if (axisT == null || !Number.isFinite(axisT)) continue;
+          if (axisT < range.start - halo || axisT > range.end + halo) continue;
+          refs.push({
+            sampleId: s.sampleId, axisUs: axisT, sessionPtsUs: s.effectivePtsUs,
+            sizeBytes: s.sizeBytes,
+            key: s.randomAccess === 'yes' ? true : s.randomAccess === 'no' ? false : null,
+            decodeOrdinal: s.decodeOrdinal, mediaId: t.mediaId,
+            sourceVersion: r.sourceVersion, indexRevision: r.indexRevision,
+          });
+        }
+        groupInputs.push({ slot: t.slot, samples: refs });
+      }
+    }
+    const preGroups: TimeGroup[] = groupInputs.length ? groupSamples(groupInputs, GROUP_TOLERANCE_US) : [];
     // 视口内无样本时不断言 raw 可用，走桶/空态，避免 0 样本误判为稀疏。
-    const useRaw = allRaw && totalRawInView > 0 && !shouldBucketize(totalRawInView, plotW, 2.5);
+    // 平均密度通过后仍需相邻组容量复核（固定柱宽在密集合并处会重叠约数 px）。
+    const lanesForCap = Math.max(1, merged ? sel.length : 1);
+    const useRaw = allRaw && totalRawInView > 0
+      && !shouldBucketize(totalRawInView, plotW, 2.5)
+      && canLayoutRaw(preGroups, range.start, Math.max(range.start + 1, range.end), 46, plotW, lanesForCap);
     const canvasTracks: CanvasTrack[] = [];
     // 纵轴按视口内数据取最大（查询含预取 margin，视口外峰值不参与），
     // 同一指标跨轨共用零起点和纵轴范围。
     let yMaxBitrate = 0, yMaxSize = 0;
-    // 分组输入：投影到公共会话时间域的真实样本，保留身份与可信展示 PTS。
-    const groupInputs: { slot: Slot; samples: GroupSampleRef[] }[] = [];
     for (const t of sel) {
       const r = results.get(t.slot);
       if (!r) continue;
@@ -539,32 +561,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         bitrate: (r.bitrate ?? []).map(p => ({ t: p.tUs, mbps: p.mbps })),
         provisional: r.capability.indexState !== 'complete',
       });
-      if (useRaw && !r.truncated) {
-        const refs: GroupSampleRef[] = [];
-        // 分组只取视口 + 容差 halo，避免视口裁切改变边缘组组成，也避免长片全量分组。
-        const halo = GROUP_TOLERANCE_US + 1000;
-        for (const s of r.samples) {
-          const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-          if (axisT == null || !Number.isFinite(axisT)) continue;
-          if (axisT < range.start - halo || axisT > range.end + halo) continue;
-          refs.push({
-            sampleId: s.sampleId, axisUs: axisT, sessionPtsUs: s.effectivePtsUs,
-            sizeBytes: s.sizeBytes,
-            key: s.randomAccess === 'yes' ? true : s.randomAccess === 'no' ? false : null,
-            decodeOrdinal: s.decodeOrdinal, mediaId: t.mediaId,
-            sourceVersion: r.sourceVersion, indexRevision: r.indexRevision,
-          });
-        }
-        groupInputs.push({ slot: t.slot, samples: refs });
-      }
     }
     if (!canvasTracks.length) return null;
-    const groups: TimeGroup[] = useRaw ? groupSamples(groupInputs, GROUP_TOLERANCE_US) : [];
-    layoutNote = merged
-      ? (useRaw ? `合并 ${groups.length} 组` : '合并 · 区间峰值（共享桶）')
-      : '分轨';
-    const corr = correspondenceNote();
-    if (corr) layoutNote += ` ｜ ${corr}`;
+    const groups: TimeGroup[] = useRaw ? preGroups : [];
     const rows = prefs.showSize ? (merged ? 1 : canvasTracks.length) : 0;
     const need = desiredHeight(prefs.showBitrate, rows);
     const height = Math.max(body.clientHeight || 220, need);
@@ -601,7 +600,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             trackOrder: sel.map(t => t.slot),
             viewStart: range.start, viewEnd,
             gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice, mediaBySlot,
-            scale: prefs.logScale ? 'log' : 'linear',
+            scale: 'linear',
           });
         } else {
           // 多轨密集时选更粗的桶，保证每组仍有位置画不同轨道，不压成同一像素。
@@ -639,7 +638,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
             trackOrder: sel.map(t => t.slot),
             viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-            scale: prefs.logScale ? 'log' : 'linear',
+            scale: 'linear',
           });
         }
       } else {
@@ -652,7 +651,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
               trackOrder: [t.slot],
               viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
               mediaBySlot: new Map([[t.slot, mediaBySlot.get(t.slot)!]]),
-              scale: prefs.logScale ? 'log' : 'linear',
+              scale: 'linear',
             }));
           } else {
             const r = results.get(t.slot);
@@ -666,7 +665,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             bucketGlyphs.push(...layoutMergedBuckets(bucketsBySlot, {
               trackOrder: [t.slot],
               viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-              scale: prefs.logScale ? 'log' : 'linear',
+              scale: 'linear',
             }));
           }
         });
@@ -675,8 +674,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return {
       width, height,
       viewStart: range.start, viewEnd,
-      showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: prefs.colorByType,
-      logScale: prefs.logScale,
+      // 多轨主体色恒为轨道色（与曲线/表头一致），关键只用顶端菱形/K 标记。
+      showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,
       tracks: canvasTracks, merged,
       yMaxBitrate: niceCeiling(yMaxBitrate), yMaxSize: yMaxSizeNice,
       colors, rubber,
@@ -687,55 +686,49 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   function render() {
-    layoutNote = '';
     window.clearTimeout(buildingTimer);
     if (!open || !ctx) return;
     const renderStart = performance.now();
     const model = buildModel();
     const builtMs = performance.now() - renderStart;
-    const note = layoutNote;
     const sel = selectedTracks();
-    const states = sel.map(t => {
-      const cap = caps.get(t.slot);
-      if (!cap) return `${t.slot}…`;
-      if (!cap.hasSize) return `${t.slot}不支持`;
-      return `${t.slot}${cap.indexState === 'complete' ? '' : cap.indexState === 'building' ? '索引中' : '索引错'}`;
-    });
-    const unsupported = sel.filter(t => caps.get(t.slot) && !caps.get(t.slot)!.hasSize);
-    status.textContent = [
-      prefs.axis.toUpperCase(),
-      `${prefs.windowUs >= 1_000_000 ? `${prefs.windowUs / 1_000_000}s` : `${prefs.windowUs / 1000}ms`}滑窗`,
-      note,
-      states.join(' · '),
-      unsupported.length ? `（${unsupported.map(t => t.slot).join('、')}：${caps.get(unsupported[0].slot)?.note ?? '暂不支持'}）` : '',
-    ].filter(Boolean).join(' ｜ ');
-    layoutNote = '';
     if (!model) {
       canvas.hidden = true;
+      overlay.hidden = true;
+      // 空态画布无高度，plot 按 body 撑满，提示文字才有地方居中，不从 0px 盒溢出。
+      plot.style.minHeight = '100%';
       emptyEl.hidden = false;
       emptyEl.textContent = !tracks.length ? '尚未载入视频。载入后可在此检查码率与帧大小走向。'
         : !sel.length ? '已全部隐藏，请在工具条中选择要对比的轨道。'
         : '正在查询统计…';
       playheadEl.hidden = true;
       hoverEl.hidden = true;
-      tooltip.hidden = true;
       lastModel = null;
       lastGeom = null;
       lastGlyphs = [];
       lastGroups = [];
       lastViewSig = '';
+      lastInspection = null;
+      renderFloat(null, null);
+      publishTestHook();
       return;
     }
     canvas.hidden = false;
+    overlay.hidden = false;
     emptyEl.hidden = true;
+    plot.style.minHeight = '';
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const cssH = Math.max(80, model.height);
     canvas.style.height = `${cssH}px`;
+    overlay.style.height = `${cssH}px`;
     const w = Math.round(model.width * dpr), h = Math.round(cssH * dpr);
     if (canvas.width !== w) canvas.width = w;
     if (canvas.height !== h) canvas.height = h;
+    if (overlay.width !== w) overlay.width = w;
+    if (overlay.height !== h) overlay.height = h;
     ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
     const drawn: CanvasModel = { ...model, height: cssH };
+    // 基础图层只在这里绘制；检查线/圆点/高亮走独立覆盖层，不触发底图重绘。
     drawAnalysis(ctx!, drawn);
     // 只读 QA 证据（对齐 pixel-grid 的 dataset 计数），不作可见计数器。
     canvas.dataset.analysisDrawMs = (performance.now() - renderStart).toFixed(2);
@@ -746,23 +739,24 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     lastGlyphs = (model as { glyphs?: AnalysisGlyph[] }).glyphs ?? [];
     lastGroups = (model as { groups?: TimeGroup[] }).groups ?? [];
     positionPlayhead();
-    if (hoverUs != null) positionHover();
     // 视图变化后把检查点重锚到光标（滚轮/捏合只动视图，不产生 pointermove），
     // 不展示过期内容；键盘检查中不抢夺焦点位置。
     const viewSig = `${drawn.viewStart}:${drawn.viewEnd}`;
-    if (!tooltip.hidden && !kbInspect && hoverUs != null && lastClient) {
+    if (!kbInspect && hoverUs != null && lastClient) {
       if (viewSig !== lastViewSig) {
         hoverUs = Math.round(tOf(drawn, geom, lastClient.x - canvas.getBoundingClientRect().left));
         const range = viewRange();
         if (hoverUs < range.start || hoverUs > range.end) {
           hoverUs = null;
           hoverEl.hidden = true;
-          tooltip.hidden = true;
         }
       }
-      if (hoverUs != null) { positionHover(); updateTooltip(lastClient.x, lastClient.y); }
+      if (hoverUs != null) { positionHover(); updateInspection(lastClient.x, lastClient.y); }
     }
     lastViewSig = viewSig;
+    refreshOverlay();
+    // 底图重绘后卡片按最后光标重新限位（仍在坞内横向滑动，不跟随翻边）。
+    if (hoverUs != null && lastClient && !pinned) positionFloat(lastClient.x);
     // 索引构建中渐进重查（仅面板打开时）；完成后自动停止。
     if (selectedTracks().some(t => caps.get(t.slot)?.indexState === 'building')) {
       buildingTimer = window.setTimeout(() => {
@@ -772,7 +766,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   const fracToPx = (t: number) => {
-    const g = lastGeom ?? plotGeometry(body.clientWidth);
+    const g = lastGeom ?? plotGeometry(plotWidthCss());
     const v = lastModel ? { start: lastModel.viewStart, end: lastModel.viewEnd } : viewRange();
     const span = Math.max(1, v.end - v.start);
     return g.gutter + ((t - v.start) / span) * g.plotW;
@@ -801,7 +795,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     hoverEl.style.left = `${fracToPx(hoverUs)}px`;
   }
 
-  // ---- 悬停/tooltip：绘图与命中共用统一几何 ----
+  // ---- 悬停/固定检查：绘图与命中共用统一几何 ----
   // 有序轴派生索引按不可变快照身份缓存（inspection.ts 内 WeakMap）：
   // 换范围/换 offset/切轴必然产生新结果对象，不复用旧轴数组。
   /** 画布 CSS 坐标下的直接命中：返回唯一 glyph 身份。 */
@@ -811,195 +805,248 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return pickGlyph(lastGlyphs, clientX - rect.left, clientY - rect.top);
   }
 
-  const kib = (bytes: number): string => `${(bytes / 1024).toFixed(1)}`;
-  const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
   /** 当前视图步长（span/pixelWidth）：码率最近邻的保真上限。 */
   function viewStepUs(): number {
     const range = viewRange();
     const span = Math.max(1, range.end - range.start);
-    const plotW = lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(body.clientWidth).plotW;
+    const plotW = lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(plotWidthCss()).plotW;
     return span / Math.max(1, plotW);
   }
 
   function directTargetFromGlyph(g: AnalysisGlyph | null): DirectTarget | null {
     if (!g) return null;
-    if (g.kind === 'sample') return { kind: 'sample', slot: g.slot, sampleId: g.sampleId };
+    if (g.kind === 'sample') {
+      // 聚合标记（含跨组局部聚合）：区间检查/点击放大，不冒充单帧。
+      if (g.stackedCount > 1 && g.clusterStartUs != null && g.clusterEndUs != null) {
+        return { kind: 'bucket', slot: g.slot, bucketStartUs: g.clusterStartUs, bucketEndUs: g.clusterEndUs };
+      }
+      if (g.stackedCount > 1) return null;
+      return { kind: 'sample', slot: g.slot, sampleId: g.sampleId };
+    }
     return { kind: 'bucket', slot: g.slot, bucketStartUs: g.startUs, bucketEndUs: g.endUs };
   }
 
-  /** 统一检查状态：公共 T 决定所有轨道指标，直接目标只影响高亮与点击。 */
+  /** 直接命中的样本及其真实轴时间（吸附用）。 */
+  function resolveDirectSample(direct: DirectTarget | null): { axisUs: number; sampleId: string } | null {
+    if (!direct || direct.kind !== 'sample' || !direct.sampleId) return null;
+    const r = results.get(direct.slot);
+    const s = r?.samples.find(v => v.sampleId === direct.sampleId);
+    if (!s) return null;
+    const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
+    if (axisT == null || !Number.isFinite(axisT)) return null;
+    return { axisUs: Math.round(axisT), sampleId: s.sampleId };
+  }
+
+  /**
+   * 统一检查状态：曲线/空白用公共 T；真正命中单样本柱时整次检查吸附到该样本
+   * 的真实轴时间，表头、检查线、码率圆点、参考样本一起更新，被命中轨道强制
+   * 使用该柱的准确 sampleId（相同 PTS 下不另选）。吸附只改变检查锚点。
+   */
   function inspectAt(tUs: number, direct: DirectTarget | null): InspectionState {
     const sel = selectedTracks();
-    return buildInspection({
-      axis: prefs.axis, inspectionTimeUs: Math.round(tUs), windowUs: prefs.windowUs,
+    let t = Math.round(tUs);
+    const hit = resolveDirectSample(direct);
+    if (hit) t = hit.axisUs;
+    const insp = buildInspection({
+      axis: prefs.axis, inspectionTimeUs: t, windowUs: prefs.windowUs,
       stepUs: viewStepUs(), order: sel.map(t => t.slot),
       results, caps, domain: domainBounds(), directTarget: direct,
     });
+    if (hit && direct?.kind === 'sample') {
+      const r = results.get(direct.slot);
+      const s = r?.samples.find(v => v.sampleId === hit.sampleId);
+      const ti = insp.tracks.find(tr => tr.slot === direct.slot);
+      if (s && ti && ti.coverageState === 'known') {
+        ti.reference = { sample: s, axisUs: hit.axisUs, dtUs: 0, relation: 'exact' };
+      }
+    }
+    return insp;
   }
 
   function stateText(s: string): string {
     switch (s) {
       case 'pending': return '统计中';
-      case 'unsupported': return '不支持';
+      case 'unsupported': return '不可用';
       case 'outside': return '—';
       case 'error': return '索引错';
       default: return '—';
     }
   }
 
-  function fmtRate(v: number | null, approx: boolean): string {
-    if (v == null) return '—';
-    return `${v.toFixed(1)}${approx ? ' ≈' : ''}`;
+  /** 码率固定两位小数；极小非零不写成误导的 0.00；无近似后缀。 */
+  function fmtBitrate(v: number | null): string {
+    if (v == null || !Number.isFinite(v)) return '—';
+    if (v > 0 && v < 0.005) return '<0.01';
+    return v.toFixed(2);
   }
 
+  /** 帧率固定两位小数（保留 29.97 可读性）；无近似后缀。 */
   function fmtFps(v: number | null): string {
-    if (v == null) return '—';
-    return v >= 100 ? String(Math.round(v)) : v.toFixed(1);
+    if (v == null || !Number.isFinite(v)) return '—';
+    return v.toFixed(2);
   }
 
-  function fmtDt(dtUs: number): string {
-    const ms = Math.abs(dtUs) / 1000;
-    const dir = dtUs > 0 ? '晚' : dtUs < 0 ? '早' : '同时';
-    if (dtUs === 0) return dir;
-    return `${dir} ${ms.toFixed(3)}ms`;
+  /** 帧大小固定一位小数 KiB；极小非零不写成误导的 0.0；字节数本身是真实值。 */
+  function fmtSize(bytes: number | null | undefined): string {
+    if (bytes == null || !Number.isFinite(bytes)) return '—';
+    if (bytes <= 0) return '0.0';
+    const kib = bytes / 1024;
+    if (kib < 0.05) return '<0.1';
+    return kib.toFixed(1);
   }
 
-  /** 默认比较表：双轨为两列数值，三轨以上为紧凑每轨一行；字段、顺序、单位一致。 */
-  function inspectionTableHTML(insp: InspectionState): string {
-    const isDts = insp.axis === 'dts';
-    const rateLabel = isDts ? '解码样本率' : '局部帧率';
-    const rateUnit = isDts ? '样本/秒' : 'fps';
-    const winLabel = prefs.windowUs >= 1_000_000 ? `${prefs.windowUs / 1_000_000}s` : `${Math.round(prefs.windowUs / 1000)}ms`;
-    let html = `<div class="tt-head"><span>查看 ${formatAxis(insp.inspectionTimeUs)}</span><span class="tt-axis">${esc(insp.axis.toUpperCase())}</span></div>`;
-    if (insp.tracks.length <= 2) {
-      html += '<table class="tt-grid"><thead><tr><th></th>';
-      for (const t of insp.tracks) {
-        const c = slotColors.get(t.slot) ?? '#888';
-        html += `<th><span class="dot" style="background:${c}"></span>${esc(t.slot)}</th>`;
-      }
-      html += '</tr></thead><tbody>';
-      html += '<tr><td>码率 Mbps</td>';
-      for (const t of insp.tracks) {
-        html += `<td class="num">${t.coverageState !== 'known' ? esc(stateText(t.coverageState)) : esc(fmtRate(t.bitrate.value, t.bitrate.approximate))}</td>`;
-      }
-      html += '</tr>';
-      html += `<tr><td>${esc(rateLabel)} ${esc(rateUnit)}</td>`;
-      for (const t of insp.tracks) {
-        html += `<td class="num">${t.coverageState !== 'known' && t.localRate.value == null ? esc(stateText(t.coverageState)) : esc(fmtFps(t.localRate.value))}</td>`;
-      }
-      html += '</tr>';
-      html += '<tr><td>参考帧 KiB</td>';
-      for (const t of insp.tracks) {
-        let cell: string;
-        if (t.coverageState !== 'known') cell = esc(stateText(t.coverageState));
-        else if (!t.reference) cell = '无新样本';
-        else {
-          const s = t.reference.sample;
-          cell = s.sizeBytes != null ? esc(kib(s.sizeBytes)) : '未知';
-          if (t.reference.relation === 'nearby') cell += ' ≈';
-        }
-        html += `<td class="num">${cell}</td>`;
-      }
-      html += '</tr>';
-      html += '<tr><td>关键</td>';
-      for (const t of insp.tracks) {
-        let cell: string;
-        if (t.coverageState !== 'known') cell = esc(stateText(t.coverageState));
-        else if (!t.reference) cell = '—';
-        else {
-          const k = t.reference.sample.randomAccess;
-          cell = k === 'yes' ? '是' : k === 'no' ? '否' : '未知';
-        }
-        html += `<td class="num">${cell}</td>`;
-      }
-      html += '</tr></tbody></table>';
-    } else {
-      html += '<table class="tt-grid"><thead><tr><th></th><th>码率</th><th>' + esc(rateLabel) + '</th><th>参考帧</th><th>关键</th></tr></thead><tbody>';
-      for (const t of insp.tracks) {
-        const c = slotColors.get(t.slot) ?? '#888';
-        const b = t.coverageState !== 'known' ? stateText(t.coverageState) : fmtRate(t.bitrate.value, t.bitrate.approximate);
-        const f = t.coverageState !== 'known' && t.localRate.value == null ? stateText(t.coverageState) : fmtFps(t.localRate.value);
-        const s = t.coverageState !== 'known' ? stateText(t.coverageState)
-          : !t.reference ? '无新样本'
-          : `${t.reference.sample.sizeBytes != null ? kib(t.reference.sample.sizeBytes) : '未知'}${t.reference.relation === 'nearby' ? ' ≈' : ''}`;
-        const k = t.coverageState !== 'known' ? stateText(t.coverageState)
-          : !t.reference ? '—'
-          : t.reference.sample.randomAccess === 'yes' ? '是' : t.reference.sample.randomAccess === 'no' ? '否' : '未知';
-        html += `<tr><td><span class="dot" style="background:${c}"></span>${esc(t.slot)}</td><td class="num">${esc(b)}</td><td class="num">${esc(f)}</td><td class="num">${esc(s)}</td><td class="num">${esc(k)}</td></tr>`;
-      }
-      html += '</tbody></table>';
+  /** 三行读数文本（固定表与悬浮窗共用同一口径与格式，无近似后缀）。 */
+  function formatCells(t: TrackInspection): [bitrate: string, rate: string, size: string] {
+    const b = t.coverageState !== 'known' && t.bitrate.value == null
+      ? stateText(t.coverageState) : fmtBitrate(t.bitrate.value);
+    const f = t.coverageState !== 'known' && t.localRate.value == null
+      ? stateText(t.coverageState) : fmtFps(t.localRate.value);
+    const s = t.coverageState !== 'known' ? stateText(t.coverageState)
+      : !t.reference ? '—' : fmtSize(t.reference.sample.sizeBytes);
+    return [b, f, s];
+  }
+
+  function sameOrder(a: readonly Slot[], b: readonly Slot[]): boolean {
+    return a.length === b.length && a.every((s, i) => s === b[i]);
+  }
+
+  // ---- 横轴下方卡片坞：竖排三行（单位常驻），玻璃背板 ----
+  // 与标注工具条同一毛玻璃材质；坞高恒定预留（画布扣除等量高度），
+  // 卡片在坞内横向以鼠标为中心滑动，不翻边、不盖数据区、不挡轴数字。
+  let flOrder: Slot[] = [];
+  let flTime: HTMLElement | null = null;
+  let flRateLabel: HTMLElement | null = null;
+  let flDots = new Map<Slot, HTMLElement>();
+  let flCells = new Map<string, HTMLElement>();
+
+  function ensureFloatStructure(order: readonly Slot[]) {
+    if (flTime && sameOrder(order, flOrder)) return;
+    flOrder = [...order];
+    flDots = new Map();
+    flCells = new Map();
+    cardEl.replaceChildren();
+    const table = document.createElement('table');
+    table.className = 'fl-grid';
+    const thead = document.createElement('thead');
+    // 表头与时间同一行：时间 + 各轨标记，不再独占一行。
+    const head = document.createElement('tr');
+    const time = document.createElement('th');
+    time.className = 'fl-time';
+    time.textContent = '—';
+    head.append(time);
+    flTime = time;
+    for (const slot of order) {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      const dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = slotColors.get(slot) ?? '#888';
+      th.append(dot, document.createTextNode(slot));
+      head.append(th);
+      flDots.set(slot, dot);
     }
-    const notes: string[] = [];
+    thead.append(head);
+    table.append(thead);
+    const tbody = document.createElement('tbody');
+    const rows = [
+      { key: 'bitrate', label: '码率 · Mbps' },
+      { key: 'rate', label: '帧率 · fps' },
+      { key: 'size', label: '帧大小 · KiB' },
+    ] as const;
+    for (const { key, label } of rows) {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.scope = 'row';
+      th.textContent = label;
+      if (key === 'rate') flRateLabel = th;
+      tr.append(th);
+      for (const slot of order) {
+        const td = document.createElement('td');
+        td.className = 'metric-value';
+        td.textContent = '—';
+        tr.append(td);
+        flCells.set(`${key}:${slot}`, td);
+      }
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    cardEl.append(table);
+  }
+
+  /**
+   * 卡片定位（视口坐标，顶层绘制）：横向以鼠标为中心并限位在图表内，
+   * 纵向落在横轴下方（画布底边之下），不盖数据区、不挡轴数字。
+   */
+  function positionFloat(clientX: number) {
+    if (cardEl.hidden) return;
+    const canvasRect = canvas.getBoundingClientRect();
+    const w = cardEl.offsetWidth || 0;
+    if (!w) return;
+    const maxX = Math.max(canvasRect.left, canvasRect.right - w - 4);
+    const x = Math.min(Math.max(canvasRect.left + 4, clientX - w / 2), maxX);
+    cardEl.style.left = `${Math.round(x)}px`;
+    cardEl.style.top = `${Math.round(canvasRect.bottom + 6)}px`;
+  }
+
+  /** 卡片内容：同一检查快照；顶层绘制，闲时隐藏，不占面板布局。 */
+  function renderFloat(insp: InspectionState | null, clientX: number | null) {
+    if (!insp) { cardEl.hidden = true; return; }
+    ensureFloatStructure(insp.tracks.map(t => t.slot));
+    cardEl.hidden = false;
+    if (flTime) {
+      flTime.textContent = `${formatAxis(insp.inspectionTimeUs)}${pinned ? ' · 已固定' : ''}`;
+    }
+    if (flRateLabel) flRateLabel.textContent = insp.axis === 'dts' ? '样本率 /s' : '帧率 · fps';
+    for (const [slot, dot] of flDots) dot.style.background = slotColors.get(slot) ?? '#888';
     for (const t of insp.tracks) {
-      if (t.reference?.relation === 'nearby') notes.push(`${t.slot} 为邻近帧，${fmtDt(t.reference.dtUs)}`);
-    }
-    if (notes.length) html += `<div class="tt-note">${esc(notes.join('；'))}</div>`;
-    // 直接命中摘要：不替换表中的时间口径，只表达点击目标。
-    const d = insp.directTarget;
-    if (d?.kind === 'sample') {
-      const r = results.get(d.slot);
-      const s = r?.samples.find(v => v.sampleId === d.sampleId);
-      if (s) {
-        const k = s.randomAccess === 'yes' ? '关键' : s.randomAccess === 'no' ? '非关键' : '未知';
-        const sameRef = insp.tracks.find(t => t.slot === d.slot)?.reference?.sample.sampleId === s.sampleId;
-        if (!sameRef) {
-          html += `<div class="tt-direct">直击 ${esc(d.slot)} · ${s.sizeBytes != null ? esc(kib(s.sizeBytes)) : '未知'} KiB · ${esc(k)}（点击定位该帧）</div>`;
-        }
+      const [b, f, s] = formatCells(t);
+      const vals: Record<string, string> = { bitrate: b, rate: f, size: s };
+      for (const [m, text] of Object.entries(vals)) {
+        const el = flCells.get(`${m}:${t.slot}`);
+        if (el) el.textContent = text;
       }
-    } else if (d?.kind === 'bucket') {
-      html += `<div class="tt-direct">直击 ${esc(d.slot)} · 区间 ${formatAxis(d.bucketStartUs!)}–${formatAxis(d.bucketEndUs!)}（点击放大）</div>`;
     }
-    html += `<div class="tt-foot">码率 ${esc(winLabel)} · 帧率 1s 估计</div>`;
-    if (insp.tracks.some(t => t.bitrate.provisional || t.localRate.provisional || t.coverageState === 'pending')) {
-      html += '<div class="tt-note">索引构建中，数值为暂定。</div>';
-    }
-    return html;
+    if (clientX != null) positionFloat(clientX);
   }
 
-  function placeTooltip(clientX: number, clientY: number) {
-    // 按真实浮层宽高限位，不按固定 200×80 估算。
-    const rect = body.getBoundingClientRect();
-    const w = tooltip.offsetWidth || 220, h = tooltip.offsetHeight || 90;
-    let x = clientX - rect.left + 14;
-    let y = clientY - rect.top + 14;
-    x = Math.min(Math.max(0, x), Math.max(0, rect.width - w - 4));
-    if (y + h > rect.height - 4) y = Math.max(4, clientY - rect.top - h - 10);
-    y = Math.min(Math.max(4, y), Math.max(4, rect.height - h - 4));
-    tooltip.style.left = `${x + body.scrollLeft}px`;
-    tooltip.style.top = `${y + body.scrollTop}px`;
-  }
-
-  function updateTooltip(clientX: number, clientY: number) {
-    if (hoverUs == null) { tooltip.hidden = true; lastInspection = null; refreshOverlay(); return; }
+  /** 检查更新：冻结期间不跟随；命中单样本时吸附锚点并同步检查线与悬浮条。 */
+  function updateInspection(clientX: number, clientY: number) {
+    if (hoverUs == null) { lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
     const sel = selectedTracks();
-    if (!sel.length) { tooltip.hidden = true; lastInspection = null; refreshOverlay(); return; }
+    if (!sel.length) { lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
+    if (pinned) return;
     const direct = directTargetFromGlyph(pickAt(clientX, clientY));
     const insp = inspectAt(hoverUs, direct);
+    // 吸附后的真实检查时间同步到检查线与悬浮条，不保留另一时刻的过期读数。
+    hoverUs = insp.inspectionTimeUs;
     lastInspection = insp;
-    tooltip.innerHTML = inspectionTableHTML(insp);
-    tooltip.hidden = false;
-    placeTooltip(clientX, clientY);
-    // 辅助技术播报主要在键盘步进/固定时更新，不每个鼠标帧推送整段文本。
-    if (kbInspect) live.textContent = tooltip.textContent ?? '';
+    positionHover();
+    renderFloat(insp, clientX);
+    // 辅助技术播报只在键盘步进/固定时更新，不每个鼠标帧推送整段文本。
+    if (kbInspect) live.textContent = cardEl.textContent ?? '';
     refreshOverlay();
     publishTestHook();
   }
 
-  /** 跨图联动：共享检查线（DOM）+ 曲线圆点与样本高亮（Canvas 覆盖绘制）。 */
+  /**
+   * 独立覆盖层：检查圆点与样本高亮只画在 overlay canvas 上，
+   * 不重绘基础图层（hover 扫描不增加底图绘制次数）。
+   */
   function refreshOverlay() {
-    if (!lastModel || !ctx || !lastGeom) return;
-    if (hoverUs == null || !lastInspection) return;
+    if (!lastModel || !overlayCtx || !lastGeom) return;
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    overlayCtx.clearRect(0, 0, lastModel.width, lastModel.height);
+    const active = pinned ?? lastInspection;
+    if (hoverUs == null || !active) return;
     const model = lastModel;
     const geom = computeLayout(model);
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawAnalysis(ctx, { ...model, height: model.height });
+    const ctx = overlayCtx;
     const span = model.viewEnd - model.viewStart || 1;
-    const xOfT = geom.gutter + ((lastInspection.inspectionTimeUs - model.viewStart) / span) * geom.plotW;
-    // 码率曲线圆点（轨道色），只在码率行可见时绘制。
+    const xOfT = geom.gutter + ((active.inspectionTimeUs - model.viewStart) / span) * geom.plotW;
+    // 码率曲线圆点（轨道色），只在码率行可见时绘制，与表内值同一评价规则。
     if (geom.bitrate && model.showBitrate && model.yMaxBitrate > 0) {
-      for (const t of lastInspection.tracks) {
+      for (const t of active.tracks) {
         if (t.bitrate.value == null) continue;
         const track = model.tracks.find(m => m.slot === t.slot);
         if (!track) continue;
@@ -1016,7 +1063,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
     }
     // 参考样本轮廓高亮，直接命中更明显。
-    for (const t of lastInspection.tracks) {
+    for (const t of active.tracks) {
       const refId = t.reference?.sample.sampleId;
       if (refId) {
         const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === refId) as SampleGlyph | undefined;
@@ -1037,7 +1084,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         }
       }
     }
-    const d = lastInspection.directTarget;
+    const d = active.directTarget;
     if (d?.kind === 'sample') {
       const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === d.sampleId) as SampleGlyph | undefined;
       if (g) {
@@ -1056,12 +1103,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function publishTestHook() {
     try {
       const w = window as unknown as { __vpAnalysis?: unknown };
+      const active = pinned ?? lastInspection;
+      const plotRect = plot.getBoundingClientRect();
+      const flRect = cardEl.hidden ? null : cardEl.getBoundingClientRect();
       w.__vpAnalysis = {
         view: viewRange(),
         axis: prefs.axis,
-        inspection: lastInspection ? {
-          t: lastInspection.inspectionTimeUs,
-          tracks: lastInspection.tracks.map(t => ({
+        pinned: pinned != null,
+        plot: { x: plotRect.x, y: plotRect.y, width: plotRect.width, height: plotRect.height },
+        float: flRect ? { x: flRect.x, y: flRect.y, width: flRect.width, height: flRect.height } : null,
+        inspection: active ? {
+          t: active.inspectionTimeUs,
+          tracks: active.tracks.map(t => ({
             slot: t.slot,
             bitrate: t.bitrate.value,
             rate: t.localRate.value,
@@ -1069,13 +1122,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             refAxis: t.reference?.axisUs ?? null,
             coverage: t.coverageState,
           })),
-          direct: lastInspection.directTarget,
+          direct: active.directTarget,
         } : null,
         glyphs: lastGlyphs.slice(0, 2000).map(g => {
           if (g.kind === 'sample') {
             const s = g as SampleGlyph;
             return {
               kind: 'sample', slot: s.slot, id: s.sampleId, axisUs: s.axisUs,
+              stacked: s.stackedCount > 1,
               cx: s.interactionRect.x + s.interactionRect.width / 2,
               cy: s.interactionRect.y + s.interactionRect.height / 2,
             };
@@ -1091,45 +1145,30 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     } catch { /* 测试钩子不得影响面板。 */ }
   }
 
+  /**
+   * 冻结/解冻当前检查（Shift+单击 / I 切换，Escape 解除）：
+   * 悬浮条停在快照上，不跟随后续 hover；换片/清轨即失效。
+   */
   function pinInspection(direct: DirectTarget | null) {
+    if (pinned) { unpinInspection(); return; }
     if (hoverUs == null) return;
-    pinned = inspectAt(hoverUs, direct);
-    renderPinned();
-    live.textContent = pinnedEl.textContent ?? '';
+    const insp = inspectAt(hoverUs, direct);
+    pinned = insp;
+    lastInspection = insp;
+    renderFloat(insp, lastClient?.x ?? null);
+    refreshOverlay();
+    publishTestHook();
+    // 固定状态做节制播报；普通 hover 不推送整段文本。
+    live.textContent = cardEl.textContent ?? '';
   }
 
-  function renderPinned() {
-    if (!pinned) { pinnedEl.hidden = true; return; }
-    const insp = pinned;
-    const isDts = insp.axis === 'dts';
-    let html = `<div class="tt-head"><span>固定检查 ${formatAxis(insp.inspectionTimeUs)} · ${esc(insp.axis.toUpperCase())}</span><span class="tt-actions"><button type="button" class="tt-copy">复制</button><button type="button" class="tt-close">关闭</button></span></div>`;
-    html += inspectionTableHTML(insp);
-    html += '<div class="tt-details">';
-    for (const t of insp.tracks) {
-      const r = results.get(t.slot);
-      const ref = t.reference?.sample;
-      const parts = [
-        `轨道 ${t.slot}`,
-        ref ? `样本 ${ref.decodeOrdinal}` : '无参考样本',
-        ref?.sampleId ? `sampleId ${ref.sampleId}` : '',
-        ref?.containerPtsUs != null ? `原始PTS ${formatAxis(ref.containerPtsUs)}` : '',
-        ref?.effectivePtsUs != null ? `展示PTS ${formatAxis(ref.effectivePtsUs)}` : '',
-        ref?.dtsUs != null ? `DTS ${formatAxis(ref.dtsUs)}` : '',
-        ref?.sizeBytes != null ? `字节 ${ref.sizeBytes}` : '',
-        `码率窗 ${prefs.windowUs}us${t.bitrate.shortWindow ? '（短窗）' : ''}${t.bitrate.approximate ? '（近似）' : ''}`,
-        `帧率窗 1000000us · ${isDts ? 'dts-interval-1s' : 'pts-interval-1s'}`,
-        `覆盖 ${t.coverageState}`,
-        r ? `版本 ${r.sourceVersion}@${r.indexRevision}` : '',
-      ].filter(Boolean).join(' ｜ ');
-      html += `<div class="tt-note">${esc(parts)}</div>`;
-    }
-    html += '</div>';
-    pinnedEl.innerHTML = html;
-    pinnedEl.hidden = false;
-    pinnedEl.querySelector('.tt-close')?.addEventListener('click', () => { pinned = null; renderPinned(); canvas.focus(); });
-    pinnedEl.querySelector('.tt-copy')?.addEventListener('click', async () => {
-      try { await navigator.clipboard.writeText(pinnedEl.textContent ?? ''); } catch { /* 剪贴板不可用时仍可手动选择。 */ }
-    });
+  function unpinInspection(focusCanvas = false) {
+    if (!pinned) return;
+    pinned = null;
+    renderFloat(lastInspection, lastClient?.x ?? null);
+    refreshOverlay();
+    publishTestHook();
+    if (focusCanvas) canvas.focus();
   }
 
   // ---- 指针交互 ----
@@ -1146,7 +1185,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       } as never, x);
     }
     // 首帧数据到达前用纯视图几何定位，手势不依赖数据。
-    const g = plotGeometry(body.clientWidth);
+    const g = plotGeometry(plotWidthCss());
     const range = viewRange();
     const span = Math.max(1, range.end - range.start);
     return range.start + ((x - g.gutter) / g.plotW) * span;
@@ -1171,16 +1210,21 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         return;
       }
     }
-    const t = canvasT(event.clientX);
+    // rAF 合并取本帧最新坐标，不保留首个事件丢弃后续；冻结期间不跟随。
+    if (pinned) return;
+    pendingHover = { x: event.clientX, y: event.clientY, t: canvasT(event.clientX) };
     if (hoverRaf) return;
     hoverRaf = requestAnimationFrame(() => {
       hoverRaf = 0;
       if (signal.aborted) return;
-      hoverUs = Math.round(t);
+      const p = pendingHover;
+      pendingHover = null;
+      if (!p) return;
+      hoverUs = Math.round(p.t);
       kbInspect = false;
-      lastClient = { x: event.clientX, y: event.clientY };
+      lastClient = { x: p.x, y: p.y };
       positionHover();
-      updateTooltip(event.clientX, event.clientY);
+      updateInspection(p.x, p.y);
     });
   }, { signal });
 
@@ -1201,30 +1245,26 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       rubber = null;
       if (b - a > MIN_SPAN_US) setView(Math.floor(a), Math.ceil(b), false);
       else render();
+      // 框选拖拽藏起了悬浮条；冻结中恢复快照显示。
+      if (pinned) renderFloat(pinned, lastClient?.x ?? null);
       return;
     }
     rubber = null;
     const picked = pickAt(event.clientX, event.clientY);
-    // Shift+单击固定当前检查（含详细信息），不改变播放状态。
+    // Shift+单击冻结/解冻当前检查，不改变播放状态。
     if (event.shiftKey) {
+      if (pinned) unpinInspection();
       hoverUs = Math.round(canvasT(event.clientX));
       lastClient = { x: event.clientX, y: event.clientY };
       positionHover();
-      updateTooltip(event.clientX, event.clientY);
+      updateInspection(event.clientX, event.clientY);
       pinInspection(directTargetFromGlyph(picked));
-      render();
       return;
     }
-    // 单击：精确柱定位到展示 PTS（DTS 图亦然，横坐标本身不是 seek 目标）；
-    // 聚合桶/重复聚合只放大，不伪造某帧精确定位；空白不定位。
+    // 单击只定位到展示 PTS，不改变视图范围（缩放走框选/滚轮/双击）；
+    // 聚合标记按其主样本定位；区间桶点击放大；空白不定位。
     if (picked && picked.kind === 'sample') {
       const g = picked as SampleGlyph;
-      // 聚合多样本（重复时间戳放不下）点击展开：放大到该组附近，不冒充 seek。
-      if (g.stackedCount > 1) {
-        const span = Math.max(MIN_SPAN_US, Math.floor((viewRange().end - viewRange().start) / 8));
-        setView(Math.floor(g.axisUs - span / 2), Math.ceil(g.axisUs + span / 2), false);
-        return;
-      }
       const r = results.get(g.slot);
       const s = r?.samples.find(v => v.sampleId === g.sampleId);
       const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: s?.effectivePtsUs ?? g.sessionPtsUs });
@@ -1232,25 +1272,40 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         kbTrack = g.slot;
         void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
       } else {
-        status.textContent = `轨道 ${g.slot}：${resolved.reason}`;
-        live.textContent = status.textContent;
+        live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
       }
     } else if (picked && picked.kind === 'bucket') {
       const g = picked as BucketGlyph;
-      if (g.count > 0) setView(Math.floor(g.startUs), Math.ceil(g.endUs), false);
+      // 区间桶按峰值样本定位到展示帧，不缩放视图；无可定位峰值时才放大区间。
+      const r = results.get(g.slot);
+      const peak = g.maxSampleId ? r?.samples.find(v => v.sampleId === g.maxSampleId) : undefined;
+      const targetPts = peak?.effectivePtsUs;
+      if (targetPts != null) {
+        const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: targetPts });
+        if ('sessionPtsUs' in resolved) {
+          kbTrack = g.slot;
+          void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
+        } else {
+          live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
+        }
+      } else if (g.count > 0) {
+        setView(Math.floor(g.startUs), Math.ceil(g.endUs), false);
+      }
     }
-    render();
+    // 单击不重绘底图；高亮随 hover 已在覆盖层更新。
+    refreshOverlay();
   }, { signal });
 
   canvas.addEventListener('pointerleave', () => {
     if (pressX != null) return;
+    // 移出隐藏顶层卡片，只隐藏检查线并清空覆盖层，不重绘底图。
     hoverUs = null;
     kbInspect = false;
-    lastInspection = null;
+    pendingHover = null;
     hoverEl.hidden = true;
-    tooltip.hidden = true;
+    renderFloat(null, null);
+    refreshOverlay();
     publishTestHook();
-    render();
   }, { signal });
 
   // 滚轮左右平移；Ctrl+滚轮（触摸板捏合）以 hover 点为中心缩放坐标轴。
@@ -1269,7 +1324,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const z = zoomTimeRange(range.start, range.end, center, factor, MIN_SPAN_US, db);
       setView(z.start, z.end, false);
     } else {
-      const px = (lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(body.clientWidth).plotW) || 1;
+      const px = (lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(plotWidthCss()).plotW) || 1;
       const shift = Math.round((event.deltaX * unit + event.deltaY * unit) * (span / px));
       if (!shift) return;
       const p = panTimeRange(range.start, range.end, shift, db);
@@ -1288,12 +1343,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const step = Math.max(1, Math.floor((range.end - range.start) / 100));
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       event.preventDefault();
+      if (pinned) return;
       const base = hoverUs ?? positionUs;
       hoverUs = Math.round(base + (event.key === 'ArrowRight' ? step : -step));
       kbInspect = true;
       positionHover();
       const rect = canvas.getBoundingClientRect();
-      updateTooltip(rect.left + (lastGeom ? xOf(lastModel, {
+      updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
         gutter: lastGeom.gutter, plotW: lastGeom.plotW,
       } as never, hoverUs) : 0), rect.top + 20);
     } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -1307,13 +1363,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       kbInspect = true;
       if (hoverUs != null) {
         const rect = canvas.getBoundingClientRect();
-        updateTooltip(rect.left + (lastGeom ? xOf(lastModel, {
+        updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
           gutter: lastGeom.gutter, plotW: lastGeom.plotW,
         } as never, hoverUs) : 0), rect.top + 20);
         live.textContent = `轨道焦点 ${kbTrack}。${live.textContent ?? ''}`;
       } else {
-        status.textContent = `轨道焦点 ${kbTrack}`;
-        live.textContent = status.textContent;
+        live.textContent = `轨道焦点 ${kbTrack}`;
       }
     } else if (event.key === 'Enter' && hoverUs != null) {
       event.preventDefault();
@@ -1324,30 +1379,30 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (ref) {
         const resolved = session.resolveAnalysisSeek(focus, { effectivePtsUs: ref.sample.effectivePtsUs });
         if ('sessionPtsUs' in resolved) void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', {});
-        else { status.textContent = resolved.reason; live.textContent = resolved.reason; }
+        else { live.textContent = resolved.reason; }
         return;
       }
-      status.textContent = `轨道 ${focus} 在该时间无可定位样本。`;
-      live.textContent = status.textContent;
+      live.textContent = `轨道 ${focus} 在该时间无可定位样本。`;
     } else if (event.key === 'i' || event.key === 'I') {
-      // 固定当前检查（含详细信息），文本可选择/复制，不改变播放。
+      // 冻结/解冻当前检查，不改变播放。
       event.preventDefault();
       kbInspect = true;
-      if (hoverUs != null) {
+      if (pinned) unpinInspection();
+      else if (hoverUs != null) {
         const rect = canvas.getBoundingClientRect();
-        updateTooltip(rect.left + (lastGeom ? xOf(lastModel, {
+        updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
           gutter: lastGeom.gutter, plotW: lastGeom.plotW,
         } as never, hoverUs) : 0), rect.top + 20);
         pinInspection(lastInspection?.directTarget ?? null);
       }
     } else if (event.key === 'Escape') {
-      if (!pinnedEl.hidden) { pinned = null; renderPinned(); return; }
-      if (!helpEl.hidden) { helpEl.hidden = true; return; }
+      if (pinned) { unpinInspection(true); return; }
       hoverUs = null; rubber = null; kbInspect = false;
       lastInspection = null;
-      hoverEl.hidden = true; tooltip.hidden = true;
+      hoverEl.hidden = true;
+      renderFloat(null, null);
+      refreshOverlay();
       publishTestHook();
-      render();
     }
   }, { signal });
 
@@ -1358,10 +1413,47 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     render();
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
+      cardEl.hidden = true;
       for (const c of abortBySlot.values()) c.abort();
       abortBySlot.clear();
       window.clearTimeout(buildingTimer);
     }
+  }
+
+  /** 工作区快照：可视区间（null 为完整范围）+ 显示偏好 + 对比轨道。 */
+  function getAnalysisState(): AnalysisViewState {
+    return {
+      view: view == null ? null : { start: Math.floor(view.start), end: Math.ceil(view.end) },
+      axis: prefs.axis, windowUs: prefs.windowUs, layoutMode: prefs.layoutMode,
+      showBitrate: prefs.showBitrate, showSize: prefs.showSize,
+      follow: prefs.follow, selected: [...prefs.selected],
+    };
+  }
+
+  /** 工作区还原：偏好立即生效；视图等轨道落定后按当时域钳制应用。 */
+  let pendingAnalysisView: { start: number; end: number } | null | undefined;
+  function applyPendingAnalysisView() {
+    if (pendingAnalysisView === undefined) return;
+    const v = pendingAnalysisView;
+    pendingAnalysisView = undefined;
+    if (v) setView(v.start, v.end, prefs.follow);
+    else setView(null, undefined, prefs.follow);
+  }
+  function restoreAnalysisState(s: AnalysisViewState) {
+    prefs.showBitrate = s.showBitrate;
+    prefs.showSize = s.showSize;
+    prefs.axis = s.axis === 'dts' ? 'dts' : 'pts';
+    prefs.windowUs = BITRATE_WINDOW_OPTIONS_US.includes(s.windowUs) ? s.windowUs : DEFAULT_BITRATE_WINDOW_US;
+    prefs.layoutMode = s.layoutMode === 'rows' ? 'rows' : 'merged';
+    prefs.follow = s.follow;
+    prefs.selected = s.selected.filter(x => SLOTS.includes(x as Slot)) as Slot[];
+    // 以当前轨道集合为选择基准，避免后续同集合事件把快照里隐藏的轨道加回来。
+    selectedBuiltFor = JSON.stringify(tracks.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs]));
+    save();
+    refreshTools();
+    pendingAnalysisView = s.view ? { start: s.view.start, end: s.view.end } : null;
+    if (tracks.length) applyPendingAnalysisView();
+    else { render(); scheduleQuery(); }
   }
 
   const onSession = () => {
@@ -1374,12 +1466,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
     }));
     const sig = JSON.stringify(entries.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs]));
+    // 选择集与轨道集合对账（独立于内容签名）：同文件重载签名不变，
+    // 但属于一次新的载入，仍要把轨道默认加入对比；用户手动显隐不触发这里。
+    if (sig !== selectedBuiltFor) {
+      selectedBuiltFor = sig;
+      for (const e of entries) if (!prefs.selected.includes(e.slot)) prefs.selected.push(e.slot);
+      prefs.selected = prefs.selected.filter(s => entries.some(e => e.slot === s));
+      save();
+      refreshTools();
+    }
     if (sig !== trackSig) {
       trackSig = sig;
       tracks = entries;
-      // 新轨道默认加入对比；已移除轨道清理选择与缓存。
-      for (const e of entries) if (!prefs.selected.includes(e.slot)) prefs.selected.push(e.slot);
-      prefs.selected = prefs.selected.filter(s => entries.some(e => e.slot === s));
       for (const slot of [...results.keys()]) {
         const entry = entries.find(e => e.slot === slot);
         if (!entry || results.get(slot)?.sourceVersion.split('@')[0] !== entry.mediaId) {
@@ -1389,8 +1487,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       }
       caps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
       if (prefs.axis === 'dts' && !allHaveDts()) prefs.axis = 'pts';
+      // 换片/清轨后旧检查与冻结快照失效，不拿旧 sampleId 定位新片源。
+      lastInspection = null;
+      pinned = null;
+      renderFloat(null, null);
       save();
       refreshTools();
+      applyPendingAnalysisView();
       scheduleQuery(true);
     } else {
       // 索引构建会改变 duration 与能力，轻量跟进。
@@ -1420,6 +1523,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     scheduleQuery();
   });
   resizer_obs.observe(body);
+  resizer_obs.observe(plot);
 
   const themeChanges = new MutationObserver(() => { readColors(); render(); });
   themeChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
@@ -1437,11 +1541,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     offProgress();
     resizer_obs.disconnect();
     themeChanges.disconnect();
+    floatLayer.remove();
     for (const c of abortBySlot.values()) c.abort();
     axisMenu.dispose();
     windowMenu.dispose();
     layoutMenu.dispose();
   }, { once: true });
 
-  return { setOpen };
+  return { setOpen, getAnalysisState, restoreAnalysisState };
 }

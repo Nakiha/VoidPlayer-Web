@@ -32,13 +32,6 @@
   overflow: hidden;
   flex: 0 0 auto;
 }
-.analysis-title {
-  font: inherit;
-  color: var(--text);
-  padding: 4px 6px;
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
 .analysis-tools {
   display: flex;
   align-items: center;
@@ -94,16 +87,29 @@
 }
 .analysis-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .analysis-chip[aria-pressed="true"] { background: var(--surface-selected); color: var(--text); }
-.analysis-status { margin-left: auto; font-size: 12px; color: var(--text-secondary); flex: 0 0 auto; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 分析图占满面板宽度；横轴下方预留固定坞，卡片在坞内滑动，不占图表布局。 */
 .analysis-body {
   position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
+.analysis-plot {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+}
 #analysis-canvas { display: block; width: 100%; }
 #analysis-canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+#analysis-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
 .analysis-line {
   position: absolute;
   top: 0;
@@ -113,89 +119,73 @@
 }
 .analysis-playhead { background: var(--track-playhead); width: 2px; }
 .analysis-hover { background: color-mix(in srgb, var(--accent) 70%, transparent); }
-.analysis-tooltip {
-  position: absolute;
-  z-index: 5;
-  max-width: min(360px, 82%);
-  background: var(--surface-panel);
+/* 横轴下方竖排卡片：body 顶层 fixed 绘制，脱离面板 overflow 裁剪。
+   与标注工具条同一毛玻璃材质；横向以鼠标为中心限位在图表内，
+   纵向落在横轴下方，不盖数据区、不挡轴数字。 */
+.analysis-float-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+}
+.analysis-card {
+  position: fixed;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+  background: var(--viewport-chrome-fill);
+  -webkit-backdrop-filter: var(--glass-filter);
+  backdrop-filter: var(--glass-filter);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 6px 8px;
+  border-radius: 9px;
+  box-shadow: var(--annotation-toolbar-shadow);
+  padding: 3px 10px;
   font-size: 12px;
   line-height: 1.5;
   color: var(--text);
-  pointer-events: none;
-  box-shadow: var(--popover-shadow);
-  opacity: 0.98;
 }
-.analysis-tooltip .tt-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .analysis-card { background: var(--surface); }
+}
+.analysis-card th.fl-time {
   color: var(--text);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  margin-bottom: 4px;
+  text-align: left;
 }
-.analysis-tooltip .tt-head .tt-axis { color: var(--text-secondary); font-weight: 400; }
-.analysis-tooltip .tt-row { display: flex; gap: 6px; align-items: baseline; white-space: nowrap; }
-.analysis-tooltip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; align-self: center; display: inline-block; margin-right: 4px; }
-.analysis-tooltip .tt-note { color: var(--text-secondary); white-space: normal; overflow-wrap: anywhere; }
-.analysis-tooltip .tt-foot { color: var(--text-secondary); margin-top: 4px; white-space: nowrap; }
-.analysis-tooltip .tt-direct { color: var(--text); margin-top: 2px; white-space: normal; overflow-wrap: anywhere; }
-.analysis-tooltip .tt-grid { border-collapse: collapse; width: 100%; table-layout: fixed; }
-.analysis-tooltip .tt-grid th,
-.analysis-tooltip .tt-grid td { padding: 1px 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.analysis-tooltip .tt-grid th { color: var(--text-secondary); font-weight: 400; }
-.analysis-tooltip .tt-grid td.num,
-.analysis-tooltip .tt-grid th.num { text-align: right; font-variant-numeric: tabular-nums; }
-.analysis-pinned {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 6;
-  max-width: min(420px, 90%);
-  max-height: 70%;
-  overflow: auto;
-  background: var(--surface-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: var(--text);
-  box-shadow: var(--popover-shadow);
-  opacity: 0.99;
-  user-select: text;
+.analysis-card table.fl-grid {
+  width: auto;
+  border-collapse: collapse;
+  margin-right: auto;
 }
-.analysis-pinned .tt-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 4px; }
-.analysis-pinned .tt-actions { display: inline-flex; gap: 4px; }
-.analysis-pinned .tt-actions button { font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-selected); color: var(--text); cursor: pointer; }
-.analysis-pinned .tt-grid { border-collapse: collapse; width: 100%; table-layout: fixed; }
-.analysis-pinned .tt-grid th,
-.analysis-pinned .tt-grid td { padding: 1px 6px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.analysis-pinned .tt-grid td.num { text-align: right; font-variant-numeric: tabular-nums; }
-.analysis-pinned .tt-note { color: var(--text-secondary); white-space: normal; overflow-wrap: anywhere; }
-.analysis-pinned .tt-foot { color: var(--text-secondary); margin-top: 4px; }
-.analysis-pinned .tt-details { margin-top: 6px; border-top: 1px solid var(--divider); padding-top: 4px; }
-.analysis-help {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 6;
-  max-width: min(380px, 90%);
-  background: var(--surface-panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--text);
-  box-shadow: var(--popover-shadow);
+.analysis-card .fl-grid th,
+.analysis-card .fl-grid td {
+  box-sizing: border-box;
+  height: 20px;
+  padding: 0 4px;
+  white-space: nowrap;
+  overflow: hidden;
 }
-.analysis-help .tt-head { font-weight: 600; margin-bottom: 4px; }
-.analysis-help .tt-help { color: var(--text-secondary); white-space: normal; }
-.analysis-help .tt-close { margin-top: 6px; font: inherit; font-size: 11px; padding: 1px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface-selected); color: var(--text); cursor: pointer; }
+.analysis-card .fl-grid thead th,
+.analysis-card .fl-grid tbody th {
+  color: var(--text-secondary);
+  font-weight: 400;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+.analysis-card .fl-grid thead th:not(:first-child),
+.analysis-card .fl-grid td.metric-value {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.analysis-card .fl-grid .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 4px;
+  vertical-align: baseline;
+}
 .analysis-empty {
   position: absolute;
   inset: 0;

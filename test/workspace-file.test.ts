@@ -26,6 +26,27 @@ test('workspace library navigation and pending search survive plain and compress
  const value=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true},selected:'A',dockHeight:180,marksExpanded:false,sources}});
  assert.deepEqual(value.layout?.sources,sources);
  assert.deepEqual((await readWorkspaceFile(await compressWorkspace(value),'http://localhost/')).layout?.sources,sources);
- for(const invalid of [{...sources,tab:'invalid'},{...sources,all:'yes'},{...sources,query:'x'.repeat(1001)}])assert.throws(()=>parseWorkspace({...value,layout:{...value.layout,sources:invalid}}));
- assert.equal(parseWorkspace(document()).layout,undefined);
+  for(const invalid of [{...sources,tab:'invalid'},{...sources,all:'yes'},{...sources,query:'x'.repeat(1001)}])assert.throws(()=>parseWorkspace({...value,layout:{...value.layout,sources:invalid}}));
+  assert.equal(parseWorkspace(document()).layout,undefined);
+});
+
+test('analysis panel state survives workspace round trips, invalid blocks are rejected',async()=>{
+  const analysisView={view:{start:1000000,end:2000000},axis:'pts',windowUs:250000,layoutMode:'merged',showBitrate:true,showSize:false,follow:false,selected:['A','B']};
+  const value=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true,analysis:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView}});
+  assert.deepEqual(value.layout?.analysisView,analysisView);
+  assert.deepEqual((await readWorkspaceFile(await compressWorkspace(value),'http://localhost/')).layout?.analysisView,analysisView);
+  // 完整范围用 null 表示。
+  const full=parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView:{...analysisView,view:null}}});
+  assert.equal(full.layout?.analysisView?.view,null);
+  // 无该块的老文件仍可读。
+  assert.equal(parseWorkspace(document()).layout,undefined);
+  for(const invalid of [
+    {...analysisView,axis:'dts2'},
+    {...analysisView,windowUs:123},
+    {...analysisView,layoutMode:'auto'},
+    {...analysisView,view:{start:2000000,end:1000000}},
+    {...analysisView,view:{start:1000000,end:1000000}},
+    {...analysisView,selected:['Z']},
+    {...analysisView,selected:'A'},
+  ])assert.throws(()=>parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView:invalid}}));
 });
