@@ -17,6 +17,10 @@ export interface ViewCacheEntry {
   bucketWidthUs: number;
   truncated: boolean;
   sampleCount: number;
+  /** 曲线采样区间（可视区间）与密度；缺省复用 start/end/pixelWidth（旧缓存兼容）。 */
+  curveStartUs?: number;
+  curveEndUs?: number;
+  curvePixelWidth?: number;
 }
 
 export interface ViewCacheRequest {
@@ -29,6 +33,9 @@ export interface ViewCacheRequest {
   /** 本次视图是否需要逐样本（raw）。 */
   needRaw: boolean;
   bucketWidthUs: number;
+  curveStartUs?: number;
+  curveEndUs?: number;
+  curvePixelWidth?: number;
 }
 
 export const MAX_QUERY_PIXELS = 4096;
@@ -59,18 +66,32 @@ export function detailModeFor(truncated: boolean, sampleCount: number): DetailMo
  *    重算派生数据：桶网格与码率采样步长必须和桶缓存一样分别比较；
  * 5. 只比较点数不够，必须比较时间分辨率/桶宽；
  * 6. 未知/暂定区间不可因命中变成完整（调用方不得缓存 building 结果）。
+ * 7. 统计样本区间（halo）与曲线采样区间（可视）分别覆盖、分别比较密度：
+ *    halo 保证 1s 帧率窗口，曲线保证可视码率点不被摊薄。
  */
 export function canSatisfy(cached: ViewCacheEntry, requested: ViewCacheRequest): boolean {
   if (cached.axis !== requested.axis) return false;
   if (cached.windowUs !== requested.windowUs) return false;
   if (cached.offsetUs !== requested.offsetUs) return false;
   if (cached.startUs > requested.startUs || cached.endUs < requested.endUs) return false;
+  // 曲线区间：缺省复用样本区间（旧缓存/旧请求兼容）。
+  const cCurveStart = cached.curveStartUs ?? cached.startUs;
+  const cCurveEnd = cached.curveEndUs ?? cached.endUs;
+  const cCurvePix = cached.curvePixelWidth ?? cached.pixelWidth;
+  const rCurveStart = requested.curveStartUs ?? requested.startUs;
+  const rCurveEnd = requested.curveEndUs ?? requested.endUs;
+  const rCurvePix = requested.curvePixelWidth ?? requested.pixelWidth;
+  if (cCurveStart > rCurveStart || cCurveEnd < rCurveEnd) return false;
+  // 曲线密度：缓存步长不得明显大于请求步长，否则可视码率点被限位剔除。
+  const cachedCurveUspp = usPerPixel(cCurveStart, cCurveEnd, cCurvePix);
+  const requestedCurveUspp = usPerPixel(rCurveStart, rCurveEnd, rCurvePix);
+  if (cachedCurveUspp > requestedCurveUspp * 1.25 + 1) return false;
   if (requested.needRaw) {
     // 逐样本请求：必须有完整 raw，桶再细也不行。
     if (cached.detailMode !== 'raw' || cached.truncated) return false;
     // raw 样本虽精确，但码率序列按查询密度采样：全览粗查询的码率步长
     // 满足不了放大视图（游标步长小一个量级时最近邻限位会将其剔除，
-    // 读数在值/—间闪烁）。时间分辨率必须一起比较。
+    // 读数在值/—间闪烁）。时间分辨率必须一起比较（样本区间 + 曲线区间）。
     const cachedUspp = usPerPixel(cached.startUs, cached.endUs, cached.pixelWidth);
     const requestedUspp = usPerPixel(requested.startUs, requested.endUs, requested.pixelWidth);
     if (cachedUspp > requestedUspp * 1.25 + 1) return false;

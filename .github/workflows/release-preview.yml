@@ -111,6 +111,63 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  analysis-logic:
+    name: Verify analysis contracts (R1/R2/R3 unit)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
+      - name: Run analysis unit contracts
+        run: node --experimental-strip-types --test test/analysis-*.test.ts
+      - name: Run session analysis projection contracts
+        run: node --experimental-strip-types --test test/session.test.ts test/media-loading.test.ts
+
+  analysis-browser:
+    name: Verify analysis panel (chromium + webkit)
+    needs: decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - run: npm ci
+      - name: Checkout pinned codec QA samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build
+      - name: Verify analysis panel on chromium
+        run: node scripts/check-analysis-browser.mjs chromium
+      - name: Verify analysis panel on webkit
+        run: node scripts/check-analysis-browser.mjs webkit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: analysis-browser-reports
+          path: |
+            /tmp/vp-analysis-*.png
+            .run/playback-reports/
+          if-no-files-found: ignore
+          retention-days: 14
+
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
@@ -315,7 +372,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, playback]
+    needs: [native-release, playback, analysis-logic, analysis-browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

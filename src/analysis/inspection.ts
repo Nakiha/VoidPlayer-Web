@@ -159,7 +159,9 @@ export function coverageFor(
 /**
  * 公共 T 的码率读取：与曲线使用同一评价规则。
  * 后端码率点是按 windowUs 滑窗的离散采样；检查表取最近点，但距离超过
- * stepUs*1.5 不延伸（缺失区间不断言），标记 approximate。
+ * 实际采样步长*1.5 不延伸（缺失区间不断言），标记 approximate。
+ * 实际步长优先用结果自带的 bitrateStepUs（曲线采样网格契约），
+ * stepUs 参数仅为旧结果的回退，不得用可视宽度猜另一份结果的密度。
  */
 export function bitrateAtT(
   result: AnalysisResult, t: number, windowUs: number, stepUs: number,
@@ -181,7 +183,11 @@ export function bitrateAtT(
   }
   if (!best) return base;
   // 步长未知时（如首帧前）用窗口/像素回退：超过半窗即不可信。
-  const limit = Number.isFinite(stepUs) && stepUs > 0 ? stepUs * 1.5 : windowUs / 2;
+  // 优先用结果自带的实际采样步长；调用方传入的可视步长仅为旧数据回退。
+  const actualStep = result.bitrateStepUs != null && Number.isFinite(result.bitrateStepUs) && (result.bitrateStepUs as number) > 0
+    ? (result.bitrateStepUs as number)
+    : stepUs;
+  const limit = Number.isFinite(actualStep) && actualStep > 0 ? actualStep * 1.5 : windowUs / 2;
   if (bestDt > limit) return { ...base, evaluationTimeUs: best.tUs, approximate: true };
   if (best.mbps == null) {
     return {
@@ -229,16 +235,24 @@ export function localRateAtT(
   const wa = Math.max(a, cov.start), wb = Math.min(b, cov.end);
   if (!(wb > wa)) return base;
   const shortWindow = wa !== a || wb !== b;
+  // 显式样本覆盖契约：统计窗口必须被本次返回的样本区间完整包含，
+  // 否则说明查询没拿全窗口（深度放大/稀疏截断），不得报告确定帧率。
+  // 这代替旧的 last-first 跨度启发式；真实稀疏与缺样本在此区分：
+  // 缺样本直接返回 null + provisional，稀疏仍走下面的间隔/跳变判定。
+  const sc = result.sampleCoverageUs;
+  if (sc !== undefined) {
+    if (!sc) return { ...base, provisional: true, shortWindow: true };
+    if (wa < sc.start || wb > sc.end) return { ...base, provisional: true, shortWindow: true };
+  }
   const lo = lowerBoundArr(derived.times, wa);
   const hi = lowerBoundArr(derived.times, wb);
   const k = hi - lo;
   if (k < 2) return base;
   const first = derived.times[lo], last = derived.times[hi - 1];
   if (!(last > first) || !Number.isFinite(first) || !Number.isFinite(last)) return base;
-  // 窗口内样本跨度远小于声明窗口，说明本次返回的样本没覆盖统计窗口
-  // （深度放大后查询区间不足 1s）或区域过稀疏：不得报告"确定"帧率。
-  // 真实帧率下完整窗口的样本跨度 ≥ 窗口 - 1/rate，远低于半窗才可疑。
-  const spanShort = (last - first) * 2 < wb - wa;
+  // 旧数据无显式覆盖时保留跨度启发式；新数据已由上面的包含检查保证，
+  // 不再用跨度猜测代替查询覆盖元数据。
+  const spanShort = sc !== undefined ? false : (last - first) * 2 < wb - wa;
   // 跳变检测：任一间隔超过半窗即视为时间线跳变，不输出稳定帧率。
   let maxGap = 0;
   for (let i = lo + 1; i < hi; i++) {
@@ -282,7 +296,7 @@ export interface BuildInspectionOptions {
   axis: 'pts' | 'dts';
   inspectionTimeUs: number;
   windowUs: number;
-  /** 视图步长（span/pixelWidth），用于码率最近邻的保真上限。 */
+  /** 视图步长回退：仅当结果缺失 bitrateStepUs 网格时使用，新结果优先用自带步长。 */
   stepUs: number;
   order: readonly Slot[];
   results: ReadonlyMap<Slot, AnalysisResult>;
@@ -347,6 +361,9 @@ export interface CoarsenedBucket extends CoarseBucketInput {
  * 把各轨基础桶按公共粗网格合并。originUs 一致（会话域 0），
  * coarseWidthUs 为基础桶宽的整数倍。空桶不绘制，但不先从时间格删除；
  * 不同稀疏度的轨道仍落到同一套边界，每个样本只计一次。
+ * R3：输入桶必须与 base 网格对齐且完全落入单个粗区间，否则输出标为
+ * 不完整（complete=false），调用方应先用 isBucketGridCompatible 判断，
+ * 不兼容时回退到原始桶或重查，不得将跨界桶整体塞入起点所在区间冒充完整。
  */
 export function coarsenBucketsShared(
   buckets: readonly CoarseBucketInput[],
@@ -359,10 +376,15 @@ export function coarsenBucketsShared(
   for (const b of buckets) {
     if (!b.count) continue;
     const idx = Math.floor((b.startUs - originUs) / coarse);
+    const coarseStart = originUs + idx * coarse;
+    const coarseEnd = coarseStart + coarse;
+    // 跨界或非对齐的细桶不得冒充完整：仍归入起点区间以保持计数守恒，
+    // 但整组标为不完整，调用方优先用兼容性检查避免进入此分支。
+    const straddles = b.startUs < coarseStart || b.endUs > coarseEnd;
     let entry = byIndex.get(idx);
     if (!entry) {
       entry = {
-        startUs: originUs + idx * coarse, endUs: originUs + (idx + 1) * coarse,
+        startUs: coarseStart, endUs: coarseEnd,
         count: 0, maxBytes: 0, sumBytes: 0, keyCount: 0, deltaCount: 0, unknownCount: 0,
         complete: true, maxSampleId: null, coarseIndex: idx,
       };
@@ -374,9 +396,36 @@ export function coarsenBucketsShared(
     entry.keyCount += b.keyCount;
     entry.deltaCount += b.deltaCount;
     entry.unknownCount += b.unknownCount;
-    if (!b.complete) entry.complete = false;
+    if (!b.complete || straddles) entry.complete = false;
   }
   return [...byIndex.values()].sort((a, b) => a.coarseIndex - b.coarseIndex);
+}
+
+/**
+ * 共享粗化前置检查：只有当所有非空输入桶宽度等于 baseWidthUs、
+ * 起点对齐 base 网格、且完全落入单个 coarse 区间时才允许合并。
+ * 各轨独立查询/缓存、异步更新或复用不同分辨率缓存时，基础网格未必相同，
+ * 不得仅凭“旧桶更细”假定一定能正确合并（R3）。
+ */
+export function isBucketGridCompatible(
+  buckets: readonly CoarseBucketInput[],
+  baseWidthUs: number, coarseWidthUs: number, originUs = 0,
+): boolean {
+  if (!(baseWidthUs > 0) || !(coarseWidthUs > 0)) return false;
+  const width = Math.max(baseWidthUs, 1);
+  const coarse = Math.max(width, Math.round(coarseWidthUs / width) * width || width);
+  // coarse 必须为 base 的整数倍（1us 整除误差内），否则网格天然不对齐。
+  if (Math.abs(coarse / width - Math.round(coarse / width)) > 1e-6) return false;
+  for (const b of buckets) {
+    if (!b.count) continue;
+    const w = b.endUs - b.startUs;
+    if (!(w > 0) || Math.abs(w - width) > 1) return false;
+    if (Math.abs((b.startUs - originUs) / width - Math.round((b.startUs - originUs) / width)) > 1e-6) return false;
+    const idx = Math.floor((b.startUs - originUs) / coarse);
+    const coarseStart = originUs + idx * coarse;
+    if (b.startUs < coarseStart || b.endUs > coarseStart + coarse) return false;
+  }
+  return true;
 }
 
 /** 从桶数组估计基础桶宽（连续桶起止差的中位数，含空桶）。 */

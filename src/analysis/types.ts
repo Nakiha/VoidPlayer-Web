@@ -63,6 +63,15 @@ export interface AnalysisQuery {
    * 再加 offset 导致跨轨桶边界错位。缺省 0 保持单轨兼容。
    */
   bucketOriginUs?: number;
+  /**
+   * 曲线采样区间（会话时间）：码率点只在该区间按 curvePixelWidth 密度
+   * 生成。缺省复用 startUs/endUs/pixelWidth（Agent/旧调用兼容）。
+   * 面板深度缩放时传可视区间，样本 halo 仍走 start/end，避免 halo
+   * 摊薄曲线密度（R1：统计样本范围与绘图采样网格解耦）。
+   */
+  curveStartUs?: number;
+  curveEndUs?: number;
+  curvePixelWidth?: number;
   /** 单轨查询上限，防止把数十万条记录塞进主线程消息。 */
   maxSamples?: number;
   signal?: AbortSignal;
@@ -106,6 +115,18 @@ export interface AnalysisResult {
   bitrate: BitratePoint[] | null;
   capability: AnalysisCapability;
   coverageUs: { start: number; end: number } | null;
+  /**
+   * 本次返回的样本完整覆盖区间（会话时间投影后由 session 换算）。
+   * truncated/bucketsOnly 时为 null：不得用它做 1s 局部帧率估计。
+   * inspection.localRateAtT 用它判定统计窗口是否被完整覆盖，
+   * 不再用 last-first 跨度启发式代替查询覆盖元数据。
+   */
+  sampleCoverageUs?: { start: number; end: number } | null;
+  /** 码率点的实际采样区间（会话时间）与步长；检查器按它做最近邻限位。 */
+  bitrateRangeUs?: { start: number; end: number } | null;
+  bitrateStepUs?: number | null;
+  /** 桶的实际网格（会话时间原点 + 桶宽），共享粗化前先校验兼容性。 */
+  bucketGrid?: { originUs: number; widthUs: number } | null;
 }
 
 /** getState 只暴露轻量能力/状态，不含样本数组。 */

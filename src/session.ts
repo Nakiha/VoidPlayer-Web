@@ -31,6 +31,7 @@ export class ReviewSession {
     if(this.changingColor)throw new Error('正在切换色彩模式。');
     if(!['hardware','software'].includes(decode.decoder)||![1,2,4,8].includes(decode.depth))throw new Error('无效的解码路径或缓冲深度。');
     if(getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode))return this.getState();
+    ++this.analysisIntentSeq;
     this.changingColor=true;
     try{await this.run('color-mode',{mode},async current=>{
       const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame}[]=[];
@@ -191,6 +192,12 @@ export class ReviewSession {
   }
   private analysisSeq = 0;
   /**
+   * 分析定位意图序列：每次发起按样本定位、新一轮 seek/step/换片/改 offset
+   * 都递增。await 之后必须校验 token 仍为最新，否则旧定位结果不得覆盖
+   * 新的用户意图（R2：查询结果隔离不等于用户动作隔离）。
+   */
+  private analysisIntentSeq = 0;
+  /**
    * 会话时间区间的只读分析查询：转为片内归一化时间下发给后端，结果投影
    * 回会话时间（sessionUs = normalizedMediaUs + offsetUs）。换 offset 只
    * 重投影，不重扫。旧异步结果由调用方按 requestId 丢弃。
@@ -206,6 +213,16 @@ export class ReviewSession {
     if (axis !== 'pts' && axis !== 'dts') throw new Error('时间基准必须是 pts 或 dts。');
     if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096) throw new Error('查询像素宽度超出范围。');
     if (!Number.isInteger(bitrateWindowUs) || bitrateWindowUs <= 0) throw new Error('码率滑窗必须为正整数微秒。');
+    // 曲线区间缺省复用样本区间；显式传入时同样要求整数微秒与合法像素宽。
+    const hasCurve = query.curveStartUs !== undefined || query.curveEndUs !== undefined || query.curvePixelWidth !== undefined;
+    if (hasCurve) {
+      if (!Number.isInteger(query.curveStartUs) || !Number.isInteger(query.curveEndUs)) {
+        throw new Error('分析曲线区间必须是整数微秒。');
+      }
+      if (!Number.isInteger(query.curvePixelWidth) || (query.curvePixelWidth as number) < 32 || (query.curvePixelWidth as number) > 4096) {
+        throw new Error('曲线像素宽度超出范围。');
+      }
+    }
     const track = this.tracks.get(slot);
     if (!track) throw new Error('轨道尚未载入。');
     if (track.failure) throw new Error(track.failure.message);
@@ -217,6 +234,10 @@ export class ReviewSession {
     const result = await track.source.queryAnalysis({
       ...query, requestId, bucketOriginUs,
       startUs: query.startUs - offsetUs, endUs: query.endUs - offsetUs,
+      ...(hasCurve ? {
+        curveStartUs: (query.curveStartUs as number) - offsetUs,
+        curveEndUs: (query.curveEndUs as number) - offsetUs,
+      } : {}),
     });
     const shift = (t: number) => t + offsetUs;
     return {
@@ -234,6 +255,10 @@ export class ReviewSession {
       buckets: result.buckets?.map(b => ({ ...b, startUs: shift(b.startUs), endUs: shift(b.endUs) })) ?? null,
       bitrate: result.bitrate?.map(p => ({ ...p, tUs: shift(p.tUs) })) ?? null,
       coverageUs: result.coverageUs ? { start: shift(result.coverageUs.start), end: shift(result.coverageUs.end) } : null,
+      sampleCoverageUs: result.sampleCoverageUs ? { start: shift(result.sampleCoverageUs.start), end: shift(result.sampleCoverageUs.end) } : (result.sampleCoverageUs ?? null),
+      bitrateRangeUs: result.bitrateRangeUs ? { start: shift(result.bitrateRangeUs.start), end: shift(result.bitrateRangeUs.end) } : (result.bitrateRangeUs ?? null),
+      bitrateStepUs: result.bitrateStepUs ?? null,
+      bucketGrid: result.bucketGrid ? { originUs: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
     };
   }
   /**
@@ -253,16 +278,49 @@ export class ReviewSession {
   /**
    * 按稳定样本身份有界定位（桶峰值定位与 Agent 共用）：不依赖某次视口查询
    * 是否恰好返回了 raw 样本列表。返回的样本时间已投影到会话时间。
+   * R2：await 之后重验实例（sourceGen/mediaId/offset）与定位意图 token，
+   * 换片、重建、改 offset 或更新的定位/seek 意图使旧结果失效。
    */
-  async locateAnalysisSample(slot: Slot, sampleId: string): Promise<{ sample: AnalysisSample } | { reason: string }> {
+  async locateAnalysisSample(slot: Slot, sampleId: string, opts?: { signal?: AbortSignal }): Promise<{ sample: AnalysisSample } | { reason: string }> {
     slotValue(slot);
     if (typeof sampleId !== 'string' || !sampleId) return { reason: '样本身份无效。' };
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     if (!track.source.locateAnalysisSample) return { reason: '该片源的解码路径暂不支持按样本定位。' };
-    const found = await track.source.locateAnalysisSample(sampleId);
-    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    const gen = track.sourceGen;
+    const mediaId = track.source.info.id;
     const offsetUs = track.offsetUs;
+    const source = track.source;
+    const locateFn = source.locateAnalysisSample;
+    if (!locateFn) return { reason: '该片源的解码路径暂不支持按样本定位。' };
+    // 只读定位不抢占意图序列：捕获当前序列，等待期间若有新定位/seek/
+    // 换片/改 offset（序列递增）则本次结果视为过期。
+    const token = this.analysisIntentSeq;
+    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
+    let found: AnalysisSample | null;
+    try {
+      const call = locateFn.call(source, sampleId);
+      found = opts?.signal
+        ? await Promise.race([call, new Promise<never>((_, reject) => {
+          opts.signal!.addEventListener('abort', () => reject(opts.signal!.reason ?? new DOMException('定位已取消。', 'AbortError')), { once: true });
+        })])
+        : await call;
+    } catch (error) {
+      // 旧实例在等待期间被释放（换片/重建）：按失效处理，不抛释放错误。
+      const current = this.tracks.get(slot);
+      if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId) {
+        return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+      }
+      throw error;
+    }
+    // 新定位意图、换片、重建、改 offset 使旧结果失效：静默丢弃，不覆盖新意图。
+    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
+    const current = this.tracks.get(slot);
+    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
+      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    }
+    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
     return {
       sample: {
         ...found,
@@ -270,6 +328,69 @@ export class ReviewSession {
         dtsUs: found.dtsUs == null ? null : found.dtsUs + offsetUs,
       },
     };
+  }
+  /**
+   * 按样本身份定位并 seek 的统一动作入口（面板/键盘/Agent 共用）：
+   * 捕获 sourceGen/mediaId/offset 与定位意图 token，await 返回后、实际
+   * seek 之前再次校验。旧定位结果不得覆盖新点击、拖动 seek、换片、
+   * source 重建或 offset 修改之后的用户意图。用可控延迟 Promise 可测，
+   * 不依赖随机等待。
+   */
+  async seekAnalysisSample(slot: Slot, sampleId: string, opts?: { signal?: AbortSignal }): Promise<{ sessionPtsUs: number } | { reason: string }> {
+    slotValue(slot);
+    if (typeof sampleId !== 'string' || !sampleId) return { reason: '样本身份无效。' };
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
+    if (!track.source.locateAnalysisSample) return { reason: '该片源的解码路径暂不支持按样本定位。' };
+    const gen = track.sourceGen;
+    const mediaId = track.source.info.id;
+    const offsetUs = track.offsetUs;
+    const source = track.source;
+    const locateFn = source.locateAnalysisSample;
+    if (!locateFn) return { reason: '该片源的解码路径暂不支持按样本定位。' };
+    const token = ++this.analysisIntentSeq;
+    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
+    let found: AnalysisSample | null;
+    try {
+      const call = locateFn.call(source, sampleId);
+      found = opts?.signal
+        ? await Promise.race([call, new Promise<never>((_, reject) => {
+          opts.signal!.addEventListener('abort', () => reject(opts.signal!.reason ?? new DOMException('定位已取消。', 'AbortError')), { once: true });
+        })])
+        : await call;
+    } catch (error) {
+      const current = this.tracks.get(slot);
+      if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId) {
+        return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+      }
+      throw error;
+    }
+    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
+    const current = this.tracks.get(slot);
+    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs) {
+      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    }
+    if (!found) return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    const projected = {
+      effectivePtsUs: found.effectivePtsUs == null ? null : found.effectivePtsUs + offsetUs,
+    };
+    const resolved = this.resolveAnalysisSeek(slot, projected);
+    if (!('sessionPtsUs' in resolved)) return resolved;
+    // 再次确认仍为最新意图后才产生 seek 副作用；seek 本身会成为新的意图。
+    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    if (opts?.signal?.aborted) throw opts.signal.reason ?? new DOMException('定位已取消。', 'AbortError');
+    try {
+      await this.seek(resolved.sessionPtsUs);
+    } catch (error) {
+      // 内部 seek 被更新的播放意图取代（AbortError）：按 stale 静默处理，
+      // 不向面板抛错，避免旧定位覆盖新意图的报错噪音。
+      if (error instanceof Error && error.name === 'AbortError') {
+        return { reason: '定位已被更新的请求取代。' };
+      }
+      throw error;
+    }
+    return resolved;
   }
   private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure).map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {
@@ -313,6 +434,8 @@ export class ReviewSession {
   async load(slot: Slot, open: (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>, name = '视频') {
     if(this.changingColor)throw new Error('请等待色彩模式切换完成。');
     slotValue(slot);
+    // 换片使旧定位意图失效：旧定位结果不得覆盖新片。
+    ++this.analysisIntentSeq;
     const scoped = contextLog(), replacing = this.tracks.get(slot)?.source.info.name;
     // Preparing a source is independent of the transport. A second load still
     // supersedes the first, but opening/indexing never owns the session queue.
@@ -394,6 +517,7 @@ export class ReviewSession {
   }
   async removeTrack(slot: Slot) {
     slotValue(slot);
+    ++this.analysisIntentSeq;
     await this.run('removeTrack', { slot }, async current => {
       const track = this.tracks.get(slot);
       if (track) this.releaseReaders('remove', [track.source]);
@@ -408,6 +532,7 @@ export class ReviewSession {
   async setTrackOffset(slot:Slot, offsetUs:number) {
     slotValue(slot);
     if(!Number.isSafeInteger(offsetUs)) throw new Error('偏移必须是整数微秒。');
+    ++this.analysisIntentSeq;
     await this.run('setTrackOffset',{slot,offsetUs},async current=>{
       const old=this.tracks.get(slot); if(!old)throw new Error('轨道尚未载入。');
       if(!Number.isSafeInteger(old.source.info.durationUs+offsetUs))throw new Error('偏移超出可用时间范围。');
@@ -445,6 +570,8 @@ export class ReviewSession {
   async seek(ptsUs: number) {
     const scoped = contextLog();
     timeUs(ptsUs);
+    // 新的播放意图使旧的分析定位意图失效（拖动进度覆盖慢定位）。
+    ++this.analysisIntentSeq;
     try {
       await this.run('seek', { ptsUs }, async current => {
         if (!this.tracks.size) throw new Error('请先打开视频。');
@@ -465,6 +592,7 @@ export class ReviewSession {
   async step(direction: number) {
     const scoped = contextLog();
     if (direction !== -1 && direction !== 1) throw new Error('逐帧方向必须是 -1 或 1。');
+    ++this.analysisIntentSeq;
     try {
       await this.run('step', { direction }, async current => {
         let entries = this.playableEntries();

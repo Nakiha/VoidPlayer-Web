@@ -191,11 +191,20 @@ export function executeSortedQuery(
     const insideQuery = b.startUs >= startUs && b.endUs <= endUs;
     return { ...b, complete: insideCoverage && insideQuery };
   });
+  // 曲线采样与统计样本解耦：码率点只在 curve 区间按其像素密度生成，
+  // 缺省复用样本查询区间（Agent/旧调用）。面板深度缩放时 curve=可视区间、
+  // 样本=halo 区间，避免 halo + 4096 封顶摊薄可视曲线的密度。
+  const rawCurveStart = Number.isFinite(query.curveStartUs) ? (query.curveStartUs as number) : startUs;
+  const rawCurveEnd = Number.isFinite(query.curveEndUs) ? (query.curveEndUs as number) : endUs;
+  const curveStart = Math.min(rawCurveStart, rawCurveEnd);
+  const curveEnd = Math.max(rawCurveStart, rawCurveEnd);
+  const curvePixels = Math.max(1, Math.floor(query.curvePixelWidth ?? pixelWidth) || 1);
   const bitrate: BitratePoint[] = [];
-  const step = (endUs - startUs) / pixelWidth;
-  for (let i = 0; i < pixelWidth; i++) {
-    const t = startUs + (i + 0.5) * step;
-    if (!(t < endUs)) break;
+  const curveSpan = curveEnd - curveStart;
+  const step = curveSpan > 0 ? curveSpan / curvePixels : (endUs - startUs) / pixelWidth;
+  for (let i = 0; i < curvePixels; i++) {
+    const t = curveStart + (i + 0.5) * step;
+    if (!(t < curveEnd)) break;
     // 没有可信覆盖水位线时不输出码率值（不断言偏低的 0），只标暂定。
     if (!coverage) {
       bitrate.push({ tUs: t, mbps: null, shortWindow: false, provisional: true });
@@ -218,6 +227,12 @@ export function executeSortedQuery(
     // 导出轴相关的实际覆盖：与内部桶完整性/码率计算使用同一区间，
     // 调用方不得再用原始 PTS 水位线判断 DTS 轴的 outside。
     coverageUs: coverage ? coverage[0] : null,
+    // 显式网格契约：样本完整区间、曲线采样区间/步长、桶网格。
+    // 调用方不得从屏幕宽度猜另一份结果的真实采样密度。
+    sampleCoverageUs: truncated || bucketsOnly ? null : { start: startUs, end: endUs },
+    bitrateRangeUs: curveSpan > 0 ? { start: curveStart, end: curveEnd } : null,
+    bitrateStepUs: curveSpan > 0 ? curveSpan / curvePixels : null,
+    bucketGrid: { originUs, widthUs: bucketWidth },
   };
 }
 

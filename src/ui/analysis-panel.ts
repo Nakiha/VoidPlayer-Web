@@ -14,7 +14,7 @@ import { groupSamples } from '../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
 import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
 import type { ViewCacheEntry } from '../analysis/view-cache.ts';
-import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
+import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
 import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
 import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
@@ -395,12 +395,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 预取 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
     // margin 至少覆盖局部帧率的半个统计窗口：深度放大后视口不足 1s，
     // 否则检查器拿到的样本覆盖不了自己的 1s 邻域（口径随缩放漂移）。
+    // R1 解耦：样本/桶走 halo 区间（qStart/qEnd/qPix），码率曲线走可视区间
+    // （vStart/vEnd/pixelWidth），避免 halo + 4096 封顶摊薄可视曲线的密度。
     const full = span >= db.end - db.start;
     const margin = Math.max(span * 0.5, LOCAL_RATE_WINDOW_US / 2);
     const qStart = full ? range.start : Math.max(db.start, Math.floor(range.start - margin));
     const qEnd = full ? range.end : Math.min(db.end, Math.ceil(range.end + margin));
     // 大 CSS 宽度 + 预取 margin 不得产生 pixelWidth>4096 的查询异常。
     const qPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (qEnd - qStart) / span));
+    const vStart = Math.floor(range.start);
+    const vEnd = Math.ceil(range.end);
     const visibleBucketW = bucketWidthFor(range.start, range.end, pixelWidth);
     for (const t of selectedTracks()) {
       const cap = caps.get(t.slot);
@@ -416,6 +420,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
           axis: prefs.axis, windowUs: prefs.windowUs, offsetUs: t.offsetUs,
           pixelWidth: qPix, needRaw, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
+          curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
         });
         // 可见区 LOD 也要满足：粗桶覆盖预取区不代表可见区够细。
         const visibleOk = !needRaw || cover.detailMode === 'raw';
@@ -434,6 +439,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
         axis: prefs.axis, pixelWidth: qPix, bitrateWindowUs: prefs.windowUs, maxSamples: MAX_SAMPLES,
         bucketOriginUs: 0,
+        curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
         signal: controller.signal,
       }).then(result => {
         if (abortBySlot.get(t.slot) === controller) abortBySlot.delete(t.slot);
@@ -456,6 +462,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             pixelWidth: qPix, offsetUs: t.offsetUs,
             detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
             truncated: result.truncated, sampleCount: result.samples.length,
+            curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
           });
           // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
         } else {
@@ -611,33 +618,54 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           // 多轨密集时选更粗的桶，保证每组仍有位置画不同轨道，不压成同一像素。
           // 按公共粗时间下标聚合（会话域原点 0），不按非空位置分批；空桶不绘制，
           // 但不先从时间格删除，不同稀疏度的轨道仍落到同一套边界。
+          // R3：各轨独立查询/缓存，基础网格未必相同。优先用结果自带的
+          // bucketGrid，缺失时回退到估计；仅当该轨网格与公共粗网格兼容时
+          // 才合并，不兼容回退到原始桶（不按比例猜拆，不整体塞入起点区间）。
           const lanes = Math.max(1, sel.length);
           const span = Math.max(1, viewEnd - range.start);
-          const bases = sel.map(t => estimateBaseBucketWidth(results.get(t.slot)?.buckets)).filter((w): w is number => w != null && w > 0);
+          const baseBySlot = new Map<Slot, number>();
+          for (const t of sel) {
+            const r = results.get(t.slot);
+            const gridW = r?.bucketGrid?.widthUs;
+            const w = (typeof gridW === 'number' && gridW > 0)
+              ? gridW
+              : estimateBaseBucketWidth(r?.buckets);
+            if (w != null && w > 0) baseBySlot.set(t.slot, w);
+          }
+          const bases = [...baseBySlot.values()];
           const baseMin = bases.length ? Math.min(...bases) : null;
           const timePerPx = span / Math.max(1, plotW);
           const needed = timePerPx * 2 * lanes;
           const coarseWidth = baseMin != null ? baseMin * Math.max(1, Math.ceil(needed / baseMin)) : null;
           const bucketsBySlot = new Map<Slot, { slot: Slot; bucketIndex: number; startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
+          const toOriginal = (slot: Slot, list: { startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]) => {
+            const nonEmpty = list.filter(b => b.count > 0);
+            bucketsBySlot.set(slot, nonEmpty.map((b, i) => ({
+              slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
+              count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
+              keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
+              complete: b.complete, maxSampleId: b.maxSampleId,
+            })));
+          };
           sel.forEach(t => {
             const r = results.get(t.slot);
             const inView = (r?.buckets ?? []).filter(b => b.endUs > range.start && b.startUs < viewEnd);
             if (coarseWidth == null || (baseMin != null && coarseWidth <= baseMin)) {
-              const nonEmpty = inView.filter(b => b.count > 0);
-              bucketsBySlot.set(t.slot, nonEmpty.map((b, i) => ({
-                slot: t.slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
-                count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-                keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-                complete: b.complete, maxSampleId: b.maxSampleId,
-              })));
+              toOriginal(t.slot, inView);
             } else {
-              const coarse = coarsenBucketsShared(inView, baseMin!, coarseWidth, 0);
-              bucketsBySlot.set(t.slot, coarse.map(b => ({
-                slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
-                count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-                keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-                complete: b.complete, maxSampleId: b.maxSampleId,
-              })));
+              const trackBase = baseBySlot.get(t.slot) ?? baseMin!;
+              // 该轨网格与公共粗网格不兼容时不合并，回退原始桶。
+              if (!isBucketGridCompatible(inView, trackBase, coarseWidth, 0)) {
+                toOriginal(t.slot, inView);
+              } else {
+                const coarse = coarsenBucketsShared(inView, trackBase, coarseWidth, 0);
+                bucketsBySlot.set(t.slot, coarse.map(b => ({
+                  slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
+                  count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
+                  keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
+                  complete: b.complete, maxSampleId: b.maxSampleId,
+                })));
+              }
             }
           });
           bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
@@ -1300,19 +1328,24 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
           }
         } else {
-          void session.locateAnalysisSample(g.slot, peakId).then(found => {
-            if (signal.aborted) return;
-            if (!('sample' in found)) { live.textContent = `轨道 ${g.slot}：${found.reason}`; return; }
-            const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: found.sample.effectivePtsUs });
-            if ('sessionPtsUs' in resolved) {
-              kbTrack = g.slot;
-              void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
-            } else {
-              live.textContent = `轨道 ${g.slot}：${resolved.reason}`;
+          // 慢路径：样本不在当前视口结果中，走 session 统一动作入口
+          // （反查 → 校验实例/offset/最新意图 → seek）。旧定位结果不得
+          // 覆盖新点击/拖动/换片/改 offset 之后的用户意图； stale 结果静默丢弃。
+          void act(async () => {
+            let res: { sessionPtsUs: number } | { reason: string };
+            try {
+              res = await session.seekAnalysisSample(g.slot, peakId, { signal });
+            } catch {
+              if (!signal.aborted) live.textContent = `轨道 ${g.slot}：峰值样本定位失败。`;
+              return;
             }
-          }).catch(() => {
-            if (!signal.aborted) live.textContent = `轨道 ${g.slot}：峰值样本定位失败。`;
-          });
+            if (signal.aborted) return;
+            if ('sessionPtsUs' in res) {
+              kbTrack = g.slot;
+            } else if (res.reason !== '定位已被更新的请求取代。') {
+              live.textContent = `轨道 ${g.slot}：${res.reason}`;
+            }
+          }, 'analysis.seek', { slot: g.slot, sampleId: peakId });
         }
       }
     }
