@@ -19,6 +19,7 @@ import type { DirectTarget, InspectionState, TrackInspection } from '../analysis
 import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
+import { reconcileTrackSelection } from './track-selection.ts';
 import type { AnalysisViewState } from '../workspace-file.ts';
 import {
   computeLayout, desiredHeight, drawAnalysis, formatAxis, plotGeometry, tOf, xOf,
@@ -180,7 +181,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   let colors: CanvasColors = { key: '', delta: '', unknown: '', grid: '', text: '', axisText: '' };
   let slotColors = new Map<Slot, string>();
   let trackSig = '';
-  let selectedBuiltFor = '';
+  // 选择集只随轨道身份（slot+mediaId）对账：新增身份默认加入，移除即遗忘；
+  // 时长/偏移等元数据更新不得触碰用户的显隐选择。
+  const knownTrackIds = new Set<string>();
   let hoverRaf = 0;
   let pendingHover: { x: number; y: number; t: number } | null = null;
   let lastClient: { x: number; y: number } | null = null;
@@ -1254,9 +1257,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     rubber = null;
     const picked = pickAt(event.clientX, event.clientY);
-    // Shift+单击冻结/解冻当前检查，不改变播放状态。
+    // Shift+单击冻结/解冻当前检查，不改变播放状态：已冻结时只解冻，
+    // 不在点击位置重新冻结（再次 Shift+单击必须可逆）。
     if (event.shiftKey) {
-      if (pinned) unpinInspection();
+      if (pinned) { unpinInspection(); return; }
       hoverUs = Math.round(canvasT(event.clientX));
       lastClient = { x: event.clientX, y: event.clientY };
       positionHover();
@@ -1317,6 +1321,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   canvas.addEventListener('pointerleave', () => {
     if (pressX != null) return;
+    if (pinned) {
+      // 冻结快照不随指针移出消失：卡片与检查线保持，只藏 hover 悬浮条。
+      // 否则 pinned 保留而卡片隐藏后，pointermove 的 pinned 提前返回会形成死状态。
+      pendingHover = null;
+      hoverEl.hidden = true;
+      return;
+    }
     // 移出隐藏顶层卡片，只隐藏检查线并清空覆盖层，不重绘底图。
     hoverUs = null;
     kbInspect = false;
@@ -1466,8 +1477,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     prefs.layoutMode = s.layoutMode === 'rows' ? 'rows' : 'merged';
     prefs.follow = s.follow;
     prefs.selected = s.selected.filter(x => SLOTS.includes(x as Slot)) as Slot[];
-    // 以当前轨道集合为选择基准，避免后续同集合事件把快照里隐藏的轨道加回来。
-    selectedBuiltFor = JSON.stringify(tracks.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs]));
+    // 以当前轨道身份为选择基准，避免后续元数据事件把快照里隐藏的轨道加回来。
+    for (const e of tracks) knownTrackIds.add(`${e.slot}|${e.mediaId}`);
     save();
     refreshTools();
     pendingAnalysisView = s.view ? { start: s.view.start, end: s.view.end } : null;
@@ -1485,14 +1496,15 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
     }));
     const sig = JSON.stringify(entries.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs]));
-    // 选择集与轨道集合对账（独立于内容签名）：同文件重载签名不变，
-    // 但属于一次新的载入，仍要把轨道默认加入对比；用户手动显隐不触发这里。
-    if (sig !== selectedBuiltFor) {
-      selectedBuiltFor = sig;
-      for (const e of entries) if (!prefs.selected.includes(e.slot)) prefs.selected.push(e.slot);
-      prefs.selected = prefs.selected.filter(s => entries.some(e => e.slot === s));
-      save();
-      refreshTools();
+    // 选择集与轨道身份对账（独立于内容签名）：只有新增身份默认加入对比、
+    // 移除身份清理选择；时长延伸/偏移调整/索引进度不覆盖用户显隐。
+    {
+      const reconciled = reconcileTrackSelection(prefs.selected, entries, knownTrackIds);
+      if (reconciled.changed) {
+        prefs.selected = reconciled.selected as Slot[];
+        save();
+        refreshTools();
+      }
     }
     if (sig !== trackSig) {
       trackSig = sig;
