@@ -95,7 +95,7 @@ function loadPrefs(): Prefs {
   return fallback;
 }
 
-interface TrackEntry { slot: Slot; mediaId: string; offsetUs: number; durationUs: number; name: string }
+interface TrackEntry { slot: Slot; mediaId: string; offsetUs: number; durationUs: number; name: string; sourceGen: number }
 
 export function installAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks): {
   setOpen(open: boolean): void;
@@ -440,9 +440,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         if (signal.aborted || seqBySlot.get(t.slot) !== mySeq) return; // 旧结果不覆盖新图
         const current = tracks.find(e => e.slot === t.slot);
         if (!current || current.mediaId !== mediaId) return; // 换片后旧结果丢弃
-        // 版本隔离：换片/同 slot 换媒体/重开解码路径后旧结果不得覆盖新图。
-        const expectedPrefix = `${current.mediaId}:`;
-        if (!result.sourceVersion.startsWith(expectedPrefix) && result.sourceVersion.split('@')[0] !== current.mediaId) return;
+        // 实例隔离：source 重建（色彩模式切换等）后 mediaId 不变，必须按
+        // session 盖章的 generation+媒体前缀校验，旧实例结果不得上屏。
+        if (!result.sourceVersion.startsWith(`${current.sourceGen}#${current.mediaId}@`)) return;
         results.set(t.slot, result);
         // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
         // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
@@ -1494,8 +1494,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const entries: TrackEntry[] = state.tracks.map(t => ({
       slot: t.slot as Slot, mediaId: t.id as string, offsetUs: t.offsetUs as number,
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
+      sourceGen: (t.sourceGen as number) ?? 0,
     }));
-    const sig = JSON.stringify(entries.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs]));
+    // 内容签名含 source 实例 generation：同 mediaId 重建实例也算内容变化，
+    // 触发结果失效与重查；纯索引进度变化走下方轻量分支。
+    const sig = JSON.stringify(entries.map(e => [e.slot, e.mediaId, e.offsetUs, e.durationUs, e.sourceGen]));
     // 选择集与轨道身份对账（独立于内容签名）：只有新增身份默认加入对比、
     // 移除身份清理选择；时长延伸/偏移调整/索引进度不覆盖用户显隐。
     {
@@ -1511,7 +1514,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       tracks = entries;
       for (const slot of [...results.keys()]) {
         const entry = entries.find(e => e.slot === slot);
-        if (!entry || results.get(slot)?.sourceVersion.split('@')[0] !== entry.mediaId) {
+        // 结果携带 generation#mediaId 盖章：同媒体重建实例的旧结果一并失效。
+        if (!entry || results.get(slot)?.sourceVersion.split('@')[0] !== `${entry.sourceGen}#${entry.mediaId}`) {
           results.delete(slot);
           queriedBySlot.delete(slot);
         }
@@ -1527,10 +1531,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       applyPendingAnalysisView();
       scheduleQuery(true);
     } else {
-      // 索引构建会改变 duration 与能力，轻量跟进。
+      // 索引构建会改变 duration 与能力，轻量跟进。能力比较覆盖完整字段
+      // （hasDts/hasSize 等），不只看 indexState：能力变化同样要求重查。
       const nextCaps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
-      const capSig = JSON.stringify([...nextCaps].map(([s, c]) => [s, c.indexState]));
-      const prevSig = JSON.stringify([...caps].map(([s, c]) => [s, c.indexState]));
+      const capSig = JSON.stringify([...nextCaps]);
+      const prevSig = JSON.stringify([...caps]);
       if (capSig !== prevSig) {
         caps = nextCaps;
         refreshTools();

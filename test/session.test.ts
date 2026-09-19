@@ -974,3 +974,56 @@ test('failed synchronization preserves the old nonzero frame and releases a late
     assert.equal(session.getState().tracks[0].id, 'old');
   } finally { await session.dispose(); }
 });
+
+test('analysis results are stamped with the source instance generation (F4)', async () => {
+  const session = new ReviewSession(() => {});
+  const mk = () => {
+    const m = media('same-id');
+    m.source.queryAnalysis = async q => ({
+      requestId: q.requestId, sourceVersion: 'same-id@3', indexRevision: 3, axis: q.axis,
+      origin: { firstPtsUs: 0, offsetUs: 0 }, samples: [], truncated: false,
+      buckets: [], bitrate: [],
+      capability: { hasSize: true, hasDts: true, keySource: 'container', pictureType: 'key-only', qp: 'unsupported', indexState: 'complete' },
+      coverageUs: { start: 0, end: 200000 },
+    });
+    return m;
+  };
+  try {
+    await session.load('A', async () => mk().source);
+    const gen1 = session.getState().tracks[0].sourceGen;
+    const r1 = await session.queryAnalysis('A', { startUs: 0, endUs: 1000, axis: 'pts', pixelWidth: 32, bitrateWindowUs: 1_000_000 });
+    assert.ok(r1.sourceVersion.startsWith(`${gen1}#same-id@`), `stamped: ${r1.sourceVersion}`);
+    // 同 mediaId 重建实例（色彩模式切换路径保留 info.id）：generation 必须变化。
+    await session.load('A', async () => mk().source);
+    const gen2 = session.getState().tracks[0].sourceGen;
+    assert.notEqual(gen2, gen1);
+    const r2 = await session.queryAnalysis('A', { startUs: 0, endUs: 1000, axis: 'pts', pixelWidth: 32, bitrateWindowUs: 1_000_000 });
+    assert.ok(r2.sourceVersion.startsWith(`${gen2}#`), `stamped: ${r2.sourceVersion}`);
+    // 偏移调整复用同一实例：generation 不变。
+    await session.setTrackOffset('A', 10000);
+    assert.equal(session.getState().tracks[0].sourceGen, gen2);
+  } finally { await session.dispose(); }
+});
+
+test('locateAnalysisSample projects to session time and reports honestly (F2)', async () => {
+  const session = new ReviewSession(() => {});
+  const m = media('m1');
+  m.source.locateAnalysisSample = async id => id === 'm1:v:1' ? {
+    sampleId: id, decodeOrdinal: 1, containerPtsUs: 340000, effectivePtsUs: 40000, dtsUs: 40000,
+    sizeBytes: 400, randomAccess: 'no', pictureType: null, pictureTypeSource: 'unavailable', qp: null,
+  } : null;
+  try {
+    await session.load('A', async () => m.source);
+    await session.setTrackOffset('A', 10000);
+    const found = await session.locateAnalysisSample('A', 'm1:v:1');
+    assert.ok('sample' in found);
+    assert.equal(found.sample.effectivePtsUs, 50000); // 片内 40000 + offset 10000
+    const missing = await session.locateAnalysisSample('A', 'm1:v:999');
+    assert.ok('reason' in missing);
+    // 无 locate 能力的片源如实播报，不回退猜时间。
+    const plain = media('plain');
+    await session.load('B', async () => plain.source);
+    const unsupported = await session.locateAnalysisSample('B', 'plain:v:0');
+    assert.ok('reason' in unsupported);
+  } finally { await session.dispose(); }
+});

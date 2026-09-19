@@ -17,7 +17,10 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up' };
+type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
+  /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
+   * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
+  sourceGen: number };
 export class ReviewSession {
   private openers=new WeakMap<MediaSource,(signal:AbortSignal,onProgress:MediaOpenProgress)=>Promise<MediaSource>>();
   private changingColor=false;
@@ -51,7 +54,7 @@ export class ReviewSession {
         for(const p of prepared){
           p.track.source.onInfoChange=undefined;p.track.source.dispose();
           recordPresentedFrame(p.source,p.frame);
-          this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs});
+          this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs,sourceGen:++this.nextSourceGen});
           this.catalog.set(p.source.info.id,p.source.info);
           p.source.onInfoChange=()=>this.emit();
         }
@@ -69,6 +72,7 @@ export class ReviewSession {
   }
   private order: Slot[] = [...SLOTS];
   private tracks = new Map<Slot, Track>();
+  private nextSourceGen = 0;
   private catalog = new Map<string, MediaInfo>();
   private marks: Mark[] = [];
   private markListeners = new Set<(id: string, document: AnnotationDocument | null) => void>();
@@ -159,7 +163,7 @@ export class ReviewSession {
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: getColorMode()==='reference'?'reference-sdr':'browser-match-approximate',colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
-      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState }] : []; }),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen }] : []; }),
       marks: this.marks,
     });
   }
@@ -218,6 +222,9 @@ export class ReviewSession {
     return {
       ...result,
       requestId,
+      // source 实例 generation 盖章：同 mediaId 重建（色彩模式切换等）后，
+      // 旧实例的异步结果与缓存不得被当成当前实例的数据。
+      sourceVersion: `${track.sourceGen}#${result.sourceVersion}`,
       origin: { firstPtsUs: track.source.info.firstPtsUs, offsetUs },
       samples: result.samples.map(s => ({
         ...s,
@@ -357,7 +364,7 @@ export class ReviewSession {
           if (resume) { ++this.revision; this.stopPlayback?.(); this.stopPlayback = undefined; }
           if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
-          this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, ...(behind ? { syncState: 'catching-up' as const } : {}) });
+          this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, sourceGen: ++this.nextSourceGen, ...(behind ? { syncState: 'catching-up' as const } : {}) });
           this.openers.set(opened,open);
           this.catalog.set(opened.info.id, opened.info);
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
@@ -759,7 +766,7 @@ export class ReviewSession {
           if (!current()) throw new DOMException('工作区导入已取消。', 'AbortError');
           const info = document.media.find(m => m.id === track.mediaId)!;
           const source = await open(info);
-          next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs });
+          next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs, sourceGen: ++this.nextSourceGen });
           await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
