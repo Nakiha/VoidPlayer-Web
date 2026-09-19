@@ -34,6 +34,28 @@ test('窗口跨未覆盖区间时返回 null 而不是偏低码率', () => {
   assert.equal(r.provisional, true);
 });
 
+test('评价中心落在媒体边界之外时不断言码率（多轨片尾尖峰回归）', () => {
+  // 30fps、尾部 300KB 大关键帧：片内约 0.45Mbps；旧逻辑在片外残窗里按残长
+  // 归一化，能膨胀到 30+Mbps 并画到最后一帧之外。
+  const N = 60;
+  const times = new Float64Array(Array.from({ length: N }, (_, i) => Math.round((i * 1e6) / 30)));
+  const sizes = new Float64Array(N).fill(2000);
+  sizes[N - 1] = 300_000;
+  const prefix = buildBytePrefixSum(sizes);
+  const bounds = { start: 0, end: 2_000_000 };
+  const cov = [{ start: 0, end: 2_000_000 }];
+  const interior = bitrateAt(1_000_000, times, prefix, 250_000, bounds, cov);
+  assert.ok(interior.mbps !== null && interior.mbps < 1, `interior=${interior.mbps}`);
+  for (const t of [2_000_000, 2_050_000, 2_100_000]) {
+    const r = bitrateAt(t, times, prefix, 250_000, bounds, cov);
+    assert.equal(r.mbps, null, `t=${t} mbps=${r.mbps}`);
+  }
+  // 起始侧镜像：中心在边界外同样不输出。
+  assert.equal(bitrateAt(-50_000, times, prefix, 250_000, bounds, cov).mbps, null);
+  // 边界内最后一刻仍有值，不误伤合法尾部。
+  assert.ok(bitrateAt(1_999_999, times, prefix, 250_000, bounds, cov).mbps !== null);
+});
+
 test('累计超过 4GiB 不回绕', () => {
   const sizes = new Float64Array([3 * 1024 ** 3, 2 * 1024 ** 3]);
   const prefix = buildBytePrefixSum(sizes);

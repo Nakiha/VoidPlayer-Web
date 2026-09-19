@@ -28,6 +28,16 @@ select { max-width: 100%; }
 .topbar .add-video:hover:not(:disabled) { color: var(--accent); background: var(--surface-selected); }
 .topbar .add-video:disabled { cursor: default; }
 .brand { font-size: var(--text-brand); font-weight: 600; letter-spacing: -.4px; margin-right: var(--control-gap); white-space: nowrap; }
+/* 品牌按钮：外观保持纯文字，点击进设置关于页；悬停只变主题色，不套按钮底。 */
+button.brand { border: 0; background: transparent; padding: 0; min-height: 0; border-radius: var(--radius-small); gap: 0; }
+/* 产品标题特殊处理：悬停不变底色（盖掉全局 button:hover 的 surface-hover），只留手形 + 字母动效。 */
+button.brand:hover:not(:disabled) { background: transparent; }
+/* 产品名滚动字母：悬停时每个字母向上滚动翻出主题色副本，逐字母错峰；
+   reduce 模式下全局停过渡，变为即时切换。 */
+button.brand .brand-ch { display: inline-block; height: 1.3em; overflow: hidden; line-height: 1.3; }
+button.brand .brand-ch > span { display: block; height: 1.3em; line-height: 1.3; transition: transform .5s cubic-bezier(.76, 0, .24, 1); transition-delay: calc(var(--i) * 30ms); }
+button.brand .brand-ch > span + span { color: var(--accent); }
+button.brand:hover .brand-ch > span { transform: translateY(-100%); }
 .topbar > .icon-button { border-color: transparent; background: transparent; }
 .view-controls, .panel-switches { display: flex; align-items: center; gap: var(--control-gap); }
 .panel-switches { padding-left: 0; }
@@ -319,7 +329,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 /* Empty on the right: the strip hugs the left tools instead of stretching. */
 .subtracks-panel.annotations-empty { grid-template-rows: minmax(0, 1fr) auto; }
 .annotation-strip { display: flex; align-items: stretch; min-width: 0; min-height: 0; background: var(--surface-panel); padding: 4px; gap: 4px; }
-.annotation-strip-tools { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 0 auto; }
+.annotation-strip-tools { display: flex; flex-direction: column-reverse; align-items: center; gap: 4px; flex: 0 0 auto; }
 .annotation-strip-tools .icon-button { background: transparent; color: var(--text-secondary); }
 #toggle-marks[aria-expanded=true] { color: var(--accent); }
 .marks-collapsed .annotation-strip-tools { flex-direction: row; }

@@ -172,11 +172,13 @@ export function executeSortedQuery(
     else bucket.unknownCount++;
   }
   // 轴相关的媒体边界与覆盖：DTS 合法为负，不得沿用 PTS 的 {0, duration} 排除首包。
+  // 结束端取容器时长与实际最大样本时间的较大值：时长偏短时尾帧仍是合法评价
+  // 中心，不得被中心越界规则误判成片外空洞。
   const axisMin = times.length ? times[0] : startUs;
   const axisMax = times.length ? times[times.length - 1] : endUs;
   const mediaBounds = query.axis === 'dts'
     ? { start: Math.min(0, axisMin), end: Math.max(ctx.durationUs, axisMax) }
-    : { start: 0, end: ctx.durationUs };
+    : { start: 0, end: Math.max(ctx.durationUs, axisMax) };
   let coverage = ctx.coverageUs ? [{ start: ctx.coverageUs.start, end: ctx.coverageUs.end }] : null;
   if (query.axis === 'dts' && coverage && times.length && ctx.capability.indexState === 'complete') {
     // 完整索引下 DTS 覆盖扩展到实际最小/最大解码时间，保留负时间。

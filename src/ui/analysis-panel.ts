@@ -260,7 +260,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   let viewRaf = 0;
-  /** 高频手势（滚轮/捏合）合并为一帧一次重绘；数据查询仍走 120ms 防抖。 */
+  /** 高频手势（滚轮/捏合）合并为一帧一次重绘；数据查询走 100ms 节流。 */
   function requestRender() {
     if (viewRaf || signal.aborted) return;
     viewRaf = requestAnimationFrame(() => { viewRaf = 0; if (!signal.aborted) render(); });
@@ -346,12 +346,32 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   // ---- 查询 ----
   // 离散动作（点击/菜单/框选）用 immediate=true：数据 2~30ms 就到；
-  // 高频手势（滚轮/尺寸）走 120ms trailing 防抖，只重绘缓存数据。
+  // 高频手势（滚轮/捏合）走节流：缓存 miss 时最多 100ms 发一次查询（abort 旧查），
+  // 命中只重绘缓存；trailing 保证停下后补齐最后一帧。
+  const QUERY_THROTTLE_MS = 100;
+  const CURVE_MARGIN_RATIO = 0.25;
+  let lastQueryMs = 0;
   function scheduleQuery(immediate = false) {
     if (!open) return;
+    if (immediate) {
+      window.clearTimeout(queryTimer);
+      lastQueryMs = performance.now();
+      void refresh();
+      return;
+    }
+    const now = performance.now();
+    const elapsed = now - lastQueryMs;
+    if (elapsed >= QUERY_THROTTLE_MS) {
+      window.clearTimeout(queryTimer);
+      lastQueryMs = now;
+      void refresh();
+      return;
+    }
     window.clearTimeout(queryTimer);
-    if (immediate) { void refresh(); return; }
-    queryTimer = window.setTimeout(() => void refresh(), 120);
+    queryTimer = window.setTimeout(() => {
+      lastQueryMs = performance.now();
+      void refresh();
+    }, QUERY_THROTTLE_MS - elapsed);
   }
 
   /**
@@ -395,16 +415,19 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 预取 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
     // margin 至少覆盖局部帧率的半个统计窗口：深度放大后视口不足 1s，
     // 否则检查器拿到的样本覆盖不了自己的 1s 邻域（口径随缩放漂移）。
-    // R1 解耦：样本/桶走 halo 区间（qStart/qEnd/qPix），码率曲线走可视区间
-    // （vStart/vEnd/pixelWidth），避免 halo + 4096 封顶摊薄可视曲线的密度。
+    // 样本/桶走 halo 区间（qStart/qEnd/qPix），码率曲线走小 margin 预载区间
+    // （cStart/cEnd/cPix，可视 ±0.25span，按比例放大像素数保证 usPerPixel 不变）；
+    // 绘制层统一按可视裁剪，缓存层分别比较覆盖与密度。
     const full = span >= db.end - db.start;
     const margin = Math.max(span * 0.5, LOCAL_RATE_WINDOW_US / 2);
     const qStart = full ? range.start : Math.max(db.start, Math.floor(range.start - margin));
     const qEnd = full ? range.end : Math.min(db.end, Math.ceil(range.end + margin));
     // 大 CSS 宽度 + 预取 margin 不得产生 pixelWidth>4096 的查询异常。
     const qPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (qEnd - qStart) / span));
-    const vStart = Math.floor(range.start);
-    const vEnd = Math.ceil(range.end);
+    const curveMargin = full ? 0 : span * CURVE_MARGIN_RATIO;
+    const cStart = full ? Math.floor(range.start) : Math.max(db.start, Math.floor(range.start - curveMargin));
+    const cEnd = full ? Math.ceil(range.end) : Math.min(db.end, Math.ceil(range.end + curveMargin));
+    const cPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (cEnd - cStart) / span));
     const visibleBucketW = bucketWidthFor(range.start, range.end, pixelWidth);
     for (const t of selectedTracks()) {
       const cap = caps.get(t.slot);
@@ -420,7 +443,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
           axis: prefs.axis, windowUs: prefs.windowUs, offsetUs: t.offsetUs,
           pixelWidth: qPix, needRaw, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
-          curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
+          curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
         });
         // 可见区 LOD 也要满足：粗桶覆盖预取区不代表可见区够细。
         const visibleOk = !needRaw || cover.detailMode === 'raw';
@@ -439,7 +462,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
         axis: prefs.axis, pixelWidth: qPix, bitrateWindowUs: prefs.windowUs, maxSamples: MAX_SAMPLES,
         bucketOriginUs: 0,
-        curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
+        curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
         signal: controller.signal,
       }).then(result => {
         if (abortBySlot.get(t.slot) === controller) abortBySlot.delete(t.slot);
@@ -462,7 +485,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             pixelWidth: qPix, offsetUs: t.offsetUs,
             detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
             truncated: result.truncated, sampleCount: result.samples.length,
-            curveStartUs: vStart, curveEndUs: vEnd, curvePixelWidth: pixelWidth,
+            curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
           });
           // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
         } else {

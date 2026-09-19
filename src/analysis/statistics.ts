@@ -60,7 +60,9 @@ function coveredLength(ranges: CoverageRange[] | null, start: number, end: numbe
 /**
  * 单点滑窗码率。窗口 I(t) = [t - w/2, t + w/2)，与已确认媒体边界求交后按
  * 实际覆盖时长归一化并标记 shortWindow；窗口跨未覆盖区间时返回 null（不断
- * 言偏低的码率）。缩放显示抽样不得改变 w 的定义。
+ * 言偏低的码率）。评价中心 t 落在媒体边界之外时直接返回 null：此时求交只剩
+ * 小残片，按残长归一化会把尾部大帧放大成尖峰并画到片尾之外。
+ * 缩放显示抽样不得改变 w 的定义。
  */
 export function bitrateAt(
   tUs: number,
@@ -72,6 +74,9 @@ export function bitrateAt(
 ): { mbps: number | null; shortWindow: boolean; provisional: boolean } {
   if (!Number.isFinite(tUs) || !(windowUs > 0)) return { mbps: null, shortWindow: false, provisional: true };
   const half = windowUs / 2;
+  if (mediaBounds && (tUs < mediaBounds.start || tUs >= mediaBounds.end)) {
+    return { mbps: null, shortWindow: true, provisional: false };
+  }
   let a = tUs - half, b = tUs + half;
   let shortWindow = false;
   if (mediaBounds) {

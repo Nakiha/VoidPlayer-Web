@@ -5,12 +5,15 @@ import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import type { Slot } from '../model.ts';
 
-const panelButton = (id: string, label: string, glyph: 'sidebar' | 'rows' | 'chart', extra = '') =>
+const panelButton = (id: string, label: string, glyph: 'info' | 'chart' | 'rows' | 'film', extra = '') =>
   iconButton({ glyph, label, iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
 
 export function shell() {
+  // 产品名滚动字母：每个字母包两份拷贝（原文 + 主题色），悬停时逐个向上翻出。
+  const brandLetters = 'VoidPlayer'.split('').map((ch, i) =>
+    `<span class="brand-ch" aria-hidden="true" style="--i:${i}"><span>${ch}</span><span>${ch}</span></span>`).join('');
   return `<header class="topbar glass">
-    <span class="brand">VoidPlayer</span>
+    <button id="brand-about" class="brand" aria-label="关于 VoidPlayer">${brandLetters}</button>
     <div class="view-controls" role="group" aria-label="视图布局">
       <div class="segmented" id="layout-mode" role="group" aria-label="对比布局"><button type="button" data-mode="side-by-side" aria-pressed="true" disabled>并排</button><button type="button" data-mode="split" aria-pressed="false" disabled>分屏</button></div>
       ${iconButton({ glyph: 'grid', label: '切换为田字布局', tooltip: '田字排列轨道', attributes: { id: 'arrangement' } })}
@@ -23,15 +26,15 @@ export function shell() {
     <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
     <div class="panel-switches" role="group" aria-label="工作区功能">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
-      ${panelButton('inspector', '轨道检查', 'sidebar')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'sidebar', 'mirror')}${panelButton('analysis', '码流分析', 'chart')}
+      ${panelButton('inspector', '轨道信息', 'info')}${panelButton('analysis', '码流分析', 'chart')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'film')}
     </div>
     <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
   </header>
 <output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" class="icon-button" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
   <main><div id="notice" role="alert" hidden><span id="notice-message"></span><button id="notice-logs" type="button" aria-haspopup="dialog" aria-controls="settings">日志</button></div>
-    <div class="workspace" id="workspace"><div id="sources-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整片源宽度" aria-orientation="vertical" aria-controls="sources-panel"></div><div id="inspector-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整轨道检查宽度" aria-orientation="vertical" aria-controls="inspector-panel"></div>
-      <aside id="inspector-panel" class="side-panel inspector-panel glass" aria-label="轨道检查" hidden>
-        <header class="panel-heading"><h2>轨道</h2><button data-close-panel="inspector" class="icon-button" aria-label="收起轨道检查">${icon('sidebar')}</button></header>
+    <div class="workspace" id="workspace"><div id="sources-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整片源宽度" aria-orientation="vertical" aria-controls="sources-panel"></div><div id="inspector-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整轨道信息宽度" aria-orientation="vertical" aria-controls="inspector-panel"></div>
+      <aside id="inspector-panel" class="side-panel inspector-panel glass" aria-label="轨道信息" hidden>
+        <header class="panel-heading"><h2>轨道</h2><button data-close-panel="inspector" class="icon-button" aria-label="收起轨道信息">${icon('sidebar')}</button></header>
         <div id="track-selector" class="track-selector" role="group" aria-label="选择检查轨道"></div>
         <div id="track-properties" class="track-properties"></div>
       </aside>

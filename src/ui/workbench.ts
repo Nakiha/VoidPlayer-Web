@@ -62,7 +62,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const open = view.panels[panel];
       panelMotion.set(panel, open);
       $(`toggle-${panel}`).setAttribute('aria-expanded', String(open));
-      $(`toggle-${panel}`).title = `${open ? '收起' : '展开'}${{ inspector: '轨道检查', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
+      $(`toggle-${panel}`).title = `${open ? '收起' : '展开'}${{ inspector: '轨道信息', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
 
     }
     analysis.setOpen(view.panels.analysis);

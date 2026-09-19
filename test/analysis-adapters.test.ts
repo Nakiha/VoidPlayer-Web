@@ -111,3 +111,28 @@ test('桶峰值按身份有界定位：不依赖 raw 是否在视口查询里返
   assert.equal(locateSampleById(packets, ctx.mediaId, ctx.firstPtsUs, 'm1:v:-1'), null);
   assert.equal(locateSampleById(packets, ctx.mediaId, ctx.firstPtsUs, 'garbage'), null);
 });
+
+test('曲线采样超出片长时尾部断开不断言尖峰（多轨片尾回归）', () => {
+  // A 轨 2s 结束、B 轨更长时，A 的曲线查询区间会伸到片外；片外点必须为 null，
+  // 片内最大值保持正常量级（不被残窗归一化抬成 2000Mbps 级尖峰）。
+  const N = 60;
+  const tail = Array.from({ length: N }, (_, i) => ({
+    pts: Math.round((i * 1e6) / 30), dts: Math.round((i * 1e6) / 30),
+    size: 2000, key: false,
+  }));
+  tail[N - 1] = { ...tail[N - 1], size: 300_000, key: true };
+  const twoSec: SourceQueryContext = {
+    ...ctx, durationUs: 2_000_000, coverageUs: { start: 0, end: 2_000_000 },
+  };
+  const r = runSourceQuery(tail, twoSec, {
+    requestId: 9, axis: 'pts', startUs: 0, endUs: 2_000_000, pixelWidth: 100, bitrateWindowUs: 250_000,
+    curveStartUs: 1_800_000, curveEndUs: 2_200_000, curvePixelWidth: 100,
+  });
+  assert.ok(r.bitrate && r.bitrate.length > 0);
+  const outside = r.bitrate.filter(p => p.tUs >= 2_000_000);
+  assert.ok(outside.length > 0, 'curve extends past duration');
+  assert.ok(outside.every(p => p.mbps == null), `outside=${outside.map(p => `${p.tUs}:${p.mbps}`).join(',')}`);
+  const inside = r.bitrate.filter(p => p.tUs < 2_000_000 && p.mbps != null).map(p => p.mbps as number);
+  assert.ok(inside.length > 0);
+  assert.ok(Math.max(...inside) < 100, `max inside=${Math.max(...inside)}`);
+});

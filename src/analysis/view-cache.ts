@@ -17,7 +17,7 @@ export interface ViewCacheEntry {
   bucketWidthUs: number;
   truncated: boolean;
   sampleCount: number;
-  /** 曲线采样区间（可视区间）与密度；缺省复用 start/end/pixelWidth（旧缓存兼容）。 */
+  /** 曲线采样区间（含小 margin 预载，不等于可视区间）；缺省复用 start/end/pixelWidth（旧缓存兼容）。 */
   curveStartUs?: number;
   curveEndUs?: number;
   curvePixelWidth?: number;
@@ -66,8 +66,9 @@ export function detailModeFor(truncated: boolean, sampleCount: number): DetailMo
  *    重算派生数据：桶网格与码率采样步长必须和桶缓存一样分别比较；
  * 5. 只比较点数不够，必须比较时间分辨率/桶宽；
  * 6. 未知/暂定区间不可因命中变成完整（调用方不得缓存 building 结果）。
- * 7. 统计样本区间（halo）与曲线采样区间（可视）分别覆盖、分别比较密度：
- *    halo 保证 1s 帧率窗口，曲线保证可视码率点不被摊薄。
+ * 7. 统计样本区间（halo，0.5span）与曲线采样区间（小 margin 预载，
+ *    可视 ±0.25span）分别覆盖、分别比较密度：
+ *    halo 保证 1s 帧率窗口，曲线预载保证小幅滚动不重查且不被摊薄。
  */
 export function canSatisfy(cached: ViewCacheEntry, requested: ViewCacheRequest): boolean {
   if (cached.axis !== requested.axis) return false;
