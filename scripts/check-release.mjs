@@ -188,7 +188,7 @@ try {
   assert.equal((await fetch(url, { headers: { range: `bytes=${bytes.length}-` } })).status, 416);
   const controller = new AbortController(); const streaming = await fetch(url, { signal: controller.signal }); await streaming.body.getReader().read(); controller.abort();
   assert.equal((await fetch(base + '/api/ready')).status, 200);
-  const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'release-test' }) }); assert.equal(uploaded.status, 201);
+  const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'log' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'release-test' }) }); assert.equal(uploaded.status, 201);
   assert.equal((await readdir(path.join(data, 'logs'))).length, 1);
   const receivedLogs = await (await fetch(base + '/api/admin/logs')).json();
   assert.equal(receivedLogs.entries.length, 1);

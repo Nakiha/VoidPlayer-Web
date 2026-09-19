@@ -69,7 +69,7 @@ try {
  await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.state==='saved');
  const retried=await b.request.get(base+'/api/annotations/spaces/default').then(r=>r.json());assert.equal(retried.entries.find(e=>e.id===retry.id).revision,1);await b.unroute('**/api/annotations/spaces/default');
  // Generate a real thumbnail through the editor and verify it reaches the cache separately.
- await b.locator('.brand').click();await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
+ await b.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
  const rectangle=await b.locator('#drawing-A').boundingBox();await b.mouse.move(rectangle.x+rectangle.width*.2,rectangle.y+rectangle.height*.2);await b.mouse.down();await b.mouse.move(rectangle.x+rectangle.width*.4,rectangle.y+rectangle.height*.5,{steps:6});await b.mouse.up();await b.locator('#mark-close').click();
  const previews=await until(()=>b.request.get(base+'/api/admin/caches/annotation-previews').then(r=>r.json()),page=>page.entries.length>0);const preview=previews.entries[0];
  const response=await b.request.get(base+preview.previewUrl);assert.equal(response.status(),200);assert.ok((await response.body()).length<128*1024);

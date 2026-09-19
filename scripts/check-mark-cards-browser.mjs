@@ -12,7 +12,7 @@ try {
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  const lib=await call('list_library');await call('load_library_item',{slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});
  for (const ptsUs of [0,1083000,3000000]) {
-  await call('seek_review',{ptsUs});await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
+  await call('seek_review',{ptsUs});await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
   const r=await page.locator('#drawing-A').boundingBox();await page.mouse.move(r.x+r.width*.2,r.y+r.height*.2);await page.mouse.down();await page.mouse.move(r.x+r.width*.4,r.y+r.height*.5,{steps:6});await page.mouse.up();
   await page.waitForTimeout(220);await page.locator('#mark-close').click();
  }

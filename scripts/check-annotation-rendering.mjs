@@ -14,7 +14,7 @@ try {
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name]of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv422p_8bit.mkv']]) await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
  await page.locator('#toggle-sources').click();
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4.568,offsetX:-52,offsetY:-81}));
- await page.locator('.brand').click(); await page.keyboard.press('n');
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
  await page.locator('[data-drawing-tool=rect]').click();
  const b=await page.locator('#image-B').boundingBox();
  await page.mouse.move(b.x+b.width*.25,b.y-b.height*.2);await page.mouse.down();await page.mouse.move(b.x+b.width*.6,b.y+b.height*1.2,{steps:10});await page.mouse.up();
@@ -105,7 +105,7 @@ async function checkWorkspace(browser, url) {
    return page.evaluate(async bytes=>{const bitmap=await createImageBitmap(new Blob([new Uint8Array(bytes)],{type:'image/png'}));const c=document.createElement('canvas');c.width=bitmap.width;c.height=bitmap.height;const ctx=c.getContext('2d');ctx.drawImage(bitmap,0,0);bitmap.close();const pixels=ctx.getImageData(0,0,c.width,1).data;let red=0;for(let i=0;i<pixels.length;i+=4)if(pixels[i]>190 && pixels[i+1]<130 && pixels[i+2]<130)red++;return red/devicePixelRatio;},[...png]);
  }
  assert.ok(await redWidth(first.x,first.y+30)>=3,'saved stroke renders outside the video');
- await page.locator('.brand').click(); await page.keyboard.press('n');await deselect();await page.mouse.click(first.x+40,first.y+40);
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');await deselect();await page.mouse.click(first.x+40,first.y+40);
  assert.equal(await page.locator('#drawing-B [data-corner]').count(),8,'out-of-frame object can be reopened');
  // A drawing tool must still create nested objects despite the enlarged hit area.
  await page.locator('[data-drawing-tool=rect]').click();await drag([first.x+15,first.y+20],[first.x+50,first.y+60]);

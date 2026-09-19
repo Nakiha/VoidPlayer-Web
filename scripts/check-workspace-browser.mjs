@@ -17,7 +17,7 @@ try {
  for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv444p10le.mkv']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
  await call('set_review_track_offset',{slot:'B',offsetUs:300000});await call('seek_review',{ptsUs:1000000});
  await call('add_review_mark',{slot:'A',text:'Round trip',drawings:[{id:'rectangle',tool:'rect',color:'#ff3b30',strokeWidth:4,points:[{x:.2,y:.2},{x:.6,y:.5}]}]});
- await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
  const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.1,stage.y+stage.height*.1);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.3,stage.y+stage.height*.3,{steps:4});await page.mouse.up();await page.waitForTimeout(250);await page.locator('#mark-close').click();
  await call('reorder_review_tracks',{order:['B','A']});
  await page.locator('#toggle-subtracks').click();await page.locator('#toggle-marks').click();

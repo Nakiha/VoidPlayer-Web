@@ -27,7 +27,7 @@ try{
      }
    }
  }
- await call('seek_review',{ptsUs:1483000});await page.locator('.brand').click();
+ await call('seek_review',{ptsUs:1483000});await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
  await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===1500000);
  await page.keyboard.press('ArrowLeft');await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs<1500000);
  await page.locator('#next').click();await page.waitForFunction(()=>!window.voidPlayer.getState().busy && window.voidPlayer.getState().positionUs===1500000);

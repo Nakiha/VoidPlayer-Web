@@ -11,6 +11,7 @@ try {
   const page=await browser.newPage({viewport:{width:1280,height:800}});
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.waitForFunction(() => window.voidPlayer);
   await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
   const playing=()=>page.evaluate(()=>window.voidPlayer.getState().playing);
   // Real key down/up: Space must not generate a click on the focused action.
@@ -50,7 +51,7 @@ try {
   await page.locator('#toggle-sources').click();await page.locator('#sources-search-toggle').click();await page.locator('#source-search').fill('sample');
   await page.keyboard.press('Space');assert.equal(await page.locator('#source-search').inputValue(),'sample ');assert.equal(await playing(),false);
   await page.locator('#toggle-sources').click();
-  await page.locator('.brand').click();await page.keyboard.press('n');
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');
   await page.locator('[data-drawing-tool=text]').click();await page.mouse.click(250,240);
   const text=page.locator('[contenteditable=true]');await text.fill('hello');await page.keyboard.press('Space');await page.keyboard.type('world');
   assert.equal(await text.innerText(),'hello world');assert.equal(await playing(),false);

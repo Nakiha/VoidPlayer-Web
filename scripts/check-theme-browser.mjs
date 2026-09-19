@@ -29,7 +29,7 @@ try {
  const lib=await call('list_library');
  for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','h264_9s_1920x1080.mp4']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
  for(const id of ['toggle-inspector','toggle-sources','toggle-subtracks'])await page.locator(`#${id}`).click();
- await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
  const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.5,stage.y+stage.height*.55,{steps:5});await page.mouse.up();
  await page.waitForTimeout(220);await page.locator('#mark-close').click();await page.locator('#toggle-marks').click();
  const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:window.voidPlayer.captureFrame('A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
@@ -62,7 +62,7 @@ try {
   await page.screenshot({path:`/tmp/voidplayer-theme-${mode}-${name}.png`});
  };
  await screenshots('light');await screenshots('dark');
- await page.locator('.brand').click();await page.keyboard.press('n');await page.locator('#drawing-color-choice').click();
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('#drawing-color-choice').click();
  await page.screenshot({path:`/tmp/voidplayer-theme-palette-${name}.png`});
  assert.equal(await page.locator('#drawing-color-choice-menu').evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'blur(8px)');
  await page.keyboard.press('Escape');await page.locator('#mark-close').click();

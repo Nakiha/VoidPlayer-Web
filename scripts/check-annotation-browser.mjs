@@ -16,7 +16,7 @@ try {
     const lib = await tool('list_library').execute({});
     await tool('load_library_item').execute({ id: lib.entries.find(e => e.name === 'ci_h264_smoke.mp4').id, slot: 'A' });
   });
-  await page.locator('.brand').click(); await page.keyboard.press('n');
+  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
   const box = await page.locator('#drawing-A').boundingBox();
   const point = (x, y) => [box.x + box.width * x, box.y + box.height * y];
   async function drag(a, b) { await page.mouse.move(...point(...a)); await page.mouse.down(); await page.mouse.move(...point(...b), { steps: 12 }); await page.mouse.up(); }

@@ -119,7 +119,14 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   if(timing.count%32===0){const sorted=[...values].sort((a,b)=>a-b);source.dataset.colorPerformance=JSON.stringify({submitP50:sorted[Math.floor(sorted.length*.5)],submitP95:sorted[Math.floor(sorted.length*.95)],submitMax:sorted.at(-1)});}
   return true;
 }
-export function gpuCapture(source:HTMLCanvasElement){const entry=entries.get(source);return entry&&!entry.disabled?entry.surface.captureSource(source):undefined;}
+export function gpuCapture(source:HTMLCanvasElement){
+  const entry=entries.get(source);if(!entry||entry.disabled)return undefined;
+  // The entry can be committed before the first GPU paint (async init racing
+  // a paused frame): with no presented frame the 2D canvas already holds the
+  // pixels, so fall back instead of throwing. Other capture errors propagate.
+  try{return entry.surface.captureSource(source);}
+  catch(error){if(error instanceof Error&&error.message==='No frame')return undefined;throw error;}
+}
 export function disposeGpuPresentation(){
   // 显式释放同样使在途初始化失效；旧任务迟到只清理自己，不再全局清理。
   gpuGuard.invalidate();
