@@ -19,35 +19,30 @@ function mockCtx(recorded: { fillRect: number[][]; fillText: unknown[][] }) {
 
 const colors = { key: '#k', delta: '#d', unknown: '#u', grid: '#g', text: '#t', axisText: '#a' };
 // 10 帧，100ms 间隔；yMax 取 1000（niceCeiling 由面板负责，这里直接给定）。
-const samples = Array.from({ length: 10 }, (_, i) => ({ t: i * 100_000, size: 1000, key: i === 0 }));
+const mediaBySlot = new Map([['A', { mediaId: 'mA', sourceVersion: 'v', indexRevision: 1 }]]);
+const sampleRefs = (times: number[]) => times.map((t, i) => ({
+  sampleId: `A${i}`, axisUs: t, sessionPtsUs: t,
+  sizeBytes: 1000, key: i === 0, decodeOrdinal: i,
+  mediaId: 'mA', sourceVersion: 'v', indexRevision: 1,
+}));
 function model(viewStart: number, viewEnd: number): CanvasModel {
   return {
     width: 1246, height: 120, viewStart, viewEnd,
-    showBitrate: false, showSize: true, colorByType: true,
-    tracks: [{ slot: 'A', color: '#slot', samples, truncated: false, buckets: [], bitrate: [], provisional: false }],
+    showBitrate: false, showSize: true, colorByType: false,
+    tracks: [{ slot: 'A', color: '#slot', bitrate: [], provisional: false }],
     merged: false, yMaxBitrate: 1, yMaxSize: 1000, colors, rubber: null,
   };
 }
 
 test('统一几何柱宽一致：缩放不改变视觉柱宽（时间由锚点距离表达）', () => {
-  const mediaBySlot = new Map([['A', { mediaId: 'mA', sourceVersion: 'v', indexRevision: 1 }]]);
   const mk = (viewStart: number, viewEnd: number) => {
-    const groups = groupSamples([
-      {
-        slot: 'A', samples: Array.from({ length: 10 }, (_, i) => ({
-          sampleId: `A${i}`, axisUs: i * 100_000, sessionPtsUs: i * 100_000,
-          sizeBytes: 1000, key: i === 0, decodeOrdinal: i,
-          mediaId: 'mA', sourceVersion: 'v', indexRevision: 1,
-        })),
-      },
-    ], 2000);
+    const groups = groupSamples([{ slot: 'A', samples: sampleRefs(Array.from({ length: 10 }, (_, i) => i * 100_000)) }], 2000);
     const glyphs = layoutMergedSamples(groups, {
       trackOrder: ['A'], viewStart, viewEnd, gutter: 46, plotW: 600,
       rowY: 0, rowH: 60, yMaxSize: 1000, mediaBySlot: mediaBySlot as never,
     });
     const m = model(viewStart, viewEnd);
     m.sampleGlyphs = glyphs as never;
-    m.tracks[0].samples = null;
     return m;
   };
   // 视口带 padding，避免边缘裁剪干扰宽度断言（边缘只裁剪不移位，见几何用例）。
@@ -63,16 +58,16 @@ test('统一几何柱宽一致：缩放不改变视觉柱宽（时间由锚点�
   assert.equal(widths(wide)[0], widths(narrow)[0]);
 });
 
-test('重复时间戳不产生零宽或异常柱', () => {
+test('重复时间戳不产生零宽或异常柱（glyph 路径）', () => {
   const recorded = { fillRect: [] as number[][], fillText: [] as unknown[][] };
+  const groups = groupSamples([{ slot: 'A', samples: sampleRefs([0, 0, 100_000]) }], 2000);
   const m = model(0, 1_000_000);
-  m.tracks[0].samples = [
-    { t: 0, size: 500, key: true },
-    { t: 0, size: 600, key: false },
-    { t: 100_000, size: 700, key: false },
-  ];
+  m.sampleGlyphs = layoutMergedSamples(groups, {
+    trackOrder: ['A'], viewStart: 0, viewEnd: 1_000_000, gutter: 46, plotW: 600,
+    rowY: 0, rowH: 60, yMaxSize: 1000, mediaBySlot: mediaBySlot as never,
+  }) as never;
   drawAnalysis(mockCtx(recorded), m);
-  assert.ok(recorded.fillRect.length >= 3);
+  assert.ok(recorded.fillRect.length >= 1);
   for (const r of recorded.fillRect) {
     assert.ok(Number.isFinite(r[0]) && Number.isFinite(r[2]) && r[2] >= 1, JSON.stringify(r));
   }

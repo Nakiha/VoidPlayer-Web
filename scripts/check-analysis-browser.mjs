@@ -21,6 +21,8 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await (engineName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  // 测试快照钩子只在 QA 显式启用时构建，生产 hover 不为测试付费。
+  await page.addInitScript(() => { window.__vpAnalysisQA = true; });
   page.setDefaultTimeout(30000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

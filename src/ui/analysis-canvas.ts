@@ -2,24 +2,10 @@
 // DOM 负责工具条/tooltip/可访问文本；Canvas 只画高密度柱、线、网格。
 // 播放游标与悬停线是独立 DOM 覆盖层，只做 transform，不触发重绘。
 
-export interface CanvasSample {
-  t: number;
-  size: number;
-  key: boolean | null;
-  /** 成对并排时的组锚定时间（共同时间）；缺省用 t。 */
-  gx?: number;
-}
-export interface CanvasBucket {
-  startUs: number; endUs: number; count: number; sumBytes: number; maxBytes: number;
-  keyCount: number; deltaCount: number; unknownCount: number; complete: boolean;
-}
 export interface CanvasBitrate { t: number; mbps: number | null }
 export interface CanvasTrack {
   slot: string;
   color: string;
-  samples: CanvasSample[] | null;
-  truncated: boolean;
-  buckets: CanvasBucket[];
   bitrate: CanvasBitrate[];
   provisional: boolean;
 }
@@ -35,23 +21,18 @@ export interface CanvasModel {
   showBitrate: boolean;
   showSize: boolean;
   colorByType: boolean;
-  /** 帧大小纵轴：默认线性；对数为共同 log10(1+v) 基准。 */
-  logScale?: boolean;
   tracks: CanvasTrack[];
   /**
    * 合并显示：多轨同一基线按时间交错，不以严格配对为前提；
    * 缺席留空，不复制。分轨由用户主动选择。
-   * 保留 `paired` 别名以兼容旧测试/旧偏好读取，语义同 merged。
    */
   merged: boolean;
-  /** @deprecated 用 merged；保留只为兼容旧调用。 */
-  paired?: boolean;
   yMaxBitrate: number;
   yMaxSize: number;
   colors: CanvasColors;
   /** 框选橡皮筋（会话时间），绘制时覆盖。 */
   rubber: { a: number; b: number } | null;
-  /** 统一几何的逐样本/桶 glyph（绘图与命中共用）；提供时优先绘制，不再各轨自算组宽。 */
+  /** 统一几何的逐样本/桶 glyph：绘图与命中只消费这一份 rect。 */
   sampleGlyphs?: import('./analysis-geometry.ts').SampleGlyph[];
   bucketGlyphs?: import('./analysis-geometry.ts').BucketGlyph[];
 }
@@ -72,12 +53,10 @@ export function plotGeometry(widthCss: number): { gutter: number; plotW: number;
   return { gutter: GUTTER, plotW: Math.max(1, width - GUTTER), width };
 }
 
-const isMerged = (model: CanvasModel): boolean => model.merged || !!model.paired;
-
 export function computeLayout(model: CanvasModel): CanvasGeom {
   const axisY = model.height - AXIS_H;
   const plotH = Math.max(0, axisY);
-  const merged = isMerged(model);
+  const merged = model.merged;
   const sizeRowCount = model.showSize ? (merged ? 1 : Math.max(1, model.tracks.length)) : 0;
   let bitrateH = 0;
   if (model.showBitrate) {
@@ -135,27 +114,6 @@ function barColor(model: CanvasModel, key: boolean | null, slotColor: string): s
   return model.colors.unknown;
 }
 
-/** 数据与刻度共用的纵轴映射：零在下，上限在上（与 geometry 一致）。 */
-export function valueToY(rowY: number, rowH: number, value: number, yMax: number, logScale = false): number {
-  if (!(yMax > 0)) return rowY + rowH - 4;
-  if (logScale) {
-    if (!(value > 0)) return rowY + rowH - 4;
-    const h = Math.max(1, (Math.log10(1 + Math.min(value, yMax)) / Math.log10(1 + yMax)) * (rowH - 8));
-    return rowY + rowH - 4 - h;
-  }
-  const h = Math.max(1, (Math.min(value, yMax) / yMax) * (rowH - 8));
-  return rowY + rowH - 4 - h;
-}
-
-function sizeBarH(rowH: number, value: number, yMax: number, logScale: boolean): number {
-  if (!(yMax > 0)) return 1;
-  if (logScale) {
-    if (!(value > 0)) return 1;
-    return Math.max(1, (Math.log10(1 + Math.min(value, yMax)) / Math.log10(1 + yMax)) * (rowH - 6));
-  }
-  return Math.max(1, (Math.min(value, yMax) / (yMax || 1)) * (rowH - 6));
-}
-
 export function formatSize(bytes: number): string {
   if (!(bytes > 0)) return '0 B';
   if (bytes < 1024) return `${bytes} B`;
@@ -211,11 +169,9 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
     }
     ctx.lineWidth = 1;
   }
-  // 大小行：放大画真实帧柱，缩小画时间桶峰值。
-  // 统一几何优先：提供 glyph 时绘图与命中共用同一份 rect，不再各轨自算组宽。
+  // 大小行：只画统一几何 glyph，绘图与命中共用同一份 rect（无第二套绘制路径）。
   if (model.showSize) {
-    const merged = isMerged(model);
-    const useGlyphs = !!(model.sampleGlyphs?.length || model.bucketGlyphs?.length);
+    const merged = model.merged;
     for (let r = 0; r < geom.sizeRows.length; r++) {
       const row = geom.sizeRows[r];
       const rows = merged ? model.tracks : [model.tracks[r]];
@@ -231,25 +187,13 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
       }
       ctx.strokeStyle = model.colors.grid;
       ctx.strokeRect(geom.gutter + 0.5, row.y + 0.5, geom.plotW - 1, Math.max(1, row.h - 1));
-      if (useGlyphs) {
-        drawGlyphs(ctx, model, row);
-        for (const track of rows) {
-          if (track.provisional) {
-            ctx.fillStyle = model.colors.axisText;
-            ctx.fillText('暂定', geom.gutter + geom.plotW - 30, row.y + 10);
-          }
-        }
-        continue;
-      }
-      const lanes = rows.length;
-      rows.forEach((track, lane) => {
-        if (track.samples && !track.truncated) drawSamples(ctx, model, geom, row, track, lane, lanes);
-        else drawBuckets(ctx, model, geom, row, track, lane, lanes);
+      drawGlyphs(ctx, model, row);
+      for (const track of rows) {
         if (track.provisional) {
           ctx.fillStyle = model.colors.axisText;
           ctx.fillText('暂定', geom.gutter + geom.plotW - 30, row.y + 10);
         }
-      });
+      }
     }
   }
   // 框选橡皮筋
@@ -265,56 +209,6 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
 
 function trimNum(v: number): string {
   return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
-}
-
-function drawSamples(
-  ctx: CanvasRenderingContext2D, model: CanvasModel, geom: CanvasGeom,
-  row: RowGeom, track: CanvasTrack, lane: number, lanes: number,
-): void {
-  // 样本按轴有序：柱宽取该样本到下一 stripe 的时间 extent，随缩放自然变宽；
-  // 末样本沿用上一间隔。分行单轨为直方图（左对齐），成对组内左右并排。
-  const samples = track.samples!;
-  const span = model.viewEnd - model.viewStart || 1;
-  const pxPerUs = geom.plotW / span;
-  const log = !!model.logScale;
-  const barTop = (size: number) => {
-    const h = sizeBarH(row.h, size, model.yMaxSize, log);
-    return { y: row.y + row.h - 2 - h, h };
-  };
-  let prevGap = span / Math.max(1, samples.length);
-  for (let i = 0; i < samples.length; i++) {
-    const s = samples[i];
-    let j = i + 1;
-    while (j < samples.length && !(samples[j].t > s.t)) j++;
-    const gap = j < samples.length ? samples[j].t - s.t : prevGap;
-    if (gap > 0 && Number.isFinite(gap)) prevGap = gap;
-    if (!(s.t >= model.viewStart && s.t <= model.viewEnd)) continue;
-    const slotPx = Math.max(0, gap * pxPerUs);
-    const { y, h } = barTop(s.size);
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = barColor(model, s.key, track.color);
-    if (lanes < 2) {
-      const bw = Math.max(1, slotPx * 0.9);
-      ctx.fillRect(xOf(model, geom, s.t), y, bw, h);
-      continue;
-    }
-    // 成对：组锚定共同时间，组内按时间占比分栏；过密时收拢为单柱。
-    const gc = xOf(model, geom, s.gx ?? s.t);
-    const laneW = slotPx / lanes;
-    if (laneW >= 3) {
-      const bw = Math.max(1, laneW - 1);
-      const x = gc - slotPx / 2 + lane * laneW;
-      ctx.fillRect(x, y, bw, h);
-      // 轨道身份：组内固定左右位置 + 轨道色细线。
-      ctx.fillStyle = track.color;
-      ctx.fillRect(x, row.y + row.h - 2, bw, 2);
-    } else {
-      // 过密旧路径兜底：按轨道错开 1px，避免后画覆盖前画（新路径已用统一几何）。
-      const bw = Math.max(1, Math.min(slotPx || 1, 2));
-      const x = gc - bw / 2 + (lane - (lanes - 1) / 2) * (bw + 0.5);
-      ctx.fillRect(x, y, bw, h);
-    }
-  }
 }
 
 function drawKeyMarker(ctx: CanvasRenderingContext2D, model: CanvasModel, cx: number, topY: number): void {
@@ -370,33 +264,6 @@ function drawGlyphs(
     else if (g.deltaCount > 0) ctx.fillStyle = barColor(model, false, slotColor);
     else ctx.fillStyle = model.colors.unknown;
     ctx.fillRect(g.rect.x, g.rect.y, g.rect.width, g.rect.height);
-    ctx.globalAlpha = 1;
-  }
-}
-
-function drawBuckets(
-  ctx: CanvasRenderingContext2D, model: CanvasModel, geom: CanvasGeom,
-  row: RowGeom, track: CanvasTrack, lane: number, lanes: number,
-): void {
-  for (const b of track.buckets) {
-    if (b.endUs <= model.viewStart || b.startUs >= model.viewEnd) continue;
-    if (!b.count) continue;
-    const x1 = xOf(model, geom, Math.max(b.startUs, model.viewStart));
-    const x2 = xOf(model, geom, Math.min(b.endUs, model.viewEnd));
-    const full = Math.max(1, x2 - x1 - 1);
-    const laneW = lanes > 1 ? full / lanes : full;
-    const x = lanes > 1 ? x1 + lane * laneW : x1;
-    const w = Math.max(1, laneW - (lanes > 1 ? 1 : 1));
-    const h = sizeBarH(row.h, b.maxBytes, model.yMaxSize, !!model.logScale);
-    // 混合桶在关闭类型着色时用轨道色，不冒充单帧类型也不强制变灰。
-    const mixed = (b.keyCount > 0 ? 1 : 0) + (b.deltaCount > 0 ? 1 : 0) + (b.unknownCount > 0 ? 1 : 0) > 1;
-    ctx.globalAlpha = b.complete ? 1 : 0.55;
-    if (!model.colorByType) ctx.fillStyle = track.color;
-    else ctx.fillStyle = mixed ? model.colors.unknown
-      : b.keyCount > 0 ? barColor(model, true, track.color)
-      : b.deltaCount > 0 ? barColor(model, false, track.color)
-      : model.colors.unknown;
-    ctx.fillRect(x, row.y + row.h - 2 - h, w, h);
     ctx.globalAlpha = 1;
   }
 }

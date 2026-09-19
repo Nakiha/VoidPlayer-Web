@@ -479,7 +479,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (!sel.length) return null;
     const range = viewRange();
     const inView = (t: number) => t >= range.start && t <= range.end;
-    // 图宽来自左侧绘图区，不含右侧固定检查区；x 换算、查询、命中统一用它。
+    // 图宽来自绘图区实际宽度（画布全宽）；x 换算、查询、命中统一用它。
     const width = plotWidthCss();
     const merged = prefs.layoutMode === 'merged';
     const plotW = Math.max(1, width - 46);
@@ -562,8 +562,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       canvasTracks.push({
         slot: t.slot,
         color: slotColors.get(t.slot) ?? '#888',
-        samples: canvasSamples, truncated: useRaw ? false : true,
-        buckets: (r.buckets ?? []).map(b => ({ ...b })),
         bitrate: (r.bitrate ?? []).map(p => ({ t: p.tUs, mbps: p.mbps })),
         provisional: r.capability.indexState !== 'complete',
       });
@@ -575,16 +573,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const height = Math.max(body.clientHeight || 220, need);
     const viewEnd = Math.max(range.start + 1, range.end);
     // 统一几何：组宽来自公共时间组，缺席留空；绘图与命中共用。
-    // 先算布局占位（行高），再生成 glyph。
-    const axisY = height - 22;
-    const plotH = Math.max(0, axisY);
-    let bitrateH = 0;
-    if (prefs.showBitrate) {
-      bitrateH = rows ? Math.round(plotH * 0.42) : plotH;
-      bitrateH = Math.max(rows ? 48 : 0, Math.min(bitrateH, 140));
-    }
-    const sizeH = rows ? Math.max(0, plotH - bitrateH) : 0;
-    const perRow = rows ? sizeH / rows : 0;
+    // 行高与绘制共用 computeLayout，不复制公式；先算布局，再按行生成 glyph。
+    const layoutProbe: CanvasModel = {
+      width, height, viewStart: range.start, viewEnd,
+      showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,
+      tracks: canvasTracks, merged,
+      yMaxBitrate: 0, yMaxSize: 0, colors, rubber,
+    };
+    const layout = computeLayout(layoutProbe);
+    const bitrateH = layout.bitrate?.h ?? 0;
+    const perRow = layout.sizeRows[0]?.h ?? 0;
     const yMaxSizeNice = niceCeiling(yMaxSize);
     let sampleGlyphs: SampleGlyph[] = [];
     let bucketGlyphs: BucketGlyph[] = [];
@@ -605,7 +603,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           sampleGlyphs = layoutMergedSamples(groups, {
             trackOrder: sel.map(t => t.slot),
             viewStart: range.start, viewEnd,
-            gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice, mediaBySlot,
+            gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice, mediaBySlot,
             scale: 'linear',
           });
         } else {
@@ -643,7 +641,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
           });
           bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
             trackOrder: sel.map(t => t.slot),
-            viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
+            viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
             scale: 'linear',
           });
         }
@@ -655,7 +653,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             // 分轨仍用公共时间组锚点计算单元，保证跨轨 x 对齐，各轨只取自己的成员。
             sampleGlyphs.push(...layoutMergedSamples(groups.filter(gr => gr.membersByTrack.has(t.slot)), {
               trackOrder: [t.slot],
-              viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
+              viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
               mediaBySlot: new Map([[t.slot, mediaBySlot.get(t.slot)!]]),
               scale: 'linear',
             }));
@@ -670,7 +668,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             })));
             bucketGlyphs.push(...layoutMergedBuckets(bucketsBySlot, {
               trackOrder: [t.slot],
-              viewStart: range.start, viewEnd, gutter: 46, plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
+              viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
               scale: 'linear',
             }));
           }
@@ -822,7 +820,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function directTargetFromGlyph(g: AnalysisGlyph | null): DirectTarget | null {
     if (!g) return null;
     if (g.kind === 'sample') {
-      // 聚合标记（含跨组局部聚合）：区间检查/点击放大，不冒充单帧。
+      // 聚合标记（含跨组局部聚合）：按区间检查，不冒充单帧。
       if (g.stackedCount > 1 && g.clusterStartUs != null && g.clusterEndUs != null) {
         return { kind: 'bucket', slot: g.slot, bucketStartUs: g.clusterStartUs, bucketEndUs: g.clusterEndUs };
       }
@@ -1105,10 +1103,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
   }
 
-  /** 只读测试快照：布局 glyph 身份与当前检查状态，供浏览器回归精确断言。 */
+  /** 只读测试快照：布局 glyph 身份与当前检查状态，供浏览器回归精确断言。
+   * 只在 QA 钩子启用时构建：生产 hover 不为 2000 条 glyph 摘要与 DOM 几何读取付费。 */
   function publishTestHook() {
     try {
-      const w = window as unknown as { __vpAnalysis?: unknown };
+      const w = window as unknown as { __vpAnalysis?: unknown; __vpAnalysisQA?: boolean };
+      if (!w.__vpAnalysisQA) return;
       const active = pinned ?? lastInspection;
       const plotRect = plot.getBoundingClientRect();
       const flRect = cardEl.hidden ? null : cardEl.getBoundingClientRect();
@@ -1269,7 +1269,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       return;
     }
     // 单击只定位到展示 PTS，不改变视图范围（缩放走框选/滚轮/双击）；
-    // 聚合标记按其主样本定位；区间桶点击放大；空白不定位。
+    // 样本与区间桶都按其主样本定位（桶峰值走 session 有界定位）；空白不定位。
     if (picked && picked.kind === 'sample') {
       const g = picked as SampleGlyph;
       const r = results.get(g.slot);
