@@ -187,38 +187,32 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
 
   // 放大到逐样本后，单击指定 B 柱：必须命中 B 的 sampleId 与可信展示 PTS。
-  // 若仍为共享桶（点击只放大），继续框选缩小直到出现逐样本 glyph。
-  let clicked = null;
-  for (let attempt = 0; attempt < 6 && !clicked; attempt++) {
-    await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'), undefined, { timeout: 30000 }).catch(() => {});
-    const hasSample = await page.evaluate(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample'));
-    if (!hasSample) {
-      await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7);
-      await page.mouse.down();
-      await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.7, { steps: 8 });
-      await page.mouse.up();
-      await page.waitForTimeout(1500);
-      continue;
-    }
-    const target = await page.evaluate(() => window.__vpAnalysis.glyphs.find(g => g.kind === 'sample' && g.slot === 'B' && !g.stacked));
-    assert.ok(target, '应有 B 逐样本 glyph');
-    const viewBefore = await page.evaluate(() => window.__vpAnalysis.view);
-    await page.mouse.click(box.x + target.cx, box.y + target.cy);
-    try {
-      await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
-      clicked = target;
-    } catch {
-      // 未定位（如点到聚合标记）时换一个 B 柱再试。
-      await page.evaluate((exclude) => {
-        window.__vpAnalysis.glyphs = window.__vpAnalysis.glyphs.filter(g => g.id !== exclude);
-      }, target.id);
-      continue;
-    }
-    // 单击单帧只定位，不缩放视图。
-    const viewAfter = await page.evaluate(() => window.__vpAnalysis.view);
-    assert.deepEqual(viewAfter, viewBefore, '单击不得改变视图范围');
+  // 固定夹具、固定目标、固定操作；失败保留现场并直接断言，不换目标重试。
+  let hasSample = false;
+  for (let attempt = 0; attempt < 6 && !hasSample; attempt++) {
+    hasSample = await page.evaluate(() => window.__vpAnalysis?.glyphs?.some(g => g.kind === 'sample') ?? false);
+    if (hasSample) break;
+    await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.7);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.6, box.y + box.height * 0.7, { steps: 8 });
+    await page.mouse.up();
+    await page.waitForTimeout(1500);
   }
-  assert.ok(clicked, '指定 B 柱应能定位');
+  assert.ok(hasSample, '连续放大后应出现逐样本 glyph');
+  const clicked = await page.evaluate(() => window.__vpAnalysis.glyphs.find(g => g.kind === 'sample' && g.slot === 'B' && !g.stacked));
+  assert.ok(clicked, '应有 B 逐样本 glyph');
+  const viewBefore = await page.evaluate(() => window.__vpAnalysis.view);
+  await page.mouse.click(box.x + clicked.cx, box.y + clicked.cy);
+  try {
+    await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
+  } catch {
+    // 失败保留现场：目标 glyph、检查快照与视图一起带出，不改测试快照换目标。
+    const scene = await page.evaluate(() => ({ inspection: window.__vpAnalysis.inspection, view: window.__vpAnalysis.view }));
+    assert.fail(`指定 B 柱未定位：${JSON.stringify({ clicked, scene })}`);
+  }
+  // 单击单帧只定位，不缩放视图。
+  const viewAfter = await page.evaluate(() => window.__vpAnalysis.view);
+  assert.deepEqual(viewAfter, viewBefore, '单击不得改变视图范围');
   assert.equal(clicked.slot, 'B');
   // 直接命中一致性：表格、高亮、点击须为同一 sampleId，不得表里一个、定位另一个。
   const hitState = await page.evaluate(() => window.__vpAnalysis.inspection);
@@ -226,11 +220,9 @@ try {
   assert.equal(hitState.direct?.sampleId, clicked.id);
   assert.equal(hitState.tracks.find(t => t.slot === 'B')?.refId, clicked.id);
   assert.equal(hitState.t, clicked.axisUs);
-  const posAfter = await page.locator('#position').inputValue();
-  assert.notEqual(posAfter, posBefore);
-  // 点击后位置应接近该 B 样本的轴时间（±100ms 内），不得退回第一轨最近样本。
+  // 点击样本柱按该样本的展示 PTS 精确定位（整数微秒），不用宽松容差。
   const statePos = await page.evaluate(() => window.voidPlayer.getState().positionUs);
-  assert.ok(Math.abs(statePos - clicked.axisUs) < 100_000, `position=${statePos} axis=${clicked.axisUs}`);
+  assert.equal(statePos, clicked.axisUs, `position=${statePos} axis=${clicked.axisUs}`);
 
   await page.locator('#analysis-canvas').dblclick();
   await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', undefined, { timeout: 15000 });
@@ -329,6 +321,25 @@ try {
     await window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document: doc });
   }, exported);
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden, undefined, { timeout: 60000 });
+  await page.waitForFunction(() => !document.getElementById('analysis-canvas').hidden, undefined, { timeout: 60000 }).catch(async () => {
+    console.error('DIAG', JSON.stringify(await page.evaluate(async () => {
+      const q = window.voidPlayer.tools.find(t => t.name === 'query_analysis');
+      let probe = null;
+      try {
+        const r = await q.execute({ slot: 'A', startUs: 2739047, endUs: 5332229, axis: 'pts', pixelWidth: 100, bitrateWindowUs: 1000000 });
+        probe = { sourceVersion: r.sourceVersion ?? null, keys: Object.keys(r).slice(0, 8) };
+      } catch (e) { probe = { error: String(e) }; }
+      return {
+        queries: document.getElementById('analysis-canvas').dataset.analysisQueries ?? null,
+        live: document.querySelector('#analysis-panel output')?.textContent ?? null,
+        vp: window.__vpAnalysis ? { glyphs: window.__vpAnalysis.glyphs?.length ?? null } : null,
+        tracks: window.voidPlayer.getState().tracks.map(t => ({ slot: t.slot, id: t.id, gen: t.sourceGen })),
+        probe,
+      };
+    })));
+    console.error('DIAG_ERRORS', JSON.stringify(errors));
+    throw new Error('分析画布在导入后 60s 内未显示');
+  });
   const box3 = await page.locator('#analysis-canvas').boundingBox();
   await page.mouse.move(box3.x + box3.width * 0.4, box3.y + box3.height * 0.5);
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 60000 });

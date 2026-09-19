@@ -441,8 +441,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         const current = tracks.find(e => e.slot === t.slot);
         if (!current || current.mediaId !== mediaId) return; // 换片后旧结果丢弃
         // 实例隔离：source 重建（色彩模式切换等）后 mediaId 不变，必须按
-        // session 盖章的 generation+媒体前缀校验，旧实例结果不得上屏。
-        if (!result.sourceVersion.startsWith(`${current.sourceGen}#${current.mediaId}@`)) return;
+        // session 盖章的 generation 校验；内层 mediaId 由 adapter 在打开时
+        // 铸造，可能早于身份钉定（updateMediaInfo），不得参与比较。
+        if (!result.sourceVersion.startsWith(`${current.sourceGen}#`)) return;
         results.set(t.slot, result);
         // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
         // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
@@ -1514,8 +1515,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       tracks = entries;
       for (const slot of [...results.keys()]) {
         const entry = entries.find(e => e.slot === slot);
-        // 结果携带 generation#mediaId 盖章：同媒体重建实例的旧结果一并失效。
-        if (!entry || results.get(slot)?.sourceVersion.split('@')[0] !== `${entry.sourceGen}#${entry.mediaId}`) {
+        // 结果携带 generation 盖章：同媒体重建实例的旧结果一并失效。
+        // 只比 generation（实例身份）；内层 mediaId 可能早于身份钉定。
+        const resultGen = Number(results.get(slot)?.sourceVersion.split('#')[0]);
+        if (!entry || !Number.isInteger(resultGen) || resultGen !== entry.sourceGen) {
           results.delete(slot);
           queriedBySlot.delete(slot);
         }
