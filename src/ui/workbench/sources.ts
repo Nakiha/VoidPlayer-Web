@@ -16,6 +16,10 @@ import type { WorkbenchShared, WorkbenchState } from './shared.ts';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const sizeText = (n: number) => n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${(n / 2 ** 20).toFixed(1)} MB`;
+const openedText = (value?: number) => {
+  if (!Number.isFinite(value)) return '';
+  try { return new Date(value as number).toLocaleString(); } catch { return ''; }
+};
 const text = (tag: string, value: string, className = '') => {
   const el = document.createElement(tag); el.textContent = value; el.className = className; return el;
 };
@@ -113,7 +117,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const pending = item.library?.state === 'pending';
     const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
     const stateLabel = loading ?? (failed ? `载入失败：${failed}` : used ? '使用中' : offline ? '存储离线' : pending ? '写入中' : isLocal ? '本地文件' : '媒体库');
-    const status = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}`, 'source-meta');
+    const opened = openedText(item.openedAt);
+    const status = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}${opened ? ` · 上次打开 ${opened}` : ''}`, 'source-meta');
     status.dataset.tooltip = row.dataset.tooltip;
     if (loading || failed) { status.setAttribute('role', 'status'); }
     const titleLine = document.createElement('span'); titleLine.className = 'source-title';
@@ -179,7 +184,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const list = $('start-library-list');
     if (!list) return;
     list.replaceChildren();
-    const items = catalog.recent().slice(0, 5);
+    const items = catalog.recent();
     for (const item of items) {
       const row = document.createElement('button');
       row.className = 'start-recent-row';
@@ -187,7 +192,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
       const { base, dir } = sourceDisplayName(item.name);
       const name = text('span', base, 'filename');
       const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
-      const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}` : `${sizeText(item.size)} · 本地文件`, 'source-meta');
+      const opened = openedText(item.openedAt);
+      const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${opened ? ` · ${opened}` : ''}`, 'source-meta');
       const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
       const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
       row.append(info, go);
@@ -222,9 +228,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // The signature tracks which row loads, not the live stage text: stage
     // transitions must not rebuild the list. Per-row fingerprints below stay
     // stable across busy flips (e.g. seeks); disabled states sync in place.
-    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, sourceInUse(item, session.getState().tracks)])]);
+    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), page?.roots]);
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), page?.roots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       const mediaLoading = session.getState().mediaLoad?.state === 'loading';

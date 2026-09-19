@@ -1,9 +1,9 @@
 import type { MediaInfo } from '../model.ts';
 import type { LibraryEntry } from '../library.ts';
 
-export type RecentSource = { key: string; name: string; size: number; lastModified: number; libraryId?: string; version?: string };
+export type RecentSource = { key: string; name: string; size: number; lastModified: number; libraryId?: string; version?: string; openedAt?: number };
 export type SourceItem = RecentSource & { file?: File; library?: LibraryEntry };
-const HISTORY_LIMIT = 40;
+const HISTORY_LIMIT = 100;
 // Identity and fingerprint are both required: distinct roots must not collapse,
 // and a replaced library file must not inherit access from an old history item.
 export const sourceKey = (entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version) =>
@@ -23,9 +23,10 @@ export class SourceCatalog {
         !Number.isSafeInteger(entry.size) || entry.size < 0 || !Number.isFinite(entry.lastModified)) continue;
       const libraryId = typeof entry.libraryId === 'string' && entry.libraryId ? entry.libraryId : undefined;
       const version = typeof entry.version === 'string' && /^[0-9a-f]{24}$/.test(entry.version) ? entry.version : undefined;
+      const openedAt = Number.isFinite(entry.openedAt) ? (entry.openedAt as number) : undefined;
       // Recompute keys so existing v1 metadata histories migrate on read.
       const clean: RecentSource = { key: sourceKey(entry, libraryId, version), name: entry.name, size: entry.size, lastModified: entry.lastModified,
-        ...(libraryId ? { libraryId } : {}), ...(version ? { version } : {}) };
+        ...(libraryId ? { libraryId } : {}), ...(version ? { version } : {}), ...(openedAt !== undefined ? { openedAt } : {}) };
       if (!this.history.some(h => h.key === clean.key)) this.history.push(clean);
     }
   }
@@ -45,7 +46,8 @@ export class SourceCatalog {
   addFile(file: File) { this.local.set(sourceKey(file), file); this.remember(file); }
   remember(entry: { name: string; size: number; lastModified: number; version?: string }, libraryId?: string, version = entry.version) {
     const key = sourceKey(entry, libraryId, version);
-    this.history = [{ key, name: entry.name, size: entry.size, lastModified: entry.lastModified,
+    const openedAt = Date.now();
+    this.history = [{ key, name: entry.name, size: entry.size, lastModified: entry.lastModified, openedAt,
       ...(libraryId ? { libraryId } : {}), ...(version ? { version } : {}) },
     ...this.history.filter(h => h.key !== key)].slice(0, HISTORY_LIMIT);
   }

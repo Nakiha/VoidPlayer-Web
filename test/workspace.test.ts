@@ -94,10 +94,11 @@ test('local and library sources with identical metadata never substitute for eac
 });
 test('history sanitizes storage, remains bounded, and exposes detached metadata', () => {
   const catalog = new SourceCatalog([null, { name: 'invalid', size: -1, lastModified: 1 }]);
-  for (let i = 0; i < 60; i++) catalog.remember({ name: `clip-${i}`, size: i, lastModified: 1 });
-  assert.equal(catalog.recent().length, 40);
+  for (let i = 0; i < 120; i++) catalog.remember({ name: `clip-${i}`, size: i, lastModified: 1 });
+  assert.equal(catalog.recent().length, 100);
   const stored = catalog.serializable(); stored[0].name = 'mutated';
-  assert.equal(catalog.recent()[0].name, 'clip-59');
+  assert.equal(catalog.recent()[0].name, 'clip-119');
+  assert.ok(Number.isFinite(catalog.recent()[0].openedAt));
 });
 
 
