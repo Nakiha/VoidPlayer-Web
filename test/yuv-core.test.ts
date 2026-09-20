@@ -1,5 +1,6 @@
 import test from 'node:test';
 import { createHash } from 'node:crypto';
+const ffmpeg = process.env.VOIDPLAYER_FFMPEG_ORACLE || 'ffmpeg';
 const hash=(data:Uint8Array|Uint8ClampedArray)=>createHash('sha256').update(data).digest('hex');
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -20,7 +21,7 @@ for(const mt of [false,true])test(`real ${mt?'mt':'single'} core planes equal in
     try{
       const first=await source.frameAt(0);
       assert.equal(first.kind,'yuv',name);validateDescription(first.description,first.pixels!.byteLength);
-      const raw=execFileSync('ffmpeg',['-v','error','-threads','1','-i',fileURLToPath(url),'-frames:v','1','-f','rawvideo','-pix_fmt',first.description.sourcePixelFormat!,'pipe:1'],{maxBuffer:64*1024*1024});
+      const raw=execFileSync(ffmpeg,['-v','error','-threads','1','-i',fileURLToPath(url),'-frames:v','1','-f','rawvideo','-pix_fmt',first.description.sourcePixelFormat!,'pipe:1'],{maxBuffer:64*1024*1024});
       assert.equal(hash(first.pixels!),hash(raw),`${name}: original precision and plane order`);
       const saved=first.pixels!.slice();first.close();
       if(source.framesFollowing){
@@ -43,9 +44,9 @@ test('real core retains odd-sized 16-bit planes and SAR without RGBA quantizatio
   try{
     const path=join(dir,'odd.mkv');const raw=Buffer.alloc(5*3*3*2);
     for(let i=0;i<45;i++)raw.writeUInt16LE((i*1459)%65536,i*2);
-    execFileSync('ffmpeg',['-v','error','-f','rawvideo','-pixel_format','yuv444p16le','-video_size','5x3','-i','pipe:0','-frames:v','1','-vf','setsar=4/3','-c:v','ffv1','-level','3','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709',path],{input:raw});
+    execFileSync(ffmpeg,['-v','error','-f','rawvideo','-pixel_format','yuv444p16le','-video_size','5x3','-i','pipe:0','-frames:v','1','-vf','setsar=4/3','-c:v','ffv1','-level','3','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709',path],{input:raw});
     const data=await readFile(path);
-    const decoded=execFileSync('ffmpeg',['-v','error','-i',path,'-frames:v','1','-f','rawvideo','-pix_fmt','yuv444p16le','pipe:1']);
+    const decoded=execFileSync(ffmpeg,['-v','error','-i',path,'-frames:v','1','-f','rawvideo','-pix_fmt','yuv444p16le','pipe:1']);
     for(const suffix of ['', '-mt']){
       const core=new URL('../public/vendor/voidplayer-core/',import.meta.url);
       const source=await openFFmpegMedia(new File([data],'odd.mkv'),{glueURL:new URL(`voidplayer-core${suffix}.js`,core).href,wasmBinary:await readFile(new URL(`voidplayer-core${suffix}.wasm`,core))});

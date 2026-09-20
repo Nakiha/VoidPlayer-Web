@@ -7,6 +7,9 @@ import {wasmFlvDecoder} from '../src/flv-decoder.ts';
 import {yuvPixelRgb} from '../src/yuv-color.ts';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
+const selectedBrowser=process.argv[2],selectedInput=process.argv[3];
+if(selectedBrowser&&!['webkit','chromium'].includes(selectedBrowser))throw Error('Unknown browser');
+if(selectedInput&&!['local','remote'].includes(selectedInput))throw Error('Unknown input mode');
 const name='h265_10s_1920x1080.mp4',bytes=await readFile(new URL('../fixtures/video/'+name,import.meta.url));
 const oracle=JSON.parse(await readFile(new URL('../test/hevc-order-reference.json',import.meta.url)));
 assert.equal(createHash('sha256').update(bytes).digest('hex'),oracle.sha256);
@@ -23,8 +26,10 @@ assert.equal(refs.length,600);
 const server=await createServer({server:{host:'127.0.0.1',port:0,headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'}}});
 await server.listen();const base=`http://127.0.0.1:${server.httpServer.address().port}`,results=[];
 try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
+  if(selectedBrowser&&browserName!==selectedBrowser)continue;
   const browser=await engine.launch({headless:true});
   try{for(const remote of [false,true]){
+    if(selectedInput&&(selectedInput==='remote')!==remote)continue;
     const page=await browser.newPage(),requests=[];
     page.on('request',r=>{if(r.url().includes('/fixtures/video/'))requests.push(r.headers());});
     try{

@@ -33,6 +33,9 @@ jobs:
 
   decoder:
     name: Build pinned WASM decoder
+    outputs:
+      ffmpegRepository: ${{ steps.core.outputs.ffmpegRepository }}
+      ffmpegRevision: ${{ steps.core.outputs.ffmpegRevision }}
     runs-on: ubuntu-24.04
     needs: identity
     timeout-minutes: 45
@@ -177,8 +180,7 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    # Must exceed the longest step timeout below (HEVC sweeps allow 50).
-    timeout-minutes: 65
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -205,7 +207,25 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools
           npm run fixtures:flv
           node scripts/sync-fate-samples.mjs
+      - name: Restore pinned native raw-plane oracle
+        id: oracle-cache
+        uses: actions/cache@v4
+        with:
+          path: .run/native-oracle
+          key: native-oracle-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/build-native-oracle.sh') }}
+      - name: Checkout pinned native oracle source
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ needs.decoder.outputs.ffmpegRepository }}
+          ref: ${{ needs.decoder.outputs.ffmpegRevision }}
+          path: .run/oracle-source
+      - name: Build native reference decoder including VVC
+        if: steps.oracle-cache.outputs.cache-hit != 'true'
+        run: bash scripts/build-native-oracle.sh .run/oracle-source .run/native-oracle
       - run: npm test
+        env:
+          VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
       - name: Verify thumbnails, startup and restored workspace lifecycle
@@ -281,13 +301,6 @@ jobs:
           node --test test/fate-oracle.test.ts test/frame-description.test.ts test/avc-geometry.test.ts test/packet-timeline.test.ts test/media-state.test.ts
           node scripts/check-fate.mjs
           node scripts/check-fate-browser.mjs
-      - name: Verify HEVC display-order recovery and seek pixels
-        # 8 full 600-frame sweeps on a software-rendered runner measure about
-        # 40 minutes; the assertions themselves stay unchanged.
-        timeout-minutes: 50
-        run: |
-          node --test test/hevc-timeline.test.ts
-          node scripts/check-hevc-timeline-browser.mjs
       - name: Audit FATE transport-stream clock faults (exploratory report)
         timeout-minutes: 8
         run: |
@@ -317,6 +330,45 @@ jobs:
           path: .run/playback-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+  hevc-browser:
+    name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
+    needs: decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+        input: [local, remote]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - run: npm ci
+      - uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      # Preserve all eight full 600-frame sweeps (two reopen rounds per cell).
+      - run: node scripts/check-hevc-timeline-browser.mjs ${{ matrix.engine }} ${{ matrix.input }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
+          path: .run/playback-reports/hevc-timeline-browser.json
+          if-no-files-found: error
 
   native-release:
     name: Standalone ${{ matrix.platform }}
@@ -392,7 +444,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, playback, analysis-logic, analysis-browser]
+    needs: [native-release, playback, analysis-logic, analysis-browser, hevc-browser]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

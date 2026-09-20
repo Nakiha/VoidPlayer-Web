@@ -30,9 +30,13 @@ for codec, source, codec_id, fourcc in cases:
     with tempfile.TemporaryDirectory(prefix='vp-flv-') as tmp:
         # MP4 provides avcC/hvcC/av1C/vvcC config records for all four codecs.
         mp4 = pathlib.Path(tmp) / 'source.mp4'
-        subprocess.run(['ffmpeg', '-v', 'error', '-i', str(ROOT / 'fixtures/video' / source), '-map', '0:v:0', '-c', 'copy', str(mp4)], check=True)
-        doc = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_streams', '-show_packets', '-show_data', '-of', 'json', str(mp4)]))
-        config = unhex(doc['streams'][0]['extradata'])
+        if codec == 'vvc':
+            doc = json.loads(subprocess.check_output(['node', str(ROOT / 'scripts/extract-vvc-fixture.mjs'), str(ROOT / 'fixtures/video' / source)]))
+            config = bytes.fromhex(doc['streams'][0]['extradata_hex'])
+        else:
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(ROOT / 'fixtures/video' / source), '-map', '0:v:0', '-c', 'copy', str(mp4)], check=True)
+            doc = json.loads(subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_streams', '-show_packets', '-show_data', '-of', 'json', str(mp4)]))
+            config = unhex(doc['streams'][0]['extradata'])
         source_packets = doc['packets']
         for enhanced in ([False] if codec == 'h264' else [False, True]):
             name = ('enhanced-' if enhanced else { 'h264': 'standard-', 'hevc': 'legacy-', 'av1': 'private-', 'vvc': 'private-' }[codec]) + codec
@@ -45,7 +49,7 @@ for codec, source, codec_id, fourcc in cases:
                 if codec == 'av1' and not enhanced:
                     dts = pts + 5  # exercise signed negative CTS with valid AV1 OBUs
                 key = 'K' in p['flags']
-                payload = unhex(p['data'])
+                payload = bytes.fromhex(p['data_hex']) if 'data_hex' in p else unhex(p['data'])
                 if enhanced:
                     video = bytes([0x80 | (0x10 if key else 0x20) | 1]) + fourcc.encode()
                     if codec != 'av1':
