@@ -86,7 +86,7 @@ export function shell() {
       </section>
       <aside id="sources-panel" class="side-panel sources-panel glass" aria-label="片源" hidden>
         <div class="source-tools" id="source-tools"></div>
-        <p id="source-status" class="source-status" role="status"></p><div id="source-list" class="source-list"></div>
+        <div id="source-list" class="source-list"></div>
         <div id="source-scrollbar" class="source-scrollbar" aria-hidden="true"><span id="source-scrollbar-thumb"></span></div>
         <div class="source-foot" id="source-foot">
         <section id="local-sources" class="local-sources" aria-label="本地文件"><h3 class="source-section"><span id="local-sources-heading">本地文件</span><button id="local-add" class="icon-button" aria-label="选择本地文件" data-tooltip="选择本地文件加入列表（仅本机预览，不上传）">${icon('filePlus')}</button></h3><div id="local-list"></div></section>

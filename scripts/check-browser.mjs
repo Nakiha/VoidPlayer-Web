@@ -60,37 +60,6 @@ try {
     }
   }
 
-  await check('source status reserves the toolbar height only once', async page => {
-    await page.locator('#toggle-sources').click();
-    await page.locator('#source-list .source-row').first().waitFor();
-    for (const message of ['', '50处路径无法读取', '50处路径无法读取：' + '/很长的媒体目录'.repeat(12), '']) {
-      const geometry = await page.evaluate(message => {
-        const status = document.getElementById('source-status');
-        status.textContent = message;
-        status.hidden = !message;
-        const list = document.getElementById('source-list');
-        list.scrollTop = 0;
-        const tools = document.getElementById('source-tools').getBoundingClientRect();
-        const row = list.firstElementChild.getBoundingClientRect();
-        const statusBox = status.getBoundingClientRect();
-        return {
-          rowTop: row.top, toolsBottom: tools.bottom, statusTop: statusBox.top,
-          statusBottom: statusBox.bottom, statusHeight: statusBox.height,
-          gap: parseFloat(getComputedStyle(status).marginBottom),
-          overflow: list.scrollWidth > list.clientWidth,
-        };
-      }, message);
-      assert.equal(geometry.overflow, false);
-      if (message) {
-        assert.ok(geometry.statusHeight > 0);
-        assert.ok(Math.abs(geometry.statusTop - geometry.toolsBottom) <= 1, 'status starts below toolbar');
-        assert.ok(Math.abs(geometry.rowTop - geometry.statusBottom - geometry.gap) <= 1, 'no duplicate toolbar gap before rows');
-      } else {
-        assert.ok(Math.abs(geometry.rowTop - geometry.toolsBottom) <= 1, 'rows return directly below toolbar');
-      }
-    }
-  });
-
   await check('resize, split/grid layout, focus mode and track-close focus', async page => {
     const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'vp9_10s_1920x1080.webm', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'av1_10s_1920x1080.webm'];
     const ids = names.map(name => {

@@ -1,15 +1,15 @@
-import { fetchLibraryPage, LibraryChangedError, requestLibraryScan } from '../library.ts';
+import { fetchLibraryPage, LibraryChangedError } from '../library.ts';
 import type { LibraryPage } from '../library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 
 /** Continuous browsing with bounded requests and atomic result replacement. */
-export function installLibraryBrowser(change: (page: LibraryPage | null, status: string) => void, signal: AbortSignal, onScope?: (recent: boolean) => void) {
+export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void) {
   let page: LibraryPage | null = null, root = '', directory = '', search = '', appliedSearch = '', all = false, recent = false;
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
   const available = () => !recent;
-  let note = '', optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
+  let optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const list = document.getElementById('source-list')!;
   const tools = document.getElementById('source-tools')!;
   // Single row: back | scope dropdown (shows the full path) | copy | search.
@@ -35,7 +35,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
   function setRecent(value: boolean) {
     if (recent === value) { onScope?.(recent); return; }
     recent = value;
-    clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = false; note = '';
+    clearTimeout(searchTimer); request?.abort(); sequence++; loading = false; pendingSearch = false;
     controls();
     if (!recent) requestAnimationFrame(more);
     onScope?.(recent);
@@ -89,9 +89,9 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
   }
   function render() {
     controls();
-    const job = page?.job;
-    const status = note || (page?.scanning ? `扫描中 · ${job?.files ?? 0} 个视频` : job?.errors ? `${job.errors} 处路径无法读取` : page?.roots.some(r => r.state === 'offline') ? '部分存储离线，显示上次索引' : '');
-    change(page, status);
+    // 扫描进度与读取错误只在管理后台展示，前端列表不再保留状态行，
+    // 避免长文本把片源列表顶下去。
+    change(page);
   }
   async function load(append = false, resetView = false, restarted = false): Promise<void> {
     clearTimeout(searchTimer); pendingSearch = false;
@@ -111,28 +111,23 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
         value = { ...value, entries: [...value.entries, ...more.entries], directories: [...value.directories, ...more.directories], nextOffset: more.nextOffset };
       }
       if (ticket !== sequence || signal.aborted) return;
-      page = value; appliedSearch = search; appliedScope = scope; note = '';
+      page = value; appliedSearch = search; appliedScope = scope;
     } catch (error) {
       if (ticket !== sequence || signal.aborted) return;
       if (error instanceof LibraryChangedError && !restarted) { await load(false, resetView, true); return; }
-      note = error instanceof Error ? error.message : '媒体库读取失败';
     } finally {
       if (ticket === sequence && !signal.aborted) {
         loading = false; render();
         if (resetView) list.scrollTop = 0;
-        if (!note) requestAnimationFrame(more);
+        requestAnimationFrame(more);
       }
     }
   }
   function more() {
     if (available() && !loading && !pendingSearch && page?.nextOffset != null && list.clientHeight > 0 && list.scrollHeight - list.scrollTop - list.clientHeight < 180) void load(true);
   }
-  function reset() { note = ''; void load(false, true); }
+  function reset() { void load(false, true); }
   function navigate(id: string, path: string) { all = false; root = id; directory = path; setRecent(false); reset(); }
-  async function refresh() {
-    try { await requestLibraryScan('refresh'); note = ''; } catch (error) { note = (error as Error).message; }
-    await load(false, pendingSearch);
-  }
   list.addEventListener('scroll', more, { signal, passive: true });
   const resize = new ResizeObserver(more); resize.observe(list);
   const timer = setInterval(() => {
@@ -145,11 +140,11 @@ export function installLibraryBrowser(change: (page: LibraryPage | null, status:
       clearTimeout(searchTimer); request?.abort(); sequence++;
       ({ root, directory, search, all } = state);
       recent = state.recent ?? false;
-      page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false; note = '';
+      page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false;
       render();
       await load(false, true);
     },
-    navigate, page: () => page, refresh, filter: () => appliedSearch,
+    navigate, page: () => page, filter: () => appliedSearch,
     load: () => load(),
     isRecent: () => recent,
     selectRecent() { setRecent(true); },
