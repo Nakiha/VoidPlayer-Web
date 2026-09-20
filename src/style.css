@@ -143,8 +143,10 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .search-field { margin: 0 var(--panel-padding-inline) var(--panel-padding-block); display: flex; gap: var(--control-gap); align-items: center; border: var(--control-border-width) solid var(--border); border-radius: var(--radius-control); padding-left: var(--field-padding-inline); background: var(--search-fill); color: var(--text-secondary); }
 .search-field input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--text); }
 .search-field input::placeholder { color: var(--text-secondary); opacity: 1; }
-.source-status { padding: 0 var(--panel-padding-inline); margin: calc(var(--control-small-height) + var(--panel-padding-block) * 2) 0 var(--panel-padding-block); font-size: var(--text-xs); color: var(--text-secondary); }
+.source-status { flex: 0 0 auto; padding: 0 var(--panel-padding-inline); margin: calc(var(--control-small-height) + var(--panel-padding-block) * 2) 0 var(--panel-padding-block); font-size: var(--text-xs); color: var(--text-secondary); overflow-wrap: anywhere; }
 .source-list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; padding-top: calc(var(--control-small-height) + var(--panel-padding-block) * 2); padding-bottom: var(--foot-h); }
+/* A visible status already reserves the floating toolbar's height. */
+.source-status:not([hidden]) + .source-list { padding-top: 0; }
 .source-list::-webkit-scrollbar { display: none; width: 0; height: 0; }
 /* Hand-rolled overlay thumb: native bars are hidden so the full-bleed glass
    never covers them; this floats above both tools and foot instead. */
