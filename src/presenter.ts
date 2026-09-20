@@ -1,5 +1,6 @@
 import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
 import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from './yuv-color.ts';
+import { getPresentationChannel } from './presentation-channel.ts';
 import { validateDescription } from './frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
 import { THUMB_MAX_EDGE } from './thumbnails/contract.ts';
@@ -36,6 +37,7 @@ export function presentationPerformance(canvas:HTMLCanvasElement) {
 const colorStates = new WeakMap<HTMLCanvasElement, string>();
 function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   validateDescription(frame.description,frame.pixels?.byteLength);
+  const channel = frame.kind === 'yuv' ? getPresentationChannel() : 'rgb';
   if(frame.kind==='yuv') {
     const d=frame.description, rotation=frame.rotation??frame.sample?.rotation??0;
     const width=rotation===90||rotation===270?d.height:d.width;
@@ -46,7 +48,7 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   if (frame.kind!=='yuv' && canvas.height !== frame.height) canvas.height = frame.height;
   const surface = surfaces.get(canvas);
   const policy = presentationColor(frame.kind, frame.description);
-  const colorState = JSON.stringify({ kind: frame.kind, ...policy });
+  const colorState = JSON.stringify({ kind: frame.kind, channel, ...policy });
   if (colorStates.get(canvas) !== colorState) {
     colorStates.set(canvas, colorState);
     log.info('media', '上屏色彩路径', { canvas: canvas.id, kind: frame.kind, ...policy, sourcePtsUs: frame.sourcePtsUs });
@@ -55,9 +57,10 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   if(frame.kind==='yuv') {
     if(!frame.pixels)throw new Error('YUV 帧缺少像素数据。');
     const rotation=frame.rotation??frame.sample?.rotation??0;
-    if(surface?.uploadYuv(frame.description,frame.pixels,rotation)){canvas.dataset.colorExecutor='webgl-yuv';return;}
+    if(surface?.uploadYuv(frame.description,frame.pixels,rotation)){canvas.dataset.colorExecutor='webgl-yuv';canvas.dataset.channel=channel;return;}
     canvas.dataset.colorExecutor='cpu-yuv';
-    const pixels=yuvToRgba(frame.description,frame.pixels);
+    canvas.dataset.channel=channel;
+    const pixels=yuvToRgba(frame.description,frame.pixels,channel);
     const ctx=canvas.getContext('2d',{colorSpace:'srgb'});if(!ctx)throw new Error('浏览器无法创建画布。');
     const image=new ImageData(pixels,frame.description.width,frame.description.height);
     if(rotation){
@@ -66,6 +69,7 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
     }else ctx.putImageData(image,0,0);
     surface?.upload();return;
   }
+  canvas.dataset.channel = 'rgb';
   if (surface?.directUpload) {
     if (frame.kind === 'rgba8') {
       if (!frame.pixels) throw new Error('RGBA 帧缺少像素数据。');

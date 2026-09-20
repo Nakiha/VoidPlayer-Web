@@ -26,6 +26,11 @@ fn pixelAt(xy0:vec2f)->vec3f {
  var y=(component(0u,xy)-select(16*scale,0.0,full))/select(219*scale,maxCode,full);
  var cb=(component(1u,xy)-128*scale)/select(224*scale,maxCode,full);
  var cr=(component(2u,xy)-128*scale)/select(224*scale,maxCode,full);
+ if(p[0].w>0.5){
+   var gray=y;
+   if(p[0].w>1.5){gray=select(cb,cr,p[0].w>2.5)+0.5;}
+   return vec3f(clamp(gray,0.0,1.0));
+ }
  if(p[7].z>0){
    y=floor(clamp(y,0.0,1.0)*255.0)/255.0;
    cb=(floor(clamp(cb*255.0+128.0,0.0,255.0)+0.5)-127.5)/255.0;

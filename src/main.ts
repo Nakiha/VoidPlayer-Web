@@ -41,8 +41,9 @@ import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperat
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
 import { paintFrame, captureFrame, disposePresentation } from './presenter.ts';
+import { setPresentationChannel } from './presentation-channel.ts';
 import { Viewport, ZOOM_PRESETS } from './viewport.ts';
-import type { PixelSizeMode, ViewportSnapshot } from './viewport.ts';
+import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
@@ -150,7 +151,7 @@ const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
-  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); await workbench.restore(document.layout ?? workbench.getState()); render(); },
+  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
@@ -167,6 +168,16 @@ const zoomMenu = installChoiceMenu('zoom-select',ZOOM_PRESETS.map(p=>({value:Str
 const pixelMenu = installChoiceMenu('pixel-size',[{value:'uniform',label:'统一像素'},{value:'fill',label:'填满视图'}],value=>{
   viewport.setPixelSize(value as PixelSizeMode); log.info('ui','切换像素尺寸模式',{pixelSize:viewport.pixelSize,trigger:inputTrigger}); fitTask.schedule();
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',true);
+});
+const channelLabels: Record<ChannelMode, string> = { rgb: 'RGB', y: 'Y 通道', u: 'U 通道', v: 'V 通道' };
+const channelMenu = installChoiceMenu('channel-select', (Object.keys(channelLabels) as ChannelMode[]).map(value => ({ value, label: channelLabels[value] })), value => {
+  viewport.setChannel(value as ChannelMode); setPresentationChannel(viewport.channel);
+  log.info('ui', '切换 YUV 通道', { channel: viewport.channel, trigger: inputTrigger });
+  channelMenu.sync(viewport.channel, channelLabels[viewport.channel], true);
+  // Playback frames pick up the new channel on their next paint; only a
+  // paused view needs an explicit re-decode of the current position.
+  const state = session.getState();
+  if (state.tracks.length && !state.playing && !state.busy) void act(() => session.seek(state.positionUs), 'channel.seek', { channel: viewport.channel });
 });
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
@@ -240,6 +251,7 @@ function render() {
     $<HTMLButtonElement>(id).disabled = !loaded;
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);
+  channelMenu.sync(viewport.channel, channelLabels[viewport.channel], loaded);
   syncZoomSelect(loaded);
   // Transient seek preparation must not dim the row or steal button focus.
   // Keep native disabled for empty sessions; busy actions are guarded below.
@@ -448,7 +460,19 @@ const api = {
   deleteMark: (id: string) => apiCall('deleteMark', { id }, () => session.deleteMark(id)), exportReview: () => session.exportReview(),
   getLogs: readLogs, listLogSessions: getLogSessions, exportLog,
   getViewport: (): ViewportSnapshot => viewport.snapshot(),
-  setViewport: (patch: Partial<ViewportSnapshot>) => apiCall('setViewport', patch, () => { viewport.apply(patch); render(); }),
+  setViewport: (patch: Partial<ViewportSnapshot>) => apiCall('setViewport', patch, async () => {
+    const before = viewport.channel;
+    viewport.apply(patch);
+    // UI 与 Agent 共用同一 viewport 行为：通道是纯视图状态，切换后同步上屏层；
+    // 暂停时重解当前帧，播放中后续帧自动生效，不打断播放。
+    if (viewport.channel !== before) {
+      setPresentationChannel(viewport.channel);
+      log.info('ui', '切换 YUV 通道', { channel: viewport.channel, trigger: 'api' });
+    }
+    render();
+    const state = session.getState();
+    if (viewport.channel !== before && state.tracks.length && !state.playing && !state.busy) await session.seek(state.positionUs);
+  }),
   tools: reviewTools(session, workspaceTransfer),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
@@ -463,7 +487,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
 // and the annotation deep-link restore (already async) are still outstanding,

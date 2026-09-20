@@ -103,8 +103,8 @@ test('split position is unclamped during drag and clamped on release', () => {
 
 test('apply validates patches for the automation surface', () => {
   const v = new Viewport();
-  v.apply({ mode: 'split', splitPos: 0.72, zoom: 4, offsetX: 10, offsetY: -5, pixelSize: 'fill' });
-  assert.deepEqual(v.snapshot(), { arrangement: 'horizontal', mode: 'split', splitPos: 0.72, zoom: 4, offsetX: 10, offsetY: -5, pixelSize: 'fill' });
+  v.apply({ mode: 'split', splitPos: 0.72, zoom: 4, offsetX: 10, offsetY: -5, pixelSize: 'fill', channel: 'y' });
+  assert.deepEqual(v.snapshot(), { arrangement: 'horizontal', mode: 'split', splitPos: 0.72, zoom: 4, offsetX: 10, offsetY: -5, pixelSize: 'fill', channel: 'y' });
   v.apply({ arrangement: 'grid' });
   assert.equal(v.snapshot().arrangement, 'grid');
   assert.throws(() => v.apply({ arrangement: 'invalid' as never }));
@@ -114,6 +114,7 @@ test('apply validates patches for the automation surface', () => {
   assert.equal(v.zoom, ZOOM_MAX);
   assert.throws(() => v.apply({ mode: 'stack' as never }));
   assert.throws(() => v.apply({ pixelSize: 'auto' as never }));
+  assert.throws(() => v.apply({ channel: 'alpha' as never }));
   assert.throws(() => v.apply({ offsetX: Infinity }));
 });
 

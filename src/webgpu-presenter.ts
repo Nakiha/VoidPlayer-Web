@@ -1,5 +1,6 @@
 import { log } from './log.ts';
 import { getColorMode } from './color-mode.ts';
+import { getPresentationChannel } from './presentation-channel.ts';
 import { detectGpuProfile } from './webgpu-calibration.ts';
 import { createExternalSurface } from './webgpu-color-surface.mjs';
 import type { GpuSurface } from './webgpu-color-surface.mjs';
@@ -114,6 +115,7 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   catch(error){entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');log.info('media','WebGPU 资源呈现失败，使用现有呈现路径。',{reason:String(error)});return false;}
   finally{resource?.close();}
   source.dataset.colorExecutor=frame.kind==='yuv'?'webgpu-yuv':'webgpu-external';
+  source.dataset.channel=frame.kind==='yuv'?getPresentationChannel():'rgb';
   source.dataset.colorContract=frame.kind==='yuv'?(experimentalProfile?'profile-yuv-sdr':'common-yuv-sdr'):'browser-managed';
   const timing=timings.get(source)??{values:[],count:0},values=timing.values;values.push(performance.now()-start);if(values.length>128)values.shift();timing.count++;timings.set(source,timing);
   if(timing.count%32===0){const sorted=[...values].sort((a,b)=>a-b);source.dataset.colorPerformance=JSON.stringify({submitP50:sorted[Math.floor(sorted.length*.5)],submitP95:sorted[Math.floor(sorted.length*.95)],submitMax:sorted.at(-1)});}

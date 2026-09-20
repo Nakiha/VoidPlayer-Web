@@ -1,5 +1,6 @@
 import { yuvKernel } from './webgpu-yuv-kernel.mjs';
 import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from './yuv-color.ts';
+import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.
 const batches=new WeakMap();
@@ -70,7 +71,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     let rect=[0,0,texture.width,texture.height];
     if(geometry&&!capture){const g=geometry,w=g.imageWidth*g.zoom*g.dpr,h=g.imageHeight*g.zoom*g.dpr;rect=[((g.width-g.imageWidth*g.zoom)/2+g.offsetX)*g.dpr,((g.height-g.imageHeight*g.zoom)/2+g.offsetY)*g.dpr,w,h];}
     device.queue.writeBuffer(externalUniform,0,new Float32Array([...rect,rotation,current.displayWidth,current.displayHeight,Number(linear)]));
-    if(isYuv){yuvParams.set(rect,32);yuvParams[31]=rotation;yuvParams[29]=Number(linear);device.queue.writeBuffer(yuvUniform,0,yuvParams);}
+    if(isYuv){yuvParams[3]=presentationChannelCode(getPresentationChannel());yuvParams.set(rect,32);yuvParams[31]=rotation;yuvParams[29]=Number(linear);device.queue.writeBuffer(yuvUniform,0,yuvParams);}
     const external=isYuv?null:mode==='copy'?copiedTexture.createView():device.importExternalTexture({source:current,colorSpace:'srgb'});
     const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:isYuv?[{binding:0,resource:{buffer:yuvBuffer}},{binding:1,resource:{buffer:yuvUniform}}]:[{binding:0,resource:external},{binding:1,resource:samplers.nearest},{binding:2,resource:{buffer:externalUniform}}]});
     const encoder=device.createCommandEncoder();
@@ -80,7 +81,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   }
   return {
     setGeometry(g,r=rotation){if(JSON.stringify(g)===JSON.stringify(geometry)&&r===rotation)return;geometry=g;rotation=r;if(current&&g)this.presentRetained();},
-    presentRetained(){const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;render(context.getCurrentTexture(),format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
+    presentRetained(){const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;if(current?.yuv&&yuvParams)yuvParams[3]=presentationChannelCode(getPresentationChannel());render(context.getCurrentTexture(),format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
     device, adapter: adapter ? {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,device:adapter.info?.device} : null,errors,
     // Own one clone so paused redraw and capture use precisely the same resource.
     present(frame,width=frame.displayWidth,height=frame.displayHeight) {
@@ -95,7 +96,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
         if(yuvSize!==length){yuvBuffer?.destroy();yuvBuffer=device.createBuffer({size:length,usage:GPUBufferUsage.STORAGE|GPUBufferUsage.COPY_DST});yuvSize=length;}
         const data=frame.pixels.byteLength===length?frame.pixels:new Uint8Array(length);if(data!==frame.pixels)data.set(frame.pixels);
         device.queue.writeBuffer(yuvBuffer,0,data);
-        yuvParams=new Float32Array(40);yuvParams.set([d.width,d.height,plan.primaries==='bt2020'?3:mode==='hybrid'?(plan.primaries==='smpte170m'?1:plan.primaries==='bt470bg'?2:0):0,0,d.visibleRect.x,d.visibleRect.y,2**l.subsampleX,2**l.subsampleY,l.bitDepth>8?2:1,l.bitShift,Number(l.semiplanar),2**l.bitDepth-1]);
+        yuvParams=new Float32Array(40);yuvParams.set([d.width,d.height,plan.primaries==='bt2020'?3:mode==='hybrid'?(plan.primaries==='smpte170m'?1:plan.primaries==='bt470bg'?2:0):0,presentationChannelCode(getPresentationChannel()),d.visibleRect.x,d.visibleRect.y,2**l.subsampleX,2**l.subsampleY,l.bitDepth>8?2:1,l.bitShift,Number(l.semiplanar),2**l.bitDepth-1]);
         l.planes.forEach((p,i)=>new Uint32Array(yuvParams.buffer).set([p.offset,p.stride,p.width,p.height],12+i*4));
         yuvParams.set([2**(l.bitDepth-8),Number(plan.fullRange),...yuvCoefficients(plan.matrix),mode==='hybrid'&&plan.transfer==='bt709'?1.961:0,0,Number(mode==='webkit-planes'&&l.bitDepth===8),0],24);
         yuvParams.set(chromaOffset(l),36);

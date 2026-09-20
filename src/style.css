@@ -241,7 +241,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 [hidden] { display: none !important; }
 @media(max-width: 900px) { .frame-time { display: none; } }
 @media(max-width: 680px) {
-  .brand { display: none; } #pixel-size { display: none; }
+  .brand { display: none; } #pixel-size { display: none; } #channel-select { display: none; }
   /* Longer labels (e.g. 添加本地视频) would push the settings button out. */
   .topbar .add-video > span { display: none; }
   .side-panel { position: absolute; grid-row: 1 / 2; top: 0; bottom: 0; z-index: 6; width: min(var(--sources-width), 75vw); box-shadow: var(--popover-shadow); }

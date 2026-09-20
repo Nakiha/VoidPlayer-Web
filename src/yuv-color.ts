@@ -87,15 +87,35 @@ export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8Clamp
   }
   return [Math.round(Math.max(0, Math.min(1, rgb[0])) * 255), Math.round(Math.max(0, Math.min(1, rgb[1])) * 255), Math.round(Math.max(0, Math.min(1, rgb[2])) * 255)];
 }
+/** Isolated source channel as display gray, using the same range normalization
+ * as the RGB path but no matrix/primaries conversion: Y maps normalized luma
+ * 0–1 to black–white; U/V map normalized chroma (≈−0.5–0.5) shifted by +0.5
+ * so neutral chroma renders mid-gray. Chroma keeps bilinear-sited
+ * reconstruction; luma stays nearest. */
+export function yuvChannelGray(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, x: number, y: number, channel: 'y' | 'u' | 'v', plan = resolveYuvColor(d)): [number, number, number] {
+  const l = d.yuv!;
+  const scale = 2 ** (l.bitDepth - 8), max = 2 ** l.bitDepth - 1;
+  const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;
+  let normalized: number;
+  if (channel === 'y') {
+    normalized = (yuvSample(pixels, l, 0, sx, sy) - (plan.fullRange ? 0 : 16 * scale)) / (plan.fullRange ? max : 219 * scale);
+  } else {
+    const component = channel === 'u' ? 1 : 2;
+    normalized = (yuvReconstructedSample(pixels, l, component, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale) + 0.5;
+  }
+  const gray = Math.round(Math.max(0, Math.min(1, normalized)) * 255);
+  return [gray, gray, gray];
+}
 /** Independent CPU reference and no-WebGL fallback. High depth stays intact
- * through range/matrix arithmetic, quantized only at final RGB output. */
-export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray): Uint8ClampedArray<ArrayBuffer> {
+ * through range/matrix arithmetic, quantized only at final RGB output. Channel
+ * 'y'/'u'/'v' isolates the source plane as gray without matrix conversion. */
+export function yuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, channel: 'rgb' | 'y' | 'u' | 'v' = 'rgb'): Uint8ClampedArray<ArrayBuffer> {
   validateYuv(d,pixels.byteLength);
   const l=d.yuv!, plan=resolveYuvColor(d);
   if (!plan.supported) throw new Error('Unsupported YUV color plan');
   const out=new Uint8ClampedArray(d.width*d.height*4);
   for(let y=0;y<d.height;y++) for(let x=0;x<d.width;x++) {
-    const [r,g,b]=yuvPixelRgb(d,pixels,x,y);
+    const [r,g,b]=channel==='rgb'?yuvPixelRgb(d,pixels,x,y,plan):yuvChannelGray(d,pixels,x,y,channel,plan);
     const i=(y*d.width+x)*4;
     out[i]=r;out[i+1]=g;out[i+2]=b;out[i+3]=255;
   }

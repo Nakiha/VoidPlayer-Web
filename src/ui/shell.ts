@@ -20,6 +20,7 @@ export function shell() {
       <button id="reset-view" class="icon-button" aria-label="重置视图" title="重置视图：恢复 1× 并居中">${icon('center')}</button>
       <button id="zoom-select" class="choice-trigger" aria-label="画面缩放" data-tooltip="画面缩放" disabled></button>
       <button id="pixel-size" class="choice-trigger" aria-label="像素尺寸模式" data-tooltip="像素尺寸模式" disabled></button>
+      <button id="channel-select" class="choice-trigger" aria-label="YUV 通道" data-tooltip="YUV 通道：仅原始平面帧生效" disabled></button>
     </div>
     <span class="toolbar-spacer"></span>
     <button id="open" class="add-video" aria-label="添加本地视频">${icon('filePlus')}<span>添加本地视频</span></button>

@@ -93,6 +93,27 @@ Cb/Cr=(code−128×scale)/(224×scale)；full Y=code/max，Cb/Cr=(code−128×sc
 色度在 range/matrix 转换之前按实际资源的 AVChromaLocation 做双线性重建，单个高位深码值先完整读取，再插值，不对拆开的高低字节插值。支持 left/center/top-left/top/bottom-left/bottom；未给出位置时明确采用 center，不能从浏览器品牌推断。边界钳制到有效平面，忽略行尾 padding。WebGPU、WebGL 和 CPU 使用相同坐标规则；亮度和最终放大仍取最近源像素。位置依据 [FFmpeg AVChromaLocation](https://ffmpeg.org/doxygen/7.1/pixdesc_8h.html)。浏览器导入可能采用不同位置或滤波，因此托管路径仍可能不同。
 CPU 测试固定黑白端点、独立饱和色向量；GPU 与 CPU 误差预算为每通道最多 1 个 8-bit 码值。
 
+## YUV 通道隔离查看（诊断视图，非色彩转换）
+
+顶栏“像素尺寸模式”右侧的 YUV 通道下拉栏在 `rgb` / `y` / `u` / `v` 之间切换，
+状态保存在 viewport 快照（`Viewport.channel`，工作区/ Agent `setViewport` 共用），
+上屏层经 `presentation-channel.ts` 全局读取，切换的是同一帧的显示方式，
+不改源标签（`sourceColor`）、资源描述（`FrameDescription.color`）或 resolved plan，
+不按片源堆叠修正。
+
+- 仅 `yuv` kind 帧（WASM 原始平面；reference 硬件经首帧核对的读回平面；
+  统一平面路径的 `copyTo` 平面）走隔离：Y 取归一化亮度 0–1 → 灰阶，
+  U/V 取归一化色度 +0.5（中性色度为中灰），不经矩阵/基色变换；
+  色度保持 AVChromaLocation 双线性重建，亮度取最近源像素，与 RGB 路径同坐标规则。
+- 三条 YUV 后端共用同一数学：WebGPU `webgpu-yuv-kernel.mjs`（`p[0].w` 通道码）、
+  旧 WebGL `yuv-surface.ts`（`channel` uniform）、CPU `yuvToRgba(..., channel)`；
+  视口缩小 LINEAR、放大 NEAREST 的采样策略不变。
+- 非 YUV 资源（浏览器托管 `video-sample`、RGBA8 回退、不支持色彩）无原始平面可还原，
+  从显示 RGB 反推不是真值，因此保持 RGB 显示（`canvas.dataset.channel='rgb'`），
+  不伪装成通道灰度。想看真通道请切“正确颜色（reference）”后再看。
+- 暂停时切换经当前位重解一帧；播放中后续帧自动生效，不打断播放。
+  截图/按需取像素反映当前通道视图；缩略图封面恒为 RGB，不随通道变化。
+
 ## 真实 WASM 与播放续接
 
 当前已从 Actions 34499068492 同步锁定修订 1ba3ef85 的单/多线程 ABI v2 core，来源与文件哈希已校验。Windows 对照支持 `test:color:windows -- --wasm`，使用真实 packet WASM 解码并逐字节核对独立 FFmpeg 参考。诊断页面保留 COOP/COEP，记录实际 coreVariant，不能把单线程测试冒充发布环境多线程。

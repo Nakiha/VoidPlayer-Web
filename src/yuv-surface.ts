@@ -1,5 +1,6 @@
 import type { FrameDescription } from './frame-description.ts';
 import { resolveYuvColor, yuvCoefficients, validateYuv, chromaOffset } from './yuv-color.ts';
+import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
 
 /** Source-coordinate color conversion, quantization, then viewport sampling.
  * Only explicit capture materializes a full RGB texture. Byte channels preserve
@@ -19,6 +20,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
     uniform float semi; uniform float maximum; uniform float codeScale;
     uniform float fullRange; uniform vec2 coefficients; uniform float wide;
     uniform float rotation; uniform vec2 origin; uniform vec2 imageSize; uniform float direct; uniform float bilinear;
+    uniform float channel;
     float code(vec4 value) {
       return floor((floor(value.r*255.0+0.5)+(bytes>1.0?floor(value.a*255.0+0.5)*256.0:0.0))/shift);
     }
@@ -43,6 +45,12 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
       y=(y-(fullRange>0.5?0.0:16.0*codeScale))/(fullRange>0.5?maximum:219.0*codeScale);
       float cb=(u-128.0*codeScale)/(fullRange>0.5?maximum:224.0*codeScale);
       float cr=(vv-128.0*codeScale)/(fullRange>0.5?maximum:224.0*codeScale);
+      if(channel>0.5){
+        float gray=y;
+        if(channel>1.5)gray=(channel>2.5?cr:cb)+0.5;
+        gray=clamp(gray,0.0,1.0);
+        return vec4(floor(gray*255.0+0.5)/255.0,floor(gray*255.0+0.5)/255.0,floor(gray*255.0+0.5)/255.0,1.0);
+      }
       float kr=coefficients.x,kb=coefficients.y,kg=1.0-kr-kb;
       vec3 rgb=vec3(y+2.0*(1.0-kr)*cr,y-2.0*kb*(1.0-kb)/kg*cb-2.0*kr*(1.0-kr)/kg*cr,y+2.0*(1.0-kb)*cb);
       if(wide>0.5){vec3 c=linear(rgb);rgb=encoded(vec3(dot(c,vec3(1.660491,-0.587641,-0.072850)),dot(c,vec3(-0.124550,1.132900,-0.008349)),dot(c,vec3(-0.018151,-0.100579,1.118730))));}
@@ -69,7 +77,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
   const textures=[gl.createTexture()!,gl.createTexture()!,gl.createTexture()!];
   const framebuffer=gl.createFramebuffer()!;
   const sizes=textures.map(()=>[0,0,0]);
-  const locations=new Map(['planeY','planeU','planeV','shapeY','shapeU','shapeV','outputSize','visibleSize','crop','subsample','chromaOrigin','chromaSize','bytes','shift','semi','maximum','codeScale','fullRange','coefficients','wide','rotation','origin','imageSize','direct','bilinear'].map(name=>[name,gl.getUniformLocation(program,name)]));
+  const locations=new Map(['planeY','planeU','planeV','shapeY','shapeU','shapeV','outputSize','visibleSize','crop','subsample','chromaOrigin','chromaSize','bytes','shift','semi','maximum','codeScale','fullRange','coefficients','wide','rotation','origin','imageSize','direct','bilinear','channel'].map(name=>[name,gl.getUniformLocation(program,name)]));
   const loc=(name:string)=>locations.get(name)!;
   const position=gl.getAttribLocation(program,'position');
   const max=gl.getParameter(gl.MAX_TEXTURE_SIZE);
@@ -121,6 +129,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
       gl.uniform2f(loc('chromaOrigin'),...chromaOffset(l));gl.uniform2f(loc('chromaSize'),l.planes[1].width,l.planes[1].height);
       for(const [key,value]of Object.entries({bytes:l.bitDepth>8?2:1,shift:2**l.bitShift,semi:Number(l.semiplanar),maximum:2**l.bitDepth-1,codeScale:2**(l.bitDepth-8),fullRange:Number(plan.fullRange),wide:Number(plan.primaries==='bt2020'),rotation}))gl.uniform1f(loc(key),value);
       gl.uniform2f(loc('coefficients'),...yuvCoefficients(plan.matrix));
+      gl.uniform1f(loc('channel'),presentationChannelCode(getPresentationChannel()));
       gl.drawArrays(gl.TRIANGLES,0,3);gl.bindFramebuffer(gl.FRAMEBUFFER,null);
     },
     dispose(){textures.forEach(t=>gl.deleteTexture(t));gl.deleteFramebuffer(framebuffer);gl.deleteBuffer(buffer);gl.deleteProgram(program);},

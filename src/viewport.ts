@@ -12,6 +12,10 @@
 export type LayoutMode = 'side-by-side' | 'split';
 export type Arrangement = 'horizontal' | 'grid';
 export type PixelSizeMode = 'uniform' | 'fill';
+/** Presentation-only YUV channel isolation. Shared by every track like zoom;
+ *  only frames with original YUV planes (`yuv` kind) render isolated
+ *  channels; browser-managed and RGBA resources stay RGB. */
+export type ChannelMode = 'rgb' | 'y' | 'u' | 'v';
 
 export const ZOOM_MIN = 1;
 export const ZOOM_MAX = 500;
@@ -42,6 +46,7 @@ export type ViewportSnapshot = {
   offsetX: number;
   offsetY: number;
   pixelSize: PixelSizeMode;
+  channel: ChannelMode;
 };
 
 export class Viewport {
@@ -52,9 +57,10 @@ export class Viewport {
   offsetX = 0;
   offsetY = 0;
   pixelSize: PixelSizeMode = 'uniform';
+  channel: ChannelMode = 'rgb';
 
   snapshot(): ViewportSnapshot {
-    return { mode: this.mode, arrangement: this.arrangement, splitPos: this.splitPos, zoom: this.zoom, offsetX: this.offsetX, offsetY: this.offsetY, pixelSize: this.pixelSize };
+    return { mode: this.mode, arrangement: this.arrangement, splitPos: this.splitPos, zoom: this.zoom, offsetX: this.offsetX, offsetY: this.offsetY, pixelSize: this.pixelSize, channel: this.channel };
   }
 
   /** Patch application for the automation surface (`window.voidPlayer`). */
@@ -70,6 +76,10 @@ export class Viewport {
     if (patch.pixelSize !== undefined) {
       if (patch.pixelSize !== 'uniform' && patch.pixelSize !== 'fill') throw new Error('像素尺寸模式必须是 uniform 或 fill。');
       this.pixelSize = patch.pixelSize;
+    }
+    if (patch.channel !== undefined) {
+      if (!['rgb', 'y', 'u', 'v'].includes(patch.channel)) throw new Error('通道模式必须是 rgb、y、u 或 v。');
+      this.channel = patch.channel;
     }
     if (patch.splitPos !== undefined) this.setSplitPos(Number(patch.splitPos), true);
     if (patch.zoom !== undefined) {
@@ -88,6 +98,10 @@ export class Viewport {
 
   setMode(mode: LayoutMode) { this.mode = mode; }
   setPixelSize(pixelSize: PixelSizeMode) { this.pixelSize = pixelSize; }
+  setChannel(channel: ChannelMode) {
+    if (!['rgb', 'y', 'u', 'v'].includes(channel)) throw new Error('通道模式必须是 rgb、y、u 或 v。');
+    this.channel = channel;
+  }
 
   /** While dragging the splitter the position is NOT clamped (the divider may
    *  leave the stage); pass clamp=true when the gesture ends. */
