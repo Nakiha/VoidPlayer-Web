@@ -7,7 +7,7 @@ export async function verifySavedWorkspaces(send, media, serverUrl, owner) {
     tracks: [{ slot: 'A', mediaId: 'release-media', offsetUs: 0 }],
     media: [{ id: 'release-media', name: media.name, size: media.size, lastModified: media.lastModified, codec: 'test', decoder: 'webcodecs', width: 100, height: 100, durationUs: 1000000, firstPtsUs: 0, source: { kind: 'library', id: media.id, url: new URL(`/api/media/${media.id}?v=${media.version}`, serverUrl).href } }],
     marks: [{ id: 'release-mark', slot: 'A', mediaId: 'release-media', text: 'Persisted review', severity: 3, origin: 'human', createdAt: now, frame: { ptsUs: 100, sourcePtsUs: 100, durationUs: 1000 }, region: null, comparison: [], drawings: [{ id: 'box', tool: 'rect', color: '#ff3b30', strokeWidth: 4, points: [{ x: .1, y: .1 }, { x: .5, y: .5 }] }] }],
-    viewport: { mode: 'side-by-side', arrangement: 'horizontal', splitPos: .5, zoom: 1, offsetX: 0, offsetY: 0, pixelSize: 'uniform' }, thumbnails: [],
+    viewport: { mode: 'side-by-side', arrangement: 'horizontal', splitPos: .5, zoom: 1, offsetX: 0, offsetY: 0, pixelSize: 'uniform', channel: 'rgb' }, thumbnails: [],
   };
   const made = await send('/api/workspaces', { method: 'POST', headers, body: JSON.stringify({ name: 'Released review', document, owner: 'forged' }) });
   assert.equal(made.status, 201, made.body.toString()); const first = JSON.parse(made.body); assert.equal(first.owner, owner); assert.equal(first.revision, 1);
