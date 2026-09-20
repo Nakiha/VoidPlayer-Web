@@ -90,7 +90,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     } catch(e) {localFailure=`本机保存失败：${(e as Error).message}`;} finally {saving--;await refreshDrafts();}
   }
   const unsubscribeMarks=session.subscribeMarkChanges((id,document)=>{void enqueue(id,document);});
-  async function apply() {
+  async function apply(removeIds: string[] = []) {
     if (editing() || saving || pendingQueue.size) return;
     const captured=generation,edited=editGeneration, records=await storage.records(scope); await refreshDrafts(); if(captured!==generation || editing())return;
     const pending=currentDrafts(), protectedIds=new Set(pending.map(draft=>draft.id));
@@ -108,7 +108,10 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     for(const document of documents){const preview=await storage.preview(scope,document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))annotationThumbnails.set(document.mark.id,preview);}
     if(captured!==generation || edited!==editGeneration || editing() || saving || pendingQueue.size)return;
     // Identical shared library versions remap to this window's ephemeral media IDs.
-    session.applyStoredAnnotations(documents,[...managed]);
+    // Stale ids are removed only with a completed load: dropping live marks
+    // before the replacement is readable leaves a window where failed imports
+    // or skipped syncs observably erase annotations.
+    session.applyStoredAnnotations(documents,[...managed, ...removeIds]);
   }
   const uploaded = new Map<string,string>();
   async function uploadPreviews(space: string, actorId: string) {
@@ -173,8 +176,12 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   }
   async function switchSpace(next:string) {
     if(editing() || pendingQueue.size)return;
-    generation++;scope=next;try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();session.applyStoredAnnotations([], [...managed]);managed.clear();
-    await apply();void sync();
+    // Restoring the current scope (e.g. failed-import rollback) must not
+    // touch live marks: there is nothing to load that the session lacks.
+    if(next===scope)return;
+    generation++;scope=next;try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();
+    const previous=[...managed];managed.clear();
+    await apply(previous);void sync();
   }
   let resolving=false;
   async function resolve(draft:AnnotationDraft,copy:boolean) {
