@@ -3,7 +3,7 @@
 // dedupe, budget checks and one independent resource reference. Heavy work
 // (render, encode, store, upload) continues in tasks.ts off the hot path.
 
-import { THUMB_FRAME_BUDGET_BYTES } from './contract.ts';
+import { THUMB_FRAME_BUDGET_BYTES, THUMB_HOLD_MS } from './contract.ts';
 import { thumbnailState } from './state.ts';
 import type { OfferResult } from './state.ts';
 import { presentationColor } from '../presentation-color.ts';
@@ -35,6 +35,9 @@ export interface AcceptedOffer {
   owned: DecodedFrame;
   context: FirstFrameContext;
   acceptedAt: number;
+  expired: boolean;
+  release(): void;
+  onExpire?: () => void;
 }
 
 function unsupportedKind(frame: DecodedFrame): string | null {
@@ -68,7 +71,7 @@ export function offerFirstFrameCandidate(
   // Fixed versioned SDR/sRGB output: HDR branches without a reliable
   // conversion stay missing rather than caching wrong colors.
   if (policy.unsupportedHdr) { thumbnailState.skip('unsupported:hdr'); return 'unsupported'; }
-  const byteSize = Number.isSafeInteger(context.byteSize) && context.byteSize >= 0 ? context.byteSize : frame.byteSize;
+  const byteSize = Math.max(frame.byteSize, frame.pixels?.byteLength ?? 0, Number.isSafeInteger(context.byteSize) && context.byteSize >= 0 ? context.byteSize : 0);
   if (!(byteSize >= 0) || byteSize > THUMB_FRAME_BUDGET_BYTES) { thumbnailState.skip('budget:frame-bytes'); return 'budget-exceeded'; }
   if (thumbnailState.holdingFull) { thumbnailState.skip('budget:hold-slot'); return 'budget-exceeded'; }
 
@@ -89,10 +92,11 @@ export function offerFirstFrameCandidate(
       const source = frame.pixels!;
       const copy = new Uint8ClampedArray(source.length);
       copy.set(source);
+      let retained: Uint8ClampedArray | undefined = copy;
       let closed = false;
       owned = {
-        ...frame, pixels: copy,
-        close() { if (closed) return; closed = true; },
+        ...frame, get pixels() { return retained; },
+        close() { if (closed) return; closed = true; retained = undefined; },
       };
     }
   } catch {
@@ -107,12 +111,31 @@ export function offerFirstFrameCandidate(
   thumbnailState.holdPeakBytes = Math.max(thumbnailState.holdPeakBytes, byteSize);
   thumbnailState.accepted++;
   if (context.epoch !== undefined) thumbnailState.epochs.set(context.cacheKey, context.epoch);
-  return { result: 'accepted', owned, context, acceptedAt };
+  const offer: AcceptedOffer = { result: 'accepted', owned, context, acceptedAt, expired: false, release };
+  const token = Symbol(context.cacheKey);
+  thumbnailState.holdOwner = token;
+  let released = false;
+  const timer = setTimeout(() => {
+    offer.expired = true;
+    offer.onExpire?.();
+    release();
+    thumbnailState.skip('budget:hold-timeout');
+  }, THUMB_HOLD_MS);
+  function release() {
+    if (released) return;
+    released = true;
+    clearTimeout(timer);
+    try { owned.close(); } catch {}
+    if (thumbnailState.holdOwner === token) {
+      thumbnailState.holdOwner = undefined;
+      thumbnailState.holdingFull = false;
+    }
+  }
+  return offer;
 }
 
 /** Release bookkeeping for an accepted task in every terminal outcome. */
 export function settleOffer(cacheKey: string, completed: boolean) {
   thumbnailState.inFlight.delete(cacheKey);
-  thumbnailState.holdingFull = false;
   if (completed) thumbnailState.completed.add(cacheKey);
 }

@@ -1,6 +1,7 @@
 name: Build and verify standalone releases
 
 on:
+  pull_request:
   push:
     branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor, codex/annotation-persistence]
     tags: ['v*']
@@ -198,9 +199,24 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
-      - run: node --test test/tls.test.ts test/decoder-policy.test.ts test/playback.test.ts test/session.test.ts test/media-loading.test.ts test/media-abort.test.ts test/media.test.ts test/media-diagnostics.test.ts test/ffmpeg-media.test.ts test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.test.ts test/flv-startup.test.ts test/flv-recovery.test.ts test/frame-index-cache.test.ts
+      - name: Prepare complete unit-test fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libnss3-tools
+          npm run fixtures:flv
+          node scripts/sync-fate-samples.mjs
+      - run: npm test
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
+      - name: Verify thumbnails, startup and restored workspace lifecycle
+        run: |
+          node scripts/check-thumbnail-browser.mjs webkit
+          node scripts/check-thumbnail-browser.mjs chromium
+          node scripts/check-thumbnail-worker.mjs
+          node scripts/check-startup-browser.mjs
+          node scripts/check-workspace-browser.mjs webkit
+          node scripts/check-workspace-browser.mjs chromium
+
       - run: node scripts/check-presentation-browser.mjs
       - run: node scripts/check-feedback-browser.mjs chromium
       - run: node scripts/check-connection-guide-browser.mjs

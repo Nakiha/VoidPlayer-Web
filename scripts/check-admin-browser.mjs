@@ -20,7 +20,7 @@ try {
   service = await startService(config, true, { version: '0.1.0-preview', revision: 'browser-check' });
   const base = `http://127.0.0.1:${service.server.address().port}`;
   await service.library.refresh();
-  const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'admin-browser', events: [{ type: 'test', text: '<script>alert(1)</script>' }] }) });
+  const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'log', 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'admin-browser', events: [{ type: 'test', text: '<script>alert(1)</script>' }] }) });
   const log = await uploaded.json(); assert.equal(uploaded.status, 201);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({ viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });

@@ -72,10 +72,10 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const files = await resolveLocalFiles(active.filter(m => !m.source), supplied);
       if (!files) return false;
       const rollback=options.beforeRestore();
-      try { await session.restoreWorkspace(document, async info => {
-        if (!info.source) return openMedia(files.get(info.id)!);
-        const reference = await pinLibraryReference(info, location.href);
-        const source = await openMediaFromUrl(reference.url, info); updateMediaInfo(source,{source:reference},'identity'); return source;
+      try { await session.restoreWorkspace(document, async (info, signal, progress) => {
+        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
+        const reference = await pinLibraryReference(info, location.href, fetch, signal);
+        const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
       });
       } catch(error) { rollback?.(); throw error; }
       annotationThumbnails.clear();

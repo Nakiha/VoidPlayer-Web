@@ -19,6 +19,7 @@ class ThumbnailState {
   readonly inFlight = new Set<string>();
   /** True while one extra full-frame candidate is retained off the hot path. */
   holdingFull = false;
+  holdOwner?: symbol;
   holdStartedAt = 0;
   holdPeakBytes = 0;
   /** Small-image uploads awaiting fetch. */
@@ -31,12 +32,6 @@ class ThumbnailState {
   skipped: SkipCounter = {};
   syncHookLastMs = 0;
   syncHookMaxMs = 0;
-  // Non-interference proof: the thumbnail path must never perform these.
-  videoRangeReads = 0;
-  mediaSourceOpens = 0;
-  frameAtCalls = 0;
-  seekCalls = 0;
-  indexScans = 0;
   rendered = 0;
   uploaded = 0;
   accepted = 0;
@@ -65,20 +60,17 @@ class ThumbnailState {
       holdPeakBytes: this.holdPeakBytes, pendingUploads: this.pendingUploads,
       skipped: { ...this.skipped }, syncHookLastMs: this.syncHookLastMs, syncHookMaxMs: this.syncHookMaxMs,
       rendered: this.rendered, uploaded: this.uploaded, accepted: this.accepted,
-      videoRangeReads: this.videoRangeReads, mediaSourceOpens: this.mediaSourceOpens,
-      frameAtCalls: this.frameAtCalls, seekCalls: this.seekCalls, indexScans: this.indexScans,
     };
   }
 
   /** Test isolation only. */
   reset() {
     this.completed.clear(); this.inFlight.clear();
-    this.holdingFull = false; this.holdStartedAt = 0; this.holdPeakBytes = 0;
+    this.holdingFull = false; this.holdOwner = undefined; this.holdStartedAt = 0; this.holdPeakBytes = 0;
     this.pendingUploads = 0; this.pendingUploadBytes = 0;
     this.epochs.clear(); this.statusCache.clear(); this.skipped = {};
     this.syncHookLastMs = 0; this.syncHookMaxMs = 0;
-    this.videoRangeReads = 0; this.mediaSourceOpens = 0; this.frameAtCalls = 0;
-    this.seekCalls = 0; this.indexScans = 0; this.rendered = 0; this.uploaded = 0; this.accepted = 0;
+    this.rendered = 0; this.uploaded = 0; this.accepted = 0;
   }
 }
 

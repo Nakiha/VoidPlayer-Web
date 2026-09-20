@@ -1,6 +1,6 @@
 // Browser-local thumbnail Blob storage (IndexedDB). Server media and local
 // files both land here for instant display; only server media additionally
-// uploads. Blobs only, never base64. Object URLs stay ephemeral per page.
+// uploads. Small JPEG bytes (never base64); old Blob records remain readable.
 
 export interface StoredThumbnail {
   key: string;
@@ -54,13 +54,22 @@ function transact<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => 
 
 export async function getLocalThumbnail(key: string): Promise<StoredThumbnail | undefined> {
   try {
-    return await transact('readonly', store => store.get(key));
+    const entry = await transact('readonly', store => store.get(key));
+    if (!entry) return undefined;
+    if (entry.blob instanceof Blob) return entry as StoredThumbnail;
+    if (!(entry.bytes instanceof ArrayBuffer)) return undefined;
+    const { bytes, ...metadata } = entry;
+    return { ...metadata, blob: new Blob([bytes], { type: 'image/jpeg' }) } as StoredThumbnail;
   } catch { return undefined; }
 }
 
 export async function putLocalThumbnail(entry: StoredThumbnail): Promise<boolean> {
   try {
-    await transact('readwrite', store => store.put(entry));
+    // WebKit can reject Blob persistence in ephemeral browser contexts.
+    // The JPEG is capped at 128 KiB, so store portable bytes instead.
+    const { blob, ...metadata } = entry;
+    const bytes = await blob.arrayBuffer();
+    await transact('readwrite', store => store.put({ ...metadata, bytes }));
     return true;
   } catch { return false; }
 }

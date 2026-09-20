@@ -1027,3 +1027,69 @@ test('locateAnalysisSample projects to session time and reports honestly (F2)', 
     assert.ok('reason' in unsupported);
   } finally { await session.dispose(); }
 });
+
+test('restored sources reopen with cancellation and preserve workspace anchors', async () => {
+  const previous = getColorMode(), decode = getReferenceDecode();
+  setColorMode('reference'); setReferenceDecode({ decoder: 'software', depth: 2 });
+  const session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => media('saved').source);
+    await session.seek(40000); session.addMark({ slot: 'A', text: 'keep' });
+    const document = session.exportWorkspace('http://localhost/');
+    let opens = 0;
+    await session.restoreWorkspace(document, async (info, signal, progress) => {
+      assert.ok(signal instanceof AbortSignal); assert.equal(typeof progress, 'function');
+      opens++; return media('decoder-' + opens).source;
+    });
+    const before = session.getState();
+    await session.setReferenceDecode({ decoder: 'hardware', depth: 4 });
+    assert.equal(opens, 2);
+    assert.deepEqual(session.getState().marks, before.marks);
+    assert.equal(session.getState().tracks[0].id, 'saved');
+    assert.equal(session.getState().positionUs, 40000);
+  } finally { await session.dispose(); setColorMode(previous); setReferenceDecode(decode); }
+});
+
+test('cancelled hung workspace opener frees the queue before its late source arrives', { timeout: 2000 }, async () => {
+  const session = new ReviewSession(() => {}), late = media('late-restore');
+  await session.load('A', async () => media('saved').source);
+  const document = session.exportWorkspace('http://localhost/');
+  const started = deferred<void>(), pending = deferred<MediaSource>();
+  let signal!: AbortSignal;
+  const restoring = session.restoreWorkspace(document, (_info, value) => {
+    signal = value; started.resolve(); return pending.promise;
+  });
+  const rejected = assert.rejects(restoring, { name: 'AbortError' });
+  await started.promise;
+  session.pause();
+  await rejected;
+  await session.load('B', async () => media('new-operation').source);
+  assert.ok(signal.aborted);
+  pending.resolve(late.source);
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(late.disposed, 1);
+  assert.equal(session.getState().tracks.length, 2);
+  await session.dispose();
+});
+
+test('cancelled color reopen frees the queue and disposes a late decoder once', { timeout: 2000 }, async () => {
+  const previous = getColorMode();
+  setColorMode('browser');
+  const session = new ReviewSession(() => {}), late = media('late-color');
+  const started = deferred<void>(), pending = deferred<MediaSource>();
+  let opens = 0;
+  try {
+    await session.load('A', async () => {
+      if (++opens === 1) return media('active').source;
+      started.resolve(); return pending.promise;
+    });
+    const switching = session.setColorMode('reference');
+    const rejected = assert.rejects(switching, { name: 'AbortError' });
+    await started.promise; session.pause(); await rejected;
+    assert.equal(getColorMode(), 'browser');
+    await session.load('B', async () => media('following').source);
+    pending.resolve(late.source);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    assert.equal(late.disposed, 1);
+  } finally { await session.dispose(); setColorMode(previous); }
+});

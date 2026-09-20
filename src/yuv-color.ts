@@ -72,8 +72,8 @@ export function yuvReconstructedSample(pixels: Uint8Array | Uint8ClampedArray,l:
 }
 const encoded = (v: number) => v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
 /** Single source pixel through the shared range/matrix/transfer plan. */
-export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, x: number, y: number): [number, number, number] {
-  const l = d.yuv!, plan = resolveYuvColor(d);
+export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, x: number, y: number, plan = resolveYuvColor(d)): [number, number, number] {
+  const l = d.yuv!;
   const [kr, kb] = yuvCoefficients(plan.matrix), kg = 1 - kr - kb;
   const scale = 2 ** (l.bitDepth - 8), max = 2 ** l.bitDepth - 1;
   const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;

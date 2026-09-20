@@ -1,5 +1,5 @@
 import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
-import { yuvToRgba } from './yuv-color.ts';
+import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from './yuv-color.ts';
 import { validateDescription } from './frame-description.ts';
 import { presentationColor } from './presentation-color.ts';
 import { THUMB_MAX_EDGE } from './thumbnails/contract.ts';
@@ -144,13 +144,30 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
       return { canvas, width, height };
     }
     if (!frame.pixels) return null;
-    const rgba = frame.kind === 'yuv' ? yuvToRgba(frame.description, frame.pixels) : frame.pixels;
-    // ImageData requires ArrayBuffer-backed storage; view (no copy) or bail.
-    let view: Uint8ClampedArray<ArrayBuffer>;
-    try {
-      view = new Uint8ClampedArray(rgba.buffer as ArrayBuffer, rgba.byteOffset, rgba.length);
-    } catch { return null; }
-    const image = new ImageData(view, frame.description.width, frame.description.height);
+    // Sample only the small target; never expand a full-resolution RGBA image.
+    const smallW = swapped ? height : width, smallH = swapped ? width : height;
+    const view = new Uint8ClampedArray(smallW * smallH * 4);
+    const d = frame.description;
+    const plan = frame.kind === 'yuv' ? resolveYuvColor(d) : undefined;
+    const rgbAt = (x: number, y: number) => {
+      if (frame.kind === 'yuv') return [...yuvPixelRgb(d, frame.pixels!, x, y, plan), 255];
+      const offset = (y * d.width + x) * 4;
+      return frame.pixels!.subarray(offset, offset + 4);
+    };
+    // Bilinear source sampling matches the presentation downscale rule.
+    for (let y = 0; y < smallH; y++) for (let x = 0; x < smallW; x++) {
+      const sx = Math.max(0, Math.min(d.width - 1, (x + .5) * d.width / smallW - .5));
+      const sy = Math.max(0, Math.min(d.height - 1, (y + .5) * d.height / smallH - .5));
+      const x0 = Math.floor(sx), y0 = Math.floor(sy), wx = sx - x0, wy = sy - y0;
+      const x1 = Math.min(d.width - 1, x0 + 1), y1 = Math.min(d.height - 1, y0 + 1);
+      const a = rgbAt(x0, y0), b = rgbAt(x1, y0), c = rgbAt(x0, y1), e = rgbAt(x1, y1);
+      const i = (y * smallW + x) * 4;
+      for (let channel = 0; channel < 4; channel++) {
+        view[i + channel] = (a[channel] * (1 - wx) + b[channel] * wx) * (1 - wy)
+          + (c[channel] * (1 - wx) + e[channel] * wx) * wy;
+      }
+    }
+    const image = new ImageData(view, smallW, smallH);
     const scratch = makeCanvas(image.width, image.height);
     const scratchCtx = scratch.getContext('2d');
     if (!scratchCtx) return null;

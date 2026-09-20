@@ -44,9 +44,6 @@ test('non-first positions never produce a candidate and never seek', () => {
   const result = offerFirstFrameCandidate(context({ isFileFirst: false }), rgbaFrame());
   assert.equal(result, 'not-first-frame');
   assert.equal(thumbnailState.inFlight.size, 0);
-  assert.equal(thumbnailState.frameAtCalls, 0);
-  assert.equal(thumbnailState.seekCalls, 0);
-  assert.equal(thumbnailState.videoRangeReads, 0);
 });
 
 test('dedupe: completed and in-flight keys are not re-accepted', () => {
@@ -97,8 +94,8 @@ test('accepted video-sample clones without touching the original', () => {
   assert.equal(originalClosed, false);
   // Epoch is frozen at accept.
   assert.equal(thumbnailState.cachedEpoch((offered as { context: FirstFrameContext }).context.cacheKey), 7);
-  const owned = (offered as { owned: DecodedFrame }).owned;
-  owned.close();
+  const owned = (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).owned;
+  (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).release();
   assert.equal(closes(), 1);
   assert.equal(originalClosed, false);
   settleOffer((offered as { context: FirstFrameContext }).context.cacheKey, true);
@@ -110,24 +107,39 @@ test('accepted pixel frames copy once and stay independent', () => {
   const frame = rgbaFrame(16);
   const offered = offerFirstFrameCandidate(context(), frame);
   assert.equal((offered as { result: string }).result, 'accepted');
-  const owned = (offered as { owned: DecodedFrame }).owned;
+  const owned = (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).owned;
   assert.notEqual(owned.pixels!.buffer, frame.pixels!.buffer);
   frame.pixels!.fill(9);
   assert.equal(owned.pixels![0], 0);
-  owned.close();
+  (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).release();
   settleOffer((offered as { context: FirstFrameContext }).context.cacheKey, false);
   assert.equal(thumbnailState.holdingFull, false);
   assert.ok(!thumbnailState.completed.has((offered as { context: FirstFrameContext }).context.cacheKey));
 });
 
-test('non-interference counters stay zero through offers', () => {
+
+test('settling A cannot release B, and the hold expires without queue progress', t => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
   thumbnailState.reset();
-  offerFirstFrameCandidate(context({ isFileFirst: false }), rgbaFrame());
-  offerFirstFrameCandidate(context(), rgbaFrame());
-  const snapshot = thumbnailState.snapshot();
-  assert.equal(snapshot.videoRangeReads, 0);
-  assert.equal(snapshot.mediaSourceOpens, 0);
-  assert.equal(snapshot.frameAtCalls, 0);
-  assert.equal(snapshot.seekCalls, 0);
-  assert.equal(snapshot.indexScans, 0);
+  const a = offerFirstFrameCandidate(context({ cacheKey: 'a' }), rgbaFrame());
+  assert.equal(typeof a, 'object'); if (typeof a !== 'object') return;
+  a.release(); // A now waits on encoding/storage/upload.
+  const sample = sampleFrame();
+  const b = offerFirstFrameCandidate(context({ cacheKey: 'b' }), sample.frame);
+  assert.equal(typeof b, 'object'); if (typeof b !== 'object') return;
+  settleOffer('a', true);
+  assert.equal(thumbnailState.holdingFull, true);
+  assert.equal(offerFirstFrameCandidate(context(), rgbaFrame()), 'budget-exceeded');
+  let terminated = 0;
+  b.onExpire = () => terminated++;
+  t.mock.timers.tick(500);
+  assert.equal(terminated, 1);
+  assert.equal(b.expired, true);
+  assert.equal(thumbnailState.holdingFull, false);
+  const c = offerFirstFrameCandidate(context({ cacheKey: 'c' }), rgbaFrame());
+  assert.equal(typeof c, 'object'); if (typeof c !== 'object') return;
+  b.release(); settleOffer('b', false);
+  assert.equal(sample.closes(), 1);
+  assert.equal(thumbnailState.holdingFull, true);
+  c.release(); settleOffer('c', false);
 });

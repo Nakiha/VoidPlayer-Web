@@ -45,11 +45,9 @@ test('opening from the origin offers one candidate with zero extra decode work',
   await session.load('A', async () => a.source);
   assert.equal(a.frameAts(), 1, 'thumbnails add no frameAt calls');
   assert.equal(thumbnailState.accepted, 1);
-  assert.equal(thumbnailState.snapshot().frameAtCalls, 0);
-  assert.equal(thumbnailState.snapshot().seekCalls, 0);
-  assert.equal(thumbnailState.snapshot().videoRangeReads, 0);
-  assert.equal(thumbnailState.snapshot().mediaSourceOpens, 0);
-  assert.equal(thumbnailState.snapshot().indexScans, 0);
+  while (thumbnailState.inFlight.size) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.equal(a.frameAts(), 1, 'no deferred thumbnail decode');
+  await session.dispose();
 });
 
 test('joining at a non-zero position stays missing without seeking back', async () => {
@@ -63,5 +61,7 @@ test('joining at a non-zero position stays missing without seeking back', async 
   assert.equal(b.frameAts(), 1, 'one sync frame for the join position, none for a cover');
   assert.equal(thumbnailState.accepted, 1, 'only the origin open was offered');
   assert.equal(thumbnailState.skipped['not-first-frame'], 1);
-  assert.equal(thumbnailState.inFlight.size, 0);
+  while (thumbnailState.inFlight.size) await new Promise(resolve => setTimeout(resolve, 1));
+  assert.equal(b.frameAts(), 1);
+  await session.dispose();
 });

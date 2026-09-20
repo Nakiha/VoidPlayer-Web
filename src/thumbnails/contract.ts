@@ -4,7 +4,7 @@
 // imports it for key construction and JPEG validation.
 
 /** First-frame selection + output geometry + color strategy, versioned. */
-export const THUMB_RECIPE_VERSION = 'first-display-v1;edge384;q80;sdr-srgb-v1';
+export const THUMB_RECIPE_VERSION = 'first-display-v2;edge384;q80;sdr-srgb-v1';
 /** Single main video stream for phase 1; fixed and versioned. */
 export const THUMB_STREAM_SELECTOR = 'main-v1';
 /** Longest output edge in pixels; aspect preserved, never upscaled. */
@@ -16,7 +16,7 @@ export const THUMB_JPEG_FALLBACK_QUALITY = 0.6;
 export const THUMB_MAX_BYTES = 128 * 1024;
 /** Largest full frame the thumbnail path may additionally hold. */
 export const THUMB_FRAME_BUDGET_BYTES = 64 * 1024 * 1024;
-/** How long an accepted full-frame candidate may wait for the serial slot. */
+/** Full-frame lifetime deadline, enforced when the event loop can run timers. */
 export const THUMB_HOLD_MS = 500;
 /** Small-image upload queue caps (full frames are never queued). */
 export const THUMB_MAX_PENDING_UPLOADS = 8;

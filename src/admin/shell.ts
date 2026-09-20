@@ -13,7 +13,7 @@ export function adminShell() {
     <main class="admin-content"><p id="admin-message" role="status" aria-live="polite" hidden></p>
       <section id="pane-overview"><header class="admin-heading"><div><h1>概览</h1><p>查看服务状态、资源占用和媒体扫描进度。</p></div><button id="refresh-status" class="icon-button" aria-label="刷新状态">${icon('refresh')}</button></header>
         <div class="admin-metrics"><div><span>已运行</span><strong id="uptime">—</strong></div><div><span>进程内存</span><strong id="memory">—</strong></div><div><span>进程 CPU</span><strong id="cpu">—</strong></div><div><span>连接数</span><strong id="connections">—</strong></div></div>
-        <h2>服务</h2><dl class="admin-properties"><div><dt>版本</dt><dd id="version">—</dd></div><div><dt>运行环境</dt><dd id="runtime">—</dd></div><div><dt>数据目录</dt><dd id="data-dir">—</dd></div><div><dt>当前身份</dt><dd id="identity">—</dd></div><div><dt>系统可用内存</dt><dd id="system-memory">—</dd></div><div><dt>HTTP 请求</dt><dd id="requests">—</dd></div></dl>
+        <h2>服务</h2><p>可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。</p><dl class="admin-properties"><div><dt>版本</dt><dd id="version">—</dd></div><div><dt>运行环境</dt><dd id="runtime">—</dd></div><div><dt>数据目录</dt><dd id="data-dir">—</dd></div><div><dt>当前身份</dt><dd id="identity">—</dd></div><div><dt>系统可用内存</dt><dd id="system-memory">—</dd></div><div><dt>HTTP 请求</dt><dd id="requests">—</dd></div></dl>
         <p class="admin-caption">CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。</p>
         <h2>媒体索引</h2><dl class="admin-properties"><div><dt>根目录</dt><dd id="root-summary">—</dd></div><div><dt>扫描任务</dt><dd id="scan-summary">—</dd></div><div><dt>目录监听</dt><dd id="watch-summary">—</dd></div></dl>
       </section>

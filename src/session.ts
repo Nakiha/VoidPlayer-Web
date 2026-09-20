@@ -25,8 +25,16 @@ type Track = { source: MediaSource; frame: FrameInfo | null; offsetUs:number; fa
   /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
    * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
   sourceGen: number };
+type SourceOpener = (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>;
 export class ReviewSession {
-  private openers=new WeakMap<MediaSource,(signal:AbortSignal,onProgress:MediaOpenProgress)=>Promise<MediaSource>>();
+  private async openCandidate(open: SourceOpener, signal: AbortSignal, progress: MediaOpenProgress = () => {}) {
+    const source = await abortableLoad(Promise.resolve().then(() => {
+      signal.throwIfAborted(); return open(signal, progress);
+    }), signal, late => late.dispose());
+    this.openers.set(source, open);
+    return source;
+  }
+  private openers=new WeakMap<MediaSource,SourceOpener>();
   private changingColor=false;
   onColorModeChange?:()=>Promise<void>;
   async setReferenceDecode(options:ReferenceDecode){return this.setColorMode(getColorMode()??'reference',options);}
@@ -47,13 +55,13 @@ export class ReviewSession {
         setColorMode(mode);setReferenceDecode(decode);
         for(const [slot,track] of this.tracks){
           const open=this.openers.get(track.source);if(!open)throw new Error('当前片源无法重新载入。');
-          const source=await open(controller.signal,()=>{});
+          const source=await this.openCandidate(open, controller.signal);
           try{
             source.info.id=track.source.info.id;
             const target=Math.max(0,Math.min(this.positionUs-track.offsetUs,source.info.durationUs-1));
             // 色彩切换的首帧准备同样可随新意图中止；迟到帧 close，不提交。
             const frame=await abortableLoad(source.frameAt(target), signal, late=>late.close());
-            prepared.push({slot,track,source,frame});this.openers.set(source,open);
+            prepared.push({slot,track,source,frame});
           }catch(error){source.dispose();throw error;}
           if(!current() || signal.aborted)throw new DOMException('切换已取消。','AbortError');
         }
@@ -500,7 +508,7 @@ export class ReviewSession {
       await traceOperation('session', 'load', { slot, replacing, targetPtsUs: status.targetPtsUs }, async () => {
         // Keep the queued milestone observable and never call a superseded opener.
         await Promise.resolve(); check(); progress('inspect');
-        const opened = await abortableLoad<MediaSource>(Promise.resolve().then(() => { check(); return open(controller.signal, progress); }), controller.signal, late => late.dispose());
+        const opened = await this.openCandidate(open, controller.signal, progress);
         source = opened; check();
         if (opened.info.source && [...this.tracks].some(([other, track]) => other !== slot && track.source.info.source?.id === opened.info.source!.id)) throw new Error('该片源已在视图中，不能重复添加。');
         const updatePending = () => {
@@ -533,7 +541,6 @@ export class ReviewSession {
           if (previous) { this.releaseReaders('replace', [previous.source]); if (!previous.failure) previous.source.dispose(); }
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
           this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, sourceGen: ++this.nextSourceGen, ...(behind ? { syncState: 'catching-up' as const } : {}) });
-          this.openers.set(opened,open);
           this.catalog.set(opened.info.id, opened.info);
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
           // Adding a short track never clamps the clock. Replacement can shrink
@@ -782,7 +789,7 @@ export class ReviewSession {
       // An import failure must still release the held reference, never leak it.
       void import('./thumbnails/tasks.ts').then(
         tasks => tasks.runThumbnailTask(offered),
-        () => { try { offered.owned.close(); } catch {} settleOffer(offered.context.cacheKey, false); },
+        () => { offered.release(); settleOffer(offered.context.cacheKey, false); },
       ).catch(() => {});
     } catch { /* Thumbnails never fail a load. */ }
     finally { thumbnailState.noteHook(performance.now() - started); }
@@ -993,7 +1000,7 @@ export class ReviewSession {
       media, marks: this.marks, viewport: new Viewport().snapshot() });
   }
   /** Prepare all sources and frames before swapping the active session. UI and agents share this transaction. */
-  async restoreWorkspace(value: unknown, open: (info: MediaInfo) => Promise<MediaSource>) {
+  async restoreWorkspace(value: unknown, open: (info: MediaInfo, signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>) {
     const document = parseWorkspace(value);
     await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async (current, signal) => {
       const next = new Map<Slot, Track>(); let committed = false;
@@ -1001,9 +1008,9 @@ export class ReviewSession {
         for (const track of document.tracks) {
           if (!current() || signal.aborted) throw new DOMException('工作区导入已取消。', 'AbortError');
           const info = document.media.find(m => m.id === track.mediaId)!;
-          const source = await open(info);
+          const source = await this.openCandidate((signal, progress) => open(info, signal, progress), signal);
           next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs, sourceGen: ++this.nextSourceGen });
-          await this.waitForIndex(Promise.resolve(source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))));
+          await abortableLoad(Promise.resolve().then(() => source.ensureIndexed?.(Math.max(0, document.positionUs - track.offsetUs))), signal);
           const end = source.info.durationUs + track.offsetUs;
           if (!Number.isSafeInteger(end) || end <= 0) throw new Error(`片源 ${info.name} 的时长或偏移已不适用。`);
           updateMediaInfo(source,{id:info.id},'identity'); // Keep mark and comparison anchors stable after reopening decoders.

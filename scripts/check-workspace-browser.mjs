@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
-import { gunzipSync } from 'node:zlib';
+import { gzipSync, gunzipSync } from 'node:zlib';
 import { webkit, chromium } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 const root=path.resolve(import.meta.dirname,'..'),name=process.argv[2]??'webkit';
@@ -11,7 +11,7 @@ const browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
 try {
  const context=await browser.newContext({viewport:{width:1280,height:900},colorScheme:'light'}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));const base=`http://127.0.0.1:${server.address().port}/`;
- await page.goto(base);
+ await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  const lib=await call('list_library');
  for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv444p10le.mkv']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
@@ -26,10 +26,10 @@ try {
  const saved=await call('export_workspace');
  assert.ok(saved.thumbnails.length>0,'export includes existing mark previews');
  assert.equal(saved.schema,'voidplayer-workspace');assert.equal(saved.serverUrl,base);assert.ok(saved.media.every(m=>m.source.url.startsWith(base)));
- // Actual downloaded artifact is gzip JSON, and a fresh page can restore it.
- await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();const downloadPromise=page.waitForEvent('download');await page.locator('#export').click();const download=await downloadPromise;
- assert.match(download.suggestedFilename(),/\.voidplayer$/);const downloaded=await readFile(await download.path());assert.equal(JSON.parse(gunzipSync(downloaded)).schema,'voidplayer-workspace');await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
- const restored=await context.newPage();restored.on('pageerror',e=>errors.push(e.message));await restored.goto(base);
+ // The current UI shares workspaces; file import remains compatible with gzip artifacts.
+ const downloaded = gzipSync(Buffer.from(JSON.stringify(saved)));
+ assert.equal(JSON.parse(gunzipSync(downloaded)).schema, 'voidplayer-workspace');
+ const restored=await context.newPage();restored.on('pageerror',e=>errors.push(e.message));await restored.goto(base); await restored.waitForFunction(() => window.voidPlayer);
  await restored.locator('#workspace-file').setInputFiles({name:'review.voidplayer',mimeType:'application/gzip',buffer:downloaded});
  await restored.waitForFunction(()=>window.voidPlayer.getState().tracks.length===2&&!window.voidPlayer.getState().busy);
  await restored.waitForFunction(()=>window.voidPlayer.getViewport().mode==='split');
@@ -38,6 +38,15 @@ try {
  assert.deepEqual(after.state.marks,saved.marks);assert.equal(after.state.positionUs,saved.positionUs);assert.deepEqual(after.view,saved.viewport);
  assert.ok(await restored.locator('.annotation-row img').count()>0,'restored annotation cards retain their previews');
  assert.deepEqual(after.layout,saved.layout);assert.equal(after.state.playing,false);
+ // Restored openers must also support settings that rebuild decoders.
+ await restored.evaluate(async () => {
+   const tools = window.voidPlayer.tools;
+   await tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'reference' });
+   await tools.find(t => t.name === 'set_reference_decode').execute({ decoder: 'software', depth: 4 });
+   await tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' });
+ });
+ assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
+ assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.id)), saved.tracks.map(t => t.mediaId));
  // A bad source must not erase or partially replace a loaded workspace.
  const bad=structuredClone(saved);bad.media.find(m=>m.id===bad.tracks[1].mediaId).source.url=base+'api/media/not-found';
  const failure=await restored.evaluate(async value=>{try{await window.voidPlayer.importWorkspace(value);return '';}catch(e){return e.message;}},bad);
@@ -76,5 +85,5 @@ try {
  const info=local.media.find(m=>m.id===local.tracks[0].mediaId),bytes=await readFile(path.join(root,'fixtures/video',info.name));
  await restored.evaluate(async({document,bytes,info})=>{const file=new File([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],info.name,{lastModified:info.lastModified});await window.voidPlayer.importWorkspace(document,[file]);},{document:local,bytes:bytes.toString('base64'),info});
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip download/import, JSON drop, ordered tracks/offsets/marks/view/layout, failed-source rollback, local relink/cancel, no transient seek rollback, settings and accent persistence`);
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip import, JSON drop, ordered tracks/offsets/marks/view/layout, failed-source rollback, local relink/cancel, no transient seek rollback, settings and accent persistence`);
 } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

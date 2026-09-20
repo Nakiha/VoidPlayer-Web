@@ -85,11 +85,14 @@ try {
   const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page2 = await fresh.newPage();
   page2.on('pageerror', e => errors.push(e.message));
+  const reuseVideoRequests = [];
+  page2.on('request', request => { if (request.headers().range || /\/api\/media\/[0-9a-f]{24}(?:\?|$)/.test(request.url())) reuseVideoRequests.push(request.url()); });
   await openSamples(page2);
   await page2.waitForFunction(thumbReady, 'sample.mp4', { timeout: 20000 });
   const reused = await page2.evaluate(() => [...document.querySelectorAll('#source-list .source-row')]
     .find(r => r.textContent.includes('sample.mp4'))?.querySelector('.source-thumb img')?.src);
   assert.match(reused, /\/api\/media\/[0-9a-f]{24}\/thumbnail\?/, 'fresh profile loads the shared image');
+  assert.deepEqual(reuseVideoRequests, [], 'cached covers never reopen or read videos');
   await fresh.close();
   assert.deepEqual(errors, []);
   console.log(`PASS ${engine}: origin open generates and shares a first-frame cover, fresh profiles reuse it, non-zero joins stay imageless`);
