@@ -39,11 +39,15 @@ export function getLiveObjectUrl(key: string): string | undefined {
 
 function trackObjectUrl(key: string, blob: Blob): string {
   const previous = objectUrls.get(key);
-  if (previous) {
-    try { URL.revokeObjectURL(previous); } catch {}
-  }
   const url = URL.createObjectURL(blob);
   objectUrls.set(key, url);
+  if (previous && previous !== url) {
+    // Delay revocation: the previous image may still be displayed until the
+    // new one decodes. Immediate revoke breaks the old <img> and flashes.
+    setTimeout(() => {
+      try { URL.revokeObjectURL(previous); } catch {}
+    }, 10000);
+  }
   return url;
 }
 
@@ -86,7 +90,14 @@ export function prefetchThumbnailStatus(libraryId: string, mediaVersion: string 
   if (statusInFlight.has(key)) return;
   const work = readStatus(libraryId, mediaVersion)
     .then(status => {
-      if (status) thumbnailState.rememberStatus(key, { ready: status.state === 'ready', epoch: status.epoch, width: status.width, height: status.height });
+      if (status) {
+        const wasReady = thumbnailState.statusCache.get(key)?.ready;
+        thumbnailState.rememberStatus(key, { ready: status.state === 'ready', epoch: status.epoch, width: status.width, height: status.height });
+        // Server readiness arrives after rows render imageless. Notify so the
+        // placeholder <img> patches in place instead of waiting for an
+        // unrelated full-list rebuild (which would flash).
+        if (status.state === 'ready' && !wasReady) notifyThumbnailReady(key);
+      }
     })
     .catch(() => {})
     .finally(() => { statusInFlight.delete(key); });
@@ -162,21 +173,61 @@ export async function uploadThumbnail(upload: ThumbnailUpload): Promise<UploadOu
  * Fill an <img> for a cache key: live object URL first, stored Blob second,
  * optional server URL when the entry is known ready. Callers keep a fixed-size
  * placeholder so late fills never shift layout. Patches only when the element
- * still shows the same key.
+ * still shows the same key. Single-write: server and local never both assign,
+ * so the image does not flash server -> local on every first render.
  */
 export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl?: string): void {
+  if (img.dataset.thumbKey === key && img.dataset.thumbSrc && (
+    img.dataset.thumbSrc === objectUrls.get(key) ||
+    (serverUrl && img.dataset.thumbSrc === serverUrl)
+  )) return;
   img.dataset.thumbKey = key;
   const live = objectUrls.get(key);
-  if (live) { img.src = live; return; }
+  if (live) {
+    img.dataset.thumbSrc = live;
+    img.decoding = 'async';
+    if (img.getAttribute('src') !== live) img.src = live;
+    return;
+  }
   if (serverUrl) {
     // Known-ready server image: direct load, async decode, no extra probing.
+    // Local fallback happens only if the server image fails.
+    img.dataset.thumbSrc = serverUrl;
     img.decoding = 'async';
-    img.src = serverUrl;
+    img.onerror = () => {
+      if (img.dataset.thumbKey !== key || !img.isConnected) return;
+      void getLocalThumbnail(key).then(stored => {
+        if (img.dataset.thumbKey !== key || !img.isConnected) return;
+        if (!stored) {
+          // Both server and local failed: keep the fixed-size empty slot
+          // instead of a broken-image icon.
+          img.removeAttribute('src');
+          img.dataset.thumbSrc = '';
+          return;
+        }
+        const currentLive = objectUrls.get(key);
+        const url = currentLive ?? trackObjectUrl(key, stored.blob);
+        if (img.dataset.thumbSrc === url) return;
+        img.dataset.thumbSrc = url;
+        img.src = url;
+      });
+    };
+    if (img.getAttribute('src') !== serverUrl) img.src = serverUrl;
+    return;
   }
   void getLocalThumbnail(key).then(stored => {
     if (!stored || img.dataset.thumbKey !== key || !img.isConnected) return;
-    if (objectUrls.get(key)) { img.src = objectUrls.get(key)!; return; }
-    img.src = trackObjectUrl(key, stored.blob);
+    if (objectUrls.get(key)) {
+      const currentLive = objectUrls.get(key)!;
+      if (img.dataset.thumbSrc === currentLive) return;
+      img.dataset.thumbSrc = currentLive;
+      img.src = currentLive;
+      return;
+    }
+    const url = trackObjectUrl(key, stored.blob);
+    if (img.dataset.thumbSrc === url) return;
+    img.dataset.thumbSrc = url;
+    img.src = url;
   });
 }
 

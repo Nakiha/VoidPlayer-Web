@@ -32,11 +32,11 @@ const text = (tag: string, value: string, className = '') => {
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
   const save = () => shared.save();
-  let libraryStatus = '';
   let refreshing: Promise<void> | undefined;
   let libraryChecked = false;
   let disposed = false;
   let sourceSignature = '';
+  let startSignature = '';
   let currentIds = '';
   let sourceBusy = false;
   let loadingSource: { key: string; status: string } | null = null;
@@ -46,8 +46,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let recentRevision = -1;
   let recentRequest = 0;
 
-  const libraryBrowser = installLibraryBrowser((page, status) => {
-    catalog.setLibrary(page?.entries ?? []); libraryStatus = status;
+  const libraryBrowser = installLibraryBrowser(page => {
+    catalog.setLibrary(page?.entries ?? []);
     // Warm thumbnail presence/epochs beside listing; never blocks opening.
     if (page) prefetchThumbnailStatuses(page.entries);
     if (page && recentRevision !== page.revision) { recentRevision = page.revision; void refreshRecent(); }
@@ -56,29 +56,63 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (recent) void refreshRecent();
     renderSources();
   });
-  // Source key -> thumbnail cache key, so completion can insert a cover into
-  // rows that rendered imageless. Bounded: rows re-register on every render.
+  // Source key -> thumbnail cache key, so completion can fill the placeholder
+  // <img> of the matching row in place. Bounded: rows re-register on render.
   const thumbKeyBySource = new Map<string, string>();
-  const rememberThumbKey = (sourceKey: string, thumbKey: string) => {
+  // Thumbnail cache key -> last known server image URL (derived from the key
+  // when status turns ready). Lets a server-ready notify patch rows without
+  // waiting for an unrelated full-list rebuild.
+  const serverUrlByThumbKey = new Map<string, string>();
+  const rememberThumbKey = (sourceKey: string, thumbKey: string, serverUrl?: string) => {
     if (thumbKeyBySource.size > 500) thumbKeyBySource.clear();
     thumbKeyBySource.set(sourceKey, thumbKey);
+    if (serverUrl) {
+      if (serverUrlByThumbKey.size > 500) serverUrlByThumbKey.clear();
+      serverUrlByThumbKey.set(thumbKey, serverUrl);
+    }
   };
-  // Thumbnail completion only touches matching rows: refresh an existing
-  // <img>, or insert a box into a row that rendered imageless. No list
-  // rebuild, no focus/scroll/selection movement.
+  function serverUrlForThumbKey(key: string): string | undefined {
+    const cached = serverUrlByThumbKey.get(key);
+    if (cached) return cached;
+    // serverCacheKey format: v1|lib|<mediaId>|<mediaVersion>|... — derive the
+    // image URL without needing the original library entry.
+    if (!key.startsWith('v1|lib|')) return undefined;
+    const parts = key.split('|');
+    if (parts.length < 4 || !parts[2] || !parts[3]) return undefined;
+    try {
+      return serverThumbnailImageUrl(decodeURIComponent(parts[2]), decodeURIComponent(parts[3]));
+    } catch {
+      return serverThumbnailImageUrl(parts[2], parts[3]);
+    }
+  }
+  // Thumbnail completion patches in place: refresh an existing <img> or
+  // insert a cover once into a row that rendered coverless (0占位). No list
+  // rebuild, no focus/scroll/selection movement. Stable fingerprints keep
+  // rows alive, so insertion happens at most once per row.
   const patchThumbnails = (key: string) => {
     const live = getLiveObjectUrl(key);
+    let serverUrl: string | undefined;
+    if (!live && key.startsWith('v1|lib|')) {
+      const ready = thumbnailState.statusCache.get(key)?.ready
+        || thumbnailState.completed.has(key)
+        || serverUrlByThumbKey.has(key);
+      if (ready) serverUrl = serverUrlForThumbKey(key);
+    }
+    const url = live ?? serverUrl;
+    // Truly missing stays 0占位: no placeholder, no empty box.
+    if (!url) return;
     for (const id of ['source-list', 'local-list', 'start-library-list']) {
       const list = document.getElementById(id);
       if (!list) continue;
       for (const img of list.querySelectorAll<HTMLImageElement>('img[data-thumb-key]')) {
-        if (img.dataset.thumbKey === key && live) fillThumbnailImage(img, key);
+        if (img.dataset.thumbKey !== key) continue;
+        if (img.dataset.thumbSrc === url) continue;
+        fillThumbnailImage(img, key, live ? undefined : serverUrl);
       }
-      if (!live) continue;
       for (const row of list.querySelectorAll<HTMLElement>('[data-source-key]')) {
         if (thumbKeyBySource.get(row.dataset.sourceKey ?? '') !== key) continue;
         if (row.querySelector(':scope > .source-thumb')) continue;
-        row.prepend(makeThumbBox(key, live));
+        row.prepend(makeThumbBox(key, url));
       }
     }
   };
@@ -150,7 +184,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     return null;
   }
 
-  /** Cover box with a known-good image. Load failure removes the box. */
+  /** Cover box. Removed on load failure so missing thumbnails take 0 space. */
   function makeThumbBox(key: string, url: string): HTMLElement {
     const box = document.createElement('div');
     box.className = 'source-thumb';
@@ -160,6 +194,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     img.loading = 'lazy';
     img.decoding = 'async';
     img.dataset.thumbKey = key;
+    img.dataset.thumbSrc = url;
     img.onerror = () => { box.remove(); };
     img.src = url;
     box.append(img);
@@ -169,13 +204,14 @@ export function createSourcesPane(shared: WorkbenchShared) {
   /**
    * No blank slots: a row gets a cover box only when an image is available
    * synchronously (live object URL or known-ready server image). Otherwise
-   * the row renders coverless, and a stored local artifact inserts the box
-   * once its lookup resolves; generation completion arrives via notify.
+   * the row stays coverless (0占位), and a stored local artifact inserts the
+   * box once its lookup resolves; generation completion arrives via notify.
+   * Rows are reused by fingerprint, so insertion happens at most once.
    */
   function attachThumb(row: HTMLElement, item: SourceItem) {
     const identity = thumbIdentity(item);
     if (!identity) return;
-    rememberThumbKey(item.key, identity.key);
+    rememberThumbKey(item.key, identity.key, identity.serverUrl);
     const syncUrl = getLiveObjectUrl(identity.key) ?? identity.serverUrl;
     if (syncUrl) { row.prepend(makeThumbBox(identity.key, syncUrl)); return; }
     void getLocalThumbnail(identity.key).then(stored => {
@@ -268,37 +304,60 @@ export function createSourcesPane(shared: WorkbenchShared) {
     return row;
   }
 
+  function startRow(item: SourceItem) {
+    const row = document.createElement('button');
+    row.className = 'start-recent-row';
+    row.setAttribute('aria-label', `打开：${item.name}`);
+    const { base, dir } = sourceDisplayName(item.name);
+    const name = text('span', base, 'filename');
+    const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
+    const opened = openedText(item.openedAt);
+    const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${opened ? ` · ${opened}` : ''}`, 'source-meta');
+    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
+    const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
+    row.append(info, go);
+    row.dataset.sourceKey = item.key;
+    attachThumb(row, item);
+    row.dataset.tooltip = item.name;
+    row.onclick = () => {
+      if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
+      const tracks = session.getState().tracks;
+      const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
+      if (empty) void load(item, empty);
+      else shared.setPanel('sources', true);
+    };
+    return row;
+  }
+
   function renderStartLibrary() {
     const list = $('start-library-list');
     if (!list) return;
-    list.replaceChildren();
     const items = catalog.recent();
+    const tracks = session.getState().tracks;
+    // Stable identity only: thumbnail readiness must NOT rebuild rows —
+    // completion patches the placeholder <img> in place via notify.
+    const fingerprintOfStart = (item: SourceItem) => JSON.stringify([
+      !!item.file, item.library?.id ?? item.libraryId ?? null,
+      item.library?.version ?? item.version ?? null, item.library?.state ?? null,
+      item.name, item.size, item.openedAt ?? null, sourceInUse(item, tracks),
+    ]);
+    const signature = JSON.stringify(items.map(item => [item.key, fingerprintOfStart(item)]));
+    if (signature === startSignature) return;
+    startSignature = signature;
+    const existing = new Map([...list.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
+    const rows: HTMLElement[] = [];
     for (const item of items) {
-      const row = document.createElement('button');
-      row.className = 'start-recent-row';
-      row.setAttribute('aria-label', `打开：${item.name}`);
-      const { base, dir } = sourceDisplayName(item.name);
-      const name = text('span', base, 'filename');
-      const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
-      const opened = openedText(item.openedAt);
-      const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${opened ? ` · ${opened}` : ''}`, 'source-meta');
-      const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
-      const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
-      row.append(info, go);
+      const fingerprint = fingerprintOfStart(item);
+      const old = existing.get(item.key);
+      const row = old?.dataset.fingerprint === fingerprint ? old : startRow(item);
       row.dataset.sourceKey = item.key;
-      attachThumb(row, item);
-      row.dataset.tooltip = item.name;
-      row.onclick = () => {
-        if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
-        const tracks = session.getState().tracks;
-        const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
-        if (empty) void load(item, empty);
-        else shared.setPanel('sources', true);
-      };
-      list.append(row);
+      row.dataset.fingerprint = fingerprint;
+      rows.push(row);
     }
+    rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
+    while (list.children.length > rows.length) list.lastElementChild!.remove();
     const status = $('start-library-status');
-    if (status) status.textContent = items.length ? '' : (libraryStatus || '暂无最近片源，可从右侧媒体库或本地文件开始');
+    if (status) status.textContent = items.length ? '' : '暂无最近片源，可从右侧媒体库或本地文件开始';
   }
 
   function renderSources() {
@@ -308,8 +367,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // Local files live in their own section pinned above the activity panel.
     const local = scoped.filter(item => item.file && !item.library);
     const items = scoped.filter(item => !(item.file && !item.library));
-    $('source-status').textContent = libraryStatus;
-    $('source-status').hidden = !libraryStatus;
     const page = libraryBrowser.page();
     const folders = !recent ? page?.directories ?? [] : [];
     const busy = session.getState().busy;
@@ -320,7 +377,11 @@ export function createSourcesPane(shared: WorkbenchShared) {
     // stable across busy flips (e.g. seeks); disabled states sync in place.
     const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), page?.roots]);
+    // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
+    // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
+    // excluded; completion patches the placeholder <img> via notify.
+    const stableRoots = page?.roots.map(root => [root.id, root.state]);
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), stableRoots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       const mediaLoading = session.getState().mediaLoad?.state === 'loading';
