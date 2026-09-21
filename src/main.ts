@@ -103,6 +103,7 @@ const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
 let message = '';
 let benchmarkRunning = false;
+let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
 const toasts = installToasts(uiEvents.signal);
@@ -282,6 +283,24 @@ function render() {
   const trackFailures = state.tracks.filter(t => t.failure).map(t => `轨道 ${t.slot} 已停用：${t.failure!.message}`).join('；');
   $('notice').hidden = !(message || state.error || trackFailures);
   $('notice-message').textContent = message || state.error || trackFailures;
+  // 浏览器色彩下原生帧走浏览器转换、软件帧走近似转换，两者混合上屏时色彩
+  // 不一致（见色彩设置页说明）。只做一次性提醒，需用户手动关闭；条件解除
+  // （切换模式/只剩单一路）后自动清理，下次混合再提醒。不改解码与色彩管线。
+  const presented = state.tracks.filter(t => !t.failure && t.frame);
+  const mixedColor = state.colorMode === 'browser'
+    && presented.some(t => t.decoder === 'webcodecs')
+    && presented.some(t => t.decoder === 'ffmpeg-wasm');
+  if (mixedColor) {
+    if (!mixedColorToast) {
+      mixedColorToast = toasts.show('浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。', {
+        kind: 'error', durationMs: 0,
+        action: { label: '前往色彩设置', onClick: () => settings.openPane('performance', $('settings-open')) },
+      });
+    }
+  } else if (mixedColorToast) {
+    mixedColorToast();
+    mixedColorToast = null;
+  }
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
     ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`
