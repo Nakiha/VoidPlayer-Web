@@ -17,6 +17,7 @@ export type WorkbenchShared = {
   workspace: HTMLElement;
   lifecyle: AbortController;
   save(): void;
+  notify(message: string): void;
   select(slot: Slot): void;
   inspect(slot: Slot): void;
   setPanel(panel: Panel, open: boolean): void;

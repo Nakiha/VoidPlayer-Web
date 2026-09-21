@@ -7,6 +7,7 @@ import type { GpuSurface } from './webgpu-color-surface.mjs';
 import type { DecodedFrame } from './media.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import { resolveYuvColor } from './yuv-color.ts';
+import { isHdrTransfer } from './presentation-color.ts';
 import { validateDescription } from './frame-description.ts';
 import { GpuPresentationGuard } from './gpu-presentation-guard.ts';
 
@@ -101,7 +102,10 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   const entry=entries.get(source);if(!entry)return false;
   if(entry.disabled)return false;
   validateDescription(frame.description,frame.kind==='yuv'?frame.pixels?.byteLength:undefined);
-  if(!entry.surface.available||(frame.kind==='yuv'&&!resolveYuvColor(frame.description).supported)||frame.kind==='rgba8'||['smpte2084','arib-std-b67'].includes(frame.description.color.transfer??'')){
+  // Native PQ/HLG has no tone mapping on the external-texture path: decline it
+  // here so it keeps the documented VideoSample.draw → sRGB canvas route.
+  // The check covers both canonical ('pq'/'hlg') and alias spellings.
+  if(!entry.surface.available||(frame.kind==='yuv'&&!resolveYuvColor(frame.description).supported)||frame.kind==='rgba8'||isHdrTransfer(frame.description.color.transfer)){
     entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');
     log.info('media','当前资源使用现有呈现路径。',{kind:frame.kind,transfer:frame.description.color.transfer,gpuAvailable:entry.surface.available});return false;
   }

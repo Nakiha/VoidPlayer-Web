@@ -19,7 +19,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const HISTORY_KEY = 'voidplayer.sources.v1';
 function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]'); } catch { return []; } }
 
-export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void) {
+export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
   const view = new WorkspaceState();
   const catalog = new SourceCatalog(readHistory());
   const lifecyle = new AbortController();
@@ -41,7 +41,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   // Panes must not call shared callbacks at factory top level: select/render
   // are hoisted function declarations, but resize/sources resolve later.
   const shared: WorkbenchShared = {
-    session, act, addMark, view, catalog, workspace, lifecyle, save,
+    session, act, addMark, view, catalog, workspace, lifecyle, save, notify,
     select, inspect, setPanel,
     render: state => render(state),
     renderSources: () => sources.renderSources(),

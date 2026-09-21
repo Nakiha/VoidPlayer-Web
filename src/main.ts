@@ -1,3 +1,4 @@
+import { isHdrTransfer } from './presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { initializeGpuPresentation } from './webgpu-presenter.ts';
 import { indexProgressLabel } from './index-progress.ts';
@@ -37,6 +38,8 @@ import { formatTime } from './model.ts';
 import type { Slot } from './model.ts';
 import { registerReviewTools, reviewTools } from './agent.ts';
 import { bindFileDrop } from './file-drop.ts';
+import { handleKey, saveFileHandle } from './file-handles.ts';
+import type { FsFileHandle } from './file-handles.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
@@ -102,10 +105,10 @@ let message = '';
 let benchmarkRunning = false;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
-const workbench = installWorkbench(session, act, openMarkDialog);
-const removeTrackDrag = installTrackDrag(session);
 const toasts = installToasts(uiEvents.signal);
 const notify = (message: string) => { toasts.show(message); };
+const workbench = installWorkbench(session, act, openMarkDialog, notify);
+const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
 let timelineDragging = false;
@@ -227,7 +230,7 @@ function render() {
     $(`image-${slot}`).hidden = !t;
     $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? '参考视频' : '对比视频');
     // Source HDR metadata is not proof of the browser's final HDR output.
-    const hdr = t?.color && (t.color.transfer === 'pq' || t.color.transfer === 'hlg');
+    const hdr = t?.color && isHdrTransfer(t.color.transfer);
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
     $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? ' · 等待索引，画面暂未同步' : ' · 正在追赶播放位置') : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
     $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
@@ -296,13 +299,17 @@ for (const slot of SLOTS) $(`remove-track-${slot}`).onclick = async () => {
   if (remaining) document.querySelector<HTMLElement>(`.card-heading [data-drag-surface="${remaining.slot}"]`)?.focus();
   else $('open').focus();
 };
-async function importFiles(files: File[], slots: Slot[]) {
+async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[]) {
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
     if (revision !== importRevision) throw new DOMException('文件导入已被新的请求取代。', 'AbortError');
     await withLogContext(context, () => session.load(slots[i], (signal, progress) => openMedia(files[i], undefined, progress, signal), files[i].name));
     workbench.rememberFile(files[i]);
+    // Remember drop-time handles so history rows can reopen without a picker.
+    // Plain <input> files have no handle; those rows bootstrap one on reselect.
+    const handle = handles?.[i];
+    if (handle) await saveFileHandle(handleKey(files[i]), handle, files[i]).catch(() => {});
   }
 }
 const unbindDrop = bindFileDrop(document.body, {

@@ -4,6 +4,7 @@ import { parseTimeInput } from '../../time-input.ts';
 import type { Slot, Mark } from '../../model.ts';
 import { formatTime } from '../../model.ts';
 import { colorLabel, rangeLabel } from '../../media-metadata.ts';
+import { isHdrTransfer } from '../../presentation-color.ts';
 import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
 import { createIconButton } from '../controls.ts';
@@ -35,7 +36,7 @@ export function createTracksPane(shared: WorkbenchShared) {
 
   function propertyRows(track: ReviewTrack) {
     const color = track.color;
-    const hdr = color?.transfer === 'pq' || color?.transfer === 'hlg';
+    const hdr = isHdrTransfer(color?.transfer);
     return [
       ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
       ...(track.indexWarning ? [['文件完整性', track.indexWarning]] : []),

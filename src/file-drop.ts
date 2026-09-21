@@ -1,6 +1,8 @@
 import { log } from './log.ts';
 import { SLOTS } from './model.ts';
 import type { Slot } from './model.ts';
+import { dropFileHandles } from './file-handles.ts';
+import type { FsFileHandle } from './file-handles.ts';
 
 export function dropSlots(count: number, loaded: Slot[], target?: Slot): Slot[] {
   if (!Number.isInteger(count) || count < 1 || count > SLOTS.length) throw new Error('请拖入一到八个视频文件。');
@@ -15,7 +17,7 @@ export function bindFileDrop(root: EventTarget, options: {
   target(event: DragEvent): Slot | undefined;
   loaded(): Slot[];
   hover(slots: Slot[]): void;
-  load(files: File[], slots: Slot[]): Promise<void>;
+  load(files: File[], slots: Slot[], handles?: (FsFileHandle | undefined)[]): Promise<void>;
   error(error: unknown): void;
 }) {
   let depth = 0;
@@ -39,7 +41,17 @@ export function bindFileDrop(root: EventTarget, options: {
     try {
       if (options.document?.accepts(files)) { void options.document.load(files).catch(options.error); return; }
       const slots = dropSlots(files.length, options.loaded(), options.target(event));
-      void options.load(files, slots).catch(options.error);
+      const items = Array.from(event.dataTransfer?.items ?? []);
+      void (async () => {
+        // Handles must be captured inside the drop event; misalignment or any
+        // failure simply means this drop will not be silently restorable.
+        let handles: (FsFileHandle | undefined)[] | undefined;
+        try {
+          const captured = await dropFileHandles(items);
+          if (captured.length === files.length) handles = captured;
+        } catch { handles = undefined; }
+        await options.load(files, slots, handles);
+      })().catch(options.error);
     } catch (error) { options.error(error); }
   };
   const handlers = { dragenter: enter, dragover: over, dragleave: leave, drop, dragend: clear };

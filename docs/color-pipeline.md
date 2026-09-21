@@ -45,7 +45,7 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 - profile 是独立的资源呈现约定，不覆盖源标签。旧 `resolveYuvColor` 的默认值与新 profile 需区分；未知的显式色彩不强制套 709。
 - 两入口对整数源像素转换为 RGB，缩小对四点 RGB 做双线性，放大 NEAREST；避免两路分别在 YUV/RGB 域滤波。共享设备和微任务提交，引用的资源覆写前先提交，旧 clone 在提交后关闭。
 - 每个 surface 只保留当前 clone 或已上传 YUV buffer；截图按需用同一 shader 渲染源尺寸，旋转后物化 2D 画布。播放不维护隐藏 RGBA 中间画布。
-- GPU 丢失、资源超限/导入失败、RGBA 或 PQ/HLG 使用下述旧路径，记本地原因。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
+- GPU 丢失、资源超限/导入失败、RGBA 或 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对交付资源的 `color.transfer` 用 `isHdrTransfer` 判定：`pq`/`hlg` 及 `smpte2084`/`arib-std-b67` 别名写法的原生帧一律拒绝 external 纹理导入，沿用 VideoSample.draw → sRGB Canvas 2D 旧路径——external 采样不对 HLG/PQ 做 tone mapping，直接导入会发灰发白。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
 - 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
 
 ## 显式统一平面路径

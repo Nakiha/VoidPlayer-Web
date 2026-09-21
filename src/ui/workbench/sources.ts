@@ -14,7 +14,8 @@ import { referenceVersion } from '../../media-reference.ts';
 import { openMedia } from '../../media.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
-import { sourceInUse } from '../source-catalog.ts';
+import { sourceInUse, sourceKey } from '../source-catalog.ts';
+import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../file-handles.ts';
 import type { SourceItem } from '../source-catalog.ts';
 import type { WorkbenchShared, WorkbenchState } from './shared.ts';
 
@@ -45,6 +46,29 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let sourceLoadError: { key: string; message: string } | null = null;
   let recentRevision = -1;
   let recentRequest = 0;
+  // History keeps local-file metadata only: after reload the live File is gone
+  // and the row cannot load until the user re-picks the file. Remember which
+  // row asked so the picker result can continue straight into that load.
+  let pendingReselect: string | null = null;
+  // Handle availability per history key: true once a stored handle is known,
+  // false/unknown renders the stale hint. Looked up async (IndexedDB) only
+  // for stale local rows; resolved lookups rebuild just that row via the
+  // start-list fingerprint below.
+  const handleKnown = new Map<string, boolean>();
+  const handlePending = new Set<string>();
+  function refreshHandleAvailability(items: SourceItem[]) {
+    if (!supportsFileHandles()) return;
+    for (const item of items) {
+      if (item.file || item.library || item.libraryId || handleKnown.has(item.key) || handlePending.has(item.key)) continue;
+      handlePending.add(item.key);
+      void hasFileHandle(item.key).then(known => {
+        handlePending.delete(item.key);
+        if (disposed || handleKnown.get(item.key) === known) return;
+        handleKnown.set(item.key, known);
+        renderSources();
+      });
+    }
+  }
 
   const libraryBrowser = installLibraryBrowser(page => {
     catalog.setLibrary(page?.entries ?? []);
@@ -296,7 +320,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       button.title = '内容已改变或不可用，请在媒体库中重新选择'; button.onclick = () => void refreshLibrary(); actions.append(button);
     } else {
       const button = createIconButton({ glyph: 'filePlus', label: '重新选择本地文件' }); button.title = '重新选择本地文件';
-      button.setAttribute('aria-label', `重新选择 ${item.name}`); button.onclick = () => $<HTMLInputElement>('source-files').click(); actions.append(button);
+      button.setAttribute('aria-label', `重新选择 ${item.name}`); button.onclick = () => { void reselectIntoCatalog(); }; actions.append(button);
     }
     row.append(info, actions);
     row.dataset.sourceKey = item.key;
@@ -307,12 +331,19 @@ export function createSourcesPane(shared: WorkbenchShared) {
   function startRow(item: SourceItem) {
     const row = document.createElement('button');
     row.className = 'start-recent-row';
-    row.setAttribute('aria-label', `打开：${item.name}`);
+    // Stale rows (local metadata without a live File, or a library id that no
+    // longer resolves) cannot load directly: route to re-selection instead of
+    // silently ignoring the click.
+    const staleLocal = !item.file && !item.library && !item.libraryId;
+    const staleLibrary = !item.file && !item.library && !!item.libraryId;
+    // A stored handle means one click restores silently — no re-pick needed.
+    const restorable = staleLocal && handleKnown.get(item.key) === true;
+    row.setAttribute('aria-label', `${staleLocal && !restorable ? '重新选择' : staleLibrary ? '在片源中重新选择' : '打开'}：${item.name}`);
     const { base, dir } = sourceDisplayName(item.name);
     const name = text('span', base, 'filename');
     const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
     const opened = openedText(item.openedAt);
-    const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${opened ? ` · ${opened}` : ''}`, 'source-meta');
+    const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${staleLocal && !restorable ? ' · 需重新选择' : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
     const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
     const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
     row.append(info, go);
@@ -321,12 +352,83 @@ export function createSourcesPane(shared: WorkbenchShared) {
     row.dataset.tooltip = item.name;
     row.onclick = () => {
       if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
+      if (staleLocal) { void reselectLocal(item); return; }
+      if (staleLibrary) {
+        shared.notify('媒体库中的文件已变化，请在片源中重新选择');
+        shared.setPanel('sources', true);
+        return;
+      }
       const tracks = session.getState().tracks;
       const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
       if (empty) void load(item, empty);
       else shared.setPanel('sources', true);
     };
     return row;
+  }
+
+  /** Reopen a stale local row: silent restore when the stored handle still
+   * grants access, otherwise the system picker (which also stores a handle
+   * for next time), otherwise the legacy file input. */
+  async function reselectLocal(item: SourceItem) {
+    if (session.getState().busy || sourceInUse(item, session.getState().tracks)) return;
+    const openLive = (file: File) => {
+      catalog.addFile(file); save();
+      const live: SourceItem = { key: handleKey(file), name: file.name, size: file.size, lastModified: file.lastModified, file };
+      const empty = SLOTS.find(slot => !session.getState().tracks.some(t => t.slot === slot));
+      if (empty) void load(live, empty);
+      else shared.setPanel('sources', true);
+    };
+    if (supportsFileHandles()) {
+      try {
+        openLive(await restoreHandleFile(item.key));
+        handleKnown.set(item.key, true);
+        return;
+      } catch (error) {
+        if (error instanceof FileHandleError && error.kind === 'denied') shared.notify(`已拒绝访问本地文件 ${item.name}，如需打开请重新选择`);
+      }
+      try {
+        const picked = await pickVideoFiles(false);
+        if (!picked) return;
+        const [{ file, handle }] = picked;
+        await saveFileHandle(handleKey(file), handle, file).catch(() => {});
+        handleKnown.set(handleKey(file), true);
+        openLive(file);
+        return;
+      } catch (error) {
+        // The picker itself being unusable (policy, headless, transient
+        // failure) falls back to the legacy input, same as unsupported browsers.
+        if (!(error instanceof FileHandleError) || error.kind !== 'unavailable') {
+          if (error instanceof FileHandleError) shared.notify(error.message);
+          return;
+        }
+      }
+    }
+    pendingReselect = item.key;
+    $<HTMLInputElement>('source-files').click();
+    shared.notify(`本地文件访问已过期，请重新选择 ${item.name}`);
+  }
+
+  /** Panel-level reselect: same handle-storing picker, but only adds to the
+   * catalog — the user picks the target slot with the row action. */
+  async function reselectIntoCatalog() {
+    if (supportsFileHandles()) {
+      try {
+        const picked = await pickVideoFiles(true);
+        if (!picked) return;
+        for (const { file, handle } of picked) {
+          catalog.addFile(file);
+          await saveFileHandle(handleKey(file), handle, file).catch(() => {});
+        }
+        save(); renderSources();
+        return;
+      } catch (error) {
+        if (!(error instanceof FileHandleError) || error.kind !== 'unavailable') {
+          if (error instanceof FileHandleError) shared.notify(error.message);
+          return;
+        }
+      }
+    }
+    $<HTMLInputElement>('source-files').click();
   }
 
   function renderStartLibrary() {
@@ -340,6 +442,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       !!item.file, item.library?.id ?? item.libraryId ?? null,
       item.library?.version ?? item.version ?? null, item.library?.state ?? null,
       item.name, item.size, item.openedAt ?? null, sourceInUse(item, tracks),
+      (!item.file && !item.library && !item.libraryId) ? handleKnown.get(item.key) ?? 'unknown' : null,
     ]);
     const signature = JSON.stringify(items.map(item => [item.key, fingerprintOfStart(item)]));
     if (signature === startSignature) return;
@@ -356,6 +459,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
     rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
     while (list.children.length > rows.length) list.lastElementChild!.remove();
+    refreshHandleAvailability(items);
     const status = $('start-library-status');
     if (status) status.textContent = items.length ? '' : '暂无最近片源，可从右侧媒体库或本地文件开始';
   }
@@ -515,8 +619,21 @@ export function createSourcesPane(shared: WorkbenchShared) {
     $('source-search').onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); setSearching(false); } };
     $('source-files').onchange = () => {
       const input = $<HTMLInputElement>('source-files');
-      for (const file of input.files ?? []) catalog.addFile(file);
+      const files = [...input.files ?? []];
+      for (const file of files) catalog.addFile(file);
       input.value = ''; save(); renderSources();
+      // Continue a start-panel reselect straight into the load when the
+      // picked file matches the row that asked (name/size/mtime identity).
+      if (pendingReselect) {
+        const key = pendingReselect; pendingReselect = null;
+        const match = files.find(file => sourceKey(file) === key);
+        if (match && !session.getState().busy) {
+          const item: SourceItem = { key, name: match.name, size: match.size, lastModified: match.lastModified, file: match };
+          const empty = SLOTS.find(slot => !session.getState().tracks.some(t => t.slot === slot));
+          if (empty) void load(item, empty);
+          else shared.setPanel('sources', true);
+        }
+      }
     };
     $('local-add').onclick = () => $<HTMLInputElement>('source-files').click();
   }
