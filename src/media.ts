@@ -104,7 +104,8 @@ const stageOf = (error: unknown): OpenStage =>
 interface OpenPlan {
   meta: MediaMeta;
   input: RandomAccessInput;
-  nativeInput(): Input;
+  nativeInput?(): Input;
+  openNative?(): Promise<MediaSource>;
   fallback(): Promise<MediaSource>;
   onProgress?: MediaOpenProgress;
   signal?: AbortSignal;
@@ -118,8 +119,10 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
     let nativeError: unknown;
     try {
       plan.onProgress?.('decode');
-      let source = await openWebCodecsInput(plan.nativeInput(), plan.meta, plan.signal, plan.onProgress,plan.input,plan.reference);
-      if(plan.reference){
+      let source = plan.openNative ? await plan.openNative() : await openWebCodecsInput(plan.nativeInput!(), plan.meta, plan.signal, plan.onProgress,plan.input,plan.reference);
+      // Packet sources may already have fallen back after native capability or
+      // first-frame failure. Their raw WASM planes need no second witness.
+      if(plan.reference && source.info.decoder === 'webcodecs'){
         try{
           const witness=referenceSource(await plan.fallback());
           let reference:DecodedFrame|undefined,probe:DecodedFrame|undefined;
@@ -131,8 +134,8 @@ function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
           }finally{probe?.close();reference?.close();witness.dispose();}
         }
         catch(error){source.dispose();throw error;}
-      }
-      log.info('media', '使用 WebCodecs 解码路径', { name: plan.meta.name, codec: source.info.codec });
+      } else if (plan.reference) source = referenceSource(source);
+      log.info('media', source.info.decoder === 'webcodecs' ? '使用 WebCodecs 解码路径' : 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
       return source;
     } catch (error) {
       loadAborted(plan.signal);
@@ -162,8 +165,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
   const reference=getColorMode()==='reference';
   if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openLocalFallback(file,{signal,onProgress}));
   if (await isFlvFile(file)) {
-    const { openFlvMedia } = await import('./flv-media.ts');
-    const source=await openFlvMedia({ file }, file, { signal, onProgress,forceWasm:reference });return reference?referenceSource(source):source;
+    return openFlvWithPolicy({ file }, file, reference, onProgress, signal);
   }
   return openWithFallback({
     meta: file, input: { file },
@@ -186,8 +188,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
   // FLV keeps its own demuxer in every mode; the FFmpeg container path does
   // not accept it.
   if (/\.flv$/i.test(meta.name)) {
-    const { openFlvMedia } = await import('./flv-media.ts');
-    const source=await openFlvMedia({ url, size: meta.size }, meta, { signal, onProgress,forceWasm:reference });return reference?referenceSource(source):source;
+    return openFlvWithPolicy({ url, size: meta.size }, meta, reference, onProgress, signal);
   }
   if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openFFmpegMediaFromUrl(url,meta,{signal,onProgress}));
   return openWithFallback({
@@ -195,6 +196,17 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
     fallback: () => openFallback ? openFallback(url, meta) : openFFmpegMediaFromUrl(url, meta, { signal, onProgress }),
   });
+}
+
+async function openFlvWithPolicy(input: import('./flv-demux.ts').FlvInput, meta: MediaMeta, reference: boolean, onProgress?: MediaOpenProgress, signal?: AbortSignal) {
+  const { openFlvMedia } = await import('./flv-media.ts');
+  if (!reference) return openFlvMedia(input, meta, { signal, onProgress });
+  const fallback = () => openFlvMedia(input, meta, { signal, onProgress, forceWasm: true });
+  if (getReferenceDecode().decoder === 'software') return referenceSource(await fallback());
+  // Keep TS demux/progressive indexing. Transport native frames unchanged to
+  // the same Worker readback and software-witness gate as other containers.
+  return openWithFallback({ meta, input, signal, onProgress, reference,
+    openNative: () => openFlvMedia(input, meta, { signal, onProgress, rawNative: true }), fallback });
 }
 
 async function openLocalFallback(file:File,deps:import('./ffmpeg-media.ts').FallbackDeps):Promise<MediaSource>{
@@ -249,7 +261,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
           || (await track.getCodec()==='hevc'&&await hevcDisplayOrder(reader,configs,()=>onProgress?.('index')))) {
           input.dispose();
           const {openPacketMedia}=await import('./packet-media.ts');
-          return await openPacketMedia('mp4',access,meta,{signal,onProgress});
+          return await openPacketMedia('mp4',access,meta,{signal,onProgress,rawNative});
         }
       } finally{detach();reader.close();}
     }

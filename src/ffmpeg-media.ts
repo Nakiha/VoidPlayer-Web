@@ -48,6 +48,8 @@ export const WASM_CORE_GLUE_PATH_MT = 'vendor/voidplayer-core/voidplayer-core-mt
 export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm';
 
 export interface FallbackDeps {
+  /** Keep native packet frames intact for the reference Worker readback gate. */
+  rawNative?: boolean;
   /** Local same-frame color diagnostics only; normal playback releases native samples after copying. */
   preserveNativeSample?: boolean;
   /** Opt-in external-texture experiment: keep native GPU resources, no plane readback. */

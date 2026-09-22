@@ -5,12 +5,15 @@ import {resolveYuvColor,validateYuv,yuvSample} from './yuv-color.ts';
 /** Certify a same-PTS raw-plane witness, never fit browser RGB output. */
 export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
   const a=native.description,b=reference.description;
-  const reject=()=>{throw new MediaOpenError('decode','硬件原始平面未通过软件首帧核对。');};
-  if(native.sourcePtsUs!==reference.sourcePtsUs||!a.yuv||!b.yuv||!native.pixels||!reference.pixels||b.yuv.bitDepth!==8||b.yuv.subsampleX!==1||b.yuv.subsampleY!==1||a.codedWidth!==b.codedWidth||a.codedHeight!==b.codedHeight||JSON.stringify(a.visibleRect)!==JSON.stringify(b.visibleRect))return reject();
+  const reject=(reason:string)=>{throw new MediaOpenError('decode',`硬件原始平面未通过软件首帧核对：${reason}`);};
+  if(native.sourcePtsUs!==reference.sourcePtsUs)return reject('源 PTS 不一致。');
+  if(!a.yuv||!b.yuv||!native.pixels||!reference.pixels||b.yuv.bitDepth!==8||b.yuv.subsampleX!==1||b.yuv.subsampleY!==1)return reject('需要可读取的 8-bit 4:2:0 平面。');
+  if(a.codedWidth!==b.codedWidth||a.codedHeight!==b.codedHeight)return reject(`编码尺寸不一致（原生 ${a.codedWidth}×${a.codedHeight}，软件 ${b.codedWidth}×${b.codedHeight}）。`);
+  if(JSON.stringify(a.visibleRect)!==JSON.stringify(b.visibleRect))return reject('裁剪区域不一致。');
   const x=resolveYuvColor(a),y=resolveYuvColor(b);
-  if(!x.supported||!y.supported||(['matrix','primaries','fullRange','transfer'] as const).some(k=>x[k]!==y[k]))return reject();
+  if(!x.supported||!y.supported||(['matrix','primaries','fullRange','transfer'] as const).some(k=>x[k]!==y[k]))return reject('SDR 色彩条件不一致或不受支持。');
   for(let c=0;c<3;c++)for(let row=0;row<a.codedHeight;row+=c?2:1)for(let col=0;col<a.codedWidth;col+=c?2:1){
-    if(yuvSample(native.pixels,a.yuv,c,col,row)!==yuvSample(reference.pixels,b.yuv,c,col,row))return reject();
+    if(yuvSample(native.pixels,a.yuv,c,col,row)!==yuvSample(reference.pixels,b.yuv,c,col,row))return reject(`平面 ${c} 的样本不一致。`);
   }
 }
 
@@ -84,6 +87,10 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     get info(){return source.info;},set info(info){source.info=info;},
     get onInfoChange(){return source.onInfoChange;},set onInfoChange(fn){source.onInfoChange=fn;},
     ensureIndexed:source.ensureIndexed?.bind(source),
+    getAnalysisCapability:source.getAnalysisCapability?.bind(source),
+    queryAnalysis:source.queryAnalysis?.bind(source),
+    rankAnalysisTime:source.rankAnalysisTime?.bind(source),
+    locateAnalysisSample:source.locateAnalysisSample?.bind(source),
     frameAt:async pts=>convert(await source.frameAt(pts)),
     async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(source.framesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},
     framesFrom:pts=>pipeline(source.framesFrom(pts)),

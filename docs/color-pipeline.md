@@ -5,7 +5,7 @@
 
 ## 用户选择的两条路径
 
-- **正确颜色（reference）**：提供“强制软件解码”（默认）及“优先硬件解码”。前者选择真实 WASM；后者优先 WebCodecs → Worker 原始 YUV 读回 → 共同颜色转换，不经过浏览器 RGB 呈现。两者均保留 SDR 原始平面。此为用户选择的后端策略，不是新增整体异常捕获。FLV 仍使用 TS 解封装并暂时强制 WASM；不支持的容器仅按既有失败阶段回退。RGBA/HDR/不支持颜色明确拒绝。这里的“正确”指本文定义的 SDR 显示参照规则，不代表完整专业 HDR 色彩管理。
+- **正确颜色（reference）**：未保存解码偏好时默认“优先硬件解码”，也可显式选择“强制软件解码”。硬件优先选择 WebCodecs → Worker 原始 YUV 读回 → 共同颜色转换，不经过浏览器 RGB 呈现；软件选择真实 WASM。已有本机偏好及导入工作区的比较条件优先于新默认。FLV（含非标 HEVC）继续用 TS 解封装及渐进索引，硬件优先时与其他容器共用原始平面读回/首帧核对准入，不再因 reference 模式直接强制 WASM。特殊包索引 MP4 同样保留原生帧交给此准入流程。能力、首帧、读回或核对失败按既有失败阶段回退；input/resource 失败不换后端。RGBA/HDR/不支持颜色明确拒绝。这里的“正确”指本文定义的 SDR 显示参照规则，不代表完整专业 HDR 色彩管理。
 - 硬件缓冲深度为每轨 1/2/4/8 帧，默认 2；每源固定 Worker 数和顺序读回队列受此上限约束，应用播放队列与解码器内部队列另有自身预算。更多缓冲不保证更快。配置只在 reference 下显示；软件解码隐藏深度控件但保留选择。底层使用 prefer-hardware 偏好，不冒充实际 GPU 使用的证明。
 - 硬件准入目前限 NV12/I420 8-bit SDR。载入时临时打开真实 WASM 取得同 PTS 首帧，核对全部原始 YUV 样本、coded/crop、位深、子采样及 resolved matrix/range/primaries/transfer；通过后沿用该帧确认的 chroma location，释放 WASM 源。保留硬件资源原始 color 和容器 sourceColor，不用源标签覆盖资源，也不拟合 RGB。容器 range 可以与实际帧不同；源 HDR 或 primaries/matrix 冲突拒绝。此验证增加首帧载入成本，不增加逐帧 WASM 解码。首帧证据不是动态码流全程认证；后续公开格式、尺寸、裁剪或色彩标签变化明确报错，提示切换软件，不静默沿用旧契约。
 - 硬件能力/读回/首帧核对失败进入现有 decode 阶段软件回退；input/resource 失败不换后端。播放中的错误继续由会话处理，不新增整体 catch 换路径。每次关闭/seek 归还预取帧，源释放时终止 Worker 并拒绝待处理请求；已交付缓冲只在 frame.close 后回收，每 Worker 最多一个空闲缓冲。
@@ -19,7 +19,7 @@ Windows 验证：`npm run test:color:modes`（需先运行本地服务，默认 
 
 2026-09-11 解码设置补测：上述 reference 57–58 fps 指软件路径。新增硬件选项在 Chrome/Edge 上通过深度 1/2/4/8、反复 seek、实际 NV12 输出、WebCodecs 不可用时回退、UI 与刷新保存检查；原片首帧全平面核对通过。相关 66 项单测（含真实 core）及 Chromium UI 回归、构建通过。全量 npm test 为 348 通过、30 失败、1 跳过：28 项缺少本机回归样片，2 项 Windows SIGTERM 退出码断言失败，不能宣称全量通过。
 
-真实应用深度 2、每场景两轮：Chrome 原片单轨 38.38–38.71 fps、双轨每轨 21.02–21.17 fps；Edge 单轨 52.61–53.25 fps、双轨每轨 30.62–31.08 fps。8 次仅 Edge 单轨一次达到现有基准阈值，其余未达实时，Chrome 双轨另有呈现停顿。与独立 960×540 吞吐实验不同，本次使用真实应用调度和 3840×2160 呈现画布。保留软件默认，硬件选项不承诺实时性能，也不按浏览器名字改矩阵或绕过首帧核对。报告位于 `artifacts/color/reference-hardware-{chrome,edge}-bench-final.json`。
+真实应用深度 2、每场景两轮：Chrome 原片单轨 38.38–38.71 fps、双轨每轨 21.02–21.17 fps；Edge 单轨 52.61–53.25 fps、双轨每轨 30.62–31.08 fps。8 次仅 Edge 单轨一次达到现有基准阈值，其余未达实时，Chrome 双轨另有呈现停顿。与独立 960×540 吞吐实验不同，本次使用真实应用调度和 3840×2160 呈现画布。当时保留软件默认；v0.3.0 改为硬件优先默认后，这些历史性能限制仍需复测，不能宣称实时性能，也不按浏览器名字改矩阵或绕过首帧核对。报告位于 `artifacts/color/reference-hardware-{chrome,edge}-bench-final.json`。
 
 当前实测结果与边界见 [WebGPU 修复记录](webgpu-color-pipeline-status.md)。
 Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipeline=unified` 共同平面路径；设计取舍、未解决资源与性能限制见 [设计审查](color-pipeline-design-review.md)。它尚未替换默认路径。

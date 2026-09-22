@@ -9,6 +9,7 @@ for(const channel of ['chrome','msedge']){
   await page.locator('#identity-welcome [data-guest]').click();
   const result=await page.evaluate(async()=>{
    const call=(name,args={})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args);
+   await call('set_reference_decode',{decoder:'software',depth:2});
    const library=await call('list_library'),item=library.entries.find(e=>e.name==='mhw_hevc_fullrange_bt709_3s.mp4');
    await call('load_library_item',{id:item.id,slot:'A'});
    await call('seek_review',{ptsUs:1000000});

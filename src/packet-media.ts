@@ -139,7 +139,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
         } satisfies DecodedFrame;
-        const decoded = deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
+        const decoded = deps.rawNative || deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
         if(disposed){decoded.close();throw new Error("媒体已释放。");}
         return decoded;
       });

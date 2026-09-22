@@ -68,3 +68,18 @@ WebKit 所需系统依赖在本环境不可用。Windows/macOS 原生便携包�
 - 缩略图本地缓存为 32 MiB/512 条 LRU，闲置 Object URL 为 8 MiB/128 条；可见消费者持有的图片直到离屏/移除才释放，不为满足闲置预算破坏当前显示。
 - 自动检查点与标注草稿不属于可再生缓存清理范围。检查点为本机周期性尽力保存，服务器保持显式保存；浏览器清理站点数据或最后一次写入未完成仍可能丢失现场。
 - 工作区记录比较条件与 SDR 呈现契约，不保证不同浏览器/软硬解路径逐像素相同，也不宣称 HDR 参考显示。
+
+## 追加：reference 默认硬件优先与 FLV 原生路径
+
+未保存解码偏好时改为 hardware/depth=2；已有 software 选择及工作区比较条件继续生效。删除 reference 对 FLV 的强制 WASM 例外，本地文件嗅探与远程 FLV 都接入共同的 Worker 原始平面读回、软件同 PTS 首帧核对及按失败阶段回退。特殊包索引 MP4 也保持原生帧到该准入阶段；读回包装保留码流分析接口。
+
+本轮构建和 100 项定向测试通过（native-yuv-source、decoder-policy、session、playback、resource-budget、workspace-file、workspace-storage、flv-open-gop、flv-resolution）。Chromium 的新增 `node scripts/check-reference-flv-browser.mjs chromium` 使用自动生成的 128×96 SDR 素材，验证结果：
+
+- AV1 非标 FLV 本地改名文件与远程文件实际选用 WebCodecs，输出为读回的 I420 YUV，并通过真实 WASM 首帧逐样本核对。
+- AV1 注入能力拒绝、读回拒绝、首帧样本不同三种情形，均回退到真实 WASM，日志区分失败原因。
+- HEVC 非标 FLV 的本地/远程入口均实际发起原生能力探测。本容器 Chromium 对该配置的 prefer-hardware/no-preference 都返回 unsupported，验证的是正确回退，**尚未验证此环境中的 HEVC 原生成功路径**。
+- H.264 实际尝试原生，但浏览器给出的 coded=128×98 与软件的 128×96 不一致，仍按原有严格核对规则回退；没有为了选择原生而放宽几何或颜色检查。核对日志现在区分 PTS、平面格式、编码尺寸、裁剪、色彩条件和样本不一致。
+- 已保存的软件偏好保持 WASM，并且不发起原生探测。
+- 实际应用 AV1 WebCodecs → YUV 播放基准通过：请求 1.2 秒，速度约 0.996、绘制间隔 p95 50.71 ms，暂停后无陈旧帧。此为小尺寸合成素材，不代表高分辨率实时性或物理硬件使用证明。
+
+恢复/工作区浏览器回归继续通过。新增测试接入 Chromium/WebKit CI；本地 WebKit、Windows/macOS HEVC 硬件与 WebGPU 呈现仍待对应环境验证。
