@@ -1,6 +1,8 @@
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { getColorMode,getReferenceDecode } from './color-mode.ts';
-import { resolveYuvColor } from './yuv-color.ts';
+import { probeContainer } from './container-probe.ts';
+import { openSoftwareMedia } from './software-media.ts';
+import { openMediaPlan } from './media-policy.ts';
 import type { MediaInfoChange } from './media-state.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 import { avcGeometry, nativeAvcCompatible } from './avc-geometry.ts';
@@ -11,21 +13,16 @@ import { sampleDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 export type { MediaOpenProgress } from './media-progress.ts';
-import { abortableLoad, loadAborted, onLoadAbort } from './media-abort.ts';
+import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
-import { explainMediaFailure } from './media-diagnostics.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
-import type { OpenStage } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
 import type { VideoSample } from 'mediabunny';
 import { NativeAnalysisAdapter } from './analysis/native-adapter.ts';
 import type { MediaInfo, FrameInfo } from './model.ts';
-import { openFFmpegMedia, openFFmpegMediaFromUrl } from './ffmpeg-media.ts';
 import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
-
-const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 export interface DecodedFrame extends FrameInfo {
   readonly description: FrameDescription;
@@ -98,84 +95,29 @@ export interface MediaMeta { name: string; size: number; lastModified: number; }
 // cannot (a network error or an oversized file fails identically on retry).
 export { MediaOpenError } from './media-errors.ts';
 export type { OpenStage } from './media-errors.ts';
-const stageOf = (error: unknown): OpenStage =>
-  error instanceof MediaOpenError ? error.stage : 'decode';
-
-interface OpenPlan {
-  meta: MediaMeta;
-  input: RandomAccessInput;
-  nativeInput?(): Input;
-  openNative?(): Promise<MediaSource>;
-  fallback(): Promise<MediaSource>;
-  onProgress?: MediaOpenProgress;
-  signal?: AbortSignal;
-  reference?: boolean;
-}
-
-function openWithFallback(plan: OpenPlan): Promise<MediaSource> {
-  const log = contextLog();
-  return abortableLoad((async () => {
-    loadAborted(plan.signal);
-    let nativeError: unknown;
-    try {
-      plan.onProgress?.('decode');
-      let source = plan.openNative ? await plan.openNative() : await openWebCodecsInput(plan.nativeInput!(), plan.meta, plan.signal, plan.onProgress,plan.input,plan.reference);
-      // Packet sources may already have fallen back after native capability or
-      // first-frame failure. Their raw WASM planes need no second witness.
-      if(plan.reference && source.info.decoder === 'webcodecs'){
-        try{
-          const witness=referenceSource(await plan.fallback());
-          let reference:DecodedFrame|undefined,probe:DecodedFrame|undefined;
-          try{
-            reference=await witness.frameAt(0);
-            const {nativeYuvSource,verifyNativeWitness}=await import('./native-yuv-source.ts');
-            source=referenceSource(nativeYuvSource(source,getReferenceDecode().depth,reference.description.yuv?.chromaLocation??null));
-            probe=await source.frameAt(0);verifyNativeWitness(probe,reference);
-          }finally{probe?.close();reference?.close();witness.dispose();}
-        }
-        catch(error){source.dispose();throw error;}
-      } else if (plan.reference) source = referenceSource(source);
-      log.info('media', source.info.decoder === 'webcodecs' ? '使用 WebCodecs 解码路径' : 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
-      return source;
-    } catch (error) {
-      loadAborted(plan.signal);
-      nativeError = error;
-    }
-    const stage = stageOf(nativeError);
-    if (stage === 'input' || stage === 'resource') throw nativeError;
-    log.info('media', 'WebCodecs 路径不可用，尝试 WASM 回退', { name: plan.meta.name, stage, reason: errorText(nativeError) });
-    try {
-      plan.onProgress?.('decode');
-      const source = await plan.fallback();
-      log.info('media', 'WASM 回退解码已启用', { name: plan.meta.name, codec: source.info.codec });
-      return plan.reference?referenceSource(source):source;
-    } catch (fallbackError) {
-      loadAborted(plan.signal);
-      log.warn('media', 'WASM 回退也不支持', { name: plan.meta.name, error: errorText(fallbackError) });
-      // Preserve input/resource failures and the actual decoder failure; the
-      // initial capability error cannot explain a failed download or timeout.
-      throw await explainMediaFailure(plan.input, nativeError, fallbackError, plan.signal);
-    }
-  })(), plan.signal, source => source.dispose());
+/** File and URL differ only in byte access. Container adapters are selected
+ * once, before the shared native/software/reference policy is applied. */
+async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  const container = await probeContainer(input, signal);
+  const reference = getColorMode() === 'reference', preference = getReferenceDecode();
+  const software = customSoftware ?? (() => openSoftwareMedia(input, meta, { signal, onProgress }, container));
+  const native = container === 'flv'
+    ? async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); }
+    : () => openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+  contextLog().info('media', '媒体适配器选择', { container, input: 'file' in input ? 'local' : 'remote', reference,
+    preference: reference ? preference.decoder : 'hardware', software: container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+  const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
+    native, software, onProgress, signal });
+  source.info.container = container;
+  return source;
 }
 
 export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   loadAborted(signal);
   if (!(file instanceof File) || file.size === 0) throw new MediaOpenError('input', '请选择非空的视频文件。');
-  const reference=getColorMode()==='reference';
-  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openLocalFallback(file,{signal,onProgress}));
-  if (await isFlvFile(file)) {
-    return openFlvWithPolicy({ file }, file, reference, onProgress, signal);
-  }
-  return openWithFallback({
-    meta: file, input: { file },
-    onProgress, signal,reference,
-    nativeInput: () => new Input({ source: new BlobSource(file), formats: ALL_FORMATS }),
-    fallback: () => openFallback ? openFallback(file) : openLocalFallback(file,{signal,onProgress}),
-  });
+  return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
 }
 
-// Both native and WASM library paths read compressed bytes on demand.
 export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
@@ -184,50 +126,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
-  const reference=getColorMode()==='reference';
-  // FLV keeps its own demuxer in every mode; the FFmpeg container path does
-  // not accept it.
-  if (/\.flv$/i.test(meta.name)) {
-    return openFlvWithPolicy({ url, size: meta.size }, meta, reference, onProgress, signal);
-  }
-  if(reference&&getReferenceDecode().decoder==='software')return referenceSource(await openFFmpegMediaFromUrl(url,meta,{signal,onProgress}));
-  return openWithFallback({
-    meta, input: { url, size: meta.size }, onProgress, signal,reference,
-    nativeInput: () => new Input({ source: new UrlSource(url), formats: ALL_FORMATS }),
-    fallback: () => openFallback ? openFallback(url, meta) : openFFmpegMediaFromUrl(url, meta, { signal, onProgress }),
-  });
-}
-
-async function openFlvWithPolicy(input: import('./flv-demux.ts').FlvInput, meta: MediaMeta, reference: boolean, onProgress?: MediaOpenProgress, signal?: AbortSignal) {
-  const { openFlvMedia } = await import('./flv-media.ts');
-  if (!reference) return openFlvMedia(input, meta, { signal, onProgress });
-  const fallback = () => openFlvMedia(input, meta, { signal, onProgress, forceWasm: true });
-  if (getReferenceDecode().decoder === 'software') return referenceSource(await fallback());
-  // Keep TS demux/progressive indexing. Transport native frames unchanged to
-  // the same Worker readback and software-witness gate as other containers.
-  return openWithFallback({ meta, input, signal, onProgress, reference,
-    openNative: () => openFlvMedia(input, meta, { signal, onProgress, rawNative: true }), fallback });
-}
-
-async function openLocalFallback(file:File,deps:import('./ffmpeg-media.ts').FallbackDeps):Promise<MediaSource>{
-  if(await isFlvFile(file)){const {openFlvMedia}=await import('./flv-media.ts');return openFlvMedia({file},file,{...deps,forceWasm:true});}
-  const {openPacketMedia}=await import('./packet-media.ts');
-  try{return await openPacketMedia('mp4',{file},file,{...deps,forceWasm:true});}
-  catch(error){loadAborted(deps.signal);if(!(error instanceof MediaOpenError)||!['container','codec'].includes(error.stage))throw error;}
-  return openFFmpegMedia(file,deps);
-}
-
-function referenceSource(source:MediaSource):MediaSource {
-  const verify=(frame:DecodedFrame)=>{
-    if(frame.kind!=='yuv'||!resolveYuvColor(frame.description).supported){frame.close();throw new MediaOpenError('decode','正确颜色模式目前仅支持可读取原始平面的 SDR 视频。请使用匹配浏览器模式查看此资源。');}
-    return frame;
-  };
-  const at=source.frameAt.bind(source),after=source.framesAfter.bind(source),from=source.framesFrom.bind(source),following=source.framesFollowing?.bind(source);
-  source.frameAt=async pts=>verify(await at(pts));
-  source.framesAfter=async(pts,count)=>{const frames=await after(pts,count);try{return frames.map(verify);}catch(error){frames.forEach(f=>f.close());throw error;}};
-  source.framesFrom=async function*(pts){for await(const frame of from(pts))yield verify(frame);};
-  if(following)source.framesFollowing=async function*(pts){for await(const frame of following(pts))yield verify(frame);};
-  return source;
+  return openInput({ url, size: meta.size }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {
@@ -286,6 +185,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       codec, decoder: 'webcodecs', width: track.displayWidth, height: track.displayHeight,
       hardwareAcceleration: config.hardwareAcceleration,
+      indexKind: 'container', seekStrategy: 'browser',
       firstPtsUs: Math.round(first * 1e6), durationUs: Math.round((end - first) * 1e6),
       colorSource: 'container', ...(indexWarning ? { indexWarning } : {}),
       ...(color ? { color: { primaries: color.primaries ?? null, transfer: color.transfer ?? null, matrix: color.matrix ?? null, fullRange: color.fullRange ?? null } } : {}),
@@ -380,11 +280,6 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     return source;
   } catch (error) { primed?.close(); input.dispose(); loadAborted(signal); throw error; }
   finally { detachAbort(); }
-}
-
-async function isFlvFile(file: File): Promise<boolean> {
-  const header = new Uint8Array(await file.slice(0, 3).arrayBuffer());
-  return /\.flv$/i.test(file.name) || header[0] === 70 && header[1] === 76 && header[2] === 86;
 }
 
 /** Preserve the real source timestamp when the capture starts before a GOP. */

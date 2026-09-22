@@ -232,6 +232,8 @@ jobs:
       - run: node scripts/check-recovery-browser.mjs webkit
       - run: node scripts/check-reference-flv-browser.mjs chromium
       - run: node scripts/check-reference-flv-browser.mjs webkit
+      - run: node scripts/check-container-browser.mjs chromium
+      - run: node scripts/check-container-browser.mjs webkit
       - name: Verify thumbnails, startup and restored workspace lifecycle
         run: |
           node scripts/check-thumbnail-browser.mjs webkit

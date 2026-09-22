@@ -43,6 +43,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       ...(track.indexState ? [['帧索引', track.indexState === 'building' ? `${indexProgressLabel(track)} · 时长为已索引范围` : track.indexState === 'error' ? `索引失败：${track.indexError}` : track.indexSource === 'server' ? '已复用服务器缓存' : '已完成']] : []),
       ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
       ['加速请求', track.decoder === 'ffmpeg-wasm' ? '软件解码' : track.hardwareAcceleration === 'prefer-hardware' ? '硬件优先（实际硬件使用未验证）' : '浏览器自动选择'],
+      ...(track.seekStrategy ? [['定位方式', ({ 'packet-anchor': '包索引定位', 'demuxer-keyframe': '容器关键帧定位', 'demuxer-timestamp': '容器时间戳定位（可能回扫）', browser: '浏览器媒体索引' })[track.seekStrategy]]] : []),
       [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
       ['色域原色', colorLabel(color?.primaries)],
       ['传递特性', colorLabel(color?.transfer)],

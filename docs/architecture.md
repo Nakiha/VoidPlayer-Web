@@ -10,6 +10,12 @@
 
 ## 解码与呈现
 
+v0.3.0 将本地/远程入口统一为字节识别（`container-probe.ts`）、解码选择与失败阶段策略（`media-policy.ts`）、软件适配器选择（`software-media.ts`）和 reference 原始平面准入（`reference-source.ts`）。容器只负责解封装/索引差异，不再各写一套 reference 回退和上屏规则。Mediabunny 已支持的容器共用 WebCodecs 入口；新增格式不应复制解码偏好、色彩校验或呈现代码。
+
+FFmpeg 容器回退原本就调用 `vp_index_build` 扫描包建立 PTS/时长索引；旧的 `indexState` 缺失不能解释成无索引。TS 的修复是保留关键包字节位置与 DTS，随机定位从目标前的 GOP 解码，避免用 PTS 定位越过目标后从起点重解码。只有 TS 的二分定位索引写入包偏移；其他容器保留自身索引语义。首次扫描仍随文件长度增长，损坏或时间戳异常文件仍可能回扫。
+
+`MediaInfo` 现在区分 `indexKind`、`seekStrategy`、`seekAnchorCount`；本地故障日志记录实际定位耗时、解码帧数和起点重试次数。完整时间索引不等于所有容器都有严格有界的随机访问能力。
+
 | 路径 | 入口 | 边界 |
 | --- | --- | --- |
 | WebCodecs | `src/media.ts` | Mediabunny 解封装，通过文件或 HTTP Range 读取；浏览器负责支持的编码组合 |

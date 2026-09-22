@@ -83,3 +83,13 @@ WebKit 所需系统依赖在本环境不可用。Windows/macOS 原生便携包�
 - 实际应用 AV1 WebCodecs → YUV 播放基准通过：请求 1.2 秒，速度约 0.996、绘制间隔 p95 50.71 ms，暂停后无陈旧帧。此为小尺寸合成素材，不代表高分辨率实时性或物理硬件使用证明。
 
 恢复/工作区浏览器回归继续通过。新增测试接入 Chromium/WebKit CI；本地 WebKit、Windows/macOS HEVC 硬件与 WebGPU 呈现仍待对应环境验证。
+# 追加：统一入口与 TS seek（先推送检查点）
+
+应用户要求先推送代码，以下区分已验证和待验证项目。
+
+- 代码核对：通用 FFmpeg 回退已有 `vp_index_build` 包扫描，旧 `indexState` 缺失是可观测性缺口；FLV 在 TypeScript Worker 解封装，并非 WASM 扫描。上屏原本已统一在 presenter。
+- 已实现本地/远程共享字节识别、失败阶段策略、软件适配器选择、reference 准入，以及索引/定位诊断。新增 18 项定向测试通过：`media-loading`、`media-policy`、`media-abort`、`decoder-policy`、`native-yuv-source`。拆分后的 TypeScript 曾通过；最终文档/诊断追加后仍须跑完整构建。
+- 上游 core 修复分支 `codex/v0.3.0-indexed-seek` 已推送，Web lock 固定 `8bd7a69d287cfb3a3bfc8c0ea1643448f9bca96e`。添加 TS 关键包偏移/DTS，保持其他容器索引语义。新增测试在真实单线程和多线程 core 上通过：70 秒、640×360、25fps、GOP12/B2、139,930,844 字节 TS，随机/倒退/GOP 边界精确 PTS、输出像素与全部 1,750 帧顺序解码一致；每次最多 24 个输出帧，0 起点重试。
+- 同文件 Node 单线程旧 core 跳到 10/36/64 秒约 159/499/823 ms，新 core 约 16/10/15 ms。它是本轮合成素材实验，未复现用户原片的 15 秒超时，不能宣称原片已验收。
+- 最后补充“seek 调用自身失败时也计入回扫次数”后启动了双版本重构建；本次先推送时最终构建/复测尚未完成。之前通过的双版本回归覆盖主要定位算法。
+- 待执行：同步最终锁定 core 及 provenance、完整构建、`check-container-browser.mjs chromium`、MP4/FLV 回归、UI 回归与播放 bench。新增浏览器脚本覆盖约 140 MB 本地/Range TS、误改扩展名、H.264 TS/MP4 WebCodecs 和强制软件 reference；接入 CI 不代表运行通过。WebKit/Windows/macOS/GPU 与用户原始失败文件仍待验证。

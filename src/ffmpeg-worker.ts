@@ -102,6 +102,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     contexts.set(ctx, { ticks, blobHandle, path });
     return {
       ctx, path, ticks, durations, indexMs, ioMode,
+      seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
       width: core.ccall('vp_width', 'number', ['number'], [ctx]),
@@ -130,7 +131,11 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
     throw new Error(`WASM 解码未能命中索引帧 ${index}（结果 ${result}）。`);
   }
-  return readWasmFrame(core, heap, ctx, recycle);
+  return { ...readWasmFrame(core, heap, ctx, recycle),
+    seek: typeof core._vp_extract_frames === 'function' ? {
+      decodedFrames: core.ccall('vp_extract_frames', 'number', ['number'], [ctx]),
+      restarts: core.ccall('vp_extract_restarts', 'number', ['number'], [ctx]),
+    } : undefined };
 }
 
 port.onmessage = async (event: { data: any }) => {
