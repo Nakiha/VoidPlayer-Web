@@ -23,7 +23,7 @@ FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV
 
 Range 压缩数据缓存每轨最多 8 MiB（MP4 解封装库另有最多 1 MiB 缓存）；MP4/FFmpeg 以 256 KiB 块读取，FLV 以 64 KiB 块读取。HTTP 必须返回精确的 206/Content-Range；忽略 Range、截断、响应过长及文件版本变化都报输入错误，不静默退回整文件下载。FFmpeg 同步 AVIO 通过 SharedArrayBuffer 与异步 fetch 桥接，需要 COOP/COEP 跨源隔离；MP4/FLV 的 TS 路径没有这项读取限制。FFmpeg 容器回退仍会扫描包建立索引，因此 TS/MKV 等文件的首次载入时间还可能随文件长度增长。
 
-索引用于真实帧时间、关键帧定位、倒退逐帧和尾帧定位。没有完整索引可支持顺序播放，但若要先播再渐进建立索引，需要会话和 UI 明确区分已索引范围、暂定时长及尚不可精确跳转的位置；当前评审会话仍在完整索引就绪后开放轨道。
+索引用于真实帧时间、关键帧定位、倒退逐帧和尾帧定位。当前已支持首帧就绪后开放轨道并在后台渐进索引。会话和 UI 区分已索引范围、暂定时长、index-wait 与 catching-up；跳转/加入轨道仅等待目标所需的前缀，未完成索引不等于不能播放。具体边界见 [渐进索引](progressive-indexing.md)。
 
 WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓库的 `wasm` 分支。本仓库通过 `scripts/sync-wasm-core.sh` 消费产物，产物不进入 Git。FLV 和 MP4 压缩包路径复用已有 packet API，不需要修改 core。跨源隔离时优先尝试多线程 core，否则使用单线程；多轨共享线程预算。
 
@@ -87,3 +87,11 @@ changes; actual overlay-size changes trigger fitting through ResizeObserver.
 Focus mode keeps the offscreen recovery action available. It remains conditional
 on the existing visibility threshold, recenters without changing magnification,
 and does not exit focus mode.
+
+## v0.3.0 资源与恢复边界
+
+- HTTP 帧索引只准入一个任务（包括接收正文和发送 GET 响应），繁忙返回 503/Retry-After；没有大正文等待队列。`frame-index-worker.ts` 独占重工作：JSON 解析、校验、派生构造、序列化和索引 SQLite IO。最终提交前主线程重新 resolve 文件，Worker 在写事务内重查媒体版本/ready/root-active 和清理 epoch。GET 由 Worker 读取已序列化文档，传输 UTF-8 字节，主线程不构建包对象数组。其他小型管理/扫描 SQLite 操作仍在主线程；SQLite 写锁竞争仍是后续观测项。
+- 无显式数据库路径的嵌入式/测试媒体库使用独立临时 SQLite 文件，使 Worker 与主线程共享同一数据库；close 先停止 Worker，再删除临时目录。正式便携数据目录保持不变。
+- `SessionResources` 默认 256 MiB 协调应用拥有的帧、待解码预留、读回和派生任务。所有队列共享预算；每轨保留必需后继帧的前进能力，超额显式计入 `overBudgetBytes`。减少预取/取消派生任务优先，不改变位深、精度或评审逐帧语义。诊断不声称覆盖解码器内部、WASM 堆或 GPU 总显存。
+- 本地 JPEG 缓存为独立数据库，32 MiB / 512 条 LRU，升级迁移旧记录并淘汰。Object URL 的闲置缓存为 8 MiB / 128 条；可见图片持有独立引用，离开视口或 DOM 后释放，旧 URL 替换后等最后引用释放再 revoke。本地键包含 stream + recipe。
+- 工作区在现有格式 v1 内添加可选 `comparison`，旧文件提示使用本机当前条件；未知呈现契约拒绝载入。本机检查点保存内容与比较条件、保持服务器显式保存。不可用片源保留为待关联轨道；重新关联经过同一个 session facade，保留媒体/标注 ID 和偏移。

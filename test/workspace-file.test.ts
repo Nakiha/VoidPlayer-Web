@@ -50,3 +50,11 @@ test('analysis panel state survives workspace round trips, invalid blocks are re
     {...analysisView,selected:'A'},
   ])assert.throws(()=>parseWorkspace({...document(),layout:{panels:{inspector:false,subtracks:true,sources:true},selected:'A',dockHeight:180,marksExpanded:false,analysisView:invalid}}));
 });
+
+test('comparison contract round trips and rejects unsupported semantics rather than silently changing conditions', async () => {
+  const comparison = { version: 1, colorMode: 'reference', referenceDecode: { decoder: 'software', depth: 2 }, presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' };
+  const parsed = parseWorkspace({ ...document(), comparison });
+  assert.deepEqual((await readWorkspaceFile(await compressWorkspace(parsed), 'http://localhost/')).comparison, comparison);
+  assert.equal(parseWorkspace(document()).comparison, undefined);
+  for (const invalid of [{ ...comparison, presentation: 'hdr-reference' }, { ...comparison, version: 2 }, { ...comparison, referenceDecode: { decoder: 'hardware', depth: 3 } }]) assert.throws(() => parseWorkspace({ ...document(), comparison: invalid }));
+});

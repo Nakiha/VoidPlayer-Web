@@ -44,12 +44,48 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
       if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
-      if (req.method === 'GET') { sendJson(res, 200, library.frameIndexes.get(entry.id, version)); return true; }
-      const body = await readAdminJson(req, FLV_INDEX_BYTES + 1024) as { index?: unknown; epoch?: unknown } | null;
-      if (!body || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
-      sendJson(res, 201, library.frameIndexes.put(entry.id, version, entry.size, body.index, body.epoch));
+      const release = library.indexJobs.acquire();
+      let prepared = false;
+      try {
+        if (req.method === 'GET') {
+          const bytes = await library.indexJobs.call('get', { id: entry.id, version }) as Uint8Array;
+          if (res.destroyed) return true;
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+          await new Promise<void>(resolve => {
+            const timer = setTimeout(() => res.destroy(), 30000);
+            const done = () => { clearTimeout(timer); res.off('close', done); resolve(); };
+            res.once('close', done); res.end(bytes, done);
+          });
+          return true;
+        }
+        if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
+        const limit = FLV_INDEX_BYTES + 1024;
+        if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
+        const chunks: Buffer[] = []; let size = 0;
+        // Admission happens BEFORE accumulating the request body.
+        const timeout = setTimeout(() => req.destroy(new Error('索引上传超时。')), 30000);
+        try {
+          for await (const chunk of req) {
+            size += (chunk as Buffer).length;
+            if (size > limit) throw new AdminError(413, '帧索引过大。');
+            chunks.push(chunk as Buffer);
+          }
+        } finally { clearTimeout(timeout); }
+        const bytes = new Uint8Array(size); let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+        chunks.length = 0;
+        const result = await library.indexJobs.call('prepare', { bytes, size: entry.size }, [bytes.buffer]);
+        prepared = true;
+        if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
+        // commit rechecks media + epoch inside its SQLite write transaction.
+        sendJson(res, 201, await library.indexJobs.call('commit', { id: entry.id, version, epoch: result.epoch }));
+        prepared = false;
+      } finally {
+        if (prepared) await library.indexJobs.call('discard').catch(() => {});
+        release();
+      }
       return true;
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
+    } catch (error) { if (!res.headersSent && error instanceof AdminError && error.status === 503) res.setHeader('retry-after', '1'); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
   }
   const thumbMatch = /^\/api\/media\/([0-9a-f]{24})\/(thumbnail|thumbnail-status)$/.exec(url.pathname);
   if (thumbMatch) {

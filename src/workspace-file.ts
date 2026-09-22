@@ -1,3 +1,4 @@
+import type { ColorMode, ReferenceDecode } from './color-mode.ts';
 import { drawingsValue } from './annotation.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
@@ -24,8 +25,13 @@ export type WorkspaceLayout = {
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
   analysisView?: AnalysisViewState;
 };
+export type ComparisonConditions = {
+  version: 1; colorMode: ColorMode; referenceDecode: ReferenceDecode;
+  presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
+};
 export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
+  comparison?: ComparisonConditions;
   positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
   thumbnails?: { id: string; url: string; width: number; height: number }[];
@@ -125,12 +131,19 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       };
     }
   }
+  let comparison: ComparisonConditions | undefined;
+  if (d.comparison !== undefined) {
+    const c = object(d.comparison), decode = object(c.referenceDecode);
+    if (c.version !== 1 || !['reference', 'browser'].includes(c.colorMode) || c.presentation !== 'voidplayer-sdr-v1' || c.outputColorSpace !== 'srgb' ||
+      !['hardware', 'software'].includes(decode.decoder) || ![1, 2, 4, 8].includes(decode.depth)) throw new Error('工作区比较条件不受支持，请使用匹配的播放器版本。');
+    comparison = { version: 1, colorMode: c.colorMode, referenceDecode: { decoder: decode.decoder, depth: decode.depth }, presentation: c.presentation, outputColorSpace: c.outputColorSpace };
+  }
   const thumbnails = array(d.thumbnails ?? [], 10000).map(value => {
     const t = object(value), url = text(t.url, 2 * 1024 * 1024), id = text(t.id, 200);
     if (!markIds.has(id) || !/^data:image\/jpeg;base64,[a-zA-Z0-9+/=]+$/.test(url)) throw new Error('工作区缩略图无效。');
     return { id, url, width: timeUs(t.width), height: timeUs(t.height) };
   });
-  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
+  return { schema: 'voidplayer-workspace', version: 1, ...(typeof d.name === 'string' ? { name: text(d.name, 200) } : {}), generatedAt: text(d.generatedAt, 100), serverUrl, positionUs: timeUs(d.positionUs), tracks, media, marks, ...(comparison ? { comparison } : {}), viewport: viewport.snapshot(), ...(layout ? { layout } : {}), thumbnails };
 }
 export async function readWorkspaceFile(file: Blob, baseUrl: string): Promise<WorkspaceFile> {
   if (file.size > MAX_BYTES) throw new Error('工作区文件超过 32 MiB。');

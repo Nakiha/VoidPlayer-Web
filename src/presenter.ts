@@ -1,3 +1,4 @@
+import type { SessionResources } from './session/resources.ts';
 import { gpuPaint, gpuCapture, gpuGeometry, gpuFallbackGeometry, disposeGpuPresentation } from './webgpu-presenter.ts';
 import { yuvToRgba, yuvPixelRgb, resolveYuvColor } from './yuv-color.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
@@ -100,8 +101,19 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   surface?.upload();
 }
 
+const captureBudgets = new WeakMap<HTMLCanvasElement, SessionResources>();
+const captureLeases = new Map<HTMLCanvasElement, () => void>();
+export function bindPresentationResources(canvas: HTMLCanvasElement, resources: SessionResources) { captureBudgets.set(canvas, resources); }
 /** Materialize source-sized pixels on demand; playback never calls this. */
-export function captureFrame(canvas: HTMLCanvasElement) { return gpuCapture(canvas) ?? surfaces.get(canvas)?.captureSource() ?? canvas; }
+export function captureFrame(canvas: HTMLCanvasElement) {
+  const resources = captureBudgets.get(canvas), bytes = canvas.width * canvas.height * 4;
+  captureLeases.get(canvas)?.(); captureLeases.delete(canvas);
+  const retained = resources?.reserve('readback', bytes, true);
+  if (retained) captureLeases.set(canvas, retained);
+  const scratch = resources?.reserve('readback', bytes, true);
+  try { return gpuCapture(canvas) ?? surfaces.get(canvas)?.captureSource() ?? canvas; }
+  finally { scratch?.(); }
+}
 
 /**
  * Thumbnail-only render: an independently owned first frame drawn straight to
@@ -193,6 +205,7 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
 
 const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
+  if (!geometry) { captureLeases.get(canvas)?.(); captureLeases.delete(canvas); }
   if(gpuGeometry(canvas,geometry))return;
   if (!geometry) {
     if (surfaces.has(canvas)) { surfaces.get(canvas)!.dispose(); surfaces.delete(canvas); canvas.width = canvas.height = 1; }
@@ -201,4 +214,5 @@ export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: Pre
   if (!surfaces.has(canvas) && geometry) { const surface = createPresentationSurface(canvas); if (surface) surfaces.set(canvas, surface); }
   surfaces.get(canvas)?.geometry(geometry);
 }
-export function disposePresentation() { disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }
+export function disposePresentation() {
+  for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }

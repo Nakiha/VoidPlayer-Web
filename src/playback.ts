@@ -1,3 +1,4 @@
+import type { SessionResources } from './session/resources.ts';
 import type { DecodedFrame } from './media.ts';
 
 /** One independent, bounded producer per track. Never await decoding on the presentation path. */
@@ -13,13 +14,18 @@ export class FrameQueue {
   private peakBytes = 0;
   private largestFrameBytes = 0;
   private minimumFrames: number;
+  private resources?: SessionResources;
+  private estimateBytes: number;
+  private unsubscribe?: () => void;
   private get effectiveBudgetBytes() { return Math.max(this.budgetBytes, Math.min(this.minimumFrames, this.capacity) * this.largestFrameBytes); }
   readonly done: Promise<void>;
   private gen: AsyncGenerator<DecodedFrame>;
   readonly capacity: number;
   readonly budgetBytes: number;
-  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes?: number) {
+  constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes?: number, resources?: SessionResources, estimateBytes = 0) {
     this.gen = gen; this.capacity = capacity; this.budgetBytes = budgetBytes ?? 64 * 1024 * 1024;
+    this.resources = resources; this.estimateBytes = estimateBytes;
+    this.unsubscribe = resources?.subscribe(() => { this.wake?.(); this.wake = undefined; });
     this.minimumFrames = budgetBytes === undefined ? 2 : 1;
     this.done = this.produce();
   }
@@ -27,11 +33,17 @@ export class FrameQueue {
     try {
       while (!this.stopped) {
         // Bounded by both count and bytes: four 4K RGBA frames are ~133 MB.
-        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.effectiveBudgetBytes)) {
+        while (!this.stopped && (this.suspended || this.frames.length >= this.capacity || this.bytes >= this.effectiveBudgetBytes || (this.frames.length > 0 && this.resources && !this.resources.canPrefetch(Math.max(this.estimateBytes, this.largestFrameBytes))))) {
           await new Promise<void>(r => { this.wake = r; });
         }
         if (this.stopped) break;
-        const next = await this.gen.next();
+        // Reserve before next(): independent tracks cannot all prefetch into
+        // the same remaining bytes. One required frame per track guarantees progress.
+        const release = this.resources?.reserve('decodeReservations', Math.max(this.estimateBytes, this.largestFrameBytes), this.frames.length === 0);
+        if (this.resources && !release) continue;
+        let next: IteratorResult<DecodedFrame>;
+        try { next = await this.gen.next(); if (!next.done) this.resources?.own(next.value); }
+        finally { release?.(); }
         if (next.done) { this.ended = true; break; }
         if (this.stopped) { next.value.close(); break; }
         this.largestFrameBytes = Math.max(this.largestFrameBytes, next.value.byteSize);
@@ -41,7 +53,7 @@ export class FrameQueue {
         this.peakBytes = Math.max(this.peakBytes, this.bytes);
       }
     } catch (error) { if (!this.stopped) this.error = error; }
-    finally { await this.gen.return(undefined).catch(() => {}); }
+    finally { this.unsubscribe?.(); await this.gen.return(undefined).catch(() => {}); }
   }
   take(target: number): { frame: DecodedFrame | null; dropped: number } {
     let frame: DecodedFrame | null = null; let dropped = 0;

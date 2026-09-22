@@ -2,7 +2,7 @@
   "name": "voidplayer-web",
   "private": true,
   "license": "LGPL-2.1-or-later",
-  "version": "0.2.3",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
@@ -58,7 +58,8 @@
     "test:color:browser-match": "node scripts/check-browser-color-match.mjs",
     "repro:color:native": "node scripts/repro-native-yuv-color.mjs",
     "test:color:modes": "node scripts/check-color-modes.mjs",
-    "test:color:settings:browser": "npm run build && node scripts/check-color-settings-browser.mjs"
+    "test:color:settings:browser": "npm run build && node scripts/check-color-settings-browser.mjs",
+    "test:recovery:browser": "npm run build && node scripts/check-recovery-browser.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",
@@ -68,6 +69,7 @@
   },
   "devDependencies": {
     "@types/node": "26.4.1",
+    "fake-indexeddb": "6.2.4",
     "playwright": "^1.63.0",
     "typescript": "7.0.2",
     "vite": "8.2.2"

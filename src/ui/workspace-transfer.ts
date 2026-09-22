@@ -1,3 +1,5 @@
+import { installWorkspaceRecovery } from './workspace-recovery.ts';
+import { restoreHandleFile, handleKey } from '../file-handles.ts';
 import { installWorkspaceSharing } from './workspace-sharing.ts';
 import type { ToastStack } from './toast.ts';
 import {updateMediaInfo} from '../media-state.ts';
@@ -15,13 +17,17 @@ export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(f
 const matchesFile = (file: File, info: MediaInfo) => file.name === info.name.split('/').at(-1) && file.size === info.size && file.lastModified === info.lastModified;
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[]) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true) {
   const files = new Map<string, File>();
   for (const info of media) { const file = supplied.find(f => matchesFile(f, info)); if (file) files.set(info.id, file); }
+  for (const info of media) if (!files.has(info.id)) {
+    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (matchesFile(file, info)) files.set(info.id, file); } catch {}
+  }
+  if (!prompt) return files;
   const missing = media.filter(info => !files.has(info.id));
   if (!missing.length) return files;
   const dialog = document.createElement('dialog'); dialog.className = 'workspace-relink'; dialog.setAttribute('aria-label', '重新连接本地视频');
-  dialog.innerHTML = `<header class="dialog-heading"><h2>重新连接本地视频</h2><button class="icon-button" aria-label="取消导入">${icon('close')}</button></header><p>工作区保存了视频引用。请重新选择这些本地文件，或取消以保留当前工作区。</p><div class="relink-files"></div><p role="alert"></p><button class="relink-continue" disabled>打开工作区</button>`;
+  dialog.innerHTML = `<header class="dialog-heading"><h2>重新连接本地视频</h2><button class="icon-button" aria-label="取消导入">${icon('close')}</button></header><p>工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。</p><div class="relink-files"></div><p role="alert"></p><button class="relink-later">稍后关联</button><button class="relink-continue" disabled>打开工作区</button>`;
   const proceed = dialog.querySelector<HTMLButtonElement>('.relink-continue')!;
   for (const info of missing) {
     const label = document.createElement('label'); label.className = 'relink-file';
@@ -40,6 +46,7 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[]) {
   return new Promise<Map<string, File> | null>(resolve => {
     dialog.querySelector('header button')!.addEventListener('click', () => dialog.close());
     proceed.onclick = () => dialog.close('open');
+    dialog.querySelector<HTMLButtonElement>('.relink-later')!.onclick = () => dialog.close('open');
     dialog.addEventListener('close', () => { const result = dialog.returnValue === 'open' ? files : null; dialog.remove(); resolve(result); }, { once: true });
     dialog.showModal();
   });
@@ -62,33 +69,59 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
-  async function importWorkspace(value: unknown, supplied: File[] = []) {
+  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false) {
     if (importing) throw new Error('工作区正在导入，请等待完成。');
     importing = true;
     try {
       const document = parseWorkspace(value, location.href);
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied);
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery);
       if (!files) return false;
       const rollback=options.beforeRestore();
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
-        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
+        if (!info.source) { const file = files.get(info.id); if (!file) throw new Error('本地文件尚未授权，请重新选择。'); return openMedia(file, undefined, progress, signal); }
         const reference = await pinLibraryReference(info, location.href, fetch, signal);
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
-      });
+      }, { allowUnavailable: true });
       } catch(error) { rollback?.(); throw error; }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      await options.restore(document); saved?.detach(document.name); return true;
+      await options.restore(document); saved?.detach(document.name);
+      if (!document.comparison) options.toasts.show('旧工作区未记录比较条件，已沿用当前色彩和解码设置。');
+      return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
-  const unsubscribe = session.subscribe(() => { saved?.update(); sharing.update(); });
+  let missingSignature = '', dismissMissing: (() => void) | undefined;
+  async function relinkMissing() {
+    const pending = session.getState().tracks.filter(t => t.pendingRelink);
+    const files = await resolveLocalFiles(pending.filter(t => !t.source), []);
+    if (!files) return;
+    for (const info of pending) {
+      if (!info.source && !files.has(info.id)) continue;
+      await options.act(() => session.relinkTrack(info.slot, async (signal, progress) => {
+        if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
+        const reference = await pinLibraryReference(info, location.href, fetch, signal);
+        const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal);
+        updateMediaInfo(source, { source: reference }, 'identity'); return source;
+      }), 'workspace.relink');
+    }
+  }
+  function updateMissing() {
+    const pending = session.getState().tracks.filter(t => t.pendingRelink);
+    const signature = pending.map(t => `${t.slot}:${t.id}`).join('|');
+    if (signature === missingSignature) return;
+    missingSignature = signature; dismissMissing?.();
+    if (pending.length) dismissMissing = options.toasts.show(`${pending.length} 个片源待重新关联；轨道、偏移和标注已保留。`, { durationMs: 0,
+      action: { label: '重新关联', onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
+  }
+  const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
+  const unsubscribe = session.subscribe(() => { saved?.update(); sharing.update(); updateMissing(); });
   const savedId = new URL(location.href).searchParams.get('workspace');
   if (!new URL(location.href).searchParams.has('share') && savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
-  return { exportWorkspace, importWorkspace, importFile, shareWorkspace: sharing.create, dispose() { lifetime.abort(); unsubscribe(); sharing.dispose(); } };
+  return { exportWorkspace, importWorkspace, importFile, relinkMissing, shareWorkspace: sharing.create, dispose() { recovery.dispose(); dismissMissing?.(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }

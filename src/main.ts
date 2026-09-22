@@ -43,7 +43,7 @@ import type { FsFileHandle } from './file-handles.ts';
 import { exportLog, getLogSessions, log, operationContext, readLogs, traceOperation, withLogContext } from './log.ts';
 import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
-import { paintFrame, captureFrame, disposePresentation } from './presenter.ts';
+import { paintFrame, captureFrame, disposePresentation, bindPresentationResources } from './presenter.ts';
 import { setPresentationChannel } from './presentation-channel.ts';
 import { Viewport, ZOOM_PRESETS } from './viewport.ts';
 import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
@@ -150,6 +150,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
+for (const canvas of Object.values(canvases)) bindPresentationResources(canvas, session.resources);
 const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
@@ -228,7 +229,7 @@ function render() {
   for (const slot of SLOTS) {
     const t = state.tracks.find(t => t.slot === slot);
     $(`empty-${slot}`).hidden = !!t;
-    $(`image-${slot}`).hidden = !t;
+    $(`image-${slot}`).hidden = !t || !!t.pendingRelink;
     $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? '参考视频' : '对比视频');
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
@@ -236,6 +237,13 @@ function render() {
     $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? ' · 等待索引，画面暂未同步' : ' · 正在追赶播放位置') : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
     $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
     $(`failure-${slot}`).textContent = t?.failure ? `轨道 ${slot} 已停用 · 画面已停止更新。${t.failure.message} 请重新载入此片源。` : t?.syncState ? `轨道 ${slot} ${t.syncState === 'index-wait' ? '等待索引数据' : '正在追赶播放位置'} · 当前画面暂未同步，其他轨道继续播放。` : '';
+    if (t?.pendingRelink) {
+      const failure = $(`failure-${slot}`);
+      failure.textContent = `轨道 ${slot} 待重新关联 · 轨道、偏移和标注已保留。`;
+      const reconnect = document.createElement('button'); reconnect.type = 'button'; reconnect.textContent = '重新关联片源';
+      reconnect.onclick = () => { void act(() => workspaceTransfer.relinkMissing(), 'workspace.relink'); };
+      failure.append(reconnect);
+    }
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
   }

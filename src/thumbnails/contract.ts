@@ -49,7 +49,7 @@ export function serverCacheKey(key: ServerThumbnailKey): string {
 
 /** Local-file key: browser history association only, never uploaded. */
 export function localCacheKey(name: string, size: number, lastModified: number): string {
-  return `v1|local|${JSON.stringify([name, size, lastModified])}`;
+  return `v1|local|${JSON.stringify([name, size, lastModified, THUMB_STREAM_SELECTOR, THUMB_RECIPE_VERSION])}`;
 }
 
 export function thumbnailImageUrl(id: string, version: string, recipe = THUMB_RECIPE_VERSION): string {

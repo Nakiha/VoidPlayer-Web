@@ -218,9 +218,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     img.loading = 'lazy';
     img.decoding = 'async';
     img.dataset.thumbKey = key;
-    img.dataset.thumbSrc = url;
     img.onerror = () => { box.remove(); };
-    img.src = url;
+    fillThumbnailImage(img, key, url.startsWith('blob:') ? undefined : url);
     box.append(img);
     return box;
   }

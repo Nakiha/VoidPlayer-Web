@@ -18,25 +18,38 @@ export class FrameIndexStore {
     }
     return { epoch: this.epoch, index };
   }
+  /** Stored documents are validated on ingress. Splice JSON without parse/stringify. */
+  getJson(id: string, version: string): string {
+    // One SQLite snapshot pairs the body with the epoch, even if another
+    // thread clears caches between statements. Invalid legacy rows are misses.
+    const row = this.db.prepare(`SELECT epoch, (SELECT CASE WHEN json_valid(document) THEN CASE WHEN json_extract(document,'$.schema')=? THEN document END ELSE NULL END
+      FROM frame_indexes WHERE media_id=? AND version=?) AS document FROM frame_index_epoch WHERE id=1`).get(FLV_INDEX_SCHEMA, id, version)!;
+    if (row.document) this.db.prepare('UPDATE frame_indexes SET accessed_at=? WHERE media_id=? AND version=?').run(Date.now(), id, version);
+    return `{"epoch":${Number(row.epoch)},"index":${row.document ? String(row.document) : 'null'}}`;
+  }
   put(id: string, version: string, size: number, value: unknown, epoch: unknown) {
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
-    let document: FlvIndexDocument;
-    try { document = serializeFlvIndex(parseFlvIndex(value, size), size); }
-    catch (error) { throw new AdminError(400, (error as Error).message); }
-    const text = JSON.stringify(document), bytes = Buffer.byteLength(text);
-    if (bytes > FLV_INDEX_BYTES) throw new AdminError(413, '帧索引过大。');
+    return this.commit(id, version, prepareFrameIndex(value, size), epoch);
+  }
+  commit(id: string, version: string, prepared: PreparedFrameIndex, epoch: unknown) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+    if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
+    const { text, bytes, frames } = prepared;
     const media = this.db.prepare("SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1").get(id, version);
     if (!media) throw new AdminError(409, '媒体已改变，未保存旧索引。');
     // First complete upload wins; concurrent clients cannot replace a cache.
     const now = Date.now();
     this.db.prepare('INSERT OR IGNORE INTO frame_indexes(media_id,version,document,bytes,frames,created_at,accessed_at) VALUES(?,?,?,?,?,?,?)')
-      .run(id, version, text, bytes, document.packets.length, now, now);
+      .run(id, version, text, bytes, frames, now, now);
     let total = Number(this.db.prepare('SELECT coalesce(sum(bytes),0) AS bytes FROM frame_indexes').get()!.bytes);
     while (total > CACHE_LIMIT) {
       const oldest = this.db.prepare('SELECT media_id,bytes FROM frame_indexes ORDER BY accessed_at,media_id LIMIT 1').get()!;
       this.db.prepare('DELETE FROM frame_indexes WHERE media_id=?').run(oldest.media_id); total -= Number(oldest.bytes);
     }
+    this.db.exec('COMMIT');
     return { ok: true };
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   list(offset = 0, search = '') {
     if (!Number.isSafeInteger(offset) || offset < 0 || typeof search !== 'string' || search.length > 200) throw new AdminError(400, '索引分页或搜索参数无效。');
@@ -48,9 +61,25 @@ export class FrameIndexStore {
   }
   remove(id?: string, version?: string) {
     if (id && (!/^[0-9a-f]{24}$/.test(id) || !version)) throw new AdminError(400, '清理单个索引需要媒体 ID 和版本。');
-    if (id && this.db.prepare('SELECT 1 FROM frame_indexes WHERE media_id=? AND version!=?').get(id, version!)) throw new AdminError(409, '索引版本已改变，请刷新后重试。');
-    const removed = id ? this.db.prepare('DELETE FROM frame_indexes WHERE media_id=? AND version=?').run(id, version!) : this.db.prepare('DELETE FROM frame_indexes').run();
-    this.db.exec('UPDATE frame_index_epoch SET epoch=epoch+1 WHERE id=1');
-    return { removed: Number(removed.changes) };
+    // The worker uses another connection: deletion and epoch advancement must
+    // be atomic, so a pending commit cannot slip between these two changes.
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      if (id && this.db.prepare('SELECT 1 FROM frame_indexes WHERE media_id=? AND version!=?').get(id, version!)) throw new AdminError(409, '索引版本已改变，请刷新后重试。');
+      const removed = id ? this.db.prepare('DELETE FROM frame_indexes WHERE media_id=? AND version=?').run(id, version!) : this.db.prepare('DELETE FROM frame_indexes').run();
+      this.db.exec('UPDATE frame_index_epoch SET epoch=epoch+1 WHERE id=1');
+      this.db.exec('COMMIT');
+      return { removed: Number(removed.changes) };
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
+}
+
+export type PreparedFrameIndex = { text: string; bytes: number; frames: number };
+export function prepareFrameIndex(value: unknown, size: number): PreparedFrameIndex {
+  let document: FlvIndexDocument;
+  try { document = serializeFlvIndex(parseFlvIndex(value, size), size); }
+  catch (error) { throw new AdminError(400, (error as Error).message); }
+  const text = JSON.stringify(document), bytes = Buffer.byteLength(text);
+  if (bytes > FLV_INDEX_BYTES) throw new AdminError(413, '帧索引过大。');
+  return { text, bytes, frames: document.packets.length };
 }

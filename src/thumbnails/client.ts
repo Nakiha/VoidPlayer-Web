@@ -1,3 +1,4 @@
+import { ThumbnailUrlCache } from './url-cache.ts';
 // Thumbnail network + display client. Queries and uploads run beside media
 // opening, never ahead of it: prefetch is fire-and-forget, uploads use the
 // epoch frozen at accept time and are never retried with a fresh epoch.
@@ -17,7 +18,50 @@ export interface ThumbnailStatus {
   height?: number;
 }
 
-const objectUrls = new Map<string, string>();
+const objectUrls = new ThumbnailUrlCache();
+const images = new Map<HTMLImageElement, { key: string; serverUrl?: string; url?: string; visible: boolean }>();
+let imageObserver: IntersectionObserver | undefined;
+let mutationObserver: MutationObserver | undefined;
+function observeImage(img: HTMLImageElement, key: string, serverUrl?: string) {
+  const previous = images.get(img);
+  if (previous && previous.key === key) { previous.serverUrl = serverUrl; return; }
+  if (previous?.url) objectUrls.release(previous.url);
+  images.set(img, { key, serverUrl, visible: true });
+  imageObserver ??= typeof IntersectionObserver === 'undefined' ? undefined : new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      const image = entry.target as HTMLImageElement, record = images.get(image);
+      if (!record) continue;
+      record.visible = entry.isIntersecting;
+      if (record.visible) fillThumbnailImage(image, record.key, record.serverUrl);
+      else {
+        if (record.url) objectUrls.release(record.url);
+        record.url = undefined; image.removeAttribute('src'); image.dataset.thumbSrc = '';
+      }
+    }
+  }, { rootMargin: '100px' });
+  imageObserver?.observe(img);
+  if (!mutationObserver && typeof MutationObserver !== 'undefined') {
+    mutationObserver = new MutationObserver(() => {
+      for (const [image, record] of images) if (!image.isConnected) {
+        if (record.url) objectUrls.release(record.url);
+        imageObserver?.unobserve(image); images.delete(image);
+      }
+      objectUrls.trim();
+    });
+    mutationObserver.observe(document.documentElement, { childList: true, subtree: true });
+  }
+}
+function showObjectUrl(img: HTMLImageElement, url: string) {
+  const record = images.get(img);
+  if (!record?.visible) return;
+  if (record.url !== url) {
+    objectUrls.retain(url);
+    if (record.url) objectUrls.release(record.url);
+    record.url = url;
+  }
+  img.dataset.thumbSrc = url; img.src = url;
+}
+
 const listeners = new Set<(key: string) => void>();
 const statusInFlight = new Map<string, Promise<void>>();
 
@@ -38,16 +82,9 @@ export function getLiveObjectUrl(key: string): string | undefined {
 }
 
 function trackObjectUrl(key: string, blob: Blob): string {
-  const previous = objectUrls.get(key);
-  const url = URL.createObjectURL(blob);
-  objectUrls.set(key, url);
-  if (previous && previous !== url) {
-    // Delay revocation: the previous image may still be displayed until the
-    // new one decodes. Immediate revoke breaks the old <img> and flashes.
-    setTimeout(() => {
-      try { URL.revokeObjectURL(previous); } catch {}
-    }, 10000);
-  }
+  const url = objectUrls.put(key, blob);
+  // Give synchronous row listeners a chance to acquire the newly published URL.
+  queueMicrotask(() => objectUrls.trim());
   return url;
 }
 
@@ -64,9 +101,8 @@ export function publishLocalThumbnail(key: string, blob: Blob): string {
 }
 
 export function releaseThumbnailUrls() {
-  for (const url of objectUrls.values()) {
-    try { URL.revokeObjectURL(url); } catch {}
-  }
+  imageObserver?.disconnect(); mutationObserver?.disconnect();
+  imageObserver = undefined; mutationObserver = undefined; images.clear();
   objectUrls.clear();
 }
 
@@ -177,6 +213,8 @@ export async function uploadThumbnail(upload: ThumbnailUpload): Promise<UploadOu
  * so the image does not flash server -> local on every first render.
  */
 export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl?: string): void {
+  observeImage(img, key, serverUrl);
+  if (!images.get(img)?.visible) return;
   if (img.dataset.thumbKey === key && img.dataset.thumbSrc && (
     img.dataset.thumbSrc === objectUrls.get(key) ||
     (serverUrl && img.dataset.thumbSrc === serverUrl)
@@ -186,7 +224,7 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
   if (live) {
     img.dataset.thumbSrc = live;
     img.decoding = 'async';
-    if (img.getAttribute('src') !== live) img.src = live;
+    showObjectUrl(img, live);
     return;
   }
   if (serverUrl) {
@@ -195,9 +233,9 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
     img.dataset.thumbSrc = serverUrl;
     img.decoding = 'async';
     img.onerror = () => {
-      if (img.dataset.thumbKey !== key || !img.isConnected) return;
+      if (img.dataset.thumbKey !== key || !img.isConnected || !images.get(img)?.visible) return;
       void getLocalThumbnail(key).then(stored => {
-        if (img.dataset.thumbKey !== key || !img.isConnected) return;
+        if (img.dataset.thumbKey !== key || !img.isConnected || !images.get(img)?.visible) return;
         if (!stored) {
           // Both server and local failed: keep the fixed-size empty slot
           // instead of a broken-image icon.
@@ -208,26 +246,23 @@ export function fillThumbnailImage(img: HTMLImageElement, key: string, serverUrl
         const currentLive = objectUrls.get(key);
         const url = currentLive ?? trackObjectUrl(key, stored.blob);
         if (img.dataset.thumbSrc === url) return;
-        img.dataset.thumbSrc = url;
-        img.src = url;
+        img.onerror = null; showObjectUrl(img, url);
       });
     };
     if (img.getAttribute('src') !== serverUrl) img.src = serverUrl;
     return;
   }
   void getLocalThumbnail(key).then(stored => {
-    if (!stored || img.dataset.thumbKey !== key || !img.isConnected) return;
+    if (!stored || img.dataset.thumbKey !== key || !img.isConnected || !images.get(img)?.visible) return;
     if (objectUrls.get(key)) {
       const currentLive = objectUrls.get(key)!;
       if (img.dataset.thumbSrc === currentLive) return;
-      img.dataset.thumbSrc = currentLive;
-      img.src = currentLive;
+      showObjectUrl(img, currentLive);
       return;
     }
     const url = trackObjectUrl(key, stored.blob);
     if (img.dataset.thumbSrc === url) return;
-    img.dataset.thumbSrc = url;
-    img.src = url;
+    showObjectUrl(img, url);
   });
 }
 

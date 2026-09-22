@@ -1,3 +1,4 @@
+import type { SessionResources } from '../session/resources.ts';
 // Synchronous first-frame offer. Runs inside the session load commit while the
 // playback frame is still open, so it must stay allocation-light: validation,
 // dedupe, budget checks and one independent resource reference. Heavy work
@@ -12,6 +13,7 @@ import type { DecodedFrame } from '../media.ts';
 export type { OfferResult };
 
 export interface FirstFrameContext {
+  resources?: SessionResources;
   /** Versioned cache identity (server key or local key). */
   cacheKey: string;
   kind: 'library' | 'local';
@@ -75,6 +77,8 @@ export function offerFirstFrameCandidate(
   if (!(byteSize >= 0) || byteSize > THUMB_FRAME_BUDGET_BYTES) { thumbnailState.skip('budget:frame-bytes'); return 'budget-exceeded'; }
   if (thumbnailState.holdingFull) { thumbnailState.skip('budget:hold-slot'); return 'budget-exceeded'; }
 
+  const releaseBudget = context.resources?.reserve('derived', byteSize);
+  if (context.resources && !releaseBudget) { thumbnailState.skip('budget:session'); return 'budget-exceeded'; }
   let owned: DecodedFrame;
   try {
     if (frame.kind === 'video-sample') {
@@ -100,6 +104,7 @@ export function offerFirstFrameCandidate(
       };
     }
   } catch {
+    releaseBudget?.();
     thumbnailState.skip('unsupported:clone');
     return 'unsupported';
   }
@@ -115,6 +120,7 @@ export function offerFirstFrameCandidate(
   const token = Symbol(context.cacheKey);
   thumbnailState.holdOwner = token;
   let released = false;
+  const stopPressure = context.resources?.cancelOnPressure(() => { offer.expired = true; offer.onExpire?.(); release(); });
   const timer = setTimeout(() => {
     offer.expired = true;
     offer.onExpire?.();
@@ -124,7 +130,7 @@ export function offerFirstFrameCandidate(
   function release() {
     if (released) return;
     released = true;
-    clearTimeout(timer);
+    clearTimeout(timer); stopPressure?.(); releaseBudget?.();
     try { owned.close(); } catch {}
     if (thumbnailState.holdOwner === token) {
       thumbnailState.holdOwner = undefined;
