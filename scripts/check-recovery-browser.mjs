@@ -45,7 +45,21 @@ try {
   const card = page.locator('#start-workspace-card');
   await card.waitFor();
   assert.match(await card.textContent(), /clip\.mp4/);
-  assert.match(await card.textContent(), /1 条轨道 · 1 条标注/);
+  assert.match(await card.textContent(), /1 轨道 · 1 标注 · 00:00/);
+  assert.doesNotMatch(await card.textContent(), /上次的工作区/);
+  assert.equal(await card.evaluate(el => {
+    const card = el.getBoundingClientRect();
+    const padding = getComputedStyle(el);
+    if (padding.paddingLeft !== getComputedStyle(el).getPropertyValue('--space-3').trim()
+      || padding.paddingTop !== getComputedStyle(el).getPropertyValue('--space-2').trim()) return false;
+    const body = el.querySelector('.start-workspace-body').getBoundingClientRect();
+    const tracks = el.querySelector('.start-workspace-tracks').getBoundingClientRect();
+    const footer = el.querySelector('.start-workspace-footer').getBoundingClientRect();
+    const arrow = el.querySelector('.start-workspace-go').getBoundingClientRect();
+    return Math.abs(body.left - card.left - parseFloat(padding.paddingLeft)) < 1
+      && Math.abs(body.right - card.right + parseFloat(padding.paddingRight)) < 1
+      && footer.top >= tracks.bottom && arrow.left > footer.left && arrow.right <= footer.right;
+  }), true);
   await page.waitForFunction(() => document.querySelector('#start-workspace-card .start-workspace-thumb img')?.naturalWidth > 0, null, { timeout: 5000 });
   assert.equal(await page.locator('.toast').filter({ hasText: '发现上次的工作区' }).count(), 0);
   assert.equal(await card.evaluate(el => getComputedStyle(el).borderTopWidth), '0px');

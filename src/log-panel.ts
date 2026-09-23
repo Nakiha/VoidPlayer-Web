@@ -1,17 +1,18 @@
 import { logPreview } from './log-preview.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
 import { icon } from './ui/icons.ts';
+import type { ToastStack } from './ui/toast.ts';
 import { exportLog, getLogSessions, log, sessionLog, traceOperation, withLogDescription, LOG_DESCRIPTION_LIMIT } from './log.ts';
 
-export function installLogPanel(container: HTMLElement) {
+export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   const dialog = document.getElementById('settings') as HTMLDialogElement;
   const pane = document.getElementById('settings-pane-logs')!;
   const panel = document.createElement('div'); panel.className = 'log-panel';
-  panel.innerHTML = `<div class="settings-section"><h4 class="settings-section-title">上传日志</h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="日志会话"></button><button type="button" class="icon-button" data-action="refresh" aria-label="更新日志" data-tooltip="更新日志">${icon('refresh')}</button><button type="button" class="icon-button" id="log-help-toggle" aria-label="日志说明" data-tooltip="日志说明" popovertarget="log-help">${icon('info')}</button></div>
-    <div class="log-description-field"><label for="log-description">问题描述 <span>选填</span></label><textarea id="log-description" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="3" placeholder="遇到了什么问题？如何复现？" spellcheck="false"></textarea></div>
+  panel.innerHTML = `<div class="settings-section"><h4 class="settings-section-title">上传日志</h4><div class="settings-card log-settings-card"><div class="log-session-row"><button type="button" id="log-session" class="settings-choice" aria-label="日志会话"></button><button type="button" class="icon-button" id="log-help-toggle" aria-label="日志说明" data-tooltip="日志说明" popovertarget="log-help">${icon('info')}</button></div>
+    <div class="log-description-field"><textarea id="log-description" aria-label="问题描述（选填）" maxlength="${LOG_DESCRIPTION_LIMIT}" rows="1" placeholder="遇到了什么问题？如何复现？" spellcheck="false"></textarea></div>
     <div class="log-send-footer"><p class="settings-caption log-destination">发送到 <span></span><br>仅在点击发送时上传</p><div class="log-submit-row"><button type="button" data-action="download">${icon('download')}下载日志</button><button type="button" class="primary" data-action="upload">${icon('export')}发送日志</button></div></div>
     </div><div class="log-feedback" hidden><p class="log-storage" role="status" hidden></p><p class="log-result" role="status" hidden></p></div>
-    </div><section class="settings-section log-details"><h4 class="settings-section-title">本地日志</h4><section class="log-report" aria-label="本地日志"><header class="log-report-toolbar"><span class="log-preview-status" role="status"></span><div class="log-detail-actions"><div class="log-preview-navigation" role="group" aria-label="日志分页"><button type="button" data-page="previous">上一页</button><button type="button" data-page="next">下一页</button></div><button type="button" data-action="copy">${icon('copy')}复制日志</button></div></header><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea><p class="log-preview-hint">预览已截短，下载或复制可获取完整日志。</p></section></section>`;
+    </div><section class="settings-section log-details"><h4 class="settings-section-title">本地日志</h4><section class="settings-card log-report" aria-label="本地日志"><header class="log-report-toolbar"><span class="log-preview-status" role="status"></span><div class="log-detail-actions"><div class="log-preview-navigation" role="group" aria-label="日志分页"><button type="button" data-page="previous">上一页</button><button type="button" data-page="next">下一页</button></div><button type="button" data-action="copy">${icon('copy')}复制日志</button></div></header><textarea class="log-json" aria-label="日志内容" readonly spellcheck="false" wrap="off"></textarea></section></section>`;
   container.append(panel);
   panel.querySelector('.log-destination span')!.textContent = location.host;
   const help = document.createElement('div'); help.id = 'log-help'; help.className = 'log-help'; help.setAttribute('popover', 'auto');
@@ -32,14 +33,23 @@ export function installLogPanel(container: HTMLElement) {
   const result = panel.querySelector<HTMLElement>('.log-result')!;
   const storage = panel.querySelector<HTMLElement>('.log-storage')!;
   const feedback = panel.querySelector<HTMLElement>('.log-feedback')!;
+  const toast = (text: string, error = false) => {
+    (dialog.open ? dialog : document.body).append(toasts.stack);
+    toasts.show(text, { kind: error ? 'error' : 'info', durationMs: error ? 0 : 7000 });
+  };
+  const fitDescription = () => {
+    if (pane.hidden) return;
+    description.style.height = 'auto';
+    description.style.height = `${description.scrollHeight}px`;
+  };
   let reportDocument: Awaited<ReturnType<typeof exportLog>> | undefined;
   const menu = installChoiceMenu('log-session', [], value => {
-    selectedSession = value; description.value = descriptions.get(value) ?? ''; reportDocument = undefined; syncMenu(); void action('select', snapshot);
+    selectedSession = value; description.value = descriptions.get(value) ?? ''; fitDescription(); reportDocument = undefined; syncMenu(); void action('select', snapshot);
   });
   const syncMenu = () => menu.sync(selectedSession, sessions.find(s => s.value === selectedSession)?.label ?? '暂无日志', sessions.length > 0 && !busy);
   const controls = () => {
     syncMenu(); description.disabled = busy || !selectedSession;
-    panel.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(button => { button.disabled = busy || (button.dataset.action !== 'refresh' && !reportDocument); });
+    panel.querySelectorAll<HTMLButtonElement>('[data-action]').forEach(button => { button.disabled = busy || !reportDocument; });
     panel.setAttribute('aria-busy', String(busy));
   };
   const showFeedback = () => { storage.hidden = !storage.textContent; result.hidden = !result.textContent; feedback.hidden = storage.hidden && result.hidden; };
@@ -61,7 +71,7 @@ export function installLogPanel(container: HTMLElement) {
   for (const button of panel.querySelectorAll<HTMLButtonElement>('[data-page]')) button.onclick = () => {
     previewPage += button.dataset.page === 'next' ? 1 : -1; renderReport();
   };
-  description.addEventListener('input', () => { descriptions.set(selectedSession, description.value); message(); });
+  description.addEventListener('input', () => { fitDescription(); descriptions.set(selectedSession, description.value); message(); });
   async function snapshot(serialize = false) {
     const ticket = ++snapshotGeneration, id = selectedSession;
     const doc = await exportLog(id || undefined, descriptions.get(id) ?? '');
@@ -81,31 +91,44 @@ export function installLogPanel(container: HTMLElement) {
     sessions = history.sessions.map(s => ({ value: s.sessionId, label: `${s.current ? '本次' : '历史'} · ${new Date(s.startedAt).toLocaleString()}` }));
     selectedSession = sessions.some(s => s.value === selected) ? selected : sessions[0]?.value ?? '';
     description.value = descriptions.get(selectedSession) ?? '';
+    fitDescription();
     menu.setOptions(sessions); syncMenu();
     await snapshot();
     if (history.error) message(`历史日志读取异常：${history.error}`, true);
   }
-  const action = async (name: string, work: () => unknown | Promise<unknown>) => {
+  const action = async (name: string, work: () => unknown | Promise<unknown>, record = true) => {
     if (busy) return;
     busy = true; message(); controls();
-    try { await traceOperation('ui', `logs.${name}`, { sessionId: selectedSession }, work); }
-    catch (error) { message(error instanceof Error ? error.message : String(error), true); }
+    try { if (record) await traceOperation('ui', `logs.${name}`, { sessionId: selectedSession }, work); else await work(); }
+    catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      if (name === 'upload') toast(text, true); else message(text, true);
+    }
     finally {
       busy = false;
       if (!disposed) {
         controls();
-        if (refreshRequested && dialog.open && !pane.hidden) { refreshRequested = false; void action('open', refresh); }
+        if (refreshRequested && dialog.open && !pane.hidden) { refreshRequested = false; void action('sync', refresh, false); }
       }
     }
   };
   controls();
   const onPaneChange = () => {
     closeHelp();
-    if (dialog.open && !pane.hidden) { storageStatus(); if (busy) refreshRequested = true; else void action('open', refresh); }
+    if (dialog.open && !pane.hidden) { fitDescription(); storageStatus(); if (busy) refreshRequested = true; else void action('open', refresh); }
     else { refreshRequested = false; ++generation; ++snapshotGeneration; }
   };
   dialog.addEventListener('settings-pane-change', onPaneChange);
-  panel.querySelector('[data-action="refresh"]')!.addEventListener('click', () => void action('refresh', refresh));
+  window.addEventListener('resize', fitDescription);
+  const syncVisibleLogs = () => {
+    if (disposed || !dialog.open || pane.hidden) return;
+    if (busy) { refreshRequested = true; return; }
+    void action('sync', refresh, false);
+  };
+  window.addEventListener('focus', syncVisibleLogs);
+  const onVisibilityChange = () => { if (!document.hidden) syncVisibleLogs(); };
+  document.addEventListener('visibilitychange', onVisibilityChange);
+  const syncTimer = window.setInterval(syncVisibleLogs, 15_000);
   panel.querySelector('[data-action="download"]')!.addEventListener('click', () => void action('download', async () => {
     const { json, filename } = await snapshot(true);
     const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
@@ -131,14 +154,15 @@ export function installLogPanel(container: HTMLElement) {
       throw new Error(`上传失败（${response.status}）${body?.error ? `：${body.error}` : '，可改用下载日志。'}`);
     }
     const body = await response.json();
-    message('已上传。');
-    const copyName = document.createElement('button'); copyName.textContent = '复制文件名'; copyName.title = body.name;
-    copyName.onclick = () => void navigator.clipboard.writeText(body.name).then(
-      () => { copyName.textContent = '已复制'; },
-      () => { message(`文件名：${body.name}`); });
-    result.append(' ', copyName);
+    try {
+      await navigator.clipboard.writeText(body.name);
+      toast(`日志已上传，文件名已复制：${body.name}`);
+    } catch (error) {
+      log.warn('ui', '日志文件名复制失败', { error });
+      toast(`日志已上传，无法自动复制文件名：${body.name}`, true);
+    }
   }));
-  const onClose = () => { closeHelp(); refreshRequested = false; ++generation; ++snapshotGeneration; };
+  const onClose = () => { closeHelp(); document.body.append(toasts.stack); refreshRequested = false; ++generation; ++snapshotGeneration; };
   dialog.addEventListener('close', onClose);
-  return () => { disposed = true; ++generation; ++snapshotGeneration; menu.dispose(); unsubscribe(); help.remove(); dialog.removeEventListener('settings-pane-change', onPaneChange); dialog.removeEventListener('close', onClose); panel.remove(); };
+  return () => { disposed = true; ++generation; ++snapshotGeneration; menu.dispose(); unsubscribe(); help.remove(); dialog.removeEventListener('settings-pane-change', onPaneChange); dialog.removeEventListener('close', onClose); window.removeEventListener('resize', fitDescription); window.removeEventListener('focus', syncVisibleLogs); document.removeEventListener('visibilitychange', onVisibilityChange); clearInterval(syncTimer); panel.remove(); };
 }

@@ -14,13 +14,14 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>) {
   button.className = 'start-workspace-card';
   button.type = 'button';
   button.setAttribute('aria-label', '恢复工作区');
-  const heading = document.createElement('span');
-  heading.className = 'start-workspace-heading';
-  const title = document.createElement('strong');
-  title.textContent = checkpoint.name && checkpoint.name !== '未命名工作区' ? checkpoint.name : '上次的工作区';
+  const body = document.createElement('span');
+  body.className = 'start-workspace-body';
+  const footer = document.createElement('span');
+  footer.className = 'start-workspace-footer';
   const arrow = document.createElement('span');
+  arrow.className = 'start-workspace-go';
+  arrow.setAttribute('aria-hidden', 'true');
   arrow.innerHTML = icon('arrowRight');
-  heading.append(title, arrow);
   const tracks = document.createElement('span');
   tracks.className = 'start-workspace-tracks';
   for (const track of checkpoint.tracks) {
@@ -44,8 +45,10 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>) {
   const meta = document.createElement('span'); meta.className = 'start-workspace-meta';
   const seconds = Math.floor(checkpoint.positionUs / 1_000_000);
   const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
-  meta.textContent = `${checkpoint.tracks.length} 条轨道 · ${checkpoint.marks.length} 条标注 · 停在 ${time}`;
-  button.append(heading, tracks, meta);
+  meta.textContent = `${checkpoint.tracks.length} 轨道 · ${checkpoint.marks.length} 标注 · ${time}`;
+  footer.append(meta, arrow);
+  body.append(tracks, footer);
+  button.append(body);
   button.onclick = () => { button.disabled = true; void restore().finally(() => { if (button.isConnected) button.disabled = false; }); };
   return button;
 }

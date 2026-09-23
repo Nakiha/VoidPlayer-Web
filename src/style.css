@@ -336,14 +336,16 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .start-header > h3 { margin: 0; font-size: var(--text-ui); font-weight: 600; }
 .start-header .add-video { flex: 0 0 auto; }
 .start-identity { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); }
-.start-workspace-card { width: 100%; display: grid; gap: 10px; padding: 14px 16px; border: 0; border-radius: var(--radius-control); background: var(--surface-stripe); box-shadow: none; color: var(--text); text-align: left; cursor: pointer; }
+.start-identity-name { color: var(--accent); }
+.start-workspace-card { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-stripe); box-shadow: none; color: var(--text); text-align: left; cursor: pointer; }
 .start-workspace-card:hover { background: var(--surface-hover); }
 .start-workspace-card:disabled { cursor: wait; opacity: .7; }
-.start-workspace-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.start-workspace-heading strong { font-size: var(--text-ui); font-weight: 600; }
-.start-workspace-heading .icon { flex: none; width: 18px; height: 18px; color: var(--text-secondary); }
-.start-workspace-tracks { display: flex; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
-.start-workspace-track { display: flex; align-items: center; gap: 8px; min-width: min(100%, 180px); flex: 1 1 180px; }
+.start-workspace-body { display: grid; gap: 6px; min-width: 0; width: 100%; }
+.start-workspace-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.start-workspace-go { display: grid; place-items: center; color: var(--text-secondary); }
+.start-workspace-go .icon { width: 18px; height: 18px; }
+.start-workspace-tracks { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.start-workspace-track { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .start-workspace-thumb { display: grid; place-items: center; flex: none; width: 54px; height: 34px; overflow: hidden; border-radius: 4px; background: var(--surface-control); color: var(--text-secondary); }
 .start-workspace-thumb > * { grid-area: 1 / 1; }
 .start-workspace-thumb img { width: 100%; height: 100%; object-fit: cover; }

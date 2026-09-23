@@ -617,7 +617,11 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const more = $('start-library-more');
     if (more) more.onclick = () => shared.setPanel('sources', true);
     const identity = $('start-identity');
-    const showIdentity = () => { if (identity) { identity.textContent = `当前身份 · ${currentActor()?.name ?? '访客'}`; identity.title = identity.textContent; } };
+    const showIdentity = () => { if (identity) {
+      const name = document.createElement('span'); name.className = 'start-identity-name'; name.textContent = currentActor()?.name ?? '访客';
+      identity.replaceChildren(document.createTextNode('当前身份 · '), name);
+      identity.title = identity.textContent;
+    } };
     showIdentity();
     window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
     $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();

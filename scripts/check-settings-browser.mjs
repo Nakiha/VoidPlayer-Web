@@ -33,12 +33,26 @@ try {
     const size=await page.locator(`#${id}`).boundingBox();assert.ok(size.height<40,'workspace actions stay on one line');
    }
   }
+  if(pane==='performance') {
+   const headings=await page.evaluate(()=>['performance','shortcuts'].map(pane=>{
+    const el=document.querySelector(`#settings-pane-${pane} .settings-section-title`),style=getComputedStyle(el);
+    return {fontSize:style.fontSize,color:style.color,fontWeight:style.fontWeight,paddingLeft:style.paddingLeft};
+   }));
+   assert.deepEqual(headings[0],headings[1],'color section heading matches other settings sections');
+  }
   if(pane==='about') {
    const links=await page.locator('#settings-pane-about a').evaluateAll(es=>es.map(e=>e.getAttribute('href')));
    assert.ok(links.includes('https://github.com/Nakiha/VoidPlayer-Web'));
    for(const href of links.filter(h=>h.startsWith('/'))) { const response=await page.request.get(new URL(href,page.url()).href);assert.equal(response.status(),200);assert.ok(!(await response.text()).includes('<!doctype html>')); }
   }
   if(pane==='logs') {
+   const headingAlignment=await page.evaluate(()=>{
+    const title=document.querySelector('.settings-floating-header h2').getBoundingClientRect();
+    const subtitle=document.querySelector('#settings-pane-logs .settings-section-title').getBoundingClientRect();
+    const header=document.querySelector('.settings-floating-header').getBoundingClientRect();
+    return { horizontal:Math.abs(title.left-subtitle.left-parseFloat(getComputedStyle(document.querySelector('#settings-pane-logs .settings-section-title')).paddingLeft)), vertical:subtitle.top-header.bottom };
+   });
+   assert.ok(headingAlignment.horizontal<1 && headingAlignment.vertical>=0 && headingAlignment.vertical<=12,`feedback headings align with a compact gap: ${JSON.stringify(headingAlignment)}`);
    assert.equal(await page.locator('.log-json').isVisible(),true);
    assert.equal(await page.locator('.log-panel [data-action=upload]').isVisible(),true);
    assert.equal(await page.locator('.log-panel .settings-group').count(),0);
@@ -125,11 +139,10 @@ try {
   const runtime=await page.evaluate(()=>{
    const left=selector=>document.querySelector(selector).getBoundingClientRect().left;
    const rect=selector=>document.querySelector(selector).getBoundingClientRect();
-   return {environment:left('#decoder-environment'),track:left('#color-runtime-tracks'),alignment:left('#alignment'),meta:left('.color-runtime-row .evidence'),rowRight:rect('#performance-current').right,decodeRight:rect('#decode').right};
+   return {track:left('#color-runtime-tracks'),alignment:left('#alignment'),meta:left('.color-runtime-row .evidence'),rowRight:rect('#performance-current').right,decodeRight:rect('#decode').right};
   });
-  assert.ok(Math.abs(runtime.track-runtime.environment)<1,`${width}px runtime track alignment`);
-  assert.ok(Math.abs(runtime.alignment-runtime.environment)<1,`${width}px runtime count alignment`);
-  assert.ok(Math.abs(runtime.meta-runtime.environment)<1,`${width}px runtime metadata alignment`);
+  assert.ok(Math.abs(runtime.alignment-runtime.track)<1,`${width}px runtime count alignment`);
+  assert.ok(Math.abs(runtime.meta-runtime.track)<1,`${width}px runtime metadata alignment`);
   assert.ok(runtime.decodeRight<=runtime.rowRight-13,`${width}px runtime seek fits the card`);
  }
  await page.setViewportSize({width:1280,height:700});
@@ -161,7 +174,8 @@ try {
  await page.locator('#log-session').click();
  await page.locator(`#log-session-menu [data-value="${originalSession}"]`).click();
  await page.waitForFunction(id=>document.querySelector('.log-json').dataset.sessionId===id,originalSession);
- await page.locator('.log-panel [data-action=refresh]').click();
+ assert.equal(await page.locator('.log-panel [data-action=refresh]').count(),0);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await page.waitForFunction(id=>document.querySelector(`#log-session-menu [aria-checked=true]`)?.dataset.value===id,originalSession);
  await page.locator('#log-session').click(); await page.locator('#settings-tab-appearance').click();
  assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.matches(':popover-open')),false,'switching panes closes the menu');

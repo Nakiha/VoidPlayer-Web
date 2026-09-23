@@ -70,6 +70,10 @@ try {
     assert.ok(Math.abs(hint.x + hint.width / 2 - (list.x + list.width / 2)) < 2);
     assert.ok(Math.abs(hint.y + hint.height / 2 - (list.y + list.height / 2)) < 2);
     await page.waitForFunction(() => document.querySelector('#start-identity')?.textContent?.startsWith('当前身份 · '));
+    assert.equal(await page.locator('#start-identity').evaluate(el => {
+      const value = el.querySelector('.start-identity-name');
+      return !!value && getComputedStyle(value).color !== getComputedStyle(el).color;
+    }), true, 'only the identity value uses the accent color');
   });
 
   await check('shortcut help and button tooltips use this platform', async page => {
@@ -117,6 +121,8 @@ try {
     assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
     await page.locator('[data-color-mode=reference]').click();
     await page.waitForFunction(() => window.voidPlayer.getState().colorMode === 'reference');
+    assert.equal(await page.locator('[data-color-mode=reference]').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
+    assert.equal(await page.locator('.color-flow-note').evaluate(el => getComputedStyle(el).fontSize), await page.locator('.color-flow-footnote').evaluate(el => getComputedStyle(el).fontSize));
     await page.locator('#settings-close').click();
     await page.locator('#settings').waitFor({ state: 'hidden' });
     await channel.click();

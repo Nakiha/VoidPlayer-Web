@@ -82,8 +82,8 @@ const depthMenu = installChoiceMenu('hardware-buffer-depth', [1,2,4,8].map(n=>({
 let flowKey = '';
 const renderColorMode=()=>{
   const state=session.getState(), mode=state.colorMode??savedColorMode, decoder=state.referenceDecode.decoder;
-  for(const button of colorButtons){button.setAttribute('aria-pressed',String(button.dataset.colorMode===mode));button.disabled=state.busy;}
-  for(const button of decoderButtons){button.setAttribute('aria-pressed',String(button.dataset.referenceDecoder===decoder));button.disabled=state.busy;}
+  for(const button of colorButtons){button.setAttribute('aria-pressed',String(button.dataset.colorMode===mode));button.setAttribute('aria-disabled',String(state.busy));}
+  for(const button of decoderButtons){button.setAttribute('aria-pressed',String(button.dataset.referenceDecoder===decoder));button.setAttribute('aria-disabled',String(state.busy));}
   $('reference-decode-settings').hidden=mode!=='reference';
   $('hardware-depth-row').style.visibility=decoder==='hardware'?'visible':'hidden';
   $('hardware-depth-row').inert=decoder!=='hardware';
@@ -96,10 +96,11 @@ const renderColorMode=()=>{
   }
 };
 session.subscribe(renderColorMode);renderColorMode();
-for(const button of colorButtons)button.onclick=()=>{void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
-for(const button of decoderButtons)button.onclick=()=>{void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
+for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
+for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
 window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
-const removeLogPanel = installLogPanel($('diagnostic-logs'));
+const toasts = installToasts(uiEvents.signal);
+const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
 let message = '';
@@ -107,7 +108,6 @@ let benchmarkRunning = false;
 let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
-const toasts = installToasts(uiEvents.signal);
 const notify = (message: string) => { toasts.show(message); };
 const workbench = installWorkbench(session, act, openMarkDialog, notify);
 const removeTrackDrag = installTrackDrag(session);
@@ -194,10 +194,6 @@ const channelMenu = installChoiceMenu('channel-select', (Object.keys(channelLabe
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
   const state = session.getState();
-  $('decoder-environment').textContent = !globalThis.isSecureContext
-    ? '原生解码不可用 · 需要受信任的 HTTPS'
-    : typeof VideoDecoder === 'undefined' ? '仅软件解码可用'
-      : `原生解码可用${globalThis.crossOriginIsolated ? ' · 支持多线程软件解码' : ''}`;
   const loaded = state.tracks.length > 0;
   $('performance-current').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
