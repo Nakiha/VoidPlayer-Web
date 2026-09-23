@@ -79,6 +79,10 @@ try {
   await check('brand effects can leave the toolbar and keep the About button usable', async page => {
     const brand = page.locator('#brand-about');
     assert.equal(await brand.locator('.brand-ch').count(), 0, 'legacy rolling letters must not run alongside random effects');
+    await page.waitForTimeout(7400);
+    assert.equal(await page.locator('.brand-effect').count(), 0, 'brand must stay still without hover');
+    await brand.focus();
+    assert.equal(await page.locator('.brand-effect').count(), 0, 'focus alone must not play an effect');
     await brand.hover();
     const effect = page.locator('body > .brand-effect');
     await effect.waitFor();
@@ -87,6 +91,7 @@ try {
     const first = (await effect.getAttribute('class')).split('--')[1];
     assert.ok(['glitch', 'scramble', 'scatter', 'flip'].includes(first));
     await page.mouse.move(400, 90);
+    assert.equal(await effect.count(), 0, 'effect stops when the pointer leaves the brand');
     await brand.hover();
     assert.notEqual((await effect.getAttribute('class')).split('--')[1], first, 'consecutive effects should differ');
     await brand.click();

@@ -18,18 +18,9 @@ export function installBrandEffects(button: HTMLButtonElement) {
     button.classList.remove('brand-effect-active');
   };
 
-  const schedule = () => {
-    window.clearTimeout(timer);
-    if (reducedMotion.matches || document.hidden) return;
-    timer = window.setTimeout(play, 3800 + Math.random() * 3200);
-  };
-
   const play = () => {
     clear();
-    if (reducedMotion.matches || document.hidden || !button.getClientRects().length) {
-      schedule();
-      return;
-    }
+    if (reducedMotion.matches || document.hidden || !button.getClientRects().length) return;
     const bounds = button.getBoundingClientRect();
     const style = getComputedStyle(button);
     // Draw above the scrolling toolbar so the distortion may leave its bounds.
@@ -70,14 +61,13 @@ export function installBrandEffects(button: HTMLButtonElement) {
     } else if (effect === 'scatter' || effect === 'flip') {
       button.classList.add('brand-effect-active');
     }
-    timer = window.setTimeout(() => { clear(); schedule(); }, DURATION);
+    timer = window.setTimeout(clear, DURATION);
   };
 
   button.addEventListener('pointerenter', play, { signal: events.signal });
-  button.addEventListener('focus', play, { signal: events.signal });
-  document.addEventListener('visibilitychange', () => { clear(); schedule(); }, { signal: events.signal });
-  window.addEventListener('resize', () => { clear(); schedule(); }, { signal: events.signal });
-  reducedMotion.addEventListener('change', () => { clear(); schedule(); }, { signal: events.signal });
-  schedule();
+  button.addEventListener('pointerleave', clear, { signal: events.signal });
+  document.addEventListener('visibilitychange', clear, { signal: events.signal });
+  window.addEventListener('resize', clear, { signal: events.signal });
+  reducedMotion.addEventListener('change', clear, { signal: events.signal });
   return () => { events.abort(); clear(); };
 }
