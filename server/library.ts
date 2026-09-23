@@ -1,3 +1,4 @@
+import { FrameIndexJobs } from './frame-index-jobs.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { MediaThumbnailStore } from './media-thumbnail-store.ts';
 import { createHash } from 'node:crypto';
@@ -24,6 +25,7 @@ export class MediaLibraryIndex {
   readonly roots: string[];
   readonly definitions: RootRecord[];
   private store: LibraryStore;
+  readonly indexJobs: FrameIndexJobs;
   readonly frameIndexes: FrameIndexStore;
   readonly thumbnails: MediaThumbnailStore;
   private pending: Promise<void> | null = null;
@@ -46,6 +48,7 @@ export class MediaLibraryIndex {
     this.options = options;
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
+    this.indexJobs = new FrameIndexJobs(this.store.file);
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }
@@ -365,7 +368,7 @@ export class MediaLibraryIndex {
   async close() {
     if (this.closed) return;
     this.closed = true; this.stop();
-    await this.pending?.catch(() => {}); this.store.close();
+    await this.pending?.catch(() => {}); await this.indexJobs.close(); this.store.close();
   }
   /** Serialize configuration with scans. Persist first; a failed DB switch rolls
    * back the file before allowing scans again. Existing byte streams stay open. */

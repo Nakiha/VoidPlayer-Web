@@ -229,7 +229,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   state();
   return {
     openSpace: switchSpace,
-    snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>{void switchSpace(previous);};},
+    snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();choice.dispose();dialog.remove();button.remove();},
   };

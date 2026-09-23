@@ -26,6 +26,12 @@ try {
   await page.locator('#drawing-undo').click(); assert.equal((await state()).marks.length, 0, 'undo first stroke removes its saved mark');
   await page.locator('#drawing-redo').click(); assert.equal((await state()).marks.length, 1);
   const markId = (await state()).marks[0].id;
+  await page.locator('#mark-close').click();
+  await page.locator('#annotations-A .annotation-hit').waitFor({ state: 'visible' });
+  await page.mouse.click(...point(.25,.25));
+  await page.locator('#annotation-toolbar').waitFor({ state: 'visible' });
+  assert.equal(await page.locator('#drawing-delete').isEnabled(), true, 'single click on a saved annotation opens and selects it');
+  assert.equal(await page.locator('#drawing-A .annotation-selection').count(), 1, 'clicked annotation has selection handles');
   // Drawing-mode taps select; intentional drags still create nested shapes.
   const original = structuredClone((await state()).marks[0].drawings[0]);
   const cursorAt = (x,y) => page.evaluate(([x,y]) => getComputedStyle(document.elementFromPoint(x,y)).cursor, point(x,y));
@@ -61,8 +67,19 @@ try {
   await page.locator('#drawing-undo').click();
   await page.locator('[data-drawing-tool=text]').click(); await page.mouse.click(...point(.58,.2));
   const input = page.getByRole('textbox', { name: '画面文字' }); await input.fill('直接编辑\n第二行');
+  assert.equal(await page.locator('#drawing-A .annotation-selection').count(), 1, 'text resize handles stay visible during editing');
   assert.equal(await input.evaluate(e => getComputedStyle(e).cursor), 'text', 'live text editing uses the text cursor');
   assert.equal(await input.evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)');
+  const fontBefore = (await state()).marks.flatMap(m => m.drawings).find(d => d.tool === 'text').fontSize;
+  const textCorner = await page.locator('#drawing-A [data-corner=se]').evaluate(e => e.getBoundingClientRect().toJSON());
+  await page.mouse.move(textCorner.x + textCorner.width / 2, textCorner.y + textCorner.height / 2);
+  await page.mouse.down(); await page.mouse.move(textCorner.x + textCorner.width / 2 + 35, textCorner.y + textCorner.height / 2 + 20); await page.mouse.up();
+  assert.equal(await page.getByRole('textbox', { name: '画面文字' }).count(), 1, 'text editing resumes after dragging its handle');
+  assert.ok((await state()).marks.flatMap(m => m.drawings).find(d => d.tool === 'text').fontSize > fontBefore, 'dragging during text entry changes font size');
+  const textCount = (await state()).marks.flatMap(m => m.drawings).filter(d => d.tool === 'text').length;
+  await page.mouse.click(...point(.9,.8));
+  assert.equal(await page.getByRole('textbox', { name: '画面文字' }).count(), 0, 'outside click finishes text editing');
+  assert.equal((await state()).marks.flatMap(m => m.drawings).filter(d => d.tool === 'text').length, textCount, 'outside click does not create another text');
   await page.locator('[data-drawing-tool=rect]').click();
   const textShape = page.locator('#drawing-A foreignObject .annotation-text'); await textShape.dblclick();
   await page.getByRole('textbox', { name: '画面文字' }).fill('改过的文字');
@@ -92,6 +109,9 @@ try {
   assert.equal((await state()).marks[0].id, markId, 'autosave preserves mark identity');
   if (await page.locator('#toggle-subtracks').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-subtracks').click();
   await page.locator('#toggle-marks').click();
+  assert.equal(await page.getByRole('button', { name: '编辑标注' }).count(), 0, 'annotation card no longer shows a redundant edit button');
+  await page.locator('#selected-marks .mark-frame-number').first().waitFor();
+  assert.match(await page.locator('#selected-marks .mark-frame-number').first().textContent(), /^#\d+~?$|^—$|^#…$/);
   await page.locator('#selected-marks .mark-entry').first().dblclick();
   await page.locator('#annotation-toolbar').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#drawing-A .annotation-object').count(), 4);

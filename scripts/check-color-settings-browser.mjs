@@ -15,10 +15,19 @@ try {
  await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
  assert.equal(await page.locator('#settings-tab-performance').innerText(),'色彩与解码');
  assert.equal(await pane.locator('select,details,summary').count(),0);
+ assert.equal(await page.locator('#color-mode').evaluate(el=>getComputedStyle(el).backgroundColor),await page.locator('#layout-mode').evaluate(el=>getComputedStyle(el).backgroundColor),'color choices use the toolbar segment group surface');
  assert.equal(await page.locator('[data-color-mode=browser]').getAttribute('aria-pressed'),'true','fresh profiles default to browser color');
+ assert.equal(await page.locator('[data-color-mode=browser]').evaluate(el=>getComputedStyle(el).backgroundColor),await page.locator('#layout-mode [aria-pressed=true]').evaluate(el=>getComputedStyle(el).backgroundColor),'selected color mode uses the toolbar segment fill');
  assert.equal(await pane.locator('.color-flow-lane').count(),2);
+ await page.evaluate(()=>{
+   window.colorControlDisabledChanges=[];
+   new MutationObserver(records=>window.colorControlDisabledChanges.push(...records.map(record=>record.target.getAttribute('disabled'))))
+     .observe(document.querySelector('#color-mode'),{subtree:true,attributes:true,attributeFilter:['disabled']});
+ });
  await page.locator('[data-color-mode=reference]').click();
  await page.waitForFunction(()=>localStorage.getItem('voidplayer.color-mode')==='reference');
+ assert.deepEqual(await page.evaluate(()=>window.colorControlDisabledChanges),[],'switching modes does not dim the segment controls');
+ assert.equal(await page.locator('[data-color-mode=reference]').evaluate(el=>getComputedStyle(el).opacity),'1');
  assert.equal(await pane.locator('.color-flow-lane').count(),1);
  const stable = await page.locator('#color-flow-diagram .color-flow-lane').elementHandle();
  const memory = await page.locator('#color-flow-diagram .color-flow-unit').nth(1).elementHandle();

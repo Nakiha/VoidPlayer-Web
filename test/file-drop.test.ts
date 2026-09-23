@@ -39,7 +39,7 @@ function harness() {
   return { send, dispose, loads, errors, get hover() { return hover; } };
 }
 
-test('file drag prevents browser navigation, clears feedback, and snapshots dropped files', () => {
+test('file drag prevents browser navigation, clears feedback, and snapshots dropped files', async () => {
   const h = harness(); const files = [new File(['a'], 'a.mp4'), new File(['b'], 'b.mp4')];
   const over = h.send('dragover', files);
   assert.equal(over.event.defaultPrevented, true); assert.equal(over.dataTransfer.dropEffect, 'copy');
@@ -47,6 +47,7 @@ test('file drag prevents browser navigation, clears feedback, and snapshots drop
   const drop = h.send('drop', files);
   assert.equal(drop.event.defaultPrevented, true); assert.deepEqual(h.hover, []);
   files.length = 0; // Real DataTransfer access is protected after dispatch.
+  await new Promise<void>(resolve => setImmediate(resolve)); // Handle capture finishes before the async load callback.
   assert.deepEqual(h.loads[0].files.map(file => file.name), ['a.mp4', 'b.mp4']);
   assert.deepEqual(h.loads[0].slots, ['B', 'C']);
   h.dispose();

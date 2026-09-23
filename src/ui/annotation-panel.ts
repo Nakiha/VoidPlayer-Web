@@ -4,15 +4,23 @@ import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
+import type { ReviewSession } from '../session.ts';
 
 type AnnotationEntry = { mark: Mark; slot: Slot; offsetUs: number };
 
 /** Both strip cards and hover cards share content and actions. */
-function markContent(mark: Mark, slot: Slot, actions?: HTMLElement) {
+function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: ReviewSession) {
   const content = document.createElement('span'); content.className = 'mark-content';
   const meta = document.createElement('span'); meta.className = 'mark-meta';
   const time = document.createElement('time'); time.textContent = `${slot} · ${formatTime(mark.frame.ptsUs)}`;
   meta.append(markSymbol(mark.id), time);
+  if (session) {
+    const frame = document.createElement('span'); frame.className = 'mark-frame-number'; frame.textContent = '#…';
+    meta.append(frame);
+    void session.rankAnalysisFrame(slot, mark.frame.ptsUs).then(result => {
+      if (frame.isConnected) frame.textContent = 'rank' in result ? `#${result.rank}${result.complete ? '' : '~'}` : '—';
+    });
+  }
   if (actions) meta.append(actions);
   content.append(meta);
   const thumbnail = document.createElement('span'); thumbnail.className = 'mark-thumbnail'; thumbnail.dataset.markThumbnail = mark.id;
@@ -28,6 +36,7 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement) {
 }
 
 export function installAnnotationPanel(
+  session: ReviewSession,
   seek: (ptsUs: number) => void,
   remove: (id: string) => void,
   edit: (id: string, ptsUs: number, slot: Slot) => void,
@@ -50,10 +59,7 @@ export function installAnnotationPanel(
   const deferHide = () => { cancelDismiss(); dismiss = setTimeout(() => {
     if (!preview.contains(document.activeElement)) hidePreview();
   }, 150); };
-  function actions(mark: Mark, slot: Slot, container: HTMLElement) {    const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
-    const editButton = createIconButton({ glyph: 'note', label: '编辑标注', tooltip: '编辑标注' });
-    editButton.disabled = mark.frame.ptsUs < 0;
-    editButton.onclick = e => { e.stopPropagation(); hidePreview(); edit(mark.id, mark.frame.ptsUs, slot); };
+  function actions(mark: Mark, _slot: Slot, container: HTMLElement) {    const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
     const removeButton = createIconButton({ glyph: 'trash', className: 'annotation-remove', label: `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`, tooltip: '删除标注' });
     removeButton.onclick = e => {
       e.stopPropagation();
@@ -65,7 +71,7 @@ export function installAnnotationPanel(
       accept.onclick = () => { hidePreview(); remove(mark.id); toggle.focus(); };
       confirmation.append(label, cancel, accept); container.append(confirmation); cancel.focus();
     };
-    actions.append(editButton, removeButton); return actions;
+    actions.append(removeButton); return actions;
   }
   // Strip cards and the hover preview share one layout; only the wrapper
   // differs (a seeking button in the strip, inert content in the dialog).
@@ -73,7 +79,7 @@ export function installAnnotationPanel(
     const row = document.createElement('div'); row.className = 'annotation-row'; row.dataset.slot = slot; identifyMark(row, mark.id);
     const entry = document.createElement(entryTag); entry.className = 'mark-entry';
     identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
-    entry.append(markContent(mark, slot, actions(mark, slot, row))); row.append(entry);
+    entry.append(markContent(mark, slot, actions(mark, slot, row), session)); row.append(entry);
     return { row, entry };
   }
   function showPreview(button: HTMLElement, mark: Mark, slot: Slot) {

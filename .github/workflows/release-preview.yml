@@ -228,6 +228,12 @@ jobs:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: npm run test:browser
+      - run: npm run test:recovery:browser -- chromium
+      - run: node scripts/check-recovery-browser.mjs webkit
+      - run: node scripts/check-reference-flv-browser.mjs chromium
+      - run: node scripts/check-reference-flv-browser.mjs webkit
+      - run: node scripts/check-container-browser.mjs chromium
+      - run: node scripts/check-container-browser.mjs webkit
       - name: Verify thumbnails, startup and restored workspace lifecycle
         run: |
           node scripts/check-thumbnail-browser.mjs webkit
@@ -268,7 +274,7 @@ jobs:
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
         run: |
-          node --test test/annotations-store.test.ts test/frame-index-cache.test.ts
+          node --test test/annotations-store.test.ts test/frame-index-cache.test.ts test/frame-index-worker.test.ts test/resource-budget.test.ts test/workspace-storage.test.ts
           node scripts/check-annotation-persistence-browser.mjs webkit
           node scripts/check-annotation-persistence-browser.mjs chromium
           node scripts/check-cache-browser.mjs webkit

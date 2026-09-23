@@ -13,6 +13,7 @@ import { SourceCatalog } from './source-catalog.ts';
 import { createTracksPane } from './workbench/tracks.ts';
 import { createSourcesPane } from './workbench/sources.ts';
 import type { WorkbenchShared, WorkbenchState } from './workbench/shared.ts';
+import { PANEL_SHORTCUTS, shortcutTooltip } from './shortcuts.ts';
 
 type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -21,6 +22,7 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
   const view = new WorkspaceState();
+  if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
   const catalog = new SourceCatalog(readHistory());
   const lifecyle = new AbortController();
   installSourceActivity(session, lifecyle.signal);
@@ -36,7 +38,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     const style = getComputedStyle(workspace);
     return Number.parseFloat(style.getPropertyValue('--annotation-cards-height')) - Number.parseFloat(style.getPropertyValue('--annotation-symbols-height'));
   };
-  const annotations = installAnnotationPanel(ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()));
+  const annotations = installAnnotationPanel(session, ptsUs => void act(() => session.seek(ptsUs), 'ui.mark-seek'), id => void act(() => session.deleteMark(id), 'ui.mark-delete'), (id, ptsUs, slot) => void act(async () => { select(slot); await session.seek(ptsUs); addMark(slot, id); }, 'ui.mark-edit'), open => resize(dockHeight + (open ? 1 : -1) * annotationHeightDelta()));
 
   // Panes must not call shared callbacks at factory top level: select/render
   // are hoisted function declarations, but resize/sources resolve later.
@@ -62,7 +64,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const open = view.panels[panel];
       panelMotion.set(panel, open);
       $(`toggle-${panel}`).setAttribute('aria-expanded', String(open));
-      $(`toggle-${panel}`).title = `${open ? '收起' : '展开'}${{ inspector: '轨道信息', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
+      const label = `${open ? '收起' : '展开'}${{ inspector: '轨道信息', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
+      $(`toggle-${panel}`).dataset.tooltip = shortcutTooltip(label, PANEL_SHORTCUTS[panel]);
 
     }
     analysis.setOpen(view.panels.analysis);

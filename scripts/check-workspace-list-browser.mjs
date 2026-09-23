@@ -24,13 +24,42 @@ try {
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-identity').click();
   await page.locator('#identity-name').fill('小红'); await page.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '小红');
+  assert.equal(await page.locator('#start-identity .start-identity-name').textContent(), '小红');
   await save('第二轮评审'); await save('交付检查');
   await page.locator('#settings').screenshot({ path: '/tmp/vp-round2-identity.png' });
   await page.locator('#settings-tab-workspace').click();
   await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 3);
+  assert.equal(await page.locator('#saved-workspace-name').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
+  assert.equal(await page.locator('#saved-workspace-name').evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('#settings').evaluate(el => getComputedStyle(el).backgroundColor), 'workspace name matches the darker log input surface');
+  assert.equal(await page.locator('#saved-workspace-refresh').count(), 0, 'saved workspaces synchronize without a manual refresh button');
   const names = await page.locator('.saved-workspace-open strong').allTextContents(); assert.deepEqual(names, ['交付检查', '第二轮评审', '第一轮评审']);
   assert.equal(await page.locator('#workspace-import, #export, #saved-workspace-save').count(), 0);
+  assert.equal(await page.locator('.saved-workspace-search').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
+  const firstRow = page.locator('.saved-workspace-row').first();
+  assert.ok(await firstRow.evaluate(el => parseFloat(getComputedStyle(el).paddingInlineStart) >= 16), 'saved workspace rows have comfortable horizontal padding');
+  assert.equal(await page.locator('.workspace-list-wrapper').evaluate(el => {
+    const heading = el.querySelector('.workspace-list-columns');
+    const row = el.querySelector('.saved-workspace-row');
+    const name = row.querySelector('strong').getBoundingClientRect();
+    const time = row.querySelector('time').getBoundingClientRect();
+    const label = heading.firstElementChild.getBoundingClientRect();
+    const updated = heading.lastElementChild.getBoundingClientRect();
+    return Math.abs(name.left - label.left) < 1 && Math.abs(time.right - updated.right) < 1;
+  }), true, 'column headings align with row content');
+  assert.equal(await page.locator('.workspace-saved-section').evaluate(el => {
+    const sectionTitle = el.querySelector('.settings-section-title').getBoundingClientRect();
+    const columnTitle = el.querySelector('.workspace-list-columns span').getBoundingClientRect();
+    return Math.abs(sectionTitle.left - columnTitle.left) < 1;
+  }), true, 'saved workspace heading aligns with list content');
+  assert.equal(await firstRow.evaluate(el => {
+    const rect = el.getBoundingClientRect();
+    return el.tagName === 'BUTTON' && document.elementFromPoint(rect.right - 12, rect.top + rect.height / 2) === el;
+  }), true, 'the full saved workspace row is one button');
   const colors = await page.locator('.saved-workspace-row').evaluateAll(rows => rows.map(r => getComputedStyle(r).backgroundColor)); assert.notEqual(colors[0], colors[1]);
+  assert.notEqual(colors[0], await page.locator('.workspace-list-columns').evaluate(el => getComputedStyle(el).backgroundColor), 'first row is distinct from the header');
+  const normalFill = await firstRow.evaluate(el => getComputedStyle(el).backgroundColor);
+  await firstRow.hover();
+  assert.notEqual(await firstRow.evaluate(el => getComputedStyle(el).backgroundColor), normalFill, 'hover highlights the full row');
   await page.locator('#settings').screenshot({ path: '/tmp/vp-round2-workspace.png' });
   await page.locator('#saved-workspace-search').fill('小明');
   await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 1);
@@ -44,6 +73,10 @@ try {
   await page.locator('#settings-tab-identity').click();
   assert.equal(await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth > e.clientWidth), false);
   await page.locator('#settings').screenshot({ path: '/tmp/vp-round2-identity-mobile.png' });
+  await page.locator('#settings-tab-workspace').click();
+  await save('跨窗口更新');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 4);
   assert.deepEqual(errors, []);
   console.log('PASS workspace list: owner/name live search, newest first, zebra rows, name and URI controls, fixed identity forms and mobile layout');
 } finally { await browser?.close(); await service?.close(); await rm(root, { recursive: true, force: true }); }

@@ -48,6 +48,8 @@ export const WASM_CORE_GLUE_PATH_MT = 'vendor/voidplayer-core/voidplayer-core-mt
 export const WASM_CORE_WASM_PATH = 'vendor/voidplayer-core/voidplayer-core.wasm';
 
 export interface FallbackDeps {
+  /** Keep native packet frames intact for the reference Worker readback gate. */
+  rawNative?: boolean;
   /** Local same-frame color diagnostics only; normal playback releases native samples after copying. */
   preserveNativeSample?: boolean;
   /** Opt-in external-texture experiment: keep native GPU resources, no plane readback. */
@@ -72,6 +74,7 @@ interface InitResult {
   height: number;
   codec: string;
   indexMs?: number;
+  seekAnchorCount?: number;
   ioMode?: 'blob' | 'memfs' | 'http-range';
   colorPrimaries?: number;
   colorTransfer?: number;
@@ -187,17 +190,12 @@ export class WorkerRpc {
 type FallbackInput = File | (MediaMeta & { url: string });
 
 export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps: FallbackDeps = {}): Promise<MediaSource> {
-  loadAborted(deps.signal);
-  const { openPacketMedia } = await import('./packet-media.ts');
-  try {
-    return await openPacketMedia('mp4', { url, size: meta.size }, meta, { ...deps, forceWasm: true });
-  } catch (error) {
-    loadAborted(deps.signal);
-    // Only a demux/codec capability gap can select FFmpeg's container path.
-    // Network, resource and packet decoding failures must remain visible.
-    if (!(error instanceof MediaOpenError) || !['container', 'codec'].includes(error.stage)) throw error;
-    contextLog().info('media', 'MP4 压缩包路径不可用，使用 FFmpeg Range 解封装', { reason: error.message });
-  }
+  const { openSoftwareMedia } = await import('./software-media.ts');
+  return openSoftwareMedia({ url, size: meta.size }, meta, deps);
+}
+
+/** Raw container adapter; higher layers select it through the shared router. */
+export function openFFmpegContainerFromUrl(url: string, meta: MediaMeta, deps: FallbackDeps = {}): Promise<MediaSource> {
   return openFallbackInput({ ...meta, url }, deps);
 }
 
@@ -302,18 +300,30 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
+    indexSource: 'client', indexState: 'complete',
+    indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
+    seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
   };
 
   let disposed = false;
   // Drawn frames return their pixel buffer to the next extract (ping-pong),
   // so playback does not allocate megabytes per frame.
   let spare: ArrayBuffer | null = null;
+  let previousIndex = -1;
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
     const payload: Record<string, unknown> = { ctx: init.ctx, index };
     const transfer: Transferable[] = [];
     if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
-    const output = await rpc.call<WasmFrameOutput>('extract', payload, transfer);
+    const started = performance.now(), randomAccess = index !== previousIndex + 1;
+    let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
+    try { output = await rpc.call<typeof output>('extract', payload, transfer); }
+    catch (error) {
+      scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });
+      throw error;
+    }
+    previousIndex = index;
+    if (randomAccess) scoped.info('media', 'WASM 帧定位完成', { index, targetPtsUs: relUs[index], elapsedMs: Math.round(performance.now() - started), seekStrategy: info.seekStrategy, ...output.seek });
     if (disposed) throw new Error('媒体已释放。');
     const pixels = new Uint8ClampedArray(output.pixels);
     validateDescription(output.description,pixels.byteLength);

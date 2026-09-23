@@ -33,12 +33,26 @@ try {
     const size=await page.locator(`#${id}`).boundingBox();assert.ok(size.height<40,'workspace actions stay on one line');
    }
   }
+  if(pane==='performance') {
+   const headings=await page.evaluate(()=>['performance','shortcuts'].map(pane=>{
+    const el=document.querySelector(`#settings-pane-${pane} .settings-section-title`),style=getComputedStyle(el);
+    return {fontSize:style.fontSize,color:style.color,fontWeight:style.fontWeight,paddingLeft:style.paddingLeft};
+   }));
+   assert.deepEqual(headings[0],headings[1],'color section heading matches other settings sections');
+  }
   if(pane==='about') {
    const links=await page.locator('#settings-pane-about a').evaluateAll(es=>es.map(e=>e.getAttribute('href')));
    assert.ok(links.includes('https://github.com/Nakiha/VoidPlayer-Web'));
    for(const href of links.filter(h=>h.startsWith('/'))) { const response=await page.request.get(new URL(href,page.url()).href);assert.equal(response.status(),200);assert.ok(!(await response.text()).includes('<!doctype html>')); }
   }
   if(pane==='logs') {
+   const headingAlignment=await page.evaluate(()=>{
+    const title=document.querySelector('.settings-floating-header h2').getBoundingClientRect();
+    const subtitle=document.querySelector('#settings-pane-logs .settings-section-title').getBoundingClientRect();
+    const header=document.querySelector('.settings-floating-header').getBoundingClientRect();
+    return { horizontal:Math.abs(title.left-subtitle.left-parseFloat(getComputedStyle(document.querySelector('#settings-pane-logs .settings-section-title')).paddingLeft)), vertical:subtitle.top-header.bottom };
+   });
+   assert.ok(headingAlignment.horizontal<1 && headingAlignment.vertical>=0 && headingAlignment.vertical<=12,`feedback headings align with a compact gap: ${JSON.stringify(headingAlignment)}`);
    assert.equal(await page.locator('.log-json').isVisible(),true);
    assert.equal(await page.locator('.log-panel [data-action=upload]').isVisible(),true);
    assert.equal(await page.locator('.log-panel .settings-group').count(),0);
@@ -95,6 +109,8 @@ try {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(overflow.scroll<=overflow.width+1,`no horizontal overflow in ${pane}: ${JSON.stringify(overflow)}`);
+  const bordered=await page.locator(`#settings-pane-${pane}`).evaluate(e=>[...e.querySelectorAll('.settings-card,.settings-group,.log-report')].filter(card=>card.getClientRects().length&&getComputedStyle(card).borderTopWidth!=='0px').map(card=>card.className));
+  assert.deepEqual(bordered,[],`section cards have no outer border in ${pane}`);
   if(pane==='logs') {
    await page.locator('#log-session').click();
    const menu=await page.locator('#log-session-menu').boundingBox(), trigger=await page.locator('#log-session').boundingBox();
@@ -104,11 +120,33 @@ try {
   const box=await page.locator('#settings').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390&&box.y>=0&&box.y+box.height<=700);
  }
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-mobile-${name}.png`});
+ assert.equal(await page.locator('#settings-current-title').textContent(),'反馈');
+ const headerBefore=await page.locator('.settings-floating-header').boundingBox();
+ const closeBefore=await page.locator('#settings-close').boundingBox();
+ assert.ok(Math.abs((closeBefore.y-headerBefore.y)-(headerBefore.x+headerBefore.width-closeBefore.x-closeBefore.width))<1,'mobile close button has equal top and right inset');
+ await page.locator('#settings-pane-logs').evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ const headerAfter=await page.locator('.settings-floating-header').boundingBox();
+ assert.ok(Math.abs(headerBefore.y-headerAfter.y)<1,'feedback glass header stays fixed while content scrolls');
  await page.locator('#settings-close').click();await page.locator('#settings').waitFor({state:'hidden'});await page.keyboard.press('Control+,');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.setViewportSize({width:1280,height:700});
+ const desktopHeader=await page.locator('.settings-floating-header').boundingBox(),desktopClose=await page.locator('#settings-close').boundingBox();
+ assert.ok(Math.abs((desktopClose.y-desktopHeader.y)-(desktopHeader.x+desktopHeader.width-desktopClose.x-desktopClose.width))<1,'desktop close button has equal top and right inset');
  if (!process.argv.includes('--ui-only')) {
  await page.evaluate(async()=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});await tools.find(t=>t.name==='load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});});
- await page.locator('#settings-tab-performance').click();await page.locator('#benchmark').click();
+ await page.locator('#settings-tab-performance').click();
+ for (const width of [1280, 791, 390]) {
+  await page.setViewportSize({width,height:700});
+  const runtime=await page.evaluate(()=>{
+   const left=selector=>document.querySelector(selector).getBoundingClientRect().left;
+   const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+   return {track:left('#color-runtime-tracks'),alignment:left('#alignment'),meta:left('.color-runtime-row .evidence'),rowRight:rect('#performance-current').right,decodeRight:rect('#decode').right};
+  });
+  assert.ok(Math.abs(runtime.alignment-runtime.track)<1,`${width}px runtime count alignment`);
+  assert.ok(Math.abs(runtime.meta-runtime.track)<1,`${width}px runtime metadata alignment`);
+  assert.ok(runtime.decodeRight<=runtime.rowRight-13,`${width}px runtime seek fits the card`);
+ }
+ await page.setViewportSize({width:1280,height:700});
+ await page.locator('#benchmark').click();
  await page.waitForFunction(()=>document.querySelector('#benchmark-json').value.includes('voidplayer-playback-benchmark'),{},{timeout:20000});
  assert.equal(await page.locator('dialog[open]').count(),1);assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),false);
@@ -136,7 +174,8 @@ try {
  await page.locator('#log-session').click();
  await page.locator(`#log-session-menu [data-value="${originalSession}"]`).click();
  await page.waitForFunction(id=>document.querySelector('.log-json').dataset.sessionId===id,originalSession);
- await page.locator('.log-panel [data-action=refresh]').click();
+ assert.equal(await page.locator('.log-panel [data-action=refresh]').count(),0);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await page.waitForFunction(id=>document.querySelector(`#log-session-menu [aria-checked=true]`)?.dataset.value===id,originalSession);
  await page.locator('#log-session').click(); await page.locator('#settings-tab-appearance').click();
  assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.matches(':popover-open')),false,'switching panes closes the menu');

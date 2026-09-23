@@ -1,3 +1,5 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { openIndexDatabase } from './sqlite.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { createHash } from 'node:crypto';
@@ -26,8 +28,12 @@ function lockDatabase(file: string): () => void {
 }
 export class LibraryStore {
   readonly db: IndexDatabase;
+  readonly file: string;
+  private temporary?: string;
   private unlock: () => void;
   constructor(file = ':memory:') {
+    if (file === ':memory:') { this.temporary = mkdtempSync(path.join(tmpdir(), 'vp-library-')); file = path.join(this.temporary, 'library.sqlite'); }
+    this.file = path.resolve(file);
     this.unlock = lockDatabase(file);
     let connection: IndexDatabase | undefined;
     try {
@@ -83,5 +89,5 @@ export class LibraryStore {
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
   find(id: string) { return this.db.prepare('SELECT media.* FROM media JOIN roots ON roots.id=media.root_id WHERE roots.active=1 AND (media.id=? OR media.id=(SELECT media_id FROM aliases WHERE id=?))').get(id, id) as unknown as StoredMedia | undefined; }
-  close() { try { this.db.close(); } finally { this.unlock(); } }
+  close() { try { this.db.close(); } finally { this.unlock(); if (this.temporary) rmSync(this.temporary, { recursive: true, force: true }); } }
 }

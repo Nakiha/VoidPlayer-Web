@@ -66,7 +66,7 @@ export function installWorkspaceSharing(options: {
         const old = new URL(media.source.url); media.source.url = new URL(old.pathname + old.search, location.origin).href;
       }
       snapshot.serverUrl = location.origin + '/';
-      if (await options.open(snapshot)) notify('已还原分享快照，后续编辑不会改变原链接');
+      if (await options.open(snapshot)) notify('已还原分享快照，可继续添加云端标注；再次分享会生成新链接');
       else notify('已取消还原分享快照');
     } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } }
   });

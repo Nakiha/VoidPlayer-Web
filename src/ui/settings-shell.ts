@@ -3,17 +3,19 @@ import { savedWorkspaceShell } from './saved-workspaces.ts';
 import { icon } from './icons.ts';
 import { buildInfo } from '../build-info.ts';
 import { ACCENTS } from './appearance.ts';
+import { shortcutLabel } from './shortcuts.ts';
+import type { Shortcut } from './shortcuts.ts';
 export const SETTINGS_PANES = [
   ['appearance', '外观', 'appearance'], ['workspace', '工作区', 'open'],
-  ['identity', '用户', 'info'], ['shortcuts', '快捷键', 'keyboard'], ['logs', '反馈', 'note'], ['performance', '色彩与解码', 'diagnostics'], ['about', '关于', 'info'],
+  ['identity', '用户', 'user'], ['shortcuts', '快捷键', 'keyboard'], ['logs', '反馈', 'note'], ['performance', '色彩与解码', 'diagnostics'], ['about', '关于', 'info'],
 ] as const;
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
-const shortcutRows = (entries: string[][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.split(' / ').map(key => `<kbd>${key}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
+const shortcutRows = (entries: [string, Shortcut[]][]) => entries.map(([action, keys]) => `<div class="shortcut-row"><span>${action}</span><span class="shortcut-keys">${keys.map(key => `<kbd>${shortcutLabel(key)}</kbd>`).join('<span> / </span>')}</span></div>`).join('');
 export function settingsShell() {
   return `<dialog id="settings" class="settings-window" aria-label="设置">
-    <button id="settings-close" class="icon-button" aria-label="关闭设置">${icon('close')}</button>
     <div class="settings-body"><nav class="settings-navigation" aria-label="设置分类"><div role="tablist" aria-orientation="vertical">${SETTINGS_PANES.map(([id, label, glyph]) => `<button id="settings-tab-${id}" role="tab" data-settings-pane="${id}" aria-controls="settings-pane-${id}" aria-selected="${id === 'appearance'}" tabindex="${id === 'appearance' ? 0 : -1}">${icon(glyph)}<span>${label}</span></button>`).join('')}</div></nav>
     <div class="settings-content">
+      <header class="settings-floating-header"><h2 id="settings-current-title">外观</h2><button id="settings-close" class="icon-button" aria-label="关闭设置">${icon('close')}</button></header>
       <section id="settings-pane-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" tabindex="0">
         ${paneTitle('外观')}
         <div class="settings-section"><h4 class="settings-section-title" id="theme-label">显示模式</h4>
@@ -44,8 +46,8 @@ export function settingsShell() {
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>
         ${paneTitle('快捷键')}
-        <div class="settings-section"><h4 class="settings-section-title">播放与视图</h4><div class="settings-group">${shortcutRows([['播放 / 暂停','Space'],['上一帧 / 下一帧','← / →'],['切换并排 / 分屏','M'],['打开设置','⌘ , / Ctrl ,']])}</div>
-        </div><div class="settings-section"><h4 class="settings-section-title">标注</h4><div class="settings-group">${shortcutRows([['开始标注','N'],['选择 / 画笔','V / P'],['矩形 / 椭圆','R / O'],['线条 / 文字 / 橡皮擦','L / T / E'],['撤销','⌘ Z / Ctrl Z'],['重做','⌘ ⇧ Z / Ctrl ⇧ Z'],['删除选中对象','Delete'],['结束标注 / 关闭窗口','Esc']])}</div>
+        <div class="settings-section"><h4 class="settings-section-title">播放与视图</h4><div class="settings-group">${shortcutRows([['播放 / 暂停',['play']],['上一帧 / 下一帧',['previous','next']],['切换并排 / 分屏',['layout']],['轨道信息',['panelInspector']],['码流分析',['panelAnalysis']],['子轨道',['panelSubtracks']],['片源',['panelSources']],['打开设置',['settings']]])}</div>
+        </div><div class="settings-section"><h4 class="settings-section-title">标注</h4><div class="settings-group">${shortcutRows([['开始标注',['annotate']],['选择 / 画笔',['select','pen']],['矩形 / 椭圆',['rect','ellipse']],['线条 / 文字 / 橡皮擦',['line','text','eraser']],['撤销',['undo']],['重做',['redo']],['删除选中对象',['delete']],['结束标注 / 关闭窗口',['close']]])}</div>
         <p class="settings-caption">输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。</p></div>
       </section>
       <section id="settings-pane-logs" role="tabpanel" aria-labelledby="settings-tab-logs" tabindex="0" hidden>

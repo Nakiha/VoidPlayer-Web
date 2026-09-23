@@ -7,7 +7,7 @@ import { createMediaServer } from '../server/app.ts';
 const root=path.resolve(import.meta.dirname,'..'),name=process.argv[2]??'webkit';
 const server=createMediaServer({roots:[path.join(root,'fixtures/video')],staticDir:path.join(root,'dist'),onLog(){}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
-const browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
+const browser=await(name==='chromium'?chromium:webkit).launch({headless:true,...(name==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{})});
 try {
  const context=await browser.newContext({viewport:{width:1280,height:900},colorScheme:'light'}),page=await context.newPage(),errors=[];
  page.on('pageerror',e=>errors.push(e.message));const base=`http://127.0.0.1:${server.address().port}/`;
@@ -47,10 +47,10 @@ try {
  });
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.id)), saved.tracks.map(t => t.mediaId));
- // A bad source must not erase or partially replace a loaded workspace.
+ // Missing sources retain their saved track and annotation anchors for relink.
  const bad=structuredClone(saved);bad.media.find(m=>m.id===bad.tracks[1].mediaId).source.url=base+'api/media/not-found';
  const failure=await restored.evaluate(async value=>{try{await window.voidPlayer.importWorkspace(value);return '';}catch(e){return e.message;}},bad);
- assert.match(failure,/无法打开/);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
+ assert.equal(failure,'');assert.equal(await restored.evaluate(()=>window.voidPlayer.getState().tracks[1].pendingRelink),true);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.id)),saved.tracks.map(t=>t.mediaId));
  // Plain JSON drop uses the same transaction.
  await restored.evaluate(value=>{const data=new DataTransfer();data.items.add(new File([JSON.stringify(value)],'workspace.json',{type:'application/json'}));document.body.dispatchEvent(new DragEvent('drop',{dataTransfer:data,bubbles:true,cancelable:true}));},saved);
@@ -85,5 +85,5 @@ try {
  const info=local.media.find(m=>m.id===local.tracks[0].mediaId),bytes=await readFile(path.join(root,'fixtures/video',info.name));
  await restored.evaluate(async({document,bytes,info})=>{const file=new File([Uint8Array.from(atob(bytes),c=>c.charCodeAt(0))],info.name,{lastModified:info.lastModified});await window.voidPlayer.importWorkspace(document,[file]);},{document:local,bytes:bytes.toString('base64'),info});
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip import, JSON drop, ordered tracks/offsets/marks/view/layout, failed-source rollback, local relink/cancel, no transient seek rollback, settings and accent persistence`);
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: gzip import, JSON drop, ordered tracks/offsets/marks/view/layout, missing-source recovery, local relink/cancel, no transient seek rollback, settings and accent persistence`);
 } finally {await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

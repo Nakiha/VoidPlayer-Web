@@ -45,7 +45,7 @@ export function colorSettingsShell() {
   return `<div class="settings-section">
     <h4 class="settings-section-title">色彩转换</h4>
     <div class="settings-group color-settings-card">
-      <div id="color-mode" class="color-mode-options" role="group" aria-label="色彩转换">
+      <div id="color-mode" class="color-mode-options segmented" role="group" aria-label="色彩转换">
         <button data-color-mode="reference" aria-pressed="false"><strong>自有色彩</strong><span>统一 SDR 转换</span></button>
         <button data-color-mode="browser" aria-pressed="false"><strong>浏览器色彩</strong><span>沿用原生帧转换</span></button>
       </div>
@@ -59,7 +59,6 @@ export function colorSettingsShell() {
     </div>
   </div>
   <div class="settings-section"><h4 class="settings-section-title">当前运行</h4><div class="settings-group">
-    <div class="settings-action-row"><span id="decoder-environment"></span></div>
     <div id="performance-current" class="color-runtime-row" hidden><div id="color-runtime-tracks"></div><p class="evidence"><span id="alignment"></span><span id="decode"></span></p></div>
     <div class="settings-action-row"><div><h4>播放流畅度</h4><p>从头播放，检查后暂停。</p></div><button id="benchmark">开始检查</button></div>
   </div></div>

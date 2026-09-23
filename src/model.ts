@@ -12,6 +12,10 @@ export type ColorInfo = {
   fullRange: boolean | null;
 };
 export type MediaInfo = {
+  container?: 'flv' | 'isobmff' | 'mpegts' | 'other';
+  indexKind?: 'packet-offsets' | 'timestamps' | 'container';
+  seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';
+  seekAnchorCount?: number;
   metadataRevision?:number;
   /** Description of the currently presented frame; prefetch never updates it. */
   output?:FrameDescription;

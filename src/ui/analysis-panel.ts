@@ -297,6 +297,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
   const rankSeq = new Map<Slot, number>();
   let lastStatusSig = '';
+  let editingNumber = false;
   /** 展示序排名按（slot，会话 PTS）缓存；换片/重建时由调用方清理。 */
   function fetchRank(slot: Slot, sessionPts: number) {
     const seq = (rankSeq.get(slot) ?? 0) + 1;
@@ -322,6 +323,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
   /** 同步渲染：只显示主题色点 + 槽位 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
   function renderStatus() {
+    if (editingNumber) return;
     const sig = [prefs.numAxis, ...tracks.map(t => {
       const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
       const num = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
@@ -351,12 +353,48 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const label = document.createElement('span');
       label.className = 'st-slot';
       label.textContent = t.slot;
-      const num = document.createElement('span');
+      const num = document.createElement('button');
+      num.type = 'button';
       num.className = 'st-num';
       const value = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      const maxFrame = Math.max(value ?? 0, (hit?.total ?? 1) - 1);
+      wrap.style.setProperty('--frame-number-width', `${Math.max(4, String(maxFrame).length + 2)}ch`);
       if (hit == null) num.textContent = '…';
       else if (value == null) num.textContent = '—';
       else num.textContent = `#${value}${hit.complete ? '' : '~'}`;
+      num.disabled = value == null || !hit?.complete;
+      num.title = num.disabled ? '帧索引尚未就绪' : `输入轨道 ${t.slot} 的${axisLabel}帧号后按回车跳转`;
+      num.setAttribute('aria-label', `轨道 ${t.slot} ${axisLabel}帧号，点击编辑`);
+      num.onclick = () => {
+        if (value == null || !hit?.complete) return;
+        const axis = prefs.numAxis;
+        editingNumber = true;
+        const input = document.createElement('input');
+        input.className = 'st-num-input'; input.type = 'text'; input.inputMode = 'numeric';
+        input.autocomplete = 'off'; input.spellcheck = false; input.value = String(value);
+        input.setAttribute('aria-label', `轨道 ${t.slot} ${axisLabel}帧号`);
+        num.replaceWith(input); input.focus(); input.select();
+        let finished = false;
+        const finish = (commit: boolean) => {
+          if (finished) return; finished = true;
+          const raw = input.value.trim().replace(/^#/, '');
+          editingNumber = false; lastStatusSig = ''; renderStatus();
+          if (!commit) return;
+          if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+            live.textContent = '帧号必须是非负整数。'; return;
+          }
+          const number = Number(raw);
+          void act(async () => {
+            const result = await session.seekAnalysisFrameNumber(t.slot, number, axis);
+            if ('reason' in result) throw new Error(result.reason);
+          }, 'analysis.seek-frame-number', { slot: t.slot, number, axis });
+        };
+        input.onkeydown = event => {
+          if (event.key === 'Enter') { event.preventDefault(); finish(true); }
+          else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
+        };
+        input.onblur = () => finish(true);
+      };
       wrap.append(dot, label, num);
       if (sessionPts == null) {
         wrap.title = `轨道 ${t.slot}：暂无上屏帧`;

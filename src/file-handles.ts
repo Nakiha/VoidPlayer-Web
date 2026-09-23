@@ -98,7 +98,7 @@ const fingerprintMatches = (file: HandleMeta, record: HandleRecord) =>
 /** Reopen a stored handle inside a user gesture. Throws FileHandleError:
  * 'unavailable' (no record / dead API), 'denied' (grant refused), 'stale'
  * (file moved, replaced, or handle invalid — the record is deleted). */
-export async function restoreHandleFile(key: string, store: HandleStore = indexedDBHandleStore()): Promise<File> {
+export async function restoreHandleFile(key: string, store: HandleStore = indexedDBHandleStore(), allowPrompt = true): Promise<File> {
   const record = await store.get(key).catch(() => undefined);
   if (!record?.handle) throw new FileHandleError('unavailable', '没有可恢复的本地文件句柄。');
   const handle = record.handle;
@@ -106,7 +106,7 @@ export async function restoreHandleFile(key: string, store: HandleStore = indexe
     if (typeof handle.queryPermission === 'function') {
       const state = await handle.queryPermission({ mode: 'read' });
       if (state !== 'granted') {
-        const next = typeof handle.requestPermission === 'function'
+        const next = allowPrompt && typeof handle.requestPermission === 'function'
           ? await handle.requestPermission({ mode: 'read' })
           : 'denied';
         if (next !== 'granted') throw new FileHandleError('denied', `已拒绝访问本地文件 ${record.name}。`);

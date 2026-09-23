@@ -5,6 +5,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   columns?: number;
   selected?: () => HTMLButtonElement | undefined;
   bounds?: () => DOMRect | undefined;
+  canOpen?: () => boolean;
 } = {}) {
   const lifecycle = new AbortController();
   const events = { signal: lifecycle.signal };
@@ -45,7 +46,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   const items = () => [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
   const close = () => { if (menu.matches(':popover-open')) menu.hidePopover(); button.setAttribute('aria-expanded', 'false'); };
   const open = (last = false) => {
-    if (button.disabled) return;
+    if (button.disabled || options.canOpen?.() === false) return;
     clearExit();
     const rect = options.anchor?.() ?? button.getBoundingClientRect();
     const bounds = options.bounds?.() ?? new DOMRect(0, 0, innerWidth, innerHeight);

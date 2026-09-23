@@ -1,6 +1,6 @@
 export type ColorMode = 'reference' | 'browser';
 export type ReferenceDecode = {decoder:'hardware'|'software';depth:1|2|4|8};
-let referenceDecode:ReferenceDecode={decoder:'software',depth:2};
+let referenceDecode:ReferenceDecode={decoder:'hardware',depth:2};
 export const getReferenceDecode=():ReferenceDecode=>({...referenceDecode});
 export function setReferenceDecode(value:ReferenceDecode){
   if(!['hardware','software'].includes(value.decoder)||![1,2,4,8].includes(value.depth))throw new Error('无效的解码路径或缓冲深度。');

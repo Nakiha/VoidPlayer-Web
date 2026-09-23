@@ -23,9 +23,11 @@ test('native pipeline preserves order under out-of-order copies and drains cance
  }
  globalThis.Worker=FakeWorker as unknown as typeof Worker;
  function frame(pts:number):DecodedFrame{return {...raw(true),ptsUs:pts,sourcePtsUs:pts,kind:'video-sample',sample:{rotation:0,toVideoFrame:()=>({pts,close(){}})} as unknown as DecodedFrame['sample'],close(){closed++;}};}
- const source={info:{},frameAt:async(pts:number)=>frame(pts),async *framesFrom(){for(let i=0;i<9;i++)yield frame(i);},dispose(){}} as unknown as MediaSource;
+ const capability={hasSize:true,hasDts:true};
+ const source={info:{},getAnalysisCapability(){assert.equal(this,source);return capability;},frameAt:async(pts:number)=>frame(pts),async *framesFrom(){for(let i=0;i<9;i++)yield frame(i);},dispose(){}} as unknown as MediaSource;
  const wrapped=nativeYuvSource(source,2,1);
  try{
+  assert.equal(wrapped.getAnalysisCapability?.(),capability,'readback wrapper retains packet analysis and its receiver');
   const pts=[];for await(const f of wrapped.framesFrom(0)){pts.push(f.ptsUs);assert.equal(f.description.yuv?.chromaLocation,1);f.close();}
   assert.deepEqual(pts,[0,1,2,3,4,5,6,7,8]);assert.equal(peak,2);
   const iterator=wrapped.framesFrom(0);const first=await iterator.next();first.value!.close();await iterator.return(undefined);assert.equal(active,0);

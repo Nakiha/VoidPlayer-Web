@@ -72,7 +72,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs') reservation.release();
     let { times, durations, ...details } = init;
-    const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified, ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
+    const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      indexSource: 'client', indexState: 'complete', indexKind: 'packet-offsets', seekStrategy: 'packet-anchor',
+      ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
     contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined });
     const yuvPool=createYuvBufferPool();
     let disposed = false, spare: ArrayBuffer | undefined;
@@ -139,7 +141,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           byteSize: frame.description.byteLength, sample, pixels,
           close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
         } satisfies DecodedFrame;
-        const decoded = deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
+        const decoded = deps.rawNative || deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
         if(disposed){decoded.close();throw new Error("媒体已释放。");}
         return decoded;
       });
@@ -205,6 +207,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, tUs,
         }, [], 60000);
         return { ...result, complete: (info.indexState ?? 'complete') === 'complete' };
+      },
+      async analysisSampleAtNumber(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }> {
+        if (disposed) throw new Error('媒体已释放。');
+        const ptsUs = await activeRpc.call<number | null>('analysis-number', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, number,
+        }, [], 60000);
+        return { ptsUs, complete: (info.indexState ?? 'complete') === 'complete' };
       },
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){

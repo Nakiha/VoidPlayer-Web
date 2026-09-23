@@ -1093,3 +1093,53 @@ test('cancelled color reopen frees the queue and disposes a late decoder once', 
     assert.equal(late.disposed, 1);
   } finally { await session.dispose(); setColorMode(previous); }
 });
+
+test('workspace comparison conditions apply before opening; partial recovery and relink preserve anchors', async () => {
+  const previousMode = getColorMode(), previousDecode = getReferenceDecode();
+  const source = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
+  try {
+    await source.load('A', async () => media('missing').source);
+    await source.load('B', async () => media('available').source);
+    await source.setTrackOffset('A', 10000); await source.seek(50000);
+    source.addMark({ slot: 'A', text: 'keep missing source annotation' });
+    const document = source.exportWorkspace('http://localhost/');
+    document.comparison = { version: 1, colorMode: 'reference', referenceDecode: { decoder: 'hardware', depth: 4 }, presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' };
+    setColorMode('browser'); setReferenceDecode({ decoder: 'software', depth: 2 });
+    await restored.restoreWorkspace(document, async info => {
+      assert.equal(getColorMode(), 'reference'); assert.deepEqual(getReferenceDecode(), { decoder: 'hardware', depth: 4 });
+      if (info.id === 'missing') throw new Error('offline'); return media(info.name).source;
+    }, { allowUnavailable: true });
+    let state = restored.getState();
+    assert.equal(state.tracks.length, 2); assert.equal(state.tracks[0].pendingRelink, true);
+    assert.equal(state.tracks[0].frame, null); assert.equal(state.positionUs, 50000); assert.deepEqual(state.marks, document.marks);
+    assert.deepEqual(restored.exportWorkspace('http://localhost/').tracks, document.tracks);
+    await restored.relinkTrack('A', async () => media('missing').source);
+    state = restored.getState(); assert.equal(state.tracks[0].pendingRelink, undefined);
+    assert.equal(state.tracks[0].id, 'missing'); assert.equal(state.tracks[0].offsetUs, 10000);
+    assert.deepEqual(state.marks, document.marks); assert.equal(state.positionUs, 50000);
+    await restored.dispose(); assert.equal(restored.resources.totalBytes, 0);
+  } finally { await source.dispose(); await restored.dispose(); setColorMode(previousMode); setReferenceDecode(previousDecode); }
+});
+test('failed comparison restore rolls back color and decoder conditions', async () => {
+  const mode = getColorMode(), decode = getReferenceDecode(), session = new ReviewSession(() => {});
+  try {
+    await session.load('A', async () => media('retained').source);
+    const document = session.exportWorkspace('http://localhost/');
+    document.comparison!.colorMode = 'reference'; document.comparison!.referenceDecode = { decoder: 'hardware', depth: 8 };
+    await assert.rejects(session.restoreWorkspace(document, async () => { throw Error('offline'); }), /offline/);
+    assert.equal(getColorMode(), mode); assert.deepEqual(getReferenceDecode(), decode);
+    assert.equal(session.getState().tracks[0].id, 'retained');
+  } finally { await session.dispose(); }
+});
+
+test('all-missing recovery retains scene duration and position while playback remains unavailable', async () => {
+  const source = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
+  try {
+    await source.load('A', async () => media('offline').source); await source.seek(120000);
+    const document = source.exportWorkspace('http://localhost/');
+    await restored.restoreWorkspace(document, async () => { throw Error('offline'); }, { allowUnavailable: true });
+    assert.equal(restored.getState().positionUs, 120000); assert.equal(restored.getState().durationUs, 200000);
+    await assert.rejects(restored.play(), /停用/);
+    assert.deepEqual(restored.exportWorkspace('http://localhost/').tracks, document.tracks);
+  } finally { await source.dispose(); await restored.dispose(); }
+});

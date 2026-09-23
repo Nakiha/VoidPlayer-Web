@@ -67,7 +67,7 @@ try {
       assert.deepEqual(errors, []);
       assert.ok(mediaRequests.length > 0);
       assert.ok(mediaRequests.every(r => /^bytes=/.test(r.range ?? '')), 'FLV must never download the whole library file');
-      assert.equal(result.referenceDecoder, 'ffmpeg-wasm', 'reference mode forces WASM for FLV');
+      assert.equal(result.referenceDecoder, 'ffmpeg-wasm', 'explicit software preference uses WASM for FLV');
       const first = result.states[0].tracks[0];
       assert.equal(first.codec, reference.codec);
       let nativeSkipped = false;

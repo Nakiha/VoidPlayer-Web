@@ -270,6 +270,10 @@ export interface SourceQuerier {
     axis: 'pts' | 'dts',
     tUs: number,
   ): { rank: number; total: number; ordinal: number | null };
+  sampleAtNumber(
+    packets: ArrayLike<PacketView> & { length: number }, firstPtsUs: number,
+    axis: 'pts' | 'dts', number: number,
+  ): number | null;
 }
 export function createSourceQuerier(): SourceQuerier {
   let cached: { packets: unknown; length: number; firstPtsUs: number; axis: string; sorted: SortedAxis } | undefined;
@@ -320,6 +324,12 @@ export function createSourceQuerier(): SourceQuerier {
     // (t,pos) 稳定序下该时间的首个样本，其包表下标就是解码顺序号。
     const lo = lowerBound(sorted.times, tUs);
     return { rank: lo, total: sorted.times.length, ordinal: sorted.times[lo] === tUs ? sorted.order[lo] : null };
+  };
+  querier.sampleAtNumber = (packets, firstPtsUs, axis, number) => {
+    if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;
+    if (axis === 'dts') return number < packets.length ? packets[number].pts - firstPtsUs : null;
+    const sorted = sortedFor(packets, firstPtsUs, 'pts');
+    return number < sorted.times.length ? packets[sorted.order[number]].pts - firstPtsUs : null;
   };
   return querier;
 }

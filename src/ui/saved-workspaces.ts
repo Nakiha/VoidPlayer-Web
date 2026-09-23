@@ -9,7 +9,7 @@ export function savedWorkspaceShell() {
     <p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
     <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>工作区已被更新，请重新打开后改名。</span><button id="saved-workspace-reload">重新打开</button></div>
     </div>
-    </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">已保存的工作区</h4><button id="saved-workspace-refresh" class="icon-button" aria-label="刷新服务器工作区">${icon('refresh')}</button></div>
+    </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">已保存的工作区</h4></div>
     <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="搜索工作区名或用户名" placeholder="搜索工作区名或用户名" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="清除搜索" hidden>${icon('close')}</button></div>
     <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>名称 / 用户</span><span>最近更新 ↓</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
     <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>返回最新</button><button id="saved-workspace-next" disabled>下一页</button></div></div>`;
@@ -42,13 +42,13 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     if (request !== sequence) return;
     available = true; next = page.next;
     const rows = page.entries.map(record => {
-      const row = document.createElement('div'); row.className = 'saved-workspace-row';
-      const open = document.createElement('button'); open.dataset.workspaceId = record.id; open.className = 'saved-workspace-open'; open.setAttribute('aria-pressed', String(record.id === binding?.id));
+      const row = document.createElement('button'); row.type = 'button'; row.dataset.workspaceId = record.id; row.className = 'saved-workspace-row saved-workspace-open'; row.setAttribute('aria-pressed', String(record.id === binding?.id));
+      const info = document.createElement('span'); info.className = 'saved-workspace-info';
       const name = document.createElement('strong'); name.textContent = record.name;
       const detail = document.createElement('span'); detail.textContent = record.ownerName ?? '访客';
-      open.append(name, detail); open.onclick = () => void act(() => load(record.id));
+      info.append(name, detail); row.onclick = () => void act(() => load(record.id));
       const time = document.createElement('time'); time.className = 'workspace-row-time'; time.dateTime = record.updatedAt; time.textContent = new Date(record.updatedAt).toLocaleString();
-      row.append(open, time); return row;
+      row.append(info, time); return row;
     });
     if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-caption'; empty.textContent = search ? '没有匹配的工作区' : '暂无工作区'; $('list').replaceChildren(empty); }
     else $('list').replaceChildren(...rows);
@@ -88,7 +88,15 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   $('reload').onclick = () => { if (binding) void act(() => load(binding!.id)); };
   const refresh = () => void act(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
-  $('refresh').onclick = refresh;
+  const syncVisibleList = () => {
+    if (options.signal.aborted || !available || document.getElementById('settings-pane-workspace')!.hidden) return;
+    if (busy) { refreshAfterBusy = true; return; }
+    void act(list);
+  };
+  window.addEventListener('focus', syncVisibleList, { signal: options.signal });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) syncVisibleList(); }, { signal: options.signal });
+  const syncTimer = window.setInterval(syncVisibleList, 30_000);
+  options.signal.addEventListener('abort', () => clearInterval(syncTimer), { once: true });
   $('search-button').onclick = () => { $<HTMLInputElement>('search').value = ''; $('search-button').hidden = true; if (busy) refreshAfterBusy = true; else refresh(); $('search').focus(); };
   $('search').addEventListener('input', event => {
     $('search-button').hidden = !$<HTMLInputElement>('search').value;

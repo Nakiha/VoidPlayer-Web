@@ -3,10 +3,12 @@ import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
 import { SLOTS } from '../model.ts';
 import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
+import { PANEL_SHORTCUTS, shortcutTooltip } from './shortcuts.ts';
+import type { Shortcut } from './shortcuts.ts';
 import type { Slot } from '../model.ts';
 
-const panelButton = (id: string, label: string, glyph: 'info' | 'chart' | 'rows' | 'film', extra = '') =>
-  iconButton({ glyph, label, iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
+const panelButton = (id: 'inspector' | 'analysis' | 'subtracks' | 'sources', label: string, glyph: 'info' | 'chart' | 'rows' | 'film', extra = '') =>
+  iconButton({ glyph, label, tooltip: shortcutTooltip(label, PANEL_SHORTCUTS[id]), iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
 
 export function shell() {
   // 产品名滚动字母：每个字母包两份拷贝（原文 + 主题色），悬停时逐个向上翻出。
@@ -15,7 +17,7 @@ export function shell() {
   return `<header class="topbar glass">
     <button id="brand-about" class="brand" aria-label="关于 VoidPlayer">${brandLetters}</button>
     <div class="view-controls" role="group" aria-label="视图布局">
-      <div class="segmented" id="layout-mode" role="group" aria-label="对比布局"><button type="button" data-mode="side-by-side" aria-pressed="true" disabled>并排</button><button type="button" data-mode="split" aria-pressed="false" disabled>分屏</button></div>
+      <div class="segmented" id="layout-mode" role="group" aria-label="对比布局"><button type="button" data-mode="side-by-side" data-tooltip="${shortcutTooltip('切换并排 / 分屏', 'layout')}" aria-pressed="true" disabled>并排</button><button type="button" data-mode="split" data-tooltip="${shortcutTooltip('切换并排 / 分屏', 'layout')}" aria-pressed="false" disabled>分屏</button></div>
       ${iconButton({ glyph: 'grid', label: '切换为田字布局', tooltip: '田字排列轨道', attributes: { id: 'arrangement' } })}
       <button id="reset-view" class="icon-button" aria-label="重置视图" title="重置视图：恢复 1× 并居中">${icon('center')}</button>
       <button id="zoom-select" class="choice-trigger" aria-label="画面缩放" data-tooltip="画面缩放" disabled></button>
@@ -23,13 +25,15 @@ export function shell() {
       <button id="channel-select" class="choice-trigger" aria-label="YUV 通道" data-tooltip="YUV 通道：仅原始平面帧生效" disabled></button>
     </div>
     <span class="toolbar-spacer"></span>
-    <button id="open" class="add-video" aria-label="添加本地视频">${icon('filePlus')}<span>添加本地视频</span></button>
-    <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
-    <div class="panel-switches" role="group" aria-label="工作区功能">
+    <div class="topbar-primary-actions">
+      <button id="open" class="add-video" aria-label="添加本地视频">${icon('filePlus')}<span>添加本地视频</span></button>
+      <button id="workspace-share" class="add-video" disabled>${icon('export')}<span>分享</span></button>
+    </div>
+    <div class="topbar-utility-actions"><div class="panel-switches" role="group" aria-label="工作区功能">
       <span class="connection-control"><a href="/admin" target="_blank" rel="opener" id="server-status" class="icon-button connection-status" data-state="checking" aria-label="正在检查媒体库连接，打开服务管理（新标签页）" data-tooltip="正在检查连接&#10;打开服务管理（新标签页）"><span class="connection-dot" aria-hidden="true"></span></a></span>
       ${panelButton('inspector', '轨道信息', 'info')}${panelButton('analysis', '码流分析', 'chart')}${panelButton('subtracks', '子轨道', 'rows')}${panelButton('sources', '片源', 'film')}
     </div>
-    <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="设置" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button>
+    <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="${shortcutTooltip('打开设置', 'settings')}" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button></div>
   </header>
 <output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" class="icon-button" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
   <main><div id="notice" role="alert" hidden><span id="notice-message"></span><button id="notice-logs" type="button" aria-haspopup="dialog" aria-controls="settings">日志</button></div>
@@ -51,14 +55,14 @@ export function shell() {
               ${iconButton({ glyph: 'open', label: `定位轨道 ${slot} 文件`, tooltip: '定位文件', attributes: { id: `source-action-${slot}` } })}
               ${iconButton({ glyph: 'close', label: `关闭轨道 ${slot}`, tooltip: '关闭轨道', className: 'remove-track', attributes: { id: `remove-track-${slot}` } })}
             </div><input id="file-${slot}" type="file" accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" aria-label="打开视频 ${slot}" hidden></div>
-          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-library-list"></div><p id="start-library-status" class="muted"></p></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
+          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><span id="start-identity" class="start-identity"></span><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-workspace-recovery" hidden></div><div id="start-library-list"></div></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
           <div class="card-footer"><span id="meta-${slot}"></span></div></article>`).join('')}
           <div id="divider" role="slider" aria-label="分割线位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0" hidden><div class="divider-line"></div><div class="divider-grip" aria-hidden="true"></div></div>
         </div>
 
         <section class="transport glass" aria-label="共用播放控制" hidden>
           <div class="transport-actions" role="group" aria-label="播放功能">
-            <div class="play-buttons"><button class="icon-button" id="previous" title="上一帧，左方向键" aria-label="上一帧" disabled>${icon('previous')}</button><button class="icon-button" id="play" data-playing="false" aria-label="播放" disabled>${icon('play')}${icon('pause')}</button><button class="icon-button" id="next" title="下一帧，右方向键" aria-label="下一帧" disabled>${icon('next')}</button></div>
+            <div class="play-buttons"><button class="icon-button" id="previous" data-tooltip="${shortcutTooltip('上一帧', 'previous')}" aria-label="上一帧" disabled>${icon('previous')}</button><button class="icon-button" id="play" data-playing="false" aria-label="播放" data-tooltip="${shortcutTooltip('播放 / 暂停', 'play')}" disabled>${icon('play')}${icon('pause')}</button><button class="icon-button" id="next" data-tooltip="${shortcutTooltip('下一帧', 'next')}" aria-label="下一帧" disabled>${icon('next')}</button></div>
             <div class="transport-time"><input id="position" class="time-input" type="text" aria-label="定位时间" autocomplete="off" spellcheck="false" value="00:00.000" disabled><span class="duration"><span aria-hidden="true">/</span><span id="duration">00:00.000</span></span></div>
           <div class="timeline-control"><input id="timeline" type="range" min="0" max="1" step="1" value="0" aria-label="共用时间轴，微秒" disabled><span class="timeline-playhead" aria-hidden="true"></span><span id="timeline-hover" class="timeline-hover" aria-hidden="true" hidden></span><output id="timeline-preview" class="seek-preview" hidden></output></div>
             <button id="fullscreen" class="icon-button" aria-label="全屏" title="全屏">${icon('fit')}</button>
@@ -69,16 +73,16 @@ export function shell() {
 <section id="annotation-toolbar" class="annotation-toolbar" aria-label="标注工具条" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="标注工具">
     <button id="drawing-grip" class="icon-button" aria-label="拖动工具条" data-tooltip="拖动工具条">${icon('grip')}</button>
-    ${([['select','选择 / 移动 (V)'],['pen','画笔 (P)'],['ellipse','椭圆 (O)'],['rect','矩形 (R)'],['line','线条 (L)'],['text','文字 (T)'],['eraser','橡皮擦 (E)']] as const).map(([tool,label]) => `<button type="button" data-drawing-tool="${tool}" class="icon-button" aria-label="${label}" data-tooltip="${label}${['pen', 'ellipse', 'rect', 'line'].includes(tool) ? ' · 单击标注以选择，拖动绘制' : ''}" aria-pressed="false">${icon(tool)}</button>`).join('')}
+    ${([['select','选择 / 移动'],['pen','画笔'],['ellipse','椭圆'],['rect','矩形'],['line','线条'],['text','文字'],['eraser','橡皮擦']] as const).map(([tool,label]) => `<button type="button" data-drawing-tool="${tool}" class="icon-button" aria-label="${label}" data-tooltip="${shortcutTooltip(label, tool as Shortcut)}" aria-pressed="false">${icon(tool)}</button>`).join('')}
     <span class="drawing-divider"></span>
     <input id="drawing-color" type="hidden" value="${DEFAULT_ANNOTATION_COLOR}"><button id="drawing-color-choice" class="icon-button" aria-label="标注颜色" data-tooltip="标注颜色"></button>
     <input id="drawing-width" type="hidden" value="4"><button id="drawing-width-choice" class="choice-trigger" aria-label="笔画粗细" data-tooltip="笔画粗细"></button>
     <input id="drawing-font" type="hidden" value="24"><button id="drawing-font-choice" class="choice-trigger" aria-label="文字大小" data-tooltip="文字大小"></button>
     <span class="drawing-divider"></span>
-    <button id="drawing-undo" class="icon-button" aria-label="撤销" data-tooltip="撤销 (⌘/Ctrl Z)">${icon('undo')}</button>
-    <button id="drawing-redo" class="icon-button" aria-label="重做" data-tooltip="重做 (⌘/Ctrl Shift Z)">${icon('redo')}</button>
-    <button id="drawing-delete" class="icon-button" aria-label="删除选中对象" data-tooltip="删除选中对象 (Delete)">${icon('trash')}</button>
-    <button id="mark-close" class="icon-button" aria-label="结束标注" data-tooltip="结束编辑 (Esc)，改动自动记录">${icon('close')}</button>
+    <button id="drawing-undo" class="icon-button" aria-label="撤销" data-tooltip="${shortcutTooltip('撤销', 'undo')}">${icon('undo')}</button>
+    <button id="drawing-redo" class="icon-button" aria-label="重做" data-tooltip="${shortcutTooltip('重做', 'redo')}">${icon('redo')}</button>
+    <button id="drawing-delete" class="icon-button" aria-label="删除选中对象" data-tooltip="${shortcutTooltip('删除选中对象', 'delete')}">${icon('trash')}</button>
+    <button id="mark-close" class="icon-button" aria-label="结束标注" data-tooltip="${shortcutTooltip('结束标注', 'close')}">${icon('close')}</button>
   </div>
   <output id="drawing-status" class="sr-only" aria-live="polite">已记录</output>
   <p id="drawing-error" role="alert" hidden></p>

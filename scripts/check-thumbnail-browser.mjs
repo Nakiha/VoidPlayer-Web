@@ -21,7 +21,7 @@ const server = createMediaServer({ library, roots: library.roots, staticDir: pat
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const engine = process.argv[2] ?? 'webkit';
-const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
+const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true, ...(engine === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}) });
 
 const thumbReady = (name) => {
   const row = [...document.querySelectorAll('#source-list .source-row')].find(r => r.textContent.includes(name));
