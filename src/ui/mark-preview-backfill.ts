@@ -78,6 +78,10 @@ export function installMarkPreviewBackfill(session: ReviewSession, sources: Reco
       if (!track.visible || !track.frame) return [];
       return state.marks
         .filter(mark => mark.mediaId === track.id && mark.frame.ptsUs === track.frame!.ptsUs)
+        // Text-only marks already render their text in the card; previews are
+        // for real graphics. This also keeps cache/upload contents to marks the
+        // editor would generate for.
+        .filter(mark => (mark.drawings ?? []).some(d => d.tool !== 'text' || d.text?.trim()))
         .map(mark => ({ track, mark }));
     });
     running = true;
