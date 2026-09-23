@@ -27,6 +27,7 @@
     "test:flv:browser": "npm run build && node scripts/check-flv-browser.mjs",
     "fixtures:library": "node scripts/make-library-fixtures.mjs",
     "fixtures:flv": "python3 scripts/make-flv-fixtures.py",
+    "fixtures:hlg": "bash scripts/make-hlg-fixture.sh",
     "test:annotations:browser": "npm run build && node scripts/check-annotation-browser.mjs",
     "test:analysis:browser": "npm run build && node scripts/check-analysis-browser.mjs",
     "test:annotations:rendering": "npm run build && node scripts/check-annotation-rendering.mjs",

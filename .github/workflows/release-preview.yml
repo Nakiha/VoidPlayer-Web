@@ -206,6 +206,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg libnss3-tools
           npm run fixtures:flv
+          npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
       - name: Restore pinned native raw-plane oracle
         id: oracle-cache

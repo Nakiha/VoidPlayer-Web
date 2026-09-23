@@ -39,6 +39,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 npm test                 # 单元 + Node 内真实 WASM 解码
 npm run build            # tsc --noEmit && vite build
 npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/ffprobe）
+npm run fixtures:hlg     # 从 H.265 样片合成 HLG 回归样片（QA 稀疏检出不含此文件，CI 必跑）
 npm run test:annotations:rendering # DPR 2 双轨连续缩放、最终像素、图层与工具条约束
 npm run test:annotations:browser # 标注交互与实际采样像素回归
 npm run test:range:browser # MP4/VVC 和 FFmpeg Range、seek、播放基准
