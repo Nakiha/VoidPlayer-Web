@@ -82,7 +82,7 @@ WebKit 所需系统依赖在本环境不可用。Windows/macOS 原生便携包�
 - 已保存的软件偏好保持 WASM，并且不发起原生探测。
 - 实际应用 AV1 WebCodecs → YUV 播放基准通过：请求 1.2 秒，速度约 0.996、绘制间隔 p95 50.71 ms，暂停后无陈旧帧。此为小尺寸合成素材，不代表高分辨率实时性或物理硬件使用证明。
 
-恢复/工作区浏览器回归继续通过。新增测试接入 Chromium/WebKit CI；本地 WebKit、Windows/macOS HEVC 硬件与 WebGPU 呈现仍待对应环境验证。
+恢复/工作区浏览器回归继续通过。新增测试接入 Chromium/WebKit CI；CI 的 Linux WebKit 报 AV1 能力探测通过但首帧解码失败（该环境无 AV1 解码器），应用按失败阶段正确回退 WASM，回归脚本对此平台缺口放行并记录，Chromium 仍要求原生准入；本地 WebKit、Windows/macOS HEVC 硬件与 WebGPU 呈现仍待对应环境验证。
 # 追加：统一入口与 TS seek（先推送检查点）
 
 应用户要求先推送代码，以下区分已验证和待验证项目。
