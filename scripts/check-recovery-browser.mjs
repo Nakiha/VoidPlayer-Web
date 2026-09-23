@@ -42,7 +42,14 @@ try {
   assert.ok(saved, 'checkpoint transaction committed before reload');
   await page.reload(); await page.waitForFunction(() => window.voidPlayer);
   assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0, 'restoration is offered, not automatic');
-  await page.getByRole('button', { name: '恢复工作区', exact: true }).click();
+  const card = page.locator('#start-workspace-card');
+  await card.waitFor();
+  assert.match(await card.textContent(), /clip\.mp4/);
+  assert.match(await card.textContent(), /1 条轨道 · 1 条标注/);
+  await page.waitForFunction(() => document.querySelector('#start-workspace-card .start-workspace-thumb img')?.naturalWidth > 0, null, { timeout: 5000 });
+  assert.equal(await page.locator('.toast').filter({ hasText: '发现上次的工作区' }).count(), 0);
+  assert.equal(await card.evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
+  await card.click();
   await page.getByText('工作区已恢复。', { exact: true }).waitFor();
   let restored = await page.evaluate(() => window.voidPlayer.exportWorkspace());
   assert.deepEqual(restored.tracks, snapshot.tracks); assert.deepEqual(restored.marks, snapshot.marks);

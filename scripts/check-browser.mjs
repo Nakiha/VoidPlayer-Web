@@ -60,6 +60,97 @@ try {
     }
   }
 
+  await check('empty recent list and current identity', async page => {
+    const empty = page.locator('#start-library-list .start-library-empty');
+    await empty.waitFor();
+    assert.equal(await empty.locator('svg').count(), 1);
+    assert.match(await empty.textContent(), /还没有最近打开的视频/);
+    const list = await page.locator('#start-library-list').boundingBox();
+    const hint = await empty.boundingBox();
+    assert.ok(Math.abs(hint.x + hint.width / 2 - (list.x + list.width / 2)) < 2);
+    assert.ok(Math.abs(hint.y + hint.height / 2 - (list.y + list.height / 2)) < 2);
+    await page.waitForFunction(() => document.querySelector('#start-identity')?.textContent?.startsWith('当前身份 · '));
+  });
+
+  await check('shortcut help and button tooltips use this platform', async page => {
+    const modifier = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? '⌘' : 'Ctrl');
+    assert.equal(await page.locator('#settings-open').getAttribute('data-tooltip'), `打开设置 (${modifier} + ,)`);
+    assert.equal(await page.locator('#previous').getAttribute('data-tooltip'), '上一帧 (←)');
+    await page.locator('#settings-open').click();
+    await page.locator('#settings-tab-shortcuts').click();
+    const settingsKeys = page.locator('#settings-pane-shortcuts .settings-section').first().locator('.shortcut-row').filter({ hasText: '打开设置' }).locator('kbd');
+    assert.equal(await settingsKeys.count(), 1);
+    assert.equal(await settingsKeys.textContent(), `${modifier} + ,`);
+    for (const [id, label, key] of [['inspector', '轨道信息', '·'], ['analysis', '码流分析', '1'], ['subtracks', '子轨道', '2'], ['sources', '片源', '3']]) {
+      const row = page.locator('#settings-pane-shortcuts .shortcut-row').filter({ has: page.locator(`span:text-is("${label}")`) });
+      assert.equal(await row.count(), 1);
+      assert.equal(await row.locator('kbd').textContent(), `Ctrl + ${key}`);
+      assert.match(await page.locator(`#toggle-${id}`).getAttribute('data-tooltip'), new RegExp(` \\(Ctrl \\+ ${key}\\)$`));
+    }
+  });
+
+  await check('left-hand panel shortcuts toggle four panels', async page => {
+    const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
+    await page.evaluate(async id => {
+      await window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'A' });
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    }, entry.id);
+    for (const [id, key] of [['inspector', 'Control+Backquote'], ['analysis', 'Control+1'], ['subtracks', 'Control+2'], ['sources', 'Control+3']]) {
+      const button = page.locator(`#toggle-${id}`);
+      const before = await button.getAttribute('aria-expanded');
+      await page.keyboard.press(key);
+      assert.notEqual(await button.getAttribute('aria-expanded'), before, `${id} opens via ${key}`);
+      await page.keyboard.press(key);
+      assert.equal(await button.getAttribute('aria-expanded'), before, `${id} closes via ${key}`);
+    }
+  });
+
+  await check('RGB control explains the required color pipeline before opening YUV choices', async page => {
+    const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
+    await page.evaluate(async id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'A' }), entry.id);
+    const channel = page.locator('#channel-select');
+    await page.waitForFunction(() => !document.getElementById('channel-select').disabled);
+    await channel.click();
+    assert.match(await page.locator('.toast-message').last().textContent(), /切换为“自有色彩”/);
+    assert.equal(await page.locator('#channel-select-menu').evaluate(menu => menu.matches(':popover-open')), false);
+    await page.locator('.toast-action').last().click();
+    assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
+    await page.locator('[data-color-mode=reference]').click();
+    await page.waitForFunction(() => window.voidPlayer.getState().colorMode === 'reference');
+    await page.locator('#settings-close').click();
+    await page.locator('#settings').waitFor({ state: 'hidden' });
+    await channel.click();
+    assert.equal(await page.locator('#channel-select-menu').evaluate(menu => menu.matches(':popover-open')), true);
+    assert.equal(await page.locator('#channel-select-menu [data-value=y]').count(), 1);
+  });
+
+  await check('topbar keeps every control visible across viewport widths', async page => {
+    for (const width of [320, 375, 480, 600, 680, 681, 793, 900, 1120, 1121, 1280]) {
+      await page.setViewportSize({ width, height: 800 });
+      await settle(page);
+      const layout = await page.evaluate(() => {
+        const bar = document.querySelector('.topbar');
+        const header = bar.getBoundingClientRect();
+        const buttons = [...document.querySelectorAll('.topbar button')]
+          .filter(button => getComputedStyle(button).display !== 'none' && button.getBoundingClientRect().width > 0)
+          .map(button => ({ id: button.id || button.textContent.trim(), rect: button.getBoundingClientRect().toJSON() }));
+        return { overflow: document.documentElement.scrollWidth > innerWidth, header: header.toJSON(), scrollWidth: bar.scrollWidth, clientWidth: bar.clientWidth, buttons };
+      });
+      assert.equal(layout.overflow, false, `${width}px document overflow`);
+      for (const { id, rect } of layout.buttons) {
+        assert.ok(rect.top >= layout.header.top - 1 && rect.bottom <= layout.header.bottom + 1, `${width}px wraps ${id}`);
+        if (layout.scrollWidth === layout.clientWidth) assert.ok(rect.left >= -1 && rect.right <= width + 1, `${width}px clips ${id}`);
+      }
+      if (width >= 600) assert.equal(layout.scrollWidth, layout.clientWidth, `${width}px toolbar should fit on one line`);
+      else if (layout.scrollWidth > layout.clientWidth) {
+        await page.locator('.topbar').evaluate(bar => { bar.scrollLeft = bar.scrollWidth; });
+        const settings = await page.locator('#settings-open').boundingBox();
+        assert.ok(settings.x >= -1 && settings.x + settings.width <= width + 1, `${width}px settings is reachable by horizontal scroll`);
+      }
+      assert.ok(layout.buttons.some(button => button.id === 'settings-open'), `${width}px settings remains visible`);
+    }
+  });
+
   await check('resize, split/grid layout, focus mode and track-close focus', async page => {
     const names = ['h264_9s_1920x1080.mp4', 'mpeg2_10s_1280x720.ts', 'mhw_hevc_fullrange_bt709_3s.mp4', 'h265_10s_1920x1080.mp4', 'ci_h264_smoke.mp4', 'vp9_10s_1920x1080.webm', 'mhw_x265_aq_qg16_4s_1920x1080.mkv', 'av1_10s_1920x1080.webm'];
     const ids = names.map(name => {
@@ -95,6 +186,20 @@ try {
         }
       }
     }
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await panels(page, false);
+    await page.evaluate(() => window.voidPlayer.setViewport({ mode: 'split', splitPos: .15 }));
+    await settle(page);
+    const splitHeader = await page.evaluate(() => {
+      const screens = document.querySelector('.screens').getBoundingClientRect();
+      const a = document.querySelector('#copy-path-A').getBoundingClientRect();
+      const b = document.querySelector('.view-second .card-heading').getBoundingClientRect();
+      const hit = document.elementFromPoint(a.left + a.width / 2, a.top + a.height / 2);
+      return { aCenter: a.left + a.width / 2, bLeft: b.left, expectedBLeft: screens.left + screens.width / 2, aCopyHit: !!hit?.closest('#copy-path-A') };
+    });
+    assert.ok(splitHeader.aCenter > 1280 * .15, 'A controls remain past the moved video seam');
+    assert.ok(Math.abs(splitHeader.bLeft - splitHeader.expectedBLeft) <= 1, 'B heading stays at the center');
+    assert.equal(splitHeader.aCopyHit, true, 'A copy button receives clicks above the drawing surface');
     // Repeat with real panel transitions enabled, including reversals while resizing.
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize({ width: 1280, height: 800 });

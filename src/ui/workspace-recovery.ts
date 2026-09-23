@@ -3,6 +3,52 @@ import { currentActor } from '../identity.ts';
 import type { ReviewSession } from '../session.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import type { ToastStack } from './toast.ts';
+import { referenceVersion } from '../media-reference.ts';
+import { localCacheKey, serverCacheKey } from '../thumbnails/contract.ts';
+import { fillThumbnailImage, serverThumbnailImageUrl } from '../thumbnails/client.ts';
+import { icon } from './icons.ts';
+
+function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>) {
+  const button = document.createElement('button');
+  button.id = 'start-workspace-card';
+  button.className = 'start-workspace-card';
+  button.type = 'button';
+  button.setAttribute('aria-label', '恢复工作区');
+  const heading = document.createElement('span');
+  heading.className = 'start-workspace-heading';
+  const title = document.createElement('strong');
+  title.textContent = checkpoint.name && checkpoint.name !== '未命名工作区' ? checkpoint.name : '上次的工作区';
+  const arrow = document.createElement('span');
+  arrow.innerHTML = icon('arrowRight');
+  heading.append(title, arrow);
+  const tracks = document.createElement('span');
+  tracks.className = 'start-workspace-tracks';
+  for (const track of checkpoint.tracks) {
+    const info = checkpoint.media.find(media => media.id === track.mediaId);
+    if (!info) continue;
+    const row = document.createElement('span'); row.className = 'start-workspace-track';
+    const thumb = document.createElement('span'); thumb.className = 'start-workspace-thumb';
+    thumb.innerHTML = icon('film');
+    const img = document.createElement('img'); img.alt = ''; img.loading = 'lazy'; img.style.opacity = '0';
+    const version = referenceVersion(info.source?.url);
+    const key = info.source && version ? serverCacheKey({ mediaId: info.source.id, mediaVersion: version })
+      : localCacheKey(info.name, info.size, info.lastModified);
+    img.onload = () => { img.style.opacity = ''; thumb.replaceChildren(img); };
+    thumb.append(img);
+    const name = document.createElement('span'); name.className = 'start-workspace-track-name';
+    const slot = document.createElement('b'); slot.textContent = `${track.slot} · `;
+    name.append(slot, document.createTextNode(info.name));
+    row.append(thumb, name); tracks.append(row);
+    fillThumbnailImage(img, key, info.source && version ? new URL(serverThumbnailImageUrl(info.source.id, version), checkpoint.serverUrl).href : undefined);
+  }
+  const meta = document.createElement('span'); meta.className = 'start-workspace-meta';
+  const seconds = Math.floor(checkpoint.positionUs / 1_000_000);
+  const time = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+  meta.textContent = `${checkpoint.tracks.length} 条轨道 · ${checkpoint.marks.length} 条标注 · 停在 ${time}`;
+  button.append(heading, tracks, meta);
+  button.onclick = () => { button.disabled = true; void restore().finally(() => { if (button.isConnected) button.disabled = false; }); };
+  return button;
+}
 
 export function installWorkspaceRecovery(session: ReviewSession, options: {
   snapshot(): WorkspaceFile; restore(document: WorkspaceFile): Promise<boolean>; ready: Promise<void>; toasts: ToastStack;
@@ -11,7 +57,8 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   let previousId = '', actor = '', active = false, initialized = false, disposed = false;
   let last = '', timer: ReturnType<typeof setTimeout> | undefined, writing = false, again = false, warned = false;
   let generation = 0;
-  let dismiss: (() => void) | undefined;
+  const recovery = document.getElementById('start-workspace-recovery')!;
+  const clearRecovery = () => { recovery.replaceChildren(); recovery.hidden = true; };
   try { previousId = sessionStorage.getItem('voidplayer.checkpoint') ?? ''; sessionStorage.setItem('voidplayer.checkpoint', id); } catch {}
   async function flush() {
     if (!initialized || disposed) return;
@@ -44,7 +91,7 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   document.addEventListener('visibilitychange', () => { if (document.hidden) void flush(); }, { signal: lifetime.signal });
   async function initialize() {
     const currentGeneration = ++generation;
-    initialized = false; active = false; last = ''; dismiss?.();
+    initialized = false; active = false; last = ''; clearRecovery();
     actor = currentActor()?.id ?? 'local';
     const expectedActor = actor;
     try {
@@ -52,11 +99,13 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
       if (disposed || actor !== expectedActor || generation !== currentGeneration) return;
       const url = new URL(location.href);
       if (checkpoint?.document.tracks.length && !session.getState().tracks.length && !url.searchParams.has('share') && !url.searchParams.has('workspace')) {
-        dismiss = options.toasts.show('发现上次的工作区：可恢复轨道、位置、布局和比较条件。', { durationMs: 0,
-          action: { label: '恢复工作区', onClick: () => {
-            void options.restore(checkpoint.document).then(ok => { if (ok) { active = true; schedule(); options.toasts.show('工作区已恢复。'); } })
-              .catch(error => options.toasts.show(String(error), { kind: 'error' }));
-          } } });
+        recovery.replaceChildren(recoveryCard(checkpoint.document, async () => {
+          try {
+            const ok = await options.restore(checkpoint.document);
+            if (ok) { active = true; clearRecovery(); schedule(); options.toasts.show('工作区已恢复。'); }
+          } catch (error) { options.toasts.show(String(error), { kind: 'error' }); }
+        }));
+        recovery.hidden = false;
       }
     } catch {
       options.toasts.show('无法读取本机工作区恢复记录，请检查浏览器存储。', { kind: 'error' });
@@ -64,5 +113,5 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   }
   void options.ready.then(initialize);
   window.addEventListener('voidplayer-identity-change', () => { void initialize(); }, { signal: lifetime.signal });
-  return { flush, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); dismiss?.(); store.close(); } };
+  return { flush, dispose() { disposed = true; clearTimeout(timer); clearInterval(interval); unsubscribe(); lifetime.abort(); clearRecovery(); store.close(); } };
 }

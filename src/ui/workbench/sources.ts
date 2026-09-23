@@ -4,6 +4,7 @@ import { SLOTS } from '../../model.ts';
 import type { Slot } from '../../model.ts';
 import { createIconButton } from '../controls.ts';
 import { icon } from '../icons.ts';
+import { currentActor } from '../../identity.ts';
 import { fetchLibraryItem, openLibraryItem } from '../../library.ts';
 import type { LibraryEntry } from '../../library.ts';
 import { localCacheKey, serverCacheKey } from '../../thumbnails/contract.ts';
@@ -79,7 +80,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }, lifecyle.signal, recent => {
     if (recent) void refreshRecent();
     renderSources();
-  });
+  }, shared.notify);
   // Source key -> thumbnail cache key, so completion can fill the placeholder
   // <img> of the matching row in place. Bounded: rows re-register on render.
   const thumbKeyBySource = new Map<string, string>();
@@ -343,7 +344,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : '本机（不上传）';
     const opened = openedText(item.openedAt);
     const meta = text('span', item.library ? `${sizeText(item.size)} · 媒体库 · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · 本地文件${staleLocal && !restorable ? ' · 需重新选择' : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
-    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.textContent = '→';
+    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('arrowRight');
     const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
     row.append(info, go);
     row.dataset.sourceKey = item.key;
@@ -459,8 +460,12 @@ export function createSourcesPane(shared: WorkbenchShared) {
     rows.forEach((row, index) => { if (list.children[index] !== row) list.insertBefore(row, list.children[index] ?? null); });
     while (list.children.length > rows.length) list.lastElementChild!.remove();
     refreshHandleAvailability(items);
-    const status = $('start-library-status');
-    if (status) status.textContent = items.length ? '' : '暂无最近片源，可从右侧媒体库或本地文件开始';
+    if (!items.length) {
+      const empty = document.createElement('div'); empty.className = 'start-library-empty';
+      const symbol = document.createElement('span'); symbol.innerHTML = icon('sidebar', 'mirror'); empty.append(symbol);
+      const label = document.createElement('span'); label.textContent = '还没有最近打开的视频'; empty.append(label);
+      list.append(empty);
+    }
   }
 
   function renderSources() {
@@ -611,6 +616,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
   function wireSourceControls() {
     const more = $('start-library-more');
     if (more) more.onclick = () => shared.setPanel('sources', true);
+    const identity = $('start-identity');
+    const showIdentity = () => { if (identity) { identity.textContent = `当前身份 · ${currentActor()?.name ?? '访客'}`; identity.title = identity.textContent; } };
+    showIdentity();
+    window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
     $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
     $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
     $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));

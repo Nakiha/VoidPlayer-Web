@@ -90,6 +90,7 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     getAnalysisCapability:source.getAnalysisCapability?.bind(source),
     queryAnalysis:source.queryAnalysis?.bind(source),
     rankAnalysisTime:source.rankAnalysisTime?.bind(source),
+    analysisSampleAtNumber:source.analysisSampleAtNumber?.bind(source),
     locateAnalysisSample:source.locateAnalysisSample?.bind(source),
     frameAt:async pts=>convert(await source.frameAt(pts)),
     async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(source.framesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},

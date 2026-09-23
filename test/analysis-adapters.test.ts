@@ -157,6 +157,9 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
   assert.deepEqual(querier.rank(mixed, 0, 'pts', 99999999), { rank: 6, total: 6, ordinal: null });
   // DTS 轴用各自时间同一规则
   assert.deepEqual(querier.rank(mixed, 0, 'dts', 80000), { rank: 2, total: 6, ordinal: 2 });
+  assert.equal(querier.sampleAtNumber(mixed, 0, 'pts', 3), 80000);
+  assert.equal(querier.sampleAtNumber(mixed, 0, 'dts', 3), 120000);
+  assert.equal(querier.sampleAtNumber(mixed, 0, 'pts', 6), null);
   // 排名与区间查询共用缓存：查完排名再查区间，结果不受影响
   const r = querier(mixed, ctx, {
     requestId: 10, axis: 'pts', startUs: 0, endUs: 200000, pixelWidth: 100, bitrateWindowUs: 1_000_000,

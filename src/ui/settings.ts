@@ -1,4 +1,5 @@
 import { SETTINGS_PANES } from './settings-shell.ts';
+import { matchesShortcut } from './shortcuts.ts';
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
 export function installSettings() {
@@ -14,6 +15,7 @@ export function installSettings() {
   let closeEpoch = 0; let outsidePointer: number | null = null;
   function select(id: string) {
     selected = id;
+    document.getElementById('settings-current-title')!.textContent = SETTINGS_PANES.find(([key]) => key === id)![1];
     for (const [key] of SETTINGS_PANES) {
       const active = key === id;
       const tab = document.getElementById(`settings-tab-${key}`)!;
@@ -64,7 +66,7 @@ export function installSettings() {
     }, { signal: life.signal });
   }
   document.addEventListener('keydown', event => {
-    if ((event.metaKey || event.ctrlKey) && event.key === ',' && !event.altKey && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
+    if (matchesShortcut(event, 'settings') && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
     if (!SETTINGS_PANES.some(([key]) => key === id)) throw new Error('未知设置页面。');

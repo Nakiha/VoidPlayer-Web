@@ -208,6 +208,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         }, [], 60000);
         return { ...result, complete: (info.indexState ?? 'complete') === 'complete' };
       },
+      async analysisSampleAtNumber(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }> {
+        if (disposed) throw new Error('媒体已释放。');
+        const ptsUs = await activeRpc.call<number | null>('analysis-number', {
+          mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, number,
+        }, [], 60000);
+        return { ptsUs, complete: (info.indexState ?? 'complete') === 'complete' };
+      },
       async frameAt(pts) { await ensureIndexed(pts);const frame=await extract(pts);if(!frame)throw new MediaOpenError('decode','没有可显示帧。');return frame; },
       async framesAfter(pts,count){
         if(count<=0)return [];

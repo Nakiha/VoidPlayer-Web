@@ -125,6 +125,14 @@ export class NativeAnalysisAdapter {
     return { rank, total, ordinal, complete: this.done };
   }
 
+  sampleAtNumber(number: number, axis: 'pts' | 'dts'): { ptsUs: number | null; complete: boolean } {
+    if (this.closed) throw new Error('媒体已释放。');
+    // The DTS status displays a packet ordinal even without DTS timestamps.
+    this.ensureStarted();
+    if (this.buildError) throw this.buildError;
+    return { ptsUs: this.querier.sampleAtNumber(this.packets, this.firstPtsUs, axis, number), complete: this.done };
+  }
+
   close(): void {
     this.closed = true;
   }

@@ -3,6 +3,8 @@ import { captureFrame } from '../presenter.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
+import { matchesShortcut } from './shortcuts.ts';
+import type { Shortcut } from './shortcuts.ts';
 import { SLOTS } from '../model.ts';
 import type { Slot } from '../model.ts';
 import { DEFAULT_ANNOTATION_COLOR, drawAnnotations, annotationAnchorsCurrent, drawingStrokeWidth } from '../annotation.ts';
@@ -25,7 +27,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   const undo: Snapshot[] = [], redo: Snapshot[] = [];
   let active = false, saving = false, closing = false, tool: Tool = 'pen', selectedSlot: Slot = 'A', selectedId: string | undefined;
   let text: { slot: Slot; drawing: Drawing; div: HTMLDivElement; before: Snapshot } | undefined;
-  let gesture: { slot: Slot; pointer: number; start: Point; previous: Point; before: Snapshot; original?: Drawing; mode: 'pending' | 'draw' | 'move' | 'resize' | 'erase'; corner?: string; clickId?: string; drawingTool?: Drawing['tool'] } | undefined;
+  let gesture: { slot: Slot; pointer: number; start: Point; previous: Point; before: Snapshot; original?: Drawing; mode: 'pending' | 'draw' | 'move' | 'resize' | 'erase'; corner?: string; clickId?: string; drawingTool?: Drawing['tool']; resumeText?: boolean } | undefined;
   let lastTap: { id: string; slot: Slot; time: number; x: number; y: number } | undefined;
   let positioned = false, savedSignature = '', observedMarks = '', viewSignature = '', thumbTimer: ReturnType<typeof setTimeout> | undefined;
   const layer = (slot: Slot) => $<SVGSVGElement>(`drawing-${slot}`);
@@ -65,13 +67,9 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     $<HTMLButtonElement>('drawing-delete').disabled = !selected();
     for (const button of bar.querySelectorAll<HTMLElement>('[data-drawing-tool]')) button.setAttribute('aria-pressed', String(button.dataset.drawingTool === tool));
   }
-  function redraw() {
-    for (const slot of SLOTS) {
-      const svg = layer(slot); svg.toggleAttribute('hidden', !active || !drafts.has(slot));
-      if (text?.slot === slot) continue; // Keep the live DOM and IME selection intact.
-      renderAnnotations(svg, all(slot), aspect(slot)); svg.dataset.tool = tool;
-      const d = selectedSlot === slot ? selected() : undefined;
-      if (d && tool !== 'eraser') {
+  function showSelection(svg: SVGSVGElement, slot: Slot, d: Drawing) {
+    svg.querySelector('.annotation-selection')?.remove();
+    if (tool !== 'eraser') {
         const b = drawingBounds(d, aspect(slot)), W = 1000, H = W / aspect(slot), rect = annotationFrameRect(svg);
         const group = svgElement('g', { class: 'annotation-selection' });
         const bounds = { x: b.x * W, y: b.y * H, width: Math.max(.001, b.width) * W, height: Math.max(.001, b.height) * H, fill: 'none', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' };
@@ -87,7 +85,15 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
           group.append(handle);
         }
         svg.append(group);
-      }
+    }
+  }
+  function redraw() {
+    for (const slot of SLOTS) {
+      const svg = layer(slot); svg.toggleAttribute('hidden', !active || !drafts.has(slot));
+      if (text?.slot === slot) { showSelection(svg, slot, text.drawing); continue; } // Keep the live DOM and IME selection intact.
+      renderAnnotations(svg, all(slot), aspect(slot)); svg.dataset.tool = tool;
+      const d = selectedSlot === slot ? selected() : undefined;
+      if (d) showSelection(svg, slot, d);
     }
     controls();
   }
@@ -155,8 +161,9 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     renderAnnotations(layer(slot), all(slot), aspect(slot), drawing.id);
     const { box, div } = textElement(drawing, 1000, 1000 / aspect(slot), true);
     layer(slot).append(box); text = { slot, drawing, div, before };
+    showSelection(layer(slot), slot, drawing);
     div.onpointerdown = e => e.stopPropagation();
-    div.oninput = () => { drawing.text = div.innerText.replace(/\r/g, '').slice(0, 2000); if (!div.isConnected) return; persist(); };
+    div.oninput = () => { drawing.text = div.innerText.replace(/\r/g, '').slice(0, 2000); if (!div.isConnected) return; showSelection(layer(slot), slot, drawing); persist(); };
     div.onkeydown = e => { e.stopPropagation(); if (e.key === 'Escape' && !e.isComposing) { e.preventDefault(); finishText(); layer(slot).focus(); } };
     div.onpaste = e => { e.preventDefault(); const value = e.clipboardData?.getData('text/plain') ?? ''; document.execCommand('insertText', false, value.slice(0, 2000)); };
     div.focus(); const selection = window.getSelection(); selection?.selectAllChildren(div); selection?.collapseToEnd(); controls();
@@ -228,8 +235,11 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
       if (e.button !== 0 || !active || session.getState().busy) return;
       e.preventDefault(); e.stopPropagation();
       const target = e.target as Element, id = target.closest<SVGElement>('[data-shape-id]')?.dataset.shapeId, corner = target.closest<SVGElement>('[data-corner]')?.dataset.corner;
-      finishText(); selectedSlot = slot; ensure(slot); const p = point(e), before = snapshot();
-      if (corner && selected()) gesture = { slot, pointer: e.pointerId, start: p, previous: p, before, original: structuredClone(selected()), mode: 'resize', corner };
+      const wasEditingText = Boolean(text);
+      finishText();
+      if (wasEditingText && !corner) { tool = 'select'; selectedId = undefined; redraw(); return; }
+      selectedSlot = slot; ensure(slot); const p = point(e), before = snapshot();
+      if (corner && selected()) gesture = { slot, pointer: e.pointerId, start: p, previous: p, before, original: structuredClone(selected()), mode: 'resize', corner, resumeText: wasEditingText };
       else if (tool === 'eraser') { selectedId = undefined; gesture = { slot, pointer: e.pointerId, start: p, previous: p, before, mode: 'erase' }; erase(p, p); }
       else if (id && (tool === 'select' || (tool === 'text' && find(slot, id)?.tool === 'text'))) {
         selectedId = id; selectionStyle();
@@ -284,7 +294,9 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
         for (const group of drafts.get(slot)!.groups) group.drawings = group.drawings.filter(shape => shape !== d);
         selectedId = undefined;
       }
+      const resumeText = gesture.resumeText;
       history(gesture.before); gesture = undefined; svg.releasePointerCapture(e.pointerId); persist(); redraw();
+      if (resumeText && selected()?.tool === 'text') startText(slot, selected()!);
     };
     svg.onpointercancel = () => { if (!gesture) return; drafts.clear(); for (const [s, draft] of gesture.before) drafts.set(s, draft); gesture = undefined; redraw(); };
     svg.ondblclick = e => { e.preventDefault(); e.stopPropagation(); const id = (e.target as Element).closest<SVGElement>('[data-shape-id]')?.dataset.shapeId; const d = find(slot, id); if (d?.tool === 'text') startText(slot, d); };
@@ -298,10 +310,13 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   window.addEventListener('resize', () => { positionBar(); if (active && !text) redraw(); }, { signal: life.signal });
   document.addEventListener('keydown', e => {
     if (!active || (e.target as Element)?.closest?.('[popover]:popover-open') || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || (e.target as HTMLElement)?.isContentEditable) return;
-    if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); close(); }
-    else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); (e.shiftKey ? $('drawing-redo') : $('drawing-undo')).click(); }
-    else if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); $('drawing-delete').click(); }
-    else if (!e.metaKey && !e.ctrlKey && !e.altKey) { const next = ({ v: 'select', p: 'pen', r: 'rect', o: 'ellipse', l: 'line', t: 'text', e: 'eraser' } as Record<string, Tool>)[e.key.toLowerCase()]; if (next) { e.preventDefault(); choose(next); } }
+    if (matchesShortcut(e, 'close')) { e.preventDefault(); e.stopImmediatePropagation(); close(); }
+    else if (matchesShortcut(e, 'undo') || matchesShortcut(e, 'redo')) { e.preventDefault(); $(matchesShortcut(e, 'redo') ? 'drawing-redo' : 'drawing-undo').click(); }
+    else if (matchesShortcut(e, 'delete') || e.key === 'Backspace') { e.preventDefault(); $('drawing-delete').click(); }
+    else {
+      const next = (['select', 'pen', 'rect', 'ellipse', 'line', 'text', 'eraser'] as Shortcut[]).find(id => matchesShortcut(e, id));
+      if (next) { e.preventDefault(); choose(next as Tool); }
+    }
   }, { capture: true, signal: life.signal });
   function render(state: ReturnType<ReviewSession['getState']>) {
     if (active && !saving && !closing && (state.playing || !annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks))) { close(); }
@@ -342,14 +357,17 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     },
     render,
     dispose() { close(); clearTimeout(thumbTimer); life.abort(); styleMenus.forEach(menu => menu.dispose()); },
-    open(slot: Slot, markId?: string) {
+    open(slot: Slot, markId?: string, drawingId?: string) {
       if (session.getState().busy) return;
       if (active) close(); session.pause();
       const state = session.getState(); if (!state.tracks.some(t => t.slot === slot && t.frame)) return;
       for (const track of state.tracks) ensure(track.slot);
       $<HTMLInputElement>('drawing-color').value = DEFAULT_ANNOTATION_COLOR;
       active = true; syncStyleMenus(); selectedSlot = slot; selectedId = undefined; positioned = false; bar.hidden = false; error.hidden = true; document.body.classList.add('annotating');
-      if (markId) selectedId = drafts.get(slot)?.groups.find(g => g.markId === markId)?.drawings[0]?.id;
+      if (markId) {
+        const group = drafts.get(slot)?.groups.find(g => g.markId === markId);
+        selectedId = group?.drawings.find(d => d.id === drawingId)?.id ?? group?.drawings[0]?.id;
+      }
       tool = all(slot).length ? 'select' : 'pen'; selectionStyle(); redraw(); savedSignature = ''; render(session.getState()); positionBar();
     },
   };

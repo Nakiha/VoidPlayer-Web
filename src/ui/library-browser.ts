@@ -3,21 +3,26 @@ import type { LibraryPage } from '../library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
+import { libraryLocationExpression, parseLibraryLocationInput, parseLibraryLocationLink } from './library-link.ts';
 
 /** Continuous browsing with bounded requests and atomic result replacement. */
-export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void) {
-  let page: LibraryPage | null = null, root = '', directory = '', search = '', appliedSearch = '', all = false, recent = false;
+export function installLibraryBrowser(change: (page: LibraryPage | null) => void, signal: AbortSignal, onScope?: (recent: boolean) => void, notify: (message: string) => void = () => {}) {
+  let initial = { root: '', directory: '', all: false };
+  if (new URL(location.href).searchParams.has('library')) {
+    try { initial = parseLibraryLocationLink(location.href, location.href); } catch { /* Ignore malformed startup links. */ }
+  }
+  let page: LibraryPage | null = null, root = initial.root, directory = initial.directory, search = '', appliedSearch = '', all = initial.all, recent = false;
   let request: AbortController | undefined, sequence = 0, loading = false, pendingSearch = false;
   const available = () => !recent;
   let optionsSignature = '', appliedScope = '', searchTimer: ReturnType<typeof setTimeout> | undefined;
   const list = document.getElementById('source-list')!;
   const tools = document.getElementById('source-tools')!;
-  // Single row: back | scope dropdown (shows the full path) | copy | search.
+  // Address-style location field with a separate scope dropdown.
   const nav = document.createElement('div'); nav.className = 'library-navigation'; nav.id = 'library-navigation';
+  const address = document.createElement('input'); address.id = 'library-location'; address.className = 'library-location'; address.type = 'text'; address.setAttribute('aria-label', '媒体库路径或链接'); address.autocomplete = 'off'; address.spellcheck = false;
   const button = document.createElement('button'); button.type = 'button'; button.id = 'library-root'; button.className = 'choice-trigger'; button.setAttribute('aria-label', '媒体库范围');
-  nav.append(button);
+  nav.append(address, button);
   const back = createIconButton({ glyph: 'caretLeft', label: '返回上一级', className: 'crumbs-back' });
-  const copy = createIconButton({ glyph: 'copy', label: '复制当前路径', className: 'crumbs-copy' });
   const toggle = createIconButton({ glyph: 'search', label: '搜索片源', className: 'crumbs-search-toggle', attributes: { id: 'sources-search-toggle', 'aria-expanded': 'false' } });
   const field = document.createElement('label'); field.className = 'search-field crumbs-search-field'; field.id = 'source-search-field'; field.hidden = true;
   const searchIcon = document.createElement('span'); searchIcon.className = 'crumbs-search-icon'; searchIcon.innerHTML = icon('search');
@@ -25,13 +30,26 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   const close = createIconButton({ glyph: 'close', label: '关闭搜索', className: 'crumbs-search-close', attributes: { id: 'source-search-close' } });
   close.dataset.tooltip = '关闭搜索并清空';
   field.append(searchIcon, input, close);
-  tools.replaceChildren(back, nav, copy, toggle, field);
+  tools.replaceChildren(back, nav, toggle, field);
   const key = (id: string, path = '') => JSON.stringify([id, path]);
+  address.addEventListener('focus', () => { address.value = recent ? '' : libraryLocationExpression({ root, directory, all }); address.select(); });
+  address.addEventListener('blur', () => { address.removeAttribute('aria-invalid'); address.value = displayPath(); });
+  address.addEventListener('keydown', event => {
+    if (event.key === 'Escape') { event.preventDefault(); address.blur(); return; }
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    try {
+      const target = parseLibraryLocationInput(address.value, location.href);
+      if (target.root && !page?.roots.some(item => item.id === target.root)) throw new Error('此媒体库在当前服务中不存在。');
+      search = ''; input.value = ''; all = target.all; root = target.root; directory = target.directory;
+      setRecent(false); reset(); address.blur();
+    } catch (error) { address.setAttribute('aria-invalid', 'true'); notify((error as Error).message); address.select(); }
+  }, { signal });
   const menu = installChoiceMenu(button.id, [], value => {
     if (value === 'recent') { setRecent(true); return; }
     if (value === 'all') { all = true; root = directory = ''; setRecent(false); reset(); }
     else { const [id, path] = JSON.parse(value); navigate(id, path ?? ''); }
-  });
+  }, undefined, undefined, () => nav.getBoundingClientRect());
   function setRecent(value: boolean) {
     if (recent === value) { onScope?.(recent); return; }
     recent = value;
@@ -40,7 +58,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     if (!recent) requestAnimationFrame(more);
     onScope?.(recent);
   }
-  // (removed: old second-row crumbs bar; back/copy/search now share the single tools row above)
+  // Back, location and search share the single tools row above.
   function displayPath() {
     const roots = page?.roots ?? [];
     const rootName = roots.find(r => r.id === root)?.name ?? '';
@@ -54,22 +72,10 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     if (directory) navigate(root, directory.includes('/') ? directory.slice(0, directory.lastIndexOf('/')) : '');
     else if (root && !all) { root = ''; directory = ''; reset(); }
   };
-  copy.onclick = () => {
-    const value = displayPath();
-    void (async () => {
-      try { await navigator.clipboard.writeText(value); } catch { /* Clipboard may be unavailable; keep the path visible. */ }
-      copy.dataset.tooltip = `已复制：${value}`;
-      window.setTimeout(() => { if (copy.isConnected) copy.dataset.tooltip = `复制当前路径：${value}`; }, 1600);
-    })();
-  };
   function renderRow() {
-    const value = displayPath();
-    copy.dataset.tooltip = `复制当前路径：${value}`;
     const canGoBack = available() && !recent && !all && (!!directory || !!root);
     back.disabled = !canGoBack;
-    copy.disabled = !available();
     back.hidden = !available();
-    copy.hidden = !available();
   }
   function controls() {
     const roots = page?.roots ?? [];
@@ -82,6 +88,7 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
     if (signature !== optionsSignature) { optionsSignature = signature; menu.setOptions(options); }
     const value = recent ? 'recent' : all ? 'all' : key(root);
     menu.sync(value, displayPath(), true);
+    if (document.activeElement !== address) address.value = displayPath();
     renderRow();
     input.placeholder = recent ? '搜索最近打开' : `搜索${all ? '全部媒体' : directory || roots.find(r => r.id === root)?.name || '媒体库'}`;
     input.title = input.placeholder;

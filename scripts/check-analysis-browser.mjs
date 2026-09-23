@@ -111,6 +111,35 @@ try {
     } catch { return false; }
   }, { timeout: 180000 });
 
+  const frameNumber = page.locator('#analysis-status-items .st-item').filter({ has: page.locator('.st-slot', { hasText: 'B' }) }).locator('.st-num');
+  await frameNumber.waitFor();
+  await page.waitForFunction(() => {
+    const item = [...document.querySelectorAll('#analysis-status-items .st-item')].find(el => el.querySelector('.st-slot')?.textContent === 'B');
+    return item?.querySelector('.st-num:not(:disabled)');
+  });
+  await page.setViewportSize({ width: 825, height: 800 });
+  const statusBefore = await frameNumber.evaluate(button => ({
+    number: button.getBoundingClientRect().width,
+    item: button.closest('.st-item').getBoundingClientRect().width,
+    header: document.querySelector('.analysis-head').getBoundingClientRect().height,
+  }));
+  await frameNumber.click();
+  const frameInput = page.getByRole('textbox', { name: '轨道 B PTS序帧号' });
+  const statusEditing = await frameInput.evaluate(input => ({
+    number: input.getBoundingClientRect().width,
+    item: input.closest('.st-item').getBoundingClientRect().width,
+    header: document.querySelector('.analysis-head').getBoundingClientRect().height,
+  }));
+  assert.ok(Math.abs(statusBefore.number - statusEditing.number) < 1, 'frame number keeps its width while editing');
+  assert.ok(Math.abs(statusBefore.item - statusEditing.item) < 1, 'status item does not push the toolbar while editing');
+  assert.ok(Math.abs(statusBefore.header - statusEditing.header) < 1, 'editing does not change header height');
+  await frameInput.fill('12'); await frameInput.press('Enter');
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForFunction(() => {
+    const item = [...document.querySelectorAll('#analysis-status-items .st-item')].find(el => el.querySelector('.st-slot')?.textContent === 'B');
+    return item?.querySelector('.st-num')?.textContent === '#12';
+  });
+
   // Agent 查询口径：压缩字节总数与文件大小一致（1752B 级小文件除外，按总和校验大文件）。
   const stats = await page.evaluate(async () => {
     const q = window.voidPlayer.tools.find(t => t.name === 'query_analysis');

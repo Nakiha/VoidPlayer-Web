@@ -48,7 +48,7 @@ export function renderAnnotations(svg: SVGSVGElement, drawings: Drawing[], aspec
     node.dataset.shapeId = d.id;
     node.classList.add('annotation-object');
     if (d.tool !== 'text') { node.setAttribute('fill', 'none'); node.setAttribute('stroke', d.color ?? DEFAULT_ANNOTATION_COLOR); node.setAttribute('stroke-width', String(drawingStrokeWidth(d))); node.setAttribute('vector-effect', 'non-scaling-stroke'); node.setAttribute('stroke-linecap', 'round'); node.setAttribute('stroke-linejoin', 'round'); }
-    if (d.tool !== 'text' && svg.classList.contains('drawing-layer')) {
+    if (d.tool !== 'text') {
       // A separate invisible target lets thin strokes and shape interiors be
       // selected comfortably without changing their visible appearance.
       const hit = node.cloneNode(true) as SVGElement;

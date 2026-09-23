@@ -63,6 +63,7 @@ export interface MediaSource {
    * O(log N) 且不物化样本数组；索引构建中返回暂定值。
    */
   rankAnalysisTime?(tUs: number, axis: AnalysisAxis): Promise<AnalysisRank>;
+  analysisSampleAtNumber?(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }>;
   /**
    * 按样本身份（桶峰值等）有界定位单个样本，不依赖某次查询是否返回了 raw 列表。
    * 身份格式由 adapter 层解析；未索引/不属于本媒体返回 null。
@@ -226,6 +227,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
       queryAnalysis: query => analysis.query(query),
       locateAnalysisSample: sampleId => analysis.locate(sampleId),
       rankAnalysisTime: (tUs, axis) => Promise.resolve(analysis.rank(tUs, axis)),
+      analysisSampleAtNumber: (number, axis) => Promise.resolve(analysis.sampleAtNumber(number, axis)),
       async frameAt(ptsUs) {
         // Resolve timestamps in the same nearest-microsecond domain that we
         // expose in state and exports (e.g. a 30 fps frame starts at .033333…).

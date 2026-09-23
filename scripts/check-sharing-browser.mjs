@@ -60,14 +60,28 @@ try {
   await other.locator('.toast-stack .toast').filter({hasText:'已还原分享快照'}).waitFor();
   const restored=await other.evaluate(()=>window.voidPlayer.exportWorkspace());
   assert.equal(await other.locator('#source-search').inputValue(),'sample');
-  assert.match(await other.locator('#library-root').innerText(),/全部媒体/);
+  assert.match(await other.locator('#library-location').inputValue(),/全部媒体/);
   for(const key of ['name','tracks','marks','viewport','layout','positionUs'])assert.deepEqual(restored[key],stored[key],key);
+  const added=await other.evaluate(()=>window.voidPlayer.addMark({slot:'A',text:'分享后新增的云端标注'}));
+  await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),added.id);
+  let cloud;
+  for(let i=0;i<100;i++){
+    cloud=await other.request.get(base+'/api/annotations/spaces/default').then(r=>r.json());
+    if(cloud.entries.some(record=>record.id===added.id))break;
+    await new Promise(resolve=>setTimeout(resolve,100));
+  }
+  assert.ok(cloud.entries.some(record=>record.id===added.id),'a mark added after opening a share syncs to the cloud');
+  assert.equal((await response.json()).document.marks.some(mark=>mark.id===added.id),false,'the original share stays immutable');
   assert.deepEqual((await other.request.get(base+'/api/users').then(r=>r.json())).users,[]);
-  await other.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async()=>{throw new Error('denied');}}));
+  await other.evaluate(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async value=>{window.failedLink=value;throw new Error('denied');}}));
   await other.locator('#workspace-share').click();
   const fallback = other.locator('.toast-stack .toast').filter({hasText:'请复制下方链接'});
   await fallback.waitFor();
   assert.equal(await fallback.locator('.toast-action').innerText(), '复制链接');
+  const updatedLink=await other.evaluate(()=>window.failedLink);
+  assert.notEqual(updatedLink,link,'sharing again creates a new link');
+  const updatedSnapshot=await other.request.get(base+'/api/shares/'+new URL(updatedLink).searchParams.get('share')).then(r=>r.json());
+  assert.ok(updatedSnapshot.document.marks.some(mark=>mark.id===added.id),'the new link contains later marks');
   await other.reload();assert.equal(await other.locator('#identity-welcome').isVisible(),false);
   assert.deepEqual(errors,[]);
   console.log('PASS: guest onboarding, immutable click snapshot, busy UI, restart, second-browser restore and clipboard fallback');

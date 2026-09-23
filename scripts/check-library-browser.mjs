@@ -17,7 +17,7 @@ const library = new MediaLibraryIndex([{ id: 'archive', path: media, name: '项�
 const server = createMediaServer({ library, roots: library.roots, staticDir: path.resolve('dist'), onLog() {} });
 await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
-const engine = process.argv[2] ?? 'webkit'; const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
+const engine = process.argv.find(arg => arg === 'webkit' || arg === 'chromium') ?? 'webkit'; const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'light' });
   const page = await context.newPage(); const errors = [], legacy = [];
@@ -27,8 +27,41 @@ try {
   const closeSearch = async () => { if (!await page.locator('#source-search-field').isHidden()) await page.locator('#source-search-close').click(); };
   await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
   await page.locator('#toggle-sources').click();
+  await page.locator('#library-root').click();
+  const menuAlignment = await page.evaluate(() => {
+    const nav = document.querySelector('#library-navigation').getBoundingClientRect();
+    const menu = document.querySelector('#library-root-menu').getBoundingClientRect();
+    return { left: Math.abs(nav.left - menu.left), right: Math.abs(nav.right - menu.right), separator: getComputedStyle(document.querySelector('#library-root')).borderLeftWidth };
+  });
+  assert.ok(menuAlignment.left <= 1 && menuAlignment.right <= 1, 'scope menu aligns to both sides of the location field');
+  assert.equal(menuAlignment.separator, '0px', 'address and dropdown share one surface without a full-height divider');
+  await page.locator('#library-root').click();
   await choose('项目归档');
   await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
+  await page.locator('#library-location').focus();
+  const copiedLink=await page.locator('#library-location').inputValue();
+  assert.deepEqual(await page.locator('#library-location').evaluate(input => [input.selectionStart, input.selectionEnd]), [0, copiedLink.length], 'focusing selects the complete shareable path');
+  assert.equal(copiedLink, 'library:archive/实验一');
+  await choose('全部媒体');
+  await page.locator('#library-location').fill(copiedLink);
+  await page.locator('#library-location').press('Enter');
+  await page.waitForFunction(()=>document.querySelector('#library-location').value.includes('实验一'));
+  const webLink = new URL(base); webLink.searchParams.set('library', '1'); webLink.searchParams.set('root', 'archive'); webLink.searchParams.set('dir', '实验一');
+  const linked=await context.newPage();await linked.goto(webLink.href);
+  await linked.waitForFunction(()=>document.querySelector('#library-location')?.value.includes('实验一'));
+  assert.equal(await linked.locator('#sources-panel').isVisible(),true,'a copied link opens the same directory in a new page');
+  await linked.close();
+  await page.locator('#library-location').fill(webLink.href);
+  await page.locator('#library-location').press('Enter');
+  await page.waitForFunction(()=>document.querySelector('#library-location').value.includes('实验一'));
+  await page.locator('#library-location').fill('https://other.example/?library=1');
+  await page.locator('#library-location').press('Enter');
+  await page.locator('.toast-stack .toast').filter({hasText:'另一个媒体服务'}).waitFor();
+  await page.locator('#library-location').press('Escape');
+  if (process.argv.includes('--links-only')) {
+    assert.deepEqual(errors, []);
+    console.log(`PASS ${engine}: copy, paste, and open media library links`);
+  } else {
   await page.waitForFunction(() => document.querySelectorAll('#source-list .source-actions').length === 60);
   assert.equal(await page.locator('#library-pagination, .library-breadcrumbs, .library-scope, #library-root select').count(), 0);
   const initialNode = await page.locator('#source-list .source-row').first().elementHandle();
@@ -59,7 +92,7 @@ try {
   await closeSearch(); await choose('全部媒体'); await openSearch(); await page.locator('#source-search').fill('deep');
   await page.evaluate(value=>window.voidPlayer.importWorkspace(value),workspace);
   assert.equal(await page.locator('#source-search').inputValue(),'clip-069');
-  assert.match(await page.locator('#library-root').innerText(),/项目归档/);
+  assert.match(await page.locator('#library-location').inputValue(),/项目归档/);
   await page.waitForFunction(()=>document.querySelectorAll('#source-list .source-actions').length===1);
   assert.match(await page.locator('#source-list').innerText(),/clip-069/);
   await closeSearch();
@@ -68,11 +101,12 @@ try {
   const recentWorkspace=await page.evaluate(()=>window.voidPlayer.exportWorkspace());
   await closeSearch(); await choose('项目归档');
   await page.evaluate(value=>window.voidPlayer.importWorkspace(value),recentWorkspace);
-  assert.match(await page.locator('#library-root').innerText(),/最近使用/);
+  assert.match(await page.locator('#library-location').inputValue(),/最近使用/);
   assert.equal(await page.locator('#source-search').inputValue(),'最近搜索');
   assert.equal((await page.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources.search,'');
   await page.reload();
   await page.locator('#start-library-list').getByRole('button', { name: '打开：实验一/clip-069.mp4', exact: true }).waitFor();
+  assert.equal(await page.locator('#start-library-list .start-recent-go svg[data-icon="arrowRight"]').count(),1,'recent item uses a stable SVG arrow');
   await page.locator('#toggle-sources').click(); await choose('项目归档');
   await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
   await choose('全部媒体'); await openSearch(); await page.locator('#source-search').fill('deep');
@@ -95,8 +129,12 @@ try {
   const download = await page.evaluate(() => document.querySelector('#source-action-A').getAttribute('data-action')); assert.equal(download, 'download');
   const downloaded = page.waitForEvent('download'); await page.locator('#source-action-A').click(); assert.equal((await downloaded).suggestedFilename(), 'sample.mp4');
   const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
-  const failure = await page.evaluate(async value => { try { await window.voidPlayer.importWorkspace(value); return ''; } catch (e) { return e.message; } }, saved);
-  assert.match(failure, /已发生变化/); assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
+  assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').version, entry.version);
+  await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
+  const unavailable = await page.evaluate(() => window.voidPlayer.getState());
+  assert.equal(unavailable.tracks[0].pendingRelink, true);
+  assert.match(unavailable.tracks[0].failure.message, /已发生变化/);
+  assert.deepEqual(unavailable.marks, saved.marks);
   // A legacy reference with matching recorded metadata is migrated to a version URL.
   const legacyWorkspace = structuredClone(saved); for (const media of legacyWorkspace.media) media.source.url = media.source.url.split('?')[0];
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), legacyWorkspace);
@@ -106,6 +144,7 @@ try {
   await page.waitForFunction(() => !document.querySelector('#settings').open); await page.screenshot({ path: `/tmp/voidplayer-library-dark-${engine}.png` });
   assert.deepEqual(legacy, [], 'UI and Agent must not fetch the capped flat listing'); assert.deepEqual(errors, []);
   console.log(`PASS ${engine}: shared dropdown, stable tabs/search, continuous scrolling, index invalidation, scoped search, versioned download, same-metadata replacement refusal and legacy workspace migration`);
+  }
 } finally {
   await browser.close(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true });
 }

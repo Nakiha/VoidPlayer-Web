@@ -396,6 +396,35 @@ export class ReviewSession {
     }
     return rank;
   }
+  /** Resolve a displayed zero-based frame number through the same packet index as rankAnalysisFrame. */
+  async seekAnalysisFrameNumber(slot: Slot, number: number, axis: AnalysisAxis = 'pts'): Promise<{ sessionPtsUs: number } | { reason: string }> {
+    slotValue(slot);
+    if (!Number.isSafeInteger(number) || number < 0) return { reason: '帧号必须是非负整数。' };
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
+    const source = track.source;
+    if (!source.analysisSampleAtNumber) return { reason: '该片源的解码路径暂不支持按帧号定位。' };
+    const gen = track.sourceGen, mediaId = source.info.id, offsetUs = track.offsetUs;
+    const token = ++this.analysisIntentSeq;
+    let result: { ptsUs: number | null; complete: boolean };
+    try { result = await source.analysisSampleAtNumber(number, axis); }
+    catch (error) { return { reason: errorText(error) }; }
+    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    const current = this.tracks.get(slot);
+    if (!current || current.sourceGen !== gen || current.source.info.id !== mediaId || current.offsetUs !== offsetUs)
+      return { reason: '该样本不在当前索引中（可能已换片或索引尚未覆盖）。' };
+    if (!result.complete) return { reason: '帧索引仍在构建，请稍后再试。' };
+    if (result.ptsUs == null) return { reason: '帧号超出当前视频范围。' };
+    const resolved = this.resolveAnalysisSeek(slot, { effectivePtsUs: result.ptsUs + offsetUs });
+    if (!('sessionPtsUs' in resolved)) return resolved;
+    if (token !== this.analysisIntentSeq) return { reason: '定位已被更新的请求取代。' };
+    try { await this.seek(resolved.sessionPtsUs); }
+    catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') return { reason: '定位已被更新的请求取代。' };
+      throw error;
+    }
+    return resolved;
+  }
   /**
    * 按样本身份定位并 seek 的统一动作入口（面板/键盘/Agent 共用）：
    * 捕获 sourceGen/mediaId/offset 与定位意图 token，await 返回后、实际

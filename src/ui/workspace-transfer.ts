@@ -55,8 +55,8 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
 export function installWorkspaceTransfer(session: ReviewSession, options: {
   act(action: () => unknown | Promise<unknown>, name: string): Promise<void>;
   capture(): Pick<WorkspaceFile, 'viewport' | 'layout'>;
-  restore(document: WorkspaceFile): void | Promise<void>;
-  beforeRestore(): void | (() => void);
+  restore(document: WorkspaceFile, resumeCloudAnnotations: boolean): void | Promise<void>;
+  beforeRestore(): void | (() => void | Promise<void>);
   closeSettings(): Promise<void>;
   identityReady: Promise<void>;
   toasts: ToastStack;
@@ -69,7 +69,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
-  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false) {
+  async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false) {
     if (importing) throw new Error('工作区正在导入，请等待完成。');
     importing = true;
     try {
@@ -84,17 +84,19 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
         const reference = await pinLibraryReference(info, location.href, fetch, signal);
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
       }, { allowUnavailable: true });
-      } catch(error) { rollback?.(); throw error; }
+      } catch(error) { await rollback?.(); throw error; }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      await options.restore(document); saved?.detach(document.name);
+      try { await options.restore(document, fromShare); }
+      finally { if (fromShare) await rollback?.(); }
+      saved?.detach(document.name);
       if (!document.comparison) options.toasts.show('旧工作区未记录比较条件，已沿用当前色彩和解码设置。');
       return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:importWorkspace, ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);

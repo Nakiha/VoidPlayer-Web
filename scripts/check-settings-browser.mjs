@@ -95,6 +95,8 @@ try {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));
   assert.ok(overflow.scroll<=overflow.width+1,`no horizontal overflow in ${pane}: ${JSON.stringify(overflow)}`);
+  const bordered=await page.locator(`#settings-pane-${pane}`).evaluate(e=>[...e.querySelectorAll('.settings-card,.settings-group,.log-report')].filter(card=>card.getClientRects().length&&getComputedStyle(card).borderTopWidth!=='0px').map(card=>card.className));
+  assert.deepEqual(bordered,[],`section cards have no outer border in ${pane}`);
   if(pane==='logs') {
    await page.locator('#log-session').click();
    const menu=await page.locator('#log-session-menu').boundingBox(), trigger=await page.locator('#log-session').boundingBox();
@@ -104,11 +106,34 @@ try {
   const box=await page.locator('#settings').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390&&box.y>=0&&box.y+box.height<=700);
  }
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-mobile-${name}.png`});
+ assert.equal(await page.locator('#settings-current-title').textContent(),'反馈');
+ const headerBefore=await page.locator('.settings-floating-header').boundingBox();
+ const closeBefore=await page.locator('#settings-close').boundingBox();
+ assert.ok(Math.abs((closeBefore.y-headerBefore.y)-(headerBefore.x+headerBefore.width-closeBefore.x-closeBefore.width))<1,'mobile close button has equal top and right inset');
+ await page.locator('#settings-pane-logs').evaluate(el=>{el.scrollTop=el.scrollHeight;});
+ const headerAfter=await page.locator('.settings-floating-header').boundingBox();
+ assert.ok(Math.abs(headerBefore.y-headerAfter.y)<1,'feedback glass header stays fixed while content scrolls');
  await page.locator('#settings-close').click();await page.locator('#settings').waitFor({state:'hidden'});await page.keyboard.press('Control+,');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.setViewportSize({width:1280,height:700});
+ const desktopHeader=await page.locator('.settings-floating-header').boundingBox(),desktopClose=await page.locator('#settings-close').boundingBox();
+ assert.ok(Math.abs((desktopClose.y-desktopHeader.y)-(desktopHeader.x+desktopHeader.width-desktopClose.x-desktopClose.width))<1,'desktop close button has equal top and right inset');
  if (!process.argv.includes('--ui-only')) {
  await page.evaluate(async()=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});await tools.find(t=>t.name==='load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});});
- await page.locator('#settings-tab-performance').click();await page.locator('#benchmark').click();
+ await page.locator('#settings-tab-performance').click();
+ for (const width of [1280, 791, 390]) {
+  await page.setViewportSize({width,height:700});
+  const runtime=await page.evaluate(()=>{
+   const left=selector=>document.querySelector(selector).getBoundingClientRect().left;
+   const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+   return {environment:left('#decoder-environment'),track:left('#color-runtime-tracks'),alignment:left('#alignment'),meta:left('.color-runtime-row .evidence'),rowRight:rect('#performance-current').right,decodeRight:rect('#decode').right};
+  });
+  assert.ok(Math.abs(runtime.track-runtime.environment)<1,`${width}px runtime track alignment`);
+  assert.ok(Math.abs(runtime.alignment-runtime.environment)<1,`${width}px runtime count alignment`);
+  assert.ok(Math.abs(runtime.meta-runtime.environment)<1,`${width}px runtime metadata alignment`);
+  assert.ok(runtime.decodeRight<=runtime.rowRight-13,`${width}px runtime seek fits the card`);
+ }
+ await page.setViewportSize({width:1280,height:700});
+ await page.locator('#benchmark').click();
  await page.waitForFunction(()=>document.querySelector('#benchmark-json').value.includes('voidplayer-playback-benchmark'),{},{timeout:20000});
  assert.equal(await page.locator('dialog[open]').count(),1);assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),false);

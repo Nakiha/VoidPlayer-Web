@@ -9,6 +9,7 @@ import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transf
 import { installThemeControls } from './ui/theme.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
 import { installSettings } from './ui/settings.ts';
+import { matchesShortcut, PANEL_SHORTCUTS } from './ui/shortcuts.ts';
 import { createFrameTask } from './ui/frame-task.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
@@ -156,7 +157,7 @@ const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
-  async restore(document) { await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
+  async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },
 });
 const screens = document.querySelector<HTMLElement>('.screens')!;
 const viewportChrome = installViewportChrome(document.querySelector<HTMLElement>('.viewport-surface')!, $<HTMLButtonElement>('toggle-chrome'));
@@ -173,7 +174,7 @@ const zoomMenu = installChoiceMenu('zoom-select',ZOOM_PRESETS.map(p=>({value:Str
 const pixelMenu = installChoiceMenu('pixel-size',[{value:'uniform',label:'统一像素'},{value:'fill',label:'填满视图'}],value=>{
   viewport.setPixelSize(value as PixelSizeMode); log.info('ui','切换像素尺寸模式',{pixelSize:viewport.pixelSize,trigger:inputTrigger}); fitTask.schedule();
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',true);
-});
+},'monitor');
 const channelLabels: Record<ChannelMode, string> = { rgb: 'RGB', y: 'Y 通道', u: 'U 通道', v: 'V 通道' };
 const channelMenu = installChoiceMenu('channel-select', (Object.keys(channelLabels) as ChannelMode[]).map(value => ({ value, label: channelLabels[value] })), value => {
   viewport.setChannel(value as ChannelMode); setPresentationChannel(viewport.channel);
@@ -183,6 +184,12 @@ const channelMenu = installChoiceMenu('channel-select', (Object.keys(channelLabe
   // paused view needs an explicit re-decode of the current position.
   const state = session.getState();
   if (state.tracks.length && !state.playing && !state.busy) void act(() => session.seek(state.positionUs), 'channel.seek', { channel: viewport.channel });
+},'appearance', undefined, undefined, () => {
+  if (session.getState().colorMode === 'reference') return true;
+  toasts.show('请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。', {
+    action: { label: '前往色彩设置', onClick: () => settings.openPane('performance', $('channel-select')) },
+  });
+  return false;
 });
 function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`${+viewport.zoom.toFixed(2)}×`,loaded); }
 function render() {
@@ -264,6 +271,8 @@ function render() {
   }
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);
   channelMenu.sync(viewport.channel, channelLabels[viewport.channel], loaded);
+  $('channel-select').dataset.tooltip = state.colorMode === 'reference'
+    ? 'YUV 通道：仅原始平面帧生效' : 'YUV 通道：请先切换为自有色彩';
   syncZoomSelect(loaded);
   // Transient seek preparation must not dim the row or steal button focus.
   // Keep native disabled for empty sessions; busy actions are guarded below.
@@ -363,18 +372,30 @@ for (const slot of SLOTS) {
   $<HTMLInputElement>(`file-${slot}`).oncancel = () => log.info('ui', '取消文件选择', { slot });
   const stage = $(`stage-${slot}`);
   let drawingStart: PointerEvent | undefined;
+  let clickedDrawing: string | undefined;
   stage.addEventListener('pointerdown', e => {
     if (e.button !== 0 || session.getState().busy || drawingEditor.active() ||
       (e.target as Element).closest('button, input, label') || !session.getState().tracks.some(t => t.slot === slot && t.frame)) return;
-    drawingStart = e; stage.setPointerCapture(e.pointerId);
+    drawingStart = e;
+    clickedDrawing = (e.target as Element).closest<SVGElement>('#annotations-' + slot + ' [data-shape-id]')?.dataset.shapeId;
+    stage.setPointerCapture(e.pointerId);
   }, { signal: uiEvents.signal });
   stage.addEventListener('pointermove', e => {
     if (!drawingStart || e.pointerId !== drawingStart.pointerId ||
       Math.hypot(e.clientX - drawingStart.clientX, e.clientY - drawingStart.clientY) < 3) return;
-    const start = drawingStart; drawingStart = undefined;
+    const start = drawingStart; drawingStart = undefined; clickedDrawing = undefined;
     drawingEditor.beginRectangle(slot, start, e);
   }, { signal: uiEvents.signal });
-  for (const event of ['pointerup', 'pointercancel']) stage.addEventListener(event, () => { drawingStart = undefined; }, { signal: uiEvents.signal });
+  stage.addEventListener('pointerup', e => {
+    const start = drawingStart, drawingId = clickedDrawing;
+    drawingStart = undefined; clickedDrawing = undefined;
+    if (!start || e.pointerId !== start.pointerId || !drawingId ||
+      Math.hypot(e.clientX - start.clientX, e.clientY - start.clientY) >= 3) return;
+    const state = session.getState(), track = state.tracks.find(t => t.slot === slot);
+    const mark = state.marks.find(m => m.mediaId === track?.id && m.frame.ptsUs === track.frame?.ptsUs && m.drawings?.some(d => d.id === drawingId));
+    if (mark) drawingEditor.open(slot, mark.id, drawingId);
+  }, { signal: uiEvents.signal });
+  stage.addEventListener('pointercancel', () => { drawingStart = undefined; clickedDrawing = undefined; }, { signal: uiEvents.signal });
 }
 installViewportGestures({ $, screens, viewport, session, getTrigger: () => inputTrigger,
   applyViewTransform, syncSplitGeometry, syncZoomSelect, render });
@@ -421,7 +442,7 @@ $<HTMLInputElement>('timeline').onchange = async e => {
 // Space owns transport even when a button, menu, slider or drawing layer has
 // focus. Capture prevents the focused control's native Space activation.
 document.addEventListener('keydown', e => {
-  if (e.code !== 'Space' || e.isComposing || e.keyCode === 229 || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (!matchesShortcut(e, 'play') || e.isComposing || e.keyCode === 229) return;
   const editingText = e.composedPath().some(node => {
     if (!(node instanceof HTMLElement)) return false;
     if (node.isContentEditable) return true;
@@ -439,14 +460,26 @@ document.addEventListener('keydown', e => {
   } finally { inputTrigger = 'pointer'; }
 }, { capture: true });
 document.addEventListener('keydown', e => {
+  if (e.repeat || e.isComposing || document.querySelector('dialog[open]') || drawingEditor.active()) return;
+  if (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select') || e.target.isContentEditable)) return;
+  const panel = (Object.keys(PANEL_SHORTCUTS) as (keyof typeof PANEL_SHORTCUTS)[])
+    .find(id => matchesShortcut(e, PANEL_SHORTCUTS[id]));
+  if (!panel) return;
+  const button = $<HTMLButtonElement>(`toggle-${panel}`);
+  if (button.disabled) return;
+  e.preventDefault(); button.click();
+});
+document.addEventListener('keydown', e => {
   if (document.querySelector('dialog[open]') || drawingEditor.active()) return;
-  if (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select,button') || e.target.isContentEditable)) return;
+  if (e.target instanceof HTMLElement &&
+    (e.target.matches('input,textarea,select') || e.target.isContentEditable ||
+      (e.target.matches('button') && !e.target.matches('#play,#previous,#next')))) return;
   if (!session.getState().tracks.length || e.ctrlKey || e.metaKey || e.altKey) return;
   inputTrigger = 'keyboard';
   try {
-    if (e.code === 'ArrowLeft' || e.code === 'ArrowRight') { e.preventDefault(); $(e.code === 'ArrowLeft' ? 'previous' : 'next').click(); }
-    else if (e.code === 'KeyN') { e.preventDefault(); openMarkDialog(); }
-    else if (e.code === 'KeyM') {
+    if (matchesShortcut(e, 'previous') || matchesShortcut(e, 'next')) { e.preventDefault(); $(matchesShortcut(e, 'previous') ? 'previous' : 'next').click(); }
+    else if (matchesShortcut(e, 'annotate')) { e.preventDefault(); openMarkDialog(); }
+    else if (matchesShortcut(e, 'layout')) {
       e.preventDefault();
       if (!e.repeat) {
         viewport.setMode(viewport.mode === 'split' || session.getState().tracks.length < 2 ? 'side-by-side' : 'split');
