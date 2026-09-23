@@ -17,13 +17,13 @@
   --field-padding-inline: var(--space-3);
   --toolbar-padding-inline: var(--space-4);
   --toolbar-padding-block: calc((var(--toolbar-height) - var(--button-size)) / 2);
-  --transport-padding: var(--space-2) var(--space-4); --transport-row-gap: 0px;
+  --transport-padding: var(--space-2); --transport-row-gap: 0px;
   --transport-group-gap: var(--space-2); --transport-text-size: 12px;
   --transport-inset: 0px;
   --transport-text: var(--text); --transport-muted: var(--text-secondary);
   --transport-hover: color-mix(in srgb, var(--surface-hover) 65%, transparent);
   --transport-rail: color-mix(in srgb, var(--text-secondary) 25%, transparent);
-  --viewport-eye-inset: var(--space-4); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
+  --viewport-eye-inset: var(--space-2); --viewport-eye-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --panel-padding-inline: var(--space-4); --panel-padding-block: var(--space-2);
   --panel-heading-inset: calc((var(--panel-heading-height) - var(--button-size)) / 2);
   --content-inset: var(--space-5); --content-gap: var(--space-3);
@@ -66,7 +66,7 @@
   --viewport-grid-label: #6c7785;
   --viewport-caption-inset: var(--space-4);
   --slot-c: #8963a8; --slot-d: #a6753d; --slot-a: #2675d5; --slot-b: #537965; --slot-e: #3d7f8c; --slot-f: #a84a6e; --slot-g: #6e7a2e; --slot-h: #4f5d75; --track-playhead: #8e8e93; --track-fill: #dae0e7; --track-active: #c1dbfb;
-  --notice-fill: #fff0dd; --notice-text: #754617; --backdrop: #10182240;
+  --warning-fill: #fff0dd; --warning-text: #754617; --backdrop: #10182240;
   --disabled-opacity: .4; --inspector-width: 200px; --sources-width: 240px;
   --annotation-symbols-height: 36px; --annotation-cards-height: 166px; --annotation-preview-width: 300px;
   /* UI identity colors are themeable; annotation ink is saved content. */

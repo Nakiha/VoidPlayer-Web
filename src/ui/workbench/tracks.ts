@@ -7,6 +7,7 @@ import { colorLabel, rangeLabel } from '../../media-metadata.ts';
 import { isHdrTransfer } from '../../presentation-color.ts';
 import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
+import { icon } from '../icons.ts';
 import { createIconButton } from '../controls.ts';
 import { trackTimelineRatio } from '../track-timeline.ts';
 import { marksForTrack, trackTiming } from '../workspace-state.ts';
@@ -164,14 +165,24 @@ export function createTracksPane(shared: WorkbenchShared) {
           format: value => `${+(value / 1000).toFixed(3)} ms`, parse: value => parseTimeInput(value, 'ms', true), begin: () => session.pause(),
           commit: offsetUs => act(() => session.setTrackOffset(track.slot, offsetUs), 'ui.track-offset', { slot: track.slot, offsetUs }),
         });
-        const remove = createIconButton({ glyph: 'close', label: `移除子轨道 ${track.slot}`, tooltip: '移除轨道', className: 'remove-track' });
-        remove.onclick = () => void act(() => session.removeTrack(track.slot), 'ui.remove-track', { slot: track.slot });
-        label.append(name); row.append(label, offset, lane, remove); list.append(row);
+        const visibility = createIconButton({ glyph: 'eye', label: `隐藏轨道 ${track.slot}`, className: 'track-visibility' });
+        visibility.onclick = () => {
+          const current = session.getState().tracks.find(t => t.slot === track.slot);
+          if (current) session.setTrackVisibility(track.slot, !current.visible);
+        };
+        label.append(name); row.append(label, offset, lane, visibility); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', '载入视频后查看轨道与标记', 'panel-empty'));
     }
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
+      const track = state.tracks.find(t => t.slot === row.dataset.trackDrag)!;
+      const visibility = row.querySelector<HTMLButtonElement>('.track-visibility')!;
+      const label = `${track.visible ? '隐藏' : '显示'}轨道 ${track.slot}`;
+      visibility.setAttribute('aria-label', label);
+      visibility.setAttribute('aria-pressed', String(!track.visible));
+      visibility.dataset.tooltip = label;
+      visibility.innerHTML = icon(track.visible ? 'eye' : 'eyeClosed');
       const selected = row.dataset.trackDrag === view.selected;
       row.classList.toggle('selected', selected);
       row.querySelector('.subtrack-name')!.setAttribute('aria-pressed', String(selected));

@@ -1,11 +1,18 @@
 import type { MediaSource, DecodedFrame } from './media.ts';
 import { MediaOpenError } from './media-errors.ts';
+import { isHdrTransfer } from './presentation-color.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 
 /** Common frame contract, independent of container, input location and decoder. */
 export function referenceSource(source: MediaSource): MediaSource {
   const verify = (frame: DecodedFrame) => {
-    if (frame.kind !== 'yuv' || !resolveYuvColor(frame.description).supported) { frame.close(); throw new MediaOpenError('decode', '正确颜色模式目前仅支持可读取原始平面的 SDR 视频。请使用匹配浏览器模式查看此资源。'); }
+    if (frame.kind !== 'yuv' || !resolveYuvColor(frame.description).supported) {
+      const hdr = isHdrTransfer(frame.description.color.transfer) || isHdrTransfer(source.info.color?.transfer);
+      frame.close();
+      throw new MediaOpenError('decode', hdr
+        ? '自有色彩目前仅支持 SDR，无法处理此 HDR 视频。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+        : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。');
+    }
     return frame;
   };
   const at = source.frameAt.bind(source), after = source.framesAfter.bind(source), from = source.framesFrom.bind(source), following = source.framesFollowing?.bind(source);

@@ -24,7 +24,7 @@ import { contextLog, log, operationContext, traceOperation, withLogContext } fro
 
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
-type Track = { pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
+type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
   /** source 实例 generation：每次打开/重建（含色彩模式切换）递增，
    * 与稳定 mediaId 分离——mediaId 供标注/工作区引用，generation 隔离旧实例的异步结果。 */
   sourceGen: number };
@@ -91,7 +91,7 @@ export class ReviewSession {
         for(const p of prepared){
           p.track.source.onInfoChange=undefined;p.track.source.dispose();
           recordPresentedFrame(p.source,p.frame);
-          this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs,sourceGen:++this.nextSourceGen});
+          this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs,visible:p.track.visible,sourceGen:++this.nextSourceGen});
           this.catalog.set(p.source.info.id,p.source.info);
           p.source.onInfoChange=()=>this.emit();
         }
@@ -205,9 +205,18 @@ export class ReviewSession {
       playback: this.measurements?.snapshot() ?? null,
       resources: this.resources.snapshot(),
       frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: getColorMode()==='reference'?'reference-sdr':'browser-match-approximate',colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
-      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
       marks: this.marks,
     });
+  }
+  setTrackVisibility(slot: Slot, visible: boolean) {
+    const track = this.tracks.get(slot);
+    if (!track) throw new Error('轨道尚未载入。');
+    if (typeof visible !== 'boolean') throw new Error('轨道显示状态无效。');
+    track.visible = visible;
+    log.info('session', '调整轨道显示', { slot, visible });
+    this.emit();
+    return this.getState();
   }
   reorderTracks(order: Slot[]) {
     if (!Array.isArray(order) || order.length !== this.tracks.size || new Set(order).size !== order.length || order.some(slot => !this.tracks.has(slot))) throw new Error('排序必须包含每个已载入轨道且不重复。');
@@ -1046,7 +1055,7 @@ export class ReviewSession {
   exportWorkspace(serverUrl: string): WorkspaceFile {
     const media = [...this.catalog.values()].map(info => ({ ...info, ...(info.source ? { source: { ...info.source, url: workspaceUrl(info.source.url, serverUrl) } } : {}) }));
     return structuredClone({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: workspaceUrl(serverUrl), positionUs: this.positionUs,
-      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, mediaId: t.source.info.id, offsetUs: t.offsetUs }] : []; }),
+      tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, mediaId: t.source.info.id, offsetUs: t.offsetUs, visible: t.visible !== false }] : []; }),
       comparison: { version: 1, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(), presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' },
       media, marks: this.marks, viewport: new Viewport().snapshot() });
   }
@@ -1073,11 +1082,11 @@ export class ReviewSession {
             updateMediaInfo(source, { id: info.id }, 'identity');
             const frame = await abortableLoad(source.frameAt(Math.max(0, Math.min(source.info.durationUs - 1, document.positionUs - track.offsetUs))), signal, late => late.close());
             selected.set(track.slot, frame);
-            next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs, sourceGen: ++this.nextSourceGen });
+            next.set(track.slot, { source, frame: null, offsetUs: track.offsetUs, visible: track.visible, sourceGen: ++this.nextSourceGen });
           } catch (error) {
             source?.dispose();
             if (!options.allowUnavailable || signal.aborted || !current()) throw error;
-            next.set(track.slot, { source: unavailableSource(info), frame: null, offsetUs: track.offsetUs, sourceGen: ++this.nextSourceGen,
+            next.set(track.slot, { source: unavailableSource(info), frame: null, offsetUs: track.offsetUs, visible: track.visible, sourceGen: ++this.nextSourceGen,
               pendingRelink: true, failure: { message: `待重新关联：${errorText(error)}`, positionUs: document.positionUs } });
           }
         }
@@ -1122,7 +1131,7 @@ export class ReviewSession {
         try {
           if (!current() || signal.aborted) throw new DOMException('重新关联已取消。', 'AbortError');
           this.draw(slot, frame); recordPresentedFrame(source, frame);
-          this.tracks.set(slot, { source, offsetUs: previous.offsetUs, frame: this.frameInfo(frame), sourceGen: ++this.nextSourceGen });
+          this.tracks.set(slot, { source, offsetUs: previous.offsetUs, visible: previous.visible, frame: this.frameInfo(frame), sourceGen: ++this.nextSourceGen });
           this.catalog.set(old.id, source.info); source.onInfoChange = () => this.emit(); committed = true;
         } finally { frame.close(); }
       } finally { if (!committed) source.dispose(); }

@@ -32,7 +32,7 @@ export type ComparisonConditions = {
 export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
-  positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number }[];
+  positionUs: number; tracks: { slot: Slot; mediaId: string; offsetUs: number; visible?: boolean }[];
   media: MediaInfo[]; marks: Mark[]; viewport: ViewportSnapshot; layout?: WorkspaceLayout;
   thumbnails?: { id: string; url: string; width: number; height: number }[];
 };
@@ -82,7 +82,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   });
   const ids = new Set(media.map(m => m.id));
   if (ids.size !== media.length || ids.has('')) throw new Error('工作区媒体 ID 重复或为空。');
-  const tracks = array(d.tracks, SLOTS.length).map(value => { const t = object(value); return { slot: slotValue(t.slot), mediaId: text(t.mediaId, 200), offsetUs: integer(t.offsetUs) }; });
+  const tracks = array(d.tracks, SLOTS.length).map(value => { const t = object(value); return { slot: slotValue(t.slot), mediaId: text(t.mediaId, 200), offsetUs: integer(t.offsetUs), ...(t.visible === undefined ? {} : { visible: boolean(t.visible) }) }; });
   if (new Set(tracks.map(t => t.slot)).size !== tracks.length || new Set(tracks.map(t => t.mediaId)).size !== tracks.length) throw new Error('工作区轨道重复。');
   for (const t of tracks) { const m = media.find(m => m.id === t.mediaId); if (!m || m.durationUs + t.offsetUs <= 0 || !Number.isSafeInteger(m.durationUs + t.offsetUs)) throw new Error('工作区轨道引用或时间范围无效。'); }
   const marks: Mark[] = array(d.marks, 10000).map(value => {

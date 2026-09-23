@@ -57,7 +57,6 @@ $('app').innerHTML = shell();
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
-$('notice-logs').onclick = () => settings.openPane('logs', $('notice-logs'));
 $('brand-about').onclick = () => settings.openPane('about', $('brand-about'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
@@ -103,7 +102,8 @@ const toasts = installToasts(uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
-let message = '';
+let warningMessage = '';
+let dismissWarning: (() => void) | null = null;
 let benchmarkRunning = false;
 let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
@@ -141,13 +141,21 @@ function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
 }
 
 
+function showWarning(message: string) {
+  if (message === warningMessage) return;
+  warningMessage = message;
+  dismissWarning?.();
+  const colorIssue = message.includes('自有色彩');
+  dismissWarning = toasts.show(message, {
+    kind: 'warning',
+    action: { label: colorIssue ? '色彩与解码' : '日志', onClick: () => settings.openPane(colorIssue ? 'performance' : 'logs', $('settings-open')) },
+  });
+}
 function showError(error: unknown) {
   session.captureDiagnostics('ui-error', error);
-  message = error instanceof Error ? error.message : String(error);
-  render();
+  showWarning(error instanceof Error ? error.message : String(error));
 }
 async function act(action: () => unknown | Promise<unknown>, name = 'ui.action', data: unknown = {}) {
-  message = '';
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
   render();
 }
@@ -195,6 +203,8 @@ function syncZoomSelect(loaded:boolean) { zoomMenu.sync(String(viewport.zoom),`$
 function render() {
   const state = session.getState();
   const loaded = state.tracks.length > 0;
+  const visibleTracks = state.tracks.filter(t => t.visible);
+  $('tracks-hidden').hidden = !loaded || visibleTracks.length > 0;
   $('performance-current').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
     const native=track.decoder==='webcodecs', label=native?'浏览器原生解码':'软件解码';
@@ -203,12 +213,12 @@ function render() {
   }).join('\n');
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');
-  screens.classList.toggle('single', state.tracks.length < 2);
-  const splitActive = viewport.mode === 'split' && state.tracks.length >= 2;
+  screens.classList.toggle('single', visibleTracks.length < 2);
+  const splitActive = viewport.mode === 'split' && visibleTracks.length >= 2;
   screens.classList.toggle('split', splitActive);
-  const columns = viewport.arrangement === 'grid' ? Math.min(2, Math.max(1, state.tracks.length)) : Math.max(1, state.tracks.length);
+  const columns = viewport.arrangement === 'grid' ? Math.min(2, Math.max(1, visibleTracks.length)) : Math.max(1, visibleTracks.length);
   screens.style.setProperty('--view-columns', String(columns));
-  screens.style.setProperty('--view-rows', String(Math.ceil(Math.max(1, state.tracks.length) / columns)));
+  screens.style.setProperty('--view-rows', String(Math.ceil(Math.max(1, visibleTracks.length) / columns)));
   screens.classList.toggle('grid-layout', viewport.arrangement === 'grid');
   if ($('arrangement').dataset.arrangement !== viewport.arrangement) {
     $('arrangement').dataset.arrangement = viewport.arrangement;
@@ -219,7 +229,7 @@ function render() {
   syncSplitGeometry();
   for (const card of cards) {
     const slot = card.dataset.slot as Slot;
-    const index = state.tracks.findIndex(t => t.slot === slot);
+    const index = visibleTracks.findIndex(t => t.slot === slot);
     card.hidden = loaded ? index < 0 || (splitActive && index >= 2) : slot !== 'A';
     card.style.order = String(Math.max(0, index));
     card.classList.toggle('view-first', index === 0 || !loaded);
@@ -255,7 +265,7 @@ function render() {
   divider.hidden = !splitActive;
   divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
   for (const button of document.querySelectorAll<HTMLButtonElement>('#layout-mode button')) {
-    button.disabled = !loaded || (button.dataset.mode === 'split' && state.tracks.length < 2);
+    button.disabled = !loaded || (button.dataset.mode === 'split' && visibleTracks.length < 2);
     button.dataset.tooltip = button.dataset.mode === 'split' ? '擦拭对比当前排序的前两个轨道' : '独立显示所有轨道';
     button.setAttribute('aria-pressed', String(button.dataset.mode === (splitActive ? 'split' : 'side-by-side')));
   }
@@ -294,12 +304,13 @@ function render() {
   $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
   const trackFailures = state.tracks.filter(t => t.failure).map(t => `轨道 ${t.slot} 已停用：${t.failure!.message}`).join('；');
-  $('notice').hidden = !(message || state.error || trackFailures);
-  $('notice-message').textContent = message || state.error || trackFailures;
+  const warning = state.error || trackFailures;
+  if (warning) showWarning(warning);
+  else warningMessage = '';
   // 浏览器色彩下原生帧走浏览器转换、软件帧走近似转换，两者混合上屏时色彩
   // 不一致（见色彩设置页说明）。只做一次性提醒，需用户手动关闭；条件解除
   // （切换模式/只剩单一路）后自动清理，下次混合再提醒。不改解码与色彩管线。
-  const presented = state.tracks.filter(t => !t.failure && t.frame);
+  const presented = visibleTracks.filter(t => !t.failure && t.frame);
   const mixedColor = state.colorMode === 'browser'
     && presented.some(t => t.decoder === 'webcodecs')
     && presented.some(t => t.decoder === 'ffmpeg-wasm');
@@ -399,6 +410,11 @@ installTimeInput($<HTMLInputElement>('position'),{
   read:()=>session.getState().positionUs,format:formatTime,parse:parseTimeInput,
   begin:()=>session.pause(),commit:ptsUs=>act(()=>session.seek(ptsUs),'seek.time',{ptsUs}),
 });
+$('show-all-tracks').onclick = () => {
+  const tracks = session.getState().tracks;
+  for (const track of tracks) if (!track.visible) session.setTrackVisibility(track.slot, true);
+  if (tracks[0]) document.querySelector<HTMLButtonElement>(`[data-inspect="${tracks[0].slot}"]`)?.focus();
+};
 $('reset-view').onclick = () => { viewport.reset(); fitTask.schedule(); syncZoomSelect(session.getState().tracks.length > 0); };
 for (const slot of SLOTS) $(`recover-${slot}`).onclick = () => {
   const stage = $(`stage-${slot}`);
@@ -478,7 +494,7 @@ document.addEventListener('keydown', e => {
     else if (matchesShortcut(e, 'layout')) {
       e.preventDefault();
       if (!e.repeat) {
-        viewport.setMode(viewport.mode === 'split' || session.getState().tracks.length < 2 ? 'side-by-side' : 'split');
+        viewport.setMode(viewport.mode === 'split' || session.getState().tracks.filter(t => t.visible).length < 2 ? 'side-by-side' : 'split');
         log.info('ui', '切换布局模式', { mode: viewport.mode, trigger: 'keyboard' });
         render();
       }
@@ -498,7 +514,7 @@ for (const eventName of ['click', 'change', 'invalid'] as const) document.addEve
   }
   log.info('ui', '界面操作', { event: eventName, control: control.id || control.dataset.action || control.tagName.toLowerCase(), trigger: inputTrigger, value });
 }, { capture: true, signal: uiEvents.signal });
-session.subscribe(() => { message = ''; render(); });
+session.subscribe(render);
 session.subscribeProgress(renderProgress);
 const unregister = registerReviewTools(session, workspaceTransfer);
 const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperation('api', name, data, action);

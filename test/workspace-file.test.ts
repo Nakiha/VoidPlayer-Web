@@ -58,3 +58,12 @@ test('comparison contract round trips and rejects unsupported semantics rather t
   assert.equal(parseWorkspace(document()).comparison, undefined);
   for (const invalid of [{ ...comparison, presentation: 'hdr-reference' }, { ...comparison, version: 2 }, { ...comparison, referenceDecode: { decoder: 'hardware', depth: 3 } }]) assert.throws(() => parseWorkspace({ ...document(), comparison: invalid }));
 });
+
+ test('track visibility is optional for older workspaces and validated when present', async () => {
+   const old = document();
+   assert.equal(parseWorkspace(old).tracks[0].visible, undefined);
+   const value = { ...old, tracks: [{ ...old.tracks[0], visible: false }] };
+   const restored = await readWorkspaceFile(await compressWorkspace(parseWorkspace(value)), old.serverUrl);
+   assert.equal(restored.tracks[0].visible, false);
+   assert.throws(() => parseWorkspace({ ...old, tracks: [{ ...old.tracks[0], visible: 'false' }] }));
+ });

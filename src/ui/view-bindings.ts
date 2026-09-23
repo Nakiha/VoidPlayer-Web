@@ -39,6 +39,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
 
   function applyViewTransform() {
     const { zoom, offsetX, offsetY } = viewport;
+    const loadedSlots = new Set(session.getState().tracks.map(track => track.slot));
     const value = zoom === 1 && !offsetX && !offsetY ? '' : `translate(${offsetX}px, ${offsetY}px) scale(${zoom})`;
     for (const slot of SLOTS) {
       const image = $(`image-${slot}`);
@@ -47,7 +48,11 @@ export function createViewBindings(deps: ViewBindingDeps) {
       const fitted = fittedTracks.get(slot);
       const displayOffsetY = offsetY + (fitted?.centerY ?? 0);
       const presentation = fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, zoom, offsetX, offsetY: displayOffsetY, dpr: devicePixelRatio } : null;
-      setPresentationGeometry(canvases[slot], presentation);
+      // A loaded track can be hidden by its eye toggle or the split layout.
+      // Keep its retained frame while its card is hidden: null geometry releases
+      // presentation resources, so a paused track would have nothing to redraw.
+      // Unloaded slots still release their surfaces and frame resources.
+      if (presentation || !loadedSlots.has(slot)) setPresentationGeometry(canvases[slot], presentation);
       for (const prefix of ['annotations', 'drawing']) setAnnotationViewport($<SVGSVGElement>(`${prefix}-${slot}`), presentation, fitted ? fitted.sourceWidth / fitted.sourceHeight : 1);
       const split = viewport.mode === 'split' && fittedTracks.size === 2;
       const first = stage.closest('.video-card')!.classList.contains('view-first');
@@ -72,7 +77,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
   function fitAll() {
     syncSplitGeometry();
     fittedTracks.clear();
-    const allTracks = session.getState().tracks;
+    const allTracks = session.getState().tracks.filter(t => t.visible);
     const tracks = viewport.mode === 'split' ? allTracks.slice(0, 2) : allTracks;
     if (!tracks.length) { primaryFitted = null; applyViewTransform(); return; }
     const geometries = new Map(tracks.map(track => [track.slot, trackGeometry(track)]));

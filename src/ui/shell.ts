@@ -36,7 +36,7 @@ export function shell() {
     <button id="settings-open" class="icon-button" aria-label="设置" data-tooltip="${shortcutTooltip('打开设置', 'settings')}" aria-haspopup="dialog" aria-controls="settings" aria-expanded="false">${icon('settings')}</button></div>
   </header>
 <output id="subtrack-preview" class="seek-preview" hidden></output><dialog id="replace-source-dialog" aria-labelledby="replace-source-title"><header class="dialog-heading"><h2 id="replace-source-title">选择要替换的视图</h2><button id="replace-source-close" class="icon-button" aria-label="取消添加">${icon('close')}</button></header><p id="replace-source-name"></p><div id="replace-source-targets"></div></dialog>
-  <main><div id="notice" role="alert" hidden><span id="notice-message"></span><button id="notice-logs" type="button" aria-haspopup="dialog" aria-controls="settings">日志</button></div>
+  <main>
     <div class="workspace" id="workspace"><div id="sources-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整片源宽度" aria-orientation="vertical" aria-controls="sources-panel"></div><div id="inspector-resize" class="side-resize" hidden role="separator" tabindex="0" aria-label="调整轨道信息宽度" aria-orientation="vertical" aria-controls="inspector-panel"></div>
       <aside id="inspector-panel" class="side-panel inspector-panel glass" aria-label="轨道信息" hidden>
         <header class="panel-heading"><h2>轨道</h2><button data-close-panel="inspector" class="icon-button" aria-label="收起轨道信息">${icon('sidebar')}</button></header>
@@ -57,6 +57,14 @@ export function shell() {
             </div><input id="file-${slot}" type="file" accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" aria-label="打开视频 ${slot}" hidden></div>
           <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><span id="start-identity" class="start-identity"></span><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-workspace-recovery" hidden></div><div id="start-library-list"></div></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
           <div class="card-footer"><span id="meta-${slot}"></span></div></article>`).join('')}
+          <section id="tracks-hidden" class="tracks-hidden" aria-labelledby="tracks-hidden-title" hidden>
+            <div class="tracks-hidden-content">
+              ${icon('eyeClosed', 'tracks-hidden-icon')}
+              <h2 id="tracks-hidden-title">所有轨道已隐藏</h2>
+              <p>点击轨道旁的眼睛图标，或显示所有轨道以继续查看。</p>
+              <button id="show-all-tracks">${icon('eye')}<span>显示所有轨道</span></button>
+            </div>
+          </section>
           <div id="divider" role="slider" aria-label="分割线位置" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50" tabindex="0" hidden><div class="divider-line"></div><div class="divider-grip" aria-hidden="true"></div></div>
         </div>
 
@@ -68,7 +76,7 @@ export function shell() {
             <button id="fullscreen" class="icon-button" aria-label="全屏" title="全屏">${icon('fit')}</button>
           </div><span id="status" class="sr-only" role="status"></span>
         </section>
-        ${iconButton({ glyph: 'eye', label: '专注模式', tooltip: '专注模式', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
+        ${iconButton({ glyph: 'focus', label: '专注模式', tooltip: '专注模式', className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
 
 <section id="annotation-toolbar" class="annotation-toolbar" aria-label="标注工具条" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="标注工具">

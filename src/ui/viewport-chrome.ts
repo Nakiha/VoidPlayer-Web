@@ -10,7 +10,7 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     if (focused) {
       for (const menu of root.querySelectorAll<HTMLElement>('[popover]:popover-open')) menu.hidePopover();
     }
-    button.innerHTML = icon(focused ? 'eyeClosed' : 'eye');
+    button.innerHTML = icon('focus');
     button.setAttribute('aria-pressed', String(focused));
     button.setAttribute('aria-label', '专注模式');
     button.dataset.tooltip = '专注模式';

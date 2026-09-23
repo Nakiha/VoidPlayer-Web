@@ -23,7 +23,7 @@
 | 一般按钮组间隔与内边距 | `--control-gap`、`--control-padding-inline` | 4px / 8px |
 | 图标按钮底色内收 | `--control-surface-inset` | 2px |
 | 顶栏内边距 | `--toolbar-padding-inline/block` | 横向 8px，纵向按按钮居中 |
-| 播放栏内边距 | `--transport-padding` | 纵向 4px，横向 8px |
+| 播放栏内边距 | `--transport-padding` | 四边均为 4px |
 | 面板内容内边距 | `--panel-padding-inline/block` | 8px / 4px |
 | 面板标题纵向内边距 | `--panel-heading-inset` | 2px |
 | 输入框内边距 | `--field-padding-inline` | 6px |

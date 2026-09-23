@@ -111,16 +111,18 @@ try {
  assert.deepEqual(joined.after.tracks.find(t=>t.slot==='A').frame,joined.before.tracks.find(t=>t.slot==='A').frame);
  const added=joined.after.tracks.find(t=>t.slot==='B').frame;
  assert.ok(added.ptsUs<=2000000&&added.ptsUs+added.durationUs>2000000);
- // A real failed load exposes the persistent notice action and selects logs.
+ // A real failed load uses a dismissible warning toast and links to logs.
  await page.locator('#file-B').setInputFiles({name:'broken.flv',mimeType:'video/x-flv',buffer:Buffer.from('not a media file')});
- await page.locator('#notice').waitFor({state:'visible'});
- await page.locator('#notice-logs').click();
+ await page.locator('.toast-warning').waitFor({state:'visible'});
+ assert.equal(await page.locator('#notice').count(),0);
+ assert.equal(await page.locator('.toast-warning').count(),1);
+ await page.locator('.toast-warning .toast-action').click();
  assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  assert.equal(await page.locator('#settings-tab-logs').getAttribute('aria-selected'),'true');
  assert.equal(await page.locator('#settings-pane-logs').isVisible(),true);
  await page.locator('#settings-close').click();
  await page.waitForFunction(()=>!document.getElementById('settings').open);
- assert.equal(await page.evaluate(()=>document.activeElement.id),'notice-logs');
+ await page.waitForFunction(()=>document.activeElement.id==='settings-open');
  assert.deepEqual(errors,[]);
  console.log(`PASS ${name}: click tooltip dismissal, hover re-entry, keyboard focus help, stable playback nodes/focus/opacity, no empty icon frame`);
 }finally{await browser.close();server.closeAllConnections();await new Promise(r=>server.close(r));}

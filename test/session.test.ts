@@ -145,7 +145,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
@@ -1143,3 +1143,26 @@ test('all-missing recovery retains scene duration and position while playback re
     assert.deepEqual(restored.exportWorkspace('http://localhost/').tracks, document.tracks);
   } finally { await source.dispose(); await restored.dispose(); }
 });
+
+ test('hiding a track preserves timing and marks, and showing it uses the current frame', async () => {
+   const session = new ReviewSession(() => {});
+   const source = media('visibility');
+   await session.load('A', async () => source.source);
+   await session.seek(120000);
+   const mark = session.addMark({ slot: 'A', text: 'retained' });
+   const before = session.getState();
+   const tool = reviewTools(session).find(t => t.name === 'set_review_track_visibility')!;
+   await tool.execute({ slot: 'A', visible: false });
+   const hidden = session.getState();
+   assert.equal(hidden.tracks[0].visible, false);
+   assert.equal(hidden.positionUs, before.positionUs);
+   assert.equal(hidden.durationUs, before.durationUs);
+   assert.deepEqual(hidden.tracks[0].frame, before.tracks[0].frame);
+   assert.deepEqual(hidden.marks, [mark]);
+   await session.step(1);
+   session.setTrackVisibility('A', true);
+   assert.equal(session.getState().tracks[0].frame?.ptsUs, 160000);
+   assert.equal(session.getState().tracks[0].visible, true);
+   assert.equal(source.disposed, 0);
+   await session.dispose();
+ });

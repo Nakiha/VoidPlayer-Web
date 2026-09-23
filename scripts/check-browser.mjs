@@ -33,8 +33,8 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,...(browserName==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}) });
 
-  async function check(name, run) {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+  async function check(name, run, options = {}) {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
     page.setDefaultTimeout(15000);
     const errors = [];
     // ResizeObserver errors are failures too; never mask the regression being tested.
@@ -155,6 +155,133 @@ try {
       }
       assert.ok(layout.buttons.some(button => button.id === 'settings-open'), `${width}px settings remains visible`);
     }
+  });
+
+  await check('warning toasts remain above settings and clickable before and after modal opens', async page => {
+    const triggerWarning = () => page.evaluate(() => window.voidPlayer.loadFile('A', new File(['invalid'], 'broken.flv')).catch(() => {}));
+    const warning = page.locator('.toast-warning');
+    const assertTop = async () => {
+      await warning.waitFor({ state: 'visible' });
+      await settle(page);
+      assert.equal(await warning.locator('.toast-close').evaluate(el => {
+        const r = el.getBoundingClientRect();
+        return el.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+      }), true, 'toast receives pointer events above modal backdrop');
+    };
+    await triggerWarning();
+    await page.locator('#settings-open').click();
+    await assertTop();
+    await warning.locator('.toast-close').click();
+    await warning.waitFor({ state: 'detached' });
+    assert.equal(await page.locator('#settings').evaluate(el => el.open), true);
+    await triggerWarning();
+    await assertTop();
+    await warning.locator('.toast-action').click();
+    assert.equal(await page.locator('#settings-tab-logs').getAttribute('aria-selected'), 'true');
+    await warning.waitFor({ state: 'detached' });
+    await triggerWarning();
+    await page.locator('#settings-close').click();
+    await page.waitForFunction(() => !document.querySelector('#settings').open);
+    await assertTop();
+    await warning.locator('.toast-close').click();
+    await warning.waitFor({ state: 'detached' });
+  });
+
+  await check('HLG Dolby sample explains SDR restriction in a warning toast and plays in browser color', async page => {
+    const id = listing.entries.find(item => item.name === 'dolby_hlg_1080p30.mp4').id;
+    const error = await page.evaluate(async id => {
+      const tool = name => window.voidPlayer.tools.find(t => t.name === name);
+      await tool('set_review_color_mode').execute({ mode: 'reference' });
+      try { await tool('load_library_item').execute({ id, slot: 'A' }); }
+      catch (error) { return error.message; }
+    }, id);
+    assert.match(error, /HDR/);
+    const warning = page.locator('.toast-warning');
+    await warning.waitFor({ state: 'visible' });
+    assert.equal(await warning.count(), 1);
+    assert.equal(await page.locator('#notice').count(), 0);
+    await warning.locator('.toast-action').click();
+    assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
+    await page.locator('[data-color-mode=browser]').click();
+    await page.waitForFunction(() => window.voidPlayer.getState().colorMode === 'browser');
+    await page.locator('#settings-close').click();
+    await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
+    await page.locator('#play').click();
+    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 500000);
+    await page.locator('#play').click();
+    const state = await page.evaluate(() => window.voidPlayer.getState());
+    assert.ok(state.tracks[0].frame && !state.tracks[0].failure);
+    assert.equal(state.error, null);
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-dolby-browser-color.png`) });
+  });
+
+  await check('paused AV1 frame retains its pixels and aspect ratio after hiding and showing', async page => {
+    await page.setViewportSize({ width: 791, height: 797 });
+    const id = listing.entries.find(item => item.name === 'av1_10s_1920x1080.webm').id;
+    await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
+    await panels(page, true);
+    await settle(page);
+    const executor = await page.locator('#canvas-A').getAttribute('data-color-executor');
+    const surface = page.locator(executor?.startsWith('webgpu') ? '#stage-A .frame-presentation:not([role])' : '#stage-A .frame-presentation[role="img"]');
+    const geometry = () => surface.evaluate(c => ({ width: c.width, height: c.height, box: [c.clientWidth, c.clientHeight] }));
+    const before = await geometry();
+    const pixels = await surface.screenshot();
+    const eye = page.locator('[data-track-drag="A"] .track-visibility');
+    for (const restoreAll of [false, true]) {
+      await eye.click(); await settle(page);
+      assert.equal(await page.locator('#tracks-hidden').isVisible(), true);
+      if (restoreAll) await page.locator('#show-all-tracks').click();
+      else await eye.click();
+      await eye.focus(); await settle(page);
+      assert.deepEqual(await geometry(), before, 'restored surface must retain its viewport-sized backing dimensions');
+      assert.deepEqual(await surface.screenshot(), pixels, 'paused frame pixels and letterboxing must survive hiding');
+    }
+    console.log(`  Retained frame verified at DPR 2 (${executor})`);
+  }, { deviceScaleFactor: 2 });
+
+  await check('track visibility toggles, reflows split view and survives workspace restore', async page => {
+    const ids = ['ci_h264_smoke.mp4', 'h264_9s_1920x1080.mp4'].map(name => listing.entries.find(item => item.name === name).id);
+    await page.evaluate(async ids => {
+      const load = window.voidPlayer.tools.find(t => t.name === 'load_library_item');
+      for (const [i, id] of ids.entries()) await load.execute({ id, slot: ['A', 'B'][i] });
+      window.voidPlayer.setViewport({ mode: 'split' });
+    }, ids);
+    await panels(page, true);
+    await page.setViewportSize({ width: 791, height: 797 });
+    const placeholder = page.locator('#tracks-hidden');
+    assert.equal(await placeholder.isVisible(), false);
+    const eye = page.locator('[data-track-drag="A"] .track-visibility');
+    const eyeBox = await eye.boundingBox(), laneBox = await page.locator('[data-track-drag="A"] .track-lane').boundingBox();
+    assert.ok(eyeBox.x >= laneBox.x + laneBox.width, 'visibility belongs at the right edge of the track row');
+    assert.equal(await page.locator('.subtrack-row[data-track-drag="A"] .remove-track').count(), 0);
+    await eye.click(); await settle(page);
+    assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), false);
+    assert.equal(await page.locator('.video-card[data-slot="B"]').isVisible(), true);
+    assert.equal(await page.locator('.screens').evaluate(el => el.classList.contains('split')), false);
+    assert.equal(await eye.getAttribute('aria-label'), '显示轨道 A');
+    const saved = await page.evaluate(async () => window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({}));
+    assert.equal(saved.tracks[0].visible, false);
+    await eye.click(); await settle(page);
+    assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), true);
+    assert.equal(await page.locator('.screens').evaluate(el => el.classList.contains('split')), true);
+    await page.evaluate(async document => window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document }), saved);
+    await settle(page);
+    assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), false);
+    await page.locator('[data-track-drag="B"] .track-visibility').click(); await settle(page);
+    assert.equal(await page.locator('.video-card:visible').count(), 0);
+    assert.equal(await placeholder.isVisible(), true);
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-all-tracks-hidden.png`) });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await settle(page);
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-all-tracks-hidden-dark.png`) });
+    await eye.click(); await settle(page);
+    assert.equal(await placeholder.isVisible(), false);
+    await eye.click(); await settle(page);
+    await page.locator('#show-all-tracks').click(); await settle(page);
+    assert.equal(await placeholder.isVisible(), false);
+    assert.equal(await page.locator('.video-card:visible').count(), 2);
+    assert.equal(await page.locator('.video-card[data-slot="A"]').isVisible(), true);
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-track-visibility.png`) });
   });
 
   await check('resize, split/grid layout, focus mode and track-close focus', async page => {
