@@ -33,7 +33,6 @@ function buildInfo() {
   return { revision, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
 export default defineConfig({
-  define: { __APP_VERSION__: JSON.stringify(JSON.parse(readFileSync(resolve(import.meta.dirname, 'package.json'), 'utf8')).version) },
   build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
   plugins: [{
     name: 'voidplayer-admin-entry',

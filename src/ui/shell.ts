@@ -1,5 +1,6 @@
 import { settingsShell } from './settings-shell.ts';
 import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
+import { buildInfo } from '../build-info.ts';
 import { SLOTS } from '../model.ts';
 import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
@@ -11,6 +12,7 @@ const panelButton = (id: 'inspector' | 'analysis' | 'subtracks' | 'sources', lab
   iconButton({ glyph, label, tooltip: shortcutTooltip(label, PANEL_SHORTCUTS[id]), iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
 
 export function shell() {
+  const revision = buildInfo?.revision ?? '开发版本';
   return `<header class="topbar glass">
     <button id="brand-about" class="brand" aria-label="关于 VoidPlayer">VoidPlayer</button>
     <div class="view-controls" role="group" aria-label="视图布局">
@@ -52,7 +54,7 @@ export function shell() {
               ${iconButton({ glyph: 'open', label: `定位轨道 ${slot} 文件`, tooltip: '定位文件', attributes: { id: `source-action-${slot}` } })}
               ${iconButton({ glyph: 'close', label: `关闭轨道 ${slot}`, tooltip: '关闭轨道', className: 'remove-track', attributes: { id: `remove-track-${slot}` } })}
             </div><input id="file-${slot}" type="file" accept="video/*,.mkv,.mov,.mp4,.webm,.ts,.avi,.flv" aria-label="打开视频 ${slot}" hidden></div>
-          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><span id="start-identity" class="start-identity"></span><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-workspace-recovery" hidden></div><div id="start-library-list"></div></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
+          <div class="frame-stage" id="stage-${slot}"><canvas id="grid-${slot}" class="pixel-grid" aria-hidden="true" hidden></canvas><span id="grid-label-${slot}" class="pixel-grid-label" hidden></span><div class="empty" id="empty-${slot}">${slot === 'A' ? `<section class="start-panel" aria-label="最近打开"><header class="start-header"><h3>最近打开</h3><span id="start-identity" class="start-identity"></span><button id="start-library-more" class="add-video" aria-label="浏览媒体库">${icon('sidebar', 'mirror')}<span>浏览媒体库</span></button></header><div id="start-workspace-recovery" hidden></div><div id="start-library-list"></div><footer class="start-version"><button id="start-version-about" type="button" aria-label="当前构建 ${revision}，打开关于页面">VoidPlayer · ${revision}</button></footer></section>` : `<label class="empty-open" for="file-${slot}">${icon('filePlus')}<span>添加本地视频</span></label><span class="empty-hint">或将文件拖入这里</span>`}</div><div id="image-${slot}" class="image-wrap" hidden><canvas id="canvas-${slot}" aria-label="视频 ${slot} 当前解码画面"></canvas></div><div id="failure-${slot}" class="track-failure" role="status" hidden></div><svg id="annotations-${slot}" class="frame-annotations" aria-hidden="true"></svg><svg id="drawing-${slot}" class="drawing-layer" aria-label="编辑视频 ${slot} 的标注" tabindex="0" hidden></svg><button id="recover-${slot}" class="recover-view" aria-label="居中轨道 ${slot} 画面，保留倍率" hidden>${icon('center')}画面已移出 · 居中</button></div>
           <div class="card-footer"><span id="meta-${slot}"></span></div></article>`).join('')}
           <section id="tracks-hidden" class="tracks-hidden" aria-labelledby="tracks-hidden-title" hidden>
             <div class="tracks-hidden-content">

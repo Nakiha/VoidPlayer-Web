@@ -59,6 +59,7 @@ const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
 $('brand-about').onclick = () => settings.openPane('about', $('brand-about'));
+$('start-version-about').onclick = () => settings.openPane('about', $('start-version-about'));
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');

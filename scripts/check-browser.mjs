@@ -74,6 +74,17 @@ try {
       const value = el.querySelector('.start-identity-name');
       return !!value && getComputedStyle(value).color !== getComputedStyle(el).color;
     }), true, 'only the identity value uses the accent color');
+    const version = page.locator('#start-version-about');
+    assert.equal(await version.textContent(), `VoidPlayer · ${await page.locator('#settings-pane-about .about-project-row').first().locator('span').nth(1).textContent()}`);
+    await version.hover();
+    assert.equal(await version.evaluate(el => getComputedStyle(el).color),
+      await page.locator('#start-identity .start-identity-name').evaluate(el => getComputedStyle(el).color),
+      'hovered version uses the theme color');
+    await version.click();
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
+    await page.locator('#settings-close').click();
+    await page.waitForFunction(() => !document.getElementById('settings')?.open);
+    assert.equal(await version.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the version');
   });
 
   await check('brand effects can leave the toolbar and keep the About button usable', async page => {
