@@ -16,6 +16,7 @@ import { installHeaderActions } from './ui/header-actions.ts';
 import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
+import { installBrandEffects } from './ui/brand-effects.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { benchmarkPlayback } from './benchmark.ts';
 // Feature styles in cascade order: accessibility overrides, component layout,
@@ -58,6 +59,7 @@ const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
 $('brand-about').onclick = () => settings.openPane('about', $('brand-about'));
+const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
 try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
@@ -97,7 +99,7 @@ const renderColorMode=()=>{
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
-window.addEventListener('pagehide',event=>{if(!event.persisted){disposePresentation();void session.dispose();}});
+window.addEventListener('pagehide',event=>{if(!event.persisted){removeBrandEffects();disposePresentation();void session.dispose();}});
 const toasts = installToasts(uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
 const removeTooltips = installTooltips();

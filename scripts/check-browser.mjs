@@ -76,6 +76,28 @@ try {
     }), true, 'only the identity value uses the accent color');
   });
 
+  await check('brand effects can leave the toolbar and keep the About button usable', async page => {
+    const brand = page.locator('#brand-about');
+    assert.equal(await brand.locator('.brand-ch').count(), 0, 'legacy rolling letters must not run alongside random effects');
+    await brand.hover();
+    const effect = page.locator('body > .brand-effect');
+    await effect.waitFor();
+    assert.equal(await effect.evaluate(el => getComputedStyle(el).position), 'fixed');
+    assert.equal(await effect.evaluate(el => getComputedStyle(el).pointerEvents), 'none');
+    const first = (await effect.getAttribute('class')).split('--')[1];
+    assert.ok(['glitch', 'scramble', 'scatter', 'flip'].includes(first));
+    await page.mouse.move(400, 90);
+    await brand.hover();
+    assert.notEqual((await effect.getAttribute('class')).split('--')[1], first, 'consecutive effects should differ');
+    await brand.click();
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
+  }, { reducedMotion: 'no-preference' });
+
+  await check('brand animation honors reduced motion', async page => {
+    await page.locator('#brand-about').hover();
+    assert.equal(await page.locator('.brand-effect').count(), 0);
+  });
+
   await check('shortcut help and button tooltips use this platform', async page => {
     const modifier = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform) ? '⌘' : 'Ctrl');
     assert.equal(await page.locator('#settings-open').getAttribute('data-tooltip'), `打开设置 (${modifier} + ,)`);

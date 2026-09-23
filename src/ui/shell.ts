@@ -11,11 +11,8 @@ const panelButton = (id: 'inspector' | 'analysis' | 'subtracks' | 'sources', lab
   iconButton({ glyph, label, tooltip: shortcutTooltip(label, PANEL_SHORTCUTS[id]), iconClass: extra, attributes: { id: `toggle-${id}`, 'aria-controls': `${id}-panel`, 'aria-expanded': 'false' } });
 
 export function shell() {
-  // 产品名滚动字母：每个字母包两份拷贝（原文 + 主题色），悬停时逐个向上翻出。
-  const brandLetters = 'VoidPlayer'.split('').map((ch, i) =>
-    `<span class="brand-ch" aria-hidden="true" style="--i:${i}"><span>${ch}</span><span>${ch}</span></span>`).join('');
   return `<header class="topbar glass">
-    <button id="brand-about" class="brand" aria-label="关于 VoidPlayer">${brandLetters}</button>
+    <button id="brand-about" class="brand" aria-label="关于 VoidPlayer">VoidPlayer</button>
     <div class="view-controls" role="group" aria-label="视图布局">
       <div class="segmented" id="layout-mode" role="group" aria-label="对比布局"><button type="button" data-mode="side-by-side" data-tooltip="${shortcutTooltip('切换并排 / 分屏', 'layout')}" aria-pressed="true" disabled>并排</button><button type="button" data-mode="split" data-tooltip="${shortcutTooltip('切换并排 / 分屏', 'layout')}" aria-pressed="false" disabled>分屏</button></div>
       ${iconButton({ glyph: 'grid', label: '切换为田字布局', tooltip: '田字排列轨道', attributes: { id: 'arrangement' } })}
