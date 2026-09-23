@@ -6,7 +6,7 @@ import { ACCENTS } from './appearance.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const SETTINGS_PANES = [
-  ['appearance', '外观', 'appearance'], ['workspace', '工作区', 'open'],
+  ['appearance', '外观', 'appearance'], ['workspace', '工作区', 'open'], ['annotations', '标注同步', 'refresh'],
   ['identity', '用户', 'user'], ['shortcuts', '快捷键', 'keyboard'], ['logs', '反馈', 'note'], ['performance', '色彩与解码', 'diagnostics'], ['about', '关于', 'info'],
 ] as const;
 const paneTitle = (title: string, description = '') => `<div class="settings-page-title"><h3>${title}</h3>${description ? `<p>${description}</p>` : ''}</div>`;
@@ -34,6 +34,25 @@ export function settingsShell() {
       <section id="settings-pane-workspace" role="tabpanel" aria-labelledby="settings-tab-workspace" tabindex="0" hidden>
         ${paneTitle('工作区')}
         ${savedWorkspaceShell()}
+      </section>
+      <section id="settings-pane-annotations" role="tabpanel" aria-labelledby="settings-tab-annotations" tabindex="0" hidden>
+        ${paneTitle('标注同步')}
+        <div class="settings-section"><h4 class="settings-section-title">评审空间</h4>
+          <div class="settings-card annotation-sync-card">
+            <div class="annotation-sync-scope"><button id="annotation-space-choice" class="choice-trigger" aria-label="评审空间"></button><button id="annotation-sync-now" class="icon-button" aria-label="重新同步">${icon('refresh')}</button></div>
+            <p id="annotation-sync-status" class="settings-caption" role="status"></p>
+            <div class="annotation-new-space"><input id="annotation-space-name" maxlength="120" aria-label="新评审空间名称" placeholder="新评审空间名称"><button id="annotation-space-create">创建空间</button></div>
+          </div>
+        </div>
+        <div class="settings-section" id="annotation-conflicts-section" hidden><h4 class="settings-section-title">同步冲突</h4>
+          <div class="settings-card annotation-sync-card"><div id="annotation-conflicts"></div></div>
+        </div>
+        <div class="settings-section" id="annotation-drafts-section" hidden><h4 class="settings-section-title">其他页面的草稿</h4>
+          <div class="settings-card annotation-sync-card"><div id="annotation-other-drafts"></div></div>
+        </div>
+        <div class="settings-section"><h4 class="settings-section-title">本机草稿</h4>
+          <div class="settings-card annotation-sync-card"><div class="annotation-sync-actions"><button id="annotation-drafts-export">导出本机草稿</button><button id="annotation-publish">将当前标注另存到空间</button></div></div>
+        </div>
       </section>
       <section id="settings-pane-identity" role="tabpanel" aria-labelledby="settings-tab-identity" tabindex="0" hidden>
         ${paneTitle('用户')}

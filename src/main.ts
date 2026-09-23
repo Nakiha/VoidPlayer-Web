@@ -18,6 +18,7 @@ import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
+import { installMarkPreviewBackfill } from './ui/mark-preview-backfill.ts';
 import { benchmarkPlayback } from './benchmark.ts';
 // Feature styles in cascade order: accessibility overrides, component layout,
 // then the settings window (scoped so it never depends on import position).
@@ -111,6 +112,7 @@ let benchmarkRunning = false;
 let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
+const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
 const workbench = installWorkbench(session, act, openMarkDialog, notify);
 const removeTrackDrag = installTrackDrag(session);
@@ -163,7 +165,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   render();
 }
 for (const canvas of Object.values(canvases)) bindPresentationResources(canvas, session.resources);
-const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
+const annotationSync = installAnnotationSync(session, () => drawingEditor.active(), () => settings.openPane('annotations', $<HTMLButtonElement>('annotation-save-state')));
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
@@ -333,6 +335,7 @@ function render() {
     ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`
     : loaded ? `${state.tracks.length} 条轨道` : '';
   drawingEditor.render(state);
+  markPreviewBackfill.schedule();
   workbench.render(state);
   sourceActions.render(state);
 
@@ -569,7 +572,7 @@ if (annotationLink.has('annotation')) void act(async () => {
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
 // and the annotation deep-link restore (already async) are still outstanding,

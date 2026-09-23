@@ -35,11 +35,11 @@ try {
  await b.unroute('**/api/annotations/spaces/default');
  await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.state==='error');
  await b.locator('#toggle-subtracks').click();await b.locator('#annotation-save-state').click();
- await b.locator('.annotation-conflict').waitFor();
+ await b.locator('#settings-pane-annotations .annotation-conflict').waitFor();
  assert.ok((await call(b,'get_review_session')).marks.some(mark=>mark.text==='离线编辑草稿'),'conflicting draft survives remote deletion');
  await b.getByRole('button',{name:'草稿另存为标注',exact:true}).click();
- await b.locator('.annotation-conflict').waitFor({state:'hidden'});
- await b.locator('#annotation-sync-dialog [aria-label="关闭标注保存"]').click();
+ await b.locator('#settings-pane-annotations .annotation-conflict').waitFor({state:'hidden'});
+ await b.locator('#settings-close').click();
  await a.waitForFunction(()=>window.voidPlayer.getState().marks.some(mark=>mark.text==='离线编辑草稿'));
  const afterConflict=await a.request.get(base+'/api/annotations/spaces/default').then(r=>r.json());
  assert.equal(afterConflict.entries.filter(entry=>!entry.deleted).length,1);
@@ -56,7 +56,7 @@ try {
  assert.equal((await call(a,'get_review_session')).positionUs,position);
  for(const scheme of ['dark','light']){await admin.emulateMedia({colorScheme:scheme});await admin.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await admin.screenshot({path:`/tmp/voidplayer-annotation-admin-${scheme}-${name}.png`});}
  await b.locator('#annotation-save-state').click();await b.screenshot({path:`/tmp/voidplayer-annotation-save-${name}.png`});
- await b.locator('#annotation-sync-dialog [aria-label="关闭标注保存"]').click();
+ await b.locator('#settings-close').click();
  // Existing old workspaces must not overwrite current shared revisions.
  const saved=await call(a,'export_workspace');await a.evaluate(value=>window.voidPlayer.importWorkspace(value),saved);
  assert.equal((await a.request.get(base+'/api/annotations/spaces/default').then(r=>r.json())).entries.find(entry=>entry.id===copy.id).revision,3);

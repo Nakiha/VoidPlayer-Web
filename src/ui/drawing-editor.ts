@@ -1,6 +1,7 @@
 import { randomUUID } from '../uuid.ts';
 import { captureFrame } from '../presenter.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
+import { publishMarkPreview } from './mark-preview-publish.ts';
 import { installColorMenu } from './color-menu.ts';
 import { installChoiceMenu, strokePreview } from './choice-menu.ts';
 import { matchesShortcut } from './shortcuts.ts';
@@ -120,11 +121,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
         const latest = session.getState().marks.find(candidate=>candidate.id===mark.id);
         if (!latest || thumbnailSignature(latest)!==signature) continue;
         const url = await new Promise<string>((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result));reader.onerror=()=>reject(reader.error);reader.readAsDataURL(blob);});
-        const preview = {url,width:thumb.width,height:thumb.height,signature}; annotationThumbnails.set(mark.id,preview);
-        window.dispatchEvent(new CustomEvent('voidplayer-annotation-preview',{detail:{id:mark.id,preview}}));
-        for (const thumbnail of document.querySelectorAll<HTMLElement>('[data-mark-thumbnail]')) if (thumbnail.dataset.markThumbnail===mark.id) {
-          let image=thumbnail.querySelector('img');if(!image){image=document.createElement('img');image.alt='标注画面';thumbnail.replaceChildren(image);} image.width=thumb.width;image.height=thumb.height;image.src=url;
-        }
+        const preview = {url,width:thumb.width,height:thumb.height,signature}; publishMarkPreview(mark.id,preview);
         await new Promise(resolve=>setTimeout(resolve,0));
       }
     } catch { /* Preview generation never interrupts drawing or persistence. */ }

@@ -111,7 +111,7 @@ try {
   await page.locator('#toggle-marks').click();
   assert.equal(await page.getByRole('button', { name: '编辑标注' }).count(), 0, 'annotation card no longer shows a redundant edit button');
   await page.locator('#selected-marks .mark-frame-number').first().waitFor();
-  assert.match(await page.locator('#selected-marks .mark-frame-number').first().textContent(), /^#\d+~?$|^—$|^#…$/);
+  assert.match(await page.locator('#selected-marks .mark-frame-number').first().textContent(), /^(· )?#(\d+~?|…)$|^(· )?—$/);
   await page.locator('#selected-marks .mark-entry').first().dblclick();
   await page.locator('#annotation-toolbar').waitFor({ state: 'visible' });
   assert.equal(await page.locator('#drawing-A .annotation-object').count(), 4);

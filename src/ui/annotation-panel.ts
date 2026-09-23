@@ -15,10 +15,10 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: Re
   const time = document.createElement('time'); time.textContent = `${slot} · ${formatTime(mark.frame.ptsUs)}`;
   meta.append(markSymbol(mark.id), time);
   if (session) {
-    const frame = document.createElement('span'); frame.className = 'mark-frame-number'; frame.textContent = '#…';
+    const frame = document.createElement('span'); frame.className = 'mark-frame-number'; frame.textContent = '· #…';
     meta.append(frame);
     void session.rankAnalysisFrame(slot, mark.frame.ptsUs).then(result => {
-      if (frame.isConnected) frame.textContent = 'rank' in result ? `#${result.rank}${result.complete ? '' : '~'}` : '—';
+      if (frame.isConnected) frame.textContent = 'rank' in result ? `· #${result.rank}${result.complete ? '' : '~'}` : '· —';
     });
   }
   if (actions) meta.append(actions);
@@ -125,7 +125,9 @@ export function installAnnotationPanel(
       dock.classList.toggle('annotations-empty', !entries.length);
       hidePreview(); list.replaceChildren();
       if (!entries.length) {
-        const empty = document.createElement('span'); empty.className = 'marks-empty'; empty.textContent = '暂无标注'; list.append(empty);
+        const empty = document.createElement('span'); empty.className = 'marks-empty';
+        const hint = document.createElement('span'); hint.className = 'marks-empty-hint'; hint.textContent = '点击 + 添加';
+        empty.append('暂无标注', hint); list.append(empty);
       }
       for (const { mark: savedMark, slot, offsetUs } of entries) {
         const mark = { ...savedMark, frame: { ...savedMark.frame, ptsUs: savedMark.frame.ptsUs + offsetUs } };

@@ -304,7 +304,8 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 /* Tools occupy a dedicated row, below either side drawer. */
 .header-actions { display: flex; align-items: center; gap: var(--tool-gap); flex: 0 0 auto; }
 .header-actions .icon-button { background: transparent; }
-.card-heading .header-actions:not([popover]) .icon-button, .card-heading .header-more { background: var(--surface-control); }
+.card-heading .header-actions:not([popover]) .icon-button { background: transparent; border-color: transparent; }
+.card-heading .header-more { background: var(--surface-control); }
 @container (max-width: 370px) { .frame-time { display: none; } }
 
 [data-track-drag] { touch-action: none; }
@@ -358,7 +359,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .start-workspace-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .start-workspace-go { display: grid; place-items: center; color: var(--text-secondary); }
 .start-workspace-go .icon { width: 18px; height: 18px; }
-.start-workspace-tracks { display: flex; flex-wrap: wrap; gap: 6px 12px; min-width: 0; }
+.start-workspace-tracks { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 6px 12px; min-width: 0; }
 .start-workspace-track { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 100%; }
 .start-workspace-thumb { display: grid; place-items: center; flex: none; width: 54px; height: 34px; overflow: hidden; border-radius: 4px; background: var(--surface-control); color: var(--text-secondary); }
 .start-workspace-thumb > * { grid-area: 1 / 1; }
@@ -408,6 +409,9 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .selected-marks { flex: 1; flex-direction: row; align-items: stretch; overflow-x: auto; overflow-y: hidden; gap: 8px; min-width: 0; padding: 0; }
 .marks-collapsed .selected-marks { align-items: center; gap: 4px; }
 .marks-empty { align-self: center; color: var(--text-secondary); font-size: var(--text-xs); padding-inline: 4px; }
+.marks-collapsed .marks-empty-hint { display: none; }
+.subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty { align-self: stretch; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 2px 0; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-small); font-size: var(--text-sm); text-align: center; }
+.subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty-hint { font-size: var(--text-xs); }
 .annotation-row { position: relative; flex: 0 0 208px; min-width: 0; border: 0; border-radius: var(--radius-small); background: transparent; overflow: hidden; }
 .annotation-row:hover, .annotation-row.mark-linked-hover { background: color-mix(in srgb, var(--mark-color) 7%, transparent); }
 .annotation-row .mark-entry { position: relative; display: block; width: 100%; height: 100%; text-align: left; padding: 0 4px; border-radius: inherit; background: transparent; }
@@ -417,7 +421,7 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .mark-meta > .annotation-card-actions { margin-left: auto; }
 .mark-meta > .mark-symbol { width: 16px; height: 16px; flex: 0 0 16px; }
 .mark-content time { font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
-.mark-frame-number { margin-left: auto; font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-secondary); }
+.mark-frame-number { font: var(--text-xs)/1.5 var(--font-mono); color: var(--text-secondary); white-space: nowrap; }
 .mark-thumbnail { display: flex; align-items: center; justify-content: center; min-height: 0; flex: 1; border-radius: 4px; overflow: hidden; background: var(--surface-table); color: var(--text-secondary); font-size: var(--text-xs); }
 .mark-thumbnail img { width: 100%; height: 100%; min-height: 0; object-fit: contain; }
 .mark-footer { display: flex; gap: 8px; align-items: center; min-width: 0; min-height: 18px; }
@@ -427,13 +431,13 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .annotation-card-actions button.icon-button { width: var(--button-size); min-height: var(--button-size); height: var(--button-size); padding: var(--control-surface-inset); border: 0; background: transparent; color: var(--text-secondary); }
 .annotation-card-actions button:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--mark-color) 10%, transparent); }
 .annotation-card-actions .annotation-remove:hover:not(:disabled) { color: var(--action-danger); }
-.annotation-confirm { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 8px; padding: 8px; background: var(--preview-fill); border-radius: inherit; }
+.annotation-confirm { position: absolute; inset: 0; display: flex; flex-wrap: wrap; align-content: center; justify-content: center; gap: 8px; padding: 8px; border-radius: inherit; background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); }
 .annotation-confirm > span { width: 100%; text-align: center; font-size: var(--text-sm); margin-bottom: 4px; }
 .annotation-delete-confirm { color: var(--action-danger); }
 .marks-collapsed .annotation-row { flex: 0 0 var(--button-size); height: var(--button-size); }
 .marks-collapsed .annotation-row .mark-entry { display: flex; align-items: center; justify-content: center; padding: 0; }
 .marks-collapsed .mark-entry .mark-content, .marks-collapsed .mark-meta { display: contents; }
-.marks-collapsed .mark-meta time, .marks-collapsed .mark-thumbnail, .marks-collapsed .mark-footer, .marks-collapsed .annotation-card-actions { display: none; }
+.marks-collapsed .mark-meta time, .marks-collapsed .mark-frame-number, .marks-collapsed .mark-thumbnail, .marks-collapsed .mark-footer, .marks-collapsed .annotation-card-actions { display: none; }
 .annotation-preview { position: fixed; z-index: 40; width: min(var(--annotation-preview-width), calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); color: var(--text); box-shadow: var(--annotation-toolbar-shadow); text-shadow: none; }
 .annotation-preview .annotation-row { flex: none; width: 100%; }
 .annotation-preview .annotation-row:hover, .annotation-preview .annotation-row.mark-linked-hover { background: transparent; }
@@ -673,7 +677,7 @@ button.icon-button[aria-pressed=true] {
   backdrop-filter: var(--menu-filter);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass, .annotation-toolbar, .annotation-preview, .transport.glass, .screens .video-card .card-heading { background: var(--surface); }
+  .glass, .annotation-toolbar, .annotation-preview, .annotation-confirm, .transport.glass, .screens .video-card .card-heading { background: var(--surface); }
   .sources-panel .source-tools, .sources-panel .source-foot { background: var(--surface-panel); }
   .popup-menu, .header-actions[popover] { background: var(--preview-fill); }
 }
@@ -684,8 +688,7 @@ button.icon-button[aria-pressed=true] {
 /* Optical correction for the different whitespace inside Phosphor glyphs. */
 .transport .icon[data-icon=previous], .transport .icon[data-icon=next] { transform: scale(1.08); }
 .transport .icon[data-icon=play] { transform: translateX(-1.5px); }
-.transport .icon[data-icon=fit] { transform: scale(1.2); }
-.viewport-eye .icon { transform: scale(.9); }
+.transport .icon[data-icon=fit], .viewport-eye .icon { transform: scale(1.2); }
 
 /* Both glyphs remain mounted; playback only switches their visibility. */
 #play[data-playing=false] [data-icon=pause], #play[data-playing=true] [data-icon=play] { display: none; }
@@ -747,10 +750,13 @@ button.icon-button[aria-pressed=true] {
 #annotation-save-state { color: var(--text-secondary); }
 #annotation-save-state[data-state=error] { color: var(--action-danger); }
 #annotation-save-state[data-state=pending] { color: var(--accent); }
-#annotation-sync-dialog { width: min(480px, calc(100vw - 24px)); border: 0; }
 .annotation-sync-scope, .annotation-new-space, .annotation-sync-actions { display: flex; align-items: center; gap: 8px; }
 .annotation-sync-scope > .choice-trigger, .annotation-new-space input { flex: 1; min-width: 0; }
-.annotation-sync-actions { margin-top: 20px; flex-wrap: wrap; }
+.annotation-sync-actions { flex-wrap: wrap; }
+#settings-pane-annotations .annotation-sync-card { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
+#settings-pane-annotations .annotation-sync-card #annotation-sync-status { margin: 0; }
+#settings-pane-annotations .annotation-sync-card .annotation-sync-actions { margin: 0; }
+#settings-pane-annotations .settings-section[hidden] { display: none; }
 .annotation-new-space button { flex-shrink: 0; }
 .annotation-conflict { padding: 12px 0; }
 .annotation-conflict > button { margin-right: 8px; }

@@ -11,8 +11,9 @@ import type { PendingEdit } from '../annotation-pending.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { icon } from './icons.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
+import { publishMarkPreview } from './mark-preview-publish.ts';
 
-export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
+export function installAnnotationSync(session: ReviewSession, editing: () => boolean, openSettings: () => void) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
   let previewEpoch = 0, editGeneration=0, localFailure='';
   // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
@@ -28,12 +29,10 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   try { actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
   const button = document.createElement('button'); button.className = 'icon-button'; button.id = 'annotation-save-state'; button.setAttribute('aria-label', '标注保存'); button.innerHTML = icon('check');
   document.querySelector('.annotation-strip-tools')!.append(button);
-  const dialog = document.createElement('dialog'); dialog.id = 'annotation-sync-dialog'; dialog.setAttribute('aria-label','标注保存');
-  dialog.innerHTML = `<header class="dialog-heading"><h2>标注保存</h2><button class="icon-button" aria-label="关闭标注保存">${icon('close')}</button></header><div class="annotation-sync-scope"><button id="annotation-space-choice" class="choice-trigger" aria-label="评审空间"></button><button id="annotation-sync-now" class="icon-button" aria-label="重新同步">${icon('refresh')}</button></div><p id="annotation-sync-status" role="status"></p><div class="annotation-new-space"><input id="annotation-space-name" maxlength="120" aria-label="新评审空间名称" placeholder="新评审空间名称"><button id="annotation-space-create">创建空间</button></div><div id="annotation-conflicts"></div><div id="annotation-other-drafts"></div><div class="annotation-sync-actions"><button id="annotation-drafts-export">导出本机草稿</button><button id="annotation-publish">将当前标注另存到空间</button></div>`;
-  document.body.append(dialog);
-  const $ = <T extends HTMLElement = HTMLElement>(id: string) => dialog.querySelector<T>(`#${id}`)!;
+  const pane = document.getElementById('settings-pane-annotations')!;
+  const $ = <T extends HTMLElement = HTMLElement>(id: string) => pane.querySelector<T>(`#${id}`)!;
   const choice = installChoiceMenu('annotation-space-choice',[], value => { if (value !== scope) void switchSpace(value); });
-  dialog.querySelector('header button')!.addEventListener('click',()=>dialog.close()); button.onclick=()=>{dialog.showModal();void refreshDrafts();};
+  button.onclick=()=>{openSettings();void refreshDrafts();};
   const currentDrafts = () => drafts.filter(draft=>draft.space===scope && draft.actor===actor && draft.key.startsWith(`${actor}/${scope}/${owner}/`));
   let choiceSignature='', conflictSignature='', otherSignature='';
   function state() {
@@ -50,12 +49,13 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     $<HTMLButtonElement>('annotation-publish').textContent=scope==='local'?'另存到共享评审':'将当前标注另存到空间';
     $<HTMLButtonElement>('annotation-publish').disabled=!available || editing() || !session.getState().marks.length;
     const others=drafts.filter(draft=>draft.actor===actor && draft.space===scope && !draft.key.startsWith(`${actor}/${scope}/${owner}/`));
+    $('annotation-drafts-section').hidden=!others.length;
     const nextOthers=JSON.stringify(others);
     if(nextOthers!==otherSignature){otherSignature=nextOthers;$('annotation-other-drafts').replaceChildren(...others.map(draft=>{
       const row=document.createElement('div');row.className='annotation-conflict';const text=document.createElement('p');text.textContent=`其他页面的草稿：${draft.desired?.mark.text || '画面标注'}`;
       const button=document.createElement('button');button.textContent='在这里继续';button.onclick=()=>void(async()=>{try{await storage.claim(draft.key,`${actor}/${scope}/${owner}/${draft.id}`);await apply();void sync();}catch(e){error=(e as Error).message;state();}})();row.append(text,button);return row;
     }));}
-    const nextConflicts=JSON.stringify(conflicts);if(nextConflicts===conflictSignature)return;conflictSignature=nextConflicts;
+    const nextConflicts=JSON.stringify(conflicts);$('annotation-conflicts-section').hidden=!conflicts.length;if(nextConflicts===conflictSignature)return;conflictSignature=nextConflicts;
     const rows=conflicts.map(draft=>{
       const row=document.createElement('div'); row.className='annotation-conflict';
       const text=document.createElement('p');text.textContent=draft.desired?.mark.text || '标注已被修改或删除';
@@ -101,11 +101,11 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       if(!record.deleted)documents.push(record.document);
       const existingPreview=annotationThumbnails.get(record.id);
       if(!record.deleted && available && (!existingPreview || (existingPreview.url.startsWith('/api/annotations/') && existingPreview.url!==`/api/annotations/spaces/${scope}/${record.id}/preview?revision=${record.revision}`) || (existingPreview.signature && existingPreview.signature!==thumbnailSignature(record.document.mark)))) {
-        annotationThumbnails.set(record.id,{url:`/api/annotations/spaces/${scope}/${record.id}/preview?revision=${record.revision}`,width:320,height:180,signature:thumbnailSignature(record.document.mark)});
+        publishMarkPreview(record.id,{url:`/api/annotations/spaces/${scope}/${record.id}/preview?revision=${record.revision}`,width:320,height:180,signature:thumbnailSignature(record.document.mark)});
       }
     }
     for(const draft of pending){managed.add(draft.id);if(draft.desired)documents.push(draft.desired);}
-    for(const document of documents){const preview=await storage.preview(scope,document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))annotationThumbnails.set(document.mark.id,preview);}
+    for(const document of documents){const preview=await storage.preview(scope,document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))publishMarkPreview(document.mark.id,preview);}
     if(captured!==generation || edited!==editGeneration || editing() || saving || pendingQueue.size)return;
     // Identical shared library versions remap to this window's ephemeral media IDs.
     // Stale ids are removed only with a completed load: dropping live marks
@@ -231,6 +231,6 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     openSpace: switchSpace,
     snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
-    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();choice.dispose();dialog.remove();button.remove();},
+    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();choice.dispose();button.remove();},
   };
 }
