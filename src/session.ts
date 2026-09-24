@@ -385,6 +385,7 @@ export class ReviewSession {
   async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts'): Promise<AnalysisRank | { reason: string }> {
     slotValue(slot);
     if (!Number.isInteger(sessionPtsUs)) return { reason: '展示时间必须是整数微秒。' };
+    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     const source = track.source;
