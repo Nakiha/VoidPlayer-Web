@@ -1,4 +1,5 @@
 import { sourceKey } from './ui/source-catalog.ts';
+import { matchMediaIdentity } from './media-identity.ts';
 
 /** Persistent local-file access via File System Access handles.
  *
@@ -92,12 +93,10 @@ export function indexedDBHandleStore(): HandleStore {
   };
 }
 
-const fingerprintMatches = (file: HandleMeta, record: HandleRecord) =>
-  file.name === record.name && file.size === record.size && file.lastModified === record.lastModified;
-
 /** Reopen a stored handle inside a user gesture. Throws FileHandleError:
  * 'unavailable' (no record / dead API), 'denied' (grant refused), 'stale'
- * (file moved, replaced, or handle invalid — the record is deleted). */
+ * (file moved, renamed, replaced, or handle invalid — the record is deleted).
+ * A bare lastModified drift refreshes the stored fingerprint instead. */
 export async function restoreHandleFile(key: string, store: HandleStore = indexedDBHandleStore(), allowPrompt = true): Promise<File> {
   const record = await store.get(key).catch(() => undefined);
   if (!record?.handle) throw new FileHandleError('unavailable', '没有可恢复的本地文件句柄。');
@@ -113,10 +112,12 @@ export async function restoreHandleFile(key: string, store: HandleStore = indexe
       }
     }
     const file = await handle.getFile();
-    if (!fingerprintMatches(file, record)) {
+    const match = matchMediaIdentity(record, file);
+    if (!match.ok) {
       await store.remove(key).catch(() => {});
-      throw new FileHandleError('stale', `本地文件 ${record.name} 已变化，请重新选择。`);
+      throw new FileHandleError('stale', `本地文件 ${record.name} 已变化（${match.mismatches.map(m => m.field === 'name' ? '文件名' : '大小').join('、')}），请重新选择。`);
     }
+    if (match.mtimeChanged) await store.put({ ...record, size: file.size, lastModified: file.lastModified, savedAt: Date.now() }).catch(() => {});
     return file;
   } catch (error) {
     if (error instanceof FileHandleError) throw error;

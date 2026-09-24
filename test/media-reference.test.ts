@@ -13,15 +13,21 @@ test('versioned media actions preserve the version and attach paths before query
   assert.equal(mediaActionUrl(source, 'download', base), `https://media.example/api/media/${id}?v=${version}&download=1`);
   assert.equal(mediaActionUrl(source, 'reveal', base), `https://media.example/api/media/${id}/reveal?v=${version}`);
 });
-test('legacy workspace references acquire a version only when size and modification time still match', async () => {
+test('legacy workspace references acquire a version when size still matches, warning on mtime drift', async () => {
   const pinned = await pinLibraryReference(info(), base, reply());
   assert.equal(pinned.url, `https://media.example/api/media/${id}?v=${version}`);
-  await assert.rejects(pinLibraryReference(info(), base, reply({ ...entry, lastModified: 12346 })), /已发生变化/);
-  await assert.rejects(pinLibraryReference(info(), base, reply({ ...entry, size: 13 })), /已发生变化/);
+  assert.equal(pinned.mtimeChanged, false);
+  const drifted = await pinLibraryReference(info(), base, reply({ ...entry, lastModified: 12346 }));
+  assert.equal(drifted.url, `https://media.example/api/media/${id}?v=${version}`);
+  assert.equal(drifted.mtimeChanged, true);
+  await assert.rejects(pinLibraryReference(info(), base, reply({ ...entry, size: 13 })), /大小 12 → 13/);
 });
-test('pinned references refuse replacement even when size and mtime match, and aliases migrate', async () => {
+test('pinned references survive version rotation with identical bytes, still refuse replacement', async () => {
   const pinned = info(`/api/media/${id}?v=${version}`);
-  await assert.rejects(pinLibraryReference(pinned, base, reply({ ...entry, version: 'c'.repeat(24) })), /已发生变化/);
+  const rotated = await pinLibraryReference(pinned, base, reply({ ...entry, version: 'c'.repeat(24) }));
+  assert.equal(rotated.url, `https://media.example/api/media/${id}?v=${'c'.repeat(24)}`);
+  assert.equal(rotated.mtimeChanged, false);
+  await assert.rejects(pinLibraryReference(pinned, base, reply({ ...entry, size: 13 })), /已发生变化/);
   await assert.rejects(pinLibraryReference(pinned, base, reply({ ...entry, state: 'pending' })), /仍在写入/);
   assert.equal((await pinLibraryReference(pinned, base, reply({ ...entry, id: 'd'.repeat(24) }))).id, 'd'.repeat(24));
 });

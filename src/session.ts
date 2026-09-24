@@ -15,6 +15,7 @@ import { offerFirstFrameCandidate, settleOffer } from './thumbnails/offer.ts';
 import { thumbnailState } from './thumbnails/state.ts';
 import { localCacheKey, serverCacheKey } from './thumbnails/contract.ts';
 import { referenceVersion } from './media-reference.ts';
+import { describeMediaMismatch, matchMediaIdentity } from './media-identity.ts';
 import { FrameQueue, PlaybackMeasurements } from './playback.ts';
 import { planBackwardStep, planForwardStep, slotValue, timeUs } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
@@ -1124,7 +1125,9 @@ export class ReviewSession {
       const source = await this.openCandidate(open, signal); let committed = false;
       try {
         const old = previous.source.info, info = source.info;
-        if (old.size !== info.size || old.lastModified !== info.lastModified || old.name.split('/').at(-1) !== info.name.split('/').at(-1)) throw new Error('片源与工作区记录不一致。');
+        const match = matchMediaIdentity(old, info);
+        if (!match.ok) throw new Error(describeMediaMismatch(old.name, match.mismatches));
+        if (match.mtimeChanged) log.info('session', '重新关联接受仅修改时间不同的片源', { slot, name: old.name });
         updateMediaInfo(source, { id: old.id }, 'identity');
         await abortableLoad(Promise.resolve(source.ensureIndexed?.(Math.max(0, this.positionUs - previous.offsetUs))), signal);
         const frame = await abortableLoad(source.frameAt(Math.max(0, Math.min(source.info.durationUs - 1, this.positionUs - previous.offsetUs))), signal, late => late.close());

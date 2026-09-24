@@ -10,18 +10,25 @@ import { parseWorkspace, readWorkspaceFile } from '../workspace-file.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { pinLibraryReference } from '../media-reference.ts';
+import { describeMediaMismatch, matchMediaIdentity, mediaMtimeWarning } from '../media-identity.ts';
 import { icon } from './icons.ts';
 import { installSavedWorkspaces } from './saved-workspaces.ts';
 
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
-const matchesFile = (file: File, info: MediaInfo) => file.name === info.name.split('/').at(-1) && file.size === info.size && file.lastModified === info.lastModified;
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void) {
   const files = new Map<string, File>();
-  for (const info of media) { const file = supplied.find(f => matchesFile(f, info)); if (file) files.set(info.id, file); }
+  const accept = (info: MediaInfo, file: File) => {
+    const match = matchMediaIdentity(info, file);
+    if (!match.ok) return false;
+    if (match.mtimeChanged) onMtimeWarning?.(info.name);
+    files.set(info.id, file);
+    return true;
+  };
+  for (const info of media) { const file = supplied.find(f => matchMediaIdentity(info, f).ok); if (file) accept(info, file); }
   for (const info of media) if (!files.has(info.id)) {
-    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (matchesFile(file, info)) files.set(info.id, file); } catch {}
+    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) continue; } catch {}
   }
   if (!prompt) return files;
   const missing = media.filter(info => !files.has(info.id));
@@ -35,9 +42,11 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
     const input = document.createElement('input'); input.type = 'file'; input.accept = 'video/*,.mkv,.ts,.flv,.avi'; input.setAttribute('aria-label', `重新选择 ${info.name}`);
     input.onchange = () => {
       const file = input.files?.[0]; files.delete(info.id);
-      const valid = file && matchesFile(file, info);
-      dialog.querySelector('[role=alert]')!.textContent = valid ? '' : '文件名、大小或修改时间与工作区记录不一致，请选择原始文件。';
-      if (valid) files.set(info.id, file);
+      const match = file ? matchMediaIdentity(info, file) : undefined;
+      dialog.querySelector('[role=alert]')!.textContent = !match ? '' : !match.ok
+        ? describeMediaMismatch(info.name, match.mismatches)
+        : match.mtimeChanged ? mediaMtimeWarning(info.name) : '';
+      if (match?.ok && file) files.set(info.id, file);
       proceed.disabled = files.size !== media.length;
     };
     label.append(name, input); dialog.querySelector('.relink-files')!.append(label);
@@ -76,12 +85,15 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const document = parseWorkspace(value, location.href);
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery);
+      const warnMtime = (name: string) => options.toasts.show(mediaMtimeWarning(name));
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime);
       if (!files) return false;
       const rollback=options.beforeRestore();
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
         if (!info.source) { const file = files.get(info.id); if (!file) throw new Error('本地文件尚未授权，请重新选择。'); return openMedia(file, undefined, progress, signal); }
-        const reference = await pinLibraryReference(info, location.href, fetch, signal);
+        const pinned = await pinLibraryReference(info, location.href, fetch, signal);
+        if (pinned.mtimeChanged) warnMtime(info.name);
+        const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
       }, { allowUnavailable: true });
       } catch(error) { await rollback?.(); throw error; }
@@ -100,13 +112,16 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const files = await resolveLocalFiles(pending.filter(t => !t.source), []);
+    const warnMtime = (name: string) => options.toasts.show(mediaMtimeWarning(name));
+    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime);
     if (!files) return;
     for (const info of pending) {
       if (!info.source && !files.has(info.id)) continue;
       await options.act(() => session.relinkTrack(info.slot, async (signal, progress) => {
         if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
-        const reference = await pinLibraryReference(info, location.href, fetch, signal);
+        const pinned = await pinLibraryReference(info, location.href, fetch, signal);
+        if (pinned.mtimeChanged) warnMtime(info.name);
+        const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal);
         updateMediaInfo(source, { source: reference }, 'identity'); return source;
       }), 'workspace.relink');
