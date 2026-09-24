@@ -270,7 +270,7 @@ export class ReviewSession {
         throw new Error('分析曲线区间必须是整数微秒。');
       }
       if (!Number.isInteger(query.curvePixelWidth) || (query.curvePixelWidth as number) < 32 || (query.curvePixelWidth as number) > 4096) {
-        throw new Error('分析曲线像素宽度超出范围。');
+        throw new Error('曲线像素宽度超出范围。');
       }
     }
     const track = this.tracks.get(slot);
@@ -308,7 +308,7 @@ export class ReviewSession {
       sampleCoverageUs: result.sampleCoverageUs ? { start: shift(result.sampleCoverageUs.start), end: shift(result.sampleCoverageUs.end) } : (result.sampleCoverageUs ?? null),
       bitrateRangeUs: result.bitrateRangeUs ? { start: shift(result.bitrateRangeUs.start), end: shift(result.bitrateRangeUs.end) } : (result.bitrateRangeUs ?? null),
       bitrateStepUs: result.bitrateStepUs ?? null,
-      bucketGrid: result.bucketGrid ? { origin: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
+      bucketGrid: result.bucketGrid ? { originUs: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
     };
   }
   /**
@@ -385,7 +385,6 @@ export class ReviewSession {
   async rankAnalysisFrame(slot: Slot, sessionPtsUs: number, axis: AnalysisAxis = 'pts'): Promise<AnalysisRank | { reason: string }> {
     slotValue(slot);
     if (!Number.isInteger(sessionPtsUs)) return { reason: '展示时间必须是整数微秒。' };
-    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     const source = track.source;
@@ -789,7 +788,7 @@ export class ReviewSession {
       const currentUs = t.frame!.ptsUs;
       if (currentUs <= 0) return [slot, null] as const;
       const frame = await t.source.frameAt(currentUs - 1);
-      if (frame.ptsUs >= currentUs) { frame.close(); return [slot, null]; }
+      if (frame.ptsUs >= currentUs) { frame.close(); return [slot, null] as const; }
       return [slot, frame] as const;
     });
     const probed = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
@@ -811,7 +810,7 @@ export class ReviewSession {
     const selected = new Map<Slot, DecodedFrame>();
     for (const [slot, t] of entries) {
       const previous = gathered.get(slot);
-      if (previous && previous.ptsUs < t.frame!.ptsUs+t.offsetUs) selected.set(slot, previous);
+      if (previous && target < t.frame!.ptsUs+t.offsetUs) selected.set(slot, previous);
     }
     for (const [slot, f] of gathered) if (f && !selected.has(slot)) f.close();
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
