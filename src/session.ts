@@ -270,7 +270,7 @@ export class ReviewSession {
         throw new Error('分析曲线区间必须是整数微秒。');
       }
       if (!Number.isInteger(query.curvePixelWidth) || (query.curvePixelWidth as number) < 32 || (query.curvePixelWidth as number) > 4096) {
-        throw new Error('曲线像素宽度超出范围。');
+        throw new Error('分析曲线像素宽度超出范围。');
       }
     }
     const track = this.tracks.get(slot);
@@ -308,7 +308,7 @@ export class ReviewSession {
       sampleCoverageUs: result.sampleCoverageUs ? { start: shift(result.sampleCoverageUs.start), end: shift(result.sampleCoverageUs.end) } : (result.sampleCoverageUs ?? null),
       bitrateRangeUs: result.bitrateRangeUs ? { start: shift(result.bitrateRangeUs.start), end: shift(result.bitrateRangeUs.end) } : (result.bitrateRangeUs ?? null),
       bitrateStepUs: result.bitrateStepUs ?? null,
-      bucketGrid: result.bucketGrid ? { originUs: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
+      bucketGrid: result.bucketGrid ? { origin: result.bucketGrid.originUs + offsetUs, widthUs: result.bucketGrid.widthUs } : (result.bucketGrid ?? null),
     };
   }
   /**
@@ -409,6 +409,7 @@ export class ReviewSession {
   async seekAnalysisFrameNumber(slot: Slot, number: number, axis: AnalysisAxis = 'pts'): Promise<{ sessionPtsUs: number } | { reason: string }> {
     slotValue(slot);
     if (!Number.isSafeInteger(number) || number < 0) return { reason: '帧号必须是非负整数。' };
+    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     const source = track.source;
@@ -601,6 +602,7 @@ export class ReviewSession {
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
           this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, sourceGen: ++this.nextSourceGen, ...(behind ? { syncState: 'catching-up' as const } : {}) });
           this.catalog.set(opened.info.id, opened.info);
+          this.pruneCatalog();
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
           // Adding a short track never clamps the clock. Replacement can shrink
           // the entire session's extent after removing its longest source.
@@ -631,6 +633,18 @@ export class ReviewSession {
     scoped.info('media', `轨道 ${slot} 已载入`, { name: source!.info.name, replacing, requestedUs: status.targetPtsUs, positionUs: this.positionUs, frame: this.tracks.get(slot)?.frame });
     return this.getState();
   }
+  /**
+   * catalog 只保留仍被轨道或标注引用的片源：关闭/替换轨道后旧 mediaId
+   * 不得留在 catalog，否则 exportWorkspace/exportReview 会携带已关闭轨道
+   * 的旧引用，分享时 pinLibraryReference 会对这些幽灵引用做版本校验。
+   * 标注（含 comparison）仍引用的片源必须保留，供 markChanged/mergeStoredMarks 使用。
+   */
+  private pruneCatalog() {
+    const keep = new Set<string>();
+    for (const track of this.tracks.values()) keep.add(track.source.info.id);
+    for (const mark of this.marks) { keep.add(mark.mediaId); for (const item of mark.comparison) keep.add(item.mediaId); }
+    for (const id of [...this.catalog.keys()]) if (!keep.has(id)) this.catalog.delete(id);
+  }
   async removeTrack(slot: Slot) {
     slotValue(slot);
     ++this.analysisIntentSeq;
@@ -638,6 +652,7 @@ export class ReviewSession {
       const track = this.tracks.get(slot);
       if (track) this.releaseReaders('remove', [track.source]);
       this.tracks.delete(slot);
+      this.pruneCatalog();
       if (track && !track.failure) track.source.dispose();
       if (!this.tracks.size) { this.positionUs = 0; this.measurements = null; }
       else if (this.positionUs >= this.durationUs) await this.drawAt(this.durationUs - 1, current, this.tracks, undefined, undefined, undefined, signal);
@@ -774,7 +789,7 @@ export class ReviewSession {
       const currentUs = t.frame!.ptsUs;
       if (currentUs <= 0) return [slot, null] as const;
       const frame = await t.source.frameAt(currentUs - 1);
-      if (frame.ptsUs >= currentUs) { frame.close(); return [slot, null] as const; }
+      if (frame.ptsUs >= currentUs) { frame.close(); return [slot, null]; }
       return [slot, frame] as const;
     });
     const probed = await abortableLoad(Promise.allSettled(decodeTasks), signal, late => {
@@ -796,7 +811,7 @@ export class ReviewSession {
     const selected = new Map<Slot, DecodedFrame>();
     for (const [slot, t] of entries) {
       const previous = gathered.get(slot);
-      if (previous && target < t.frame!.ptsUs+t.offsetUs) selected.set(slot, previous);
+      if (previous && previous.ptsUs < t.frame!.ptsUs+t.offsetUs) selected.set(slot, previous);
     }
     for (const [slot, f] of gathered) if (f && !selected.has(slot)) f.close();
     const kept = new Set(entries.map(([slot]) => slot).filter(slot => !selected.has(slot)));
@@ -1048,6 +1063,7 @@ export class ReviewSession {
   deleteMark(id: string) {
     if (!this.marks.some(mark => mark.id === id)) throw new Error('标注不存在。');
     this.marks = this.marks.filter(mark => mark.id !== id); this.markChanged(id);
+    this.pruneCatalog();
     log.info('session', '删除标注', { id });
     this.emit();
     return this.getState();
@@ -1124,7 +1140,8 @@ export class ReviewSession {
       const source = await this.openCandidate(open, signal); let committed = false;
       try {
         const old = previous.source.info, info = source.info;
-        if (old.size !== info.size || old.lastModified !== info.lastModified || old.name.split('/').at(-1) !== info.name.split('/').at(-1)) throw new Error('片源与工作区记录不一致。');
+        // 修改时间降级为提示（UI 层 toast 警告）：同名同大小但重新生成过的文件仍可关联上屏。
+        if (old.size !== info.size || old.name.split('/').at(-1) !== info.name.split('/').at(-1)) throw new Error('片源与工作区记录不一致。');
         updateMediaInfo(source, { id: old.id }, 'identity');
         await abortableLoad(Promise.resolve(source.ensureIndexed?.(Math.max(0, this.positionUs - previous.offsetUs))), signal);
         const frame = await abortableLoad(source.frameAt(Math.max(0, Math.min(source.info.durationUs - 1, this.positionUs - previous.offsetUs))), signal, late => late.close());
