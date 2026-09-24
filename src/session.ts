@@ -409,7 +409,6 @@ export class ReviewSession {
   async seekAnalysisFrameNumber(slot: Slot, number: number, axis: AnalysisAxis = 'pts'): Promise<{ sessionPtsUs: number } | { reason: string }> {
     slotValue(slot);
     if (!Number.isSafeInteger(number) || number < 0) return { reason: '帧号必须是非负整数。' };
-    if (axis !== 'pts' && axis !== 'dts') return { reason: '时间基准必须是 pts 或 dts。' };
     const track = this.tracks.get(slot);
     if (!track || track.failure) return { reason: '轨道尚未载入或已停用。' };
     const source = track.source;
