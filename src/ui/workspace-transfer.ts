@@ -100,7 +100,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;},'workspace.share') });
+  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
