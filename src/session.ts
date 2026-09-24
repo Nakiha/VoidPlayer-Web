@@ -193,6 +193,9 @@ export class ReviewSession {
       const info = track.source.info;
       log.warn('session', '故障现场：轨道', { ...context, slot, mediaId: info.id, name: info.name, decoder: info.decoder,
         width: info.width, height: info.height, durationUs: info.durationUs, offsetUs: track.offsetUs, frame: track.frame,
+        // failure/pendingRelink 是区分"打开失败待重新关联"与"播放中途逐帧门拒绝"
+        // 的关键字段，必须出现在快照里；状态变化日志的整串 JSON 会被 budget 截断。
+        failure: track.failure ?? null, pendingRelink: track.pendingRelink ?? false,
         container: info.container, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount,
         indexState: info.indexState, indexError: info.indexError, indexProgress: info.indexProgress, indexWaiting: info.indexWaiting, syncState: track.syncState, color: info.color });
       log.warn('session', '故障现场：播放队列', { reason, slot, mediaId: info.id, queue: this.readers.get(track.source)?.snapshot() ?? null });
@@ -671,8 +674,9 @@ export class ReviewSession {
   private failTrack(slot: Slot, track: Track, error: unknown) {
     if (track.failure || this.tracks.get(slot) !== track) return;
     if (error instanceof Error && error.name === 'AbortError') throw error;
-    this.captureDiagnostics(`track-${slot}-failure`, error);
+    // 先记录 failure 再拍快照：captureDiagnostics 的轨道事件才能带上失败原因。
     track.failure = { message: errorText(error), positionUs: this.positionUs };
+    this.captureDiagnostics(`track-${slot}-failure`, error);
     this.releaseReaders('track-failed', [track.source]);
     try { track.source.dispose(); } catch (cleanup) { log.warn('session', '故障轨道释放失败', { slot, error: errorText(cleanup) }); }
     log.warn('session', '轨道已停用，其余轨道继续', { slot, mediaId: track.source.info.id, ...track.failure });
