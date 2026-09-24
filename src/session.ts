@@ -605,6 +605,7 @@ export class ReviewSession {
           const behind = resume && frame.ptsUs + frame.durationUs <= this.positionUs && opened.info.durationUs > this.positionUs;
           this.tracks.set(slot, { source: opened, frame: this.frameInfo(frame), offsetUs: 0, sourceGen: ++this.nextSourceGen, ...(behind ? { syncState: 'catching-up' as const } : {}) });
           this.catalog.set(opened.info.id, opened.info);
+          this.pruneCatalog();
           opened.onInfoChange = () => { if ([...this.tracks.values()].some(t => t.source === opened)) this.emit(); };
           // Adding a short track never clamps the clock. Replacement can shrink
           // the entire session's extent after removing its longest source.
@@ -635,6 +636,17 @@ export class ReviewSession {
     scoped.info('media', `轨道 ${slot} 已载入`, { name: source!.info.name, replacing, requestedUs: status.targetPtsUs, positionUs: this.positionUs, frame: this.tracks.get(slot)?.frame });
     return this.getState();
   }
+  /**
+   * catalog 只保留仍被轨道或标注引用的片源：关闭/替换轨道后旧 mediaId
+   * 不得留在 catalog，否则 exportWorkspace/exportReview 会携带已关闭轨道
+   * 的旧引用。标注（含 comparison）仍引用的片源必须保留。
+   */
+  private pruneCatalog() {
+    const keep = new Set<string>();
+    for (const track of this.tracks.values()) keep.add(track.source.info.id);
+    for (const mark of this.marks) { keep.add(mark.mediaId); for (const item of mark.comparison) keep.add(item.mediaId); }
+    for (const id of [...this.catalog.keys()]) if (!keep.has(id)) this.catalog.delete(id);
+  }
   async removeTrack(slot: Slot) {
     slotValue(slot);
     ++this.analysisIntentSeq;
@@ -642,6 +654,7 @@ export class ReviewSession {
       const track = this.tracks.get(slot);
       if (track) this.releaseReaders('remove', [track.source]);
       this.tracks.delete(slot);
+      this.pruneCatalog();
       if (track && !track.failure) track.source.dispose();
       if (!this.tracks.size) { this.positionUs = 0; this.measurements = null; }
       else if (this.positionUs >= this.durationUs) await this.drawAt(this.durationUs - 1, current, this.tracks, undefined, undefined, undefined, signal);
@@ -1053,6 +1066,7 @@ export class ReviewSession {
   deleteMark(id: string) {
     if (!this.marks.some(mark => mark.id === id)) throw new Error('标注不存在。');
     this.marks = this.marks.filter(mark => mark.id !== id); this.markChanged(id);
+    this.pruneCatalog();
     log.info('session', '删除标注', { id });
     this.emit();
     return this.getState();

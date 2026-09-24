@@ -25,7 +25,7 @@ export function matchMediaIdentity(record: MediaIdentityMeta, candidate: MediaId
 }
 
 export const describeMediaMismatch = (displayName: string, mismatches: MediaIdentityMismatch[]) =>
-  `片源 ${displayName} 已发生变化（${mismatches.map(m => m.field === 'name' ? `文件名 ${m.expected} → ${m.actual}` : `大小 ${m.expected} → ${m.actual}`).join('、')}），无法按原工作区还原。请重新选择片源并检查标注。`;
+  `片源 ${displayName} 已发生变化，与工作区记录不一致（${mismatches.map(m => m.field === 'name' ? `文件名 ${m.expected} → ${m.actual}` : `大小 ${m.expected} → ${m.actual}`).join('、')}）。请重新选择片源并检查标注。`;
 
 export const mediaMtimeWarning = (displayName: string) =>
   `「${displayName}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。`;
