@@ -14,14 +14,16 @@ import { icon } from './icons.ts';
 import { installSavedWorkspaces } from './saved-workspaces.ts';
 
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
-const matchesFile = (file: File, info: MediaInfo) => file.name === info.name.split('/').at(-1) && file.size === info.size && file.lastModified === info.lastModified;
+/** 名称与大小是身份硬校验；仅修改时间不同（文件被重新生成）降级为警告，不阻止上屏。 */
+const fileMismatch = (file: File, info: MediaInfo): 'identity' | 'mtime' | null =>
+  file.name !== info.name.split('/').at(-1) || file.size !== info.size ? 'identity' : file.lastModified !== info.lastModified ? 'mtime' : null;
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, warnModified?: (info: MediaInfo) => void) {
   const files = new Map<string, File>();
-  for (const info of media) { const file = supplied.find(f => matchesFile(f, info)); if (file) files.set(info.id, file); }
+  for (const info of media) { const file = supplied.find(f => fileMismatch(f, info) !== 'identity'); if (file) { files.set(info.id, file); if (fileMismatch(file, info) === 'mtime') warnModified?.(info); } }
   for (const info of media) if (!files.has(info.id)) {
-    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (matchesFile(file, info)) files.set(info.id, file); } catch {}
+    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (fileMismatch(file, info) !== 'identity') { files.set(info.id, file); if (fileMismatch(file, info) === 'mtime') warnModified?.(info); } } catch {}
   }
   if (!prompt) return files;
   const missing = media.filter(info => !files.has(info.id));
@@ -35,9 +37,10 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
     const input = document.createElement('input'); input.type = 'file'; input.accept = 'video/*,.mkv,.ts,.flv,.avi'; input.setAttribute('aria-label', `重新选择 ${info.name}`);
     input.onchange = () => {
       const file = input.files?.[0]; files.delete(info.id);
-      const valid = file && matchesFile(file, info);
-      dialog.querySelector('[role=alert]')!.textContent = valid ? '' : '文件名、大小或修改时间与工作区记录不一致，请选择原始文件。';
-      if (valid) files.set(info.id, file);
+      const mismatch = file ? fileMismatch(file, info) : null;
+      const valid = !!file && mismatch !== 'identity';
+      dialog.querySelector('[role=alert]')!.textContent = mismatch === 'mtime' ? '修改时间与工作区记录不一致，将按此文件恢复。' : valid ? '' : '文件名或大小与工作区记录不一致，请选择原始文件。';
+      if (valid) { files.set(info.id, file!); if (mismatch === 'mtime') warnModified?.(info); }
       proceed.disabled = files.size !== media.length;
     };
     label.append(name, input); dialog.querySelector('.relink-files')!.append(label);
@@ -69,6 +72,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
+  const warnModified = (info: MediaInfo) => options.toasts.show(`「${info.name}」的修改时间与工作区记录不一致，已按同名同大小文件恢复。`);
   async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false) {
     if (importing) throw new Error('工作区正在导入，请等待完成。');
     importing = true;
@@ -76,7 +80,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       const document = parseWorkspace(value, location.href);
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery);
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnModified);
       if (!files) return false;
       const rollback=options.beforeRestore();
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
@@ -96,11 +100,11 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
   saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0 && !session.getState().busy, report:error=>void options.act(()=>{throw error;},'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const files = await resolveLocalFiles(pending.filter(t => !t.source), []);
+    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnModified);
     if (!files) return;
     for (const info of pending) {
       if (!info.source && !files.has(info.id)) continue;
