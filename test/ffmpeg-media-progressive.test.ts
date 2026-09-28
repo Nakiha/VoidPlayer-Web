@@ -13,7 +13,8 @@ class DelayedIndexWorker {
   listeners = new Map<string, Set<(event: { data: any }) => void>>();
   initId = 0;
   terminated = false;
-  constructor(private readonly firstDuration = 3_600) {}
+  firstDuration: number;
+  constructor(firstDuration = 3_600) { this.firstDuration = firstDuration; }
 
   addEventListener(type: string, listener: (event: { data: any }) => void) {
     const listeners = this.listeners.get(type) ?? new Set();
