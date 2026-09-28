@@ -5,7 +5,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { MediaIndexClient } from './media-index-client.ts';
-import { FFMPEG_INDEX_BYTES, FfmpegIndexDocument, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -46,6 +46,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
   const path = `/vp-in-${randomUUID()}`;
   let blobHandle = 0;
+  let indexClient: MediaIndexClient | undefined;
   try {
     // Player-assigned decode thread budget (no-op on the single-thread core).
     if (payload.threads) core.ccall('vp_set_threads', null, ['number'], [payload.threads]);
@@ -79,7 +80,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     onProgress('index');
     const indexStart = performance.now();
-    const indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
+    indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
       ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000) : undefined;
     let indexSource: 'server' | 'client' = 'client';
     let count = 0;
@@ -130,29 +131,30 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
     if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
-    contexts.set(ctx, { ticks, blobHandle, path, indexClient });
     if (indexSource === 'client' && indexClient) {
-      const recordBytes = count * 24;
-      const records = new Uint8Array(recordBytes);
-      const view = new DataView(records.buffer);
-      for (let i = 0; i < count; i++) {
-        const offset = i * 24;
-        const tick = core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]) as bigint;
-        const duration = core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]) as bigint;
-        view.setBigInt64(offset, tick, true);
-        view.setBigInt64(offset + 8, duration, true);
-        view.setUint32(offset + 16, core.ccall('vp_index_is_key', 'number', ['number', 'number'], [ctx, i]) ? 1 : 0, true);
-      }
-      const document = serializeFfmpegIndex({
-        size: payload.mediaSize!,
-        codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
-        timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
-        timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
-        width: core.ccall('vp_width', 'number', ['number'], [ctx]),
-        height: core.ccall('vp_height', 'number', ['number'], [ctx]),
-      }, records);
-      void indexClient.save(document).catch(() => {});
+      try {
+        const records = new Uint8Array(count * 24);
+        const view = new DataView(records.buffer);
+        for (let i = 0; i < count; i++) {
+          const offset = i * 24;
+          const tick = core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]) as bigint;
+          const duration = core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]) as bigint;
+          view.setBigInt64(offset, tick, true);
+          view.setBigInt64(offset + 8, duration, true);
+          view.setUint32(offset + 16, core.ccall('vp_index_is_key', 'number', ['number', 'number'], [ctx, i]) ? 1 : 0, true);
+        }
+        const document = serializeFfmpegIndex({
+          size: payload.mediaSize!,
+          codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+          timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+          timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+          width: core.ccall('vp_width', 'number', ['number'], [ctx]),
+          height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+        }, records);
+        void indexClient.save(document).catch(() => {});
+      } catch { /* An oversized or unsupported index must not block playback. */ }
     }
+    contexts.set(ctx, { ticks, blobHandle, path, indexClient });
     return {
       ctx, path, ticks, durations, indexMs, indexSource, ioMode,
       seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,

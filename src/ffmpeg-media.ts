@@ -74,6 +74,7 @@ interface InitResult {
   height: number;
   codec: string;
   indexMs?: number;
+  indexSource?: 'server' | 'client';
   seekAnchorCount?: number;
   ioMode?: 'blob' | 'memfs' | 'http-range';
   colorPrimaries?: number;
@@ -197,7 +198,7 @@ export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps:
 function ffmpegIndexEndpoint(url: string): string | undefined {
   try {
     const source = new URL(url, globalThis.location?.href);
-    if (!/^\\/api\\/media\\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
+    if (!/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
     source.pathname += '/frame-index';
     source.searchParams.set('kind', 'ffmpeg');
     return source.href;
@@ -274,7 +275,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // Includes fetching/compiling the core and scanning the file's index.
       // Five seconds is not a viable cold-start budget over a LAN.
       deps.onProgress?.('decoder');
-      init = await rpc.call<InitResult>('init', payload, transfer, 60000);
+      init = await rpc.call<InitResult>('init', payload, transfer, 300000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,

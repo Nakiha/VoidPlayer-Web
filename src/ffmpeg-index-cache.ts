@@ -45,10 +45,11 @@ export function encodeBase64(bytes: Uint8Array): string {
 export function serializeFfmpegIndex(metadata: FfmpegIndexMetadata, records: Uint8Array): FfmpegIndexDocument {
   if (records.byteLength === 0 || records.byteLength % FFMPEG_INDEX_RECORD_BYTES !== 0) throw new Error('FFmpeg 索引记录长度无效。');
   const count = records.byteLength / FFMPEG_INDEX_RECORD_BYTES;
-  if (count > FFMPEG_INDEX_RECORD_LIMIT || records.byteLength > FFMPEG_INDEX_BYTES) throw new Error('FFmpeg 索引超过缓存上限。');
+  const encoded = encodeBase64(records);
+  if (count > FFMPEG_INDEX_RECORD_LIMIT || encoded.length > FFMPEG_INDEX_BYTES) throw new Error('FFmpeg 索引超过缓存上限。');
   return {
     schema: FFMPEG_INDEX_SCHEMA, kind: FFMPEG_INDEX_KIND, ...metadata,
-    recordBytes: FFMPEG_INDEX_RECORD_BYTES, count, records: encodeBase64(records),
+    recordBytes: FFMPEG_INDEX_RECORD_BYTES, count, records: encoded,
   };
 }
 
@@ -62,7 +63,7 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     || !Number.isSafeInteger(doc.height) || doc.height <= 0 || doc.height > 16384
     || doc.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
     || !Number.isSafeInteger(doc.count) || doc.count <= 0 || doc.count > FFMPEG_INDEX_RECORD_LIMIT
-    || typeof doc.records !== 'string' || doc.records.length > Math.ceil(FFMPEG_INDEX_BYTES / 3) * 4
+    || typeof doc.records !== 'string' || doc.records.length > FFMPEG_INDEX_BYTES
     || doc.records.length % 4 !== 0
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(doc.records)) return null;
   for (const key of ['codec', 'timeBaseNum', 'timeBaseDen', 'width', 'height'] as const) {

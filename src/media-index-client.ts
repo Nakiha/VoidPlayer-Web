@@ -7,7 +7,7 @@ export class MediaIndexClient {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
-        if (/^\\/api\\/media\\/[0-9a-f]{24}$/.test(source.pathname) && source.searchParams.has('v')) {
+        if (/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) && source.searchParams.has('v')) {
           source.pathname += '/frame-index';
           source.searchParams.set('kind', kind);
           this.endpoint = source.href;
@@ -51,7 +51,7 @@ export class MediaIndexClient {
     const result = await this.lookup;
     if (!this.endpoint || !result || this.controller.signal.aborted) return;
     const body = JSON.stringify({ epoch: result.epoch, kind: this.kind, index });
-    if (new TextEncoder().encode(body).byteLength > this.maxBytes) return;
+    if (body.length > this.maxBytes) return;
     const response = await fetch(this.endpoint, {
       method: 'POST',
       headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'frame-index' },
