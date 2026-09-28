@@ -10,6 +10,7 @@ import type { DecodedFrame, MediaSource, MediaMeta } from './media.ts';
 import type { MediaInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
+import { updateMediaInfo } from './media-state.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
@@ -65,6 +66,8 @@ export interface FallbackDeps {
 
 interface InitResult {
   ctx: number;
+  firstPts?: number;
+  firstFrame?: WasmFrameOutput;
   path: string;
   ticks: number[];
   durations: number[];
@@ -111,6 +114,8 @@ async function createWorker(): Promise<Worker> {
 export class WorkerRpc {
   onIndexWaiting?: (waiting: boolean) => void;
   onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
+  private indexHandlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
+  private queuedIndexEvents: { type: 'index-complete' | 'index-error'; data: any }[] = [];
   private workerId=randomUUID();
   private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
@@ -121,7 +126,21 @@ export class WorkerRpc {
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: unknown; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
+    const onMessage = (data: { id: number; ok: boolean; data: any; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
+      if (data.type === 'ready') {
+        const entry = this.pending.get(data.id);
+        if (!entry) return;
+        clearTimeout(entry.timer); this.pending.delete(data.id); entry.resolve(data.data);
+        return;
+      }
+      if (data.type === 'index-complete' || data.type === 'index-error') {
+        if (this.failure) return;
+        if (this.indexHandlers) {
+          if (data.type === 'index-complete') this.indexHandlers.complete?.(data.data);
+          else this.indexHandlers.error?.(data.data);
+        } else this.queuedIndexEvents.push({ type: data.type, data: data.data });
+        return;
+      }
       if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
       if (data.type === 'index-progress') {
         if (!this.failure && this.pending.has(data.id)) {
@@ -164,6 +183,15 @@ export class WorkerRpc {
       anyWorker.on('message', onMessage);
       anyWorker.on('error', (e: unknown) => fail(e instanceof Error ? e.message : String(e)));
       anyWorker.on('exit', (code: number) => fail(`exit ${code}`));
+    }
+  }
+  setIndexHandlers(handlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void }) {
+    this.indexHandlers = handlers;
+    if (!handlers) return;
+    const queued = this.queuedIndexEvents.splice(0);
+    for (const event of queued) {
+      if (event.type === 'index-complete') handlers.complete?.(event.data);
+      else handlers.error?.(event.data);
     }
   }
   call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
