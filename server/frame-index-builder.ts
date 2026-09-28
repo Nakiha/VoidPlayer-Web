@@ -1,4 +1,5 @@
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
+import type { Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -13,14 +14,14 @@ export function hasServerIndexCore(coreDir: string): boolean {
 }
 
 /** Build a cache using local-file AVIO reads; the media itself never enters WASM memory. */
-function fileVersion(stat: ReturnType<typeof statSync>) {
+function fileVersion(stat: Stats) {
   return createHash('sha256').update(stat.size + ':' + Math.round(stat.mtimeMs) + ':' + Math.round(stat.ctimeMs) + ':' + stat.ino).digest('hex').slice(0, 24);
 }
 
 export async function buildFfmpegIndexDocument(filePath: string, expectedSize: number, expectedVersion: string, coreDir: string, identity: MediaIndexIdentity): Promise<FfmpegIndexDocument> {
   if (!hasServerIndexCore(coreDir)) throw new Error('服务端 FFmpeg WASM core 不可用。');
   const stat = statSync(filePath);
-  if (!stat.isFile() || stat.size !== expectedSize || fileVersion(stat) !== expectedVersion) throw new Error('媒体文件在建立索引前已改变。');
+  if (!stat || !stat.isFile() || stat.size !== expectedSize || fileVersion(stat) !== expectedVersion) throw new Error('媒体文件在建立索引前已改变。');
   const gluePath = path.join(coreDir, 'voidplayer-core.js');
   const wasmPath = path.join(coreDir, 'voidplayer-core.wasm');
   const wasm = new Uint8Array(await readFile(wasmPath));
@@ -77,7 +78,7 @@ export async function buildFfmpegIndexDocument(filePath: string, expectedSize: n
       if (exported !== count) throw new Error('服务端 FFmpeg 索引导出失败。');
       const records = heap().slice(recordPtr, recordPtr + recordBytes);
       const after = statSync(filePath);
-      if (!after.isFile() || after.size !== expectedSize || fileVersion(after) !== expectedVersion) throw new Error('媒体文件在建立索引时已改变。');
+      if (!after || !after.isFile() || after.size !== expectedSize || fileVersion(after) !== expectedVersion) throw new Error('媒体文件在建立索引时已改变。');
       return serializeFfmpegIndex({
         size: fileSize,
         codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),

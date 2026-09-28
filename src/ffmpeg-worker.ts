@@ -80,17 +80,22 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     onProgress('index');
     const indexStart = performance.now();
-    const streamIndex = core.ccall('vp_stream_index', 'number', ['number'], [ctx]) as number;
-    const indexerBuild = core.ccall('vp_core_build_id', 'string', [], []) as string;
+    const hasIndexIdentityAbi = typeof core._vp_stream_index === 'function' && typeof core._vp_core_build_id === 'function';
+    const streamIndex = hasIndexIdentityAbi ? core.ccall('vp_stream_index', 'number', ['number'], [ctx]) as number : -1;
+    const indexerBuild = hasIndexIdentityAbi ? core.ccall('vp_core_build_id', 'string', [], []) as string : '';
     const indexIdentity = { kind: 'ffmpeg' as const, streamKey: `video:${streamIndex}`, schemaVersion: FFMPEG_INDEX_SCHEMA, indexerBuild };
-    const canImportIndex = typeof core._vp_index_import === 'function'
+    const canImportIndex = hasIndexIdentityAbi
+      && typeof core._vp_index_import === 'function'
       && typeof core._vp_index_export === 'function'
       && typeof core._vp_index_export_bytes === 'function'
+      && typeof core._vp_index_seek_anchors === 'function'
+      && typeof core._vp_index_abi_version === 'function'
+      && typeof core._vp_index_record_bytes === 'function'
       && /^[a-f0-9]{40}$/.test(indexerBuild)
       && core.ccall('vp_index_abi_version', 'number', [], []) === 2
       && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
-    indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, canImportIndex ? 300000 : 2000, canImportIndex, indexIdentity) : undefined;
+    indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity) : undefined;
     let indexSource: 'server' | 'client' = 'client';
     let count = 0;
     if (indexClient && canImportIndex) {
@@ -110,9 +115,17 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
           if (!ptr) throw new Error('FFmpeg 索引导入内存分配失败。');
           try {
             heap().set(parsed.records, ptr);
+            const recordView = new DataView(parsed.records.buffer, parsed.records.byteOffset, parsed.records.byteLength);
+            let expectedSeekAnchors = 0;
+            for (let i = 0; i < parsed.document.count; i++) {
+              if ((recordView.getUint32(i * FFMPEG_INDEX_RECORD_BYTES + 36, true) & 2) !== 0) expectedSeekAnchors++;
+            }
             const imported = core.ccall('vp_index_import', 'number', ['number', 'number', 'number'], [ctx, ptr, parsed.document.count]);
-            if (imported === parsed.document.count) { count = imported; indexSource = 'server'; }
-            else throw new MediaOpenError('resource', '服务器索引无法安全导入，已停止这次解码。');
+            if (imported !== parsed.document.count) throw new MediaOpenError('resource', '服务器索引无法安全导入，已停止这次解码。');
+            const importedSeekAnchors = core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) as number;
+            if (importedSeekAnchors !== expectedSeekAnchors) throw new MediaOpenError('resource', '服务器索引的 seek anchor 数量不匹配，已停止这次解码。');
+            count = imported;
+            indexSource = 'server';
           } finally { core._free(ptr); }
         }
       } catch (error) {

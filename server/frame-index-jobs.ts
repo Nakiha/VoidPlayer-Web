@@ -145,7 +145,7 @@ export class FrameIndexJobs {
         if (result.error) finish(new AdminError(result.status ?? 500, result.error));
         else finish(undefined, result.value);
       });
-      worker.once('error', error => finish(error));
+      worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
       worker.once('exit', code => { if (!settled) finish(new Error('FFmpeg 索引构建 Worker 已退出 (' + code + ')')); });
       try { worker.postMessage(request); }
       catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
