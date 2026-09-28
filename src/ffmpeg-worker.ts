@@ -4,6 +4,8 @@ import { MediaOpenError } from './media-errors.ts';
 import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
+import { MediaIndexClient } from './media-index-client.ts';
+import { FFMPEG_INDEX_BYTES, FfmpegIndexDocument, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -33,9 +35,9 @@ const port: any = (() => {
 
 let core: any = null;
 let heap: () => Uint8Array;
-const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string }>();
+const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string; indexClient?: MediaIndexClient }>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number }, onProgress: MediaOpenProgress) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress) {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -77,8 +79,37 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     onProgress('index');
     const indexStart = performance.now();
-    const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
-    if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
+    const indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000) : undefined;
+    let indexSource: 'server' | 'client' = 'client';
+    let count = 0;
+    if (indexClient && typeof core._vp_index_import === 'function'
+      && core.ccall('vp_index_abi_version', 'number', [], []) === 1
+      && core.ccall('vp_index_record_bytes', 'number', [], []) === 24) {
+      try {
+        const cached = await indexClient.read();
+        const parsed = parseFfmpegIndex(cached, payload.mediaSize!, {
+          codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+          timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+          timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+          width: core.ccall('vp_width', 'number', ['number'], [ctx]),
+          height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+        });
+        if (parsed) {
+          const ptr = core._malloc(parsed.records.byteLength);
+          if (!ptr) throw new Error('FFmpeg 索引导入内存分配失败。');
+          try {
+            heap().set(parsed.records, ptr);
+            const imported = core.ccall('vp_index_import', 'number', ['number', 'number', 'number'], [ctx, ptr, parsed.document.count]);
+            if (imported === parsed.document.count) { count = imported; indexSource = 'server'; }
+          } finally { core._free(ptr); }
+        }
+      } catch { /* An unavailable or stale server index falls back to local indexing. */ }
+    }
+    if (!count) {
+      count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
+    }
+    if (count <= 0) { indexClient?.close(); throw new Error('FFmpeg WASM 无法建立该文件的帧索引。'); }
     const indexMs = Math.round(performance.now() - indexStart);
     const ticks: number[] = new Array(count);
     const durations: number[] = new Array(count);
@@ -99,9 +130,31 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
     if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
-    contexts.set(ctx, { ticks, blobHandle, path });
+    contexts.set(ctx, { ticks, blobHandle, path, indexClient });
+    if (indexSource === 'client' && indexClient) {
+      const recordBytes = count * 24;
+      const records = new Uint8Array(recordBytes);
+      const view = new DataView(records.buffer);
+      for (let i = 0; i < count; i++) {
+        const offset = i * 24;
+        const tick = core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]) as bigint;
+        const duration = core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]) as bigint;
+        view.setBigInt64(offset, tick, true);
+        view.setBigInt64(offset + 8, duration, true);
+        view.setUint32(offset + 16, core.ccall('vp_index_is_key', 'number', ['number', 'number'], [ctx, i]) ? 1 : 0, true);
+      }
+      const document = serializeFfmpegIndex({
+        size: payload.mediaSize!,
+        codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+        timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+        timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+        width: core.ccall('vp_width', 'number', ['number'], [ctx]),
+        height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+      }, records);
+      void indexClient.save(document).catch(() => {});
+    }
     return {
-      ctx, path, ticks, durations, indexMs, ioMode,
+      ctx, path, ticks, durations, indexMs, indexSource, ioMode,
       seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
@@ -116,6 +169,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     };
   } catch (error) {
     if (blobHandle) core.vpBlobs.delete(blobHandle);
+    indexClient?.close();
     try { core.FS.unlink(path); } catch { /* best effort */ }
     core.ccall('vp_destroy', null, ['number'], [ctx]);
     throw error;
@@ -151,6 +205,7 @@ port.onmessage = async (event: { data: any }) => {
       const entry = contexts.get(ctx);
       if (contexts.delete(ctx)) {
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
+        entry?.indexClient?.close();
         try { core.FS.unlink(payload.path); } catch { /* already gone */ }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
       }

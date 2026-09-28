@@ -194,6 +194,16 @@ export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps:
   return openSoftwareMedia({ url, size: meta.size }, meta, deps);
 }
 
+function ffmpegIndexEndpoint(url: string): string | undefined {
+  try {
+    const source = new URL(url, globalThis.location?.href);
+    if (!/^\\/api\\/media\\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
+    source.pathname += '/frame-index';
+    source.searchParams.set('kind', 'ffmpeg');
+    return source.href;
+  } catch { return undefined; }
+}
+
 /** Raw container adapter; higher layers select it through the shared router. */
 export function openFFmpegContainerFromUrl(url: string, meta: MediaMeta, deps: FallbackDeps = {}): Promise<MediaSource> {
   return openFallbackInput({ ...meta, url }, deps);
@@ -253,7 +263,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const activeRpc = rpc;
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
-      const payload: Record<string, unknown> = { glueURL, name: file.name, threads,
+      const indexUrl = 'url' in file ? ffmpegIndexEndpoint(file.url) : undefined;
+      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, mediaSize: file.size, ...(indexUrl ? { indexUrl } : {}),
         ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
@@ -267,7 +278,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
-        ioMode: init.ioMode, readMs, initIndexMs: init.indexMs, threads,
+        ioMode: init.ioMode, indexSource: init.indexSource, readMs, initIndexMs: init.indexMs, threads,
       });
       break;
     } catch (error) {
@@ -300,7 +311,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
-    indexSource: 'client', indexState: 'complete',
+    indexSource: init.indexSource ?? 'client', indexState: 'complete',
     indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
     seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
   };
