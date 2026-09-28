@@ -17,6 +17,8 @@ export interface FfmpegIndexDocument {
   recordBytes: number;
   streamIndex: number;
   indexerBuild: string;
+  firstPts?: string;
+  originVerified?: boolean;
   count: number;
   records: string;
 }
@@ -29,6 +31,8 @@ export interface FfmpegIndexMetadata {
   height: number;
   streamIndex: number;
   indexerBuild: string;
+  firstPts?: string;
+  originVerified?: boolean;
 }
 export interface ParsedFfmpegIndex {
   document: FfmpegIndexDocument;
@@ -68,6 +72,8 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     || !Number.isSafeInteger(doc.height) || doc.height <= 0 || doc.height > 16384
     || !Number.isSafeInteger(doc.streamIndex) || doc.streamIndex < 0 || doc.streamIndex > 64
     || typeof doc.indexerBuild !== 'string' || !/^[a-f0-9]{40}$/.test(doc.indexerBuild)
+    || (doc.firstPts !== undefined && (typeof doc.firstPts !== 'string' || !/^-?\d+$/.test(doc.firstPts)))
+    || (doc.originVerified !== undefined && typeof doc.originVerified !== 'boolean')
     || doc.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
     || !Number.isSafeInteger(doc.count) || doc.count <= 0 || doc.count > FFMPEG_INDEX_RECORD_LIMIT
     || typeof doc.records !== 'string' || doc.records.length > FFMPEG_INDEX_BYTES

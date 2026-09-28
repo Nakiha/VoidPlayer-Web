@@ -10,7 +10,7 @@ const store = new FrameIndexStore(db);
 
 parentPort!.on('message', (request: {
   rpcId: number; op: string; id?: string; version?: string; size?: number;
-  bytes?: Uint8Array; identity?: MediaIndexIdentity; epoch?: number;
+  bytes?: Uint8Array; identity?: MediaIndexIdentity; epoch?: number; after?: number; limit?: number;
 }) => {
   try {
     let value: unknown;
@@ -29,6 +29,10 @@ parentPort!.on('message', (request: {
       ));
       parentPort!.postMessage({ rpcId: request.rpcId, value: result }, [result.buffer]);
       return;
+    } else if (request.op === 'stream-manifest') {
+      value = store.streamManifest(request.id!, request.version!, request.identity!);
+    } else if (request.op === 'stream-batches') {
+      value = store.streamBatches(request.id!, request.version!, request.identity!, request.after ?? -1, request.limit ?? 16);
     } else {
       throw new Error('Unknown index worker operation');
     }

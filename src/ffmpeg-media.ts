@@ -114,8 +114,8 @@ async function createWorker(): Promise<Worker> {
 export class WorkerRpc {
   onIndexWaiting?: (waiting: boolean) => void;
   onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
-  private indexHandlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
-  private queuedIndexEvents: { type: 'index-complete' | 'index-error'; data: any }[] = [];
+  private indexHandlers?: { batch?: (data: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string }) => void; complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
+  private queuedIndexEvents: { type: 'index-batch' | 'index-complete' | 'index-error'; data: any }[] = [];
   private indexProgressHandler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void;
   private queuedIndexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
   private indexRequestId?: number;
@@ -147,6 +147,12 @@ export class WorkerRpc {
           if (data.type === 'index-complete') this.indexHandlers.complete?.(data.data);
           else this.indexHandlers.error?.(data.data);
         } else this.queuedIndexEvents.push({ type: data.type, data: data.data });
+        return;
+      }
+      if (data.type === 'index-batch') {
+        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal) return;
+        if (this.indexHandlers) this.indexHandlers.batch?.(data.data);
+        else this.queuedIndexEvents.push({ type: 'index-batch', data: data.data });
         return;
       }
       if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
@@ -202,12 +208,13 @@ export class WorkerRpc {
       anyWorker.on('exit', (code: number) => fail(`exit ${code}`));
     }
   }
-  setIndexHandlers(handlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void }) {
+  setIndexHandlers(handlers?: { batch?: (data: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string }) => void; complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void }) {
     this.indexHandlers = handlers;
     if (!handlers) return;
     const queued = this.queuedIndexEvents.splice(0);
     for (const event of queued) {
-      if (event.type === 'index-complete') handlers.complete?.(event.data);
+      if (event.type === 'index-batch') handlers.batch?.(event.data);
+      else if (event.type === 'index-complete') handlers.complete?.(event.data);
       else handlers.error?.(event.data);
     }
   }
@@ -398,6 +405,31 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
   let source: MediaSource;
   const activeRpc = rpc;
+  const applyIndexBatch = (result: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string }) => {
+    if (disposed || result.ctx !== init!.ctx) return;
+    const lastTick = ticks[ticks.length - 1];
+    if (result.ticks.length !== result.durations.length || result.ticks.some(tick => !Number.isSafeInteger(tick))
+      || (result.ticks.length && lastTick !== undefined && result.ticks[0] < lastTick)
+      || !Number.isFinite(result.stableCoverageUs) || result.stableCoverageUs < 0) {
+      activeRpc.terminate(new MediaOpenError('resource', '服务端 FFmpeg 索引 batch 破坏了呈现时间顺序。'));
+      return;
+    }
+    if (result.ticks.length) {
+      ticks.push(...result.ticks);
+      durationsTicks.push(...result.durations);
+      relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
+      durationsUs = frameDurationsUs(ticks, durationsTicks);
+    }
+    const stableCoverageUs = Math.max(info.stableCoverageUs ?? 1, Math.floor(result.stableCoverageUs));
+    updateMediaInfo(source, {
+      stableCoverageUs,
+      durationUs: Math.max(info.durationUs, stableCoverageUs),
+      indexSource: 'server',
+      seekAnchorCount: result.seekAnchorCount,
+      seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
+    }, 'index');
+    wakeIndex();
+  };
   const applyIndexComplete = (result: InitResult) => {
     if (disposed) return;
     if (!result.ticks.length || result.ticks[0] !== firstTick) {
@@ -520,7 +552,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       activeRpc.terminate(undefined, false);
     },
   };
-  activeRpc.setIndexHandlers({ complete: applyIndexComplete, error: applyIndexError });
+  activeRpc.setIndexHandlers({ batch: applyIndexBatch, complete: applyIndexComplete, error: applyIndexError });
   activeRpc.setIndexProgressHandler(progress => {
     if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');
   });

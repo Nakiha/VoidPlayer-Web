@@ -71,12 +71,17 @@ try {
       if (!local && name === 'mpeg2.ts') {
         assert.equal(first.error, null);
         assert.equal(first.tracks[0].indexSource, 'server', 'cold FFmpeg library index must import from the server');
+        assert.ok(['building', 'complete'].includes(first.tracks[0].indexState), 'the primed source is available independently from the server scan');
         await firstIndexStream;
-        const buildingAt = indexEvents.findIndex(event => event.type === 'manifest' && event.state === 'building');
+        const manifestAt = indexEvents.findIndex(event => event.type === 'manifest' && event.protocol === 2);
         const scanAt = indexEvents.findIndex(event => event.type === 'progress' && event.phase === 'scan');
-        const completeAt = indexEvents.findIndex(event => event.type === 'manifest' && event.state === 'complete');
-        assert.ok(buildingAt >= 0 && scanAt > buildingAt && completeAt > scanAt, 'cold NDJSON must report scan progress before completed-document batches');
-        assert.ok(indexEvents.filter(event => event.type === 'batch').every(event => event.safePresentationUs === null), 'document chunks must not claim a playable frontier');
+        const batches = indexEvents.filter(event => event.type === 'batch');
+        const completeAt = indexEvents.findIndex(event => event.type === 'complete');
+        assert.ok(manifestAt >= 0 && scanAt > manifestAt && completeAt > scanAt, 'cold record stream must report scan progress before completion');
+        assert.ok(batches.length > 0 && batches.every(event => event.buildId === indexEvents[manifestAt].buildId
+          && Number.isSafeInteger(event.count) && event.count > 0
+          && Number.isSafeInteger(event.safePresentationUs)), 'record batches carry one build identity and a stable coverage watermark');
+        assert.ok(batches.some(event => event.safePresentationUs > 0), 'TS scan publishes a seekable presentation prefix');
         await call('remove_review_track', { slot: 'A' });
         await call('load_library_item', { id: libraryEntryId, slot: 'A' });
         const warm = await call('get_review_session');
@@ -87,7 +92,10 @@ try {
       assert.equal(first.tracks[0].container, name === 'h264.mp4' ? 'isobmff' : 'mpegts');
       if (long || software) {
         assert.equal(first.tracks[0].decoder, 'ffmpeg-wasm');
-        assert.equal(first.tracks[0].indexState, 'complete');
+        if (!local && name === 'mpeg2.ts') {
+          const completed = await call('get_review_session');
+          assert.equal(completed.tracks[0].indexState, 'complete', 'all stable batches finalize the FFmpeg source');
+        } else assert.equal(first.tracks[0].indexState, 'complete');
         assert.equal(first.tracks[0].seekStrategy, 'demuxer-keyframe');
         assert.ok(first.tracks[0].seekAnchorCount > 0);
       } else assert.equal(first.tracks[0].decoder, 'webcodecs', 'supported H.264 uses native in both TS and MP4');

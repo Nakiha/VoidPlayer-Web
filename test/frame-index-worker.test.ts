@@ -63,7 +63,7 @@ test('manifest identity keeps FLV and FFmpeg payloads separate for one media ver
       schema: 2, kind: 'ffmpeg-container', size: entry.size, codec: 'mpeg2video',
       timeBaseNum: 1, timeBaseDen: 90000, width: 1280, height: 720,
       streamIndex: 0, indexerBuild: ffmpegIdentity.indexerBuild,
-      recordBytes: 40, count: 2, records: records.toString('base64'),
+      recordBytes: 40, count: 2, firstPts: '10', originVerified: false, records: records.toString('base64'),
     };
     const flvReader = new FlvReader({ file: new Blob([media]) });
     const flvDocument = serializeFlvIndex(await demuxFlv(flvReader), media.length); flvReader.close();

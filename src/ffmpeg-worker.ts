@@ -5,7 +5,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { MediaIndexClient } from './media-index-client.ts';
-import type { MediaIndexScanProgress } from './media-index-client.ts';
+import type { MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress } from './media-index-client.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
@@ -36,7 +36,8 @@ const port: any = (() => {
 
 let core: any = null;
 let heap: () => Uint8Array;
-const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string; indexClient?: MediaIndexClient }>();
+let indexRequestId: number | undefined;
+const contexts = new Map<number, { ticks: number[]; durations: number[]; blobHandle: number; path: string; indexClient?: MediaIndexClient }>();
 
 async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress, onReady?: (data: any) => void, onIndexProgress?: (progress: MediaIndexScanProgress) => void) {
   onProgress('decoder');
@@ -95,15 +96,92 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       && typeof core._vp_index_record_bytes === 'function'
       && /^[a-f0-9]{40}$/.test(indexerBuild)
       && core.ccall('vp_index_abi_version', 'number', [], []) === 2
+      && typeof core._vp_index_stream_abi_version === 'function'
+      && core.ccall('vp_index_stream_abi_version', 'number', [], []) === 1
+      && typeof core._vp_index_import_begin === 'function'
+      && typeof core._vp_index_import_batch === 'function'
       && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
+    let streamImportStarted = false;
+    let streamImportComplete = false;
+    let streamedBuildId = '';
+    let streamedCount = 0;
+    let streamedLastSeq = -1;
+    let streamedSafeTick = 0n;
+    let originRecordSkipped = false;
+    const importRecordManifest = (manifest: MediaIndexRecordManifest) => {
+      const metadata = manifest.metadata;
+      if (metadata.size !== payload.mediaSize || metadata.codec !== core.ccall('vp_codec_name', 'string', ['number'], [ctx])
+        || metadata.timeBaseNum !== core.ccall('vp_tb_num', 'number', ['number'], [ctx])
+        || metadata.timeBaseDen !== core.ccall('vp_tb_den', 'number', ['number'], [ctx])
+        || metadata.width !== core.ccall('vp_width', 'number', ['number'], [ctx])
+        || metadata.height !== core.ccall('vp_height', 'number', ['number'], [ctx])
+        || metadata.streamIndex !== streamIndex || metadata.indexerBuild !== indexerBuild) {
+        throw new MediaOpenError('resource', '服务端索引元数据与当前解码流不匹配。');
+      }
+      const originVerified = metadata.originVerified === true;
+      if (originVerified && firstPresentation && String(metadata.firstPts) !== String(firstPresentation.pts)) {
+        throw new MediaOpenError('resource', '服务端索引改变了首帧时间轴起点。');
+      }
+      streamedBuildId = manifest.buildId;
+    };
+    const importRecordBatch = (batch: MediaIndexRecordBatch) => {
+      if (!firstPresentation || !streamedBuildId || batch.buildId !== streamedBuildId) throw new MediaOpenError('resource', 'FFmpeg 索引 batch 不属于当前 build。');
+      if (!streamImportStarted) {
+        if (core.ccall('vp_index_import_begin', 'number', ['number'], [ctx]) !== 1) throw new MediaOpenError('resource', 'FFmpeg 无法开始渐进导入服务端索引。');
+        streamImportStarted = true;
+      }
+      const view = new DataView(batch.records.buffer, batch.records.byteOffset, batch.records.byteLength);
+      const safeTick = view.getBigInt64(batch.records.byteLength - FFMPEG_INDEX_RECORD_BYTES, true);
+      const ptr = core._malloc(batch.records.byteLength);
+      if (!ptr) throw new MediaOpenError('resource', 'FFmpeg 索引 batch 内存分配失败。');
+      const previousCount = streamedCount;
+      try {
+        heap().set(batch.records, ptr);
+        const imported = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
+          [ctx, ptr, batch.count, batch.seq, safeTick, 0]) as number;
+        if (imported !== batch.count) throw new MediaOpenError('resource', '服务端 FFmpeg 索引 batch 无法安全导入。');
+      } finally { core._free(ptr); }
+      streamedCount += batch.count;
+      streamedLastSeq = batch.seq;
+      streamedSafeTick = safeTick;
+      const entry = contexts.get(ctx);
+      if (!entry) throw new MediaOpenError('resource', '索引尚未绑定到可播放媒体。');
+      const newTicks: number[] = [], newDurations: number[] = [];
+      for (let i = previousCount; i < streamedCount; i++) {
+        const tick = Number(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]));
+        const duration = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]));
+        if (tick < firstPresentation.pts) continue;
+        if (!originRecordSkipped && tick === firstPresentation.pts) { originRecordSkipped = true; continue; }
+        newTicks.push(tick);
+        newDurations.push(duration);
+      }
+      entry.ticks.push(...newTicks);
+      entry.durations.push(...newDurations);
+      const timeBaseNum = core.ccall('vp_tb_num', 'number', ['number'], [ctx]) as number;
+      const timeBaseDen = core.ccall('vp_tb_den', 'number', ['number'], [ctx]) as number;
+      const toUs = (value: number) => Math.round(value * 1e6 * timeBaseNum / timeBaseDen);
+      const lastDuration = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, streamedCount - 1]));
+      const durationCoverageUs = lastDuration > 0 ? Math.max(1, toUs(lastDuration)) : 1;
+      const stableCoverageUs = Math.max(1, toUs(Number(safeTick) - firstPresentation.pts) + durationCoverageUs);
+      port.postMessage({ id: indexRequestId, type: 'index-batch', data: { ctx, ticks: newTicks, durations: newDurations,
+        stableCoverageUs, seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]), buildId: streamedBuildId } });
+    };
+    const finishRecordImport = (_manifest: MediaIndexRecordManifest, _frames: number) => {
+      if (!streamImportStarted || streamImportComplete) return;
+      const result = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
+        [ctx, 0, 0, streamedLastSeq + 1, streamedSafeTick, 1]) as number;
+      if (result !== 0) throw new MediaOpenError('resource', 'FFmpeg 无法完成服务端索引导入。');
+      streamImportComplete = true;
+    };
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity, progress => onIndexProgress?.(progress)) : undefined;
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity,
+        progress => onIndexProgress?.(progress), importRecordManifest, importRecordBatch, finishRecordImport) : undefined;
     if (indexClient && typeof core._vp_prime_first_presentable === 'function') {
       const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
       if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
       firstPresentation = readWasmFrame(core, heap, ctx);
       const firstTicks = firstPresentation.pts;
-      contexts.set(ctx, { ticks: [firstTicks], blobHandle, path, indexClient });
+      contexts.set(ctx, { ticks: [firstTicks], durations: [firstPresentation.duration], blobHandle, path, indexClient });
       onReady?.({
         ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
         firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
@@ -127,7 +205,15 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     if (indexClient && canImportIndex) {
       try {
         const cached = await indexClient.read();
-        const parsed = parseFfmpegIndex(cached, payload.mediaSize!, {
+        const streamResult = cached as { streamed?: unknown; count?: unknown } | null;
+        if (streamResult?.streamed === true) {
+          if (!streamImportComplete || streamedCount !== streamResult.count) throw new MediaOpenError('resource', '服务端索引流未完整导入。');
+          count = streamedCount;
+          indexSource = 'server';
+        } else if (!cached && streamImportStarted) {
+          throw new MediaOpenError('resource', '服务端索引流中断；已保留稳定前缀，未将其当作完整索引。');
+        }
+        const parsed = streamResult?.streamed === true ? null : parseFfmpegIndex(cached, payload.mediaSize!, {
           codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
           timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
           timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
@@ -209,12 +295,14 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
             height: core.ccall('vp_height', 'number', ['number'], [ctx]),
             streamIndex,
             indexerBuild,
+            firstPts: String(firstPresentation?.pts ?? ticks[0]),
+            originVerified: !!firstPresentation,
           }, records);
           void indexClient.save(document).catch(() => {});
         } finally { core._free(recordPtr); }
       } catch { /* An oversized or unsupported index must not block playback. */ }
     }
-    contexts.set(ctx, { ticks, blobHandle, path, indexClient });
+    contexts.set(ctx, { ticks, durations, blobHandle, path, indexClient });
     return {
       ctx, path, ticks, durations, indexMs, indexSource, localIndexBuildCalls, ioMode,
       seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
@@ -263,6 +351,7 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
 
 port.onmessage = async (event: { data: any }) => {
   const { id, type, ...payload } = event.data;
+  if (type === 'init') indexRequestId = id;
   let readyContext: number | undefined;
   try {
     if (type === 'init') {

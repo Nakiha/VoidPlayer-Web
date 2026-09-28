@@ -1,4 +1,5 @@
 import { Worker } from 'node:worker_threads';
+import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
 import { mediaIndexIdentityKey } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
@@ -11,9 +12,11 @@ type BuildRequest = {
   filePath: string;
   epoch: number;
   identity: MediaIndexIdentity;
+  buildId: string;
 };
 type IndexBuildProgress = { phase: 'scan'; packets: number; scannedBytes: number; totalBytes: number };
 type ProgressListener = (progress: IndexBuildProgress) => void;
+type BuildUpdateListener = () => void;
 type QueuedBuild = {
   key: string;
   request: BuildRequest;
@@ -21,6 +24,8 @@ type QueuedBuild = {
   resolve(value: any): void;
   reject(error: Error): void;
   listeners: Set<ProgressListener>;
+  updateListeners: Set<BuildUpdateListener>;
+  buildId: string;
   latestProgress?: IndexBuildProgress;
 };
 
@@ -99,30 +104,43 @@ export class FrameIndexJobs {
     });
   }
 
-  buildIndex(request: BuildRequest, timeoutMs = 300000, onProgress?: ProgressListener): Promise<any> {
-    if (this.closed) return Promise.reject(new AdminError(503, '索引服务已关闭。'));
+  buildIndex(request: Omit<BuildRequest, 'buildId'>, timeoutMs = 300000, onProgress?: ProgressListener): Promise<any> {
+    const handle = this.startBuild(request, timeoutMs, undefined, onProgress);
+    return handle.promise;
+  }
+
+  startBuild(request: Omit<BuildRequest, 'buildId'>, timeoutMs = 300000, onUpdate?: BuildUpdateListener, onProgress?: ProgressListener) {
+    if (this.closed) throw new AdminError(503, '索引服务已关闭。');
     const key = request.id + ':' + request.version + ':' + request.epoch + ':' + mediaIndexIdentityKey(request.identity);
     const joined = this.builds.get(key);
     if (joined) {
+      if (onUpdate) { joined.updateListeners.add(onUpdate); try { onUpdate(); } catch {} }
       if (onProgress) {
         joined.listeners.add(onProgress);
         if (joined.latestProgress) {
           try { onProgress(joined.latestProgress); } catch {}
         }
       }
-      return joined.promise;
+      return { buildId: joined.buildId, promise: joined.promise, unsubscribe: () => { if (onUpdate) joined.updateListeners.delete(onUpdate); if (onProgress) joined.listeners.delete(onProgress); } };
     }
     if (this.activeBuilds >= this.maxConcurrentBuilds && this.buildQueue.length >= this.maxQueuedBuilds) {
-      return Promise.reject(new AdminError(503, '索引构建队列已满，请稍后重试。'));
+      throw new AdminError(503, '索引构建队列已满，请稍后重试。');
     }
     let resolve!: (value: any) => void, reject!: (error: Error) => void;
     const promise = new Promise<any>((res, rej) => { resolve = res; reject = rej; });
-    const job: QueuedBuild = { key, request, promise, resolve, reject, listeners: new Set() };
+    const buildId = randomUUID();
+    const job: QueuedBuild = { key, request: { ...request, buildId }, promise, resolve, reject,
+      listeners: new Set(), updateListeners: new Set(), buildId };
     if (onProgress) job.listeners.add(onProgress);
+    if (onUpdate) job.updateListeners.add(onUpdate);
     this.builds.set(key, job);
     this.buildQueue.push(job);
     this.pumpBuilds(timeoutMs);
-    return promise;
+    return { buildId, promise, unsubscribe: () => { if (onUpdate) job.updateListeners.delete(onUpdate); if (onProgress) job.listeners.delete(onProgress); } };
+  }
+
+  private notifyBuildUpdate(job: QueuedBuild) {
+    for (const listener of job.updateListeners) { try { listener(); } catch {} }
   }
 
   private notifyBuildProgress(job: QueuedBuild, progress: IndexBuildProgress) {
@@ -136,16 +154,17 @@ export class FrameIndexJobs {
     while (!this.closed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
       const job = this.buildQueue.shift()!;
       this.activeBuilds++;
-      void this.runBuild(job.request, timeoutMs, progress => this.notifyBuildProgress(job, progress))
+      void this.runBuild(job.request, timeoutMs, progress => { this.notifyBuildProgress(job, progress); this.notifyBuildUpdate(job); }, () => this.notifyBuildUpdate(job))
         .then(job.resolve, job.reject).finally(() => {
           this.activeBuilds--;
           if (this.builds.get(job.key) === job) this.builds.delete(job.key);
+          this.notifyBuildUpdate(job);
           this.pumpBuilds(timeoutMs);
         });
     }
   }
 
-  private runBuild(request: BuildRequest, timeoutMs: number, onProgress: ProgressListener): Promise<any> {
+  private runBuild(request: BuildRequest, timeoutMs: number, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
     let worker: Worker;
     try {
       worker = new Worker(new URL('./frame-index-build-worker.ts', import.meta.url), {
@@ -169,6 +188,7 @@ export class FrameIndexJobs {
           try { onProgress(result.data as IndexBuildProgress); } catch {}
           return;
         }
+        if (result.type === 'manifest' || result.type === 'batch' || result.type === 'complete') { onUpdate(); return; }
         if (result.error) finish(new AdminError(result.status ?? 500, result.error));
         else finish(undefined, result.value);
       });

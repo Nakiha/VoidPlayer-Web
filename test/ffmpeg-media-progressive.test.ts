@@ -68,6 +68,13 @@ class DelayedIndexWorker {
     });
   }
 
+  publishBatch(ticks = [originTicks + 3_600], stableCoverageUs = 80_000) {
+    this.emit({ id: this.initId, type: 'index-batch', data: {
+      ctx: 1, ticks, durations: ticks.map(() => 3_600), stableCoverageUs, seekAnchorCount: 1,
+      buildId: '11111111-1111-4111-8111-111111111111',
+    } });
+  }
+
   terminate() { this.terminated = true; }
 }
 
@@ -180,6 +187,28 @@ test('server scan progress reaches the media source info after early ready', asy
   try {
     worker.reportScanProgress({ packets: 7_500, scannedBytes: 12_345, totalBytes: 99_000 });
     assert.deepEqual(source.info.indexProgress, { packets: 7_500, scannedBytes: 12_345, totalBytes: 99_000 });
+  } finally {
+    source.dispose();
+  }
+});
+
+test('a stable FFmpeg record batch advances seek coverage before index completion', async () => {
+  const worker = new DelayedIndexWorker();
+  const source = await openWith(worker);
+  try {
+    let settled = false;
+    const waiting = source.ensureIndexed!(50_000).then(() => { settled = true; });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(settled, false);
+
+    worker.publishBatch();
+    await waiting;
+    assert.equal(source.info.indexState, 'building');
+    assert.equal(source.info.stableCoverageUs, 80_000);
+
+    const frame = await source.frameAt(50_000);
+    assert.equal(frame.sourcePtsUs, 1_040_000);
+    frame.close();
   } finally {
     source.dispose();
   }

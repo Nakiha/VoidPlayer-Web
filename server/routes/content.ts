@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
-import { FFMPEG_INDEX_BYTES } from '../../src/ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES } from '../../src/ffmpeg-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
@@ -85,6 +85,128 @@ async function sendMediaIndexStream(
   });
 }
 
+function ticksToUs(ticks: bigint, num: number, den: number): number {
+  return Math.floor(Number(ticks) * 1_000_000 * num / den);
+}
+
+async function sendFfmpegRecordStream(
+  res: ServerResponse,
+  library: RouteContext['library'],
+  id: string,
+  version: string,
+  identity: MediaIndexIdentity,
+  after: number,
+  requestedBuildId: string | undefined,
+  startBuild: boolean,
+  filePath?: string,
+  size?: number,
+): Promise<void> {
+  let wakeListener: (() => void) | undefined;
+  let wakePromise: Promise<void> | undefined;
+  const wake = () => { wakeListener?.(); wakeListener = undefined; wakePromise = undefined; };
+  const waitForChange = () => {
+    if (!wakePromise) wakePromise = new Promise<void>(resolve => { wakeListener = resolve; });
+    return Promise.race([wakePromise, new Promise<void>(resolve => setTimeout(resolve, 1000))]);
+  };
+  let build: ReturnType<RouteContext['library']['indexJobs']['startBuild']> | undefined;
+  let buildError: Error | undefined;
+  let buildAlreadyPresent = false;
+  if (startBuild) {
+    if (!filePath || size === undefined) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
+    build = library.indexJobs.startBuild({ id, version, size, filePath,
+      epoch: await library.indexJobs.call('epoch') as number, identity }, 300000, wake);
+    void build.promise.then((value: { built?: boolean }) => { if (!value?.built) buildAlreadyPresent = true; wake(); }, error => {
+      buildError = error instanceof Error ? error : new Error(String(error)); wake();
+    });
+  }
+  if (!res.headersSent) beginMediaIndexStream(res);
+  const streamTimer = setTimeout(() => res.destroy(), 300000);
+  let seq = after;
+  let sentManifest = false;
+  let sentReset = false;
+  let sentScanProgress = -1;
+  const timeoutAt = Date.now() + 300000;
+  try {
+    for (;;) {
+      if (res.destroyed) return;
+      if (Date.now() > timeoutAt) throw new AdminError(503, 'FFmpeg 索引传输超时，请稍后重试。');
+      const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity }) as {
+        epoch: number; manifest: null | { buildId: string; state: string; lastSeq: number; complete: boolean; packets: number; scannedBytes: number;
+          stablePresentationUs: number; bytes: number; frames: number; metadata: Record<string, unknown> | null };
+      };
+      const manifest = snapshot.manifest;
+      if (manifest && manifest.metadata && (!build || manifest.buildId === build.buildId || buildAlreadyPresent)) {
+        if (requestedBuildId && requestedBuildId !== manifest.buildId && !sentReset) {
+          await writeMediaIndexEvent(res, { type: 'reset', protocol: 2, buildId: manifest.buildId });
+          sentReset = true;
+          seq = -1;
+        }
+        if (seq > manifest.lastSeq) throw new AdminError(416, '索引流续传序号超过当前 build。');
+        if (!sentManifest) {
+          await writeMediaIndexEvent(res, {
+            type: 'manifest', protocol: 2, epoch: snapshot.epoch, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64',
+            state: manifest.state, buildId: manifest.buildId, identity, metadata: manifest.metadata,
+            recordBytes: FFMPEG_INDEX_RECORD_BYTES, lastSeq: manifest.lastSeq, frames: manifest.frames,
+            scannedBytes: manifest.scannedBytes, stablePresentationUs: manifest.stablePresentationUs,
+          });
+          sentManifest = true;
+        }
+        if (!manifest.complete && manifest.scannedBytes > 0 && manifest.scannedBytes !== sentScanProgress && size && size > 0) {
+          sentScanProgress = manifest.scannedBytes;
+          await writeMediaIndexEvent(res, { type: 'progress', phase: 'scan', packets: manifest.packets,
+            scannedBytes: manifest.scannedBytes, totalBytes: size });
+        }
+        const page = await library.indexJobs.call('stream-batches', { id, version, identity, after: seq, limit: 16 }) as
+          { seq: number; payload: string; bytes: number; frames: number }[];
+        for (const row of page) {
+          if (row.seq !== seq + 1) throw new AdminError(500, '服务端索引 batch 序号不连续。');
+          const records = Buffer.from(row.payload, 'base64');
+          if (!row.frames || records.byteLength !== row.frames * FFMPEG_INDEX_RECORD_BYTES) throw new AdminError(500, '服务端索引 batch 长度无效。');
+          const lastPts = records.readBigInt64LE(records.byteLength - FFMPEG_INDEX_RECORD_BYTES);
+          const firstPts = BigInt(String(manifest.metadata.firstPts ?? '0'));
+          const timeBaseNum = Number(manifest.metadata.timeBaseNum), timeBaseDen = Number(manifest.metadata.timeBaseDen);
+          const safePresentationUs = Math.max(0, ticksToUs(lastPts - firstPts, timeBaseNum, timeBaseDen));
+          await writeMediaIndexEvent(res, { type: 'batch', buildId: manifest.buildId, seq: row.seq,
+            count: row.frames, safePresentationUs, data: row.payload });
+          seq = row.seq;
+        }
+        if (manifest.state === 'failed' || buildError) {
+          throw buildError ?? new AdminError(500, 'FFmpeg 索引扫描失败。');
+        }
+        if (manifest.complete && seq === manifest.lastSeq) {
+          await writeMediaIndexEvent(res, { type: 'complete', buildId: manifest.buildId, lastSeq: manifest.lastSeq,
+            frames: manifest.frames, stablePresentationUs: manifest.stablePresentationUs });
+          break;
+        }
+      } else if (buildError) {
+        throw buildError;
+      } else if (manifest && manifest.complete && !manifest.metadata) {
+        // Older complete documents remain readable through the legacy transport.
+        const bytes = await library.indexJobs.call('get', { id, version, identity }) as Uint8Array;
+        const envelope = JSON.parse(Buffer.from(bytes).toString('utf8')) as { epoch?: unknown };
+        if (!Number.isSafeInteger(envelope.epoch)) throw new AdminError(500, '索引缓存 epoch 无效。');
+        await sendMediaIndexStream(res, bytes, Number(envelope.epoch), 'ffmpeg', after, true);
+        return;
+      }
+      await waitForChange();
+    }
+  } catch (error) {
+    if (!res.destroyed) {
+      try { await writeMediaIndexEvent(res, { type: 'error', buildId: build?.buildId, message: (error as Error).message }); } catch {}
+    }
+  } finally {
+    clearTimeout(streamTimer);
+    build?.unsubscribe();
+  }
+  if (res.destroyed) return;
+  await new Promise<void>(resolve => {
+    const done = () => { res.off('finish', done); res.off('close', done); resolve(); };
+    res.once('finish', done);
+    res.once('close', done);
+    res.end();
+  });
+}
+
 
 /** Library, media bytes, frame indexes and user-submitted logs. Returns true when handled. */
 export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
@@ -144,6 +266,17 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       try {
         if (req.method === 'GET') {
           const cached = await library.indexJobs.call('has', { id: entry.id, version, identity }) as boolean;
+          if (kind === 'ffmpeg' && streamingGet && (cached || url.searchParams.get('build') === '1')) {
+            const shouldBuild = !cached && url.searchParams.get('build') === '1';
+            const resolvedPath = shouldBuild ? await library.resolve(entry.id, version) : undefined;
+            if (shouldBuild && !resolvedPath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
+            const filePath = resolvedPath ?? undefined;
+            const requestedBuildId = url.searchParams.get('buildId') ?? undefined;
+            if (requestedBuildId !== undefined && !/^[0-9a-f-]{36}$/i.test(requestedBuildId)) throw new AdminError(400, '索引流 buildId 无效。');
+            await sendFfmpegRecordStream(res, library, entry.id, version, identity, after, requestedBuildId,
+              shouldBuild, filePath, entry.size);
+            return true;
+          }
           if (kind === 'ffmpeg' && url.searchParams.get('build') === '1' && !cached) {
             const filePath = await library.resolve(entry.id, version);
             if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');

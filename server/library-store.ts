@@ -40,7 +40,11 @@ export class LibraryStore {
       this.db = connection = openIndexDatabase(file);
       this.db.exec('PRAGMA busy_timeout=3000; PRAGMA foreign_keys=ON;');
       const version = this.db.prepare('PRAGMA user_version').get() as { user_version: number };
-      if (version.user_version > 5) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      if (version.user_version > 7) { throw new Error('媒体索引来自更新的程序版本，请使用匹配版本或恢复升级前备份。'); }
+      const mediaIndexColumns = this.db.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
+      const addMediaIndexBuildIdColumn = !mediaIndexColumns.some(column => column.name === 'build_id');
+      const addMediaIndexMetadataColumn = !mediaIndexColumns.some(column => column.name === 'metadata_json');
+      const addMediaIndexPacketsColumn = !mediaIndexColumns.some(column => column.name === 'packets');
       this.db.exec('PRAGMA journal_mode=WAL');
       this.db.exec(`
         BEGIN IMMEDIATE;
@@ -100,6 +104,9 @@ export class LibraryStore {
             REFERENCES media_index_manifests(media_id,media_version,kind,stream_key,schema_version,indexer_build)
             ON DELETE CASCADE
         );
+        ${addMediaIndexBuildIdColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN build_id TEXT;' : ''}
+        ${addMediaIndexMetadataColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN metadata_json TEXT;' : ''}
+        ${addMediaIndexPacketsColumn ? 'ALTER TABLE media_index_manifests ADD COLUMN packets INTEGER NOT NULL DEFAULT 0;' : ''}
         -- Preserve valid FLV cache rows during the one-time identity migration.
         INSERT OR IGNORE INTO media_index_manifests(
           media_id,media_version,kind,stream_key,schema_version,indexer_build,state,last_seq,complete,
@@ -128,7 +135,7 @@ export class LibraryStore {
         INSERT OR IGNORE INTO thumbnail_epoch VALUES(1,0);
         CREATE TRIGGER IF NOT EXISTS thumbnail_changed AFTER UPDATE ON media WHEN old.version!=new.version OR new.state='missing' BEGIN DELETE FROM media_thumbnails WHERE media_id=new.id; END;
         CREATE TRIGGER IF NOT EXISTS thumbnail_root_changed AFTER UPDATE ON roots WHEN old.path!=new.path BEGIN DELETE FROM media_thumbnails WHERE media_id IN (SELECT id FROM media WHERE root_id=new.id); END;
-        PRAGMA user_version=5;
+        PRAGMA user_version=7;
         COMMIT;
       `);
       this.db.prepare("UPDATE scan_jobs SET state='interrupted', finished_at=? WHERE state='running'").run(Date.now());
