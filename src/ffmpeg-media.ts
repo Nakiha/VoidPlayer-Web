@@ -265,11 +265,10 @@ export async function openFFmpegMediaFromUrl(url: string, meta: MediaMeta, deps:
   return openSoftwareMedia({ url, size: meta.size }, meta, deps);
 }
 
-function ffmpegIndexEndpoint(url: string): string | undefined {
+function ffmpegIndexMediaUrl(url: string): string | undefined {
   try {
     const source = new URL(url, globalThis.location?.href);
     if (!/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) || !source.searchParams.has('v')) return undefined;
-    source.pathname += '/frame-index';
     source.searchParams.set('kind', 'ffmpeg');
     return source.href;
   } catch { return undefined; }
@@ -334,7 +333,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const activeRpc = rpc;
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
-      const indexUrl = 'url' in file ? ffmpegIndexEndpoint(file.url) : undefined;
+      const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
       const payload: Record<string, unknown> = { glueURL, name: file.name, threads, mediaSize: file.size, ...(indexUrl ? { indexUrl } : {}),
         ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
       const transfer: Transferable[] = [];

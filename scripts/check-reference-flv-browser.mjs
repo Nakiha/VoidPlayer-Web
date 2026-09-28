@@ -10,14 +10,18 @@ import { MediaLibraryIndex } from '../server/library.ts';
 import { createMediaServer } from '../server/app.ts';
 
 const root = await mkdtemp(path.join(tmpdir(), 'vp-reference-flv-'));
+const ffmpegEncoders = execFileSync('ffmpeg', ['-hide_banner', '-encoders'], { encoding: 'utf8' });
+const av1Encoder = ffmpegEncoders.includes('libaom-av1') ? 'libaom-av1'
+  : ffmpegEncoders.includes('libsvtav1') ? 'libsvtav1' : null;
+if (!av1Encoder) throw new Error('reference FLV browser check requires an FFmpeg AV1 encoder (libaom-av1 or libsvtav1).');
 const unhex = dump => Buffer.from(dump.split('\n').filter(l => l.includes(': ')).map(l => l.split(': ')[1].split('  ')[0].replaceAll(' ', '')).join(''), 'hex');
 const u24 = n => { const b = Buffer.alloc(3); b.writeUIntBE(n & 0xffffff, 0, 3); return b; };
 const tag = (data, time) => { const size = Buffer.alloc(4); size.writeUInt32BE(11 + data.length); return Buffer.concat([Buffer.from([9]), u24(data.length), u24(time), Buffer.from([time >>> 24, 0, 0, 0]), data, size]); };
 async function fixture(codec) {
   const file = path.join(root, `${codec}.mp4`);
   execFileSync('ffmpeg', ['-v', 'error', '-y', '-f', 'lavfi', '-i', 'testsrc2=size=128x96:rate=25', '-t', '3', '-an',
-    '-c:v', codec === 'h264' ? 'libx264' : codec === 'hevc' ? 'libx265' : 'libaom-av1', '-threads', '1',
-    ...(codec === 'av1' ? ['-cpu-used', '8'] : ['-preset', 'ultrafast']), '-g', '25', '-bf', '0',
+    '-c:v', codec === 'h264' ? 'libx264' : codec === 'hevc' ? 'libx265' : av1Encoder, '-threads', '1',
+    ...(codec === 'av1' ? (av1Encoder === 'libaom-av1' ? ['-cpu-used', '8'] : ['-preset', '12', '-crf', '45']) : ['-preset', 'ultrafast']), '-g', '25', '-bf', '0',
     '-pix_fmt', 'yuv420p', '-color_range', 'tv', '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709',
     ...(codec === 'hevc' ? ['-x265-params', 'pools=1:frame-threads=1:log-level=error', '-tag:v', 'hvc1'] : []), file], { timeout: 30000 });
   const doc = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_streams', '-show_packets', '-show_data', '-of', 'json', file], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
@@ -86,7 +90,14 @@ try {
       } else assert.ok(state.tracks[0].output.yuv, 'native source reaches raw YUV output');
       if (software) assert.equal(decisions.length, 0, 'explicit software skips native probing');
       else assert.ok(decisions.length > 0, 'reference hardware actually probes native FLV');
-      if (fault === 'readback' || fault === 'mismatch') assert.ok(logs.events.some(e => e.msg === 'WebCodecs 路径不可用，尝试 WASM 回退' && (fault === 'mismatch' ? /平面 .*样本不一致/.test(e.data?.reason) : /injected readback/.test(e.data?.reason))), 'fallback reports the actual admission failure');
+      if (fault === 'readback' || fault === 'mismatch') {
+        const failureMatches = e => {
+          const reason = e.msg === 'WebCodecs 路径不可用，尝试 WASM 回退' ? e.data?.reason
+            : e.msg === '硬件首帧核验失败，复用已就绪的软件解码源' ? e.data?.error : undefined;
+          return fault === 'mismatch' ? /平面 .*样本不一致/.test(reason ?? '') : /injected readback/.test(reason ?? '');
+        };
+        assert.ok(logs.events.some(failureMatches), 'fallback reports the actual admission failure');
+      }
       for (const ptsUs of [1000000, 0, 500000]) await call('seek_review', { ptsUs });
       assert.equal((await call('get_review_session')).tracks[0].frame.ptsUs, 480000);
       if (!fault && !software && codec === 'av1' && !local) {

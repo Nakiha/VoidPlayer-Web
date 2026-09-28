@@ -36,18 +36,32 @@ try {
     ['h264.ts', true, true], ['h264.ts', false, true],
   ]) {
     const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [], indexEvents = [];
-    let resolveIndexStream = () => {};
-    const firstIndexStream = new Promise(resolve => { resolveIndexStream = resolve; });
+    let resolveIndexStream = () => {}, rejectIndexStream = () => {}, indexStreamTimer;
+    const firstIndexStream = new Promise((resolve, reject) => {
+      resolveIndexStream = resolve;
+      rejectIndexStream = reject;
+      indexStreamTimer = setTimeout(() => reject(new Error('cold FFmpeg index stream did not finish within 180 seconds')), 180000);
+    });
     let libraryEntryId;
     page.on('pageerror', e => errors.push(e.message));
     context.on('response', response => {
-      if (!response.url().includes('/frame-index?')) return;
+      if (local || name !== 'mpeg2.ts' || !response.url().includes('/frame-index?')) return;
       void response.text().then(body => {
+        const events = [];
         if (response.headers()['content-type']?.includes('application/x-ndjson')) {
-          for (const line of body.trim().split('\n')) if (line) indexEvents.push(JSON.parse(line));
+          for (const line of body.trim().split('\n')) if (line) events.push(JSON.parse(line));
         }
-        resolveIndexStream();
-      }).catch(() => resolveIndexStream());
+        if (events.some(event => event.type === 'complete')) {
+          indexEvents.push(...events);
+          clearTimeout(indexStreamTimer);
+          resolveIndexStream();
+        } else if (events.some(event => event.type === 'error')) {
+          clearTimeout(indexStreamTimer);
+          rejectIndexStream(new Error(events.find(event => event.type === 'error').message));
+        }
+      }).catch(() => {
+        // A disconnected browser fetch is retried with its last accepted batch.
+      });
     });
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     await page.addInitScript(software => {
@@ -71,7 +85,19 @@ try {
       if (!local && name === 'mpeg2.ts') {
         assert.equal(first.error, null);
         assert.equal(first.tracks[0].indexSource, 'server', 'cold FFmpeg library index must import from the server');
-        assert.ok(['building', 'complete'].includes(first.tracks[0].indexState), 'the primed source is available independently from the server scan');
+        assert.equal(first.tracks[0].indexState, 'building', 'the primed source is available before the server scan completes');
+        await page.waitForFunction(() => {
+          const track = window.voidPlayer.getState().tracks[0];
+          return track?.stableCoverageUs >= 1_000_000 || track?.indexState === 'complete';
+        }, null, { timeout: 45000 });
+        const prefix = await call('get_review_session');
+        assert.equal(prefix.tracks[0].indexState, 'building', 'stable coverage advances while the server scan is still running');
+        assert.ok(prefix.tracks[0].stableCoverageUs >= 1_000_000, 'the first imported batch exposes seekable coverage');
+        await call('seek_review', { ptsUs: 1_000_000 });
+        const partialSeek = await call('get_review_session');
+        assert.equal(partialSeek.error, null);
+        assert.equal(partialSeek.tracks[0].frame.ptsUs, 1_000_000);
+        assert.equal(partialSeek.tracks[0].indexState, 'building', 'seek within the imported prefix does not wait for scan completion');
         await firstIndexStream;
         const manifestAt = indexEvents.findIndex(event => event.type === 'manifest' && event.protocol === 2);
         const scanAt = indexEvents.findIndex(event => event.type === 'progress' && event.phase === 'scan');
@@ -90,14 +116,14 @@ try {
       }
       assert.equal(first.error, null);
       assert.equal(first.tracks[0].container, name === 'h264.mp4' ? 'isobmff' : 'mpegts');
+      if (long || software) await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete', null, { timeout: 60000 });
+      const final = await call('get_review_session');
+      assert.equal(final.error, null);
       if (long || software) {
-        assert.equal(first.tracks[0].decoder, 'ffmpeg-wasm');
-        if (!local && name === 'mpeg2.ts') {
-          const completed = await call('get_review_session');
-          assert.equal(completed.tracks[0].indexState, 'complete', 'all stable batches finalize the FFmpeg source');
-        } else assert.equal(first.tracks[0].indexState, 'complete');
-        assert.equal(first.tracks[0].seekStrategy, 'demuxer-keyframe');
-        assert.ok(first.tracks[0].seekAnchorCount > 0);
+        assert.equal(final.tracks[0].decoder, 'ffmpeg-wasm');
+        assert.equal(final.tracks[0].indexState, 'complete');
+        assert.equal(final.tracks[0].seekStrategy, 'demuxer-keyframe');
+        assert.ok(final.tracks[0].seekAnchorCount > 0);
       } else assert.equal(first.tracks[0].decoder, 'webcodecs', 'supported H.264 uses native in both TS and MP4');
       const timings = [];
       for (const ptsUs of long ? [10e6, 36e6, 64e6, 10e6, 0] : [1e6, 2e6, 0]) {
@@ -123,7 +149,7 @@ try {
       if (!local) assert.ok(requests.length && requests.every(r => /^bytes=/.test(r.range ?? '')), 'remote reads are Range requests');
       assert.deepEqual(errors, []);
       console.log(`PASS ${engine}: ${name} ${local ? 'local' : 'remote'} ${software ? 'software reference' : 'browser'} -> ${first.tracks[0].decoder}`);
-    } finally { await context.close(); }
+    } finally { clearTimeout(indexStreamTimer); await context.close(); }
   }
 } finally {
   await browser?.close(); if (server) { server.closeAllConnections(); await new Promise(r => server.close(r)); }
