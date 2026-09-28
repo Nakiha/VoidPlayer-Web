@@ -113,6 +113,7 @@ async function createWorker(): Promise<Worker> {
 
 export class WorkerRpc {
   onIndexWaiting?: (waiting: boolean) => void;
+  onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   private indexHandlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
   private queuedIndexEvents: { type: 'index-complete' | 'index-error'; data: any }[] = [];
   private indexProgressHandler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void;
@@ -150,12 +151,19 @@ export class WorkerRpc {
       }
       if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
       if (data.type === 'index-progress') {
-        if (!this.failure && data.id === this.indexRequestId && !this.indexTerminal) {
+        if (!this.failure && (data.id === this.indexRequestId || this.pending.has(data.id)) && !this.indexTerminal) {
           // Real scan advances keep waiting extraction RPCs alive, too.
           for (const entry of this.pending.values()) entry.refresh?.();
-          const progress = data.data as { scannedBytes: number; totalBytes: number; packets: number };
+          const rawProgress = data.data as { durationUs?: number; scannedBytes: number; totalBytes: number; packets: number };
+          if (typeof rawProgress.durationUs === 'number') this.onIndexProgress?.({
+            durationUs: rawProgress.durationUs, scannedBytes: rawProgress.scannedBytes,
+            totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
+          });
+          const progress = {
+            scannedBytes: rawProgress.scannedBytes, totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
+          };
           if (this.indexProgressHandler) this.indexProgressHandler(progress);
-          else this.queuedIndexProgress = progress;
+          else if (data.id === this.indexRequestId) this.queuedIndexProgress = progress;
         }
         return;
       }
