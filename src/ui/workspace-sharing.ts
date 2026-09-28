@@ -13,11 +13,19 @@ export function installWorkspaceSharing(options: {
   const settingsButton = document.getElementById('saved-workspace-share') as HTMLButtonElement;
   const toasts = options.toasts;
   let busy = false;
+  let renderedBusy: boolean | undefined;
   function update() {
+    const disabled = busy || !options.canShare();
     for (const control of [button, settingsButton]) {
-      control.disabled = busy || !options.canShare();
-      control.setAttribute('aria-busy', String(busy));
-      control.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
+      if (control.disabled !== disabled) control.disabled = disabled;
+      if (control.getAttribute('aria-busy') !== String(busy)) control.setAttribute('aria-busy', String(busy));
+    }
+    // Session notifications also fire after seeks and on playback ticks. Keep
+    // the existing SVG node unless the share operation itself changes state.
+    if (renderedBusy !== busy) {
+      renderedBusy = busy;
+      const content = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
+      for (const control of [button, settingsButton]) control.innerHTML = content;
     }
   }
   function notify(message: string, link?: string, kind?: 'info' | 'error') {

@@ -40,7 +40,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
   let sourceSignature = '';
   let startSignature = '';
   let currentIds = '';
-  let sourceBusy = false;
   let loadingSource: { key: string; status: string } | null = null;
   let loadingConfirmed = false;
   let confirmTimer: ReturnType<typeof setTimeout> | undefined;
@@ -155,7 +154,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   async function load(item: SourceItem, slot: Slot) {
-    if (loadingSource?.key === item.key || (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
+    if (loadingSource?.key === item.key || (!item.file && !item.library) || sourceInUse(item, session.getState().tracks)) return;
     // Parallel cache-status warm for the frozen upload epoch; never awaited.
     if (item.library?.id) prefetchThumbnailStatus(item.library.id, item.library.version);
     const pendingLoad = { key: item.key, status: '正在载入' };
@@ -249,7 +248,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const used = sourceInUse(item, session.getState().tracks);
     const loading = loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status : null;
     const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
-    const blocked = !!loadingSource || session.getState().busy;
+    const blocked = !!loadingSource;
     row.setAttribute('aria-busy', String(!!loading));
     row.classList.toggle('in-use', used);
     const info = document.createElement('div'); info.className = 'source-info';
@@ -277,7 +276,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       button.disabled = blocked;
       button.setAttribute('aria-label', `从视图移除：${item.name}`);
       button.onclick = () => void act(async () => {
-        if (loadingSource || session.getState().busy) return;
+        if (loadingSource) return;
         button.disabled = true;
         try {
           const tracks = session.getState().tracks.filter(track => sourceInUse(item, [track]));
@@ -297,11 +296,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
     else if (item.library || item.file) {
       const button = createIconButton({ glyph: 'plus', label: '添加到视图' });
-      button.disabled = (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') || !!pending || !!offline;
-      button.dataset.tooltip = session.getState().mediaLoad?.state === 'loading' ? '取消当前载入并添加到视图' : session.getState().busy ? '请等待当前定位完成' : '添加到视图';
+      button.disabled = !!pending || !!offline;
+      button.dataset.tooltip = session.getState().mediaLoad?.state === 'loading' ? '取消当前载入并添加到视图' : '添加到视图';
       button.title = offline ? '媒体存储离线，请等待重新连接' : pending ? '片源仍在写入，请稍后重试' : '添加到视图'; button.setAttribute('aria-label', `添加到视图：${item.name}`);
       button.onclick = () => {
-        if (session.getState().busy && session.getState().mediaLoad?.state !== 'loading') return;
         const tracks = session.getState().tracks;
         if (sourceInUse(item, tracks)) return;
         const empty = SLOTS.find(slot => !tracks.some(t => t.slot === slot));
@@ -477,13 +475,11 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const items = scoped.filter(item => !(item.file && !item.library));
     const page = libraryBrowser.page();
     const folders = !recent ? page?.directories ?? [] : [];
-    const busy = session.getState().busy;
     const loadingKey = loadingSource?.key ?? null;
     const failedKey = sourceLoadError?.key ?? null;
-    // The signature tracks which row loads, not the live stage text: stage
-    // transitions must not rebuild the list. Per-row fingerprints below stay
-    // stable across busy flips (e.g. seeks); disabled states sync in place.
-    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, busy, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
+    // Only source and navigation state affect the list. A seek must not
+    // disable every row or rebuild any of their action controls.
+    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
@@ -492,7 +488,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), stableRoots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
-      const mediaLoading = session.getState().mediaLoad?.state === 'loading';
       for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
         const item = byKey.get(row.dataset.sourceKey ?? '');
         const button = row.querySelector<HTMLButtonElement>(':scope > .source-actions > button');
@@ -500,8 +495,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
         const used = sourceInUse(item, session.getState().tracks);
         const pending = item.library?.state === 'pending';
         const offline = page?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-        if (used) button.disabled = !!loadingSource || busy;
-        else if (item.library || item.file) button.disabled = (busy && !mediaLoading) || !!pending || !!offline;
+        if (used) button.disabled = !!loadingSource;
+        else if (item.library || item.file) button.disabled = !!pending || !!offline;
       }
     };
     if (signature !== sourceSignature) {
@@ -558,10 +553,9 @@ export function createSourcesPane(shared: WorkbenchShared) {
     }
   }
 
-  /** Loading-stage and busy visuals; called from the core render path after syncCatalog. */
+  /** Loading-stage visuals; called from the core render path after syncCatalog. */
   function syncLoadVisuals(state: WorkbenchState) {
     if (loadingSource && state.mediaLoad?.state === 'loading' && loadingSource.status !== loadStages[state.mediaLoad.stage]) { loadingSource.status = loadStages[state.mediaLoad.stage]; renderSources(); }
-    if (sourceBusy !== state.busy) { sourceBusy = state.busy; renderSources(); }
   }
 
   // The library refreshes itself (3 s poll plus server file watchers); the
