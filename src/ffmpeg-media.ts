@@ -324,44 +324,102 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     throw lastError ?? new Error('WASM 解码 core 不可用。');
   }
 
-  const { ticks, tbNum, tbDen } = init;
-  if (!tbNum || !tbDen) { rpc.terminate(); throw new Error('WASM 解码器未提供有效的时间基准。'); }
-  const total = ticks.length;
-  const ticksToUs = (t: number) => Math.round(t * 1e6 * tbNum / tbDen);
-  const firstUs = ticksToUs(ticks[0]);
-  const relUs = ticks.map(t => ticksToUs(t) - firstUs);
-  const durations = init.durations.map((d, i) => {
+  if (!init.ticks.length || !init.tbNum || !init.tbDen) { rpc.terminate(); throw new Error('WASM 解码器未提供有效的首帧时间基准。'); }
+  const firstTick = init.firstPts ?? init.ticks[0];
+  const ticksToUs = (t: number) => Math.round(t * 1e6 * init.tbNum / init.tbDen);
+  let ticks = init.ticks;
+  let durationsTicks = init.durations;
+  if (init.firstFrame) {
+    ticks = [firstTick];
+    durationsTicks = [init.firstFrame.duration];
+  }
+  let relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
+  const frameDurationsUs = (times: number[], durations: number[]) => durations.map((d, i) => {
     const declared = ticksToUs(d);
-    return declared > 0 ? declared : (i + 1 < total ? relUs[i + 1] - relUs[i] : (i > 0 ? relUs[i] - relUs[i - 1] : 0));
+    return declared > 0 ? declared : (i + 1 < times.length ? ticksToUs(times[i + 1] - times[i]) : (i > 0 ? ticksToUs(times[i] - times[i - 1]) : 0));
   });
+  let durationsUs = frameDurationsUs(ticks, durationsTicks);
+  const initialDurationUs = Math.max(1, durationsUs[0] || 40_000);
+  const initialDuration = init.firstFrame ? initialDurationUs : relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1];
   const info: MediaInfo = {
     id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
-    firstPtsUs: firstUs, durationUs: relUs[total - 1] + durations[total - 1],
+    firstPtsUs: ticksToUs(firstTick), durationUs: initialDuration,
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
-    indexSource: init.indexSource ?? 'client', indexState: 'complete',
+    indexSource: init.indexSource ?? 'client', indexState: init.firstFrame ? 'building' : 'complete',
     indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
     seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
   };
 
   let disposed = false;
-  // Drawn frames return their pixel buffer to the next extract (ping-pong),
-  // so playback does not allocate megabytes per frame.
   let spare: ArrayBuffer | null = null;
+  let firstFrame = init.firstFrame;
   let previousIndex = -1;
+  const indexWaiters = new Set<() => void>();
+  const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
+  const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
+  let source: MediaSource;
+  const activeRpc = rpc;
+  const applyIndexComplete = (result: InitResult) => {
+    if (disposed) return;
+    if (!result.ticks.length || result.ticks[0] !== firstTick) {
+      updateMediaInfo(source, { indexState: 'error', indexError: '完整索引改变了首帧时间轴起点。' }, 'index');
+      wakeIndex();
+      return;
+    }
+    ticks = result.ticks;
+    durationsTicks = result.durations;
+    relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
+    durationsUs = frameDurationsUs(ticks, durationsTicks);
+    const durationUs = Math.max(initialDurationUs, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
+    contextLog().info('media', 'FFmpeg 索引完成', {
+      name: file.name, indexSource: result.indexSource, frames: ticks.length,
+      firstPtsUs: info.firstPtsUs, durationUs, indexMs: result.indexMs,
+      localIndexBuildCalls: result.localIndexBuildCalls ?? 0, seekAnchorCount: result.seekAnchorCount ?? 0,
+    });
+    updateMediaInfo(source, {
+      durationUs, indexState: 'complete', indexSource: result.indexSource ?? info.indexSource,
+      seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
+      seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
+    }, 'index');
+    wakeIndex();
+  };
+  const applyIndexError = (result: { error: string; stage?: OpenStage }) => {
+    if (disposed) return;
+    updateMediaInfo(source, { indexState: 'error', indexError: result.error }, 'index');
+    wakeIndex();
+  };
+  const ensureIndexed = async (ptsUs = Infinity) => {
+    if (disposed) throw new Error('媒体已释放。');
+    if (info.indexState === 'complete') return;
+    if (info.indexState === 'error') {
+      if (ptsUs < info.durationUs) return;
+      throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+    }
+    while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await waitForIndexUpdate();
+    if (disposed) throw new Error('媒体已释放。');
+    if (info.indexState === 'error' && ptsUs >= info.durationUs) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+  };
+  activeRpc.setIndexHandlers({ complete: applyIndexComplete, error: applyIndexError });
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
+    if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
     const payload: Record<string, unknown> = { ctx: init.ctx, index };
     const transfer: Transferable[] = [];
     if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
     const started = performance.now(), randomAccess = index !== previousIndex + 1;
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
-    try { output = await rpc.call<typeof output>('extract', payload, transfer); }
-    catch (error) {
-      scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });
-      throw error;
+    if (index === 0 && firstFrame) {
+      output = firstFrame;
+      firstFrame = undefined;
+    } else {
+      try { output = await rpc.call<typeof output>('extract', payload, transfer); }
+      catch (error) {
+        scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });
+        throw error;
+      }
     }
     previousIndex = index;
     if (randomAccess) scoped.info('media', 'WASM 帧定位完成', { index, targetPtsUs: relUs[index], elapsedMs: Math.round(performance.now() - started), seekStrategy: info.seekStrategy, ...output.seek });
@@ -376,34 +434,51 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       height: output.description.height,
       byteSize: pixels.byteLength,
       pixels,
-      ptsUs: ticksToUs(output.pts) - firstUs,
+      ptsUs: ticksToUs(output.pts) - ticksToUs(firstTick),
       sourcePtsUs: ticksToUs(output.pts),
-      durationUs: durations[index],
+      durationUs: ticksToUs(output.duration) || durationsUs[index] || initialDurationUs,
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };
   };
 
-  return {
-    info,
-    frameAt: ptsUs => extract(floorIndex(relUs, ptsUs)),
+  source = {
+    info, ensureIndexed,
+    async frameAt(ptsUs) {
+      await ensureIndexed(ptsUs);
+      return extract(floorIndex(relUs, ptsUs));
+    },
     async framesAfter(ptsUs, count) {
+      if (count <= 0) return [];
+      await ensureIndexed(ptsUs);
+      while (info.indexState === 'building' && nextIndex(relUs, ptsUs) < 0) await waitForIndexUpdate();
+      if (info.indexState === 'error' && nextIndex(relUs, ptsUs) < 0) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
       const start = nextIndex(relUs, ptsUs);
       if (start < 0) return [];
       const frames: WasmDecodedFrame[] = [];
       try {
-        for (let i = start; i < Math.min(start + count, total); i++) frames.push(await extract(i));
+        for (let i = start; i < Math.min(start + count, ticks.length); i++) frames.push(await extract(i));
         return frames;
       } catch (error) { for (const frame of frames) frame.close(); throw error; }
     },
     async *framesFrom(ptsUs) {
-      for (let idx = floorIndex(relUs, ptsUs); idx < total && !disposed; idx++) yield await extract(idx);
+      await ensureIndexed(ptsUs);
+      let idx = floorIndex(relUs, ptsUs);
+      while (!disposed) {
+        while (idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
+        if (idx >= ticks.length) break;
+        yield await extract(idx++);
+      }
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      wakeIndex();
+      firstFrame = undefined;
       spare = null;
       liveFallbacks--;
-      rpc.terminate();
+      activeRpc.setIndexHandlers(undefined);
+      activeRpc.terminate();
     },
   };
+  return source;
 }
