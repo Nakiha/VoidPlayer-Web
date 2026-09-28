@@ -231,6 +231,7 @@ export class WorkerRpc {
     this.failure = error;
     if (notifyIndex) {
       this.indexTerminal = true;
+      this.queuedIndexProgress = undefined;
       const indexError = { error: error.message, stage: 'resource' as const };
       if (this.indexHandlers) this.indexHandlers.error?.(indexError);
       else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
