@@ -203,7 +203,7 @@ try {
   const received = await (await fetch(base + '/api/admin/logs/' + receivedLogs.entries[0].name)).json();
   assert.equal(received.document.serverReceipt.actorId, 'local');
   await stop();
-  // Exercise the compiled runtime's actual schema 1 -> 4 migration. The old
+  // Exercise the compiled runtime's actual schema 1 -> 5 migration. The old
   // mount now exposes an empty directory instead of returning ENOENT.
   const legacyIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
   legacyIndex.exec('DROP TABLE root_storage; PRAGMA user_version=1;'); legacyIndex.close();
@@ -230,7 +230,7 @@ try {
   assert.equal((await fetch(url, { headers: { range: 'bytes=0-31' } })).status, 206);
   await stop();
   const migratedIndex = openIndexDatabase(path.join(data, 'library.sqlite'));
-  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(migratedIndex.prepare('PRAGMA user_version').get()?.user_version, 7);
   assert.ok(migratedIndex.prepare('SELECT fs_type FROM root_storage').get()?.fs_type);
   migratedIndex.close();
   // A stopped full-data backup must restore into a fresh directory, not only

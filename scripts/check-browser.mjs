@@ -16,7 +16,7 @@ const screenshots = path.join(root, 'artifacts', 'source-activity');
 await mkdir(screenshots, { recursive: true });
 await access(path.join(root, 'dist/index.html'));
 const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-browser-'));
-let browser, server;
+let browser, server, library;
 try {
   // Different library roots, identical names, bytes and modification times.
   const roots = ['camera-a', 'camera-b'].map(name => path.join(temporary, name));
@@ -26,7 +26,7 @@ try {
     await copyFile(path.join(fixtures, 'ci_h264_smoke.mp4'), file);
     await utimes(file, 1000, 1000);
   }
-  const library = new MediaLibraryIndex([fixtures, ...roots]);
+  library = new MediaLibraryIndex([fixtures, ...roots]);
   const listing = await library.list();
   server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
@@ -523,6 +523,7 @@ try {
   try { await browser?.close(); }
   finally {
     if (server) await new Promise(resolve => { server.close(resolve); server.closeAllConnections(); });
+    await library?.close();
     await rm(temporary, { recursive: true, force: true });
   }
 }

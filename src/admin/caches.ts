@@ -45,7 +45,7 @@ export function installCaches(signal: AbortSignal, notice: (text: string, error?
     meter(document.querySelector('.cache-volume-bar')!, volume?.usedBytes ?? null, volume?.totalBytes ?? 0);
     for (const type of overview.types) $(type.kind === 'frame-indexes' ? 'frame-count' : type.kind === 'annotation-previews' ? 'preview-count' : 'thumb-count').textContent = String(type.count);
     const type = overview.types.find(type => type.kind === kind)!;
-    $('description').textContent = kind === 'frame-indexes' ? '加快 FLV 视频再次打开和定位。清理后会在播放时重建。' : kind === 'annotation-previews' ? '标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。' : '媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。';
+    $('description').textContent = kind === 'frame-indexes' ? '加快媒体库视频再次打开和定位。支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建。' : kind === 'annotation-previews' ? '标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。' : '媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。';
     $('budget').textContent = `${bytes(type.bytes)} / ${bytes(type.limitBytes)} 上限 · 达到上限后自动清理旧缓存`;
     meter(document.querySelector('.cache-budget-bar')!, type.bytes, type.limitBytes);
     $('path').textContent = type.location; $('file-size').textContent = `数据库 ${bytes(type.databaseBytes)} · 写入日志 ${bytes(type.journalBytes)}`;
@@ -73,7 +73,7 @@ export function installCaches(signal: AbortSignal, notice: (text: string, error?
     next = page.nextOffset;
     if (!more) $('list').replaceChildren();
     $('list').append(...page.entries.map(row));
-    if (!more && !page.entries.length) $('list').append(emptyState(search ? '没有匹配的缓存' : `暂无${label()}缓存`, search ? '换个关键词试试。' : kind === 'frame-indexes' ? '打开 FLV 视频后，索引会自动保存在这里。' : kind === 'annotation-previews' ? '编辑标注后，画面预览会在播放暂停时保存。' : '从头打开媒体库视频后，首帧小图会保存在这里。')); 
+    if (!more && !page.entries.length) $('list').append(emptyState(search ? '没有匹配的缓存' : `暂无${label()}缓存`, search ? '换个关键词试试。' : kind === 'frame-indexes' ? '打开支持的媒体库视频后，索引会自动保存在这里。' : kind === 'annotation-previews' ? '编辑标注后，画面预览会在播放暂停时保存。' : '从头打开媒体库视频后，首帧小图会保存在这里。'));
   }
   async function refresh() { const value = await api<Overview>('/api/admin/caches'); overview = value; renderOverview(); await list(); }
   $('refresh').onclick = () => void act(refresh);

@@ -14,7 +14,7 @@ export class CacheManager {
     const frames = this.frames.list(), previews = this.annotations.previewList();
     const thumbs = this.thumbnails?.overview() ?? { count: 0, bytes: 0, limitBytes: 256 * 1024 * 1024, epoch: 0 };
     const definitions = [
-      { kind: 'frame-indexes' as const, name: '帧索引', count: frames.count, bytes: frames.bytes, limitBytes: frames.limitBytes, file: 'library.sqlite', table: 'frame_indexes' },
+      { kind: 'frame-indexes' as const, name: '帧索引', count: frames.count, bytes: frames.bytes, limitBytes: frames.limitBytes, file: 'library.sqlite', table: 'media_index_manifests + media_index_batches' },
       { kind: 'annotation-previews' as const, name: '标注预览', count: previews.count, bytes: previews.bytes, limitBytes: previews.limitBytes, file: 'annotations.sqlite', table: 'annotation_previews' },
       { kind: 'media-thumbnails' as const, name: '媒体缩略图', count: thumbs.count, bytes: thumbs.bytes, limitBytes: thumbs.limitBytes, file: 'library.sqlite', table: 'media_thumbnails' },
     ];
@@ -34,7 +34,7 @@ export class CacheManager {
   list(kind: string, offset = 0, search = '') {
     if (kind === 'frame-indexes') {
       const page = this.frames.list(offset, search);
-      return { ...page, entries: page.entries.map(row => ({ id: String(row.id), version: String(row.version), name: String(row.name), detail: `${row.root} · ${row.frames} 帧`, bytes: Number(row.bytes), updatedAt: Number(row.createdAt) } satisfies CacheEntry)) };
+      return { ...page, entries: page.entries.map(row => ({ id: String(row.id), version: String(row.version), name: String(row.name), detail: `${row.root} · ${row.kind} · ${row.frames} 帧`, bytes: Number(row.bytes), updatedAt: Number(row.createdAt) } satisfies CacheEntry)) };
     }
     if (kind === 'annotation-previews') return this.annotations.previewList(offset, search);
     if (kind === 'media-thumbnails') {

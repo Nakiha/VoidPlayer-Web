@@ -13,9 +13,14 @@ if (process.argv[3] === '--variant') {
   try {
     const create = (await import(pathToFileURL(path.join(directory, stem + '.js')).href)).default;
     const core = await create({ wasmBinary: await readFile(path.join(directory, stem + '.wasm')) });
-    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_index_build', 'vp_index_seek_anchors', 'vp_extract_frames', 'vp_extract_restarts', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset', 'vp_frame_info', 'vp_frame_format']) assert.equal(typeof core['_' + symbol], 'function', symbol);
+    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_prime_first_presentable', 'vp_index_build', 'vp_index_scan_begin', 'vp_index_scan_stream_begin', 'vp_index_scan_step', 'vp_index_scan_complete', 'vp_index_scan_failed', 'vp_index_scan_packets', 'vp_index_scan_bytes', 'vp_index_scan_progressive_supported', 'vp_index_scan_stable_count', 'vp_index_scan_stable_ticks', 'vp_index_seek_anchors', 'vp_index_abi_version', 'vp_index_stream_abi_version', 'vp_index_record_bytes', 'vp_index_export_bytes', 'vp_index_export_range', 'vp_index_export', 'vp_index_import_begin', 'vp_index_import_batch', 'vp_index_import', 'vp_core_build_id', 'vp_stream_index', 'vp_extract_frames', 'vp_extract_restarts', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset', 'vp_frame_info', 'vp_frame_format']) assert.equal(typeof core['_' + symbol], 'function', symbol);
     const ctx = core.ccall('vp_create', 'number', [], []);
     assert.ok(ctx);
+    assert.equal(core.ccall('vp_index_abi_version', 'number', [], []), 2, 'index ABI version');
+    assert.equal(core.ccall('vp_index_record_bytes', 'number', [], []), 40, 'index ABI record size');
+    assert.equal(core.ccall('vp_index_stream_abi_version', 'number', [], []), 1, 'index stream ABI version');
+    const buildId = core.ccall('vp_core_build_id', 'string', [], []);
+    assert.equal(buildId, process.argv[5], 'core source build ID must match release lock');
     try {
       core.FS.writeFile('/invalid.bin', new Uint8Array([1, 2, 3, 4]));
       assert.notEqual(core.ccall('vp_open', 'number', ['number', 'string'], [ctx, '/invalid.bin']), 0);
@@ -34,6 +39,6 @@ if (process.argv[3] === '--variant') {
     assert.ok(!path.isAbsolute(file) && !file.split(/[\\/]/).includes('..'), 'Unsafe core manifest path');
     assert.equal(createHash('sha256').update(await readFile(path.join(directory, file))).digest('hex'), hash, file);
   }
-  for (const suffix of ['', '-mt']) execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix], { stdio: 'inherit', timeout: 30000 });
+  for (const suffix of ['', '-mt']) execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix, lock.revision], { stdio: 'inherit', timeout: 30000 });
   console.log('PASS decoder provenance and file hashes');
 }

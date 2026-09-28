@@ -72,8 +72,23 @@ test('schema 1 upgrade preserves media and waits for an unchanged original befor
   await index.refresh(); assert.equal(index.status().roots[0].state, 'ready'); assert.deepEqual(index.browse().entries, before);
   await index.close();
   const upgraded = openIndexDatabase(database);
-  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 4);
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 7);
   assert.equal(upgraded.prepare('SELECT fs_type FROM root_storage').get()?.fs_type, '101'); upgraded.close();
+}));
+
+test('schema 6 migration repairs a partially present FFmpeg stream manifest', async () => fixture(async ({ database, open }) => {
+  let index = open(); await index.refresh(); await index.close();
+  const partial = openIndexDatabase(database);
+  partial.exec('ALTER TABLE media_index_manifests DROP COLUMN metadata_json; PRAGMA user_version=6;');
+  partial.close();
+  index = open(); await index.refresh(); await index.close();
+  const upgraded = openIndexDatabase(database);
+  const columns = upgraded.prepare('PRAGMA table_info(media_index_manifests)').all() as { name: string }[];
+  assert.ok(columns.some(column => column.name === 'build_id'));
+  assert.ok(columns.some(column => column.name === 'metadata_json'));
+  assert.ok(columns.some(column => column.name === 'packets'));
+  assert.equal(upgraded.prepare('PRAGMA user_version').get()?.user_version, 7);
+  upgraded.close();
 }));
 
 test('legacy binding rechecks files encountered before its first unchanged original', async () => fixture(async ({ media, database, open }) => {

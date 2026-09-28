@@ -187,8 +187,8 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .source-title .filename { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-meta { color: var(--text-secondary); font-size: var(--text-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .source-section { position: sticky; top: 0; z-index: 1; margin: 0; padding: var(--space-2) var(--panel-padding-inline); font-size: var(--text-xs); font-weight: 600; color: var(--text-secondary); background: var(--surface-panel); border-top: 1px solid var(--divider); }
-.source-actions button:hover:not(:disabled) { color: var(--accent); background: var(--surface-selected); }
-.source-actions .remove-track:hover:not(:disabled) { color: var(--action-danger); background: var(--action-danger-fill); }
+.source-actions button:hover:not(:disabled) { color: var(--accent); background-color: var(--surface-selected); }
+.source-actions .remove-track:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
 .source-actions { display: flex; align-items: center; gap: var(--tool-gap); }
 .source-actions button { width: var(--control-small-height); height: var(--control-small-height); min-height: var(--control-small-height); padding: 0; font-size: var(--text-xs); color: var(--text-secondary); background: transparent; transition: color var(--transition-fast), background-color var(--transition-fast); }
 .panel-empty { padding: var(--panel-padding-inline); margin: var(--panel-padding-block) 0; color: var(--text-secondary); font-size: var(--text-sm); }
@@ -319,7 +319,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 .subtrack-row.track-drop-target::after { left: var(--space-3); right: var(--space-3); top: 0; height: 2px; }
 .subtrack-row.track-drop-target[data-drop-edge=after]::after { top: auto; bottom: 0; }
 .remove-track { background: transparent; color: var(--text-secondary); transition: color var(--transition-fast), background var(--transition-fast); }
-.remove-track:hover:not(:disabled) { color: var(--action-danger); background: var(--action-danger-fill); }
+.remove-track:hover:not(:disabled) { color: var(--action-danger); background-color: var(--action-danger-fill); }
 @media (prefers-reduced-motion: reduce) { .remove-track { transition: none; } }
 .subtrack-label { display: flex; align-items: center; min-width: 0; gap: var(--tool-gap); }
 .subtrack-name { flex: 1; }
@@ -350,7 +350,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .start-header { display: flex; align-items: center; justify-content: space-between; gap: var(--section-gap); }
 .start-header > h3 { margin: 0; font-size: var(--text-ui); font-weight: 600; }
 .start-header .add-video { flex: 0 0 auto; }
-.start-identity { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); }
+.start-identity { margin-left: auto; min-width: 0; min-height: 0; overflow: hidden; padding: 4px 8px; border-color: transparent; background: transparent; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast); }
+.start-identity:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.start-identity:active:not(:disabled) { transform: scale(.97); }
+.start-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .start-identity-name { color: var(--accent); }
 .start-workspace-card { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-stripe); box-shadow: none; color: var(--text); text-align: left; cursor: pointer; }
 .start-workspace-card:hover { background: var(--surface-hover); }

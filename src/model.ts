@@ -22,6 +22,8 @@ export type MediaInfo = {
   indexSource?: 'client' | 'server';
   indexState?: 'building' | 'complete' | 'error';
   indexError?: string;
+  /** Exclusive end of the stable, seekable timeline prefix while indexing. */
+  stableCoverageUs?: number;
   indexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
   indexWaiting?: boolean;
   indexWarning?: string;

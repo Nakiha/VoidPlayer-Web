@@ -48,7 +48,7 @@ export class MediaLibraryIndex {
     this.options = options;
     this.definitions = normalizeRoots(roots); this.roots = this.definitions.map(r => r.path);
     this.store = new LibraryStore(options.database);
-    this.indexJobs = new FrameIndexJobs(this.store.file);
+    this.indexJobs = new FrameIndexJobs(this.store.file, process.env.VOIDPLAYER_WASM_CORE_DIR || path.resolve(process.cwd(), 'public/vendor/voidplayer-core'));
     this.frameIndexes = new FrameIndexStore(this.store.db);
     this.thumbnails = new MediaThumbnailStore(this.store.db);
     try { this.store.configure(this.definitions); } catch (error) { this.store.close(); throw error; }

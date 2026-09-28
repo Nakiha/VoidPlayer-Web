@@ -2,6 +2,7 @@ import type { MediaSource, DecodedFrame } from './media.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { isHdrTransfer } from './presentation-color.ts';
 import { resolveYuvColor } from './yuv-color.ts';
+import { contextLog } from './log.ts';
 
 /** Common frame contract, independent of container, input location and decoder. */
 export function referenceSource(source: MediaSource): MediaSource {
@@ -25,15 +26,47 @@ export function referenceSource(source: MediaSource): MediaSource {
 
 export async function admitReferenceSource(source: MediaSource, software: () => Promise<MediaSource>, depth: number): Promise<MediaSource> {
   if (source.info.decoder !== 'webcodecs') return referenceSource(source);
+
+  let candidate = source;
+  let candidateDisposed = false;
+  let witness: MediaSource | undefined;
+  let reference: DecodedFrame | undefined;
+  let probe: DecodedFrame | undefined;
+  let returnWitness = false;
+  const disposeCandidate = () => {
+    if (candidateDisposed) return;
+    candidateDisposed = true;
+    candidate.dispose();
+  };
+
   try {
-    const witness = referenceSource(await software());
-    let reference: DecodedFrame | undefined, probe: DecodedFrame | undefined;
+    witness = referenceSource(await software());
+    reference = await witness.frameAt(0);
     try {
-      reference = await witness.frameAt(0);
       const { nativeYuvSource, verifyNativeWitness } = await import('./native-yuv-source.ts');
-      source = referenceSource(nativeYuvSource(source, depth, reference.description.yuv?.chromaLocation ?? null));
-      probe = await source.frameAt(0); verifyNativeWitness(probe, reference);
-      return source;
-    } finally { probe?.close(); reference?.close(); witness.dispose(); }
-  } catch (error) { source.dispose(); throw error; }
+      candidate = referenceSource(nativeYuvSource(source, depth, reference.description.yuv?.chromaLocation ?? null));
+      probe = await candidate.frameAt(0);
+      verifyNativeWitness(probe, reference);
+      return candidate;
+    } catch (error) {
+      // A successful software first frame is already the fallback source. If
+      // native readback or its witness check fails, keep it instead of opening
+      // and indexing the same media a second time.
+      if (error instanceof DOMException && error.name === 'AbortError') throw error;
+      disposeCandidate();
+      returnWitness = true;
+      contextLog().warn('media', '硬件首帧核验失败，复用已就绪的软件解码源', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return witness;
+    } finally {
+      probe?.close();
+      reference.close();
+    }
+  } catch (error) {
+    disposeCandidate();
+    throw error;
+  } finally {
+    if (!returnWitness) witness?.dispose();
+  }
 }
