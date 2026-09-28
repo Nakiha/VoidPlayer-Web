@@ -96,12 +96,14 @@ export class FrameIndexStore {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       if (id && this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version!=?').get(id, version!)) throw new AdminError(409, '索引版本已改变，请刷新后重试。');
-      const removed = id
-        ? this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=?').run(id, version!)
-        : this.db.prepare('DELETE FROM media_index_manifests').run();
+      const removedCount = Number(id
+        ? this.db.prepare('SELECT count(*) AS count FROM media_index_manifests WHERE media_id=? AND media_version=?').get(id, version!)!.count
+        : this.db.prepare('SELECT count(*) AS count FROM media_index_manifests').get()!.count);
+      if (id) this.db.prepare('DELETE FROM media_index_manifests WHERE media_id=? AND media_version=?').run(id, version!);
+      else this.db.prepare('DELETE FROM media_index_manifests').run();
       this.db.exec('UPDATE frame_index_epoch SET epoch=epoch+1 WHERE id=1');
       this.db.exec('COMMIT');
-      return { removed: Number(removed.changes) };
+      return { removed: removedCount };
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
 }
