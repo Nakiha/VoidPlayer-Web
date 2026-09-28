@@ -113,9 +113,13 @@ async function createWorker(): Promise<Worker> {
 
 export class WorkerRpc {
   onIndexWaiting?: (waiting: boolean) => void;
-  onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   private indexHandlers?: { complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
   private queuedIndexEvents: { type: 'index-complete' | 'index-error'; data: any }[] = [];
+  private indexProgressHandler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void;
+  private queuedIndexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
+  private indexRequestId?: number;
+  private indexReady = false;
+  private indexTerminal = false;
   private workerId=randomUUID();
   private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
   private worker: Worker;
@@ -130,11 +134,14 @@ export class WorkerRpc {
       if (data.type === 'ready') {
         const entry = this.pending.get(data.id);
         if (!entry) return;
+        if (data.id === this.indexRequestId) this.indexReady = true;
         clearTimeout(entry.timer); this.pending.delete(data.id); entry.resolve(data.data);
         return;
       }
       if (data.type === 'index-complete' || data.type === 'index-error') {
-        if (this.failure) return;
+        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal) return;
+        this.indexTerminal = true;
+        this.queuedIndexProgress = undefined;
         if (this.indexHandlers) {
           if (data.type === 'index-complete') this.indexHandlers.complete?.(data.data);
           else this.indexHandlers.error?.(data.data);
@@ -143,10 +150,12 @@ export class WorkerRpc {
       }
       if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
       if (data.type === 'index-progress') {
-        if (!this.failure && this.pending.has(data.id)) {
+        if (!this.failure && data.id === this.indexRequestId && !this.indexTerminal) {
           // Real scan advances keep waiting extraction RPCs alive, too.
           for (const entry of this.pending.values()) entry.refresh?.();
-          this.onIndexProgress?.(data.data as Parameters<NonNullable<WorkerRpc['onIndexProgress']>>[0]);
+          const progress = data.data as { scannedBytes: number; totalBytes: number; packets: number };
+          if (this.indexProgressHandler) this.indexProgressHandler(progress);
+          else this.queuedIndexProgress = progress;
         }
         return;
       }
@@ -194,9 +203,18 @@ export class WorkerRpc {
       else handlers.error?.(event.data);
     }
   }
+  setIndexProgressHandler(handler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void) {
+    this.indexProgressHandler = handler;
+    if (handler && this.queuedIndexProgress) {
+      const progress = this.queuedIndexProgress;
+      this.queuedIndexProgress = undefined;
+      handler(progress);
+    }
+  }
   call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
+    if (type === 'init') this.indexRequestId = id;
     this.requests.push({id,type,pts:payload.pts,index:payload.index});if(this.requests.length>16)this.requests.shift();
     return new Promise<T>((resolve, reject) => {
       const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
@@ -207,9 +225,16 @@ export class WorkerRpc {
       catch (error) { this.terminate(error instanceof Error ? error : new Error(String(error))); }
     });
   }
-  terminate(error = new Error('WASM worker 已释放。')) {
+  terminate(error = new Error('WASM worker 已释放。'), reportIndexFailure = true) {
     if (this.failure) return;
+    const notifyIndex = reportIndexFailure && this.indexReady && !this.indexTerminal;
     this.failure = error;
+    if (notifyIndex) {
+      this.indexTerminal = true;
+      const indexError = { error: error.message, stage: 'resource' as const };
+      if (this.indexHandlers) this.indexHandlers.error?.(indexError);
+      else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
+    }
     this.onTerminate();
     for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
     this.pending.clear();
@@ -339,12 +364,14 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     return declared > 0 ? declared : (i + 1 < times.length ? ticksToUs(times[i + 1] - times[i]) : (i > 0 ? ticksToUs(times[i] - times[i - 1]) : 0));
   });
   let durationsUs = frameDurationsUs(ticks, durationsTicks);
-  const initialDurationUs = Math.max(1, durationsUs[0] || 40_000);
-  const initialDuration = init.firstFrame ? initialDurationUs : relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1];
+  const firstFrameDurationUs = Math.max(0, durationsUs[0] || 0);
+  const initialDurationUs = Math.max(1, firstFrameDurationUs || 40_000);
+  const initialStableCoverageUs = init.firstFrame ? Math.max(1, firstFrameDurationUs) : Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
+  const initialDuration = init.firstFrame ? initialDurationUs : initialStableCoverageUs;
   const info: MediaInfo = {
     id: randomUUID(), name: file.name, size: file.size, lastModified: file.lastModified,
     codec: init.codec, decoder: 'ffmpeg-wasm', coreVariant, width: init.width, height: init.height,
-    firstPtsUs: ticksToUs(firstTick), durationUs: initialDuration,
+    firstPtsUs: ticksToUs(firstTick), durationUs: initialDuration, stableCoverageUs: initialStableCoverageUs,
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
@@ -373,14 +400,14 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     durationsTicks = result.durations;
     relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
     durationsUs = frameDurationsUs(ticks, durationsTicks);
-    const durationUs = Math.max(initialDurationUs, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
+    const durationUs = Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
     contextLog().info('media', 'FFmpeg 索引完成', {
       name: file.name, indexSource: result.indexSource, frames: ticks.length,
       firstPtsUs: info.firstPtsUs, durationUs, indexMs: result.indexMs,
       localIndexBuildCalls: result.localIndexBuildCalls ?? 0, seekAnchorCount: result.seekAnchorCount ?? 0,
     });
     updateMediaInfo(source, {
-      durationUs, indexState: 'complete', indexSource: result.indexSource ?? info.indexSource,
+      durationUs, stableCoverageUs: durationUs, indexState: 'complete', indexSource: result.indexSource ?? info.indexSource,
       seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
       seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
     }, 'index');
@@ -396,14 +423,13 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     if (disposed) throw new Error('媒体已释放。');
     if (currentIndexState() === 'complete') return;
     if (currentIndexState() === 'error') {
-      if (ptsUs < info.durationUs) return;
+      if (ptsUs < (info.stableCoverageUs ?? info.durationUs)) return;
       throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
     }
-    while (!disposed && currentIndexState() === 'building' && ptsUs >= info.durationUs) await waitForIndexUpdate();
+    while (!disposed && currentIndexState() === 'building' && ptsUs >= (info.stableCoverageUs ?? info.durationUs)) await waitForIndexUpdate();
     if (disposed) throw new Error('媒体已释放。');
-    if (currentIndexState() === 'error' && ptsUs >= info.durationUs) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+    if (currentIndexState() === 'error' && ptsUs >= (info.stableCoverageUs ?? info.durationUs)) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
   };
-  activeRpc.setIndexHandlers({ complete: applyIndexComplete, error: applyIndexError });
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
@@ -466,7 +492,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       let idx = floorIndex(relUs, ptsUs);
       while (!disposed) {
         while (idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
-        if (idx >= ticks.length) break;
+        if (idx >= ticks.length) {
+          if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+          break;
+        }
         yield await extract(idx++);
       }
     },
@@ -478,8 +507,13 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       spare = null;
       liveFallbacks--;
       activeRpc.setIndexHandlers(undefined);
-      activeRpc.terminate();
+      activeRpc.setIndexProgressHandler(undefined);
+      activeRpc.terminate(undefined, false);
     },
   };
+  activeRpc.setIndexHandlers({ complete: applyIndexComplete, error: applyIndexError });
+  activeRpc.setIndexProgressHandler(progress => {
+    if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');
+  });
   return source;
 }
