@@ -35,3 +35,32 @@ test('worker admission, final epoch/media checks and encoded GET keep stale task
     release(); const again = library.indexJobs.acquire(); again();
   } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
 });
+
+
+test('worker stores and returns versioned FFmpeg binary indexes through the shared cache', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'vp-ffmpeg-index-worker-'));
+  const mediaRoot = path.join(root, 'media');
+  await mkdir(mediaRoot);
+  const file = path.join(mediaRoot, 'one.ts');
+  await writeFile(file, Buffer.from([0, 0, 1, 0x47]));
+  const library = new MediaLibraryIndex([mediaRoot], { watch: false });
+  try {
+    await library.refresh();
+    const entry = library.browse().entries[0];
+    const records = Buffer.alloc(48);
+    records.writeBigInt64LE(10n, 0); records.writeBigInt64LE(3000n, 8); records.writeUInt32LE(1, 16);
+    records.writeBigInt64LE(20n, 24); records.writeBigInt64LE(3000n, 32);
+    const document = {
+      schema: 1, kind: 'ffmpeg-container', size: entry.size, codec: 'mpeg2video',
+      timeBaseNum: 1, timeBaseDen: 90000, width: 1280, height: 720,
+      recordBytes: 24, count: 2, records: records.toString('base64'),
+    };
+    const body = new TextEncoder().encode(JSON.stringify({ epoch: 0, index: document }));
+    await library.indexJobs.call('prepare', { bytes: body, size: entry.size, kind: 'ffmpeg' }, [body.buffer]);
+    await library.indexJobs.call('commit', { id: entry.id, version: entry.version, epoch: 0 });
+    const encoded = await library.indexJobs.call('get', { id: entry.id, version: entry.version, kind: 'ffmpeg' });
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded)), { epoch: 0, index: document });
+    assert.equal(library.frameIndexes.has(entry.id, entry.version!, 'ffmpeg'), true);
+    assert.equal(library.frameIndexes.has(entry.id, entry.version!, 'flv'), false);
+  } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
+});

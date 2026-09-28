@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
+import { FFMPEG_INDEX_BYTES } from '../../src/ffmpeg-index-cache.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { readAdminJson } from '../admin.ts';
@@ -39,6 +40,9 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
   const indexMatch = /^\/api\/media\/([0-9a-f]{24})\/frame-index$/.exec(url.pathname);
   if (indexMatch) {
     try {
+      const kindParam = url.searchParams.get('kind') ?? 'flv';
+      if (kindParam !== 'flv' && kindParam !== 'ffmpeg') throw new AdminError(400, '未知帧索引类型。');
+      const kind = kindParam as 'flv' | 'ffmpeg';
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
@@ -48,7 +52,18 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       let prepared = false;
       try {
         if (req.method === 'GET') {
-          const bytes = await library.indexJobs.call('get', { id: entry.id, version }) as Uint8Array;
+          if (kind === 'ffmpeg') {
+            const filePath = await library.resolve(entry.id, version);
+            if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
+            const built = await library.indexJobs.call('build', { id: entry.id, version, size: entry.size, filePath }, [], 300000) as { built: boolean; epoch: number };
+            prepared = built.built;
+            if (built.built) {
+              if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
+              await library.indexJobs.call('commit', { id: entry.id, version, epoch: built.epoch });
+              prepared = false;
+            }
+          }
+          const bytes = await library.indexJobs.call('get', { id: entry.id, version, kind }) as Uint8Array;
           if (res.destroyed) return true;
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           await new Promise<void>(resolve => {
@@ -59,7 +74,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           return true;
         }
         if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
-        const limit = FLV_INDEX_BYTES + 1024;
+        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
         if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
         const chunks: Buffer[] = []; let size = 0;
         // Admission happens BEFORE accumulating the request body.
@@ -74,7 +89,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
         const bytes = new Uint8Array(size); let offset = 0;
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
         chunks.length = 0;
-        const result = await library.indexJobs.call('prepare', { bytes, size: entry.size }, [bytes.buffer]);
+        const result = await library.indexJobs.call('prepare', { bytes, size: entry.size, kind }, [bytes.buffer]);
         prepared = true;
         if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
         // commit rechecks media + epoch inside its SQLite write transaction.

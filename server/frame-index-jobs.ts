@@ -9,19 +9,20 @@ export class FrameIndexJobs {
   private closed = false;
   private timer?: ReturnType<typeof setTimeout>;
   private pending?: { resolve(value: any): void; reject(error: Error): void };
-  constructor(privateDatabase: string) { this.database = privateDatabase; }
+  constructor(privateDatabase: string, coreDir: string) { this.database = privateDatabase; this.coreDir = coreDir; }
   private database: string;
+  private coreDir: string;
   acquire(): () => void {
     if (this.closed || this.occupied) throw new AdminError(503, '索引任务繁忙，请稍后重试。');
     this.occupied = true;
     let released = false;
     return () => { if (!released) { released = true; this.occupied = false; } };
   }
-  async call(op: string, data: Record<string, unknown> = {}, transfer: ArrayBuffer[] = []): Promise<any> {
+  async call(op: string, data: Record<string, unknown> = {}, transfer: ArrayBuffer[] = [], timeoutMs = 60000): Promise<any> {
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
     if (this.pending) throw new Error('Concurrent index worker call');
     if (!this.worker) {
-      const worker = this.worker = new Worker(new URL('./frame-index-worker.ts', import.meta.url), { workerData: { database: this.database } });
+      const worker = this.worker = new Worker(new URL('./frame-index-worker.ts', import.meta.url), { workerData: { database: this.database, coreDir: this.coreDir } });
       worker.on('message', result => {
         if (this.worker !== worker) return;
         clearTimeout(this.timer);
@@ -44,7 +45,7 @@ export class FrameIndexJobs {
       this.timer = setTimeout(() => {
         const worker = this.worker; this.worker = undefined; this.pending = undefined;
         void worker?.terminate(); reject(new AdminError(503, '索引任务超时，请稍后重试。'));
-      }, 60000);
+      }, timeoutMs);
       try { this.worker!.postMessage({ op, ...data }, transfer); }
       catch (error) { clearTimeout(this.timer); this.pending = undefined; reject(error); }
     });

@@ -2,6 +2,10 @@ import type { IndexDatabase } from './sqlite.ts';
 import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_KIND, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex } from '../src/ffmpeg-index-cache.ts';
+import type { FfmpegIndexDocument } from '../src/ffmpeg-index-cache.ts';
+
+export type FrameIndexKind = 'flv' | 'ffmpeg';
 
 const CACHE_LIMIT = 256 * 1024 * 1024;
 export class FrameIndexStore {
@@ -9,7 +13,7 @@ export class FrameIndexStore {
   constructor(db: IndexDatabase) { this.db = db; }
   get epoch(): number { return Number(this.db.prepare('SELECT epoch FROM frame_index_epoch WHERE id=1').get()!.epoch); }
   get(id: string, version: string): { epoch: number; index: FlvIndexDocument | null } {
-    const row = this.db.prepare('SELECT document FROM frame_indexes WHERE media_id=? AND version=?').get(id, version);
+    const row = this.db.prepare("SELECT document FROM frame_indexes WHERE media_id=? AND version=? AND json_valid(document) AND json_extract(document,'$.schema')=?").get(id, version, FLV_INDEX_SCHEMA);
     let index: FlvIndexDocument | null = null;
     if (row) {
       try { index = JSON.parse(String(row.document)); } catch { /* discard an unreadable cache */ }
@@ -18,12 +22,21 @@ export class FrameIndexStore {
     }
     return { epoch: this.epoch, index };
   }
+  has(id: string, version: string, kind: FrameIndexKind = 'flv'): boolean {
+    const schema = kind === 'ffmpeg' ? FFMPEG_INDEX_SCHEMA : FLV_INDEX_SCHEMA;
+    const kindCheck = kind === 'ffmpeg' ? " AND json_extract(document,'$.kind')=?" : '';
+    const values = kind === 'ffmpeg' ? [id, version, schema, FFMPEG_INDEX_KIND] : [id, version, schema];
+    return !!this.db.prepare("SELECT 1 FROM frame_indexes WHERE media_id=? AND version=? AND json_valid(document) AND json_extract(document,'$.schema')=?" + kindCheck).get(...values);
+  }
   /** Stored documents are validated on ingress. Splice JSON without parse/stringify. */
-  getJson(id: string, version: string): string {
+  getJson(id: string, version: string, kind: FrameIndexKind = 'flv'): string {
     // One SQLite snapshot pairs the body with the epoch, even if another
     // thread clears caches between statements. Invalid legacy rows are misses.
-    const row = this.db.prepare(`SELECT epoch, (SELECT CASE WHEN json_valid(document) THEN CASE WHEN json_extract(document,'$.schema')=? THEN document END ELSE NULL END
-      FROM frame_indexes WHERE media_id=? AND version=?) AS document FROM frame_index_epoch WHERE id=1`).get(FLV_INDEX_SCHEMA, id, version)!;
+    const schema = kind === 'ffmpeg' ? FFMPEG_INDEX_SCHEMA : FLV_INDEX_SCHEMA;
+    const kindGuard = kind === 'ffmpeg' ? " AND json_extract(document,'$.kind')=?" : '';
+    const args = kind === 'ffmpeg' ? [schema, FFMPEG_INDEX_KIND, id, version] : [schema, id, version];
+    const row = this.db.prepare(`SELECT epoch, (SELECT CASE WHEN json_valid(document) AND json_extract(document,'$.schema')=?${kindGuard} THEN document ELSE NULL END
+      FROM frame_indexes WHERE media_id=? AND version=?) AS document FROM frame_index_epoch WHERE id=1`).get(...args)!;
     if (row.document) this.db.prepare('UPDATE frame_indexes SET accessed_at=? WHERE media_id=? AND version=?').run(Date.now(), id, version);
     return `{"epoch":${Number(row.epoch)},"index":${row.document ? String(row.document) : 'null'}}`;
   }
@@ -75,7 +88,14 @@ export class FrameIndexStore {
 }
 
 export type PreparedFrameIndex = { text: string; bytes: number; frames: number };
-export function prepareFrameIndex(value: unknown, size: number): PreparedFrameIndex {
+export function prepareFrameIndex(value: unknown, size: number, kind: FrameIndexKind = 'flv'): PreparedFrameIndex {
+  if (kind === 'ffmpeg') {
+    const parsed = parseFfmpegIndex(value, size);
+    if (!parsed) throw new AdminError(400, 'FFmpeg 帧索引格式或范围无效。');
+    const text = JSON.stringify(parsed.document), bytes = Buffer.byteLength(text);
+    if (bytes > FFMPEG_INDEX_BYTES + 1024) throw new AdminError(413, 'FFmpeg 帧索引过大。');
+    return { text, bytes, frames: parsed.document.count };
+  }
   let document: FlvIndexDocument;
   try { document = serializeFlvIndex(parseFlvIndex(value, size), size); }
   catch (error) { throw new AdminError(400, (error as Error).message); }
