@@ -46,6 +46,7 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     return lines.map(line => JSON.stringify(line));
   };
   const cursors: string[] = [];
+  const scanProgress: { packets: number; scannedBytes: number; totalBytes: number }[] = [];
   globalThis.fetch = (async (input: RequestInfo | URL) => {
     const requestUrl = new URL(String(input));
     const after = requestUrl.searchParams.get('after') ?? '';
@@ -54,10 +55,11 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     return ndjsonResponse(events(Number(after)));
   }) as typeof fetch;
 
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) });
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) }, progress => scanProgress.push(progress));
   try {
     assert.deepEqual(await client.read(), expected);
     assert.deepEqual(cursors, ['-1', '0']);
+    assert.deepEqual(scanProgress, [{ packets: 1024, scannedBytes: 8192, totalBytes: 200_000 }]);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;
