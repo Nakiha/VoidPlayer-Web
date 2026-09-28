@@ -4,8 +4,8 @@ import diagnostics from '@phosphor-icons/core/assets/regular/pulse.svg?raw';
 import info from '@phosphor-icons/core/assets/regular/info.svg?raw';
 import user from '@phosphor-icons/core/assets/regular/user.svg?raw';
 import check from '@phosphor-icons/core/assets/regular/check.svg?raw';
-// Phosphor's regular weight matches the compact optical-glass chrome. Import
-// Plus and refresh use bold for optical balance at small sizes. Import
+// Phosphor's regular weight matches the compact optical-glass chrome. Plus,
+// close, and refresh use bold for optical balance at small sizes. Import
 // only the icons we use; no icon font, CDN, or entire catalog enters the bundle.
 import settings from '@phosphor-icons/core/assets/regular/gear-six.svg?raw';
 import focus from '@phosphor-icons/core/assets/regular/frame-corners.svg?raw';
@@ -22,7 +22,7 @@ import previous from '@phosphor-icons/core/assets/regular/skip-back.svg?raw';
 import next from '@phosphor-icons/core/assets/regular/skip-forward.svg?raw';
 import plusRegular from '@phosphor-icons/core/assets/regular/plus.svg?raw';
 import plus from '@phosphor-icons/core/assets/bold/plus-bold.svg?raw';
-import close from '@phosphor-icons/core/assets/regular/x.svg?raw';
+import close from '@phosphor-icons/core/assets/bold/x-bold.svg?raw';
 import more from '@phosphor-icons/core/assets/regular/dots-three.svg?raw';
 import note from '@phosphor-icons/core/assets/regular/note-pencil.svg?raw';
 import refresh from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?raw';
