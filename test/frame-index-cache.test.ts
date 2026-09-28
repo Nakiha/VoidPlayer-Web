@@ -29,7 +29,9 @@ test('shared frame indexes persist, respect versions and clear permissions, and 
   const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}`;
   const upload = (epoch: number, index: unknown = document, origin = base) => fetch(endpoint, { method: 'POST', headers: { origin, 'x-voidplayer-action': 'frame-index', 'content-type': 'application/json' }, body: JSON.stringify({ epoch, index }) });
   try {
-    assert.equal((await fetch(endpoint)).status, 200);
+    const cacheResponse = await fetch(endpoint);
+    const cacheBody = await cacheResponse.text();
+    assert.equal(cacheResponse.status, 200, cacheBody);
     assert.equal((await upload(0, document, 'https://evil.invalid')).status, 403);
     assert.equal((await upload(0, { ...document, packets: [[entry.size, 10, 0, 0, 1]] })).status, 400);
     assert.equal((await fetch(base + '/api/admin/frame-indexes', { method: 'DELETE' })).status, 403);
