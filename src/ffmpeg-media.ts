@@ -391,16 +391,17 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     updateMediaInfo(source, { indexState: 'error', indexError: result.error }, 'index');
     wakeIndex();
   };
+  const currentIndexState = (): MediaInfo['indexState'] => info.indexState;
   const ensureIndexed = async (ptsUs = Infinity) => {
     if (disposed) throw new Error('媒体已释放。');
-    if (info.indexState === 'complete') return;
-    if (info.indexState === 'error') {
+    if (currentIndexState() === 'complete') return;
+    if (currentIndexState() === 'error') {
       if (ptsUs < info.durationUs) return;
       throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
     }
-    while (!disposed && info.indexState === 'building' && ptsUs >= info.durationUs) await waitForIndexUpdate();
+    while (!disposed && currentIndexState() === 'building' && ptsUs >= info.durationUs) await waitForIndexUpdate();
     if (disposed) throw new Error('媒体已释放。');
-    if (info.indexState === 'error' && ptsUs >= info.durationUs) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+    if (currentIndexState() === 'error' && ptsUs >= info.durationUs) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
   };
   activeRpc.setIndexHandlers({ complete: applyIndexComplete, error: applyIndexError });
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
