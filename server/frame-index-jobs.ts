@@ -12,15 +12,20 @@ type BuildRequest = {
   epoch: number;
   identity: MediaIndexIdentity;
 };
+type IndexBuildProgress = { phase: 'scan'; packets: number; scannedBytes: number; totalBytes: number };
+type ProgressListener = (progress: IndexBuildProgress) => void;
 type QueuedBuild = {
   key: string;
   request: BuildRequest;
+  promise: Promise<any>;
   resolve(value: any): void;
   reject(error: Error): void;
+  listeners: Set<ProgressListener>;
+  latestProgress?: IndexBuildProgress;
 };
 
 /** Cache I/O and bounded, identity-deduplicated FFmpeg builds use separate
- * workers. A long synchronous WASM scan therefore cannot block warm lookups. */
+ * workers. Packet-budgeted WASM scans report progress without blocking warm lookups. */
 export class FrameIndexJobs {
   private worker?: Worker;
   private pending = new Map<number, PendingRequest>();
@@ -29,7 +34,7 @@ export class FrameIndexJobs {
   private database: string;
   private coreDir: string;
   private uploads = 0;
-  private builds = new Map<string, Promise<any>>();
+  private builds = new Map<string, QueuedBuild>();
   private buildQueue: QueuedBuild[] = [];
   private buildWorkers = new Set<Worker>();
   private activeBuilds = 0;
@@ -94,35 +99,53 @@ export class FrameIndexJobs {
     });
   }
 
-  buildIndex(request: BuildRequest, timeoutMs = 300000): Promise<any> {
+  buildIndex(request: BuildRequest, timeoutMs = 300000, onProgress?: ProgressListener): Promise<any> {
     if (this.closed) return Promise.reject(new AdminError(503, '索引服务已关闭。'));
     const key = request.id + ':' + request.version + ':' + request.epoch + ':' + mediaIndexIdentityKey(request.identity);
     const joined = this.builds.get(key);
-    if (joined) return joined;
+    if (joined) {
+      if (onProgress) {
+        joined.listeners.add(onProgress);
+        if (joined.latestProgress) {
+          try { onProgress(joined.latestProgress); } catch {}
+        }
+      }
+      return joined.promise;
+    }
     if (this.activeBuilds >= this.maxConcurrentBuilds && this.buildQueue.length >= this.maxQueuedBuilds) {
       return Promise.reject(new AdminError(503, '索引构建队列已满，请稍后重试。'));
     }
     let resolve!: (value: any) => void, reject!: (error: Error) => void;
     const promise = new Promise<any>((res, rej) => { resolve = res; reject = rej; });
-    this.builds.set(key, promise);
-    this.buildQueue.push({ key, request, resolve, reject });
+    const job: QueuedBuild = { key, request, promise, resolve, reject, listeners: new Set() };
+    if (onProgress) job.listeners.add(onProgress);
+    this.builds.set(key, job);
+    this.buildQueue.push(job);
     this.pumpBuilds(timeoutMs);
     return promise;
+  }
+
+  private notifyBuildProgress(job: QueuedBuild, progress: IndexBuildProgress) {
+    job.latestProgress = progress;
+    for (const listener of job.listeners) {
+      try { listener(progress); } catch {}
+    }
   }
 
   private pumpBuilds(timeoutMs: number) {
     while (!this.closed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
       const job = this.buildQueue.shift()!;
       this.activeBuilds++;
-      void this.runBuild(job.request, timeoutMs).then(job.resolve, job.reject).finally(() => {
-        this.activeBuilds--;
-        if (this.builds.get(job.key)) this.builds.delete(job.key);
-        this.pumpBuilds(timeoutMs);
-      });
+      void this.runBuild(job.request, timeoutMs, progress => this.notifyBuildProgress(job, progress))
+        .then(job.resolve, job.reject).finally(() => {
+          this.activeBuilds--;
+          if (this.builds.get(job.key) === job) this.builds.delete(job.key);
+          this.pumpBuilds(timeoutMs);
+        });
     }
   }
 
-  private runBuild(request: BuildRequest, timeoutMs: number): Promise<any> {
+  private runBuild(request: BuildRequest, timeoutMs: number, onProgress: ProgressListener): Promise<any> {
     let worker: Worker;
     try {
       worker = new Worker(new URL('./frame-index-build-worker.ts', import.meta.url), {
@@ -141,7 +164,11 @@ export class FrameIndexJobs {
         if (error) reject(error); else resolve(value);
       };
       const timer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建超时，请稍后重试。')), timeoutMs);
-      worker.once('message', (result: { value?: unknown; error?: string; status?: number }) => {
+      worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number }) => {
+        if (result.type === 'progress') {
+          try { onProgress(result.data as IndexBuildProgress); } catch {}
+          return;
+        }
         if (result.error) finish(new AdminError(result.status ?? 500, result.error));
         else finish(undefined, result.value);
       });

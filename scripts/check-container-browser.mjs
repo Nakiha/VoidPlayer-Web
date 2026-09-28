@@ -35,9 +35,20 @@ try {
     ['h264.mp4', true, false], ['h264.mp4', false, false],
     ['h264.ts', true, true], ['h264.ts', false, true],
   ]) {
-    const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [];
+    const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [], indexEvents = [];
+    let resolveIndexStream = () => {};
+    const firstIndexStream = new Promise(resolve => { resolveIndexStream = resolve; });
     let libraryEntryId;
     page.on('pageerror', e => errors.push(e.message));
+    context.on('response', response => {
+      if (!response.url().includes('/frame-index?')) return;
+      void response.text().then(body => {
+        if (response.headers()['content-type']?.includes('application/x-ndjson')) {
+          for (const line of body.trim().split('\n')) if (line) indexEvents.push(JSON.parse(line));
+        }
+        resolveIndexStream();
+      }).catch(() => resolveIndexStream());
+    });
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     await page.addInitScript(software => {
       localStorage.setItem('voidplayer.color-mode', software ? 'reference' : 'browser');
@@ -60,6 +71,12 @@ try {
       if (!local && name === 'mpeg2.ts') {
         assert.equal(first.error, null);
         assert.equal(first.tracks[0].indexSource, 'server', 'cold FFmpeg library index must import from the server');
+        await firstIndexStream;
+        const buildingAt = indexEvents.findIndex(event => event.type === 'manifest' && event.state === 'building');
+        const scanAt = indexEvents.findIndex(event => event.type === 'progress' && event.phase === 'scan');
+        const completeAt = indexEvents.findIndex(event => event.type === 'manifest' && event.state === 'complete');
+        assert.ok(buildingAt >= 0 && scanAt > buildingAt && completeAt > scanAt, 'cold NDJSON must report scan progress before completed-document batches');
+        assert.ok(indexEvents.filter(event => event.type === 'batch').every(event => event.safePresentationUs === null), 'document chunks must not claim a playable frontier');
         await call('remove_review_track', { slot: 'A' });
         await call('load_library_item', { id: libraryEntryId, slot: 'A' });
         const warm = await call('get_review_session');

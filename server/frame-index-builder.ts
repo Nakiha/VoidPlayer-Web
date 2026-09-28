@@ -18,7 +18,21 @@ function fileVersion(stat: Stats) {
   return createHash('sha256').update(stat.size + ':' + Math.round(stat.mtimeMs) + ':' + Math.round(stat.ctimeMs) + ':' + stat.ino).digest('hex').slice(0, 24);
 }
 
-export async function buildFfmpegIndexDocument(filePath: string, expectedSize: number, expectedVersion: string, coreDir: string, identity: MediaIndexIdentity): Promise<FfmpegIndexDocument> {
+export interface FfmpegIndexBuildProgress {
+  phase: 'scan';
+  packets: number;
+  scannedBytes: number;
+  totalBytes: number;
+}
+
+export async function buildFfmpegIndexDocument(
+  filePath: string,
+  expectedSize: number,
+  expectedVersion: string,
+  coreDir: string,
+  identity: MediaIndexIdentity,
+  onProgress?: (progress: FfmpegIndexBuildProgress) => void,
+): Promise<FfmpegIndexDocument> {
   if (!hasServerIndexCore(coreDir)) throw new Error('服务端 FFmpeg WASM core 不可用。');
   const stat = statSync(filePath);
   if (!stat || !stat.isFile() || stat.size !== expectedSize || fileVersion(stat) !== expectedVersion) throw new Error('媒体文件在建立索引前已改变。');
@@ -66,7 +80,21 @@ export async function buildFfmpegIndexDocument(filePath: string, expectedSize: n
       || identity.streamKey !== `video:${streamIndex}` || identity.indexerBuild !== indexerBuild) {
       throw new Error('媒体索引身份与服务端 FFmpeg core 不匹配。');
     }
-    const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
+    if (core.ccall('vp_index_scan_begin', 'number', ['number'], [ctx]) !== 1) {
+      throw new Error('服务端 FFmpeg 无法开始媒体帧索引。');
+    }
+    while (!core.ccall('vp_index_scan_complete', 'number', ['number'], [ctx])) {
+      const step = core.ccall('vp_index_scan_step', 'number', ['number', 'number'], [ctx, 1024]) as number;
+      if (step < 0 || core.ccall('vp_index_scan_failed', 'number', ['number'], [ctx])) {
+        throw new Error('服务端 FFmpeg 媒体帧索引扫描失败。');
+      }
+      const packets = core.ccall('vp_index_scan_packets', 'number', ['number'], [ctx]) as number;
+      const scannedBytes = Math.min(fileSize, Math.max(0,
+        Number(core.ccall('vp_index_scan_bytes', 'i64', ['number'], [ctx]))));
+      onProgress?.({ phase: 'scan', packets, scannedBytes, totalBytes: fileSize });
+      await new Promise<void>(resolve => setImmediate(resolve));
+    }
+    const count = core.ccall('vp_index_count', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('服务端 FFmpeg 无法建立媒体帧索引。');
     if (count > 2_000_000) throw new Error('媒体帧数超过服务端索引上限。');
     const recordBytes = core.ccall('vp_index_export_bytes', 'number', ['number'], [ctx]) as number;

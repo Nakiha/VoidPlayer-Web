@@ -26,7 +26,7 @@ export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
-  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 30000, requestBuild = false, identity?: MediaIndexIdentity) {
+  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 300000, requestBuild = false, identity?: MediaIndexIdentity) {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
@@ -51,6 +51,7 @@ export class MediaIndexClient {
     if (!this.endpoint) return null;
     const deadline = Date.now() + this.timeoutMs;
     let manifest: any;
+    let buildingManifest: any;
     let transferBytes = new Uint8Array(0);
     let receivedBytes = 0;
     let lastSeq = -1;
@@ -83,17 +84,26 @@ export class MediaIndexClient {
       let buffer = '';
       const decoder = new TextDecoder();
       let streamFailed = false;
+      let serverRejected = false;
 
       const consumeLine = (line: string) => {
         if (!line.trim()) return;
         const event = JSON.parse(line);
         if (event?.type === 'manifest') {
-          if (event.protocol !== 1 || event.kind !== this.kind || event.state !== 'complete' || event.encoding !== 'json-utf8-base64'
-            || !Number.isSafeInteger(event.epoch) || event.epoch < 0
+          if (event.protocol !== 1 || event.kind !== this.kind || !Number.isSafeInteger(event.epoch) || event.epoch < 0
+            || event.batchBytes !== STREAM_BATCH_BYTES) throw new Error('索引流 manifest 无效。');
+          if (event.state === 'building') {
+            if (manifest || (buildingManifest && buildingManifest.epoch !== event.epoch)) {
+              throw new Error('索引流 building manifest 在续传期间改变。');
+            }
+            buildingManifest = event;
+            return;
+          }
+          if (event.state !== 'complete' || event.encoding !== 'json-utf8-base64'
             || !Number.isSafeInteger(event.totalBytes) || event.totalBytes < 0 || event.totalBytes > this.maxBytes
-            || event.batchBytes !== STREAM_BATCH_BYTES
             || !Number.isSafeInteger(event.lastSeq)
-            || event.lastSeq !== Math.ceil(event.totalBytes / event.batchBytes) - 1) {
+            || event.lastSeq !== Math.ceil(event.totalBytes / event.batchBytes) - 1
+            || (buildingManifest && buildingManifest.epoch !== event.epoch)) {
             throw new Error('索引流 manifest 无效。');
           }
           if (manifest && !sameManifest(manifest, event)) throw new Error('索引流 manifest 在续传期间改变。');
@@ -112,7 +122,14 @@ export class MediaIndexClient {
           return;
         }
         if (event?.type === 'progress') {
-          if (!manifest || event.seq > lastSeq || !Number.isSafeInteger(event.bytesSent)
+          if (event.phase === 'scan') {
+            if ((!buildingManifest && !manifest) || !Number.isSafeInteger(event.packets) || event.packets < 0
+              || !Number.isSafeInteger(event.scannedBytes) || event.scannedBytes < 0
+              || !Number.isSafeInteger(event.totalBytes) || event.totalBytes < event.scannedBytes
+              || (buildingManifest && event.totalBytes <= 0)) throw new Error('索引扫描 progress 无效。');
+            return;
+          }
+          if (event.phase !== 'transfer' || !manifest || event.seq > lastSeq || !Number.isSafeInteger(event.bytesSent)
             || event.bytesSent < 0 || event.bytesSent > manifest.totalBytes) throw new Error('索引流 progress 无效。');
           return;
         }
@@ -124,7 +141,10 @@ export class MediaIndexClient {
           complete = true;
           return;
         }
-        if (event?.type === 'error') throw new Error(typeof event.message === 'string' ? event.message : '服务端索引流失败。');
+        if (event?.type === 'error') {
+          serverRejected = true;
+          throw new Error(typeof event.message === 'string' ? event.message : '服务端索引流失败。');
+        }
         throw new Error('索引流事件类型未知。');
       };
 
@@ -149,7 +169,7 @@ export class MediaIndexClient {
         await reader.cancel().catch(() => {});
         reader.releaseLock();
       }
-      if (this.controller.signal.aborted) return null;
+      if (this.controller.signal.aborted || serverRejected) return null;
       if (streamFailed || !complete) continue;
     }
 

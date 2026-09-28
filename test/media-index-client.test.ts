@@ -27,11 +27,16 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
   const bytes = encoder.encode(JSON.stringify(document));
   const batchBytes = 64 * 1024;
   const lastSeq = Math.ceil(bytes.length / batchBytes) - 1;
-  const events = (after: number) => {
-    const lines = [{
-      type: 'manifest', protocol: 1, epoch: 7, kind: 'ffmpeg', state: 'complete', encoding: 'json-utf8-base64',
-      totalBytes: bytes.length, batchBytes, lastSeq,
-    }, ...Array.from({ length: lastSeq - after }, (_, i) => after + i + 1).flatMap(seq => {
+  const events = (after: number, includeScan = false) => {
+    const lines = [
+      ...(includeScan ? [
+        { type: 'manifest', protocol: 1, epoch: 7, kind: 'ffmpeg', state: 'building', batchBytes },
+        { type: 'progress', phase: 'scan', packets: 1024, scannedBytes: 8192, totalBytes: 200_000 },
+      ] : []),
+      {
+        type: 'manifest', protocol: 1, epoch: 7, kind: 'ffmpeg', state: 'complete', encoding: 'json-utf8-base64',
+        totalBytes: bytes.length, batchBytes, lastSeq,
+      }, ...Array.from({ length: lastSeq - after }, (_, i) => after + i + 1).flatMap(seq => {
       const chunk = bytes.subarray(seq * batchBytes, Math.min(bytes.length, (seq + 1) * batchBytes));
       return [
         { type: 'batch', seq, data: Buffer.from(chunk).toString('base64') },
@@ -45,7 +50,7 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     const requestUrl = new URL(String(input));
     const after = requestUrl.searchParams.get('after') ?? '';
     cursors.push(after);
-    if (cursors.length === 1) return ndjsonResponse(events(-1).slice(0, 2), true);
+    if (cursors.length === 1) return ndjsonResponse(events(-1, true).slice(0, 5), true);
     return ndjsonResponse(events(Number(after)));
   }) as typeof fetch;
 

@@ -3,6 +3,7 @@ import { openIndexDatabase } from './sqlite.ts';
 import { FrameIndexStore, prepareFrameIndex } from './frame-index-store.ts';
 import { AdminError } from './admin-error.ts';
 import { buildFfmpegIndexDocument, hasServerIndexCore } from './frame-index-builder.ts';
+import type { FfmpegIndexBuildProgress } from './frame-index-builder.ts';
 import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
 
 const db = openIndexDatabase(workerData.database);
@@ -21,6 +22,7 @@ parentPort!.on('message', async (request: {
     if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
     const document = await buildFfmpegIndexDocument(
       request.filePath, request.size, request.version, workerData.coreDir, request.identity,
+      (progress: FfmpegIndexBuildProgress) => parentPort!.postMessage({ type: 'progress', data: progress }),
     );
     const prepared = prepareFrameIndex(document, request.size, request.identity);
     store.commit(request.id, request.version, prepared, request.epoch);
