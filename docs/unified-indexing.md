@@ -1,21 +1,22 @@
 # Unified media index
 
-This document proposes the shared index contract and service lifecycle for progressive client and server indexing. The first implementation target is MPEG-TS through the FFmpeg container fallback; FLV and MP4 keep their established format adapters.
+This document tracks the index unification rollout. The first server producer targets MPEG-TS and other containers handled by the FFmpeg fallback. FLV and MP4 retain their format-specific index records and validation.
 
 ## Current behavior
 
-- The frame-index endpoint accepts and caches a complete FLV index document. A browser can later download that whole document; it does not subscribe to a server scan.
-- FLV begins playback from a local startup prefix and continues scanning in the background. Its server cache is populated only after a complete client scan.
-- The FFmpeg worker calls vp_index_build synchronously, then returns the complete timestamp and duration arrays. It has no index import or partial-index API.
-- MP4 sample-table indexing and FLV tag indexing have different source metadata and validation rules. The shared packet timeline consumes those format-specific records.
+- FLV stores and reads a complete index document. Its playback path can show frames while a client-side background scan continues; the server cache is populated after that scan finishes.
+- FFmpeg container fallback can request a server index for a versioned library media item. On a cache miss, the server runs the bundled FFmpeg WASM core against a bounded local-file reader, stores the completed index, and returns it. On a hit, the browser imports the stored records into the decoder context and skips its full index scan.
+- FFmpeg cache transfer uses the shared media-index client and the versioned frame-index endpoint. Direct local files, servers without the matching core, and older browser cores keep the client indexing fallback.
+- The FFmpeg core currently scans synchronously and the server responds with one complete JSON document. Cold builds do not yet publish intermediate batches, and the FFmpeg path does not yet present its first frame before index completion.
+- The common storage table can hold FLV or FFmpeg documents, but their payload schemas remain format-specific. MP4 sample-table indexing and FLV tag indexing have different source metadata and validation rules.
 
 ## Shared contract
 
-Unify identity, lifecycle, progress, persistence, and transport. Keep each container adapter responsible for its own valid seek records and time reconstruction.
+Unify media-version checks, cache lifecycle, progress reporting, persistence, and transport while keeping each container adapter responsible for valid seek records and time reconstruction.
 
-An index identity is the tuple media ID, observed media version, selected video stream, index schema version, and indexer/core build. A cached index is reusable only when every identity field matches. Continue validating the opening packet/sample against source bytes before using remote cache data.
+The current cache identity includes the library media ID and observed media version at the service boundary, plus source size and FFmpeg stream metadata in the FFmpeg document. A follow-up schema should explicitly include selected stream identity, index schema, and indexer/core build before cache compatibility is widened. Every remote index still needs validation against the opened source before it is trusted.
 
-The common manifest carries identity, source size, index kind, state, revision, scanned-byte progress, indexed presentation coverage, and completion status. States are building, complete, and error. Batches have monotonically increasing sequence numbers and immutable contents. A batch boundary includes a container-provided safe presentation watermark; the client must not infer that later packets cannot precede the last observed PTS.
+The target manifest carries identity, source size, index kind, state, revision, scanned-byte progress, indexed presentation coverage, and completion status. States are building, complete, and error. Batches have monotonically increasing sequence numbers and immutable contents. A batch boundary includes a container-provided safe presentation watermark; the client must not infer that later packets cannot precede the last observed PTS.
 
 Payload adapters retain the data needed by their seek implementation:
 
@@ -23,33 +24,33 @@ Payload adapters retain the data needed by their seek implementation:
 - MP4: validated sample offsets and sizes, decode/presentation timing, edit-list mapping, and configuration boundaries.
 - FFmpeg containers such as MPEG-TS: exact stream time base, packet/frame identity, timestamps, byte positions or usable demuxer seek anchors, key flags, and codec configuration identity. A timestamp-only list does not let the client skip demux indexing or restore seek behavior.
 
-Keep the public session timeline in integer microseconds. The wire representation should use bounded batches with validated integer values; a compact binary or delta-encoded representation can replace JSON after the end-to-end contract is stable.
+Keep the public session timeline in integer microseconds. The current FFmpeg wire records use a fixed 24-byte little-endian layout with ticks, duration, and key flag. The target streaming envelope can begin with bounded JSON batches; compact binary or delta encoding can follow once the end-to-end contract is stable.
 
 ## Producer and transport
 
-A server request for a library media version joins or starts one deduplicated background job. The job opens the media through a bounded local-file random-access adapter and runs in a worker. It publishes immutable batches to persistent storage and active subscribers. Use the existing media-version and cache-epoch checks at commit time.
+The current FFmpeg cold-build request runs in the frame-index worker and reads the media through local-file AVIO. It does not copy the complete source into WASM memory. The completed cache is committed only if the media version and cache epoch still match.
 
-GET on the versioned frame-index resource streams a manifest, index batches, progress updates, and one terminal complete or error record as NDJSON. Accept an after-sequence cursor so a disconnected client can resume. A cache hit replays stored batches in sequence and completes immediately. A cache miss starts the shared job; the HTTP request itself never owns the scanner.
+The target server API uses a deduplicated background job for each media version. The job publishes immutable batches to persistent storage and active subscribers. GET on a versioned frame-index resource streams a manifest, index batches, progress updates, and one terminal complete or error record as NDJSON. It accepts an after-sequence cursor so a disconnected client can resume. A cache hit replays stored batches in sequence.
 
-The existing frame-index request gate serializes request-body preparation and complete-document reads. Streaming subscribers therefore need a separate bounded job coordinator and fan-out; holding that gate for the lifetime of a stream would prevent other clients from joining. Build concurrency remains bounded independently from library scanning and playback requests. Persist complete batches transactionally; incomplete jobs are discarded or explicitly resumed after restart, never represented as complete.
+Streaming subscribers need a bounded job coordinator and fan-out separate from request-body preparation and complete-document reads. Holding the current request gate for a stream lifetime would prevent other clients from joining. Build concurrency remains bounded independently from library scanning and playback requests. Incomplete jobs must not be represented as complete after restart.
 
-The standalone server currently has no ffmpeg or ffprobe executable dependency. Prefer the project’s custom FFmpeg core with a server worker and bounded file reader. Do not buffer the whole source file into WASM memory. Keep client indexing as the fallback for direct local files, unavailable server support, and unsupported containers.
+The standalone server has no ffmpeg or ffprobe executable dependency. Continue using the bundled FFmpeg core with a server worker and bounded file reader. Keep client indexing as the fallback for direct local files, unavailable server support, and unsupported containers.
 
 ## Client consumption
 
-For a versioned library URL, the client opens an index subscription alongside ordinary media probing. On a complete cache hit, it imports the index into the decoder context and skips a full client scan. On a cold build, the first usable server batch initializes the decoder and makes the covered prefix available for playback; later batches extend the same source and timeline.
+For a versioned library URL, the client requests a compatible server cache or cold build. On a complete cache hit, it imports the index and skips a full client scan. On a cold build today, it waits for the server's complete index document before importing it.
 
-The FFmpeg core needs explicit begin, next-batch, export, and import operations. Scanning must yield between bounded batches so the worker can publish progress and serve frame requests without blocking for the whole file. The decoder must preserve random-access anchors, open-GOP preroll, duplicate-PTS handling, and stream time-base semantics when it imports a partial or complete index.
+The next client stage needs FFmpeg core begin, bounded-step, partial export, and partial import operations. The worker must yield between batches so it can publish progress and serve frame requests. The decoder must preserve random-access anchors, open-GOP preroll, duplicate-PTS handling, timestamp wrap/discontinuity behavior, and stream time-base semantics when it imports a partial or complete index.
 
 The existing session contract remains authoritative: first presentation, indexed duration, complete scan, and decoder EOF are distinct. A decoder reaching the current indexed frontier waits for more data; it does not flush or claim EOF until the index completes. An explicit seek requests enough prefix to cover the target. Scan failure or cancellation leaves ordinary client-side playback fallback available.
 
 ## Rollout
 
 1. Preserve the already validated software reference source when native first-frame verification fails. This avoids reopening and rescanning the same source.
-2. Add FFmpeg core index export/import and bounded scan batches, with a local client progressive path. Verify early first-frame presentation before adding server generation.
-3. Add a separate server build-job coordinator, local-file input adapter, versioned batch storage, and resumable NDJSON streaming.
-4. Connect versioned library sources to the provider. Keep the existing FLV document cache readable during migration, then move it to the common envelope.
-5. Add MP4 and FLV server producers through their existing adapters after MPEG-TS has passed the end-to-end contract.
+2. Add and validate FFmpeg core index import/export. This is implemented for complete indexes; bounded scanning and partial-index import/export remain.
+3. Add server-side FFmpeg cold generation and complete-index cache reuse. This is implemented for versioned library media.
+4. Add bounded index jobs, versioned batch storage, resumable NDJSON streaming, and client partial-index consumption so cold builds can present frames before scanning completes.
+5. Extend explicit identity fields and migrate FLV and MP4 producers through their existing adapters after the MPEG-TS flow passes the end-to-end contract.
 
 ## Acceptance
 
