@@ -350,7 +350,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .start-header { display: flex; align-items: center; justify-content: space-between; gap: var(--section-gap); }
 .start-header > h3 { margin: 0; font-size: var(--text-ui); font-weight: 600; }
 .start-header .add-video { flex: 0 0 auto; }
-.start-identity { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); }
+.start-identity { margin-left: auto; min-width: 0; min-height: 0; overflow: hidden; padding: 4px 8px; border-color: transparent; background: transparent; text-overflow: ellipsis; white-space: nowrap; color: var(--text-secondary); font-size: var(--text-sm); transition: background-color var(--transition-fast), color var(--transition-fast), transform var(--transition-fast); }
+.start-identity:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
+.start-identity:active:not(:disabled) { transform: scale(.97); }
+.start-identity:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .start-identity-name { color: var(--accent); }
 .start-workspace-card { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); justify-content: stretch; padding: var(--space-2) var(--space-3); border: 0; border-radius: var(--radius-control); background: var(--surface-stripe); box-shadow: none; color: var(--text); text-align: left; cursor: pointer; }
 .start-workspace-card:hover { background: var(--surface-hover); }

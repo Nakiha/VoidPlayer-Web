@@ -612,9 +612,11 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (more) more.onclick = () => shared.setPanel('sources', true);
     const identity = $('start-identity');
     const showIdentity = () => { if (identity) {
-      const name = document.createElement('span'); name.className = 'start-identity-name'; name.textContent = currentActor()?.name ?? '访客';
+      const actorName = currentActor()?.name ?? '访客';
+      const name = document.createElement('span'); name.className = 'start-identity-name'; name.textContent = actorName;
       identity.replaceChildren(document.createTextNode('当前身份 · '), name);
-      identity.title = identity.textContent;
+      identity.title = `点击打开用户设置（当前身份：${actorName}）`;
+      identity.setAttribute('aria-label', `当前身份：${actorName}，打开用户设置`);
     } };
     showIdentity();
     window.addEventListener('voidplayer-identity-change', showIdentity, { signal: lifecyle.signal });
