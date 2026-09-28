@@ -5,6 +5,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { MediaIndexClient } from './media-index-client.ts';
+import type { MediaIndexScanProgress } from './media-index-client.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
@@ -37,7 +38,7 @@ let core: any = null;
 let heap: () => Uint8Array;
 const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string; indexClient?: MediaIndexClient }>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress, onReady?: (data: any) => void) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress, onReady?: (data: any) => void, onIndexProgress?: (progress: MediaIndexScanProgress) => void) {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -96,7 +97,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       && core.ccall('vp_index_abi_version', 'number', [], []) === 2
       && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity) : undefined;
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity, progress => onIndexProgress?.(progress)) : undefined;
     if (indexClient && typeof core._vp_prime_first_presentable === 'function') {
       const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
       if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
@@ -268,7 +269,7 @@ port.onmessage = async (event: { data: any }) => {
       const result = await init(payload, progress => port.postMessage({ id, type: 'progress', progress }), data => {
         readyContext = data.ctx;
         port.postMessage({ id, type: 'ready', data }, [data.firstFrame.pixels]);
-      });
+      }, progress => port.postMessage({ id, type: 'index-progress', data: progress }));
       if (readyContext !== undefined) port.postMessage({ id, type: 'index-complete', data: result });
       else port.postMessage({ id, ok: true, data: result });
     } else if (type === 'extract') {
