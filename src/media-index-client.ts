@@ -2,6 +2,7 @@ import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 
 export interface ServerIndexResult { epoch: number; index: unknown | null; }
+export interface MediaIndexScanProgress { scannedBytes: number; totalBytes: number; packets: number; }
 
 const STREAM_BATCH_BYTES = 64 * 1024;
 const STREAM_ATTEMPTS = 3;
@@ -26,7 +27,7 @@ export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
-  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 300000, requestBuild = false, identity?: MediaIndexIdentity) {
+  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 300000, requestBuild = false, identity?: MediaIndexIdentity, private readonly onScanProgress?: (progress: MediaIndexScanProgress) => void) {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
@@ -127,6 +128,9 @@ export class MediaIndexClient {
               || !Number.isSafeInteger(event.scannedBytes) || event.scannedBytes < 0
               || !Number.isSafeInteger(event.totalBytes) || event.totalBytes < event.scannedBytes
               || (buildingManifest && event.totalBytes <= 0)) throw new Error('索引扫描 progress 无效。');
+            try {
+              this.onScanProgress?.({ packets: event.packets, scannedBytes: event.scannedBytes, totalBytes: event.totalBytes });
+            } catch { /* Progress reporting must not interrupt index transfer. */ }
             return;
           }
           if (event.phase !== 'transfer' || !manifest || event.seq > lastSeq || !Number.isSafeInteger(event.bytesSent)
