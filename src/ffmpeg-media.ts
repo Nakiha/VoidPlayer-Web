@@ -75,6 +75,7 @@ interface InitResult {
   codec: string;
   indexMs?: number;
   indexSource?: 'server' | 'client';
+  localIndexBuildCalls?: number;
   seekAnchorCount?: number;
   ioMode?: 'blob' | 'memfs' | 'http-range';
   colorPrimaries?: number;
@@ -279,7 +280,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
-        ioMode: init.ioMode, indexSource: init.indexSource, readMs, initIndexMs: init.indexMs, threads,
+        ioMode: init.ioMode, indexSource: init.indexSource, localIndexBuildCalls: init.localIndexBuildCalls ?? 0, readMs, initIndexMs: init.indexMs, threads,
       });
       break;
     } catch (error) {

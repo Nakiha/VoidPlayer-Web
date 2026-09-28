@@ -83,6 +83,11 @@ try {
       }
       const logs = await call('get_review_logs', { limit: 500 });
       assert.ok(logs.events.some(e => e.msg === '媒体适配器选择' && e.data.software === (name === 'h264.mp4' ? 'packet-mp4' : 'ffmpeg-container')));
+      if (!local && name === 'mpeg2.ts') {
+        const ready = logs.events.filter(e => e.msg === 'WASM core 已就绪').map(e => e.data);
+        assert.ok(ready.length >= 2, 'cold and warm server-index opens are observed');
+        assert.ok(ready.slice(-2).every(e => e.indexSource === 'server' && e.localIndexBuildCalls === 0), JSON.stringify(ready.slice(-2)));
+      }
       assert.ok(!logs.events.some(e => /MP4 压缩包路径不可用/.test(e.msg)), 'TS never attempts the MP4 packet adapter');
       if (long) {
         const seeks = logs.events.filter(e => e.msg === 'WASM 帧定位完成').map(e => e.data);

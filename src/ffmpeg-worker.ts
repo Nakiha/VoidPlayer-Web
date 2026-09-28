@@ -97,6 +97,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
       ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity) : undefined;
     let indexSource: 'server' | 'client' = 'client';
+    let localIndexBuildCalls = 0;
     let count = 0;
     if (indexClient && canImportIndex) {
       try {
@@ -134,6 +135,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       }
     }
     if (!count) {
+      localIndexBuildCalls++;
       count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
     }
     if (count <= 0) { indexClient?.close(); throw new Error('FFmpeg WASM 无法建立该文件的帧索引。'); }
@@ -183,7 +185,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     contexts.set(ctx, { ticks, blobHandle, path, indexClient });
     return {
-      ctx, path, ticks, durations, indexMs, indexSource, ioMode,
+      ctx, path, ticks, durations, indexMs, indexSource, localIndexBuildCalls, ioMode,
       seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
