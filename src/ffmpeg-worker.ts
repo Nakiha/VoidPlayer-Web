@@ -37,7 +37,7 @@ let core: any = null;
 let heap: () => Uint8Array;
 const contexts = new Map<number, { ticks: number[]; blobHandle: number; path: string; indexClient?: MediaIndexClient }>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress) {
+async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; indexUrl?: string; mediaSize?: number }, onProgress: MediaOpenProgress, onReady?: (data: any) => void) {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -96,6 +96,30 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
       ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity) : undefined;
+    let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
+    if (indexClient && typeof core._vp_prime_first_presentable === 'function') {
+      const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
+      if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
+      firstPresentation = readWasmFrame(core, heap, ctx);
+      const firstTicks = firstPresentation.pts;
+      contexts.set(ctx, { ticks: [firstTicks], blobHandle, path, indexClient });
+      onReady?.({
+        ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
+        firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
+        indexSource: 'server', localIndexBuildCalls: 0, ioMode,
+        seekAnchorCount: 0,
+        tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+        tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+        width: core.ccall('vp_width', 'number', ['number'], [ctx]),
+        height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+        codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+        pixelFormat: typeof core._vp_pixel_format === 'function' ? core.ccall('vp_pixel_format', 'string', ['number'], [ctx]) || null : null,
+        colorPrimaries: core.ccall('vp_color_primaries', 'number', ['number'], [ctx]),
+        colorTransfer: core.ccall('vp_color_transfer', 'number', ['number'], [ctx]),
+        colorSpace: core.ccall('vp_color_space', 'number', ['number'], [ctx]),
+        colorRange: core.ccall('vp_color_range', 'number', ['number'], [ctx]),
+      });
+    }
     let indexSource: 'server' | 'client' = 'client';
     let localIndexBuildCalls = 0;
     let count = 0;
@@ -150,12 +174,18 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     // demux index. Keep them in the core for decoding, but do not expose an
     // unrenderable prefix as frame zero. Never skip a positive-time failure.
     let prefix = 0;
-    while (prefix < ticks.length && ticks[prefix] < 0) {
+    const timelineOrigin = firstPresentation?.pts ?? 0;
+    while (prefix < ticks.length && ticks[prefix] < timelineOrigin) {
       if (prefix >= 128) throw new MediaOpenError('resource', '视频预滚范围超过 128 帧探测上限。');
-      const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, BigInt(ticks[prefix])]);
-      if (result === 1) break;
-      if (result !== 2) throw new MediaOpenError('decode', '软件解码器无法解析视频预滚帧。');
+      if (!firstPresentation) {
+        const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, BigInt(ticks[prefix])]);
+        if (result === 1) break;
+        if (result !== 2) throw new MediaOpenError('decode', '软件解码器无法解析视频预滚帧。');
+      }
       prefix++;
+    }
+    if (firstPresentation && ticks[prefix] !== timelineOrigin) {
+      throw new MediaOpenError('resource', '索引中找不到已展示的首帧时间戳。');
     }
     if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
     if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
@@ -199,6 +229,13 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       colorRange: core.ccall('vp_color_range', 'number', ['number'], [ctx]),
     };
   } catch (error) {
+    if (firstPresentation) {
+      indexClient?.close();
+      // The early-ready source owns this context until it is explicitly disposed.
+      const entry = contexts.get(ctx);
+      if (entry) entry.indexClient = indexClient;
+      throw error;
+    }
     if (blobHandle) core.vpBlobs.delete(blobHandle);
     indexClient?.close();
     try { core.FS.unlink(path); } catch { /* best effort */ }
@@ -227,7 +264,13 @@ port.onmessage = async (event: { data: any }) => {
   const { id, type, ...payload } = event.data;
   try {
     if (type === 'init') {
-      port.postMessage({ id, ok: true, data: await init(payload, progress => port.postMessage({ id, type: 'progress', progress })) });
+      let readyContext: number | undefined;
+      const result = await init(payload, progress => port.postMessage({ id, type: 'progress', progress }), data => {
+        readyContext = data.ctx;
+        port.postMessage({ id, type: 'ready', data }, [data.firstFrame.pixels]);
+      });
+      if (readyContext !== undefined) port.postMessage({ id, type: 'index-complete', data: result });
+      else port.postMessage({ id, ok: true, data: result });
     } else if (type === 'extract') {
       const frame = extract(payload.ctx, payload.index, payload.recycle);
       port.postMessage({ id, ok: true, data: frame }, [frame.pixels]);
@@ -245,6 +288,8 @@ port.onmessage = async (event: { data: any }) => {
       throw new Error(`未知消息类型: ${type}`);
     }
   } catch (error) {
-    port.postMessage({ id, ok: false, error: error instanceof Error ? error.message : String(error), stage: error instanceof MediaOpenError ? error.stage : undefined });
+    const message = error instanceof Error ? error.message : String(error);
+    const stage = error instanceof MediaOpenError ? error.stage : undefined;
+    port.postMessage({ id, ok: false, error: message, stage });
   }
 };
