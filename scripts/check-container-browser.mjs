@@ -36,6 +36,7 @@ try {
     ['h264.ts', true, true], ['h264.ts', false, true],
   ]) {
     const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [];
+    let libraryEntryId;
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });
     await page.addInitScript(software => {
@@ -50,9 +51,21 @@ try {
         await page.waitForFunction(() => !window.voidPlayer.getState().busy && window.voidPlayer.getState().tracks[0]?.frame, null, { timeout: 60000 });
       } else {
         const listing = await call('list_library');
-        await call('load_library_item', { id: listing.entries.find(e => e.name === name).id, slot: 'A' });
+        const entry = listing.entries.find(e => e.name === name);
+        assert.ok(entry, `library fixture ${name} is listed`);
+        libraryEntryId = entry.id;
+        await call('load_library_item', { id: libraryEntryId, slot: 'A' });
       }
       const first = await call('get_review_session'), long = name === 'mpeg2.ts' || name === 'renamed.mp4';
+      if (!local && name === 'mpeg2.ts') {
+        assert.equal(first.error, null);
+        assert.equal(first.tracks[0].indexSource, 'server', 'cold FFmpeg library index must import from the server');
+        await call('remove_review_track', { slot: 'A' });
+        await call('load_library_item', { id: libraryEntryId, slot: 'A' });
+        const warm = await call('get_review_session');
+        assert.equal(warm.error, null);
+        assert.equal(warm.tracks[0].indexSource, 'server', 'warm FFmpeg cache must import without client-side index_build');
+      }
       assert.equal(first.error, null);
       assert.equal(first.tracks[0].container, name === 'h264.mp4' ? 'isobmff' : 'mpegts');
       if (long || software) {
