@@ -6,8 +6,9 @@ This document tracks the index unification rollout. The first server producer ta
 
 - FLV stores and reads a complete index document. Its playback path can show frames while a client-side background scan continues; the server cache is populated after that scan finishes.
 - FFmpeg container fallback can request a server index for a versioned library media item. On a cache miss, the server runs the bundled FFmpeg WASM core against a bounded local-file reader, stores the completed index, and returns it. On a hit, the browser imports the stored records into the decoder context and skips its full index scan.
+- With the compatible server-backed core, opening returns the first presentable frame before the complete index arrives. That frame's source PTS fixes the media timeline origin; the initial seek coverage is only that frame.
 - FFmpeg cache transfer uses the shared media-index client and the versioned frame-index endpoint. Direct local files, servers without the matching core, and older browser cores keep the client indexing fallback.
-- The FFmpeg core exposes packet-budgeted begin/step/complete calls, and the server build worker now yields between packet batches while tracking scanned bytes. A cold NDJSON GET sends a `building` manifest and scan progress before the final document is ready. After completion it sends sequenced 64 KiB base64 byte slices and can resume with `?after=N`. These wire slices still have no record or coverage semantics; the browser assembles and imports the complete JSON document only after `complete`, so playback does not yet begin during scanning.
+- The FFmpeg core exposes packet-budgeted begin/step/complete calls, and the server build worker now yields between packet batches while tracking scanned bytes. A cold NDJSON GET sends a `building` manifest and scan progress before the final document is ready. After completion it sends sequenced 64 KiB base64 byte slices and can resume with `?after=N`. These wire slices still have no record or coverage semantics. The independently primed first frame can be displayed during the scan, but later seek positions and playback beyond that frame wait until the browser assembles and imports the complete document.
 - Persistence now uses identity-keyed manifests and sequence-keyed batches. The identity includes media ID/version, format kind, stream key, schema version, and indexer build. A complete bootstrap document is stored as batch 0; FLV and FFmpeg payload validation remain format-specific.
 
 ## Shared contract
@@ -16,7 +17,7 @@ Unify media-version checks, cache lifecycle, progress reporting, persistence, an
 
 The persisted key is (media ID, media version, kind, stream key, schema version, indexer build). FFmpeg cache documents also carry source size, stream index, codec, time base, dimensions, and the core build SHA. The Web release check requires index ABI v2, 40-byte records, and an embedded core build ID equal to the pinned revision. Every remote FFmpeg index is checked against the opened source before import.
 
-The manifest carries identity, state, last sequence, scanned-byte progress, stable presentation coverage, and completion status. The schema supports building, streaming, complete, and failed states. Index-record batch sequence numbers are monotonic and immutable; each record batch boundary must carry a container-provided safe presentation watermark. The current completed-document transport chunks have no playback coverage, and the client must not infer one from transfer progress.
+The manifest carries identity, state, last sequence, scanned-byte progress, stable presentation coverage, and completion status. The schema supports building, streaming, complete, and failed states. Once the first presentable frame is exposed, its source PTS is the immutable timeline origin; earlier records discovered later are preroll and must not renormalize that origin. Index-record batch sequence numbers are monotonic and immutable; each record batch boundary must carry a container-provided safe presentation watermark. The current completed-document transport chunks have no playback coverage, and the client must not infer one from transfer progress.
 
 Payload adapters retain the data needed by their seek implementation:
 
@@ -38,9 +39,9 @@ The standalone server has no ffmpeg or ffprobe executable dependency. Continue u
 
 ## Client consumption
 
-For a versioned library URL, the client requests a compatible server cache or cold build. It parses NDJSON events incrementally, accepts scan progress before the completed-document manifest, validates transfer sequence and byte counts, resumes a broken transfer, and imports only after the final `complete` event. The core scan is packet-budgeted on the server, but the client still waits for the complete index before importing it.
+For a versioned library URL, the client requests a compatible server cache or cold build. It parses NDJSON events incrementally, accepts scan progress before the completed-document manifest, validates transfer sequence and byte counts, resumes a broken transfer, and imports only after the final `complete` event. On the compatible FFmpeg path, the source can return its primed first frame while this transfer/build continues; the complete index is still required before exposing later seek positions.
 
-The next client stage needs FFmpeg core partial export and import operations. The worker must yield between batches so it can publish progress and serve frame requests. The decoder must preserve random-access anchors, open-GOP preroll, duplicate-PTS handling, timestamp wrap/discontinuity behavior, and stream time-base semantics when it imports a partial or complete index.
+The next client stage needs FFmpeg core partial export and append/import operations. The worker must yield between batches so it can publish progress and serve frame requests after the first frame. The decoder must preserve random-access anchors, open-GOP preroll, duplicate-PTS handling, timestamp wrap/discontinuity behavior, and stream time-base semantics when it imports a partial or complete index.
 
 The existing session contract remains authoritative: first presentation, indexed duration, complete scan, and decoder EOF are distinct. A decoder reaching the current indexed frontier waits for more data; it does not flush or claim EOF until the index completes. An explicit seek requests enough prefix to cover the target. Scan failure or cancellation leaves ordinary client-side playback fallback available.
 
@@ -49,13 +50,14 @@ The existing session contract remains authoritative: first presentation, indexed
 1. Preserve the already validated software reference source when native first-frame verification fails. This avoids reopening and rescanning the same source.
 2. Add and validate FFmpeg core index import/export. ABI v2 preserves MPEG-TS seek anchors; packet-budgeted scanning and byte progress are implemented in Core PR #1, with the Web server integration in this rollout. Partial-index import/export remains.
 3. Add server-side FFmpeg cold generation, exact cache identity, separate cache/build workers, and complete-index reuse. This is implemented for versioned library media.
-4. Add a demuxer-provided safe presentation watermark. Persist format-adapter record batches while the scan runs, then let the player consume the stable indexed prefix before completion.
-5. Move FLV and MP4 through the same lifecycle and transport while preserving their format-specific payload adapters.
+4. Return the first presentable FFmpeg frame before index completion and keep its timeline origin immutable. Route later seeks through `ensureIndexed(target)` so workspace restore remains atomic. This first-presentation milestone is implemented for compatible server-backed media.
+5. Add a demuxer-provided safe presentation watermark. Persist format-adapter record batches while the scan runs, then let the player consume the stable indexed prefix before completion.
+6. Move FLV and MP4 through the same lifecycle and transport while preserving their format-specific payload adapters.
 
 ## Acceptance
 
 - On the reported 211 MB TS file, record cold server build, an in-progress join, and warm-cache startup separately. Measure time to first frame, browser Range count, server scan throughput, and whether vp_index_build ran in the browser.
-- Verify a warm hit imports the index and performs no full client scan. Verify a cold scan presents from the first valid prefix before completion.
+- Verify a warm hit imports the index and performs no full client scan. A cold scan must show its first presentable frame before completion; seeks beyond that frame's coverage wait. After safe record batches are implemented, playback and seeks should advance through the stable prefix before EOF.
 - Compare displayed PTS, duration, dimensions, color metadata, seeks, and open-GOP output with the existing client path.
 - Cover duplicate concurrent requests, reconnect from a sequence cursor, cancellation, cache clearing, file replacement during build, truncated input, worker failure, and server restart.
 - Keep Node 24 semantic tests and the Bun standalone package covered. Retain the current FLV progressive-indexing and multi-track index-wait regressions.
