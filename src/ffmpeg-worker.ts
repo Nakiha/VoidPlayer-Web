@@ -80,13 +80,14 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     onProgress('index');
     const indexStart = performance.now();
+    const canImportIndex = typeof core._vp_index_import === 'function'
+      && core.ccall('vp_index_abi_version', 'number', [], []) === 1
+      && core.ccall('vp_index_record_bytes', 'number', [], []) === 24;
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000) : undefined;
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, canImportIndex ? 300000 : 2000, canImportIndex) : undefined;
     let indexSource: 'server' | 'client' = 'client';
     let count = 0;
-    if (indexClient && typeof core._vp_index_import === 'function'
-      && core.ccall('vp_index_abi_version', 'number', [], []) === 1
-      && core.ccall('vp_index_record_bytes', 'number', [], []) === 24) {
+    if (indexClient && canImportIndex) {
       try {
         const cached = await indexClient.read();
         const parsed = parseFfmpegIndex(cached, payload.mediaSize!, {

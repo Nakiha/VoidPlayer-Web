@@ -3,13 +3,14 @@ export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
-  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 2000) {
+  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 2000, requestBuild = false) {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
         if (/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) && source.searchParams.has('v')) {
           source.pathname += '/frame-index';
           source.searchParams.set('kind', kind);
+          if (kind === 'ffmpeg' && requestBuild) source.searchParams.set('build', '1');
           this.endpoint = source.href;
         }
       } catch { /* local files and arbitrary URLs have no cache API */ }

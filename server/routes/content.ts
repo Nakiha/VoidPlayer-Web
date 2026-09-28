@@ -52,7 +52,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       let prepared = false;
       try {
         if (req.method === 'GET') {
-          if (kind === 'ffmpeg') {
+          if (kind === 'ffmpeg' && url.searchParams.get('build') === '1') {
             const filePath = await library.resolve(entry.id, version);
             if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
             const built = await library.indexJobs.call('build', { id: entry.id, version, size: entry.size, filePath }, [], 300000) as { built: boolean; epoch: number };

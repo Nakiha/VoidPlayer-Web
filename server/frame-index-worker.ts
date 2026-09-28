@@ -29,9 +29,10 @@ parentPort!.on('message', async (request) => {
       if (store.has(request.id, request.version, 'ffmpeg') || !hasServerIndexCore(workerData.coreDir)) {
         value = { built: false, epoch: store.epoch };
       } else {
+        const epoch = store.epoch;
         const document = await buildFfmpegIndexDocument(request.filePath, request.size, workerData.coreDir);
         prepared = prepareFrameIndex(document, request.size, 'ffmpeg');
-        value = { built: true, epoch: store.epoch };
+        value = { built: true, epoch };
       }
     } else if (request.op === 'get') {
       const result = new TextEncoder().encode(store.getJson(request.id, request.version, request.kind === 'ffmpeg' ? 'ffmpeg' : 'flv'));
