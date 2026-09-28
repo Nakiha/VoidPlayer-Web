@@ -8,15 +8,15 @@ This document tracks the index unification rollout. The first server producer ta
 - FFmpeg container fallback can request a server index for a versioned library media item. On a cache miss, the server runs the bundled FFmpeg WASM core against a bounded local-file reader, stores the completed index, and returns it. On a hit, the browser imports the stored records into the decoder context and skips its full index scan.
 - FFmpeg cache transfer uses the shared media-index client and the versioned frame-index endpoint. Direct local files, servers without the matching core, and older browser cores keep the client indexing fallback.
 - The FFmpeg core currently scans synchronously and the server responds with one complete JSON document. Cold builds do not yet publish intermediate batches, and the FFmpeg path does not yet present its first frame before index completion.
-- The common storage table can hold FLV or FFmpeg documents, but their payload schemas remain format-specific. MP4 sample-table indexing and FLV tag indexing have different source metadata and validation rules.
+- Persistence now uses identity-keyed manifests and sequence-keyed batches. The identity includes media ID/version, format kind, stream key, schema version, and indexer build. A complete bootstrap document is stored as batch 0; FLV and FFmpeg payload validation remain format-specific.
 
 ## Shared contract
 
 Unify media-version checks, cache lifecycle, progress reporting, persistence, and transport while keeping each container adapter responsible for valid seek records and time reconstruction.
 
-The current cache identity includes the library media ID and observed media version at the service boundary, plus source size and FFmpeg stream metadata in the FFmpeg document. A follow-up schema should explicitly include selected stream identity, index schema, and indexer/core build before cache compatibility is widened. Every remote index still needs validation against the opened source before it is trusted.
+The persisted key is (media ID, media version, kind, stream key, schema version, indexer build). FFmpeg cache documents also carry source size, stream index, codec, time base, dimensions, and the core build SHA. The Web release check requires index ABI v2, 40-byte records, and an embedded core build ID equal to the pinned revision. Every remote FFmpeg index is checked against the opened source before import.
 
-The target manifest carries identity, source size, index kind, state, revision, scanned-byte progress, indexed presentation coverage, and completion status. States are building, complete, and error. Batches have monotonically increasing sequence numbers and immutable contents. A batch boundary includes a container-provided safe presentation watermark; the client must not infer that later packets cannot precede the last observed PTS.
+The manifest carries identity, state, last sequence, scanned-byte progress, stable presentation coverage, and completion status. The schema supports building, streaming, complete, and failed states. Batch sequence numbers are monotonic and immutable. A batch boundary must carry a container-provided safe presentation watermark; the client must not infer that later packets cannot precede the last observed PTS.
 
 Payload adapters retain the data needed by their seek implementation:
 
@@ -24,15 +24,15 @@ Payload adapters retain the data needed by their seek implementation:
 - MP4: validated sample offsets and sizes, decode/presentation timing, edit-list mapping, and configuration boundaries.
 - FFmpeg containers such as MPEG-TS: exact stream time base, packet/frame identity, timestamps, byte positions or usable demuxer seek anchors, key flags, and codec configuration identity. A timestamp-only list does not let the client skip demux indexing or restore seek behavior.
 
-Keep the public session timeline in integer microseconds. The current FFmpeg wire records use a fixed 24-byte little-endian layout with ticks, duration, and key flag. The target streaming envelope can begin with bounded JSON batches; compact binary or delta encoding can follow once the end-to-end contract is stable.
+Keep the public session timeline in integer microseconds. FFmpeg ABI v2 uses fixed 40-byte little-endian records with PTS, DTS, duration, packet position, packet size, and flags. MPEG-TS keyframe records restore the demuxer seek anchors on import. This payload belongs to the FFmpeg adapter; FLV and MP4 keep their own record models.
 
 ## Producer and transport
 
-The current FFmpeg cold-build request runs in the frame-index worker and reads the media through local-file AVIO. It does not copy the complete source into WASM memory. The completed cache is committed only if the media version and cache epoch still match.
+The FFmpeg cold build runs in a dedicated bounded build worker and reads the media through local-file AVIO. It does not copy the complete source into WASM memory. Builds deduplicate by media version and full index identity; one scan runs at a time with a bounded queue. Cache lookup and writes use a separate database worker, so a long scan does not block warm reads. Commit checks both media version and cache epoch.
 
 The target server API uses a deduplicated background job for each media version. The job publishes immutable batches to persistent storage and active subscribers. GET on a versioned frame-index resource streams a manifest, index batches, progress updates, and one terminal complete or error record as NDJSON. It accepts an after-sequence cursor so a disconnected client can resume. A cache hit replays stored batches in sequence.
 
-Streaming subscribers need a bounded job coordinator and fan-out separate from request-body preparation and complete-document reads. Holding the current request gate for a stream lifetime would prevent other clients from joining. Build concurrency remains bounded independently from library scanning and playback requests. Incomplete jobs must not be represented as complete after restart.
+The job coordinator and cache workers are now separate, but subscriber fan-out, restartable in-progress jobs, resumable batch reads, and NDJSON are still outstanding. Build concurrency remains bounded independently from cache lookup, library scanning, and playback requests. Incomplete jobs must not be represented as complete after restart.
 
 The standalone server has no ffmpeg or ffprobe executable dependency. Continue using the bundled FFmpeg core with a server worker and bounded file reader. Keep client indexing as the fallback for direct local files, unavailable server support, and unsupported containers.
 
@@ -47,10 +47,10 @@ The existing session contract remains authoritative: first presentation, indexed
 ## Rollout
 
 1. Preserve the already validated software reference source when native first-frame verification fails. This avoids reopening and rescanning the same source.
-2. Add and validate FFmpeg core index import/export. This is implemented for complete indexes; bounded scanning and partial-index import/export remain.
-3. Add server-side FFmpeg cold generation and complete-index cache reuse. This is implemented for versioned library media.
-4. Add bounded index jobs, versioned batch storage, resumable NDJSON streaming, and client partial-index consumption so cold builds can present frames before scanning completes.
-5. Extend explicit identity fields and migrate FLV and MP4 producers through their existing adapters after the MPEG-TS flow passes the end-to-end contract.
+2. Add and validate FFmpeg core index import/export. ABI v2 preserves MPEG-TS seek anchors and is pinned by the Web release lock; bounded scanning and partial-index import/export remain.
+3. Add server-side FFmpeg cold generation, exact cache identity, separate cache/build workers, and complete-index reuse. This is implemented for versioned library media.
+4. Add incremental core scanning with a safe presentation watermark, then stream immutable batches over resumable NDJSON and let the player consume partial indexes before scan completion.
+5. Move FLV and MP4 through the same lifecycle and transport while preserving their format-specific payload adapters.
 
 ## Acceptance
 

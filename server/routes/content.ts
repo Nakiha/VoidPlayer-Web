@@ -3,6 +3,8 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES } from '../../src/ffmpeg-index-cache.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
+import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { readAdminJson } from '../admin.ts';
@@ -43,27 +45,33 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       const kindParam = url.searchParams.get('kind') ?? 'flv';
       if (kindParam !== 'flv' && kindParam !== 'ffmpeg') throw new AdminError(400, '未知帧索引类型。');
       const kind = kindParam as 'flv' | 'ffmpeg';
+      let identity: MediaIndexIdentity;
+      try {
+        identity = kind === 'flv' && !url.searchParams.has('stream') && !url.searchParams.has('schema') && !url.searchParams.has('indexer')
+          ? FLV_MEDIA_INDEX_IDENTITY
+          : parseMediaIndexIdentity(kind, url.searchParams);
+      } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
       if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
-      const release = library.indexJobs.acquire();
-      let prepared = false;
+      let releaseUpload: (() => void) | undefined;
       try {
         if (req.method === 'GET') {
-          if (kind === 'ffmpeg' && url.searchParams.get('build') === '1') {
+          const cached = await library.indexJobs.call('has', { id: entry.id, version, identity }) as boolean;
+          if (kind === 'ffmpeg' && url.searchParams.get('build') === '1' && !cached) {
             const filePath = await library.resolve(entry.id, version);
             if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
-            const built = await library.indexJobs.call('build', { id: entry.id, version, size: entry.size, filePath }, [], 300000) as { built: boolean; epoch: number };
-            prepared = built.built;
-            if (built.built) {
-              if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
-              await library.indexJobs.call('commit', { id: entry.id, version, epoch: built.epoch });
-              prepared = false;
+            const epoch = await library.indexJobs.call('epoch') as number;
+            const built = await library.indexJobs.buildIndex({
+              id: entry.id, version, size: entry.size, filePath, epoch, identity,
+            }, 300000) as { built: boolean; epoch: number };
+            if (built.built && (res.destroyed || !await library.resolve(entry.id, version))) {
+              throw new AdminError(409, '媒体已改变，未保存旧索引。');
             }
           }
-          const bytes = await library.indexJobs.call('get', { id: entry.id, version, kind }) as Uint8Array;
+          const bytes = await library.indexJobs.call('get', { id: entry.id, version, kind, identity }) as Uint8Array;
           if (res.destroyed) return true;
           res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
           await new Promise<void>(resolve => {
@@ -73,11 +81,11 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           });
           return true;
         }
+        releaseUpload = library.indexJobs.acquireUpload();
         if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
         const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
         if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
         const chunks: Buffer[] = []; let size = 0;
-        // Admission happens BEFORE accumulating the request body.
         const timeout = setTimeout(() => req.destroy(new Error('索引上传超时。')), 30000);
         try {
           for await (const chunk of req) {
@@ -89,15 +97,13 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
         const bytes = new Uint8Array(size); let offset = 0;
         for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
         chunks.length = 0;
-        const result = await library.indexJobs.call('prepare', { bytes, size: entry.size, kind }, [bytes.buffer]);
-        prepared = true;
         if (res.destroyed || !await library.resolve(entry.id, version)) throw new AdminError(409, '媒体已改变，未保存旧索引。');
-        // commit rechecks media + epoch inside its SQLite write transaction.
-        sendJson(res, 201, await library.indexJobs.call('commit', { id: entry.id, version, epoch: result.epoch }));
-        prepared = false;
+        const result = await library.indexJobs.call('put', {
+          bytes, size: entry.size, id: entry.id, version, identity,
+        }, [bytes.buffer]);
+        sendJson(res, 201, result);
       } finally {
-        if (prepared) await library.indexJobs.call('discard').catch(() => {});
-        release();
+        releaseUpload?.();
       }
       return true;
     } catch (error) { if (!res.headersSent && error instanceof AdminError && error.status === 503) res.setHeader('retry-after', '1'); if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }

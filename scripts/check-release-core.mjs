@@ -13,9 +13,13 @@ if (process.argv[3] === '--variant') {
   try {
     const create = (await import(pathToFileURL(path.join(directory, stem + '.js')).href)).default;
     const core = await create({ wasmBinary: await readFile(path.join(directory, stem + '.wasm')) });
-    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_index_build', 'vp_index_seek_anchors', 'vp_extract_frames', 'vp_extract_restarts', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset', 'vp_frame_info', 'vp_frame_format']) assert.equal(typeof core['_' + symbol], 'function', symbol);
+    for (const symbol of ['vp_create', 'vp_destroy', 'vp_open_blob', 'vp_index_build', 'vp_index_seek_anchors', 'vp_index_abi_version', 'vp_index_record_bytes', 'vp_index_export_bytes', 'vp_index_export', 'vp_index_import', 'vp_core_build_id', 'vp_stream_index', 'vp_extract_frames', 'vp_extract_restarts', 'vp_extract', 'vp_pixel_format', 'vp_color_primaries', 'vp_color_transfer', 'vp_color_space', 'vp_color_range', 'vp_packet_open', 'vp_packet_alloc', 'vp_packet_send', 'vp_packet_receive', 'vp_packet_reset', 'vp_frame_info', 'vp_frame_format']) assert.equal(typeof core['_' + symbol], 'function', symbol);
     const ctx = core.ccall('vp_create', 'number', [], []);
     assert.ok(ctx);
+    assert.equal(core.ccall('vp_index_abi_version', 'number', [], []), 2, 'index ABI version');
+    assert.equal(core.ccall('vp_index_record_bytes', 'number', [], []), 40, 'index ABI record size');
+    const buildId = core.ccall('vp_core_build_id', 'string', [], []);
+    assert.equal(buildId, process.argv[5], 'core source build ID must match release lock');
     try {
       core.FS.writeFile('/invalid.bin', new Uint8Array([1, 2, 3, 4]));
       assert.notEqual(core.ccall('vp_open', 'number', ['number', 'string'], [ctx, '/invalid.bin']), 0);
@@ -34,6 +38,6 @@ if (process.argv[3] === '--variant') {
     assert.ok(!path.isAbsolute(file) && !file.split(/[\\/]/).includes('..'), 'Unsafe core manifest path');
     assert.equal(createHash('sha256').update(await readFile(path.join(directory, file))).digest('hex'), hash, file);
   }
-  for (const suffix of ['', '-mt']) execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix], { stdio: 'inherit', timeout: 30000 });
+  for (const suffix of ['', '-mt']) execFileSync(process.execPath, [import.meta.filename, directory, '--variant', 'voidplayer-core' + suffix, lock.revision], { stdio: 'inherit', timeout: 30000 });
   console.log('PASS decoder provenance and file hashes');
 }

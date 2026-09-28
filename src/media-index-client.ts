@@ -1,15 +1,24 @@
+import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
+import type { MediaIndexIdentity } from './media-index-identity.ts';
+
 export interface ServerIndexResult { epoch: number; index: unknown | null; }
 export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
-  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 2000, requestBuild = false) {
+  constructor(url: string | undefined, private readonly kind: 'flv' | 'ffmpeg', private readonly maxBytes: number, private readonly timeoutMs = 2000, requestBuild = false, identity?: MediaIndexIdentity) {
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
         if (/^\/api\/media\/[0-9a-f]{24}$/.test(source.pathname) && source.searchParams.has('v')) {
           source.pathname += '/frame-index';
           source.searchParams.set('kind', kind);
+          const resolvedIdentity = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
+          if (resolvedIdentity) {
+            source.searchParams.set('stream', resolvedIdentity.streamKey);
+            source.searchParams.set('schema', String(resolvedIdentity.schemaVersion));
+            source.searchParams.set('indexer', resolvedIdentity.indexerBuild);
+          }
           if (kind === 'ffmpeg' && requestBuild) source.searchParams.set('build', '1');
           this.endpoint = source.href;
         }

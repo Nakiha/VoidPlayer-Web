@@ -1,8 +1,9 @@
-export const FFMPEG_INDEX_SCHEMA = 1;
+export const FFMPEG_INDEX_SCHEMA = 2;
 export const FFMPEG_INDEX_KIND = 'ffmpeg-container';
-export const FFMPEG_INDEX_RECORD_BYTES = 24;
+export const FFMPEG_INDEX_RECORD_BYTES = 40;
 export const FFMPEG_INDEX_RECORD_LIMIT = 2_000_000;
-export const FFMPEG_INDEX_BYTES = 64 * 1024 * 1024;
+// Base64 for two million 40-byte records is about 107 MiB.
+export const FFMPEG_INDEX_BYTES = 128 * 1024 * 1024;
 
 export interface FfmpegIndexDocument {
   schema: number;
@@ -14,6 +15,8 @@ export interface FfmpegIndexDocument {
   width: number;
   height: number;
   recordBytes: number;
+  streamIndex: number;
+  indexerBuild: string;
   count: number;
   records: string;
 }
@@ -24,6 +27,8 @@ export interface FfmpegIndexMetadata {
   timeBaseDen: number;
   width: number;
   height: number;
+  streamIndex: number;
+  indexerBuild: string;
 }
 export interface ParsedFfmpegIndex {
   document: FfmpegIndexDocument;
@@ -61,12 +66,14 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     || !Number.isSafeInteger(doc.timeBaseDen) || doc.timeBaseDen <= 0 || doc.timeBaseDen > 1_000_000_000
     || !Number.isSafeInteger(doc.width) || doc.width <= 0 || doc.width > 16384
     || !Number.isSafeInteger(doc.height) || doc.height <= 0 || doc.height > 16384
+    || !Number.isSafeInteger(doc.streamIndex) || doc.streamIndex < 0 || doc.streamIndex > 64
+    || typeof doc.indexerBuild !== 'string' || !/^[a-f0-9]{40}$/.test(doc.indexerBuild)
     || doc.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
     || !Number.isSafeInteger(doc.count) || doc.count <= 0 || doc.count > FFMPEG_INDEX_RECORD_LIMIT
     || typeof doc.records !== 'string' || doc.records.length > FFMPEG_INDEX_BYTES
     || doc.records.length % 4 !== 0
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(doc.records)) return null;
-  for (const key of ['codec', 'timeBaseNum', 'timeBaseDen', 'width', 'height'] as const) {
+  for (const key of ['codec', 'timeBaseNum', 'timeBaseDen', 'width', 'height', 'streamIndex', 'indexerBuild'] as const) {
     if (expected?.[key] !== undefined && expected[key] !== doc[key]) return null;
   }
   let binary: string;
@@ -76,13 +83,20 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
   if (records.byteLength !== doc.count * FFMPEG_INDEX_RECORD_BYTES || records.byteLength > FFMPEG_INDEX_BYTES) return null;
   const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
   let previous = 0n;
+  const noTimestamp = -9223372036854775808n;
   for (let i = 0; i < doc.count; i++) {
     const offset = i * FFMPEG_INDEX_RECORD_BYTES;
-    const ticks = view.getBigInt64(offset, true);
-    const key = view.getUint32(offset + 16, true);
-    const reserved = view.getUint32(offset + 20, true);
-    if (key > 1 || reserved !== 0 || (i > 0 && ticks < previous)) return null;
-    previous = ticks;
+    const pts = view.getBigInt64(offset, true);
+    const dts = view.getBigInt64(offset + 8, true);
+    const pos = view.getBigInt64(offset + 24, true);
+    const packetSize = view.getInt32(offset + 32, true);
+    const flags = view.getUint32(offset + 36, true);
+    const key = (flags & 1) !== 0;
+    const seekAnchor = (flags & 2) !== 0;
+    if (packetSize < 0 || pos < -1n || (flags & ~3) !== 0
+      || (seekAnchor && (!key || pos < 0n || dts === noTimestamp))
+      || (i > 0 && pts < previous)) return null;
+    previous = pts;
   }
   return { document: doc, records };
 }

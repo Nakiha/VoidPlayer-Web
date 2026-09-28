@@ -5,7 +5,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { MediaIndexClient } from './media-index-client.ts';
-import { FFMPEG_INDEX_BYTES, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + demux-only index) and extract (exact-PTS RGBA
@@ -80,11 +80,17 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     onProgress('index');
     const indexStart = performance.now();
+    const streamIndex = core.ccall('vp_stream_index', 'number', ['number'], [ctx]) as number;
+    const indexerBuild = core.ccall('vp_core_build_id', 'string', [], []) as string;
+    const indexIdentity = { kind: 'ffmpeg' as const, streamKey: `video:${streamIndex}`, schemaVersion: FFMPEG_INDEX_SCHEMA, indexerBuild };
     const canImportIndex = typeof core._vp_index_import === 'function'
-      && core.ccall('vp_index_abi_version', 'number', [], []) === 1
-      && core.ccall('vp_index_record_bytes', 'number', [], []) === 24;
+      && typeof core._vp_index_export === 'function'
+      && typeof core._vp_index_export_bytes === 'function'
+      && /^[a-f0-9]{40}$/.test(indexerBuild)
+      && core.ccall('vp_index_abi_version', 'number', [], []) === 2
+      && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize)
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, canImportIndex ? 300000 : 2000, canImportIndex) : undefined;
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, canImportIndex ? 300000 : 2000, canImportIndex, indexIdentity) : undefined;
     let indexSource: 'server' | 'client' = 'client';
     let count = 0;
     if (indexClient && canImportIndex) {
@@ -96,6 +102,8 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
           timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
           width: core.ccall('vp_width', 'number', ['number'], [ctx]),
           height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+          streamIndex,
+          indexerBuild,
         });
         if (parsed) {
           const ptr = core._malloc(parsed.records.byteLength);
@@ -104,9 +112,13 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
             heap().set(parsed.records, ptr);
             const imported = core.ccall('vp_index_import', 'number', ['number', 'number', 'number'], [ctx, ptr, parsed.document.count]);
             if (imported === parsed.document.count) { count = imported; indexSource = 'server'; }
+            else throw new MediaOpenError('resource', '服务器索引无法安全导入，已停止这次解码。');
           } finally { core._free(ptr); }
         }
-      } catch { /* An unavailable or stale server index falls back to local indexing. */ }
+      } catch (error) {
+        if (error instanceof MediaOpenError) throw error;
+        /* An unavailable or stale server index falls back to local indexing. */
+      }
     }
     if (!count) {
       count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
@@ -132,27 +144,28 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     }
     if (prefix) { ticks.splice(0, prefix); durations.splice(0, prefix); }
     if (!ticks.length) throw new MediaOpenError('decode', '视频只有预滚包，没有可显示的画面。');
-    if (indexSource === 'client' && indexClient) {
+    if (indexSource === 'client' && indexClient && canImportIndex) {
       try {
-        const records = new Uint8Array(count * 24);
-        const view = new DataView(records.buffer);
-        for (let i = 0; i < count; i++) {
-          const offset = i * 24;
-          const tick = core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, i]) as bigint;
-          const duration = core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, i]) as bigint;
-          view.setBigInt64(offset, tick, true);
-          view.setBigInt64(offset + 8, duration, true);
-          view.setUint32(offset + 16, core.ccall('vp_index_is_key', 'number', ['number', 'number'], [ctx, i]) ? 1 : 0, true);
-        }
-        const document = serializeFfmpegIndex({
-          size: payload.mediaSize!,
-          codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
-          timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
-          timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
-          width: core.ccall('vp_width', 'number', ['number'], [ctx]),
-          height: core.ccall('vp_height', 'number', ['number'], [ctx]),
-        }, records);
-        void indexClient.save(document).catch(() => {});
+        const recordBytes = core.ccall('vp_index_export_bytes', 'number', ['number'], [ctx]) as number;
+        if (recordBytes !== count * FFMPEG_INDEX_RECORD_BYTES) throw new Error('FFmpeg 索引记录长度异常。');
+        const recordPtr = core._malloc(recordBytes);
+        if (!recordPtr) throw new Error('FFmpeg 索引导出内存分配失败。');
+        try {
+          const exported = core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, recordPtr, recordBytes]);
+          if (exported !== count) throw new Error('FFmpeg 索引导出失败。');
+          const records = heap().slice(recordPtr, recordPtr + recordBytes);
+          const document = serializeFfmpegIndex({
+            size: payload.mediaSize!,
+            codec: core.ccall('vp_codec_name', 'string', ['number'], [ctx]),
+            timeBaseNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
+            timeBaseDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
+            width: core.ccall('vp_width', 'number', ['number'], [ctx]),
+            height: core.ccall('vp_height', 'number', ['number'], [ctx]),
+            streamIndex,
+            indexerBuild,
+          }, records);
+          void indexClient.save(document).catch(() => {});
+        } finally { core._free(recordPtr); }
       } catch { /* An oversized or unsupported index must not block playback. */ }
     }
     contexts.set(ctx, { ticks, blobHandle, path, indexClient });
