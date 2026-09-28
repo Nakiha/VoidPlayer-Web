@@ -2,7 +2,7 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
 import { FrameIndexStore, prepareFrameIndex } from './frame-index-store.ts';
 import { AdminError } from './admin-error.ts';
-import { buildFfmpegIndexDocument, hasServerIndexCore } from './ffmpeg-index-builder.ts';
+import { buildFfmpegIndexDocument, hasServerIndexCore } from './frame-index-builder.ts';
 
 const db = openIndexDatabase(workerData.database);
 db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=3000;');
