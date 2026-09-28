@@ -13,6 +13,68 @@ import { encryptedRequest } from '../tls.ts';
 import { allowReveal, localRequest, revealFile } from '../reveal.ts';
 import type { RouteContext } from './context.ts';
 
+const INDEX_STREAM_BATCH_BYTES = 64 * 1024;
+
+function requestsMediaIndexStream(req: IncomingMessage): boolean {
+  return String(req.headers.accept ?? '').split(',').some(value => value.trim().split(';', 1)[0] === 'application/x-ndjson');
+}
+
+async function writeMediaIndexEvent(res: ServerResponse, event: unknown): Promise<void> {
+  if (res.destroyed) throw new Error('索引客户端已断开。');
+  if (res.write(JSON.stringify(event) + '\n')) return;
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => { res.off('drain', onDrain); res.off('close', onClose); };
+    const onDrain = () => { cleanup(); resolve(); };
+    const onClose = () => { cleanup(); reject(new Error('索引客户端已断开。')); };
+    res.once('drain', onDrain);
+    res.once('close', onClose);
+    if (res.destroyed) onClose();
+  });
+}
+
+async function sendMediaIndexStream(res: ServerResponse, bytes: Uint8Array, epoch: number, kind: string, after: number): Promise<void> {
+  const lastSeq = Math.ceil(bytes.byteLength / INDEX_STREAM_BATCH_BYTES) - 1;
+  if (after > lastSeq) throw new AdminError(416, '索引流续传序号超过当前索引。');
+  if (res.destroyed) return;
+  res.writeHead(200, {
+    'content-type': 'application/x-ndjson; charset=utf-8',
+    'cache-control': 'no-store',
+    'x-accel-buffering': 'no',
+  });
+  const timeout = setTimeout(() => res.destroy(), 300000);
+  try {
+    await writeMediaIndexEvent(res, {
+      type: 'manifest', protocol: 1, epoch, kind,
+      encoding: 'json-utf8-base64', state: 'complete',
+      totalBytes: bytes.byteLength, batchBytes: INDEX_STREAM_BATCH_BYTES, lastSeq,
+    });
+    for (let seq = after + 1; seq <= lastSeq; seq++) {
+      const start = seq * INDEX_STREAM_BATCH_BYTES;
+      const end = Math.min(bytes.byteLength, start + INDEX_STREAM_BATCH_BYTES);
+      const data = Buffer.from(bytes.subarray(start, end)).toString('base64');
+      await writeMediaIndexEvent(res, { type: 'batch', seq, safePresentationUs: null, data });
+      await writeMediaIndexEvent(res, {
+        type: 'progress', phase: 'transfer', seq, bytesSent: end, totalBytes: bytes.byteLength,
+      });
+    }
+    await writeMediaIndexEvent(res, { type: 'complete', lastSeq, totalBytes: bytes.byteLength });
+  } catch {
+    if (!res.destroyed) {
+      try { await writeMediaIndexEvent(res, { type: 'error', message: '索引传输中断，可从最后收到的序号续传。' }); } catch {}
+    }
+  } finally {
+    clearTimeout(timeout);
+  }
+  if (res.destroyed) return;
+  await new Promise<void>(resolve => {
+    const done = () => { res.off('finish', done); res.off('close', done); resolve(); };
+    res.once('finish', done);
+    res.once('close', done);
+    res.end();
+  });
+}
+
+
 /** Library, media bytes, frame indexes and user-submitted logs. Returns true when handled. */
 export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessage, res: ServerResponse, url: URL): Promise<boolean> {
   const { options, library } = ctx;
@@ -56,6 +118,15 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
       if (!entry || !await library.resolve(indexMatch[1], version)) throw new AdminError(409, '媒体不可用或已改变。');
+      const streamingGet = req.method === 'GET' && requestsMediaIndexStream(req);
+      let after = -1;
+      if (streamingGet && url.searchParams.has('after')) {
+        const rawAfter = url.searchParams.get('after')!;
+        if (!/^-?\d+$/.test(rawAfter) || !Number.isSafeInteger(Number(rawAfter)) || Number(rawAfter) < -1) {
+          throw new AdminError(400, '索引流续传序号无效。');
+        }
+        after = Number(rawAfter);
+      }
       let releaseUpload: (() => void) | undefined;
       try {
         if (req.method === 'GET') {
@@ -73,12 +144,18 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           }
           const bytes = await library.indexJobs.call('get', { id: entry.id, version, kind, identity }) as Uint8Array;
           if (res.destroyed) return true;
-          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-          await new Promise<void>(resolve => {
-            const timer = setTimeout(() => res.destroy(), 30000);
-            const done = () => { clearTimeout(timer); res.off('close', done); resolve(); };
-            res.once('close', done); res.end(bytes, done);
-          });
+          if (streamingGet) {
+            const envelope = JSON.parse(Buffer.from(bytes).toString('utf8')) as { epoch?: unknown };
+            if (!Number.isSafeInteger(envelope.epoch) || Number(envelope.epoch) < 0) throw new AdminError(500, '索引缓存 epoch 无效。');
+            await sendMediaIndexStream(res, bytes, Number(envelope.epoch), kind, after);
+          } else {
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+            await new Promise<void>(resolve => {
+              const timer = setTimeout(() => res.destroy(), 30000);
+              const done = () => { clearTimeout(timer); res.off('close', done); resolve(); };
+              res.once('close', done); res.end(bytes, done);
+            });
+          }
           return true;
         }
         releaseUpload = library.indexJobs.acquireUpload();
