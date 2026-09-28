@@ -47,6 +47,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
   const path = `/vp-in-${randomUUID()}`;
   let blobHandle = 0;
   let indexClient: MediaIndexClient | undefined;
+  let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
   try {
     // Player-assigned decode thread budget (no-op on the single-thread core).
     if (payload.threads) core.ccall('vp_set_threads', null, ['number'], [payload.threads]);
@@ -96,7 +97,6 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       && core.ccall('vp_index_record_bytes', 'number', [], []) === FFMPEG_INDEX_RECORD_BYTES;
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
       ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity) : undefined;
-    let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
     if (indexClient && typeof core._vp_prime_first_presentable === 'function') {
       const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
       if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
@@ -262,9 +262,9 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
 
 port.onmessage = async (event: { data: any }) => {
   const { id, type, ...payload } = event.data;
+  let readyContext: number | undefined;
   try {
     if (type === 'init') {
-      let readyContext: number | undefined;
       const result = await init(payload, progress => port.postMessage({ id, type: 'progress', progress }), data => {
         readyContext = data.ctx;
         port.postMessage({ id, type: 'ready', data }, [data.firstFrame.pixels]);
@@ -290,6 +290,10 @@ port.onmessage = async (event: { data: any }) => {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const stage = error instanceof MediaOpenError ? error.stage : undefined;
-    port.postMessage({ id, ok: false, error: message, stage });
+    if (type === 'init' && readyContext !== undefined) {
+      port.postMessage({ id, type: 'index-error', data: { ctx: readyContext, error: message, stage } });
+    } else {
+      port.postMessage({ id, ok: false, error: message, stage });
+    }
   }
 };
