@@ -6,6 +6,7 @@ import { RangeReader } from './range-reader.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
+import type { PacketDecoder } from './flv-decoder.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import type { FlvCodec, FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -20,6 +21,7 @@ export class Mp4Engine {
   private index!:FlvIndex;
   private timeline?:PacketTimeline;
   private primed:FlvFrame|null=null;
+  private nativeConfig?:VideoDecoderConfig;
   constructor(source:RandomAccessInput){
     this.reader=new RangeReader(source);
     this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:(start,end)=>this.reader.read(start,end-start),maxCacheSize:1024*1024}),formats:[MP4,QTFF]});
@@ -35,7 +37,6 @@ export class Mp4Engine {
       if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
       const configs=await readMp4Configurations(this.reader,track.id);
       const available = configs.availableSamples ?? configs.sampleSizes!.length;
-      const truncated = available < configs.sampleSizes!.length;
       onProgress?.('index');this.sink=new EncodedPacketSink(track);
       for await(const packet of this.sink.packets(undefined,undefined,{metadataOnly:true})){
         this.packets.push(packet);if(this.packets.length===available)break;if(this.packets.length>2_000_000)throw new MediaOpenError('resource','MP4 包索引超过上限。');
@@ -59,14 +60,24 @@ export class Mp4Engine {
       const durations=order.map((p,i)=>recovered&&i+1<pts.length?pts[i+1]-pts[i]:Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
       this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations};
-      const nativeConfig=!forceWasm&&(recovered||truncated)?await track.getDecoderConfig():null;
-      onProgress?.('decoder');const native=nativeConfig&&await nativeFlvDecoder(this.index,nativeConfig);
-      const decoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      this.nativeConfig=await track.getDecoderConfig()??undefined;
+      onProgress?.('decoder');
+      const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
+      const decoder:PacketDecoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
       this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
-      onProgress?.('first-frame');this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
+      onProgress?.('first-frame');
+      try { this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts)); }
+      catch(error) {
+        if(decoder.kind!=='webcodecs'||!(error instanceof MediaOpenError)||error.stage!=='decode')throw error;
+        this.timeline.close();this.timeline=undefined;
+        const software=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+        this.timeline=new PacketTimeline(this.index,software,packet=>this.reader.read(packet.offset,packet.size));
+        this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
+      }
       const firstPtsUs=this.primed.pts;
-      const color=decoder.kind==='webcodecs'?await track.getColorSpace():null;
-      return {codec,decoder:decoder.kind,hardwareAcceleration:decoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...decoder.metadata?.(),
+      const activeDecoder=this.timeline.decoder;
+      const color=activeDecoder.kind==='webcodecs'?await track.getColorSpace():null;
+      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
         indexWarning: [configs.warning, recovered ? '容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。' : undefined].filter(Boolean).join(' ') || undefined,
@@ -80,6 +91,46 @@ export class Mp4Engine {
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
   next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  /** Produce a first-frame software witness from this MP4 index and reader. */
+  async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<FlvFrame>{
+    if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
+    const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+    const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+    try{return await timeline.at(this.primed?.pts??this.index.packets[this.index.order[0]].pts);}
+    finally{timeline.close();}
+  }
+  /** Replace the active decoder without rebuilding the MP4 sample table. */
+  async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads=1){
+    if(this.timeline?.decoder.kind==='webcodecs'){
+      const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+      const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
+      let primed:FlvFrame;
+      try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
+      this.primed?.frame?.close();this.timeline.close();this.timeline=timeline;this.primed=primed;
+    }
+    return this.decoderInfo();
+  }
+  /** Restore WebCodecs without reopening the MP4 input or rebuilding its sample table. */
+  async switchToNative(){
+    if(this.timeline?.decoder.kind==='ffmpeg-wasm'&&this.nativeConfig){
+      const decoder=await nativeFlvDecoder(this.index,this.nativeConfig);
+      if(decoder){
+        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+        const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
+        let primed:FlvFrame;
+        try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
+        this.primed?.frame?.close();this.timeline.close();this.timeline=timeline;this.primed=primed;
+      }
+    }
+    return this.decoderInfo();
+  }
+  private decoderInfo(){
+    const decoder=this.timeline!.decoder;
+    return {codec:this.index.codec,decoder:decoder.kind,width:this.primed!.width,height:this.primed!.height,
+      hardwareAcceleration:decoder.hardwareAcceleration,...decoder.metadata?.(),
+      decodedPixelFormat:this.primed!.frame?.format??this.primed!.description.format??null};
+  }
   extract(position:number,recycle?:ArrayBuffer){
     if(!Number.isInteger(position)||position<0||position>=this.index.order.length)throw new MediaOpenError('input','MP4 帧位置越界。');
     return this.at(this.index.packets[this.index.order[position]].pts,recycle);

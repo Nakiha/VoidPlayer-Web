@@ -65,7 +65,8 @@ export class ReviewSession {
     ++this.analysisIntentSeq;
     this.changingColor=true;
     try{await this.run('color-mode',{mode},async (current, signal)=>{
-      const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame}[]=[];
+      const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
+      const reconfigured:MediaSource[]=[];
       const controller=new AbortController();let committed=false;
       const onAbort=()=>controller.abort(signal.reason ?? new DOMException('切换已取消。','AbortError'));
       if(signal.aborted)controller.abort(signal.reason);
@@ -74,15 +75,23 @@ export class ReviewSession {
         setColorMode(mode);setReferenceDecode(decode);
         for(const [slot,track] of this.tracks){
           if (track.pendingRelink) continue;
-          const open=this.openers.get(track.source);if(!open)throw new Error('当前片源无法重新载入。');
-          const source=await this.openCandidate(open, controller.signal);
+          const reusesSession=!!track.source.reconfigureColorMode;
+          let source:MediaSource;
+          if(reusesSession){
+            source=track.source;
+            reconfigured.push(source);
+            await source.reconfigureColorMode!(mode,decode,controller.signal);
+          }else{
+            const open=this.openers.get(track.source);if(!open)throw new Error('当前片源无法重新载入。');
+            source=await this.openCandidate(open, controller.signal);
+          }
           try{
-            source.info.id=track.source.info.id;
+            if(!reusesSession)source.info.id=track.source.info.id;
             const target=Math.max(0,Math.min(this.positionUs-track.offsetUs,source.info.durationUs-1));
             // 色彩切换的首帧准备同样可随新意图中止；迟到帧 close，不提交。
             const frame=await abortableLoad(source.frameAt(target), signal, late=>late.close());
-            prepared.push({slot,track,source,frame});
-          }catch(error){source.dispose();throw error;}
+            prepared.push({slot,track,source,frame,reusesSession});
+          }catch(error){if(!reusesSession)source.dispose();throw error;}
           if(!current() || signal.aborted)throw new DOMException('切换已取消。','AbortError');
         }
         await this.onColorModeChange?.();
@@ -90,7 +99,7 @@ export class ReviewSession {
         for(const p of prepared)this.draw(p.slot,p.frame);
         this.releaseReaders('color-mode');
         for(const p of prepared){
-          p.track.source.onInfoChange=undefined;p.track.source.dispose();
+          if(!p.reusesSession){p.track.source.onInfoChange=undefined;p.track.source.dispose();}
           recordPresentedFrame(p.source,p.frame);
           this.tracks.set(p.slot,{source:p.source,frame:this.frameInfo(p.frame),offsetUs:p.track.offsetUs,visible:p.track.visible,sourceGen:++this.nextSourceGen});
           this.catalog.set(p.source.info.id,p.source.info);
@@ -100,12 +109,13 @@ export class ReviewSession {
         try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
       }catch(error){
         setColorMode(previous);setReferenceDecode(previousDecode);await this.onColorModeChange?.();
+        for(const source of reconfigured)try{await source.reconfigureColorMode?.(previous??'browser',previousDecode);}catch{}
         if(current() && !signal.aborted)for(const [slot,track] of this.tracks){
           try{const frame=await track.source.frameAt(Math.max(0,this.positionUs-track.offsetUs));try{this.draw(slot,frame);}finally{frame.close();}}catch{}
         }
         throw error;
       }
-      finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed)p.source.dispose();}}
+      finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed&&!p.reusesSession)p.source.dispose();}}
     });return this.getState();}finally{this.changingColor=false;}
   }
   private order: Slot[] = [...SLOTS];

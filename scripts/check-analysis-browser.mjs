@@ -147,6 +147,7 @@ try {
     const sizes = r.samples.map(s => s.sizeBytes);
     return {
       samples: r.samples.length, truncated: r.truncated,
+      hasDts: r.capability.hasDts,
       total: sizes.reduce((a, b) => a + b, 0),
       max: Math.max(...sizes),
       peak: Math.max(...r.bitrate.map(p => p.mbps ?? -1)),
@@ -157,16 +158,17 @@ try {
   assert.ok(stats.samples > 100, `samples=${stats.samples}`);
   assert.ok(stats.total > 10_000_000, `total=${stats.total}`);
   assert.ok(stats.peak > 5 && stats.peak < 60, `peak=${stats.peak}`);
-  assert.equal(stats.dts, stats.samples); // 原生路径无 DTS，不得伪造
+  assert.equal(stats.hasDts, true, 'packet MP4 exposes its sample-table DTS');
+  assert.equal(stats.dts, 0, 'packet MP4 DTS values must be present, not synthesized as null');
 
-  // 原生轨道查 DTS 应明确失败，不返回伪造时间。
-  const dtsFailed = await page.evaluate(async () => {
+  // DTS 查询使用同一份 MP4 sample-table index，且返回实际解码时间。
+  const dtsQuery = await page.evaluate(async () => {
     const q = window.voidPlayer.tools.find(t => t.name === 'query_analysis');
-    try { await q.execute({ slot: 'B', startUs: 0, endUs: 1000000, axis: 'dts', pixelWidth: 100, bitrateWindowUs: 1000000 }); }
-    catch (error) { return /DTS/.test(error.message); }
-    return false;
+    return q.execute({ slot: 'B', startUs: 0, endUs: 1000000, axis: 'dts', pixelWidth: 100, bitrateWindowUs: 1000000 });
   });
-  assert.equal(dtsFailed, true);
+  assert.equal(dtsQuery.capability.hasDts, true);
+  assert.ok(dtsQuery.samples.length > 0, 'DTS query returns samples');
+  assert.ok(dtsQuery.samples.every(sample => Number.isFinite(sample.dtsUs)), 'DTS query returns finite decode times');
 
   // 悬停只读：横轴带区悬浮条，不触发 seek；只开码率图也能读两轨码率。
   const box = await page.locator('#analysis-canvas').boundingBox();

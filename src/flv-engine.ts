@@ -137,6 +137,53 @@ export class FlvEngine {
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
   next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  /** Decode the first output with a temporary software decoder over this
+   * engine's already-open FLV index and reader. No scan, cache client, or
+   * timeline is created for the witness. */
+  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<FlvFrame> {
+    if (this.decoder?.kind !== 'webcodecs' || !this.timeline) throw new MediaOpenError('decode', 'FLV 原生解码器尚未就绪。');
+    const decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
+    const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size));
+    try {
+      const firstPts = this.primed?.pts ?? this.index.packets[(this.index.displayOrder ?? this.index.order)[0]].pts;
+      return await timeline.at(firstPts);
+    } finally { timeline.close(); }
+  }
+  /** Switch only the decoder after reference admission rejects native output.
+   * The packet index, reader, and cache lifecycle remain owned by this engine. */
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
+    if (this.decoder?.kind === 'webcodecs') {
+      const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
+      const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
+      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+      let primed:FlvFrame;
+      try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
+      this.primed?.frame?.close();this.timeline?.close();
+      this.decoder=decoder;this.timeline=timeline;this.primed=primed;
+    }
+    return {
+      codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
+      hardwareAcceleration: this.decoder.hardwareAcceleration, ...this.decoder.metadata?.(),
+      decodedPixelFormat: this.primed!.frame?.format ?? this.primed!.description.format ?? null,
+    };
+  }
+  /** Restore browser decoding over the same packet index after a color-mode switch. */
+  async switchToNative(){
+    if(this.decoder?.kind==='ffmpeg-wasm'){
+      const decoder=await nativeFlvDecoder(this.index);
+      if(decoder){
+        const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
+        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+        let primed:FlvFrame;
+        try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
+        this.primed?.frame?.close();this.timeline?.close();this.decoder=decoder;this.timeline=timeline;this.primed=primed;
+      }
+    }
+    return this.decoderInfo();
+  }
+  private decoderInfo(){return {codec:this.index.codec,decoder:this.decoder.kind,width:this.primed!.width,height:this.primed!.height,
+    hardwareAcceleration:this.decoder.hardwareAcceleration,...this.decoder.metadata?.(),
+    decodedPixelFormat:this.primed!.frame?.format??this.primed!.description.format??null};}
   private async extractFrame(position:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
     if(!Number.isInteger(position)||position<0||position>=(this.index.displayOrder ?? this.index.order).length)throw new MediaOpenError('input','FLV 帧位置越界。');
     return this.at(this.index.packets[(this.index.displayOrder ?? this.index.order)[position]].pts,recycle);

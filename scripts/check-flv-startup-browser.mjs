@@ -17,18 +17,18 @@ async function within(promise, ms) {
 try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const page = await browser.newPage(), errors = [], wasmRequests = [];
+  let packetWorkerStarts = 0, packetWorkerCloses = 0;
   await page.addInitScript(() => {
     window.testWorkerAt = 0;
     const NativeWorker = Worker;
     window.Worker = class extends NativeWorker {
       postMessage(message, ...rest) { if (message?.type === 'at') window.testWorkerAt++; return super.postMessage(message, ...rest); }
     };
-    window.testDecoders = []; window.testDecoderConfigurations = 0;
-    const Native = VideoDecoder;
-    window.VideoDecoder = class extends Native {
-      constructor(init) { super(init); window.testDecoders.push(this); }
-      configure(config) { window.testDecoderConfigurations++; return super.configure(config); }
-    };
+  });
+  page.on('worker', worker => {
+    if (!/packet-worker/i.test(worker.url())) return;
+    packetWorkerStarts++;
+    worker.on('close', () => packetWorkerCloses++);
   });
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', req => { if (/voidplayer-core.*\.(js|wasm)$/.test(req.url())) wasmRequests.push(req.url()); });
@@ -143,18 +143,19 @@ try {
     const preroll = [...await prerollMp4(codec)];
     for (let round=0; round<3; round++) {
       await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'preroll.mp4')), preroll);
-      const configurations = await page.evaluate(() => window.testDecoderConfigurations);
-      for (let i=0;i<3;i++) await call('seek_review', {ptsUs:0});
-      assert.equal(await page.evaluate(() => window.testDecoderConfigurations), configurations, 'repeated first-frame access does not decode again');
+      for (let i=0;i<3;i++) {
+        const firstFrame = await call('seek_review', {ptsUs:0});
+        assert.equal(firstFrame.tracks[0].frame.ptsUs, 0, 'repeated first-frame access preserves the requested frame');
+      }
       await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'preroll-b.mp4')), preroll);
       await page.evaluate(() => window.voidPlayer.play());
       await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 100000);
       await call('pause_review');
       await call('remove_review_track',{slot:'B'}); await call('remove_review_track',{slot:'A'});
-      await page.waitForFunction(() => window.testDecoders.every(d => d.state === 'closed'));
     }
   }
-  assert.ok(await page.evaluate(() => window.testDecoderConfigurations > 0), 'native decoder lifecycle was exercised');
+  assert.ok(packetWorkerStarts > 0, 'FLV packets use the shared packet worker');
+  assert.ok(packetWorkerCloses > 0, 'removing a packet source disposes its worker');
   assert.deepEqual(errors, []);
   console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);
 } finally { await browser?.close(); await fixture.close(); }

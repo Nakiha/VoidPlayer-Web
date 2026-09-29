@@ -61,6 +61,10 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     assert.deepEqual(await client.read(), expected);
     assert.deepEqual(cursors, ['-1', '0']);
     assert.deepEqual(scanProgress, [{ packets: 1024, scannedBytes: 8192, totalBytes: 200_000 }]);
+    assert.deepEqual({ serverIndexRequests: client.diagnostics().serverIndexRequests, reconnects: client.diagnostics().reconnects },
+      { serverIndexRequests: 2, reconnects: 1 });
+    assert.ok(client.diagnostics().firstIndexBatchMs !== undefined);
+    assert.ok(client.diagnostics().indexCompleteMs !== undefined);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;
@@ -107,6 +111,11 @@ test('FFmpeg record batches are incrementally validated and delivered before str
     assert.deepEqual(Array.from(batches[0].records), Array.from(records));
     assert.equal(batches[0].safePresentationUs, 33_333);
     assert.equal(completed[0].frames, 2);
+    assert.deepEqual(client.diagnostics().indexIdentity, identity);
+    assert.equal(client.diagnostics().indexBuildId, buildId);
+    assert.equal(client.diagnostics().serverIndexRequests, 1);
+    assert.ok(client.diagnostics().firstIndexBatchMs !== undefined);
+    assert.ok(client.diagnostics().indexCompleteMs! >= client.diagnostics().firstIndexBatchMs!);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;
@@ -159,6 +168,51 @@ test('FFmpeg record streams resume the same build after the last accepted batch'
     assert.equal(result.count, 2);
     assert.deepEqual(batches, [0, 1]);
     assert.deepEqual(requestUrls.map(url => url.searchParams.get('after')), ['-1', '0']);
+    assert.equal(client.diagnostics().serverIndexRequests, 2);
+    assert.equal(client.diagnostics().reconnects, 1);
+    assert.equal(client.diagnostics().indexBuildId, buildId);
+  } finally {
+    client.close();
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('active index streams may outlast the per-request idle timeout', async () => {
+  const originalFetch = globalThis.fetch;
+  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
+  const metadata = { schema: 2, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
+    width: 1920, height: 1080, recordBytes: FFMPEG_INDEX_RECORD_BYTES, streamIndex: 0, indexerBuild: identity.indexerBuild,
+    firstPts: '90000', originVerified: true, count: 1 };
+  const buildId = '33333333-3333-4333-8333-333333333333';
+  const records = new Uint8Array(FFMPEG_INDEX_RECORD_BYTES);
+  const view = new DataView(records.buffer);
+  view.setBigInt64(0, 90_000n, true);
+  view.setBigInt64(8, 87_000n, true);
+  view.setBigInt64(16, 3_000n, true);
+  view.setBigInt64(24, 0n, true);
+  view.setInt32(32, 188, true);
+  view.setUint32(36, 3, true);
+  const lines = [
+    { type: 'manifest', protocol: 2, epoch: 5, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64', state: 'complete', buildId,
+      identity, metadata, recordBytes: FFMPEG_INDEX_RECORD_BYTES, lastSeq: 0 },
+    { type: 'batch', buildId, seq: 0, count: 1, safePresentationUs: 0, data: Buffer.from(records).toString('base64') },
+    { type: 'complete', buildId, lastSeq: 0, frames: 1, stablePresentationUs: 0 },
+  ].map(event => encoder.encode(JSON.stringify(event) + '\n'));
+  globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      if (lines.length) {
+        const line = lines.shift()!;
+        await new Promise(resolve => setTimeout(resolve, 10));
+        controller.enqueue(line);
+      } else controller.close();
+    },
+  }), { headers: { 'content-type': 'application/x-ndjson' } })) as typeof fetch;
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 25, true, identity);
+  try {
+    const result = await client.read() as any;
+    assert.equal(result.streamed, true);
+    assert.equal(result.buildId, buildId);
+    assert.equal(client.diagnostics().serverIndexRequests, 1);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;

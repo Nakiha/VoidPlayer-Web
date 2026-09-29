@@ -39,35 +39,27 @@ test('all adapter plans share preference and stage-based fallback, without an in
   const s=await openMediaPlan(plan({reference:true,softwareOnly:true,native:async()=>{native++;throw Error('must skip');},software:async()=>{software++;return source('ffmpeg-wasm').value;}}));
   assert.equal(native,0);assert.equal(software,1);s.dispose();
 });
-test('FLV reference opens its software witness alongside the native adapter and releases an unused witness',async()=>{
- const native=source('ffmpeg-wasm'),witness=source('ffmpeg-wasm');let started=false,release!:()=>void;
- const gate=new Promise<void>(resolve=>release=resolve);
- const opening=openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
-  native:async()=>{await gate;return native.value;},
-  software:async()=>{started=true;return witness.value;}}));
- await new Promise(r=>setTimeout(r,0));
- assert.equal(started,true,'software witness begins before native adapter resolves');
- release();
- const selected=await opening;
- assert.equal(selected.info.decoder,'ffmpeg-wasm');
- await new Promise(r=>setTimeout(r,0));
- assert.equal(witness.disposed(),1,'unused speculative source is disposed');
+test('a container-owned reference admission hook avoids opening a second software source',async()=>{
+ const native=source('webcodecs');let admittedDepth=0,softwareOpens=0;
+ native.value.admitReference=async depth=>{admittedDepth=depth;return native.value;};
+ const selected=await openMediaPlan(plan({reference:true,depth:3,native:async()=>native.value,
+  software:async()=>{softwareOpens++;return source('ffmpeg-wasm').value;}}));
+ assert.equal(admittedDepth,3);
+ assert.equal(softwareOpens,0);
+ assert.equal(selected.info.decoder,'webcodecs');
  selected.dispose();
- assert.equal(native.disposed(),1);
 });
-test('early native input failure disposes a speculative FLV witness',async()=>{
- const witness=source('ffmpeg-wasm');let opens=0;
- const opening=openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
+test('an input failure does not start a second container/index open',async()=>{
+ let opens=0;
+ const opening=openMediaPlan(plan({reference:true,
   native:async()=>{throw new MediaOpenError('input','read failed');},
-  software:async()=>{opens++;return witness.value;}}));
+  software:async()=>{opens++;return source('ffmpeg-wasm').value;}}));
  await assert.rejects(opening,/read failed/);
- await new Promise(r=>setTimeout(r,0));
- assert.equal(opens,1);
- assert.equal(witness.disposed(),1);
+ assert.equal(opens,0);
 });
-test('native failure reuses an already opened FLV software fallback',async()=>{
+test('a decoder failure opens one software fallback',async()=>{
  const fallback=source('ffmpeg-wasm');let opens=0;
- const selected=await openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
+ const selected=await openMediaPlan(plan({reference:true,
   native:async()=>{throw new MediaOpenError('decode','native failure');},
   software:async()=>{opens++;return fallback.value;}}));
  assert.equal(opens,1);

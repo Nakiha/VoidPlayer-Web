@@ -1,5 +1,6 @@
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { getColorMode,getReferenceDecode } from './color-mode.ts';
+import type { ColorMode, ReferenceDecode } from './color-mode.ts';
 import { probeContainer } from './container-probe.ts';
 import { openSoftwareMedia } from './software-media.ts';
 import { openMediaPlan } from './media-policy.ts';
@@ -44,6 +45,11 @@ export interface MediaSource {
   /** Background container indexing can extend duration after the first frame. */
   onInfoChange?: (change?:MediaInfoChange) => void;
   ensureIndexed?(ptsUs?: number): Promise<void>;
+  /** Container adapters may verify or replace only the decoder while retaining
+   * their existing demux/index session. This is used by reference-color admission. */
+  admitReference?(depth: number): Promise<MediaSource>;
+  /** Change presentation/decoder policy over the existing container session. */
+  reconfigureColorMode?(mode: ColorMode, decode: ReferenceDecode, signal?: AbortSignal): Promise<void>;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
   /** Sequential presentation-order frames starting at ptsUs, for playback. */
@@ -91,6 +97,37 @@ export async function inspectVideoTrack(input: Input) {
 }
 export interface MediaMeta { name: string; size: number; lastModified: number; }
 
+type Mp4DemuxPlan = 'packet' | 'ffmpeg';
+
+/** Pick the MP4 adapter from container capabilities only. Decoder availability,
+ * hardware preference, and color mode are deliberately not inputs here. */
+async function chooseMp4DemuxPlan(input: RandomAccessInput, signal?: AbortSignal, onProgress?: MediaOpenProgress): Promise<Mp4DemuxPlan> {
+  const source = 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url);
+  const media = new Input({ source, formats: ALL_FORMATS });
+  const reader = new RangeReader(input);
+  const detach = onLoadAbort(signal, () => { media.dispose(); reader.close(); });
+  try {
+    loadAborted(signal);
+    onProgress?.('inspect');
+    if (!(await media.getFormat() instanceof IsobmffInputFormat)) return 'ffmpeg';
+    const track = await media.getPrimaryVideoTrack();
+    if (!track || track.rotation !== 0) return 'ffmpeg';
+    const id = await track.getInternalCodecId();
+    const codec = await track.getCodec();
+    const packetCodecs = ['avc', 'hevc', 'av1', 'vvc'];
+    if (!packetCodecs.includes(codec ?? '') && !['vvc1', 'vvi1'].includes(String(id))) return 'ffmpeg';
+    const configs = await readMp4Configurations(reader, track.id);
+    // The packet engine currently represents one decoder configuration per
+    // stream. More complex sample-description changes stay with Mediabunny.
+    return configs.descriptions.length === 1 ? 'packet' : 'ffmpeg';
+  } catch (error) {
+    if (error instanceof MediaOpenError && (error.stage === 'input' || error.stage === 'resource')) throw error;
+    return 'ffmpeg';
+  } finally {
+    detach(); media.dispose(); reader.close();
+  }
+}
+
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
 // cannot (a network error or an oversized file fails identically on retry).
@@ -99,17 +136,65 @@ export type { OpenStage } from './media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
+  const mp4DemuxPlan = container === 'isobmff' ? await chooseMp4DemuxPlan(input, signal, onProgress) : null;
   const reference = getColorMode() === 'reference', preference = getReferenceDecode();
-  const software = customSoftware ?? (() => openSoftwareMedia(input, meta, { signal, onProgress }, container));
-  const native = container === 'flv'
-    ? async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); }
-    : () => openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
-  contextLog().info('media', '媒体适配器选择', { container, input: 'file' in input ? 'local' : 'remote', reference,
+  const colorMode = reference ? 'reference' : 'browser';
+  let nativeOpens = 0, softwareOpens = 0;
+  let libraryId: string | undefined, mediaVersion: string | undefined;
+  if ('url' in input) {
+    try {
+      const url = new URL(input.url, globalThis.location?.href);
+      libraryId = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname)?.[1];
+      mediaVersion = url.searchParams.get('v') ?? undefined;
+    } catch { /* Non-library URLs have no stable library identity. */ }
+  }
+  const packetMp4 = container === 'isobmff' && mp4DemuxPlan === 'packet';
+  const ffmpegPlan = container !== 'flv' && !packetMp4;
+  const openMp4Packet = async (forceWasm: boolean) => {
+    const { openPacketMedia } = await import('./packet-media.ts');
+    return openPacketMedia('mp4', input, meta, { signal, onProgress, rawNative: reference,
+      ...(reference ? {} : { nativeColorMode: 'browser' as const }), forceWasm });
+  };
+  const openFfmpeg = async () => {
+    const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./ffmpeg-media.ts');
+    return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
+      : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
+  };
+  const software = customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
+    : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
+  const countedSoftware = async () => { softwareOpens++; return software(); };
+  const native = async () => {
+    nativeOpens++;
+    return container === 'flv'
+      ? (async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
+      : packetMp4 ? openMp4Packet(false)
+        : ffmpegPlan && !customSoftware ? openFfmpeg()
+          : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+  };
+  contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, input: 'file' in input ? 'local' : 'remote', reference,
     preference: reference ? preference.decoder : 'hardware', software: container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+  contextLog().info('media', '媒体管线追踪', {
+    phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
+    demuxBackend: container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
+    indexBackend: container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
+    decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
+  });
   const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
-    parallelReferenceWitness: reference && container === 'flv', native, software, onProgress, signal });
+    native, software: countedSoftware, nativeOwnsFallback: (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
   source.info.container = container;
+  const demuxBackend = container === 'flv' ? 'flv-engine'
+    : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
+  contextLog().info('media', '媒体管线追踪', {
+    phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
+    indexBackend: source.info.indexSource ?? source.info.indexKind ?? 'container',
+    decoderBackend: source.info.decoder, colorMode,
+    firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
+    stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,
+    firstFrameReadyMs: Math.round(performance.now() - pipelineStartedAt),
+    nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
+  });
   return source;
 }
 

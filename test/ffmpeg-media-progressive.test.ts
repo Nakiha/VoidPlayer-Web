@@ -34,7 +34,8 @@ class DelayedIndexWorker {
         id: message.id, type: 'ready', data: {
           ctx: 1, path: '/fake.ts', ticks: [originTicks], durations: [this.firstDuration],
           firstPts: originTicks, firstFrame: frame(originTicks, this.firstDuration), tbNum: 1, tbDen: 90_000,
-          width: 1, height: 1, codec: 'mpeg2video', indexSource: 'server',
+          width: 1, height: 1, codec: 'mpeg2video', indexSource: 'server', indexPending: true,
+          indexIdentity: { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) },
         },
       }));
     } else if (message.type === 'extract') {

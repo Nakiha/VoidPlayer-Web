@@ -12,12 +12,19 @@ import type { FlvInput } from './flv-demux.ts';
 import type { PreparedFlv } from './flv-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import { contextLog } from './log.ts';
+import { getColorMode } from './color-mode.ts';
+import type { ColorMode, ReferenceDecode } from './color-mode.ts';
+import { isHdrTransfer } from './presentation-color.ts';
+import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfo } from './model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
 export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
-  const reservation = reserveFallbackThreads();
+  let reservation = reserveFallbackThreads();
+  let reservationHeld = true;
+  const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(); reservationHeld = true; } };
+  const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc | undefined;
   try {
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
@@ -71,11 +78,16 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const startup = prepared;
     prepared = undefined;
     const activeRpc = rpc;
-    if (init.decoder === 'webcodecs') reservation.release();
+    if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexSource: 'client', indexState: 'complete', indexKind: 'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
+    let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
+    let nativeWitnessReadback = false;
+    let verifiedNativeYuv: MediaSource | undefined;
+    let activateVerifiedNativeYuv = (_adapter: MediaSource) => {};
+    let deactivateVerifiedNativeYuv = () => {};
     contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined,
       startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
     const yuvPool=createYuvBufferPool();
@@ -125,33 +137,115 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (disposed) throw new Error('媒体已释放。');
       if ((info.indexState as string) === 'error') throw new Error(info.indexError);
     };
-    const extract = (pts:number, next=false): Promise<DecodedFrame|null> => {
+    const toDecodedFrame = async (frame: FlvFrame): Promise<DecodedFrame> => {
+      const position = floorIndex(times, frame.pts - info.firstPtsUs);
+      if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
+      const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
+      const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
+      try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
+      let closed = false;
+      const rawFrame = { description: frame.description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+        width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
+        durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
+        close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
+      } satisfies DecodedFrame;
+      const rawForWitness = nativeWitnessReadback || verifiedNativeYuv !== undefined;
+      const decoded = rawForWitness || presentationMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame, yuvPool, deps.preserveNativeSample);
+      if (disposed) { decoded.close(); throw new Error('媒体已释放。'); }
+      if (!rawForWitness && presentationMode === 'reference' && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
+        const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
+        decoded.close();
+        throw new MediaOpenError('decode', hdr ? '自有色彩目前仅支持 SDR，无法处理此 HDR 视频。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+          : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。');
+      }
+      return decoded;
+    };
+    const extract = (pts:number,next=false):Promise<DecodedFrame|null> => {
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
         const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
-        const position=floorIndex(times,frame.pts-info.firstPtsUs);
-        if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
-        const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
-        const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
-        try { validateDescription(frame.description,pixels?.byteLength); } catch(error) {sample?.close();throw error;}
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
-        let closed = false;
-        const rawFrame = { description:frame.description,kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8', width: frame.width, height: frame.height,
-          ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: frame.durationUs ?? durations[position],
-          byteSize: frame.description.byteLength, sample, pixels,
-          close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
-        } satisfies DecodedFrame;
-        const decoded = deps.rawNative || deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
-        if(disposed){decoded.close();throw new Error("媒体已释放。");}
-        return decoded;
+        return toDecodedFrame(frame);
       });
       serial = task.then(() => {}, () => {});
       return task;
     };
+    const setDecoder = async (kind: 'software' | 'native') => {
+      if (kind === 'software') holdReservation();
+      const result = await activeRpc.call<Partial<MediaInfo>>(kind === 'software' ? 'switch-software' : 'switch-native', {
+        ...(kind === 'software' ? { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads } : {}),
+      }, [], 60000);
+      Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' } : {}) });
+      if (kind === 'native') delete info.coreVariant;
+      return result;
+    };
+    const reconfigureColorMode = async (mode: ColorMode, decode: ReferenceDecode, signal?: AbortSignal) => {
+      if (disposed) throw new Error('媒体已释放。');
+      loadAborted(signal);
+      const previousMode = presentationMode;
+      if (mode === 'reference') {
+        deactivateVerifiedNativeYuv();
+        holdReservation();
+        if (decode.decoder === 'software' && info.decoder === 'webcodecs') await setDecoder('software');
+        if (decode.decoder === 'hardware' && info.decoder === 'ffmpeg-wasm') {
+          try { await setDecoder('native'); } catch { /* Browser decoding may not be available; keep the shared software decoder. */ }
+        }
+        if (decode.decoder === 'hardware' && info.decoder === 'webcodecs') {
+          let witness: DecodedFrame | undefined, candidate: MediaSource | undefined, probe: DecodedFrame | undefined;
+          try {
+            const raw = await activeRpc.call<FlvFrame>('reference-witness', {
+              glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
+            }, [], 60000);
+            witness = await toDecodedFrame(raw);
+            const { nativeYuvSource, verifyNativeWitness } = await import('./native-yuv-source.ts');
+            presentationMode = 'reference';
+            // The candidate must read back the decoder's native VideoFrame in
+            // the dedicated raw-plane worker. Converting it here would bypass
+            // native-witness validation and make readback faults invisible.
+            nativeWitnessReadback = true;
+            candidate = nativeYuvSource(source, decode.depth, witness.description.yuv?.chromaLocation ?? null, false);
+            probe = await candidate.frameAt(0);
+            verifyNativeWitness(probe, witness);
+            activateVerifiedNativeYuv(candidate);
+            candidate = undefined;
+          } catch (error) {
+            probe?.close(); probe = undefined;
+            candidate?.dispose(); candidate = undefined;
+            if (signal?.aborted || error instanceof DOMException && error.name === 'AbortError') { presentationMode = previousMode; throw error; }
+            loadAborted(signal);
+            contextLog().warn('media', '硬件首帧核验失败，复用共享容器索引并切换软件解码器', {
+              error: error instanceof Error ? error.message : String(error),
+            });
+            await setDecoder('software');
+          } finally {
+            nativeWitnessReadback = false;
+            probe?.close(); candidate?.dispose(); witness?.close();
+          }
+        }
+        presentationMode = 'reference';
+        try { const first = await source.frameAt(0); first.close(); }
+        catch (error) { presentationMode = previousMode; throw error; }
+        if (info.decoder === 'webcodecs') releaseReservation();
+      } else {
+        deactivateVerifiedNativeYuv();
+        if (info.decoder === 'ffmpeg-wasm') {
+          try { await setDecoder('native'); } catch { /* Keep the decoder if WebCodecs cannot be restored. */ }
+        }
+        presentationMode = 'browser';
+        try { const first = await source.frameAt(0); first.close(); }
+        catch (error) { presentationMode = previousMode; throw error; }
+        if (info.decoder === 'webcodecs') releaseReservation();
+      }
+    };
     const source: MediaSource = {
       info, ensureIndexed,
+      reconfigureColorMode,
+      async admitReference(depth) {
+        await reconfigureColorMode('reference', { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] }, deps.signal);
+        return source;
+      },
       getAnalysisCapability(): AnalysisCapability {
         return {
           hasSize: true, hasDts: true, keySource: 'container',
@@ -244,8 +338,26 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() { if (!disposed) { disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; reservation.release(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
+    };
+    const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
+    activateVerifiedNativeYuv=adapter=>{
+      verifiedNativeYuv=adapter;
+      source.frameAt=adapter.frameAt.bind(adapter);
+      source.framesAfter=adapter.framesAfter.bind(adapter);
+      source.framesFrom=adapter.framesFrom.bind(adapter);
+      source.framesFollowing=adapter.framesFollowing?.bind(adapter) ?? baseFramesFollowing;
+    };
+    deactivateVerifiedNativeYuv=()=>{
+      const adapter=verifiedNativeYuv;
+      if(!adapter)return;
+      verifiedNativeYuv=undefined;
+      source.frameAt=baseFrameAt;
+      source.framesAfter=baseFramesAfter;
+      source.framesFrom=baseFramesFrom;
+      source.framesFollowing=baseFramesFollowing;
+      adapter.dispose();
     };
     return source;
-  } catch (error) { reservation.release(); rpc?.terminate(); throw error; }
+  } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

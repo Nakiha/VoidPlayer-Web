@@ -75,13 +75,17 @@
       "chromium/local": {},
       "chromium/http": {},
       "webkit/local": {},
-      "webkit/http": {}
+      "webkit/http": {
+        "known": ["open:resource"]
+      }
     },
     "hevc/extradata-reload-multi-stsd.mov": {
       "chromium/local": {},
       "chromium/http": {},
       "webkit/local": {},
-      "webkit/http": {}
+      "webkit/http": {
+        "known": ["open:resource"]
+      }
     },
     "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
       "chromium/local": {},

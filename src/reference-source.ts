@@ -5,7 +5,7 @@ import { resolveYuvColor } from './yuv-color.ts';
 import { contextLog } from './log.ts';
 
 /** Give the verified origin frame to the session's first presentation. */
-function offerVerifiedFrame(source: MediaSource, firstFrame: DecodedFrame): MediaSource {
+export function offerVerifiedFrame(source: MediaSource, firstFrame: DecodedFrame): MediaSource {
   const frameAt = source.frameAt.bind(source);
   const dispose = source.dispose.bind(source);
   let pending: DecodedFrame | undefined = firstFrame;

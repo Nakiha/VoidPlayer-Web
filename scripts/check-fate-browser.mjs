@@ -17,7 +17,11 @@ for(const [browserName,engine] of Object.entries({chromium,webkit})){
   try {for(const sample of manifest)for(const remote of [false,true]){
     const page=await browser.newPage();let timer;
     try {
-      await page.route('**/fate-test',r=>r.fulfill({contentType:'text/html',body:'<div class="frame-stage"><canvas id="source"></canvas></div>'}));
+      await page.route('**/fate-test',r=>r.fulfill({
+        contentType:'text/html',
+        headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'},
+        body:'<div class="frame-stage"><canvas id="source"></canvas></div>',
+      }));
       await page.goto(base+'/fate-test');
       const rows=await Promise.race([page.evaluate(async ({url,name,remote,ref})=>{
         const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
