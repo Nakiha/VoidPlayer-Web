@@ -108,7 +108,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
   contextLog().info('media', '媒体适配器选择', { container, input: 'file' in input ? 'local' : 'remote', reference,
     preference: reference ? preference.decoder : 'hardware', software: container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
   const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
-    native, software, onProgress, signal });
+    parallelReferenceWitness: reference && container === 'flv', native, software, onProgress, signal });
   source.info.container = container;
   return source;
 }

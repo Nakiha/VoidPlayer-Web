@@ -39,6 +39,32 @@ test('all adapter plans share preference and stage-based fallback, without an in
   const s=await openMediaPlan(plan({reference:true,softwareOnly:true,native:async()=>{native++;throw Error('must skip');},software:async()=>{software++;return source('ffmpeg-wasm').value;}}));
   assert.equal(native,0);assert.equal(software,1);s.dispose();
 });
+test('FLV reference opens its software witness alongside the native adapter and releases an unused witness',async()=>{
+ const native=source('ffmpeg-wasm'),witness=source('ffmpeg-wasm');let started=false,release!:()=>void;
+ const gate=new Promise<void>(resolve=>release=resolve);
+ const opening=openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
+  native:async()=>{await gate;return native.value;},
+  software:async()=>{started=true;return witness.value;}}));
+ await new Promise(r=>setTimeout(r,0));
+ assert.equal(started,true,'software witness begins before native adapter resolves');
+ release();
+ const selected=await opening;
+ assert.equal(selected.info.decoder,'ffmpeg-wasm');
+ await new Promise(r=>setTimeout(r,0));
+ assert.equal(witness.disposed(),1,'unused speculative source is disposed');
+ selected.dispose();
+ assert.equal(native.disposed(),1);
+});
+test('native failure reuses an already opened FLV software fallback',async()=>{
+ const fallback=source('ffmpeg-wasm');let opens=0;
+ const selected=await openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
+  native:async()=>{throw new MediaOpenError('decode','native failure');},
+  software:async()=>{opens++;return fallback.value;}}));
+ assert.equal(opens,1);
+ assert.equal(fallback.disposed(),0);
+ selected.dispose();
+ assert.equal(fallback.disposed(),1);
+});
 test('a cancelled open releases a late source exactly once and never selects another decoder',async()=>{
   const controller=new AbortController(),s=source();let resolve!:(s:MediaSource)=>void,software=0;
   const pending=openMediaPlan(plan({signal:controller.signal,native:()=>new Promise(r=>resolve=r),software:async()=>{software++;throw Error('unused');}}));
