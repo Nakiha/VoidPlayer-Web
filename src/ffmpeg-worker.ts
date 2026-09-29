@@ -177,7 +177,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       streamImportComplete = true;
     };
     indexClient = payload.indexUrl && Number.isSafeInteger(payload.mediaSize) && canImportIndex
-      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 300000, true, indexIdentity,
+      ? new MediaIndexClient(payload.indexUrl, 'ffmpeg', FFMPEG_INDEX_BYTES + 1024, 120000, true, indexIdentity,
         progress => onIndexProgress?.(progress), importRecordManifest, importRecordBatch, finishRecordImport) : undefined;
     if (indexClient && typeof core._vp_prime_first_presentable === 'function') {
       const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);

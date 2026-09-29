@@ -37,6 +37,8 @@ For a cold index, the versioned frame-index endpoint returns NDJSON protocol 2 e
 
 The server persists scan packet/byte progress, stable coverage, and each batch. A failed build remains marked failed with its durable prefix; a subsequent request starts a new build. A complete cache hit uses the same record event protocol. Older complete FFmpeg documents are lazily converted to record batches, while the JSON endpoint remains compatible with older clients. FLV continues to use its existing document transport until its server producer is migrated.
 
+Build jobs are independent of HTTP subscribers. The server runs one build at a time with up to eight queued jobs; disconnecting a stream removes that subscriber but leaves the identity-deduplicated job running. NDJSON streams use a 90-second lease. Clients resume with the same `buildId` and last accepted `after` sequence, so lease expiry does not create another build. A build fails only after 120 seconds without packet or scanned-byte progress, or at the configurable 24-hour safety cap. Set `VOIDPLAYER_INDEX_IDLE_TIMEOUT_MS` and `VOIDPLAYER_INDEX_ABSOLUTE_TIMEOUT_MS` to adjust those bounds; the absolute cap must exceed the idle timeout. Client waits use a per-request idle timeout and continue reconnecting while the source remains open, rather than applying a wall-clock deadline to the whole index build.
+
 For a TS build the scan loop exports only records newly added to the core's stable prefix. For containers without a safe partial-export proof, it waits for EOF and emits the final record set as batches. In both cases every batch includes the demux seek anchors required by the pinned core ABI. Media version and cache epoch are checked before committing progress, batches, and completion.
 
 ## Client consumption
@@ -69,3 +71,7 @@ The record client incrementally parses NDJSON and validates identity, batch sequ
 The development log records `媒体管线追踪` at container selection, first-frame readiness, the first streamed index batch, and index completion. Each event includes the selected demux/index/decoder backends and, when available, the versioned media ID, index identity, build ID, request count, first PTS, duration, stable coverage, and timing milestones. These events are diagnostic only and do not select a media path.
 
 Server cold builds emit one JSON `frame-index-build-profile` record after completion. It separates WASM open/prime/scan time, scan calls and packet/byte progress, CPU time, local AVIO reads and copies, record export, SQLite progress/batch/finish work, and time to first presentable frame and first persisted batch. Run `npm run bench:index -- /path/to/media.ts [video-stream-index]` to compare a cold build with a warm index-store lookup on the same machine and core. The benchmark reports server indexing timings; browser first-frame latency and Range counts remain browser integration measurements.
+
+## M1 timeout and job lifecycle
+
+`test/frame-index-build-policy.test.ts` checks defaults and environment overrides. Client stream regression tests cover build-ID resume after disconnect and a continuously active stream that lasts longer than its idle timeout. A stream subscriber can be dropped by its 90-second lease or by client cancellation without terminating the server job.

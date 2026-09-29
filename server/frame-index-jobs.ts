@@ -14,6 +14,34 @@ type BuildRequest = {
   identity: MediaIndexIdentity;
   buildId: string;
 };
+export interface FrameIndexBuildPolicy {
+  idleTimeoutMs: number;
+  absoluteTimeoutMs: number;
+}
+export interface FrameIndexBuildOptions {
+  policy?: FrameIndexBuildPolicy;
+  onUpdate?: BuildUpdateListener;
+  onProgress?: ProgressListener;
+}
+const DEFAULT_BUILD_POLICY: FrameIndexBuildPolicy = { idleTimeoutMs: 120_000, absoluteTimeoutMs: 24 * 60 * 60 * 1000 };
+
+export function frameIndexBuildPolicy(env: NodeJS.ProcessEnv = process.env): FrameIndexBuildPolicy {
+  const read = (name: string, fallback: number, max: number) => {
+    const raw = env[name];
+    if (raw === undefined) return fallback;
+    const value = Number(raw);
+    if (!Number.isSafeInteger(value) || value < 1000 || value > max) {
+      throw new Error(`${name} must be an integer from 1000 to ${max} milliseconds.`);
+    }
+    return value;
+  };
+  const policy = {
+    idleTimeoutMs: read('VOIDPLAYER_INDEX_IDLE_TIMEOUT_MS', DEFAULT_BUILD_POLICY.idleTimeoutMs, 24 * 60 * 60 * 1000),
+    absoluteTimeoutMs: read('VOIDPLAYER_INDEX_ABSOLUTE_TIMEOUT_MS', DEFAULT_BUILD_POLICY.absoluteTimeoutMs, 7 * 24 * 60 * 60 * 1000),
+  };
+  if (policy.absoluteTimeoutMs <= policy.idleTimeoutMs) throw new Error('VOIDPLAYER_INDEX_ABSOLUTE_TIMEOUT_MS must exceed the idle timeout.');
+  return policy;
+}
 type IndexBuildProgress = { phase: 'scan'; packets: number; scannedBytes: number; totalBytes: number };
 type ProgressListener = (progress: IndexBuildProgress) => void;
 type BuildUpdateListener = () => void;
@@ -26,6 +54,7 @@ type QueuedBuild = {
   listeners: Set<ProgressListener>;
   updateListeners: Set<BuildUpdateListener>;
   buildId: string;
+  policy: FrameIndexBuildPolicy;
   latestProgress?: IndexBuildProgress;
 };
 
@@ -46,6 +75,7 @@ export class FrameIndexJobs {
   private readonly maxConcurrentBuilds = 1;
   private readonly maxQueuedBuilds = 8;
   private readonly maxUploads = 2;
+  private readonly defaultBuildPolicy = frameIndexBuildPolicy();
 
   constructor(privateDatabase: string, coreDir: string) { this.database = privateDatabase; this.coreDir = coreDir; }
 
@@ -104,24 +134,32 @@ export class FrameIndexJobs {
     });
   }
 
-  buildIndex(request: Omit<BuildRequest, 'buildId'>, timeoutMs = 300000, onProgress?: ProgressListener): Promise<any> {
-    const handle = this.startBuild(request, timeoutMs, undefined, onProgress);
+  buildIndex(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}): Promise<any> {
+    const handle = this.startBuild(request, options);
     return handle.promise;
   }
 
-  startBuild(request: Omit<BuildRequest, 'buildId'>, timeoutMs = 300000, onUpdate?: BuildUpdateListener, onProgress?: ProgressListener) {
+  startBuild(request: Omit<BuildRequest, 'buildId'>, options: FrameIndexBuildOptions = {}) {
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
+    const policy = { ...(options.policy ?? this.defaultBuildPolicy) };
+    if (!Number.isSafeInteger(policy.idleTimeoutMs) || policy.idleTimeoutMs < 1000
+      || !Number.isSafeInteger(policy.absoluteTimeoutMs) || policy.absoluteTimeoutMs <= policy.idleTimeoutMs) {
+      throw new AdminError(400, '帧索引构建超时策略无效。');
+    }
     const key = request.id + ':' + request.version + ':' + request.epoch + ':' + mediaIndexIdentityKey(request.identity);
     const joined = this.builds.get(key);
     if (joined) {
-      if (onUpdate) { joined.updateListeners.add(onUpdate); try { onUpdate(); } catch {} }
-      if (onProgress) {
-        joined.listeners.add(onProgress);
+      if (options.onUpdate) { joined.updateListeners.add(options.onUpdate); try { options.onUpdate(); } catch {} }
+      if (options.onProgress) {
+        joined.listeners.add(options.onProgress);
         if (joined.latestProgress) {
-          try { onProgress(joined.latestProgress); } catch {}
+          try { options.onProgress(joined.latestProgress); } catch {}
         }
       }
-      return { buildId: joined.buildId, promise: joined.promise, unsubscribe: () => { if (onUpdate) joined.updateListeners.delete(onUpdate); if (onProgress) joined.listeners.delete(onProgress); } };
+      return { buildId: joined.buildId, promise: joined.promise, unsubscribe: () => {
+        if (options.onUpdate) joined.updateListeners.delete(options.onUpdate);
+        if (options.onProgress) joined.listeners.delete(options.onProgress);
+      } };
     }
     if (this.activeBuilds >= this.maxConcurrentBuilds && this.buildQueue.length >= this.maxQueuedBuilds) {
       throw new AdminError(503, '索引构建队列已满，请稍后重试。');
@@ -130,13 +168,16 @@ export class FrameIndexJobs {
     const promise = new Promise<any>((res, rej) => { resolve = res; reject = rej; });
     const buildId = randomUUID();
     const job: QueuedBuild = { key, request: { ...request, buildId }, promise, resolve, reject,
-      listeners: new Set(), updateListeners: new Set(), buildId };
-    if (onProgress) job.listeners.add(onProgress);
-    if (onUpdate) job.updateListeners.add(onUpdate);
+      listeners: new Set(), updateListeners: new Set(), buildId, policy };
+    if (options.onProgress) job.listeners.add(options.onProgress);
+    if (options.onUpdate) job.updateListeners.add(options.onUpdate);
     this.builds.set(key, job);
     this.buildQueue.push(job);
-    this.pumpBuilds(timeoutMs);
-    return { buildId, promise, unsubscribe: () => { if (onUpdate) job.updateListeners.delete(onUpdate); if (onProgress) job.listeners.delete(onProgress); } };
+    this.pumpBuilds();
+    return { buildId, promise, unsubscribe: () => {
+      if (options.onUpdate) job.updateListeners.delete(options.onUpdate);
+      if (options.onProgress) job.listeners.delete(options.onProgress);
+    } };
   }
 
   private notifyBuildUpdate(job: QueuedBuild) {
@@ -150,21 +191,21 @@ export class FrameIndexJobs {
     }
   }
 
-  private pumpBuilds(timeoutMs: number) {
+  private pumpBuilds() {
     while (!this.closed && this.activeBuilds < this.maxConcurrentBuilds && this.buildQueue.length) {
       const job = this.buildQueue.shift()!;
       this.activeBuilds++;
-      void this.runBuild(job.request, timeoutMs, progress => { this.notifyBuildProgress(job, progress); this.notifyBuildUpdate(job); }, () => this.notifyBuildUpdate(job))
+      void this.runBuild(job.request, job.policy, progress => { this.notifyBuildProgress(job, progress); this.notifyBuildUpdate(job); }, () => this.notifyBuildUpdate(job))
         .then(job.resolve, job.reject).finally(() => {
           this.activeBuilds--;
           if (this.builds.get(job.key) === job) this.builds.delete(job.key);
           this.notifyBuildUpdate(job);
-          this.pumpBuilds(timeoutMs);
+          this.pumpBuilds();
         });
     }
   }
 
-  private runBuild(request: BuildRequest, timeoutMs: number, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
+  private runBuild(request: BuildRequest, policy: FrameIndexBuildPolicy, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
     let worker: Worker;
     try {
       worker = new Worker(new URL('./frame-index-build-worker.ts', import.meta.url), {
@@ -174,18 +215,33 @@ export class FrameIndexJobs {
     this.buildWorkers.add(worker);
     return new Promise((resolve, reject) => {
       let settled = false;
+      let idleTimer: ReturnType<typeof setTimeout>;
+      let absoluteTimer: ReturnType<typeof setTimeout>;
+      let latestPackets = -1, latestScannedBytes = -1;
+      const resetIdleTimer = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建进度停滞。')), policy.idleTimeoutMs);
+      };
       const finish = (error?: Error, value?: unknown) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        clearTimeout(idleTimer);
+        clearTimeout(absoluteTimer);
         this.buildWorkers.delete(worker);
         void worker.terminate();
         if (error) reject(error); else resolve(value);
       };
-      const timer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建超时，请稍后重试。')), timeoutMs);
+      resetIdleTimer();
+      absoluteTimer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建超过绝对安全期限。')), policy.absoluteTimeoutMs);
       worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number }) => {
         if (result.type === 'progress') {
-          try { onProgress(result.data as IndexBuildProgress); } catch {}
+          const progress = result.data as IndexBuildProgress;
+          if (progress.packets > latestPackets || progress.scannedBytes > latestScannedBytes) {
+            latestPackets = progress.packets;
+            latestScannedBytes = progress.scannedBytes;
+            resetIdleTimer();
+          }
+          try { onProgress(progress); } catch {}
           return;
         }
         if (result.type === 'manifest' || result.type === 'batch' || result.type === 'complete') { onUpdate(); return; }

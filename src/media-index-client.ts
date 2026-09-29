@@ -23,7 +23,22 @@ export interface MediaIndexClientTrace {
 }
 
 const STREAM_BATCH_BYTES = 64 * 1024;
-const STREAM_ATTEMPTS = 3;
+const RETRY_DELAY_BASE_MS = 100;
+const RETRY_DELAY_MAX_MS = 2000;
+
+function retryDelay(signal: AbortSignal, delayMs: number): Promise<boolean> {
+  if (signal.aborted) return Promise.resolve(false);
+  return new Promise(resolve => {
+    const finish = (retry: boolean) => {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      resolve(retry);
+    };
+    const onAbort = () => finish(false);
+    const timer = setTimeout(() => finish(true), delayMs);
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 function decodeBase64(value: unknown): Uint8Array {
   if (typeof value !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
@@ -56,7 +71,7 @@ export class MediaIndexClient {
   private lookup: Promise<ServerIndexResult | null>;
   private readonly kind: 'flv' | 'ffmpeg';
   private readonly maxBytes: number;
-  private readonly timeoutMs: number;
+  private readonly idleTimeoutMs: number;
   private readonly identity?: MediaIndexIdentity;
   private readonly onScanProgress?: (progress: MediaIndexScanProgress) => void;
   private readonly onRecordManifest?: (manifest: MediaIndexRecordManifest) => void;
@@ -64,10 +79,10 @@ export class MediaIndexClient {
   private readonly onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void;
   private readonly traceStartedAt = performance.now();
   private trace: MediaIndexClientTrace = { serverIndexRequests: 0, reconnects: 0 };
-  constructor(url: string | undefined, kind: 'flv' | 'ffmpeg', maxBytes: number, timeoutMs = 300000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
+  constructor(url: string | undefined, kind: 'flv' | 'ffmpeg', maxBytes: number, idleTimeoutMs = 120000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
     this.kind = kind;
     this.maxBytes = maxBytes;
-    this.timeoutMs = timeoutMs;
+    this.idleTimeoutMs = idleTimeoutMs;
     this.identity = identity;
     this.onScanProgress = onScanProgress;
     this.onRecordManifest = onRecordManifest;
@@ -95,7 +110,6 @@ export class MediaIndexClient {
 
   private async load(): Promise<ServerIndexResult | null> {
     if (!this.endpoint) return null;
-    const deadline = Date.now() + this.timeoutMs;
     let manifest: any;
     let buildingManifest: any;
     let transferBytes = new Uint8Array(0);
@@ -109,12 +123,30 @@ export class MediaIndexClient {
     let previousSafeUs = -1;
     let recordStream = false;
 
-    for (let attempt = 0; attempt < STREAM_ATTEMPTS && !complete; attempt++) {
-      const remaining = deadline - Date.now();
-      if (remaining <= 0 || this.controller.signal.aborted) return null;
+    let attempt = 0;
+    while (!complete && !this.controller.signal.aborted) {
       const requestUrl = new URL(this.endpoint);
       requestUrl.searchParams.set('after', String(lastSeq));
       if (buildId) requestUrl.searchParams.set('buildId', buildId);
+      const requestController = new AbortController();
+      const abortRequest = () => requestController.abort();
+      this.controller.signal.addEventListener('abort', abortRequest, { once: true });
+      let idleTimer: ReturnType<typeof setTimeout> | undefined;
+      const resetIdleTimeout = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => requestController.abort(), this.idleTimeoutMs);
+      };
+      const clearRequestTimeout = () => {
+        clearTimeout(idleTimer);
+        this.controller.signal.removeEventListener('abort', abortRequest);
+      };
+      const waitBeforeRetry = async () => {
+        clearRequestTimeout();
+        const delayMs = Math.min(RETRY_DELAY_BASE_MS * (2 ** Math.min(attempt, 4)), RETRY_DELAY_MAX_MS);
+        attempt++;
+        return retryDelay(this.controller.signal, delayMs);
+      };
+      resetIdleTimeout();
       let response: Response;
       this.trace.serverIndexRequests++;
       if (attempt > 0) this.trace.reconnects++;
@@ -122,21 +154,31 @@ export class MediaIndexClient {
         response = await fetch(requestUrl, {
           cache: 'no-store',
           headers: { accept: 'application/x-ndjson, application/json;q=0.8' },
-          signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(Math.max(1, remaining))]),
+          signal: requestController.signal,
         });
       } catch {
-        if (this.controller.signal.aborted) return null;
+        if (this.controller.signal.aborted) { clearRequestTimeout(); return null; }
+        if (!await waitBeforeRetry()) return null;
         continue;
       }
 
-      if (!response.ok) { await response.body?.cancel().catch(() => {}); return null; }
+      if (!response.ok) {
+        clearRequestTimeout();
+        await response.body?.cancel().catch(() => {});
+        if (response.status >= 500) {
+          if (!await waitBeforeRetry()) return null;
+          continue;
+        }
+        return null;
+      }
       if (!response.headers.get('content-type')?.toLowerCase().includes('application/x-ndjson')) {
-        if (recordFrames > 0) return null;
-        const legacy = await this.readLegacy(response);
+        if (recordFrames > 0) { clearRequestTimeout(); return null; }
+        const legacy = await this.readLegacy(response, resetIdleTimeout);
+        clearRequestTimeout();
         return legacy;
       }
       const reader = response.body?.getReader();
-      if (!reader) return null;
+      if (!reader) { clearRequestTimeout(); return null; }
       let buffer = '';
       const decoder = new TextDecoder();
       let streamFailed = false;
@@ -303,25 +345,33 @@ export class MediaIndexClient {
         for (;;) {
           const { value, done } = await reader.read();
           if (done) break;
+          if (value?.byteLength) { resetIdleTimeout(); attempt = 0; }
           buffer += decoder.decode(value, { stream: true });
           for (;;) {
             const newline = buffer.indexOf('\n');
             if (newline < 0) break;
-            consumeLine(buffer.slice(0, newline));
+            try { consumeLine(buffer.slice(0, newline)); }
+            catch { serverRejected = true; throw new Error('索引流事件无效。'); }
             buffer = buffer.slice(newline + 1);
           }
           if (buffer.length > STREAM_BATCH_BYTES * 2 + 4096) throw new Error('索引流事件超过大小上限。');
         }
         buffer += decoder.decode();
-        if (buffer.trim()) consumeLine(buffer);
+        if (buffer.trim()) {
+          try { consumeLine(buffer); }
+          catch { serverRejected = true; throw new Error('索引流事件无效。'); }
+        }
       } catch {
         streamFailed = true;
       } finally {
+        clearRequestTimeout();
         await reader.cancel().catch(() => {});
         reader.releaseLock();
       }
       if (this.controller.signal.aborted || serverRejected) return null;
-      if (streamFailed || !complete) continue;
+      if (streamFailed || !complete) {
+        if (!await waitBeforeRetry()) return null;
+      }
     }
 
     if (recordStream) return complete && recordManifest
@@ -335,7 +385,7 @@ export class MediaIndexClient {
     } catch { return null; }
   }
 
-  private async readLegacy(response: Response): Promise<ServerIndexResult | null> {
+  private async readLegacy(response: Response, onChunk?: () => void): Promise<ServerIndexResult | null> {
     const reader = response.body?.getReader();
     if (!reader) return null;
     const chunks: Uint8Array[] = [];
@@ -344,6 +394,7 @@ export class MediaIndexClient {
       for (;;) {
         const { value, done } = await reader.read();
         if (done) break;
+        onChunk?.();
         size += value.length;
         if (size > this.maxBytes) throw new Error('索引缓存超过上限。');
         chunks.push(value);

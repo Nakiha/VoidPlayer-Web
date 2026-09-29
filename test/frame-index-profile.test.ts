@@ -31,11 +31,15 @@ test('cold server index build returns AVIO, scan, storage and CPU profile counte
     assert.ok(entry?.version);
     const resolvedPath = await library.resolve(entry.id, entry.version!);
     assert.equal(path.basename(resolvedPath!), path.basename(filePath));
-    const { promise } = library.indexJobs.startBuild({
+    const request = {
       id: entry.id, version: entry.version!, size: entry.size, filePath: resolvedPath!, epoch: library.frameIndexes.epoch,
-      identity: { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild },
-    });
-    const result = await promise as { built: boolean; profile?: Record<string, any> };
+      identity: { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild },
+    };
+    const firstSubscriber = library.indexJobs.startBuild(request, { onUpdate() {} });
+    firstSubscriber.unsubscribe();
+    const resumedSubscriber = library.indexJobs.startBuild(request, { onUpdate() {} });
+    assert.equal(resumedSubscriber.buildId, firstSubscriber.buildId);
+    const result = await resumedSubscriber.promise as { built: boolean; profile?: Record<string, any> };
     assert.equal(result.built, true);
     const profile = result.profile!;
     assert.ok(profile.totalBuildWallMs > 0);

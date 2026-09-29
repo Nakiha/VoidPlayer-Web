@@ -14,6 +14,7 @@ import { allowReveal, localRequest, revealFile } from '../reveal.ts';
 import type { RouteContext } from './context.ts';
 
 const INDEX_STREAM_BATCH_BYTES = 64 * 1024;
+const INDEX_STREAM_LEASE_MS = 90_000;
 
 function requestsMediaIndexStream(req: IncomingMessage): boolean {
   return String(req.headers.accept ?? '').split(',').some(value => value.trim().split(';', 1)[0] === 'application/x-ndjson');
@@ -52,7 +53,7 @@ async function sendMediaIndexStream(
   if (after > lastSeq) throw new AdminError(416, '索引流续传序号超过当前索引。');
   if (res.destroyed) return;
   if (!alreadyStarted) beginMediaIndexStream(res);
-  const timeout = setTimeout(() => res.destroy(), 300000);
+  const timeout = setTimeout(() => res.destroy(), INDEX_STREAM_LEASE_MS);
   try {
     await writeMediaIndexEvent(res, {
       type: 'manifest', protocol: 1, epoch, kind,
@@ -114,22 +115,20 @@ async function sendFfmpegRecordStream(
   if (startBuild) {
     if (!filePath || size === undefined) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
     build = library.indexJobs.startBuild({ id, version, size, filePath,
-      epoch: await library.indexJobs.call('epoch') as number, identity }, 300000, wake);
+      epoch: await library.indexJobs.call('epoch') as number, identity }, { onUpdate: wake });
     void build.promise.then((value: { built?: boolean }) => { if (!value?.built) buildAlreadyPresent = true; wake(); }, error => {
       buildError = error instanceof Error ? error : new Error(String(error)); wake();
     });
   }
   if (!res.headersSent) beginMediaIndexStream(res);
-  const streamTimer = setTimeout(() => res.destroy(), 300000);
+  const streamTimer = setTimeout(() => res.destroy(), INDEX_STREAM_LEASE_MS);
   let seq = after;
   let sentManifest = false;
   let sentReset = false;
   let sentScanProgress = -1;
-  const timeoutAt = Date.now() + 300000;
   try {
     for (;;) {
       if (res.destroyed) return;
-      if (Date.now() > timeoutAt) throw new AdminError(503, 'FFmpeg 索引传输超时，请稍后重试。');
       const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity }) as {
         epoch: number; manifest: null | { buildId: string; state: string; lastSeq: number; complete: boolean; packets: number; scannedBytes: number;
           stablePresentationUs: number; bytes: number; frames: number; metadata: Record<string, unknown> | null };
@@ -284,7 +283,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
             if (streamingGet) {
               beginMediaIndexStream(res);
               indexStreamStarted = true;
-              indexStreamTimer = setTimeout(() => res.destroy(), 300000);
+              indexStreamTimer = setTimeout(() => res.destroy(), INDEX_STREAM_LEASE_MS);
               await writeMediaIndexEvent(res, {
                 type: 'manifest', protocol: 1, epoch, kind, state: 'building',
                 batchBytes: INDEX_STREAM_BATCH_BYTES,
@@ -314,7 +313,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
             };
             const built = await library.indexJobs.buildIndex({
               id: entry.id, version, size: entry.size, filePath, epoch, identity,
-            }, 300000, onProgress) as { built: boolean; epoch: number };
+            }, { onProgress }) as { built: boolean; epoch: number };
             await progressTail;
             if (built.built && (res.destroyed || !await library.resolve(entry.id, version))) {
               throw new AdminError(409, '媒体已改变，未保存旧索引。');
