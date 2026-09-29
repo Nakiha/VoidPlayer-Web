@@ -51,6 +51,50 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
   }
 
   const panMomentum = new PanMomentumFilter();
+  let panFrame: number | null = null;
+  let pendingPanX = 0, pendingPanY = 0;
+  function applyPendingPan() {
+    panFrame = null;
+    const dx = pendingPanX, dy = pendingPanY;
+    pendingPanX = pendingPanY = 0;
+    if (!dx && !dy) return;
+    viewport.panBy(dx, dy);
+    applyViewTransform();
+  }
+  function queuePan(dx: number, dy: number) {
+    pendingPanX += dx;
+    pendingPanY += dy;
+    if (panFrame === null) panFrame = requestAnimationFrame(applyPendingPan);
+  }
+  function flushPendingPan() {
+    if (panFrame !== null) cancelAnimationFrame(panFrame);
+    applyPendingPan();
+  }
+
+  // `contextmenu` may target the element under the pointer rather than the
+  // captured stage in some browser/input sequences. Keep a short, gesture-
+  // scoped document guard through pointerup so a release over another part of
+  // the page cannot open the browser's page context menu.
+  let activePanPointer: number | null = null;
+  let suppressPanContextMenu = false;
+  let contextMenuExpiry: ReturnType<typeof setTimeout> | undefined;
+  function clearPanContextMenuSuppression() {
+    suppressPanContextMenu = false;
+    clearTimeout(contextMenuExpiry);
+    contextMenuExpiry = undefined;
+  }
+  document.addEventListener('pointerdown', () => {
+    if (activePanPointer === null && suppressPanContextMenu) clearPanContextMenuSuppression();
+  }, true);
+  document.addEventListener('keydown', () => {
+    if (activePanPointer === null && suppressPanContextMenu) clearPanContextMenuSuppression();
+  }, true);
+  document.addEventListener('contextmenu', e => {
+    if (!suppressPanContextMenu) return;
+    e.preventDefault();
+    clearPanContextMenuSuppression();
+  }, true);
+
   for (const slot of SLOTS) {
     const stage = $(`stage-${slot}`);
     stage.addEventListener('contextmenu', e => e.preventDefault());
@@ -59,23 +103,32 @@ export function installViewportGestures(deps: ViewportGestureDeps) {
       if (e.button !== 2 || !session.getState().tracks.length) return;
       e.preventDefault();
       pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY };
+      activePanPointer = e.pointerId;
+      suppressPanContextMenu = true;
+      clearTimeout(contextMenuExpiry);
+      contextMenuExpiry = undefined;
       stage.setPointerCapture(e.pointerId);
     });
     stage.addEventListener('pointermove', e => {
       if (!pan || pan.pointer !== e.pointerId) return;
-      viewport.panBy(e.clientX - pan.x, e.clientY - pan.y);
+      queuePan(e.clientX - pan.x, e.clientY - pan.y);
       pan.x = e.clientX;
       pan.y = e.clientY;
-      applyViewTransform();
     });
     const endPan = (e: PointerEvent) => {
       if (!pan || pan.pointer !== e.pointerId) return;
+      flushPendingPan();
       pan = null;
+      activePanPointer = null;
+      if (suppressPanContextMenu) {
+        contextMenuExpiry = setTimeout(clearPanContextMenuSuppression, 500);
+      }
       log.info('ui', '视口平移', { offsetX: Math.round(viewport.offsetX), offsetY: Math.round(viewport.offsetY) });
       flushView();
     };
     stage.addEventListener('pointerup', endPan);
     stage.addEventListener('pointercancel', endPan);
+    stage.addEventListener('lostpointercapture', endPan);
   }
 
   screens.addEventListener('wheel', e => {
