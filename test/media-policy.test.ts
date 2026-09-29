@@ -55,6 +55,16 @@ test('FLV reference opens its software witness alongside the native adapter and 
  selected.dispose();
  assert.equal(native.disposed(),1);
 });
+test('early native input failure disposes a speculative FLV witness',async()=>{
+ const witness=source('ffmpeg-wasm');let opens=0;
+ const opening=openMediaPlan(plan({reference:true,parallelReferenceWitness:true,
+  native:async()=>{throw new MediaOpenError('input','read failed');},
+  software:async()=>{opens++;return witness.value;}}));
+ await assert.rejects(opening,/read failed/);
+ await new Promise(r=>setTimeout(r,0));
+ assert.equal(opens,1);
+ assert.equal(witness.disposed(),1);
+});
 test('native failure reuses an already opened FLV software fallback',async()=>{
  const fallback=source('ffmpeg-wasm');let opens=0;
  const selected=await openMediaPlan(plan({reference:true,parallelReferenceWitness:true,

@@ -35,6 +35,8 @@ test('native witness accepts coded padding when the visible rectangle and visibl
  verifyNativeWitness(native,reference);
  native.pixels![nativeY.offset+959*nativeY.stride+539]++;
  assert.throws(()=>verifyNativeWitness(native,reference),/可见样本不一致/);
+ const cropped=geometryFrame(544,960,539,960);
+ assert.throws(()=>verifyNativeWitness(cropped,reference),/裁剪区域不一致/);
 });
 test('native pipeline preserves order under out-of-order copies and drains cancellation',async()=>{
  const original=globalThis.Worker;let active=0,peak=0,terminated=0,closed=0;
