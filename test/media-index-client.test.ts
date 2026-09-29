@@ -61,6 +61,10 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     assert.deepEqual(await client.read(), expected);
     assert.deepEqual(cursors, ['-1', '0']);
     assert.deepEqual(scanProgress, [{ packets: 1024, scannedBytes: 8192, totalBytes: 200_000 }]);
+    assert.deepEqual({ serverIndexRequests: client.diagnostics().serverIndexRequests, reconnects: client.diagnostics().reconnects },
+      { serverIndexRequests: 2, reconnects: 1 });
+    assert.ok(client.diagnostics().firstIndexBatchMs !== undefined);
+    assert.ok(client.diagnostics().indexCompleteMs !== undefined);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;
@@ -107,6 +111,11 @@ test('FFmpeg record batches are incrementally validated and delivered before str
     assert.deepEqual(Array.from(batches[0].records), Array.from(records));
     assert.equal(batches[0].safePresentationUs, 33_333);
     assert.equal(completed[0].frames, 2);
+    assert.deepEqual(client.diagnostics().indexIdentity, identity);
+    assert.equal(client.diagnostics().indexBuildId, buildId);
+    assert.equal(client.diagnostics().serverIndexRequests, 1);
+    assert.ok(client.diagnostics().firstIndexBatchMs !== undefined);
+    assert.ok(client.diagnostics().indexCompleteMs! >= client.diagnostics().firstIndexBatchMs!);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;
@@ -159,6 +168,9 @@ test('FFmpeg record streams resume the same build after the last accepted batch'
     assert.equal(result.count, 2);
     assert.deepEqual(batches, [0, 1]);
     assert.deepEqual(requestUrls.map(url => url.searchParams.get('after')), ['-1', '0']);
+    assert.equal(client.diagnostics().serverIndexRequests, 2);
+    assert.equal(client.diagnostics().reconnects, 1);
+    assert.equal(client.diagnostics().indexBuildId, buildId);
   } finally {
     client.close();
     globalThis.fetch = originalFetch;

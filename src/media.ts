@@ -99,17 +99,51 @@ export type { OpenStage } from './media-errors.ts';
 /** File and URL differ only in byte access. Container adapters are selected
  * once, before the shared native/software/reference policy is applied. */
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+  const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
   const reference = getColorMode() === 'reference', preference = getReferenceDecode();
+  const colorMode = reference ? 'reference' : 'browser';
+  let nativeOpens = 0, softwareOpens = 0;
+  let libraryId: string | undefined, mediaVersion: string | undefined;
+  if ('url' in input) {
+    try {
+      const url = new URL(input.url, globalThis.location?.href);
+      libraryId = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname)?.[1];
+      mediaVersion = url.searchParams.get('v') ?? undefined;
+    } catch { /* Non-library URLs have no stable library identity. */ }
+  }
   const software = customSoftware ?? (() => openSoftwareMedia(input, meta, { signal, onProgress }, container));
-  const native = container === 'flv'
-    ? async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); }
-    : () => openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+  const countedSoftware = async () => { softwareOpens++; return software(); };
+  const native = async () => {
+    nativeOpens++;
+    return container === 'flv'
+      ? (async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
+      : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+  };
   contextLog().info('media', '媒体适配器选择', { container, input: 'file' in input ? 'local' : 'remote', reference,
     preference: reference ? preference.decoder : 'hardware', software: container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+  contextLog().info('media', '媒体管线追踪', {
+    phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
+    demuxBackend: container === 'flv' ? 'flv-engine' : container === 'isobmff' ? 'mediabunny-or-mp4-packet' : 'mediabunny-or-ffmpeg',
+    indexBackend: container === 'flv' ? 'flv-packet-index' : container === 'isobmff' ? 'mp4-sample-or-packet-index' : 'ffmpeg-index',
+    decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
+    parallelSoftwareWitness: reference && container === 'flv',
+  });
   const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
-    parallelReferenceWitness: reference && container === 'flv', native, software, onProgress, signal });
+    parallelReferenceWitness: reference && container === 'flv', native, software: countedSoftware, onProgress, signal });
   source.info.container = container;
+  const demuxBackend = container === 'flv' ? 'flv-engine'
+    : container === 'isobmff' ? source.info.seekStrategy === 'packet-anchor' ? 'mp4-packet' : 'mediabunny'
+    : source.info.decoder === 'ffmpeg-wasm' ? 'ffmpeg-wasm' : 'mediabunny';
+  contextLog().info('media', '媒体管线追踪', {
+    phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
+    indexBackend: source.info.indexSource ?? source.info.indexKind ?? 'container',
+    decoderBackend: source.info.decoder, colorMode,
+    firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
+    stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,
+    firstFrameReadyMs: Math.round(performance.now() - pipelineStartedAt),
+    nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
+  });
   return source;
 }
 

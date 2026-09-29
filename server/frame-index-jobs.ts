@@ -190,7 +190,16 @@ export class FrameIndexJobs {
         }
         if (result.type === 'manifest' || result.type === 'batch' || result.type === 'complete') { onUpdate(); return; }
         if (result.error) finish(new AdminError(result.status ?? 500, result.error));
-        else finish(undefined, result.value);
+        else {
+          const value = result.value as { built?: boolean; profile?: Record<string, unknown> } | undefined;
+          if (value?.built && value.profile) {
+            console.info(JSON.stringify({
+              event: 'frame-index-build-profile', mediaId: request.id, mediaVersion: request.version,
+              buildId: request.buildId, identity: request.identity, ...value.profile,
+            }));
+          }
+          finish(undefined, result.value);
+        }
       });
       worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
       worker.once('exit', code => { if (!settled) finish(new Error('FFmpeg 索引构建 Worker 已退出 (' + code + ')')); });

@@ -11,6 +11,16 @@ export interface MediaIndexRecordManifest {
 export interface MediaIndexRecordBatch {
   buildId: string; seq: number; records: Uint8Array; count: number; safePresentationUs: number;
 }
+export interface MediaIndexClientTrace {
+  serverIndexRequests: number;
+  reconnects: number;
+  indexBuildId?: string;
+  indexIdentity?: MediaIndexIdentity;
+  firstIndexBatchMs?: number;
+  indexCompleteMs?: number;
+  /** Time spent importing delivered records into the decoder core (diagnostic only). */
+  recordImportMs?: number;
+}
 
 const STREAM_BATCH_BYTES = 64 * 1024;
 const STREAM_ATTEMPTS = 3;
@@ -52,6 +62,8 @@ export class MediaIndexClient {
   private readonly onRecordManifest?: (manifest: MediaIndexRecordManifest) => void;
   private readonly onRecordBatch?: (batch: MediaIndexRecordBatch) => void;
   private readonly onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void;
+  private readonly traceStartedAt = performance.now();
+  private trace: MediaIndexClientTrace = { serverIndexRequests: 0, reconnects: 0 };
   constructor(url: string | undefined, kind: 'flv' | 'ffmpeg', maxBytes: number, timeoutMs = 300000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
     this.kind = kind;
     this.maxBytes = maxBytes;
@@ -104,6 +116,8 @@ export class MediaIndexClient {
       requestUrl.searchParams.set('after', String(lastSeq));
       if (buildId) requestUrl.searchParams.set('buildId', buildId);
       let response: Response;
+      this.trace.serverIndexRequests++;
+      if (attempt > 0) this.trace.reconnects++;
       try {
         response = await fetch(requestUrl, {
           cache: 'no-store',
@@ -158,6 +172,8 @@ export class MediaIndexClient {
             const activeBuildId = String(event.buildId);
             if (buildId && buildId !== activeBuildId) throw new Error('FFmpeg 索引 buildId 在续传期间改变。');
             if (!buildId) buildId = activeBuildId;
+            this.trace.indexBuildId = activeBuildId;
+            this.trace.indexIdentity = identity;
             const nextManifest: MediaIndexRecordManifest = { epoch: event.epoch, buildId: activeBuildId, kind: 'ffmpeg', state: event.state, identity, metadata, recordBytes: event.recordBytes, lastSeq: event.lastSeq };
             if (recordManifest && !sameRecordIdentity(recordManifest, nextManifest)) throw new Error('FFmpeg 索引续传期间 manifest 身份发生改变。');
             recordManifest = nextManifest;
@@ -205,6 +221,7 @@ export class MediaIndexClient {
             const expectedSafeUs = Math.max(0, Math.floor(Number(safeTick - firstPts) * 1_000_000
               * Number(recordManifest.metadata.timeBaseNum) / Number(recordManifest.metadata.timeBaseDen)));
             if (expectedSafeUs !== event.safePresentationUs) throw new Error('FFmpeg 索引 watermark 与记录末帧不匹配。');
+            if (this.trace.firstIndexBatchMs === undefined) this.trace.firstIndexBatchMs = performance.now() - this.traceStartedAt;
             this.onRecordBatch?.({ buildId: recordManifest.buildId, seq: event.seq, records: parsed.records, count: event.count, safePresentationUs: event.safePresentationUs });
             recordFrames += event.count;
             recordBytesTotal += records.byteLength;
@@ -218,6 +235,7 @@ export class MediaIndexClient {
           if (bytes.byteLength !== expected || receivedBytes + bytes.byteLength > manifest.totalBytes) throw new Error('索引流分块长度无效。');
           transferBytes.set(bytes, event.seq * manifest.batchBytes);
           receivedBytes += bytes.byteLength;
+          if (this.trace.firstIndexBatchMs === undefined) this.trace.firstIndexBatchMs = performance.now() - this.traceStartedAt;
           lastSeq = event.seq;
           return;
         }
@@ -230,6 +248,7 @@ export class MediaIndexClient {
             throw new Error('FFmpeg 索引 build 已重启，无法将新记录接到已导入前缀。');
           }
           buildId = event.buildId;
+          this.trace.indexBuildId = buildId;
           lastSeq = -1;
           recordManifest = undefined;
           recordStream = false;
@@ -261,6 +280,7 @@ export class MediaIndexClient {
               throw new Error('FFmpeg 索引记录流在 complete 前缺少 batch。');
             }
             this.onRecordComplete?.(recordManifest, recordFrames);
+            this.trace.indexCompleteMs = performance.now() - this.traceStartedAt;
             complete = true;
             return;
           }
@@ -268,6 +288,7 @@ export class MediaIndexClient {
             || event.totalBytes !== manifest.totalBytes || receivedBytes !== manifest.totalBytes) {
             throw new Error('索引流在 complete 前缺少分块。');
           }
+          this.trace.indexCompleteMs = performance.now() - this.traceStartedAt;
           complete = true;
           return;
         }
@@ -339,6 +360,10 @@ export class MediaIndexClient {
   async read() {
     const result = await this.lookup;
     return result?.index ?? null;
+  }
+
+  diagnostics(): MediaIndexClientTrace {
+    return { ...this.trace, ...(this.trace.indexIdentity ? { indexIdentity: { ...this.trace.indexIdentity } } : {}) };
   }
 
   async save(index: unknown) {

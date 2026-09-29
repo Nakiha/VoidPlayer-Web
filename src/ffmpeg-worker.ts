@@ -108,6 +108,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     let streamedLastSeq = -1;
     let streamedSafeTick = 0n;
     let originRecordSkipped = false;
+    let recordImportMs = 0;
     const importRecordManifest = (manifest: MediaIndexRecordManifest) => {
       const metadata = manifest.metadata;
       if (metadata.size !== payload.mediaSize || metadata.codec !== core.ccall('vp_codec_name', 'string', ['number'], [ctx])
@@ -135,12 +136,13 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       const ptr = core._malloc(batch.records.byteLength);
       if (!ptr) throw new MediaOpenError('resource', 'FFmpeg 索引 batch 内存分配失败。');
       const previousCount = streamedCount;
+      const importStarted = performance.now();
       try {
         heap().set(batch.records, ptr);
         const imported = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
           [ctx, ptr, batch.count, batch.seq, safeTick, 0]) as number;
         if (imported !== batch.count) throw new MediaOpenError('resource', '服务端 FFmpeg 索引 batch 无法安全导入。');
-      } finally { core._free(ptr); }
+      } finally { core._free(ptr); recordImportMs += performance.now() - importStarted; }
       streamedCount += batch.count;
       streamedLastSeq = batch.seq;
       streamedSafeTick = safeTick;
@@ -164,7 +166,8 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       const durationCoverageUs = lastDuration > 0 ? Math.max(1, toUs(lastDuration)) : 1;
       const stableCoverageUs = Math.max(1, toUs(Number(safeTick) - firstPresentation.pts) + durationCoverageUs);
       port.postMessage({ id: indexRequestId, type: 'index-batch', data: { ctx, ticks: newTicks, durations: newDurations,
-        stableCoverageUs, seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]), buildId: streamedBuildId } });
+        stableCoverageUs, seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]), buildId: streamedBuildId,
+        indexIdentity, indexTrace: { ...indexClient?.diagnostics(), recordImportMs } } });
     };
     const finishRecordImport = (_manifest: MediaIndexRecordManifest, _frames: number) => {
       if (!streamImportStarted || streamImportComplete) return;
@@ -186,6 +189,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
         ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
         firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
         indexSource: 'server', localIndexBuildCalls: 0, ioMode,
+        indexIdentity, indexTrace: { ...indexClient.diagnostics(), recordImportMs },
         seekAnchorCount: 0,
         tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
         tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
@@ -305,6 +309,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     contexts.set(ctx, { ticks, durations, blobHandle, path, indexClient });
     return {
       ctx, path, ticks, durations, indexMs, indexSource, localIndexBuildCalls, ioMode,
+      indexIdentity, indexTrace: { ...indexClient?.diagnostics(), recordImportMs },
       seekAnchorCount: typeof core._vp_index_seek_anchors === 'function' ? core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) : 0,
       tbNum: core.ccall('vp_tb_num', 'number', ['number'], [ctx]),
       tbDen: core.ccall('vp_tb_den', 'number', ['number'], [ctx]),
