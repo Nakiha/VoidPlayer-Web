@@ -47,9 +47,14 @@ try {
         return configure.call(this, config);
       };
     });
-    const errors = [], workers = new Set();
+    const errors = [];
+    let ffmpegWorkerStarts = 0;
     page.on('pageerror', error => errors.push(error.message));
-    page.on('worker', worker => { workers.add(worker); worker.on('close', () => workers.delete(worker)); });
+    page.on('worker', worker => {
+      // Packet demux and WebCodecs run in packet-worker; only this worker
+      // indicates a software FFmpeg fallback.
+      if (/ffmpeg-worker/i.test(worker.url())) ffmpegWorkerStarts++;
+    });
     const requests = [];
     page.on('request', request => { if (/\/api\/media\/[^/]+(?:\?|$)/.test(new URL(request.url()).pathname)) requests.push(request.url()); });
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
@@ -77,7 +82,7 @@ try {
     await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy);
     await page.unroute('**/api/media/**');
     if (!secure) assert.equal(requests.length, 1, 'repeated + clicks must start exactly one file download');
-    assert.equal(workers.size, secure ? 0 : 1, 'WebCodecs must not open WASM workers');
+    assert.equal(ffmpegWorkerStarts, 0, 'WebCodecs must not open FFmpeg workers');
     assert.equal(await row.getAttribute('aria-busy'), 'false');
     assert.match(await row.innerText(), /使用中/);
     console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
