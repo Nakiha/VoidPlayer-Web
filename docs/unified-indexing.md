@@ -61,7 +61,18 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 
 ## Acceptance
 
-- For the reported 211 MB TS, measure cold build, in-progress join, and warm-cache startup separately: first-frame time, browser Range count, server scan throughput, and browser `vp_index_build` calls.
+- For representative 350 MB and 691 MB MPEG-TS files, measure cold build, in-progress join, and warm-cache startup separately: first-frame time, browser Range count, server scan throughput, and browser `vp_index_build` calls. Large local benchmark inputs can be generated reproducibly from the checked-in fixtures (assuming FFmpeg is installed):
+
+  ```sh
+  ffmpeg -hide_banner -loglevel error -stream_loop 16 -i fixtures/video/mpeg2_10s_1280x720.ts -map 0:v:0 -c copy -f mpegts /tmp/voidplayer-index-350mb-mpeg2.ts
+  ffmpeg -hide_banner -loglevel error -stream_loop 16 -i fixtures/video/h264_9s_1920x1080.mp4 -map 0:v:0 -c copy -f mpegts /tmp/voidplayer-index-338mb-h264.ts
+  ffmpeg -hide_banner -loglevel error -stream_loop 34 -i fixtures/video/h264_9s_1920x1080.mp4 -map 0:v:0 -c copy -f mpegts /tmp/voidplayer-index-695mb-h264.ts
+  npm run bench:index -- /tmp/voidplayer-index-350mb-mpeg2.ts
+  npm run bench:index -- /tmp/voidplayer-index-338mb-h264.ts
+  npm run bench:index -- /tmp/voidplayer-index-695mb-h264.ts
+  ```
+
+  These are synthetic repeated streams for repeatable load and scan profiling. Their measured sizes were 347,742,284 bytes (MPEG-2), 337,538,772 bytes (H.264), and 694,932,788 bytes (H.264). They do not stand in for content-specific correctness checks. Compare runs on the same machine, FFmpeg, WASM core, and input.
 - Verify a cold TS displays its first frame before completion, publishes stable batches while scanning, and permits seeks within stable coverage. A warm hit imports anchors and performs no client full scan.
 - Compare PTS, duration, dimensions, color metadata, random seeks, and open-GOP output against the client-indexed path, including pixel/hash equivalence.
 - Cover duplicate concurrent requests, batch resume, build restart, cache clear, file replacement during build, truncated input, worker failure, and failed-prefix behavior.
@@ -96,3 +107,9 @@ The FLV compatibility index may still be sourced from a local progressive scan o
 `chooseMp4DemuxPlan()` runs after container probing and before reading color or decoder preferences. It selects the packet sample-table path only when the MP4 has a zero-rotation primary video track, a packet-supported codec, and one validated sample description; other MP4 structures use the FFmpeg container/index plan. MPEG-TS and other non-FLV/non-MP4 inputs also use FFmpeg independent of color or decoder preference. The selected plan is recorded in the pipeline trace. For packet-plan MP4, WebCodecs and WASM use the same `Mp4Engine` sample table, byte reader, and timeline. A temporary reference witness decodes from that same sample table, and a failed native check switches only the decoder. FFmpeg sources keep the same index session during color changes and validate YUV output in reference mode.
 
 Packet and FFmpeg sources expose `reconfigureColorMode()` so `ReviewSession` can change browser/reference mode without invoking the saved opener. The packet worker can replace WebCodecs with WASM or restore WebCodecs while retaining the MP4 or FLV index. FFmpeg stays on its current decoder and index session because its worker currently exposes only the WASM decoder. Matrix regression asserts one container-open trace across browser → reference → browser for MP4 and MPEG-TS, and one demux backend across all fixture modes.
+
+## M6 server index profiling
+
+The existing build profile isolates the measured cost to the WASM FFmpeg scan on this machine. A synthetic 347,742,284-byte MPEG-2 TS completed cold indexing in 9.7 s (34.15 MiB/s); synthetic 337,538,772-byte and 694,932,788-byte H.264 TS files completed in 51.3 s (6.27 MiB/s) and 105.8 s (6.26 MiB/s), respectively. The larger run spent 105.6 s in `vp_index_scan_step` with 105.7 s CPU user time. It produced the first frame in 140 ms and the first persisted stable batch in 5.2 s; warm manifest lookup took 25 ms.
+
+For the 694.9 MB run, local AVIO read, allocation, and ArrayBuffer copy totaled about 115 ms; SQLite batch writes totaled 39 ms. These are negligible beside the scan, so no AVIO/read-ahead or storage tuning was made. The scan step already processes 1,024 packets per call (21 calls for 21,000 packets); changing that budget cannot materially improve this CPU-bound result. The benchmark meets the current 5 MiB/s minimum and finishes both large synthetic files well below the removed 300-second build deadline. It does not reach the 10–20 MiB/s stretch target. A dedicated TS producer remains deferred because the profiled WASM path is not near the prior 0.5–1 MB/s reports, and any replacement must first prove identical DTS/PTS, packet position/size, keyframe, preroll, and seek-anchor semantics.
