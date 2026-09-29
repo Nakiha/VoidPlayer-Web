@@ -21,6 +21,7 @@ try {
         const { getLiveObjectUrl } = await import('/src/thumbnails/client.ts');
         const { getLocalThumbnail } = await import('/src/thumbnails/local-store.ts');
         const { renderThumbnailCanvas } = await import('/src/presenter.ts');
+        const { yuvToRgba } = await import('/src/yuv-color.ts');
         const small = renderThumbnailCanvas({ kind: 'rgba8', width: 2, height: 2,
           description: rgbaDescription(2, 2), pixels: Uint8ClampedArray.from([
             0,0,0,255, 255,255,255,255, 255,255,255,255, 0,0,0,255,
@@ -72,9 +73,55 @@ try {
           if (n === 5 && !url) throw Error('warm YUV worker did not complete: ' + JSON.stringify(thumbnailState.snapshot()));
 
         }
+        // Equivalent SDR content through software YUV (Worker) and browser sample (main).
+        // This checks that execution location/input adaptation does not change the thumbnail result.
+        const parityW = 16, parityH = 8, parityLuma = parityW * parityH;
+        const parityPixels = new Uint8ClampedArray(parityLuma * 1.5);
+        const yValues = [16, 81, 145, 235];
+        for (let y = 0; y < parityH; y++) for (let x = 0; x < parityW; x++) {
+          parityPixels[y * parityW + x] = yValues[(Math.floor(y / 2) * 4 + Math.floor(x / 2)) % yValues.length];
+        }
+        parityPixels.fill(128, parityLuma);
+        const parityDescription = { ...rgbaDescription(parityW, parityH), format: 'I420', stride: null,
+          byteLength: parityPixels.length,
+          color: { matrix: 'bt709', primaries: 'bt709', transfer: 'bt709', fullRange: false },
+          yuv: { bitDepth: 8, bitShift: 0, subsampleX: 1, subsampleY: 1, semiplanar: false, chromaLocation: null,
+            planes: [{ offset: 0, stride: parityW, width: parityW, height: parityH },
+              { offset: parityLuma, stride: parityW / 2, width: parityW / 2, height: parityH / 2 },
+              { offset: parityLuma * 1.25, stride: parityW / 2, width: parityW / 2, height: parityH / 2 }] } };
+        const equivalentRgba = yuvToRgba(parityDescription, parityPixels);
+        const sampleCanvas = new OffscreenCanvas(parityW, parityH);
+        sampleCanvas.getContext('2d').putImageData(new ImageData(equivalentRgba, parityW, parityH), 0, 0);
+        const sample = () => ({ rotation: 0,
+          draw(ctx, x, y, width, height) { ctx.drawImage(sampleCanvas, x, y, width, height); },
+          clone() { return sample(); }, close() {} });
+        async function runParityThumbnail(key, frame) {
+          const offer = offerFirstFrameCandidate({ cacheKey: key, kind: 'local', sourceGen: 99,
+            sourcePtsUs: 0, isFileFirst: true, byteSize: frame.byteSize }, frame);
+          if (typeof offer !== 'object') throw Error('parity offer rejected: ' + offer);
+          runThumbnailTask(offer);
+          const deadline = performance.now() + 3000;
+          while (thumbnailState.inFlight.has(key) && performance.now() < deadline) await new Promise(r => setTimeout(r, 10));
+          const url = getLiveObjectUrl(key);
+          if (!url) throw Error('parity thumbnail missing: ' + key);
+          const image = new Image(); image.src = url; await image.decode();
+          const canvas = new OffscreenCanvas(image.naturalWidth, image.naturalHeight);
+          const ctx = canvas.getContext('2d'); ctx.drawImage(image, 0, 0);
+          return { width: image.naturalWidth, height: image.naturalHeight,
+            pixels: Array.from(ctx.getImageData(0, 0, image.naturalWidth, image.naturalHeight).data) };
+        }
+        const parityYuv = await runParityThumbnail('parity-yuv', { kind: 'yuv', width: parityW, height: parityH,
+          description: parityDescription, pixels: parityPixels, byteSize: parityPixels.byteLength, ptsUs: 0, sourcePtsUs: 0,
+          durationUs: 40000, close() {} });
+        const paritySample = await runParityThumbnail('parity-sample', { kind: 'video-sample', width: parityW, height: parityH,
+          description: parityDescription, sample: sample(), byteSize: parityW * parityH * 4,
+          ptsUs: 0, sourcePtsUs: 0, durationUs: 40000, close() {} });
+        if (parityYuv.width !== paritySample.width || parityYuv.height !== paritySample.height) throw Error('thumbnail input kinds changed output geometry');
+        const parityMaxDiff = Math.max(...parityYuv.pixels.map((value, i) => Math.abs(value - paritySample.pixels[i])));
+        if (parityMaxDiff > 3) throw Error('YUV/sample thumbnail output mismatch: max channel delta ' + parityMaxDiff);
         await new Promise(r => setTimeout(r, 50));
         observer?.disconnect();
-        return { timings, longTasks, state: thumbnailState.snapshot() };
+        return { timings, longTasks, parityMaxDiff, state: thumbnailState.snapshot() };
       });
       assert.ok(result.state.rendered > 0, JSON.stringify(result));
       assert.deepEqual(ranges, [], 'thumbnail executor performs no media requests');
