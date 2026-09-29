@@ -13,6 +13,7 @@ class DelayedIndexWorker {
   listeners = new Map<string, Set<(event: { data: any }) => void>>();
   initId = 0;
   terminated = false;
+  extractRequests = 0;
   firstDuration: number;
   constructor(firstDuration = 3_600) { this.firstDuration = firstDuration; }
 
@@ -37,6 +38,7 @@ class DelayedIndexWorker {
         },
       }));
     } else if (message.type === 'extract') {
+      this.extractRequests++;
       this.emit({ id: message.id, ok: true, data: frame(message.index === 0 ? originTicks : originTicks + 3_600) });
     }
   }
@@ -116,6 +118,37 @@ test('FFmpeg source presents its first frame before index completion and keeps i
     assert.equal(afterIndex.ptsUs, 0);
     assert.equal(afterIndex.sourcePtsUs, 1_000_000);
     afterIndex.close();
+  } finally {
+    source.dispose();
+  }
+});
+
+test('a primed first frame remains replayable after a witness read while the index is building', async () => {
+  const worker = new DelayedIndexWorker();
+  const source = await openWith(worker);
+  try {
+    assert.equal(source.info.indexState, 'building');
+
+    // Reference admission reads frame zero before deciding whether to keep
+    // WebCodecs. The selected software source must still serve the display.
+    const witness = await source.frameAt(0);
+    const witnessPixels = Array.from(witness.pixels ?? []);
+    witness.close();
+    assert.equal(worker.extractRequests, 0);
+
+    // A later indexed frame may recycle its output buffer into the worker.
+    worker.publishBatch();
+    const later = await source.frameAt(50_000);
+    assert.equal(later.ptsUs, 40_000);
+    later.close();
+    assert.equal(worker.extractRequests, 1);
+
+    const display = await source.frameAt(0);
+    assert.equal(display.ptsUs, 0);
+    assert.deepEqual(Array.from(display.pixels ?? []), witnessPixels);
+    assert.equal(worker.extractRequests, 1, 'frame zero must come from the retained primed frame');
+    assert.equal(source.info.indexState, 'building');
+    display.close();
   } finally {
     source.dispose();
   }
