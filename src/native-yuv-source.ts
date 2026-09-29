@@ -1,30 +1,46 @@
 import type {DecodedFrame,MediaSource} from './media.ts';
 import {MediaOpenError} from './media-errors.ts';
-import {resolveYuvColor,validateYuv,yuvSample} from './yuv-color.ts';
+import {chromaOffset,resolveYuvColor,validateYuv,yuvSample} from './yuv-color.ts';
 
 /** Certify a same-PTS raw-plane witness, never fit browser RGB output. */
 export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
   const a=native.description,b=reference.description;
   const reject=(reason:string)=>{throw new MediaOpenError('decode',`硬件原始平面未通过软件首帧核对：${reason}`);};
   if(native.sourcePtsUs!==reference.sourcePtsUs)return reject('源 PTS 不一致。');
-  if(!a.yuv||!b.yuv||!native.pixels||!reference.pixels)return reject('需要可读取的原始 YUV 平面。');
-  try{validateYuv(a,native.pixels.byteLength);validateYuv(b,reference.pixels.byteLength);}catch{return reject('YUV 平面布局无效。');}
+  const nativePixels=native.pixels,referencePixels=reference.pixels;
+  if(!a.yuv||!b.yuv||!nativePixels||!referencePixels)return reject('需要可读取的原始 YUV 平面。');
+  try{validateYuv(a,nativePixels.byteLength);validateYuv(b,referencePixels.byteLength);}catch{return reject('YUV 平面布局无效。');}
   const is420=(l:NonNullable<typeof a.yuv>)=>l.bitDepth===8&&l.bitShift===0&&l.subsampleX===1&&l.subsampleY===1;
   if(!is420(a.yuv)||!is420(b.yuv))return reject('需要可读取的 8-bit 4:2:0 平面。');
   const ar=a.visibleRect,br=b.visibleRect;
   if(ar.x!==br.x||ar.y!==br.y||ar.width!==br.width||ar.height!==br.height)return reject('裁剪区域不一致。');
   const x=resolveYuvColor(a),y=resolveYuvColor(b);
   if(!x.supported||!y.supported||(['matrix','primaries','fullRange','transfer'] as const).some(k=>x[k]!==y[k]))return reject('SDR 色彩条件不一致或不受支持。');
+  const [aOx,aOy]=chromaOffset(a.yuv),[bOx,bOy]=chromaOffset(b.yuv);
+  if(aOx!==bOx||aOy!==bOy)return reject('色度采样位置不一致。');
   // Coded dimensions can differ when a decoder retains CTU padding. Compare
-  // every plane sample that contributes to the identical visible rectangle;
-  // bytes outside that rectangle cannot reach the presenter.
+  // luma in the visible rectangle plus every chroma sample touched by its
+  // bilinear reconstruction, including the one-sample edge halo.
+  const clampIndex=(index:number,size:number)=>Math.max(0,Math.min(size-1,index));
   for(let c=0;c<3;c++){
     const sx=c?2**a.yuv.subsampleX:1,sy=c?2**a.yuv.subsampleY:1;
-    const x0=c?Math.floor(ar.x/sx):ar.x,y0=c?Math.floor(ar.y/sy):ar.y;
-    const x1=c?Math.floor((ar.x+ar.width-1)/sx):ar.x+ar.width-1;
-    const y1=c?Math.floor((ar.y+ar.height-1)/sy):ar.y+ar.height-1;
+    let x0=c?Math.floor((ar.x-aOx)/sx):ar.x,y0=c?Math.floor((ar.y-aOy)/sy):ar.y;
+    let x1=c?Math.floor((ar.x+ar.width-1-aOx)/sx)+1:ar.x+ar.width-1;
+    let y1=c?Math.floor((ar.y+ar.height-1-aOy)/sy)+1:ar.y+ar.height-1;
+    if(c){
+      const ap=a.yuv.planes[a.yuv.semiplanar?1:c],bp=b.yuv.planes[b.yuv.semiplanar?1:c];
+      const ax0=clampIndex(x0,ap.width),bx0=clampIndex(x0,bp.width);
+      const ay0=clampIndex(y0,ap.height),by0=clampIndex(y0,bp.height);
+      const ax1=clampIndex(x1,ap.width),bx1=clampIndex(x1,bp.width);
+      const ay1=clampIndex(y1,ap.height),by1=clampIndex(y1,bp.height);
+      x0=Math.min(ax0,bx0);y0=Math.min(ay0,by0);x1=Math.max(ax1,bx1);y1=Math.max(ay1,by1);
+    }
+    const read=(pixels:Uint8ClampedArray,d:typeof a,col:number,row:number)=>{
+      const layout=d.yuv!,plane=layout.planes[layout.semiplanar&&c?1:c];
+      return yuvSample(pixels,layout,c,clampIndex(col,plane.width)*sx,clampIndex(row,plane.height)*sy);
+    };
     for(let row=y0;row<=y1;row++)for(let col=x0;col<=x1;col++){
-      if(yuvSample(native.pixels,a.yuv,c,col*sx,row*sy)!==yuvSample(reference.pixels,b.yuv,c,col*sx,row*sy))return reject(`平面 ${c} 的可见样本不一致。`);
+      if(read(nativePixels,a,col,row)!==read(referencePixels,b,col,row))return reject(`平面 ${c} 的可见样本不一致。`);
     }
   }
 }

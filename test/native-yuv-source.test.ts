@@ -28,12 +28,15 @@ test('native witness accepts coded padding when the visible rectangle and visibl
  const native=geometryFrame(544,960,540,960),reference=geometryFrame(540,960,540,960);
  const nativeY=native.description.yuv!.planes[0],nativeU=native.description.yuv!.planes[1],nativeV=native.description.yuv!.planes[2];
  for(let row=0;row<960;row++)for(let col=540;col<544;col++)native.pixels![nativeY.offset+row*nativeY.stride+col]=99;
- for(let row=0;row<480;row++)for(let col=270;col<272;col++){
-  native.pixels![nativeU.offset+row*nativeU.stride+col]=77;
-  native.pixels![nativeV.offset+row*nativeV.stride+col]=88;
+ for(let row=0;row<480;row++){
+  native.pixels![nativeU.offset+row*nativeU.stride+271]=77;
+  native.pixels![nativeV.offset+row*nativeV.stride+271]=88;
  }
  verifyNativeWitness(native,reference);
  native.pixels![nativeY.offset+959*nativeY.stride+539]++;
+ assert.throws(()=>verifyNativeWitness(native,reference),/可见样本不一致/);
+ native.pixels![nativeY.offset+959*nativeY.stride+539]--;
+ native.pixels![nativeU.offset+479*nativeU.stride+270]=77;
  assert.throws(()=>verifyNativeWitness(native,reference),/可见样本不一致/);
  const cropped=geometryFrame(544,960,539,960);
  assert.throws(()=>verifyNativeWitness(cropped,reference),/裁剪区域不一致/);
