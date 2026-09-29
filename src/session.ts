@@ -845,7 +845,11 @@ export class ReviewSession {
       if (libraryId) {
         // Without a reliable media version, a replaced same-name file would
         // inherit the old cover: stay missing instead of uploading a cache.
-        if (!mediaVersion) { thumbnailState.skip('upload:no-epoch-or-version'); return; }
+        if (!mediaVersion) {
+          thumbnailState.skip('upload:no-epoch-or-version');
+          log.debug('media', '首帧缩图候选未接受', { reason: 'upload:no-epoch-or-version', sourcePtsUs: frame.sourcePtsUs, decoder: source.info.decoder });
+          return;
+        }
         kind = 'library';
         cacheKey = serverCacheKey({ mediaId: libraryId, mediaVersion });
         // Frozen at accept; a missing epoch means local-only this time, with
@@ -861,6 +865,11 @@ export class ReviewSession {
         sourcePtsUs: frame.sourcePtsUs, isFileFirst, epoch,
         byteSize: frame.byteSize, isLive: () => this.tracks.get(slot)?.source === source,
       }, frame);
+      const offerResult = typeof offered === 'string' ? offered : offered.result;
+      log.debug('media', '首帧缩图候选已检查', {
+        result: offerResult, localTarget, framePtsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs,
+        kind: frame.kind, decoder: source.info.decoder,
+      });
       if (typeof offered === 'string' || offered.result !== 'accepted') return;
       // Detached continuation; the module is already cached via workbench init.
       // An import failure must still release the held reference, never leak it.
@@ -868,7 +877,9 @@ export class ReviewSession {
         tasks => tasks.runThumbnailTask(offered),
         () => { offered.release(); settleOffer(offered.context.cacheKey, false); },
       ).catch(() => {});
-    } catch { /* Thumbnails never fail a load. */ }
+    } catch (error) {
+      log.debug('media', '首帧缩图候选检查失败', { error: error instanceof Error ? error.message : String(error) });
+    }
     finally { thumbnailState.noteHook(performance.now() - started); }
   }
   private async drawAt(ptsUs: number, current: () => boolean, tracks = this.tracks, commit?: () => void, selected?: Map<Slot, DecodedFrame>, kept?: Set<Slot>, signal?: AbortSignal) {

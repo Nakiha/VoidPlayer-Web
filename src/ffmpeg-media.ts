@@ -473,15 +473,18 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const extract = async (index: number): Promise<WasmDecodedFrame> => {
     if (disposed) throw new Error('媒体已释放。');
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
-    const payload: Record<string, unknown> = { ctx: init.ctx, index };
-    const transfer: Transferable[] = [];
-    if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
     const started = performance.now(), randomAccess = index !== previousIndex + 1;
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
     if (index === 0 && firstFrame) {
-      output = firstFrame;
-      firstFrame = undefined;
+      // The primed frame may first be consumed as a native-decoder witness,
+      // before the player asks for its initial image. Keep the cache replayable
+      // and give each caller a private buffer because returned buffers can be
+      // recycled into the worker.
+      output = { ...firstFrame, pixels: firstFrame.pixels.slice(0) };
     } else {
+      const payload: Record<string, unknown> = { ctx: init.ctx, index };
+      const transfer: Transferable[] = [];
+      if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
       try { output = await rpc.call<typeof output>('extract', payload, transfer); }
       catch (error) {
         scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });

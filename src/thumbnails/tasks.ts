@@ -69,7 +69,12 @@ async function execute(accepted: AcceptedOffer): Promise<void> {
       ? await encodeSample(accepted)
       : await encodePixels(accepted);
     releaseOwned();
-    if (!rendered) { thumbnailState.skip('unsupported:render'); settle(false); return; }
+    if (!rendered) {
+      thumbnailState.skip('unsupported:render');
+      log.debug('media', '首帧缩图未渲染', { kind: owned.kind, width: owned.width, height: owned.height, sourcePtsUs: context.sourcePtsUs });
+      settle(false);
+      return;
+    }
     thumbnailState.rendered++;
     log.debug('media', '首帧缩图渲染完成', {
       key: key.slice(0, 48), width: rendered.width, height: rendered.height,
