@@ -50,7 +50,8 @@ try {
     scanThroughputMiBPerSec: profile?.totalBuildWallMs > 0
       ? Number((profile.scannedBytes / 1024 ** 2 / (profile.totalBuildWallMs / 1000)).toFixed(2)) : 0,
     scan: { scannedBytes: profile?.scannedBytes, packets: profile?.packets, stepCalls: profile?.scanStepCalls,
-      totalBuildWallMs: profile?.totalBuildWallMs, cpuUserMs: profile?.cpuUserMs, cpuSystemMs: profile?.cpuSystemMs },
+      totalBuildWallMs: profile?.totalBuildWallMs, scanCompleteMs: profile?.scanCompleteMs,
+      cpuUserMs: profile?.cpuUserMs, cpuSystemMs: profile?.cpuSystemMs },
     avio: { readCalls: profile?.avioReadCalls, requestedBytes: profile?.avioRequestedBytes, actualBytes: profile?.avioActualBytes,
       averageReadBytes: profile?.avioAverageReadBytes, readSyncMs: profile?.avioReadSyncMs,
       allocationMs: profile?.avioAllocationMs, arrayBufferCopyMs: profile?.avioArrayBufferCopyMs },

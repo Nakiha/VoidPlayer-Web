@@ -63,6 +63,7 @@
     "test:recovery:browser": "npm run build && node scripts/check-recovery-browser.mjs",
     "test:thumbnail-worker": "node scripts/check-thumbnail-worker.mjs",
     "bench:index": "node scripts/bench-frame-index.mjs",
+    "bench:index:modes": "node scripts/compare-index-scan-modes.mjs",
     "test:media-open-matrix": "npm run build && node scripts/check-media-open-matrix.mjs"
   },
   "dependencies": {

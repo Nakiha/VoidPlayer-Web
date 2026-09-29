@@ -42,6 +42,7 @@ test('cold server index build returns AVIO, scan, storage and CPU profile counte
     const result = await resumedSubscriber.promise as { built: boolean; profile?: Record<string, any> };
     assert.equal(result.built, true);
     const profile = result.profile!;
+    assert.equal(profile.scanMode, 'demux-only');
     assert.ok(profile.totalBuildWallMs > 0);
     assert.ok(profile.cpuUserMs + profile.cpuSystemMs > 0);
     assert.ok(profile.vpOpenBlobMs > 0);
@@ -49,6 +50,7 @@ test('cold server index build returns AVIO, scan, storage and CPU profile counte
     assert.ok(profile.scanStepCalls > 0);
     assert.ok(profile.packets > 0);
     assert.ok(profile.scannedBytes > 0);
+    assert.ok(profile.scanCompleteMs > 0);
     assert.ok(profile.avioReadCalls > 0);
     assert.equal(profile.avioAverageReadBytes, profile.avioActualBytes / profile.avioReadCalls);
     assert.ok(profile.avioReadSyncMs >= 0);
@@ -56,6 +58,8 @@ test('cold server index build returns AVIO, scan, storage and CPU profile counte
     assert.ok(profile.recordExportBytes > 0);
     assert.ok(profile.firstPresentationReadyMs >= 0);
     assert.ok(profile.firstStableBatchReadyMs >= 0);
+    assert.ok(profile.firstStableBatchReadyMs >= profile.scanCompleteMs,
+      'demux-only index batches must wait for scan finality');
     assert.ok(profile.storage.progressUpdateCount > 0);
     assert.ok(profile.storage.batchAppendCount > 0);
     assert.ok(profile.storage.finishMs >= 0);

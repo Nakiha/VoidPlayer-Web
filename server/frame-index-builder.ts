@@ -41,6 +41,7 @@ export interface FfmpegIndexBuildBatch {
 }
 
 export interface FfmpegIndexBuildProfile {
+  scanMode: 'demux-only';
   totalBuildWallMs: number;
   cpuUserMs: number;
   cpuSystemMs: number;
@@ -50,6 +51,7 @@ export interface FfmpegIndexBuildProfile {
   scanStepCalls: number;
   scannedBytes: number;
   packets: number;
+  scanCompleteMs?: number;
   avioReadCalls: number;
   avioRequestedBytes: number;
   avioActualBytes: number;
@@ -71,9 +73,9 @@ export interface FfmpegIndexBuildProfile {
   };
 }
 
-const RECORDS_PER_BATCH = 128; // 5 KiB raw; stable GOP prefixes can reach the client promptly.
+const RECORDS_PER_BATCH = 128; // Keep persistence writes and subscriber events bounded.
 
-/** Build a server index from local-file AVIO and persist only newly stable record batches. */
+/** Build a server index from local-file AVIO and persist validated record batches. */
 export async function buildFfmpegIndexDocument(
   filePath: string,
   expectedSize: number,
@@ -87,6 +89,7 @@ export async function buildFfmpegIndexDocument(
   const buildStarted = performance.now();
   const cpuStarted = process.cpuUsage();
   const profile: FfmpegIndexBuildProfile = {
+    scanMode: 'demux-only',
     totalBuildWallMs: 0, cpuUserMs: 0, cpuSystemMs: 0,
     vpOpenBlobMs: 0, vpPrimeFirstPresentableMs: 0, vpIndexScanStepMs: 0,
     scanStepCalls: 0, scannedBytes: 0, packets: 0,
@@ -179,11 +182,13 @@ export async function buildFfmpegIndexDocument(
     profile.firstPresentationReadyMs = performance.now() - buildStarted;
     onManifest?.(metadata);
 
-    if (core.ccall('vp_index_scan_stream_begin', 'number', ['number'], [ctx]) !== 1) {
+    // Building packet timing/seek metadata does not require decoding every
+    // packet. Keep the first-presentable-frame probe above separate, then use
+    // the core's demux-only scan and publish the complete index after EOF.
+    if (core.ccall('vp_index_scan_begin', 'number', ['number'], [ctx]) !== 1) {
       throw new Error('服务端 FFmpeg 无法开始媒体帧索引。');
     }
     let seq = 0;
-    let exportedSourceCount = 0;
     let batchCount = 0;
     let publishedRecords = 0;
     let batch = new Uint8Array(RECORDS_PER_BATCH * FFMPEG_INDEX_RECORD_BYTES);
@@ -214,68 +219,38 @@ export async function buildFfmpegIndexDocument(
         if (batchCount === RECORDS_PER_BATCH) publish(batchCount, scannedBytes);
       }
     };
-    const exportRange = (start: number, count: number, scannedBytes: number) => {
-      if (!count) return;
-      const byteLength = count * FFMPEG_INDEX_RECORD_BYTES;
-      const ptr = core._malloc(byteLength);
-      if (!ptr) throw new Error('服务端 FFmpeg 索引内存分配失败。');
-      try {
-        const exportStarted = performance.now();
-        const exported = core.ccall('vp_index_export_range', 'number', ['number', 'number', 'number', 'number', 'number'], [ctx, start, count, ptr, byteLength]) as number;
-        if (exported !== count) throw new Error('服务端 FFmpeg 稳定索引分块导出失败。');
-        const bytes = heap().slice(ptr, ptr + byteLength);
-        profile.recordExportMs += performance.now() - exportStarted;
-        profile.recordExportBytes += byteLength;
-        ingest(bytes, count, scannedBytes);
-      } finally { core._free(ptr); }
-    };
-
-    let progressive = false;
     while (!core.ccall('vp_index_scan_complete', 'number', ['number'], [ctx])) {
       const stepStarted = performance.now();
       const step = core.ccall('vp_index_scan_step', 'number', ['number', 'number'], [ctx, 1024]) as number;
       profile.vpIndexScanStepMs += performance.now() - stepStarted;
       profile.scanStepCalls++;
       if (step < 0 || core.ccall('vp_index_scan_failed', 'number', ['number'], [ctx])) throw new Error('服务端 FFmpeg 媒体帧索引扫描失败。');
-      progressive = core.ccall('vp_index_scan_progressive_supported', 'number', ['number'], [ctx]) === 1;
       const scannedBytes = Math.min(fileSize, Math.max(0, Number(core.ccall('vp_index_scan_bytes', 'i64', ['number'], [ctx]))));
-      if (progressive) {
-        const stableCount = core.ccall('vp_index_scan_stable_count', 'number', ['number'], [ctx]) as number;
-        if (stableCount < exportedSourceCount) throw new Error('服务端稳定索引前缀出现回退。');
-        if (stableCount > exportedSourceCount) {
-          exportRange(exportedSourceCount, stableCount - exportedSourceCount, scannedBytes);
-          exportedSourceCount = stableCount;
-        }
-      }
       const packets = core.ccall('vp_index_scan_packets', 'number', ['number'], [ctx]) as number;
       profile.packets = packets;
       profile.scannedBytes = scannedBytes;
       onProgress?.({ phase: 'scan', packets, scannedBytes, totalBytes: fileSize });
       await new Promise<void>(resolve => setImmediate(resolve));
     }
+    profile.scanCompleteMs = performance.now() - buildStarted;
     const count = core.ccall('vp_index_count', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('服务端 FFmpeg 无法建立媒体帧索引。');
     if (count > 2_000_000) throw new Error('媒体帧数超过服务端索引上限。');
-    if (count < exportedSourceCount) throw new Error('服务端完整索引短于已发布前缀。');
-    const tailCount = count - exportedSourceCount;
-    if (tailCount > 0) {
-      const totalBytes = count * FFMPEG_INDEX_RECORD_BYTES;
-      const ptr = core._malloc(totalBytes);
-      if (!ptr) throw new Error('服务端 FFmpeg 索引内存分配失败。');
-      try {
-        const exportStarted = performance.now();
-        const exported = core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, totalBytes]) as number;
-        if (exported !== count) throw new Error('服务端 FFmpeg 完整索引导出失败。');
-        const bytes = heap().slice(ptr + exportedSourceCount * FFMPEG_INDEX_RECORD_BYTES, ptr + totalBytes);
-        profile.recordExportMs += performance.now() - exportStarted;
-        profile.recordExportBytes += tailCount * FFMPEG_INDEX_RECORD_BYTES;
-        ingest(bytes, tailCount,
-          Math.min(fileSize, Math.max(0, Number(core.ccall('vp_index_scan_bytes', 'i64', ['number'], [ctx])))));
-      } finally { core._free(ptr); }
-    }
     const scannedBytes = Math.min(fileSize, Math.max(0, Number(core.ccall('vp_index_scan_bytes', 'i64', ['number'], [ctx]))));
     profile.scannedBytes = scannedBytes;
     profile.packets = Number(core.ccall('vp_index_scan_packets', 'number', ['number'], [ctx]));
+    const totalBytes = count * FFMPEG_INDEX_RECORD_BYTES;
+    const ptr = core._malloc(totalBytes);
+    if (!ptr) throw new Error('服务端 FFmpeg 索引内存分配失败。');
+    try {
+      const exportStarted = performance.now();
+      const exported = core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, totalBytes]) as number;
+      if (exported !== count) throw new Error('服务端 FFmpeg 完整索引导出失败。');
+      const bytes = heap().slice(ptr, ptr + totalBytes);
+      profile.recordExportMs += performance.now() - exportStarted;
+      profile.recordExportBytes += totalBytes;
+      ingest(bytes, count, scannedBytes);
+    } finally { core._free(ptr); }
     publish(batchCount, scannedBytes);
     if (!seq) throw new Error('服务端 FFmpeg 没有可公开的呈现帧。');
     assertSameFile('建立索引时');
