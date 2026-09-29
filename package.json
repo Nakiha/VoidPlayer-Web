@@ -60,7 +60,8 @@
     "repro:color:native": "node scripts/repro-native-yuv-color.mjs",
     "test:color:modes": "node scripts/check-color-modes.mjs",
     "test:color:settings:browser": "npm run build && node scripts/check-color-settings-browser.mjs",
-    "test:recovery:browser": "npm run build && node scripts/check-recovery-browser.mjs"
+    "test:recovery:browser": "npm run build && node scripts/check-recovery-browser.mjs",
+    "test:thumbnail-worker": "node scripts/check-thumbnail-worker.mjs"
   },
   "dependencies": {
     "@peculiar/x509": "2.1.0",

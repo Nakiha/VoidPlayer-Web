@@ -1,7 +1,8 @@
 // Disposable, single-job CPU executor. It never receives media URLs or decoders.
 import { renderThumbnailCanvas } from '../presenter.ts';
 import type { DecodedFrame } from '../media.ts';
-import { THUMB_MAX_EDGE, THUMB_MAX_BYTES, THUMB_JPEG_QUALITY, THUMB_JPEG_FALLBACK_QUALITY } from './contract.ts';
+import { THUMB_MAX_EDGE } from './contract.ts';
+import { encodeThumbnailCanvas } from './encode.ts';
 
 self.onmessage = async event => {
   try {
@@ -10,8 +11,8 @@ self.onmessage = async event => {
     event.data.pixels = undefined;
     if (!rendered) { self.postMessage(null); return; }
     const canvas = rendered.canvas as OffscreenCanvas;
-    let blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: THUMB_JPEG_QUALITY });
-    if (blob.size > THUMB_MAX_BYTES) blob = await canvas.convertToBlob({ type: 'image/jpeg', quality: THUMB_JPEG_FALLBACK_QUALITY });
+    const blob = await encodeThumbnailCanvas(canvas);
+    if (!blob) { self.postMessage(null); return; }
     const bytes = await blob.arrayBuffer();
     self.postMessage({ bytes, width: rendered.width, height: rendered.height }, { transfer: [bytes] });
   } catch { self.postMessage(null); }

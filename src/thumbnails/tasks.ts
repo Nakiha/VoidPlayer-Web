@@ -2,10 +2,7 @@
 // thumbnail, never the load. Full frames are never queued — at most one extra
 // candidate is held, with its own deadline independent of encode/store/upload.
 
-import {
-  THUMB_HOLD_MS, THUMB_JPEG_QUALITY, THUMB_JPEG_FALLBACK_QUALITY,
-  THUMB_MAX_BYTES, THUMB_MAX_EDGE,
-} from './contract.ts';
+import { THUMB_HOLD_MS, THUMB_MAX_BYTES, THUMB_MAX_EDGE } from './contract.ts';
 import { thumbnailState } from './state.ts';
 import { settleOffer } from './offer.ts';
 import type { AcceptedOffer } from './offer.ts';
@@ -13,26 +10,10 @@ import { renderThumbnailCanvas } from '../presenter.ts';
 import { putLocalThumbnail } from './local-store.ts';
 import { publishLocalThumbnail, uploadThumbnail } from './client.ts';
 import { log } from '../log.ts';
+import { encodeThumbnailCanvas } from './encode.ts';
 
 let queueDepth = 0;
 const MAX_QUEUE_DEPTH = 3;
-
-async function canvasToJpeg(canvas: OffscreenCanvas | HTMLCanvasElement, quality: number): Promise<Blob | null> {
-  try {
-    if (typeof (canvas as OffscreenCanvas).convertToBlob === 'function') {
-      const blob = await (canvas as OffscreenCanvas).convertToBlob({ type: 'image/jpeg', quality });
-      return blob && blob.size > 0 ? blob : null;
-    }
-    const element = canvas as HTMLCanvasElement;
-    if (typeof element.toBlob !== 'function') return null;
-    // Async toBlob only; the sync toDataURL path is never the default.
-    return await new Promise<Blob | null>(resolve => {
-      try {
-        element.toBlob(result => resolve(result), 'image/jpeg', quality);
-      } catch { resolve(null); }
-    });
-  } catch { return null; }
-}
 
 /** Fire-and-forget from the session hook; never rejects. */
 export function runThumbnailTask(accepted: AcceptedOffer): void {
@@ -117,8 +98,7 @@ async function encodeSample(accepted: AcceptedOffer) {
   const rendered = renderThumbnailCanvas(accepted.owned, THUMB_MAX_EDGE);
   accepted.release();
   if (!rendered) return null;
-  let blob = await canvasToJpeg(rendered.canvas, THUMB_JPEG_QUALITY);
-  if (blob && blob.size > THUMB_MAX_BYTES) blob = await canvasToJpeg(rendered.canvas, THUMB_JPEG_FALLBACK_QUALITY);
+  const blob = await encodeThumbnailCanvas(rendered.canvas);
   return { ...rendered, blob };
 }
 
