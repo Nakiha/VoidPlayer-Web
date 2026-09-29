@@ -480,7 +480,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // before the player asks for its initial image. Keep the cache replayable
       // and give each caller a private buffer because returned buffers can be
       // recycled into the worker.
-      output = { ...firstFrame, pixels: firstFrame.pixels.slice(0) };
+      output = { ...firstFrame, pixels: firstFrame.pixels.slice(0), seek: { decodedFrames: 0, restarts: 0 } };
     } else {
       const payload: Record<string, unknown> = { ctx: init.ctx, index };
       const transfer: Transferable[] = [];
