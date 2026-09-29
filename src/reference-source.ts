@@ -88,7 +88,7 @@ export async function admitReferenceSource(source: MediaSource, software: () => 
       return offerVerifiedFrame(witness!, firstFrame);
     } finally {
       probe?.close();
-      reference.close();
+      reference?.close();
     }
   } catch (error) {
     disposeCandidate();
