@@ -44,6 +44,9 @@ export interface MediaSource {
   /** Background container indexing can extend duration after the first frame. */
   onInfoChange?: (change?:MediaInfoChange) => void;
   ensureIndexed?(ptsUs?: number): Promise<void>;
+  /** Container adapters may verify or replace only the decoder while retaining
+   * their existing demux/index session. This is used by reference-color admission. */
+  admitReference?(depth: number): Promise<MediaSource>;
   frameAt(ptsUs: number): Promise<DecodedFrame>;
   framesAfter(ptsUs: number, count: number): Promise<DecodedFrame[]>;
   /** Sequential presentation-order frames starting at ptsUs, for playback. */
@@ -127,10 +130,9 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
     demuxBackend: container === 'flv' ? 'flv-engine' : container === 'isobmff' ? 'mediabunny-or-mp4-packet' : 'mediabunny-or-ffmpeg',
     indexBackend: container === 'flv' ? 'flv-packet-index' : container === 'isobmff' ? 'mp4-sample-or-packet-index' : 'ffmpeg-index',
     decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
-    parallelSoftwareWitness: reference && container === 'flv',
   });
   const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
-    parallelReferenceWitness: reference && container === 'flv', native, software: countedSoftware, onProgress, signal });
+    native, software: countedSoftware, onProgress, signal });
   source.info.container = container;
   const demuxBackend = container === 'flv' ? 'flv-engine'
     : container === 'isobmff' ? source.info.seekStrategy === 'packet-anchor' ? 'mp4-packet' : 'mediabunny'

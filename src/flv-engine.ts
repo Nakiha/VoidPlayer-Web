@@ -137,6 +137,35 @@ export class FlvEngine {
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
   next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  /** Decode the first output with a temporary software decoder over this
+   * engine's already-open FLV index and reader. No scan, cache client, or
+   * timeline is created for the witness. */
+  async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<FlvFrame> {
+    if (this.decoder?.kind !== 'webcodecs' || !this.timeline) throw new MediaOpenError('decode', 'FLV 原生解码器尚未就绪。');
+    const decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
+    const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size));
+    try {
+      const firstPts = this.primed?.pts ?? this.index.packets[(this.index.displayOrder ?? this.index.order)[0]].pts;
+      return await timeline.at(firstPts);
+    } finally { timeline.close(); }
+  }
+  /** Switch only the decoder after reference admission rejects native output.
+   * The packet index, reader, and cache lifecycle remain owned by this engine. */
+  async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
+    if (this.decoder?.kind === 'webcodecs') {
+      this.primed?.frame?.close(); this.primed = null;
+      this.timeline?.close(); this.timeline = undefined;
+      this.decoder = undefined!;
+      this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
+      this.timeline = new PacketTimeline(this.index, this.decoder, packet => this.reader.read(packet.offset, packet.size));
+      this.primed = await this.extract(0);
+    }
+    return {
+      codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
+      hardwareAcceleration: this.decoder.hardwareAcceleration, ...this.decoder.metadata?.(),
+      decodedPixelFormat: this.primed!.frame?.format ?? this.primed!.description.format ?? null,
+    };
+  }
   private async extractFrame(position:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
     if(!Number.isInteger(position)||position<0||position>=(this.index.displayOrder ?? this.index.order).length)throw new MediaOpenError('input','FLV 帧位置越界。');
     return this.at(this.index.packets[(this.index.displayOrder ?? this.index.order)[position]].pts,recycle);

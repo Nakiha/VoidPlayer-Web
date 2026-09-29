@@ -45,9 +45,14 @@ try {
   async function openCase(fixture, colorMode, decoder) {
     const context = await browser.newContext();
     const page = await context.newPage();
-    const errors = [], indexRequests = [];
+    const errors = [], indexRequests = [], indexGetRequests = [];
     page.on('pageerror', error => errors.push(error.message));
-    page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/frame-index')) indexRequests.push(request.url()); });
+    page.on('request', request => {
+      if (new URL(request.url()).pathname.endsWith('/frame-index')) {
+        indexRequests.push({ method: request.method(), url: request.url() });
+        if (request.method() === 'GET') indexGetRequests.push(request.url());
+      }
+    });
     await page.addInitScript(({ colorMode, decoder }) => {
       localStorage.setItem('voidplayer.color-mode', colorMode);
       localStorage.setItem('voidplayer.reference-decode', JSON.stringify({ decoder, depth: 2 }));
@@ -72,6 +77,15 @@ try {
       const logs = await call('get_review_logs', { limit: 2000 });
       const trace = logs.events.filter(event => event.msg === '媒体管线追踪').map(event => event.data);
       assert.ok(trace.some(event => event?.phase === 'first-frame-ready'), `Missing first-frame trace for ${fixture.name} / ${colorMode} / ${decoder}`);
+      if (fixture.container === 'flv') {
+        assert.equal(indexGetRequests.length, 1, `${fixture.name} / ${colorMode} / ${decoder}: one FLV index subscriber per open`);
+        assert.ok(trace.filter(event => event?.phase === 'container-selected').every(event => event.demuxBackend === 'flv-engine'),
+          `${fixture.name} / ${colorMode} / ${decoder}: FLV demux backend must stay shared`);
+        if (colorMode === 'reference' && decoder === 'hardware') {
+          const firstReady = trace.find(event => event?.phase === 'first-frame-ready');
+          assert.equal(firstReady?.softwareOpenCount, 0, `${fixture.name}: reference witness must not open a second software source`);
+        }
+      }
       assert.deepEqual(errors, [], `${fixture.name} / ${colorMode} / ${decoder}: ${errors.join('; ')}`);
       const result = {
         fixture: fixture.name, expectedContainer: fixture.container, expectedCodec: fixture.codec,
@@ -79,7 +93,7 @@ try {
         decoderBackend: state.tracks[0].decoder, firstPtsUs: state.tracks[0].firstPtsUs,
         durationUs: state.tracks[0].durationUs, stableCoverageUs: state.tracks[0].stableCoverageUs,
         indexState: state.tracks[0].indexState, indexSource: state.tracks[0].indexSource,
-        seekAnchorCount: state.tracks[0].seekAnchorCount, indexRequests,
+        seekAnchorCount: state.tracks[0].seekAnchorCount, indexRequests, indexGetRequests,
         trace: trace.map(event => Object.fromEntries(['phase', 'mediaId', 'mediaVersion', 'container', 'demuxBackend', 'indexBackend',
           'indexIdentity', 'indexBuildId', 'serverIndexRequests', 'firstIndexBatchMs', 'indexCompleteMs', 'decoderBackend', 'colorMode',
           'firstPtsUs', 'durationUs', 'stableCoverageUs', 'seekAnchorCount', 'firstFrameReadyMs', 'nativeOpenCount', 'softwareOpenCount']
@@ -113,6 +127,10 @@ try {
       sameTimeline: cases.every(result => result.firstPtsUs === cases[0].firstPtsUs && result.durationUs === cases[0].durationUs),
     };
   });
+  for (const comparison of modeComparisons.filter(item => fixtures.find(fixture => fixture.name === item.fixture)?.container === 'flv')) {
+    assert.equal(comparison.sameTimeline, true, `${comparison.fixture}: browser and reference timelines must match`);
+    assert.ok(comparison.paths.every(path => path.demuxBackend === 'flv-engine'), `${comparison.fixture}: all modes share FlvEngine`);
+  }
   console.log(JSON.stringify({ phase: 'mode-matrix-comparison', cases: modeComparisons }));
 
   // Capture the existing mode-switch request path on the same versioned item.

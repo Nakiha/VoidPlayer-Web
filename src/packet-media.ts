@@ -71,7 +71,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const startup = prepared;
     prepared = undefined;
     const activeRpc = rpc;
-    if (init.decoder === 'webcodecs') reservation.release();
+    if (init.decoder === 'webcodecs' && !(container === 'flv' && deps.rawNative)) reservation.release();
     let { times, durations, ...details } = init;
     const info: MediaInfo = { id: randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
       indexSource: 'client', indexState: 'complete', indexKind: 'packet-offsets', seekStrategy: 'packet-anchor',
@@ -125,33 +125,87 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (disposed) throw new Error('媒体已释放。');
       if ((info.indexState as string) === 'error') throw new Error(info.indexError);
     };
-    const extract = (pts:number, next=false): Promise<DecodedFrame|null> => {
+    const toDecodedFrame = async (frame: FlvFrame): Promise<DecodedFrame> => {
+      const position = floorIndex(times, frame.pts - info.firstPtsUs);
+      if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
+      const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
+      const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
+      try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
+      let closed = false;
+      const rawFrame = { description: frame.description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+        width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
+        durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
+        close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
+      } satisfies DecodedFrame;
+      const decoded = deps.rawNative || deps.nativeColorMode === 'browser'
+        ? rawFrame : await prepareYuvFrame(rawFrame, yuvPool, deps.preserveNativeSample);
+      if (disposed) { decoded.close(); throw new Error('媒体已释放。'); }
+      return decoded;
+    };
+    const extract = (pts:number,next=false):Promise<DecodedFrame|null> => {
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
         const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
-        const position=floorIndex(times,frame.pts-info.firstPtsUs);
-        if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
-        const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
-        const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
-        try { validateDescription(frame.description,pixels?.byteLength); } catch(error) {sample?.close();throw error;}
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
-        let closed = false;
-        const rawFrame = { description:frame.description,kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8', width: frame.width, height: frame.height,
-          ptsUs: frame.pts-info.firstPtsUs, sourcePtsUs: frame.pts, durationUs: frame.durationUs ?? durations[position],
-          byteSize: frame.description.byteLength, sample, pixels,
-          close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
-        } satisfies DecodedFrame;
-        const decoded = deps.rawNative || deps.nativeColorMode === 'browser' ? rawFrame : await prepareYuvFrame(rawFrame,yuvPool,deps.preserveNativeSample);
-        if(disposed){decoded.close();throw new Error("媒体已释放。");}
-        return decoded;
+        return toDecodedFrame(frame);
       });
       serial = task.then(() => {}, () => {});
       return task;
     };
     const source: MediaSource = {
       info, ensureIndexed,
+      async admitReference(depth) {
+        if (disposed) throw new Error('媒体已释放。');
+        if (container !== 'flv') {
+          const { admitReferenceSource } = await import('./reference-source.ts');
+          const { openSoftwareMedia } = await import('./software-media.ts');
+          return admitReferenceSource(source, () => openSoftwareMedia(input, meta, deps, 'isobmff'), depth);
+        }
+        if (info.decoder !== 'webcodecs') return (await import('./reference-source.ts')).referenceSource(source);
+        const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
+        let witness: DecodedFrame | undefined;
+        let candidate: MediaSource | undefined;
+        let probe: DecodedFrame | undefined;
+        try {
+          loadAborted(deps.signal);
+          const raw = await activeRpc.call<FlvFrame>('reference-witness', {
+            glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
+          }, [], 60000);
+          witness = await toDecodedFrame(raw);
+          const { nativeYuvSource, verifyNativeWitness } = await import('./native-yuv-source.ts');
+          const { offerVerifiedFrame, referenceSource } = await import('./reference-source.ts');
+          candidate = nativeYuvSource(source, depth, witness.description.yuv?.chromaLocation ?? null, false);
+          probe = await candidate.frameAt(0);
+          verifyNativeWitness(probe, witness);
+          const admitted = referenceSource(candidate);
+          const dispose = admitted.dispose.bind(admitted);
+          admitted.dispose = () => { dispose(); source.dispose(); };
+          candidate = undefined;
+          const verifiedProbe = probe;
+          probe = undefined;
+          return offerVerifiedFrame(admitted, verifiedProbe);
+        } catch (error) {
+          probe?.close();
+          candidate?.dispose();
+          if (deps.signal?.aborted || error instanceof DOMException && error.name === 'AbortError') throw error;
+          loadAborted(deps.signal);
+          try {
+            const switched = await activeRpc.call<Partial<MediaInfo>>('switch-software', {
+              glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
+            }, [], 60000);
+            Object.assign(info, switched, { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' });
+            return (await import('./reference-source.ts')).referenceSource(source);
+          } catch (switchError) {
+            source.dispose();
+            throw switchError;
+          }
+        } finally {
+          detachAbort();
+          witness?.close();
+        }
+      },
       getAnalysisCapability(): AnalysisCapability {
         return {
           hasSize: true, hasDts: true, keySource: 'container',

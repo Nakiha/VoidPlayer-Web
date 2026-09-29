@@ -44,6 +44,12 @@ async function start() {
             engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);
           }
           send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress })) });
+        } else if (type === 'reference-witness' && engine instanceof FlvEngine) {
+          const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
+          try { send({ id, ok: true, data: frame }, frame.frame ? [frame.frame] : [frame.pixels!]); }
+          finally { frame.frame?.close(); }
+        } else if (type === 'switch-software' && engine instanceof FlvEngine) {
+          send({ id, ok: true, data: await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads) });
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send({ id, ok: true, data: null });
         } else if (['extract','at','next'].includes(type) && engine) {          const result = type==='at'?await engine.at(message.pts,message.recycle):type==='next'?await engine.next(message.pts,message.recycle):await engine.extract(message.position, message.recycle);

@@ -46,7 +46,7 @@ export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
 }
 
 /** A source owns its workers; yielded buffers belong to frames until close(). */
-export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:number|null=null):MediaSource{
+export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:number|null=null,ownsSource=true):MediaSource{
   let disposed=false;
   let signature:string|undefined;
   type Slot={worker:Worker;buffer?:ArrayBuffer;reject?: (error:Error)=>void};
@@ -124,6 +124,6 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(source.framesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},
     framesFrom:pts=>pipeline(source.framesFrom(pts)),
     ...(source.framesFollowing?{framesFollowing:(pts:number)=>pipeline(source.framesFollowing!(pts))}:{}),
-    dispose(){if(disposed)return;disposed=true;source.dispose();for(const slot of slots){slot.reject?.(aborted());slot.worker.terminate();}while(waiters.length)waiters.shift()!(slots[0]);},
+    dispose(){if(disposed)return;disposed=true;if(ownsSource)source.dispose();for(const slot of slots){slot.reject?.(aborted());slot.worker.terminate();}while(waiters.length)waiters.shift()!(slots[0]);},
   };
 }

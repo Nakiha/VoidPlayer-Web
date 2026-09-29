@@ -56,7 +56,7 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 3. Add identity-keyed server persistence, bounded build coordination, and first-frame readiness.
 4. Stream and append FFmpeg record batches; publish stable TS coverage during scan and the full record set at EOF for other FFmpeg containers.
 5. Move FFmpeg HTTP ownership into a main-thread `ContainerSession`/`MediaIndexSession`; keep worker messages limited to import, append, and decode.
-6. Migrate FLV cold indexing to the server and its packet-record adapter. Keep FLV's record semantics while adopting the common lifecycle and streaming transport.
+6. Keep FLV's packet-offset record semantics while converging its progressive lifecycle with the common index session contract. Browser playback, reference/hardware admission, and reference/software playback must reuse one `FlvEngine`, packet index, reader, and timeline. A temporary software witness decodes from that engine's existing index; failed admission swaps the decoder in place instead of opening a second `MediaSource`.
 7. Evaluate server indexing for the separate MP4 packet path without changing its sample/edit-list record contract.
 
 ## Acceptance
@@ -84,3 +84,9 @@ Server cold builds emit one JSON `frame-index-build-profile` record after comple
 ## M3 FFmpeg container session
 
 `src/media-index-session.ts` adds the first `ContainerSession` and `MediaIndexSession` implementation. `src/ffmpeg-media.ts` owns the HTTP subscriber on the main thread and sends validated record events to the FFmpeg worker. The worker no longer imports `MediaIndexClient` or performs HTTP/reconnect work. Local files and server-unavailable cases still ask the worker to build a local fallback index through the same session sink. `test/media-index-session.test.ts` covers local fallback, coverage/finality, subscriber abort on dispose, and the worker's lack of transport dependencies.
+
+## M4 FLV decoder admission
+
+`FlvEngine` keeps ownership of the reader, packet index, progressive scan, and `PacketTimeline` across browser and reference modes. Reference/hardware admission decodes a temporary software witness through that existing index; if native output does not match, `switchToSoftware()` replaces the decoder inside the same engine. The witness no longer opens a second complete FLV `MediaSource`. `scripts/check-media-open-matrix.mjs` verifies one FLV index GET per open, shared `flv-engine` selection, no software-source open during reference/hardware witness admission, and matching browser/reference timelines for FLV H.264 and HEVC.
+
+The FLV compatibility index may still be sourced from a local progressive scan or the server's completed document cache depending on cache state. This does not create a second demux/index session inside one open. Migrating FLV cold builds to the server streaming transport remains separate work.
