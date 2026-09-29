@@ -47,7 +47,7 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 
 `MediaSource.ensureIndexed(target)` waits only when the target is beyond stable coverage. As batches arrive, the source wakes waiters and allows seeking within the newly covered region while the scan remains in `building`. Progress reaches `MediaInfo.indexProgress`. Completion changes the source to `complete`; transport failure changes it to `error` and wakes waiters. An already imported prefix remains usable up to its coverage, while a restarted build is rejected rather than mixed into that prefix.
 
-The record client incrementally parses NDJSON and validates identity, batch sequence, record size/structure, per-batch ordering, watermark, byte/frame limits, and build ID. It resumes a transient disconnect from its last accepted sequence. If the server build identity changes after a prefix has been imported, the source fails beyond its existing stable coverage; it does not claim completion or splice in a different scan.
+`MediaIndexClient` is a compatibility facade over `IndexStreamTransport` and the index consumers. The transport owns HTTP, bounded NDJSON parsing, idle timeout, reconnect, abort, and generic `after`/`buildId` cursor handling. `FfmpegIndexConsumer` validates FFmpeg manifest identity, record layout, ordering, watermark, byte/frame limits, and build ID, then emits accepted records through callbacks; it does not own HTTP or WASM. The compatibility document consumer retains the FLV and older FFmpeg JSON payload behavior. A transient disconnect resumes from the last accepted sequence. If the server build identity changes after a prefix has been imported, the source fails beyond its existing stable coverage; it does not claim completion or splice in a different scan.
 
 ## Rollout and remaining work
 
@@ -75,3 +75,7 @@ Server cold builds emit one JSON `frame-index-build-profile` record after comple
 ## M1 timeout and job lifecycle
 
 `test/frame-index-build-policy.test.ts` checks defaults and environment overrides. Client stream regression tests cover build-ID resume after disconnect and a continuously active stream that lasts longer than its idle timeout. A stream subscriber can be dropped by its 90-second lease or by client cancellation without terminating the server job.
+
+## M2 transport separation
+
+`src/index-stream-transport.ts` contains the HTTP/NDJSON reconnect loop. `src/ffmpeg-index-consumer.ts` validates and publishes container-specific FFmpeg records, while `src/media-index-client.ts` remains the FLV/FFmpeg compatibility facade. The FFmpeg decoder worker still constructs that facade; moving index-session ownership above the decoder is the next milestone.

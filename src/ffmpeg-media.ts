@@ -13,7 +13,7 @@ import { contextLog } from './log.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
-import type { MediaIndexClientTrace } from './media-index-client.ts';
+import type { MediaIndexClientTrace } from './media-index-types.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
 // demux or decode (FFV1, MPEG-2 TS, H.266/VVC, H.264 4:2:2, ...). The

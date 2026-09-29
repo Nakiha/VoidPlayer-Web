@@ -1,54 +1,13 @@
 import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex } from './ffmpeg-index-cache.ts';
-
-export interface ServerIndexResult { epoch: number; index: unknown | null; }
-export interface MediaIndexScanProgress { scannedBytes: number; totalBytes: number; packets: number; }
-export interface MediaIndexRecordManifest {
-  epoch: number; buildId: string; kind: 'ffmpeg'; state: 'building' | 'streaming' | 'complete' | 'failed';
-  identity: MediaIndexIdentity; metadata: Record<string, unknown>; recordBytes: number; lastSeq: number;
-}
-export interface MediaIndexRecordBatch {
-  buildId: string; seq: number; records: Uint8Array; count: number; safePresentationUs: number;
-}
-export interface MediaIndexClientTrace {
-  serverIndexRequests: number;
-  reconnects: number;
-  indexBuildId?: string;
-  indexIdentity?: MediaIndexIdentity;
-  firstIndexBatchMs?: number;
-  indexCompleteMs?: number;
-  /** Time spent importing delivered records into the decoder core (diagnostic only). */
-  recordImportMs?: number;
-}
+import { decodeIndexBase64 } from './index-stream-encoding.ts';
+import { IndexStreamTransport } from './index-stream-transport.ts';
+import type { IndexStreamEventResult } from './index-stream-transport.ts';
+import { FfmpegIndexConsumer } from './ffmpeg-index-consumer.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
+export type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
 
 const STREAM_BATCH_BYTES = 64 * 1024;
-const RETRY_DELAY_BASE_MS = 100;
-const RETRY_DELAY_MAX_MS = 2000;
-
-function retryDelay(signal: AbortSignal, delayMs: number): Promise<boolean> {
-  if (signal.aborted) return Promise.resolve(false);
-  return new Promise(resolve => {
-    const finish = (retry: boolean) => {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', onAbort);
-      resolve(retry);
-    };
-    const onAbort = () => finish(false);
-    const timer = setTimeout(() => finish(true), delayMs);
-    signal.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
-function decodeBase64(value: unknown): Uint8Array {
-  if (typeof value !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
-    throw new Error('索引流分块编码无效。');
-  }
-  const binary = atob(value);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
 
 function sameManifest(a: any, b: any): boolean {
   return a.protocol === b.protocol && a.epoch === b.epoch && a.kind === b.kind
@@ -56,38 +15,26 @@ function sameManifest(a: any, b: any): boolean {
     && a.batchBytes === b.batchBytes && a.lastSeq === b.lastSeq;
 }
 
-function sameRecordIdentity(a: MediaIndexRecordManifest, b: MediaIndexRecordManifest): boolean {
-  if (a.epoch !== b.epoch || a.buildId !== b.buildId || a.recordBytes !== b.recordBytes
-    || a.identity.kind !== b.identity.kind || a.identity.streamKey !== b.identity.streamKey
-    || a.identity.schemaVersion !== b.identity.schemaVersion || a.identity.indexerBuild !== b.identity.indexerBuild) return false;
-  const stableFields = ['schema', 'kind', 'size', 'codec', 'timeBaseNum', 'timeBaseDen', 'width', 'height',
-    'recordBytes', 'streamIndex', 'indexerBuild', 'firstPts', 'originVerified'] as const;
-  return stableFields.every(key => a.metadata[key] === b.metadata[key]);
-}
 
 export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
+  private transport: IndexStreamTransport;
+  private ffmpegConsumer?: FfmpegIndexConsumer;
   private readonly kind: 'flv' | 'ffmpeg';
   private readonly maxBytes: number;
-  private readonly idleTimeoutMs: number;
-  private readonly identity?: MediaIndexIdentity;
   private readonly onScanProgress?: (progress: MediaIndexScanProgress) => void;
-  private readonly onRecordManifest?: (manifest: MediaIndexRecordManifest) => void;
-  private readonly onRecordBatch?: (batch: MediaIndexRecordBatch) => void;
-  private readonly onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void;
   private readonly traceStartedAt = performance.now();
-  private trace: MediaIndexClientTrace = { serverIndexRequests: 0, reconnects: 0 };
+  private trace: Partial<MediaIndexClientTrace> = {};
   constructor(url: string | undefined, kind: 'flv' | 'ffmpeg', maxBytes: number, idleTimeoutMs = 120000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
     this.kind = kind;
     this.maxBytes = maxBytes;
-    this.idleTimeoutMs = idleTimeoutMs;
-    this.identity = identity;
     this.onScanProgress = onScanProgress;
-    this.onRecordManifest = onRecordManifest;
-    this.onRecordBatch = onRecordBatch;
-    this.onRecordComplete = onRecordComplete;
+    this.ffmpegConsumer = kind === 'ffmpeg' ? new FfmpegIndexConsumer({
+      identity, maxBytes, startedAt: this.traceStartedAt, onScanProgress,
+      onRecordManifest, onRecordBatch, onRecordComplete,
+    }) : undefined;
     if (url) {
       try {
         const source = new URL(url, globalThis.location?.href);
@@ -105,6 +52,7 @@ export class MediaIndexClient {
         }
       } catch { /* local files and arbitrary URLs have no cache API */ }
     }
+    this.transport = new IndexStreamTransport({ idleTimeoutMs, maxBytes, signal: this.controller.signal });
     this.lookup = this.load().catch(() => null);
   }
 
@@ -116,113 +64,10 @@ export class MediaIndexClient {
     let receivedBytes = 0;
     let lastSeq = -1;
     let complete = false;
-    let buildId: string | undefined;
-    let recordManifest: MediaIndexRecordManifest | undefined;
-    let recordFrames = 0;
-    let recordBytesTotal = 0;
-    let previousSafeUs = -1;
-    let recordStream = false;
-
-    let attempt = 0;
-    while (!complete && !this.controller.signal.aborted) {
-      const requestUrl = new URL(this.endpoint);
-      requestUrl.searchParams.set('after', String(lastSeq));
-      if (buildId) requestUrl.searchParams.set('buildId', buildId);
-      const requestController = new AbortController();
-      const abortRequest = () => requestController.abort();
-      this.controller.signal.addEventListener('abort', abortRequest, { once: true });
-      let idleTimer: ReturnType<typeof setTimeout> | undefined;
-      const resetIdleTimeout = () => {
-        clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => requestController.abort(), this.idleTimeoutMs);
-      };
-      const clearRequestTimeout = () => {
-        clearTimeout(idleTimer);
-        this.controller.signal.removeEventListener('abort', abortRequest);
-      };
-      const waitBeforeRetry = async () => {
-        clearRequestTimeout();
-        const delayMs = Math.min(RETRY_DELAY_BASE_MS * (2 ** Math.min(attempt, 4)), RETRY_DELAY_MAX_MS);
-        attempt++;
-        return retryDelay(this.controller.signal, delayMs);
-      };
-      resetIdleTimeout();
-      let response: Response;
-      this.trace.serverIndexRequests++;
-      if (attempt > 0) this.trace.reconnects++;
-      try {
-        response = await fetch(requestUrl, {
-          cache: 'no-store',
-          headers: { accept: 'application/x-ndjson, application/json;q=0.8' },
-          signal: requestController.signal,
-        });
-      } catch {
-        if (this.controller.signal.aborted) { clearRequestTimeout(); return null; }
-        if (!await waitBeforeRetry()) return null;
-        continue;
-      }
-
-      if (!response.ok) {
-        clearRequestTimeout();
-        await response.body?.cancel().catch(() => {});
-        if (response.status >= 500) {
-          if (!await waitBeforeRetry()) return null;
-          continue;
-        }
-        return null;
-      }
-      if (!response.headers.get('content-type')?.toLowerCase().includes('application/x-ndjson')) {
-        if (recordFrames > 0) { clearRequestTimeout(); return null; }
-        const legacy = await this.readLegacy(response, resetIdleTimeout);
-        clearRequestTimeout();
-        return legacy;
-      }
-      const reader = response.body?.getReader();
-      if (!reader) { clearRequestTimeout(); return null; }
-      let buffer = '';
-      const decoder = new TextDecoder();
-      let streamFailed = false;
-      let serverRejected = false;
-
-      const consumeLine = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line);
-        if (event?.type === 'manifest') {
-          if (event.protocol === 2) {
-            const identity = event.identity as MediaIndexIdentity | undefined;
-            const metadata = event.metadata as Record<string, unknown> | undefined;
-            if (this.kind !== 'ffmpeg' || event.kind !== 'ffmpeg' || event.encoding !== 'ffmpeg-records-base64'
-              || !Number.isSafeInteger(event.epoch) || event.epoch < 0 || typeof event.buildId !== 'string'
-              || !/^[0-9a-f-]{36}$/i.test(event.buildId) || event.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
-              || !identity || identity.kind !== 'ffmpeg' || identity.streamKey !== `video:${metadata?.streamIndex}`
-              || !metadata || metadata.schema !== 2 || metadata.kind !== 'ffmpeg-container' || metadata.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
-              || !Number.isSafeInteger(metadata.size) || Number(metadata.size) <= 0 || typeof metadata.codec !== 'string'
-              || !Number.isSafeInteger(metadata.timeBaseNum) || Number(metadata.timeBaseNum) <= 0
-              || !Number.isSafeInteger(metadata.timeBaseDen) || Number(metadata.timeBaseDen) <= 0
-              || !Number.isSafeInteger(metadata.width) || Number(metadata.width) <= 0 || Number(metadata.width) > 16384
-              || !Number.isSafeInteger(metadata.height) || Number(metadata.height) <= 0 || Number(metadata.height) > 16384
-              || !Number.isSafeInteger(metadata.streamIndex) || Number(metadata.streamIndex) < 0 || Number(metadata.streamIndex) > 64
-              || (metadata.originVerified !== undefined && typeof metadata.originVerified !== 'boolean')
-              || !/^[a-z0-9_+-]{1,64}$/i.test(String(metadata.codec)) || !/^[a-f0-9]{40}$/.test(String(metadata.indexerBuild))
-              || !/^-?\d+$/.test(String(metadata.firstPts))
-              || metadata.indexerBuild !== identity.indexerBuild || metadata.schema !== identity.schemaVersion
-              || (this.identity && (identity.streamKey !== this.identity.streamKey || identity.schemaVersion !== this.identity.schemaVersion || identity.indexerBuild !== this.identity.indexerBuild))
-              || !['building', 'streaming', 'complete', 'failed'].includes(event.state)
-              || !Number.isSafeInteger(event.lastSeq) || event.lastSeq < -1 || event.lastSeq < lastSeq) {
-              throw new Error('FFmpeg 索引记录 manifest 无效。');
-            }
-            const activeBuildId = String(event.buildId);
-            if (buildId && buildId !== activeBuildId) throw new Error('FFmpeg 索引 buildId 在续传期间改变。');
-            if (!buildId) buildId = activeBuildId;
-            this.trace.indexBuildId = activeBuildId;
-            this.trace.indexIdentity = identity;
-            const nextManifest: MediaIndexRecordManifest = { epoch: event.epoch, buildId: activeBuildId, kind: 'ffmpeg', state: event.state, identity, metadata, recordBytes: event.recordBytes, lastSeq: event.lastSeq };
-            if (recordManifest && !sameRecordIdentity(recordManifest, nextManifest)) throw new Error('FFmpeg 索引续传期间 manifest 身份发生改变。');
-            recordManifest = nextManifest;
-            recordStream = true;
-            try { this.onRecordManifest?.(recordManifest); } catch (error) { throw error; }
-            return;
-          }
+    const consumeLegacyEvent = (event: any): IndexStreamEventResult => {
+      const ffmpegResult = this.ffmpegConsumer?.accept(event);
+      if (ffmpegResult && ffmpegResult !== 'unhandled') return ffmpegResult;
+      if (event?.type === 'manifest') {
           if (event.protocol !== 1 || event.kind !== this.kind || !Number.isSafeInteger(event.epoch) || event.epoch < 0
             || event.batchBytes !== STREAM_BATCH_BYTES) throw new Error('索引流 manifest 无效。');
           if (event.state === 'building') {
@@ -230,7 +75,7 @@ export class MediaIndexClient {
               throw new Error('索引流 building manifest 在续传期间改变。');
             }
             buildingManifest = event;
-            return;
+            return 'continue';
           }
           if (event.state !== 'complete' || event.encoding !== 'json-utf8-base64'
             || !Number.isSafeInteger(event.totalBytes) || event.totalBytes < 0 || event.totalBytes > this.maxBytes
@@ -242,141 +87,63 @@ export class MediaIndexClient {
           if (manifest && !sameManifest(manifest, event)) throw new Error('索引流 manifest 在续传期间改变。');
           if (!manifest) transferBytes = new Uint8Array(event.totalBytes);
           manifest = event;
-          return;
+          return 'continue';
         }
         if (event?.type === 'batch') {
-          if (recordStream) {
-            if (!recordManifest || event.buildId !== buildId || event.seq !== lastSeq + 1
-              || !Number.isSafeInteger(event.count) || event.count <= 0
-              || !Number.isSafeInteger(event.safePresentationUs) || event.safePresentationUs < previousSafeUs) {
-              throw new Error('FFmpeg 索引记录 batch 序号或 watermark 无效。');
-            }
-            const records = decodeBase64(event.data);
-            if (records.byteLength !== event.count * FFMPEG_INDEX_RECORD_BYTES) throw new Error('FFmpeg 索引记录 batch 长度无效。');
-            if (recordFrames + event.count > FFMPEG_INDEX_RECORD_LIMIT
-              || recordBytesTotal + records.byteLength > this.maxBytes) throw new Error('FFmpeg 索引记录流超过缓存上限。');
-            const parsed = parseFfmpegIndex({ ...recordManifest.metadata, count: event.count, records: event.data }, Number(recordManifest.metadata.size));
-            if (!parsed) throw new Error('FFmpeg 索引记录 batch 内容无效。');
-            const view = new DataView(parsed.records.buffer, parsed.records.byteOffset, parsed.records.byteLength);
-            const safeTick = view.getBigInt64(parsed.records.byteLength - FFMPEG_INDEX_RECORD_BYTES, true);
-            const firstPts = BigInt(String(recordManifest.metadata.firstPts));
-            const expectedSafeUs = Math.max(0, Math.floor(Number(safeTick - firstPts) * 1_000_000
-              * Number(recordManifest.metadata.timeBaseNum) / Number(recordManifest.metadata.timeBaseDen)));
-            if (expectedSafeUs !== event.safePresentationUs) throw new Error('FFmpeg 索引 watermark 与记录末帧不匹配。');
-            if (this.trace.firstIndexBatchMs === undefined) this.trace.firstIndexBatchMs = performance.now() - this.traceStartedAt;
-            this.onRecordBatch?.({ buildId: recordManifest.buildId, seq: event.seq, records: parsed.records, count: event.count, safePresentationUs: event.safePresentationUs });
-            recordFrames += event.count;
-            recordBytesTotal += records.byteLength;
-            previousSafeUs = event.safePresentationUs;
-            lastSeq = event.seq;
-            return;
-          }
           if (!manifest || event.seq !== lastSeq + 1 || event.seq > manifest.lastSeq) throw new Error('索引流序号不连续。');
-          const bytes = decodeBase64(event.data);
+          const bytes = decodeIndexBase64(event.data);
           const expected = Math.min(manifest.batchBytes, manifest.totalBytes - event.seq * manifest.batchBytes);
           if (bytes.byteLength !== expected || receivedBytes + bytes.byteLength > manifest.totalBytes) throw new Error('索引流分块长度无效。');
           transferBytes.set(bytes, event.seq * manifest.batchBytes);
           receivedBytes += bytes.byteLength;
           if (this.trace.firstIndexBatchMs === undefined) this.trace.firstIndexBatchMs = performance.now() - this.traceStartedAt;
           lastSeq = event.seq;
-          return;
-        }
-        if (event?.type === 'reset') {
-          if (typeof event.buildId !== 'string' || !/^[0-9a-f-]{36}$/i.test(event.buildId)) {
-            throw new Error('FFmpeg 索引重建期间无法安全续传已导入前缀。');
-          }
-          if (recordFrames > 0) {
-            serverRejected = true;
-            throw new Error('FFmpeg 索引 build 已重启，无法将新记录接到已导入前缀。');
-          }
-          buildId = event.buildId;
-          this.trace.indexBuildId = buildId;
-          lastSeq = -1;
-          recordManifest = undefined;
-          recordStream = false;
-          previousSafeUs = -1;
-          return;
+          return 'continue';
         }
         if (event?.type === 'progress') {
           if (event.phase === 'scan') {
-            if ((!buildingManifest && !manifest && !recordManifest) || !Number.isSafeInteger(event.packets) || event.packets < 0
+            if ((!buildingManifest && !manifest) || !Number.isSafeInteger(event.packets) || event.packets < 0
               || !Number.isSafeInteger(event.scannedBytes) || event.scannedBytes < 0
               || !Number.isSafeInteger(event.totalBytes) || event.totalBytes < event.scannedBytes
               || (buildingManifest && event.totalBytes <= 0)) throw new Error('索引扫描 progress 无效。');
             try {
               this.onScanProgress?.({ packets: event.packets, scannedBytes: event.scannedBytes, totalBytes: event.totalBytes });
             } catch { /* Progress reporting must not interrupt index transfer. */ }
-            return;
+            return 'continue';
           }
           if (event.phase !== 'transfer' || !manifest || event.seq > lastSeq || !Number.isSafeInteger(event.bytesSent)
             || event.bytesSent < 0 || event.bytesSent > manifest.totalBytes) throw new Error('索引流 progress 无效。');
-          return;
+          return 'continue';
         }
         if (event?.type === 'complete') {
-          if (recordStream) {
-            if (!recordManifest || event.buildId !== buildId || event.lastSeq !== lastSeq
-              || event.frames !== recordFrames || !Number.isSafeInteger(event.stablePresentationUs)
-              || event.stablePresentationUs !== previousSafeUs
-              || (recordManifest.metadata.count !== undefined && recordManifest.metadata.count !== recordFrames)
-              || (recordManifest.state === 'complete' && recordManifest.lastSeq !== lastSeq)) {
-              throw new Error('FFmpeg 索引记录流在 complete 前缺少 batch。');
-            }
-            this.onRecordComplete?.(recordManifest, recordFrames);
-            this.trace.indexCompleteMs = performance.now() - this.traceStartedAt;
-            complete = true;
-            return;
-          }
           if (!manifest || event.lastSeq !== manifest.lastSeq || lastSeq !== manifest.lastSeq
             || event.totalBytes !== manifest.totalBytes || receivedBytes !== manifest.totalBytes) {
             throw new Error('索引流在 complete 前缺少分块。');
           }
-          this.trace.indexCompleteMs = performance.now() - this.traceStartedAt;
           complete = true;
-          return;
+          this.trace.indexCompleteMs = performance.now() - this.traceStartedAt;
+          return 'complete';
         }
         if (event?.type === 'error') {
-          serverRejected = true;
-          throw new Error(typeof event.message === 'string' ? event.message : '服务端索引流失败。');
+          return 'stop';
         }
         throw new Error('索引流事件类型未知。');
       };
 
+    const transportResult = await this.transport.read(this.endpoint, {
+      cursor: () => this.ffmpegConsumer?.isActive ? this.ffmpegConsumer.cursor() : { after: lastSeq },
+      onEvent: consumeLegacyEvent,
+    });
+    if (transportResult.status === 'legacy') {
+      if (this.ffmpegConsumer?.isActive) return null;
       try {
-        for (;;) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          if (value?.byteLength) { resetIdleTimeout(); attempt = 0; }
-          buffer += decoder.decode(value, { stream: true });
-          for (;;) {
-            const newline = buffer.indexOf('\n');
-            if (newline < 0) break;
-            try { consumeLine(buffer.slice(0, newline)); }
-            catch { serverRejected = true; throw new Error('索引流事件无效。'); }
-            buffer = buffer.slice(newline + 1);
-          }
-          if (buffer.length > STREAM_BATCH_BYTES * 2 + 4096) throw new Error('索引流事件超过大小上限。');
-        }
-        buffer += decoder.decode();
-        if (buffer.trim()) {
-          try { consumeLine(buffer); }
-          catch { serverRejected = true; throw new Error('索引流事件无效。'); }
-        }
-      } catch {
-        streamFailed = true;
-      } finally {
-        clearRequestTimeout();
-        await reader.cancel().catch(() => {});
-        reader.releaseLock();
-      }
-      if (this.controller.signal.aborted || serverRejected) return null;
-      if (streamFailed || !complete) {
-        if (!await waitBeforeRetry()) return null;
-      }
+        const result = JSON.parse(new TextDecoder().decode(transportResult.bytes)) as ServerIndexResult;
+        return Number.isSafeInteger(result.epoch) && result.epoch >= 0 ? result : null;
+      } catch { return null; }
     }
-
-    if (recordStream) return complete && recordManifest
-      ? { epoch: recordManifest.epoch, index: { streamed: true, buildId: recordManifest.buildId, count: recordFrames, metadata: recordManifest.metadata } }
-      : null;
+    if (transportResult.status !== 'complete') return null;
+    const streamed = this.ffmpegConsumer?.result();
+    if (streamed) return streamed;
     if (!complete || !manifest) return null;
     try {
       const result = JSON.parse(new TextDecoder().decode(transferBytes)) as ServerIndexResult;
@@ -385,36 +152,14 @@ export class MediaIndexClient {
     } catch { return null; }
   }
 
-  private async readLegacy(response: Response, onChunk?: () => void): Promise<ServerIndexResult | null> {
-    const reader = response.body?.getReader();
-    if (!reader) return null;
-    const chunks: Uint8Array[] = [];
-    let size = 0;
-    try {
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        onChunk?.();
-        size += value.length;
-        if (size > this.maxBytes) throw new Error('索引缓存超过上限。');
-        chunks.push(value);
-      }
-    } finally { await reader.cancel().catch(() => {}); reader.releaseLock(); }
-    const bytes = new Uint8Array(size);
-    let offset = 0;
-    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
-    const result = JSON.parse(new TextDecoder().decode(bytes)) as ServerIndexResult;
-    if (!Number.isSafeInteger(result.epoch) || result.epoch < 0) return null;
-    return result;
-  }
-
   async read() {
     const result = await this.lookup;
     return result?.index ?? null;
   }
 
   diagnostics(): MediaIndexClientTrace {
-    return { ...this.trace, ...(this.trace.indexIdentity ? { indexIdentity: { ...this.trace.indexIdentity } } : {}) };
+    const trace = { ...this.transport.diagnostics(), ...this.ffmpegConsumer?.diagnostics(), ...this.trace };
+    return { ...trace, ...(trace.indexIdentity ? { indexIdentity: { ...trace.indexIdentity } } : {}) } as MediaIndexClientTrace;
   }
 
   async save(index: unknown) {

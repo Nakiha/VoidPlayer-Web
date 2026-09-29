@@ -5,7 +5,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { MediaIndexClient } from './media-index-client.ts';
-import type { MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress } from './media-index-client.ts';
+import type { MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress } from './media-index-types.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
