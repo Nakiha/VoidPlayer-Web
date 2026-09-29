@@ -1,5 +1,6 @@
 // Compare demux-only indexing with MPEG-TS decoder-backed progressive indexing
-// on the exact same local file and bundled WASM core.
+// on the exact same local file and bundled WASM core. Correctness is checked
+// across H.264, HEVC open-GOP/B-frame, and MPEG-2 fixtures by the test suite.
 // Usage: node scripts/compare-index-scan-modes.mjs <media.ts> [--budget=1024]
 import assert from 'node:assert/strict';
 import { closeSync, existsSync, openSync, readFileSync, readSync, statSync } from 'node:fs';
@@ -136,9 +137,10 @@ async function runMode(mode) {
     const firstPts = BigInt(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, 0]));
     const lastPts = BigInt(core.ccall('vp_index_ticks', 'i64', ['number', 'number'], [ctx, recordCount - 1]));
     const lastDuration = BigInt(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, recordCount - 1]));
+    const durationTicks = lastPts - firstPts + lastDuration;
     const tbNum = Number(core.ccall('vp_tb_num', 'number', ['number'], [ctx]));
     const tbDen = Number(core.ccall('vp_tb_den', 'number', ['number'], [ctx]));
-    const mediaDurationSeconds = Number(lastPts - firstPts + lastDuration) * tbNum / tbDen;
+    const mediaDurationSeconds = Number(durationTicks) * tbNum / tbDen;
     const requestedIndices = [...new Set([Math.floor(recordCount * 0.1), Math.floor(recordCount * 0.25),
       Math.floor(recordCount * 0.5), Math.floor(recordCount * 0.75), Math.floor(recordCount * 0.9)])];
     const seekHashes = [];
@@ -171,6 +173,7 @@ async function runMode(mode) {
       scanWallMs: Number(scanWallMs.toFixed(2)), cpuUserMs: Number((cpu.user / 1000).toFixed(2)), cpuSystemMs: Number((cpu.system / 1000).toFixed(2)),
       MiBPerSec: Number((fileStat.size / 1024 ** 2 / (scanWallMs / 1000)).toFixed(2)),
       mediaDurationSeconds: Number(mediaDurationSeconds.toFixed(3)),
+      durationTicks: durationTicks.toString(),
       realtimeFactor: Number((mediaDurationSeconds / (scanWallMs / 1000)).toFixed(3)),
       indexedVideoPacketsPerSecond: Number((recordCount / (scanWallMs / 1000)).toFixed(1)),
       demuxPackets: demuxPacketCount, recordCount, recordHash: digest(records),
@@ -194,6 +197,8 @@ const comparison = {
   sameRecordBytes: Buffer.from(progressive.records).equals(Buffer.from(demuxOnly.records)),
   sameCount: progressive.result.recordCount === demuxOnly.result.recordCount,
   sameSeekAnchors: progressive.result.seekAnchorCount === demuxOnly.result.seekAnchorCount,
+  sameFirstPts: progressive.result.firstPts === demuxOnly.result.firstPts,
+  sameDuration: progressive.result.durationTicks === demuxOnly.result.durationTicks,
   sameFirstFrame: progressive.result.firstFrameHash === demuxOnly.result.firstFrameHash,
   sameRandomSeekPixels: JSON.stringify(progressive.result.seekHashes) === JSON.stringify(demuxOnly.result.seekHashes),
   allRandomSeekProbesSucceeded: [...progressive.result.seekHashes, ...demuxOnly.result.seekHashes]
