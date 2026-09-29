@@ -9,7 +9,7 @@ export interface MediaIndexRecordManifest {
 export interface MediaIndexRecordBatch {
   buildId: string; seq: number; records: Uint8Array; count: number; safePresentationUs: number;
 }
-export interface MediaIndexClientTrace {
+export interface MediaIndexTrace {
   serverIndexRequests: number;
   reconnects: number;
   indexBuildId?: string;
@@ -19,3 +19,5 @@ export interface MediaIndexClientTrace {
   /** Time spent importing delivered records into the decoder core (diagnostic only). */
   recordImportMs?: number;
 }
+/** Compatibility alias for older call sites; transport consumers should use MediaIndexTrace. */
+export type MediaIndexClientTrace = MediaIndexTrace;

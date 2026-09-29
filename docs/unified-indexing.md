@@ -4,7 +4,7 @@ The shared contract unifies index identity, lifecycle, progress, persistence, tr
 
 ## Current behavior
 
-- **FFmpeg container fallback:** for versioned library media, the browser primes the first presentable frame and returns a playable source before indexing finishes. The first frame PTS fixes the timeline origin. The server then scans with the bundled FFmpeg WASM core and local-file AVIO; the browser imports records as the server publishes them. A compatible warm cache skips the full scan.
+- **FFmpeg container fallback:** the main-thread `FfmpegContainerSession` owns its `FfmpegMediaIndexSession`, which starts or joins the versioned server index stream. The decoder worker opens the container and primes the first presentable frame, then returns a playable source before indexing finishes. The session sends validated manifest and record events to the worker for core import; a compatible warm cache skips the full scan.
 - **MPEG-TS:** the core exposes a stable record prefix at demuxer-proven boundaries. The server persists each new prefix batch before notifying subscribers. The player appends validated batches and wakes `ensureIndexed(target)` when stable coverage reaches the requested time. TS batches retain PTS, DTS, packet position/size, key flags, and seek anchors.
 - **Other FFmpeg containers:** the same record protocol and lifecycle apply, but without a proven stable prefix the server publishes records after its full scan. The first frame can still appear early; later seeks wait until the full index arrives.
 - **FLV packet path:** playback already has client-side progressive indexing and its own packet-offset records. Completed indexes are cached on the server and transferred through the compatibility document protocol. Cold FLV indexing is not yet performed by the server.
@@ -45,9 +45,9 @@ For a TS build the scan loop exports only records newly added to the core's stab
 
 The FFmpeg worker opens the media and primes the first frame independently of the index stream. It validates the server manifest against the opened stream, starts core append-import once, imports each validated batch, and appends only presentation records at or after the immutable origin to the public timeline. Preroll records remain in the core so seeks can use their anchors.
 
-`MediaSource.ensureIndexed(target)` waits only when the target is beyond stable coverage. As batches arrive, the source wakes waiters and allows seeking within the newly covered region while the scan remains in `building`. Progress reaches `MediaInfo.indexProgress`. Completion changes the source to `complete`; transport failure changes it to `error` and wakes waiters. An already imported prefix remains usable up to its coverage, while a restarted build is rejected rather than mixed into that prefix.
+`MediaSource.ensureIndexed(target)` waits only when the target is beyond stable coverage. As batches arrive, the main-thread index session updates coverage and the source wakes waiters so seeking can continue within the newly covered region while the scan remains in `building`. Progress reaches `MediaInfo.indexProgress`. Completion changes the source to `complete`; transport or import failure changes it to `error` and wakes waiters. An already imported prefix remains usable up to its coverage, while a restarted build is rejected rather than mixed into that prefix.
 
-`MediaIndexClient` is a compatibility facade over `IndexStreamTransport` and the index consumers. The transport owns HTTP, bounded NDJSON parsing, idle timeout, reconnect, abort, and generic `after`/`buildId` cursor handling. `FfmpegIndexConsumer` validates FFmpeg manifest identity, record layout, ordering, watermark, byte/frame limits, and build ID, then emits accepted records through callbacks; it does not own HTTP or WASM. The compatibility document consumer retains the FLV and older FFmpeg JSON payload behavior. A transient disconnect resumes from the last accepted sequence. If the server build identity changes after a prefix has been imported, the source fails beyond its existing stable coverage; it does not claim completion or splice in a different scan.
+`MediaIndexClient` is a compatibility facade over `IndexStreamTransport` and the index consumers. For FFmpeg, it now runs in the main-thread container session, never in the decoder worker. The transport owns HTTP, bounded NDJSON parsing, idle timeout, reconnect, abort, and generic `after`/`buildId` cursor handling. `FfmpegIndexConsumer` validates FFmpeg manifest identity, record layout, ordering, watermark, byte/frame limits, and build ID, then emits accepted records through callbacks; it does not own HTTP or WASM. The decoder worker receives only already-accepted record events, checks that their metadata matches the opened stream, imports them, and decodes frames. The compatibility document consumer retains the FLV and older FFmpeg JSON payload behavior. A transient disconnect resumes from the last accepted sequence. If the server build identity changes after a prefix has been imported, the source fails beyond its existing stable coverage; it does not claim completion or splice in a different scan.
 
 ## Rollout and remaining work
 
@@ -55,8 +55,9 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 2. Pin and check FFmpeg index ABI v2 and stable-prefix/append-import ABI v1.
 3. Add identity-keyed server persistence, bounded build coordination, and first-frame readiness.
 4. Stream and append FFmpeg record batches; publish stable TS coverage during scan and the full record set at EOF for other FFmpeg containers.
-5. Migrate FLV cold indexing to the server and its packet-record adapter. Keep FLV's record semantics while adopting the common lifecycle and streaming transport.
-6. Evaluate server indexing for the separate MP4 packet path without changing its sample/edit-list record contract.
+5. Move FFmpeg HTTP ownership into a main-thread `ContainerSession`/`MediaIndexSession`; keep worker messages limited to import, append, and decode.
+6. Migrate FLV cold indexing to the server and its packet-record adapter. Keep FLV's record semantics while adopting the common lifecycle and streaming transport.
+7. Evaluate server indexing for the separate MP4 packet path without changing its sample/edit-list record contract.
 
 ## Acceptance
 
@@ -78,4 +79,8 @@ Server cold builds emit one JSON `frame-index-build-profile` record after comple
 
 ## M2 transport separation
 
-`src/index-stream-transport.ts` contains the HTTP/NDJSON reconnect loop. `src/ffmpeg-index-consumer.ts` validates and publishes container-specific FFmpeg records, while `src/media-index-client.ts` remains the FLV/FFmpeg compatibility facade. The FFmpeg decoder worker still constructs that facade; moving index-session ownership above the decoder is the next milestone.
+`src/index-stream-transport.ts` contains the HTTP/NDJSON reconnect loop. `src/ffmpeg-index-consumer.ts` validates and publishes container-specific FFmpeg records, while `src/media-index-client.ts` remains the FLV/FFmpeg compatibility facade. At this milestone FFmpeg still constructs the facade inside its decoder worker; M3 moves that ownership to the main-thread container session.
+
+## M3 FFmpeg container session
+
+`src/media-index-session.ts` adds the first `ContainerSession` and `MediaIndexSession` implementation. `src/ffmpeg-media.ts` owns the HTTP subscriber on the main thread and sends validated record events to the FFmpeg worker. The worker no longer imports `MediaIndexClient` or performs HTTP/reconnect work. Local files and server-unavailable cases still ask the worker to build a local fallback index through the same session sink. `test/media-index-session.test.ts` covers local fallback, coverage/finality, subscriber abort on dispose, and the worker's lack of transport dependencies.

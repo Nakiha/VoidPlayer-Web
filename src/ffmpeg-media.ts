@@ -13,7 +13,9 @@ import { contextLog } from './log.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
-import type { MediaIndexClientTrace } from './media-index-types.ts';
+import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
+import { FfmpegContainerSession, FfmpegMediaIndexSession } from './media-index-session.ts';
+import type { FfmpegIndexRecordSink } from './media-index-session.ts';
 
 // FFmpeg-WASM fallback media source for tracks mediabunny/WebCodecs cannot
 // demux or decode (FFV1, MPEG-2 TS, H.266/VVC, H.264 4:2:2, ...). The
@@ -90,6 +92,7 @@ interface InitResult {
   pixelFormat?: string | null;
   indexIdentity?: MediaIndexIdentity;
   indexTrace?: MediaIndexClientTrace;
+  indexPending?: boolean;
 }
 
 // Player-side thread budget: fallback decoders share the host's cores, each
@@ -230,6 +233,33 @@ export class WorkerRpc {
       handler(progress);
     }
   }
+  sendIndexManifest(ctx: number, manifest: MediaIndexRecordManifest, trace: MediaIndexClientTrace) {
+    this.pushIndexInput('manifest', ctx, { manifest, trace });
+  }
+  sendIndexBatch(ctx: number, batch: MediaIndexRecordBatch, trace: MediaIndexClientTrace) {
+    const records = batch.records.slice();
+    this.pushIndexInput('batch', ctx, { batch: { ...batch, records }, trace }, [records.buffer]);
+  }
+  sendIndexComplete(ctx: number, manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexClientTrace) {
+    this.pushIndexInput('complete', ctx, { manifest, frames, trace });
+  }
+  sendLegacyIndex(ctx: number, index: unknown, trace: MediaIndexClientTrace) {
+    this.pushIndexInput('legacy', ctx, { index, trace });
+  }
+  startLocalIndex(ctx: number) { this.pushIndexInput('fallback', ctx); }
+  reportIndexError(error: string, stage: OpenStage = 'resource') {
+    if (this.failure || this.indexTerminal) return;
+    this.indexTerminal = true;
+    this.queuedIndexProgress = undefined;
+    const data = { error, stage };
+    if (this.indexHandlers) this.indexHandlers.error?.(data);
+    else this.queuedIndexEvents.push({ type: 'index-error', data });
+  }
+  private pushIndexInput(action: string, ctx: number, data: Record<string, unknown> = {}, transfer: Transferable[] = []) {
+    if (this.failure || this.indexTerminal || this.indexRequestId === undefined) return;
+    try { this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', action, ctx, ...data }, transfer); }
+    catch (error) { this.reportIndexError(error instanceof Error ? error.message : String(error)); }
+  }
   call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
     if (this.failure) return Promise.reject(this.failure);
     const id = this.nextId++;
@@ -313,6 +343,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   // (nested pthread workers wedging in some WebKit builds) — a wedged worker
   // is terminated and replaced.
   const candidates: string[] = [];
+  const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
   if (deps.glueURL) candidates.push(deps.glueURL);
   else {
     if (globalThis.crossOriginIsolated) candidates.push(new URL(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin).href);
@@ -337,8 +368,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const activeRpc = rpc;
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
-      const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
-      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, mediaSize: file.size, ...(indexUrl ? { indexUrl } : {}),
+      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
         ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
@@ -348,7 +378,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // Includes fetching/compiling the core and scanning the file's index.
       // Five seconds is not a viable cold-start budget over a LAN.
       deps.onProgress?.('decoder');
-      init = await rpc.call<InitResult>('init', payload, transfer, 300000);
+      // A legacy core may still build its local index during init. Keep a wide
+      // safety cap here; supported cores return after first-frame priming and
+      // stream their index through the main-thread session below.
+      init = await rpc.call<InitResult>('init', payload, transfer, 24 * 60 * 60 * 1000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -403,7 +436,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
-    indexSource: init.indexSource ?? 'client', indexState: init.firstFrame ? 'building' : 'complete',
+    indexSource: init.indexPending ? (indexUrl ? 'server' : 'client') : init.indexSource ?? 'client', indexState: init.indexPending ? 'building' : 'complete',
     indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
     seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
   };
@@ -417,6 +450,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
   let source: MediaSource;
   const activeRpc = rpc;
+  let containerSession: FfmpegContainerSession | undefined;
   let firstIndexBatchLogged = false;
   const applyIndexBatch = (result: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => {
     if (disposed || result.ctx !== init!.ctx) return;
@@ -444,6 +478,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       durationsUs = frameDurationsUs(ticks, durationsTicks);
     }
     const stableCoverageUs = Math.max(info.stableCoverageUs ?? 1, Math.floor(result.stableCoverageUs));
+    containerSession?.index.updateCoverage(stableCoverageUs);
     updateMediaInfo(source, {
       stableCoverageUs,
       durationUs: Math.max(info.durationUs, stableCoverageUs),
@@ -465,6 +500,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
     durationsUs = frameDurationsUs(ticks, durationsTicks);
     const durationUs = Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
+    containerSession?.index.markComplete(durationUs);
     contextLog().info('media', 'FFmpeg 索引完成', {
       name: file.name, indexSource: result.indexSource, frames: ticks.length,
       firstPtsUs: info.firstPtsUs, durationUs, indexMs: result.indexMs,
@@ -488,12 +524,18 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   };
   const applyIndexError = (result: { error: string; stage?: OpenStage }) => {
     if (disposed) return;
+    containerSession?.index.fail(result.error, false);
     updateMediaInfo(source, { indexState: 'error', indexError: result.error }, 'index');
     wakeIndex();
   };
   const currentIndexState = (): MediaInfo['indexState'] => info.indexState;
   const ensureIndexed = async (ptsUs = Infinity) => {
     if (disposed) throw new Error('媒体已释放。');
+    if (containerSession) {
+      await containerSession.index.ensure(ptsUs);
+      if (disposed) throw new Error('媒体已释放。');
+      return;
+    }
     if (currentIndexState() === 'complete') return;
     if (currentIndexState() === 'error') {
       if (ptsUs < (info.stableCoverageUs ?? info.durationUs)) return;
@@ -581,6 +623,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       wakeIndex();
       firstFrame = undefined;
       spare = null;
+      containerSession?.dispose();
       liveFallbacks--;
       activeRpc.setIndexHandlers(undefined);
       activeRpc.setIndexProgressHandler(undefined);
@@ -591,5 +634,23 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   activeRpc.setIndexProgressHandler(progress => {
     if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');
   });
+  if (init.indexPending && init.indexIdentity) {
+    const sink: FfmpegIndexRecordSink = {
+      manifest: (manifest, trace) => activeRpc.sendIndexManifest(init!.ctx, manifest, trace),
+      batch: (batch, trace) => activeRpc.sendIndexBatch(init!.ctx, batch, trace),
+      complete: (manifest, frames, trace) => activeRpc.sendIndexComplete(init!.ctx, manifest, frames, trace),
+      legacy: (index, trace) => activeRpc.sendLegacyIndex(init!.ctx, index, trace),
+      fallback: () => activeRpc.startLocalIndex(init!.ctx),
+      progress: progress => { if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index'); },
+      error: message => activeRpc.reportIndexError(message),
+    };
+    containerSession = new FfmpegContainerSession(new FfmpegMediaIndexSession({
+      url: indexUrl,
+      identity: init.indexIdentity,
+      firstPtsUs: info.firstPtsUs,
+      durationUs: initialStableCoverageUs,
+      sink,
+    }));
+  }
   return source;
 }
