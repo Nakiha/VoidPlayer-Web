@@ -49,6 +49,7 @@ export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
 export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:number|null=null,ownsSource=true):MediaSource{
   let disposed=false;
   let signature:string|undefined;
+  const sourceFrameAt=source.frameAt.bind(source),sourceFramesFrom=source.framesFrom.bind(source),sourceFramesFollowing=source.framesFollowing?.bind(source);
   type Slot={worker:Worker;buffer?:ArrayBuffer;reject?: (error:Error)=>void};
   const slots:Slot[]=[];
   try{for(let i=0;i<depth;i++)slots.push({worker:new Worker(new URL('./native-yuv-worker.ts',import.meta.url),{type:'module'})});}
@@ -120,10 +121,10 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     rankAnalysisTime:source.rankAnalysisTime?.bind(source),
     analysisSampleAtNumber:source.analysisSampleAtNumber?.bind(source),
     locateAnalysisSample:source.locateAnalysisSample?.bind(source),
-    frameAt:async pts=>convert(await source.frameAt(pts)),
-    async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(source.framesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},
-    framesFrom:pts=>pipeline(source.framesFrom(pts)),
-    ...(source.framesFollowing?{framesFollowing:(pts:number)=>pipeline(source.framesFollowing!(pts))}:{}),
+    frameAt:async pts=>convert(await sourceFrameAt(pts)),
+    async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(sourceFramesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},
+    framesFrom:pts=>pipeline(sourceFramesFrom(pts)),
+    ...(sourceFramesFollowing?{framesFollowing:(pts:number)=>pipeline(sourceFramesFollowing(pts))}:{}),
     dispose(){if(disposed)return;disposed=true;if(ownsSource)source.dispose();for(const slot of slots){slot.reject?.(aborted());slot.worker.terminate();}while(waiters.length)waiters.shift()!(slots[0]);},
   };
 }

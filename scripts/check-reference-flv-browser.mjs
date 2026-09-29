@@ -62,13 +62,21 @@ try {
     try {
       await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
       const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
+      const loadLibraryItem = async args => {
+        try { return await call('load_library_item', args); }
+        catch (error) {
+          const logs = await call('get_review_logs', { limit: 500 }).catch(() => null);
+          const mediaEvents = logs?.events?.filter(e => e.cat === 'media') ?? logs;
+          throw new Error(`load_library_item failed: ${error instanceof Error ? error.message : String(error)}; media events: ${JSON.stringify(mediaEvents)}`, { cause: error });
+        }
+      };
       assert.deepEqual((await call('get_review_session')).referenceDecode, { decoder: software ? 'software' : 'hardware', depth: 2 });
       if (local) {
         await page.locator('#file-A').setInputFiles({ name: 'renamed.bin', mimeType: 'application/octet-stream', buffer: await readFile(path.join(root, `${codec}.flv`)) });
         await page.waitForFunction(() => { const s = window.voidPlayer.getState(); return !s.busy && s.tracks[0]?.frame; });
       } else {
         const listing = await call('list_library');
-        await call('load_library_item', { id: listing.entries.find(e => e.name === `${codec}.flv`).id, slot: 'A' });
+        await loadLibraryItem({ id: listing.entries.find(e => e.name === `${codec}.flv`).id, slot: 'A' });
       }
       const state = await call('get_review_session'), logs = await call('get_review_logs', { limit: 500 });
       const decisions = logs.events.filter(e => e.msg === '原生解码路径探测').flatMap(e => e.data?.decisions ?? []);
@@ -76,16 +84,23 @@ try {
       else if (state.tracks[0].decoder !== 'webcodecs') {
         const refusal = decisions.length && decisions.every(d => d.reason === 'webcodecs-unavailable' || d.reason === 'capability-probe' && !d.supported);
         const gate = logs.events.find(e => e.msg === 'WebCodecs 路径不可用，尝试 WASM 回退');
-        const reusedSoftwareWitness = logs.events.some(e => e.msg === '硬件首帧核验失败，复用已就绪的软件解码源');
+        const reusedSoftwareWitness = logs.events.some(e => e.msg === '硬件首帧核验失败，复用共享容器索引并切换软件解码器');
+        const firstFrameTrace = logs.events.find(e => e.msg === '媒体管线追踪' && e.data?.phase === 'first-frame-ready')?.data;
+        const inPlaceSoftwareFallback = state.tracks[0].decoder === 'ffmpeg-wasm'
+          && firstFrameTrace?.container === 'flv'
+          && firstFrameTrace?.demuxBackend === 'flv-engine'
+          && firstFrameTrace?.nativeOpenCount === 1
+          && firstFrameTrace?.softwareOpenCount === 0;
         // Playwright WebKit on Linux reports AV1 probe support but ships no AV1
         // decoder: first-frame failure with a working WASM fallback is the platform
         // gap, not an admission bug (see verification notes). Chromium keeps the rule.
         const webkitAv1DecodeGap = engine === 'webkit' && codec === 'av1' && !fault && !software
           && decisions.some(d => d.reason === 'native-failed')
           && state.tracks[0].decoder === 'ffmpeg-wasm';
-        assert.ok(refusal || gate || webkitAv1DecodeGap || reusedSoftwareWitness, JSON.stringify({ decisions, events: logs.events.filter(e => e.cat === 'media') }));
-        if (codec === 'av1' && !refusal && !webkitAv1DecodeGap) assert.fail(`AV1 raw-plane admission unexpectedly failed: ${JSON.stringify(gate)}`);
+        assert.ok(refusal || gate || webkitAv1DecodeGap || reusedSoftwareWitness || inPlaceSoftwareFallback, JSON.stringify({ decisions, events: logs.events.filter(e => e.cat === 'media') }));
+        if (codec === 'av1' && !fault && !software && !refusal && !webkitAv1DecodeGap) assert.fail(`AV1 raw-plane admission unexpectedly failed: ${JSON.stringify(gate)}`);
         if (webkitAv1DecodeGap) console.log('PLATFORM GAP webkit av1: probe passed but first-frame decode failed, WASM fallback active');
+        else if (inPlaceSoftwareFallback) console.log(`IN-PLACE FALLBACK ${codec}: shared FLV demux/index, no second software source open`);
         else console.log(`ADMISSION REFUSAL ${codec}: ${JSON.stringify(gate?.data ?? decisions)}`);
       } else assert.ok(state.tracks[0].output.yuv, 'native source reaches raw YUV output');
       if (software) assert.equal(decisions.length, 0, 'explicit software skips native probing');
@@ -93,7 +108,7 @@ try {
       if (fault === 'readback' || fault === 'mismatch') {
         const failureMatches = e => {
           const reason = e.msg === 'WebCodecs 路径不可用，尝试 WASM 回退' ? e.data?.reason
-            : e.msg === '硬件首帧核验失败，复用已就绪的软件解码源' ? e.data?.error : undefined;
+            : e.msg === '硬件首帧核验失败，复用共享容器索引并切换软件解码器' ? e.data?.error : undefined;
           return fault === 'mismatch' ? /平面 .*样本不一致/.test(reason ?? '') : /injected readback/.test(reason ?? '');
         };
         assert.ok(logs.events.some(failureMatches), 'fallback reports the actual admission failure');
