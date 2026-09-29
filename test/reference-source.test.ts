@@ -31,15 +31,16 @@ function yuvFrame(width: number): DecodedFrame {
 }
 
 function mediaSource(decoder: string, width: number) {
-  let disposed = 0;
+  let disposed = 0, frameAtCalls = 0;
+  let lastFrame: DecodedFrame | undefined;
   const source = {
     info: { decoder },
-    frameAt: async () => yuvFrame(width),
+    frameAt: async () => { frameAtCalls++; lastFrame = yuvFrame(width); return lastFrame; },
     framesAfter: async () => [],
     async *framesFrom() { yield yuvFrame(width); },
     dispose() { disposed++; },
   } as unknown as MediaSource;
-  return { source, disposeCount: () => disposed };
+  return { source, disposeCount: () => disposed, frameAtCalls: () => frameAtCalls, lastFrame: () => lastFrame };
 }
 
 class IdleWorker {
@@ -65,6 +66,8 @@ test('reference admission reuses a validated software witness when native geomet
 
     const frame = await selected.frameAt(0);
     assert.equal(frame.kind, 'yuv');
+    assert.equal(frame, software.lastFrame(), 'the verified software witness is presented without a second decode');
+    assert.equal(software.frameAtCalls(), 1);
     frame.close();
     selected.dispose();
     assert.equal(software.disposeCount(), 1);
@@ -82,6 +85,10 @@ test('reference admission still selects native output after a matching witness',
     const selected = await admitReferenceSource(native.source, async () => software.source, 1);
     assert.equal(selected.info.decoder, 'webcodecs');
     assert.equal(software.disposeCount(), 1);
+    const frame = await selected.frameAt(0);
+    assert.equal(frame, native.lastFrame(), 'the verified native probe is presented without another readback');
+    assert.equal(native.frameAtCalls(), 1);
+    frame.close();
     selected.dispose();
     assert.equal(native.disposeCount(), 1);
   } finally {
