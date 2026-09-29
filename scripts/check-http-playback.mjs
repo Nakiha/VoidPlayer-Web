@@ -49,11 +49,19 @@ try {
     });
     const errors = [];
     let ffmpegWorkerStarts = 0;
+    const ffmpegWorkers = new Set(), packetWorkers = new Set();
     page.on('pageerror', error => errors.push(error.message));
     page.on('worker', worker => {
       // Packet demux and WebCodecs run in packet-worker; only this worker
       // indicates a software FFmpeg fallback.
-      if (/ffmpeg-worker/i.test(worker.url())) ffmpegWorkerStarts++;
+      if (/ffmpeg-worker/i.test(worker.url())) {
+        ffmpegWorkerStarts++;
+        ffmpegWorkers.add(worker);
+        worker.on('close', () => ffmpegWorkers.delete(worker));
+      } else if (/packet-worker/i.test(worker.url())) {
+        packetWorkers.add(worker);
+        worker.on('close', () => packetWorkers.delete(worker));
+      }
     });
     const requests = [];
     page.on('request', request => { if (/\/api\/media\/[^/]+(?:\?|$)/.test(new URL(request.url()).pathname)) requests.push(request.url()); });
@@ -127,7 +135,8 @@ try {
         if (round === 1 && item.id === entry.id) continue;
         await page.evaluate(({ id, slot }) => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot }), { id: item.id, slot: i ? 'B' : 'A' });
       }
-      assert.equal(workers.size, secure ? 0 : 2);
+      assert.equal(ffmpegWorkers.size, secure ? 0 : 2);
+      if (secure) assert.equal(packetWorkers.size, 2, 'each packet MP4 source owns one packet worker');
       const report = await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'benchmark_review').execute({ durationMs: 12000 }));
       assert.equal(report.error, null);
       assert.equal(report.staleAfterPause, false);
@@ -143,8 +152,9 @@ try {
       }
       const loadedBytes = await residentBytes();
       await page.evaluate(async () => { for (const t of window.voidPlayer.getState().tracks) await window.voidPlayer.removeTrack(t.slot); });
-      for (let i = 0; i < 100 && workers.size; i++) await new Promise(resolve => setTimeout(resolve, 50));
-      assert.equal(workers.size, 0, 'removing both tracks must release both workers');
+      for (let i = 0; i < 100 && (ffmpegWorkers.size || packetWorkers.size); i++) await new Promise(resolve => setTimeout(resolve, 50));
+      assert.equal(ffmpegWorkers.size, 0, 'removing both tracks must release FFmpeg workers');
+      assert.equal(packetWorkers.size, 0, 'removing both tracks must release packet workers');
       const unloadedBytes = await residentBytes();
       reports.push({ round, loadedBytes, unloadedBytes, report });
       console.log(JSON.stringify({ round, loadedBytes, unloadedBytes, performancePassed: report.passed, failures: report.failures, measurements: report.measurements }));
