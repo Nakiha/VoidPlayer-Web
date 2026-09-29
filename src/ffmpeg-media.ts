@@ -12,6 +12,8 @@ import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
+import { isHdrTransfer } from './presentation-color.ts';
+import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
 import { FfmpegContainerSession, FfmpegMediaIndexSession } from './media-index-session.ts';
@@ -445,6 +447,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   let spare: ArrayBuffer | null = null;
   let firstFrame = init.firstFrame;
   let previousIndex = -1;
+  let referencePresentation = false;
   const indexWaiters = new Set<() => void>();
   const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
   const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
@@ -572,7 +575,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const pixels = new Uint8ClampedArray(output.pixels);
     validateDescription(output.description,pixels.byteLength);
     let closed = false;
-    return {
+    const decoded: WasmDecodedFrame = {
       kind: output.description.yuv ? 'yuv' : 'rgba8',
       description: output.description,
       width: output.description.width,
@@ -584,10 +587,25 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       durationUs: ticksToUs(output.duration) || durationsUs[index] || initialDurationUs,
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };
+    if (referencePresentation && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
+      const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
+      decoded.close();
+      throw new MediaOpenError('decode', hdr ? '自有色彩目前仅支持 SDR，无法处理此 HDR 视频。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+        : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。');
+    }
+    return decoded;
   };
 
   source = {
     info, ensureIndexed,
+    async reconfigureColorMode(mode) {
+      const previous = referencePresentation;
+      referencePresentation = mode === 'reference';
+      if (!referencePresentation) return;
+      try { const frame = await source!.frameAt(0); frame.close(); }
+      catch (error) { referencePresentation = previous; throw error; }
+    },
+    async admitReference() { await source!.reconfigureColorMode?.('reference', { decoder: 'software', depth: 1 }); return source!; },
     async frameAt(ptsUs) {
       await ensureIndexed(ptsUs);
       return extract(floorIndex(relUs, ptsUs));

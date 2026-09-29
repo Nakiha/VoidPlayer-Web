@@ -34,6 +34,21 @@ test('color mode reload preserves identity, marks and offset; failed replacement
   fail=true;await assert.rejects(session.setColorMode('reference'),/unsupported/);assert.equal(getColorMode(),'browser');assert.deepEqual(session.getState().tracks,after.tracks);
  }finally{await session.dispose();setColorMode(previous);}
 });
+test('container sessions reconfigure color mode in place without reopening media',async()=>{
+ const previous=getColorMode(),decode=getReferenceDecode();setColorMode('browser');
+ const session=new ReviewSession(()=>{}),opened=media('shared-container');let opens=0;
+ const changes:Array<[string,string,number]> = [];
+ opened.source.reconfigureColorMode=async(mode,preference)=>{changes.push([mode,preference.decoder,preference.depth]);};
+ try{
+  await session.load('A',async()=>{opens++;return opened.source;});
+  await session.setColorMode('reference',{decoder:'hardware',depth:4});
+  await session.setColorMode('browser',{decoder:'software',depth:8});
+  assert.equal(opens,1);
+  assert.deepEqual(changes,[['reference','hardware',4],['browser','software',8]]);
+  assert.equal(opened.disposed,0);
+ }finally{await session.dispose();setColorMode(previous);setReferenceDecode(decode);}
+ assert.equal(opened.disposed,1);
+});
 function media(name = 'A', starts = [0, 40000, 120000, 160000], end = 200000) {
   let closed = 0, disposed = 0;
   const frame = (pts: number) => ({

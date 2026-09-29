@@ -127,40 +127,51 @@ try {
       sameTimeline: cases.every(result => result.firstPtsUs === cases[0].firstPtsUs && result.durationUs === cases[0].durationUs),
     };
   });
-  for (const comparison of modeComparisons.filter(item => fixtures.find(fixture => fixture.name === item.fixture)?.container === 'flv')) {
+  for (const comparison of modeComparisons) {
     assert.equal(comparison.sameTimeline, true, `${comparison.fixture}: browser and reference timelines must match`);
-    assert.ok(comparison.paths.every(path => path.demuxBackend === 'flv-engine'), `${comparison.fixture}: all modes share FlvEngine`);
+    assert.equal(new Set(comparison.paths.map(path => path.demuxBackend)).size, 1,
+      `${comparison.fixture}: decoder/color preferences must keep one container plan (${comparison.paths.map(path => path.demuxBackend).join(', ')})`);
+    if (fixtures.find(fixture => fixture.name === comparison.fixture)?.container === 'flv') {
+      assert.ok(comparison.paths.every(path => path.demuxBackend === 'flv-engine'), `${comparison.fixture}: all modes share FlvEngine`);
+    }
   }
   console.log(JSON.stringify({ phase: 'mode-matrix-comparison', cases: modeComparisons }));
 
   // Capture the existing mode-switch request path on the same versioned item.
-  const fixture = fixtures.find(item => item.name === 'h264_9s_1920x1080.mp4');
-  const context = await browser.newContext();
-  const page = await context.newPage();
-  const indexRequests = [];
-  page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/frame-index')) indexRequests.push(request.url()); });
-  await page.addInitScript(() => localStorage.setItem('voidplayer.color-mode', 'browser'));
-  try {
-    await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
-    const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(item => item.name === name).execute(args), { name, args });
-    const entry = (await call('list_library', { search: fixture.name })).entries.find(item => item.name === fixture.name);
-    await call('load_library_item', { id: entry.id, slot: 'A' });
-    await page.waitForFunction(() => !window.voidPlayer.getState().busy && !!window.voidPlayer.getState().tracks[0]?.frame);
-    const transitions = [];
-    for (const mode of ['reference', 'browser']) {
-      await call('set_review_color_mode', { mode });
+  for (const fixture of [fixtures.find(item => item.name === 'h264_9s_1920x1080.mp4'), fixtures.find(item => item.name === 'mpegts--h264small.ts')]) {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    const indexRequests = [];
+    page.on('request', request => { if (new URL(request.url()).pathname.endsWith('/frame-index')) indexRequests.push(request.url()); });
+    await page.addInitScript(() => localStorage.setItem('voidplayer.color-mode', 'browser'));
+    try {
+      await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
+      const call = (name, args = {}) => page.evaluate(({ name, args }) => window.voidPlayer.tools.find(item => item.name === name).execute(args), { name, args });
+      const entry = (await call('list_library', { search: fixture.name })).entries.find(item => item.name === fixture.name);
+      await call('load_library_item', { id: entry.id, slot: 'A' });
       await page.waitForFunction(() => !window.voidPlayer.getState().busy && !!window.voidPlayer.getState().tracks[0]?.frame);
-      const current = await call('get_review_session');
-      transitions.push({ mode, firstPtsUs: current.tracks[0].firstPtsUs, durationUs: current.tracks[0].durationUs, decoder: current.tracks[0].decoder });
-    }
-    const logs = await call('get_review_logs', { limit: 2000 });
-    const traceFields = ['phase', 'mediaId', 'mediaVersion', 'container', 'demuxBackend', 'indexBackend', 'indexIdentity', 'indexBuildId',
-      'serverIndexRequests', 'firstIndexBatchMs', 'indexCompleteMs', 'decoderBackend', 'colorMode', 'firstPtsUs', 'durationUs',
-      'stableCoverageUs', 'seekAnchorCount', 'firstFrameReadyMs', 'nativeOpenCount', 'softwareOpenCount'];
-    const traces = logs.events.filter(event => event.msg === '媒体管线追踪').map(event => Object.fromEntries(
-      traceFields.filter(key => key in event.data).map(key => [key, event.data[key]])));
-    console.log(JSON.stringify({ phase: 'browser-reference-browser-switch', mediaId: entry.id, mediaVersion: entry.version, transitions, indexRequests, traces }));
-  } finally { await context.close(); }
+      const indexRequestsBeforeSwitch = indexRequests.length;
+      const transitions = [];
+      for (const mode of ['reference', 'browser']) {
+        await call('set_review_color_mode', { mode });
+        await page.waitForFunction(() => !window.voidPlayer.getState().busy && !!window.voidPlayer.getState().tracks[0]?.frame);
+        const current = await call('get_review_session');
+        transitions.push({ mode, firstPtsUs: current.tracks[0].firstPtsUs, durationUs: current.tracks[0].durationUs, decoder: current.tracks[0].decoder });
+      }
+      const logs = await call('get_review_logs', { limit: 2000 });
+      const traceFields = ['phase', 'mediaId', 'mediaVersion', 'container', 'demuxBackend', 'indexBackend', 'indexIdentity', 'indexBuildId',
+        'serverIndexRequests', 'firstIndexBatchMs', 'indexCompleteMs', 'decoderBackend', 'colorMode', 'firstPtsUs', 'durationUs',
+        'stableCoverageUs', 'seekAnchorCount', 'firstFrameReadyMs', 'nativeOpenCount', 'softwareOpenCount'];
+      const traces = logs.events.filter(event => event.msg === '媒体管线追踪').map(event => Object.fromEntries(
+        traceFields.filter(key => key in event.data).map(key => [key, event.data[key]])));
+      assert.equal(traces.filter(event => event.phase === 'container-selected').length, 1,
+        `${fixture.name}: browser/reference/browser switching must reuse the opened container session`);
+      assert.equal(traces.filter(event => event.phase === 'first-frame-ready' && event.container !== 'ffmpeg').length, 1,
+        `${fixture.name}: mode switching must not create a second media/index lifecycle`);
+      assert.equal(indexRequests.length, indexRequestsBeforeSwitch, `${fixture.name}: mode switching must not request another frame index`);
+      console.log(JSON.stringify({ phase: 'browser-reference-browser-switch', fixture: fixture.name, mediaId: entry.id, mediaVersion: entry.version, transitions, indexRequests, traces }));
+    } finally { await context.close(); }
+  }
   console.log(JSON.stringify({ summary: { engine, cases: results.length, fixtures: fixtures.map(item => item.name) } }));
 } finally {
   await browser?.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve));
