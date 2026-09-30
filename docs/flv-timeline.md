@@ -106,6 +106,14 @@ Incomplete trailing tags retain complete indexed packets. A structurally corrupt
 suffix (stream ID, tag type/flags or footer mismatch) is also ignored only after
 a configured initial key packet, within the last 64 KiB, and when a bounded scan
 finds no later complete tag with a valid stream ID and footer. The index completes
-with `truncatedAt` and an explicit warning, persisted in shared caches. Interior
-corruption, longer corrupt suffixes, IO/version errors and codec/configuration
-errors remain failures. Recovery never indexes bytes from the rejected suffix.
+with `truncatedAt` and an explicit warning, persisted in shared caches. Interior gaps can recover after a playable prefix: search at most 4 KiB ahead
+and validate two consecutive complete, nonempty tags (type/flags, stream ID,
+size and PreviousTagSize). Candidate probing is capped at 64 chains and recovery
+at 16 gaps per file. The normal codec/configuration parser still validates every
+resumed tag. Original offsets, timestamps and compressed packets are retained;
+no frames or timestamps are invented. `recoveredGaps` survives immutable scan
+checkpoints and cache round trips and produces an explicit warning. Inserted
+garbage can leave decoding unchanged; lost compressed data may affect nearby
+pictures and still fail decoding. Unproven or over-limit gaps, longer corrupt
+suffixes, IO/version errors and codec/configuration errors remain failures.
+Recovery never indexes bytes from the rejected gap or suffix.

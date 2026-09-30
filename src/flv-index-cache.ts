@@ -1,16 +1,17 @@
-import { buildFlvIndex, flvDecoderConfig } from './flv-demux.ts';
-import type { FlvCodec, FlvIndex } from './flv-demux.ts';
+import { buildFlvIndex, flvDecoderConfig, FLV_RESYNC_BYTES, FLV_RESYNC_GAPS } from './flv-demux.ts';
+import type { FlvCodec, FlvIndex, FlvRecoveredGap } from './flv-demux.ts';
 
 export const FLV_INDEX_SCHEMA = 2;
 export const FLV_INDEX_BYTES = 32 * 1024 * 1024;
 export interface FlvIndexDocument {
+  recoveredGaps?: FlvRecoveredGap[];
   configurations?: number[][];
   truncatedAt?: number;
   schema: number; size: number; codec: FlvCodec; description: number[];
   packets: [number, number, number, number, number, number?][];
 }
 export function serializeFlvIndex(index: FlvIndex, size: number): FlvIndexDocument {
-  return { ...(index.configurations ? { configurations: index.configurations.map(c => [...c]) } : {}), ...(index.truncatedAt === undefined ? {} : { truncatedAt: index.truncatedAt }), schema: FLV_INDEX_SCHEMA, size, codec: index.codec, description: [...index.description],
+  return { ...(index.recoveredGaps ? { recoveredGaps: index.recoveredGaps.map(g=>({...g})) } : {}), ...(index.configurations ? { configurations: index.configurations.map(c => [...c]) } : {}), ...(index.truncatedAt === undefined ? {} : { truncatedAt: index.truncatedAt }), schema: FLV_INDEX_SCHEMA, size, codec: index.codec, description: [...index.description],
     packets: index.packets.map(p => [p.offset, p.size, p.pts, p.dts, +p.key, ...(p.configuration === undefined ? [] : [p.configuration])] as [number, number, number, number, number, number?]) };
 }
 /** Derived timing/order is always rebuilt, never trusted from a cache upload. */
@@ -43,6 +44,18 @@ export function parseFlvIndex(value: unknown, size: number): FlvIndex {
   if (doc.truncatedAt !== undefined) {
     if (!Number.isSafeInteger(doc.truncatedAt) || doc.truncatedAt < previousEnd + 4 || doc.truncatedAt >= size) return bad();
     index.truncatedAt = doc.truncatedAt;
+  }
+  if(doc.recoveredGaps!==undefined){
+    if(!Array.isArray(doc.recoveredGaps)||!doc.recoveredGaps.length||doc.recoveredGaps.length>FLV_RESYNC_GAPS)return bad();
+    let previousGapEnd=13,packetCursor=0;
+    index.recoveredGaps=doc.recoveredGaps.map(g=>{
+      if(!g||!Number.isSafeInteger(g.offset)||!Number.isSafeInteger(g.size)||g.offset<previousGapEnd||g.offset<packets[0].offset+packets[0].size+4||g.size<1||g.size>FLV_RESYNC_BYTES||g.offset+g.size>size-30
+        ||(doc.truncatedAt!==undefined&&g.offset+g.size>doc.truncatedAt))return bad();
+      const end=g.offset+g.size;
+      while(packetCursor<packets.length&&packets[packetCursor].offset+packets[packetCursor].size<=g.offset)packetCursor++;
+      if(packetCursor<packets.length&&packets[packetCursor].offset<end)return bad();
+      previousGapEnd=end;return {offset:g.offset,size:g.size};
+    });
   }
   for (const description of index.configurations ?? [index.description]) flvDecoderConfig({ codec: index.codec, description });
   return index;
