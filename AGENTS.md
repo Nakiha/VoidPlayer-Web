@@ -12,7 +12,7 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
   clip-path，不动解码路径）；`log.ts` / `log-panel.ts` / `log-storage.ts`
   本地诊断日志；`agent.ts` WebMCP 工具；`library.ts` / `ui/source-catalog.ts` / `ui/workbench.ts` 媒体库与工具区；`ui/workbench/` 下 `tracks.ts` 轨道窗格、`sources.ts` 片源窗格、`shared.ts` 装配契约；`ui/track-drag.ts` 排序输入；`ui/seek-preview.ts` 时间预览/标注吸附；`ui/source-actions.ts` 服务连接和文件操作。
 - `src/mp4-engine.ts` / `mp4-config.ts`：远程 MP4 的 TS 包索引和 VVC 配置；与 FLV 共用 `packet-media.ts` / `packet-worker.ts`。`range-reader.ts` 有界缓存；`range-bridge.ts` 仅供 FFmpeg 容器回退的同步 AVIO 读取。
-- `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：Worker 内的 FLV 分块读取、索引及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
+- `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：共享 FLV 扫描器（媒体库由服务端 Worker 本地读盘建索引，本地文件由客户端 Worker 建索引）及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
 - `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`app.ts` 只做装配与分发，路由按域在 `routes/{connection,content,state}.ts`（`context.ts` 为共享请求上下文），HTTP 基元在 `http-utils.ts`；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
 - `test/`：node:test，无浏览器依赖；WASM 用例在 Node worker_threads 里跑真实 core。

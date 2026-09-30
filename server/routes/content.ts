@@ -276,7 +276,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
               shouldBuild, filePath, entry.size);
             return true;
           }
-          if (kind === 'ffmpeg' && url.searchParams.get('build') === '1' && !cached) {
+          if (url.searchParams.get('build') === '1' && !cached) {
             const filePath = await library.resolve(entry.id, version);
             if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
             const epoch = await library.indexJobs.call('epoch') as number;

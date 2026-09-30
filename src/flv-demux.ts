@@ -4,6 +4,7 @@ import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
+export interface FlvScanReader { readonly size: number; read(offset: number, length: number): Promise<Uint8Array>; }
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
 export interface FlvPacket { sequenceNumber?:number; configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; originalPts?: number; }
 export interface FlvRecoveredGap { offset: number; size: number; }
@@ -28,7 +29,7 @@ const s24 = (b: Uint8Array, i: number) => (u24(b, i) << 8) >> 8;
 // Recovery is bounded and only available after a playable prefix. Do not
 // silently truncate an interior failure when a structurally valid tag follows it.
 const MAX_CORRUPT_TAIL_BYTES = 64 * 1024;
-async function isCorruptTail(reader: FlvReader, offset: number, playable: boolean) {
+async function isCorruptTail(reader: FlvScanReader, offset: number, playable: boolean) {
   if (!playable || reader.size - offset > MAX_CORRUPT_TAIL_BYTES) return false;
   const tail = await reader.read(offset, reader.size - offset);
   for (let i = 1; i + 15 <= tail.length; i++) {
@@ -43,7 +44,7 @@ async function isCorruptTail(reader: FlvReader, offset: number, playable: boolea
 // Read only headers and footers while proving two consecutive complete tags.
 export const FLV_RESYNC_BYTES = 4096;
 export const FLV_RESYNC_GAPS = 16;
-async function resyncFlv(reader: FlvReader, offset: number): Promise<number | undefined> {
+async function resyncFlv(reader: FlvScanReader, offset: number): Promise<number | undefined> {
   const bytes=await reader.read(offset,Math.min(reader.size-offset,FLV_RESYNC_BYTES+11));
   let candidates=0;
   const tagEnd=async (at:number):Promise<number|undefined> => {
@@ -78,12 +79,12 @@ export class FlvReader extends RangeReader {
  * Audio/script tags are skipped: this review app currently has video only. */
 export interface FlvCheckpoint { index: FlvIndex; nextOffset: number; complete: boolean; }
 
-export async function demuxFlv(reader: FlvReader, onProgress?: () => void): Promise<FlvIndex> {
+export async function demuxFlv(reader: FlvScanReader, onProgress?: () => void): Promise<FlvIndex> {
   return (await scanFlv(reader, onProgress)).index;
 }
 
 /** Stop after the first video packet for startup; resume at the next tag. */
-export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
+export async function scanFlv(reader: FlvScanReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
   const header = await reader.read(0, 9);
   if (header[0] !== 70 || header[1] !== 76 || header[2] !== 86 || header[3] !== 1) bad('不是有效的 FLV 1 文件。');
   let offset = u32(header, 5);

@@ -117,3 +117,21 @@ garbage can leave decoding unchanged; lost compressed data may affect nearby
 pictures and still fail decoding. Unproven or over-limit gaps, longer corrupt
 suffixes, IO/version errors and codec/configuration errors remain failures.
 Recovery never indexes bytes from the rejected gap or suffix.
+
+## Index ownership and shared scanner
+
+Library URLs (`/api/media/<id>?v=<version>`) request a server build on cache miss.
+The server Worker reads the library file directly through a bounded 2 MiB disk
+cache and runs the same `scanFlv` used for local files. Parsing, reorder handling,
+duplicate timestamps, damaged tails and bounded resynchronization are identical.
+FLV remains outside FFmpeg demuxing; index building needs no decoder or WASM core.
+Builds share the version/identity/epoch-deduplicated queue and SQLite cache, and
+verify the file descriptor and current path version before committing.
+
+Startup still reads only enough compressed bytes to display the first frame.
+Server scan progress is streamed, then the completed FLV document transfers in
+resumable NDJSON chunks. This does not yet publish FLV packet prefixes during
+server scanning; seeks/playback beyond startup coverage wait for the completed
+index. Cache hits skip building. Local Blob files and arbitrary URLs without a
+library service endpoint scan on the client. A library server failure or index
+prefix mismatch is explicit, never a silent full-file browser rescan.

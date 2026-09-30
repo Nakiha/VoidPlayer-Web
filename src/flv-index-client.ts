@@ -1,17 +1,21 @@
 import { FLV_INDEX_BYTES, parseFlvIndex, serializeFlvIndex } from './flv-index-cache.ts';
 import type { FlvIndex } from './flv-demux.ts';
+import { MediaOpenError } from './media-errors.ts';
+import type { MediaIndexScanProgress } from './media-index-types.ts';
 import { MediaIndexClient } from './media-index-client.ts';
 
-/** Optional cache service. Failures never prevent decoding the original media. */
+/** Library files require a server index; local files have no service dependency. */
 export class FlvIndexClient {
   private transport: MediaIndexClient;
-  constructor(url: string | undefined, privateSize: number) {
+  constructor(url: string | undefined, privateSize: number, onScanProgress?: (progress: MediaIndexScanProgress) => void) {
     this.size = privateSize;
-    this.transport = new MediaIndexClient(url, 'flv', FLV_INDEX_BYTES + 1024);
+    this.transport = new MediaIndexClient(url, 'flv', FLV_INDEX_BYTES + 1024, 120000, true, undefined, onScanProgress);
   }
   private size: number;
+  get serverIndexRequired(): boolean { return this.transport.hasEndpoint; }
   async read(prefix: FlvIndex) {
     const value = await this.transport.read();
+    if(!value && this.serverIndexRequired)throw new MediaOpenError('container','服务端 FLV 索引未能完成，请检查索引服务或升级服务端；网络媒体库不会改为客户端全文件扫描。');
     const cached = value ? parseFlvIndex(value, this.size) : null;
     if (!cached || cached.codec !== prefix.codec || cached.description.length !== prefix.description.length
       || cached.description.some((b, i) => b !== prefix.description[i]) || cached.packets.length < prefix.packets.length) return null;
