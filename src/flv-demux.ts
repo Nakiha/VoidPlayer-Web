@@ -4,11 +4,14 @@ import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
+export interface FlvScanReader { readonly size: number; read(offset: number, length: number): Promise<Uint8Array>; }
 export type FlvCodec = 'h264' | 'hevc' | 'av1' | 'vvc';
 export interface FlvPacket { sequenceNumber?:number; configuration?: number; offset: number; size: number; pts: number; dts: number; key: boolean; originalPts?: number; }
+export interface FlvRecoveredGap { offset: number; size: number; }
 export interface FlvIndex {
+  recoveredGaps?: FlvRecoveredGap[]; // Skipped bytes, with subsequent tags structurally revalidated.
   configurations?: Uint8Array[]; // Configuration records in decode-order segments.
-  truncatedAt?: number; // Start of an incomplete trailing tag, never a playable packet.
+  truncatedAt?: number; // Start of an incomplete or corrupt trailing tag, never a playable packet.
   codec: FlvCodec;
   description: Uint8Array;
   packets: FlvPacket[]; // decode order; payloads stay in the source
@@ -22,6 +25,42 @@ const bad = (message: string): never => { throw new MediaOpenError('container', 
 const u24 = (b: Uint8Array, i: number) => b[i] * 65536 + b[i + 1] * 256 + b[i + 2];
 const u32 = (b: Uint8Array, i: number) => b[i] * 16777216 + u24(b, i + 1);
 const s24 = (b: Uint8Array, i: number) => (u24(b, i) << 8) >> 8;
+
+// Recovery is bounded and only available after a playable prefix. Do not
+// silently truncate an interior failure when a structurally valid tag follows it.
+const MAX_CORRUPT_TAIL_BYTES = 64 * 1024;
+async function isCorruptTail(reader: FlvScanReader, offset: number, playable: boolean) {
+  if (!playable || reader.size - offset > MAX_CORRUPT_TAIL_BYTES) return false;
+  const tail = await reader.read(offset, reader.size - offset);
+  for (let i = 1; i + 15 <= tail.length; i++) {
+    if (![8,9,18].includes(tail[i]) || u24(tail,i+8) !== 0) continue;
+    const size=u24(tail,i+1),end=i+11+size+4;
+    if (end <= tail.length && u32(tail,end-4) === size+11) return false;
+  }
+  return true;
+}
+
+// At most 4 KiB of skipped bytes and 64 candidate chains per recovery.
+// Read only headers and footers while proving two consecutive complete tags.
+export const FLV_RESYNC_BYTES = 4096;
+export const FLV_RESYNC_GAPS = 16;
+async function resyncFlv(reader: FlvScanReader, offset: number): Promise<number | undefined> {
+  const bytes=await reader.read(offset,Math.min(reader.size-offset,FLV_RESYNC_BYTES+11));
+  let candidates=0;
+  const tagEnd=async (at:number):Promise<number|undefined> => {
+    if(at+15>reader.size)return;
+    const header=await reader.read(at,11),size=u24(header,1),end=at+15+size;
+    if(![8,9,18].includes(header[0])||u24(header,8)!==0||!size||end>reader.size)return;
+    if(u32(await reader.read(end-4,4),0)!==size+11)return;
+    return end;
+  };
+  for(let i=1;i<=FLV_RESYNC_BYTES&&i+11<=bytes.length;i++){
+    if(![8,9,18].includes(bytes[i])||u24(bytes,i+8)!==0)continue;
+    if(++candidates>64)return;
+    const next=await tagEnd(offset+i);
+    if(next!==undefined&&await tagEnd(next)!==undefined)return offset+i;
+  }
+}
 
 /** Private-CDN and Enhanced FLV share bounded, cancellable HTTP Range IO. */
 export class FlvReader extends RangeReader {
@@ -40,12 +79,12 @@ export class FlvReader extends RangeReader {
  * Audio/script tags are skipped: this review app currently has video only. */
 export interface FlvCheckpoint { index: FlvIndex; nextOffset: number; complete: boolean; }
 
-export async function demuxFlv(reader: FlvReader, onProgress?: () => void): Promise<FlvIndex> {
+export async function demuxFlv(reader: FlvScanReader, onProgress?: () => void): Promise<FlvIndex> {
   return (await scanFlv(reader, onProgress)).index;
 }
 
 /** Stop after the first video packet for startup; resume at the next tag. */
-export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
+export async function scanFlv(reader: FlvScanReader, onProgress?: () => void, resume?: FlvCheckpoint, firstPacket = false, publish?: (checkpoint: FlvCheckpoint) => void): Promise<FlvCheckpoint> {
   const header = await reader.read(0, 9);
   if (header[0] !== 70 || header[1] !== 76 || header[2] !== 86 || header[3] !== 1) bad('不是有效的 FLV 1 文件。');
   let offset = u32(header, 5);
@@ -59,6 +98,7 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
   let configuration = configurations.length - 1;
   const packets: FlvPacket[] = resume ? resume.index.packets.slice() : [];
   let truncatedAt: number | undefined;
+  const recoveredGaps = resume?.index.recoveredGaps?.map(g=>({...g})) ?? [];
   let reported = performance.now();
   let published = resume?.index;
   const checkpoint = (nextOffset: number, complete: boolean) => {
@@ -70,6 +110,7 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
         `${error.message} scan=${JSON.stringify({ nextOffset, complete, size: reader.size, previousPackets: published?.packets.length ?? 0, packets: packets.length })}`);
       throw error;
     }
+    if(recoveredGaps.length)index={...index,recoveredGaps:recoveredGaps.map(g=>({...g}))};
     published = index;
     return { index, nextOffset, complete };
   };
@@ -96,12 +137,22 @@ export async function scanFlv(reader: FlvReader, onProgress?: () => void, resume
     if (reader.size - offset < 11) { truncatedAt = offset; break; }
     const tag = await reader.read(offset, 11);
     const size = u24(tag, 1), start = offset + 11, next = start + size + 4;
-    if (u24(tag, 8) !== 0) bad(`标签 @${offset} 的 stream ID 无效。`);
+    const structuralError = u24(tag,8) !== 0 ? `标签 @${offset} 的 stream ID 无效。`
+      : ![8,9,18].includes(tag[0]) ? `标签 @${offset} 的类型或标志无效。`
+      : next <= reader.size && u32(await reader.read(next-4,4),0) !== size+11 ? 'PreviousTagSize 与标签长度不一致。' : undefined;
+    if ((structuralError || next > reader.size) && description && packets.length && packets[0].key && recoveredGaps.length < FLV_RESYNC_GAPS) {
+      const resumedAt=await resyncFlv(reader,offset);
+      if(resumedAt!==undefined){recoveredGaps.push({offset,size:resumedAt-offset});offset=resumedAt;continue;}
+    }
+    if (structuralError) {
+      if (await isCorruptTail(reader,offset,!!description && !!packets.length && packets[0].key)) { truncatedAt=offset; break; }
+      bad(structuralError);
+    }
     if (next > reader.size) {
-      if (![8, 9, 18].includes(tag[0])) bad(`末尾标签 @${offset} 的类型或标志无效，且长度超出文件末尾。`);
+      if(description&&packets.length&&packets[0].key&&reader.size-offset<=MAX_CORRUPT_TAIL_BYTES&&!await isCorruptTail(reader,offset,true))
+        bad(`残缺标签 @${offset} 后仍有有效标签，无法安全重同步。`);
       truncatedAt = offset; break;
     }
-    if (u32(await reader.read(next - 4, 4), 0) !== size + 11) bad('PreviousTagSize 与标签长度不一致。');
     if ((tag[0] & 31) === 9) {
       if (tag[0] & 0xe0) bad('不支持加密或扩展标签标志。');
       if (size < 1) bad('视频标签为空。');
@@ -253,7 +304,11 @@ export function flvDecoderConfig(index: Pick<FlvIndex, 'codec' | 'description'>)
 
 export function flvIndexWarning(index: FlvIndex): string | undefined {
   const warnings: string[] = [];
-  if (index.truncatedAt !== undefined) warnings.push('文件尾部不完整，已忽略残缺标签，仅播放完整视频包。');
+  if(index.recoveredGaps?.length){
+    const first=index.recoveredGaps[0],bytes=index.recoveredGaps.reduce((n,g)=>n+g.size,0);
+    warnings.push(`文件存在 ${index.recoveredGaps.length} 处损坏间隙，已跳过 ${bytes} 字节并重同步标签；首处偏移=${first.offset}，长度=${first.size}。缺失的视频数据可能影响附近画面。`);
+  }
+  if (index.truncatedAt !== undefined) warnings.push('文件尾部不完整或损坏，已忽略尾部标签，仅播放完整视频包。');
   if (index.displayOrder) {
     const i = index.order.findIndex((p, i) => i > 0 && index.packets[p].pts === index.packets[index.order[i - 1]].pts);
     const a = index.packets[index.order[i - 1]], b = index.packets[index.order[i]];

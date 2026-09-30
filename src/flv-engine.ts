@@ -15,6 +15,7 @@ export class FlvEngine {
   readonly reader: FlvReader;
   private cache: FlvIndexClient;
   private scanReader?: FlvReader;
+  private serverProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   index!: FlvIndex;
   private checkpoint?: FlvCheckpoint;
   decoder!: PacketDecoder;
@@ -45,7 +46,9 @@ export class FlvEngine {
   }
   constructor(input: FlvInput, prepared?: PreparedFlv) {
     this.reader = new FlvReader(input, prepared?.version);
-    this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size);
+    this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size, progress => {
+      if(this.index)this.serverProgress?.({...progress,durationUs:flvMediaTiming(this.index).durationUs});
+    });
     if (prepared) { this.index = prepared.index; this.checkpoint = prepared; }
   }
   async prepare(onProgress?: MediaOpenProgress): Promise<PreparedFlv> {
@@ -72,13 +75,17 @@ export class FlvEngine {
       publish?.({ durationUs: checkpoint.index.firstPts + checkpoint.index.duration - checkpoint.index.packets[0].pts,
         scannedBytes: checkpoint.nextOffset, totalBytes: this.reader.size, packets: checkpoint.index.packets.length });
     };
+    this.serverProgress = data => { onProgress?.('index'); publish?.(data); };
     try {
       cached ??= await this.cache.read(this.index) ?? undefined;
+      if(!cached && this.cache.serverIndexRequired)throw new MediaOpenError('container','服务端 FLV 索引与源文件首包不一致，请清理旧索引后重试。');
       if (!this.checkpoint!.complete) {
-        const scanner = this.scanReader = new FlvReader(this.reader.input, this.reader.version);
-        scanner.setIndexing(true);
-        const completed = cached ? { index: cached, nextOffset: this.reader.size, complete: true }
-          : await scanFlv(scanner, () => onProgress?.('index'), this.checkpoint, false, commit);
+        let completed: FlvCheckpoint;
+        if(cached)completed={index:cached,nextOffset:this.reader.size,complete:true};
+        else {
+          const scanner=this.scanReader=new FlvReader(this.reader.input,this.reader.version);scanner.setIndexing(true);
+          completed=await scanFlv(scanner,()=>onProgress?.('index'),this.checkpoint,false,commit);
+        }
         if (completed.index.packets[0].pts !== this.index.packets[0].pts) throw new MediaOpenError('container', 'FLV 索引的起始包发生变化。');
         commit(completed);
       }
@@ -86,7 +93,7 @@ export class FlvEngine {
       return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
     } catch (error) {
       this.indexingFailure = error; this.wake(); throw error;
-    } finally { this.scanReader?.close(); this.scanReader = undefined; }
+    } finally { this.serverProgress=undefined; this.scanReader?.close(); this.scanReader = undefined; }
   }
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = false, threads = 1, onProgress?: MediaOpenProgress, nativeOnly = false) {
     try {
@@ -118,6 +125,7 @@ export class FlvEngine {
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
         indexWarning: flvIndexWarning(this.index),
+        indexSource: this.cache.serverIndexRequired ? 'server' as const : 'client' as const,
         indexState: this.checkpoint!.complete ? 'complete' as const : 'building' as const,
         ...flvMediaTiming(this.index) };
     } catch (error) { this.close(); throw error; }

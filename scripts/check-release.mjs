@@ -1,4 +1,5 @@
 import { httpFetch } from '../test/http-request.ts';
+import { syntheticFlv } from '../test/flv-fixture.ts';
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';
@@ -178,6 +179,20 @@ try {
   };
   const watchState = await (await fetch(base + '/api/library/scan')).json();
   assert.ok(watchState.watch?.active >= 2, 'packaged runtime registered directory watchers');
+  // Cold FLV builds must use the embedded build worker too, with no checkout or runtime on PATH.
+  const coldFlv = path.join(media, 'cold-index.flv');
+  await writeFile(coldFlv, syntheticFlv());
+  let flvEntry;
+  await waitForEntries(entries => !!(flvEntry = entries.find(e => e.name.endsWith('cold-index.flv') && e.state === 'ready')));
+  const coldIndexUrl = `${base}/api/media/${flvEntry.id}/frame-index?v=${flvEntry.version}&kind=flv&build=1`;
+  const coldResponse = await fetch(coldIndexUrl);
+  assert.equal(coldResponse.status, 200, 'packaged cold FLV build succeeds');
+  const coldIndex = await coldResponse.json();
+  assert.equal(coldIndex.index.codec, 'h264');
+  assert.equal(coldIndex.index.packets.length, 4);
+  assert.deepEqual((await (await fetch(coldIndexUrl)).json()).index, coldIndex.index, 'packaged cold index persists');
+  await rm(coldFlv);
+  await waitForEntries(entries => entries.length === 1);
   const added = path.join(media, '子目录', 'added.mp4');
   await writeFile(added, 'watch-test'); await utimes(added, 1, 1);
   await waitForEntries(entries => entries.some(e => e.name.endsWith('/added.mp4') && e.state === 'ready'));

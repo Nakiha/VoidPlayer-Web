@@ -3,6 +3,7 @@ import { openIndexDatabase } from './sqlite.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
 import { encodeBase64 } from '../src/ffmpeg-index-cache.ts';
 import { AdminError } from './admin-error.ts';
+import { buildFlvIndexDocument } from './flv-index-builder.ts';
 import { buildFfmpegIndexDocument, hasServerIndexCore } from './frame-index-builder.ts';
 import type { FfmpegIndexBuildProgress } from './frame-index-builder.ts';
 import type { FfmpegIndexBuildBatch, FfmpegIndexStreamMetadata } from './frame-index-builder.ts';
@@ -25,6 +26,13 @@ parentPort!.on('message', async (request: {
   try {
     if (store.has(request.id, request.version, request.identity.kind, request.identity)) {
       parentPort!.postMessage({ value: { built: false, epoch: store.epoch } });
+      return;
+    }
+    if(request.identity.kind==='flv'){
+      if(store.epoch!==request.epoch)throw new AdminError(409,'索引缓存已被清理，请重新请求。');
+      const result=await buildFlvIndexDocument(request.filePath,request.size,request.version,progress=>parentPort!.postMessage({type:'progress',data:progress}));
+      store.put(request.id,request.version,request.size,result.document,request.epoch,request.identity);
+      parentPort!.postMessage({value:{built:true,epoch:request.epoch,profile:result.profile}});
       return;
     }
     if (!hasServerIndexCore(workerData.coreDir)) throw new AdminError(503, '服务端 FFmpeg WASM core 不可用。');

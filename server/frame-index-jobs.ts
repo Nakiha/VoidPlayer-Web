@@ -58,7 +58,7 @@ type QueuedBuild = {
   latestProgress?: IndexBuildProgress;
 };
 
-/** Cache I/O and bounded, identity-deduplicated FFmpeg builds use separate
+/** Cache I/O and bounded, identity-deduplicated media-index builds use separate
  * workers. Packet-budgeted WASM scans report progress without blocking warm lookups. */
 export class FrameIndexJobs {
   private worker?: Worker;
@@ -220,7 +220,7 @@ export class FrameIndexJobs {
       let latestPackets = -1, latestScannedBytes = -1;
       const resetIdleTimer = () => {
         clearTimeout(idleTimer);
-        idleTimer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建进度停滞。')), policy.idleTimeoutMs);
+        idleTimer = setTimeout(() => finish(new AdminError(503, '媒体索引构建进度停滞。')), policy.idleTimeoutMs);
       };
       const finish = (error?: Error, value?: unknown) => {
         if (settled) return;
@@ -232,7 +232,7 @@ export class FrameIndexJobs {
         if (error) reject(error); else resolve(value);
       };
       resetIdleTimer();
-      absoluteTimer = setTimeout(() => finish(new AdminError(503, 'FFmpeg 索引构建超过绝对安全期限。')), policy.absoluteTimeoutMs);
+      absoluteTimer = setTimeout(() => finish(new AdminError(503, '媒体索引构建超过绝对安全期限。')), policy.absoluteTimeoutMs);
       worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number }) => {
         if (result.type === 'progress') {
           const progress = result.data as IndexBuildProgress;
@@ -258,7 +258,7 @@ export class FrameIndexJobs {
         }
       });
       worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
-      worker.once('exit', code => { if (!settled) finish(new Error('FFmpeg 索引构建 Worker 已退出 (' + code + ')')); });
+      worker.once('exit', code => { if (!settled) finish(new Error('媒体索引构建 Worker 已退出 (' + code + ')')); });
       try { worker.postMessage(request); }
       catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
     });

@@ -5,7 +5,7 @@ import { startupFixture } from '../scripts/flv-startup-fixture.ts';
 import { openFlvMedia } from '../src/flv-media.ts';
 import { ReviewSession } from '../src/session.ts';
 
-test('first decoded frame and startup-frame seeks precede a blocked tail; completed indexes upload and are reused', { timeout: 30000 }, async () => {
+test('first decoded frame precedes a server build; completed indexes are persisted and reused', { timeout: 30000 }, async () => {
   const f = await startupFixture(true);
   const core = new URL('../public/vendor/voidplayer-core/', import.meta.url);
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true };
@@ -28,7 +28,7 @@ test('first decoded frame and startup-frame seeks precede a blocked tail; comple
     assert.ok(session.getState().positionUs > 2400000);
     const end = Date.now() + 5000;
     while (!f.library.frameIndexes.list().count && Date.now() < end) await new Promise(r => setTimeout(r, 10));
-    assert.equal(f.library.frameIndexes.list().count, 1, 'worker uploads completed index');
+    assert.equal(f.library.frameIndexes.list().count, 1, 'server persists completed index without a browser upload');
     await session.removeTrack('A'); const before = f.counts().ranges;
     await deadline(session.load('A', () => openFlvMedia(input, f.entry, deps)));
     await deadline(session.seek(2500000));
@@ -45,9 +45,9 @@ test('first decoded frame and startup-frame seeks precede a blocked tail; comple
 
 
 test('real packet playback advances before a blocked sparse tail is indexed', { timeout: 30000 }, async () => {
-  const f = await startupFixture(true, true);
+  const f = await startupFixture(true, true, false);
   const core = new URL('../public/vendor/voidplayer-core/', import.meta.url);
-  const source = await openFlvMedia({ url: `${f.base}/api/media/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size }, f.entry,
+  const source = await openFlvMedia({ url: `${f.base}/raw/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size }, f.entry,
     { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true });
   const iterator = source.framesFrom(0);
   try {

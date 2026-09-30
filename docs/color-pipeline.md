@@ -172,3 +172,14 @@ Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮�
 ### 工作区比较条件（v0.3.0）
 
 导出/本机检查点持久化 `comparison`：色彩模式、referenceDecode 偏好/深度、`voidplayer-sdr-v1` 呈现契约和 sRGB 目标。导入在打开解码器之前应用，失败/取消回滚原条件；通道仍保存在 viewport。这不会扩展 SDR 准入范围，不宣称 browser 兼容路径与软件输出逐像素相同，也不承诺不同设备的 HDR 参考显示。旧工作区缺少该块时提示沿用当前条件，未知契约拒绝读取。
+
+### Visible chroma edge contract
+
+Raw YUV CPU, WebGL and WebGPU reconstruction clamps chroma indices to cells
+intersecting `visibleRect` (floor of crop origin / subsampling through ceil of
+crop end / subsampling minus one). Bilinear reconstruction never reads CTU
+padding outside this crop. The native witness compares every visible luma and
+chroma cell exactly, including boundary cells, with no numeric tolerance.
+Different coded allocations may therefore pass when only their padding differs.
+PTS, crop, packing validity, bit depth, siting and resolved color checks remain
+mandatory. This does not certify arbitrary differences in decoded edge pixels.

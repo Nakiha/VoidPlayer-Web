@@ -19,9 +19,10 @@ test('odd dimensions, padding, planar/NV12 and low/high aligned 10-bit are equiv
   const a=yuvFixture(10),b=yuvFixture(10,true),c=yuvFixture(10,true,false,'bt709',5,3,6);
   assert.deepEqual(yuvToRgba(a.description,a.pixels),yuvToRgba(b.description,b.pixels));
   assert.deepEqual(yuvToRgba(a.description,a.pixels),yuvToRgba(c.description,c.pixels));
-  const full=yuvToRgba(a.description,a.pixels);
   a.description.visibleRect={x:1,y:1,width:3,height:1};a.description.width=3;a.description.height=1;
-  assert.deepEqual(yuvToRgba(a.description,a.pixels),full.slice(24,36));
+  // This one-row crop uses only the chroma row intersecting it. The next
+  // coded row (V=190) must not bleed into the crop through interpolation.
+  assert.deepEqual([...yuvToRgba(a.description,a.pixels)], [64,66,38,255,128,135,51,255,191,201,90,255]);
   a.description.yuv!.planes[1].offset=a.pixels.length;
   assert.throws(()=>validateYuv(a.description,a.pixels.length));
 });

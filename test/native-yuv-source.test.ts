@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {nativeYuvSource,verifyNativeWitness} from '../src/native-yuv-source.ts';
+import {yuvToRgba} from '../src/yuv-color.ts';
 import {rgbaDescription} from '../src/frame-description.ts';
 import type {DecodedFrame,MediaSource} from '../src/media.ts';
 
@@ -37,6 +38,9 @@ test('native witness accepts coded padding when the visible rectangle and visibl
  assert.throws(()=>verifyNativeWitness(native,reference),/可见样本不一致/);
  native.pixels![nativeY.offset+959*nativeY.stride+539]--;
  native.pixels![nativeU.offset+479*nativeU.stride+270]=77;
+ verifyNativeWitness(native,reference);
+ assert.deepEqual(yuvToRgba(native.description,native.pixels!),yuvToRgba(reference.description,reference.pixels!));
+ native.pixels![nativeU.offset+479*nativeU.stride+269]=77;
  assert.throws(()=>verifyNativeWitness(native,reference),/可见样本不一致/);
  const cropped=geometryFrame(544,960,539,960);
  assert.throws(()=>verifyNativeWitness(cropped,reference),/裁剪区域不一致/);
@@ -60,4 +64,20 @@ test('native pipeline preserves order under out-of-order copies and drains cance
   const iterator=wrapped.framesFrom(0);const first=await iterator.next();first.value!.close();await iterator.return(undefined);assert.equal(active,0);
   const pending=wrapped.frameAt(0);wrapped.dispose();await assert.rejects(pending,/释放/);assert.equal(terminated,2);assert.ok(closed>=12);
  }finally{wrapped.dispose();globalThis.Worker=original;}
+});
+
+test('witness rejects visible chroma changes for odd crops, both crop edges',()=>{
+ for(const location of [1,2,3,4,5,6]){
+  const native=geometryFrame(8,8,5,3),reference=geometryFrame(6,4,5,3);
+  for(const f of [native,reference]){f.description.visibleRect.x=1;f.description.visibleRect.y=1;f.description.yuv!.chromaLocation=location;}
+  const l=native.description.yuv!;
+  // Change every padding cell while retaining the intersecting 3x2 crop.
+  for(const p of l.planes.slice(1))for(let y=0;y<p.height;y++)for(let x=0;x<p.width;x++)if(x>=3||y>=2)native.pixels![p.offset+y*p.stride+x]=255;
+  verifyNativeWitness(native,reference);
+  for(const p of l.planes.slice(1))for(const [x,y] of [[0,0],[2,1]]){
+   const at=p.offset+y*p.stride+x;native.pixels![at]=1;
+   assert.throws(()=>verifyNativeWitness(native,reference),/可见样本/);native.pixels![at]=0;
+  }
+  assert.deepEqual(yuvToRgba(native.description,native.pixels!),yuvToRgba(reference.description,reference.pixels!));
+ }
 });

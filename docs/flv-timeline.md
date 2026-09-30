@@ -99,3 +99,39 @@ was released. Native FLV diagnostics include capability probe preferences and
 results, policy exclusions, and first-frame failure reasons. Packet open logs
 also include the chosen WASM variant and requested thread count. Neither a
 hardware preference nor capability acceptance proves the GPU actually used.
+
+## Damaged tails
+
+Incomplete trailing tags retain complete indexed packets. A structurally corrupt
+suffix (stream ID, tag type/flags or footer mismatch) is also ignored only after
+a configured initial key packet, within the last 64 KiB, and when a bounded scan
+finds no later complete tag with a valid stream ID and footer. The index completes
+with `truncatedAt` and an explicit warning, persisted in shared caches. Interior gaps can recover after a playable prefix: search at most 4 KiB ahead
+and validate two consecutive complete, nonempty tags (type/flags, stream ID,
+size and PreviousTagSize). Candidate probing is capped at 64 chains and recovery
+at 16 gaps per file. The normal codec/configuration parser still validates every
+resumed tag. Original offsets, timestamps and compressed packets are retained;
+no frames or timestamps are invented. `recoveredGaps` survives immutable scan
+checkpoints and cache round trips and produces an explicit warning. Inserted
+garbage can leave decoding unchanged; lost compressed data may affect nearby
+pictures and still fail decoding. Unproven or over-limit gaps, longer corrupt
+suffixes, IO/version errors and codec/configuration errors remain failures.
+Recovery never indexes bytes from the rejected gap or suffix.
+
+## Index ownership and shared scanner
+
+Library URLs (`/api/media/<id>?v=<version>`) request a server build on cache miss.
+The server Worker reads the library file directly through a bounded 2 MiB disk
+cache and runs the same `scanFlv` used for local files. Parsing, reorder handling,
+duplicate timestamps, damaged tails and bounded resynchronization are identical.
+FLV remains outside FFmpeg demuxing; index building needs no decoder or WASM core.
+Builds share the version/identity/epoch-deduplicated queue and SQLite cache, and
+verify the file descriptor and current path version before committing.
+
+Startup still reads only enough compressed bytes to display the first frame.
+Server scan progress is streamed, then the completed FLV document transfers in
+resumable NDJSON chunks. This does not yet publish FLV packet prefixes during
+server scanning; seeks/playback beyond startup coverage wait for the completed
+index. Cache hits skip building. Local Blob files and arbitrary URLs without a
+library service endpoint scan on the client. A library server failure or index
+prefix mismatch is explicit, never a silent full-file browser rescan.

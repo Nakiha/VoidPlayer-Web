@@ -47,7 +47,7 @@ export class MediaIndexClient {
             source.searchParams.set('schema', String(resolvedIdentity.schemaVersion));
             source.searchParams.set('indexer', resolvedIdentity.indexerBuild);
           }
-          if (kind === 'ffmpeg' && requestBuild) source.searchParams.set('build', '1');
+          if (requestBuild) source.searchParams.set('build', '1');
           this.endpoint = source.href;
         }
       } catch { /* local files and arbitrary URLs have no cache API */ }
@@ -151,6 +151,8 @@ export class MediaIndexClient {
       return result;
     } catch { return null; }
   }
+
+  get hasEndpoint(): boolean { return !!this.endpoint; }
 
   async read() {
     const result = await this.lookup;

@@ -6,7 +6,7 @@ import { MediaLibraryIndex } from '../server/library.ts';
 import { AdminController } from '../server/admin.ts';
 import { createMediaServer } from '../server/app.ts';
 
-export async function startupFixture(nodeOrigin = false, blockAfterVideo = false) {
+export async function startupFixture(nodeOrigin = false, blockAfterVideo = false, blockServerIndex = true) {
   const root = path.resolve(import.meta.dirname, '..'), temporary = await mkdtemp(path.join(os.tmpdir(), 'vp-flv-startup-'));
   const media = path.join(temporary, 'media'); await mkdir(media); await mkdir(path.join(temporary, 'data'));
   const original = await readFile(path.join(root, 'fixtures/flv/standard-h264.flv'));
@@ -30,8 +30,15 @@ export async function startupFixture(nodeOrigin = false, blockAfterVideo = false
   const handler = server.listeners('request')[0]; server.removeAllListeners('request');
   let release!: () => void, block = true, delayed = 0, ranges = 0;
   const gate = new Promise<void>(resolve => { release = resolve; });
+  const buildIndex=library.indexJobs.buildIndex.bind(library.indexJobs);
+  library.indexJobs.buildIndex=async(request,options)=>{
+    if(blockServerIndex&&request.identity.kind==='flv'&&block){delayed++;await gate;}
+    return buildIndex(request,options);
+  };
   let base = '';
   server.on('request', async (req, res) => {
+    // Raw URLs deliberately have no library index endpoint, for client-only scan tests.
+    if(req.url?.startsWith('/raw/'))req.url=req.url.replace('/raw/','/api/media/');
     if (nodeOrigin && req.method === 'POST' && req.url?.includes('/frame-index')) req.headers.origin = base;
     if (/^\/api\/media\/[a-f0-9]{24}(\?|$)/.test(req.url ?? '') && req.headers.range) {
       ranges++; const start = Number(/^bytes=(\d+)/.exec(req.headers.range)?.[1]);
