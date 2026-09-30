@@ -61,13 +61,18 @@ export function yuvSample(pixels: Uint8Array | Uint8ClampedArray, l: YuvLayout, 
   const offset = p.offset + y * p.stride + x * bytes * (l.semiplanar && component ? 2 : 1) + (l.semiplanar && component === 2 ? bytes : 0);
   return ((pixels[offset] + (bytes === 2 ? pixels[offset + 1] * 256 : 0)) >>> l.bitShift) & (2 ** l.bitDepth - 1);
 }
+/** Chroma cells intersecting the visible luma crop; coded padding is not image data. */
+export function visibleChromaBounds(d: FrameDescription): [number,number,number,number] {
+  const l=d.yuv!,r=d.visibleRect,sx=2**l.subsampleX,sy=2**l.subsampleY;
+  return [Math.floor(r.x/sx),Math.floor(r.y/sy),Math.ceil((r.x+r.width)/sx)-1,Math.ceil((r.y+r.height)/sy)-1];
+}
 const linear = (v: number) => v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-export function yuvReconstructedSample(pixels: Uint8Array | Uint8ClampedArray,l:YuvLayout,c:number,x:number,y:number) {
+export function yuvReconstructedSample(pixels: Uint8Array | Uint8ClampedArray,l:YuvLayout,c:number,x:number,y:number,bounds?:[number,number,number,number]) {
   if(!c)return yuvSample(pixels,l,c,x,y);
   const [ox,oy]=chromaOffset(l),sx=2**l.subsampleX,sy=2**l.subsampleY;
   const px=(x-ox)/sx,py=(y-oy)/sy,bx=Math.floor(px),by=Math.floor(py),wx=px-bx,wy=py-by;
   const plane=l.planes[l.semiplanar?1:c];
-  const at=(i:number,j:number)=>yuvSample(pixels,l,c,Math.max(0,Math.min(plane.width-1,i))*sx,Math.max(0,Math.min(plane.height-1,j))*sy);
+  const at=(i:number,j:number)=>yuvSample(pixels,l,c,Math.max(bounds?.[0]??0,Math.min(bounds?.[2]??plane.width-1,i))*sx,Math.max(bounds?.[1]??0,Math.min(bounds?.[3]??plane.height-1,j))*sy);
   return (at(bx,by)*(1-wx)+at(bx+1,by)*wx)*(1-wy)+(at(bx,by+1)*(1-wx)+at(bx+1,by+1)*wx)*wy;
 }
 const encoded = (v: number) => v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055;
@@ -78,8 +83,8 @@ export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8Clamp
   const scale = 2 ** (l.bitDepth - 8), max = 2 ** l.bitDepth - 1;
   const sx = x + d.visibleRect.x, sy = y + d.visibleRect.y;
   const yy = (yuvSample(pixels, l, 0, sx, sy) - (plan.fullRange ? 0 : 16 * scale)) / (plan.fullRange ? max : 219 * scale);
-  const cb = (yuvReconstructedSample(pixels, l, 1, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
-  const cr = (yuvReconstructedSample(pixels, l, 2, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
+  const cb = (yuvReconstructedSample(pixels, l, 1, sx, sy, visibleChromaBounds(d)) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
+  const cr = (yuvReconstructedSample(pixels, l, 2, sx, sy, visibleChromaBounds(d)) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
   let rgb = [yy + 2 * (1 - kr) * cr, yy - 2 * kb * (1 - kb) / kg * cb - 2 * kr * (1 - kr) / kg * cr, yy + 2 * (1 - kb) * cb];
   if (plan.primaries === 'bt2020') {
     const [r, g, b] = rgb.map(v => linear(Math.max(0, v)));
@@ -101,7 +106,7 @@ export function yuvChannelGray(d: FrameDescription, pixels: Uint8Array | Uint8Cl
     normalized = (yuvSample(pixels, l, 0, sx, sy) - (plan.fullRange ? 0 : 16 * scale)) / (plan.fullRange ? max : 219 * scale);
   } else {
     const component = channel === 'u' ? 1 : 2;
-    normalized = (yuvReconstructedSample(pixels, l, component, sx, sy) - 128 * scale) / (plan.fullRange ? max : 224 * scale) + 0.5;
+    normalized = (yuvReconstructedSample(pixels, l, component, sx, sy, visibleChromaBounds(d)) - 128 * scale) / (plan.fullRange ? max : 224 * scale) + 0.5;
   }
   const gray = Math.round(Math.max(0, Math.min(1, normalized)) * 255);
   return [gray, gray, gray];

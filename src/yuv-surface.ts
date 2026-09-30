@@ -27,7 +27,7 @@ export function createYuvSurface(gl: WebGLRenderingContext) {
     vec3 linear(vec3 x){x=max(x,0.0);return mix(x/12.92,pow((x+0.055)/1.055,vec3(2.4)),step(vec3(0.04045),x));}
     vec3 encoded(vec3 x){x=max(x,0.0);return mix(x*12.92,1.055*pow(x,vec3(1.0/2.4))-0.055,step(vec3(0.0031308),x));}
     vec2 chromaAt(vec2 chroma){
-      chroma=clamp(chroma,vec2(0.0),chromaSize-1.0);
+      chroma=clamp(chroma,floor(crop/subsample),min(chromaSize-1.0,ceil((crop+visibleSize)/subsample)-1.0));
       vec4 uv=texture2D(planeU,(chroma+0.5)/shapeU);
       float u; float vv;
       if(semi>0.5){

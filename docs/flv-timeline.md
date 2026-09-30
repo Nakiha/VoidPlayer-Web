@@ -99,3 +99,13 @@ was released. Native FLV diagnostics include capability probe preferences and
 results, policy exclusions, and first-frame failure reasons. Packet open logs
 also include the chosen WASM variant and requested thread count. Neither a
 hardware preference nor capability acceptance proves the GPU actually used.
+
+## Damaged tails
+
+Incomplete trailing tags retain complete indexed packets. A structurally corrupt
+suffix (stream ID, tag type/flags or footer mismatch) is also ignored only after
+a configured initial key packet, within the last 64 KiB, and when a bounded scan
+finds no later complete tag with a valid stream ID and footer. The index completes
+with `truncatedAt` and an explicit warning, persisted in shared caches. Interior
+corruption, longer corrupt suffixes, IO/version errors and codec/configuration
+errors remain failures. Recovery never indexes bytes from the rejected suffix.

@@ -9,7 +9,9 @@ fn planeCode(c:u32,xy:vec2f)->f32{
  var plane=c;if(c>0u&&p[2].z>0){plane=1u;}
  let planeInfo=p[3u+plane];
  let shape=planeInfo;
- let pos=clamp(xy,vec2f(0),vec2f(f32(bitcast<u32>(shape.z)),f32(bitcast<u32>(shape.w)))-1);
+ var lower=vec2f(0);var upper=vec2f(f32(bitcast<u32>(shape.z)),f32(bitcast<u32>(shape.w)))-1;
+ if(c>0u){lower=floor(p[1].xy/p[1].zw);upper=min(upper,ceil((p[1].xy+p[0].xy)/p[1].zw)-1);}
+ let pos=clamp(xy,lower,upper);
  var offset=bitcast<u32>(planeInfo.x)+u32(pos.y)*bitcast<u32>(planeInfo.y)+u32(pos.x)*u32(p[2].x);
  if(c>0u&&p[2].z>0){offset=bitcast<u32>(planeInfo.x)+u32(pos.y)*bitcast<u32>(planeInfo.y)+u32(pos.x)*u32(p[2].x)*2u+select(0u,u32(p[2].x),c==2u);}
  return codeAt(offset);

@@ -36,7 +36,11 @@ test('incomplete final header, payload or footer retains the validated prefix an
 test('invalid stream IDs and broken interior tag links remain fatal, and a truncated first packet is not playable', async () => {
   const bytes = syntheticFlv();
   const invalid = trailingTag(); invalid[10] = 1;
-  await assert.rejects(index(Buffer.concat([bytes, invalid])), /stream ID/);
+  const recovered=await index(Buffer.concat([bytes,invalid]));
+  assert.equal(recovered.truncatedAt,bytes.length);
+  assert.deepEqual(recovered.packets,(await index(bytes)).packets);
+  await assert.rejects(index(Buffer.concat([bytes,invalid,bytes.subarray(13)])), /stream ID/);
+  await assert.rejects(index(Buffer.concat([bytes,invalid,Buffer.alloc(64*1024)])), /stream ID/);
   const corrupt = Buffer.from(bytes); corrupt.writeUInt32BE(999, 36);
   await assert.rejects(index(corrupt), /PreviousTagSize/);
   const full = await index(bytes), first = full.packets[0];
@@ -76,4 +80,21 @@ test('foreign codec sequence-end markers do not change codec or duration; coded 
   for (const payload of [[0x1c, 0, 0, 0, 0, 1], [0x1c, 1, 0, 0, 0, 1]])
     await assert.rejects(index(Buffer.concat([original, control(payload)])), /切换视频编码/);
   await assert.rejects(index(Buffer.concat([original, control([0x17, 2, 0, 0, 0, 1])])), /结束标签/);
+});
+
+test('corrupt short EOF suffixes recover after startup, preserve cache warnings and reject an empty prefix', async () => {
+  const bytes=syntheticFlv(),expected=await index(bytes);
+  const invalidStream=Buffer.alloc(18);invalidStream[0]=9;invalidStream[10]=1;invalidStream.writeUIntBE(3,1,3);invalidStream.writeUInt32BE(14,14);
+  const badFooter=Buffer.from(invalidStream);badFooter[10]=0;badFooter.writeUInt32BE(99,14);
+  for(const tail of [Buffer.alloc(37,0xa5),invalidStream,badFooter]){
+    const file=Buffer.concat([bytes,tail]),reader=new FlvReader({file:new Blob([file])});
+    try{
+      const start=await scanFlv(reader,undefined,undefined,true);
+      const full=await scanFlv(reader,undefined,start);
+      assert.equal(full.complete,true);assert.equal(full.nextOffset,file.length);
+      assert.equal(full.index.truncatedAt,bytes.length);assert.deepEqual(full.index.packets,expected.packets);
+      assert.deepEqual(parseFlvIndex(serializeFlvIndex(full.index,file.length),file.length),full.index);
+    }finally{reader.close();}
+    await assert.rejects(index(Buffer.concat([bytes.subarray(0,13),tail])));
+  }
 });
