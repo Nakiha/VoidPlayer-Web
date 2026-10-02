@@ -26,45 +26,31 @@ try {
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hlg-test`);
   const results = await page.evaluate(async ({ size, expected }) => {
     const { Mp4Engine } = await import('/src/mp4-engine.ts');
+    const { createHlgPixelSampler, hlgSignatureDifference, hlgSignatureHasSpatialVariation } = await import('/scripts/hlg-pixel-signature.mjs');
     const assert = (value, message) => { if (!value) throw Error(message); };
     const url = new URL('/fixtures/video/dolby_hlg_1080p30.mp4', location.href).href;
-    const signatures = new Map(), rows = [];
+    const signatures = new Map(), rows = [], samplePixels = createHlgPixelSampler();
+    const seekOrdinals = [0, 8, 9, 10, Math.floor(expected.length / 2), expected.length - 2, expected.length - 1, 0];
+    const seekSamples = seekOrdinals.reduce((count, i) => count + (i + 1 < expected.length ? 2 : 1), 0);
     for (const remote of [true, false]) {
       const source = new Mp4Engine(remote ? { url, size } : { file: new Blob([await (await fetch(url)).arrayBuffer()]) });
-      const row = { remote, count: 0, pixelChecks: 0, seeks: [] };
+      const row = { remote, count: 0, pixelSamples: 0, pixelChecks: 0, nonFlatFrames: 0, temporalChanges: 0, seeks: [] };
+      let precedingSignature;
       const inspect = async (output, ordinal) => {
         try {
           assert(!!output && Math.abs(output.pts - expected[ordinal]) <= 2, `frame ${ordinal}: PTS=${output?.pts}, expected=${expected[ordinal]}`);
-          const frame = output.frame;
-          let bytes, plane, depth, shift = 0, width, height, channels = 1, sampleBytes;
-          if (frame && ['NV12', 'I420', 'I420P10', 'RGBA', 'RGBX', 'BGRA', 'BGRX'].includes(frame.format)) {
-            bytes = new Uint8Array(frame.allocationSize());
-            [plane] = await frame.copyTo(bytes); depth = frame.format === 'I420P10' ? 10 : 8;
-            channels = frame.format.includes('RGB') || frame.format.includes('BGR') ? 3 : 1;
-            sampleBytes = channels === 3 ? 4 : depth > 8 ? 2 : 1;
-            width = frame.visibleRect.width; height = frame.visibleRect.height;
-          } else if (output.pixels && output.description.yuv) {
-            bytes = new Uint8Array(output.pixels);
-            const yuv = output.description.yuv;
-            [plane] = yuv.planes; depth = yuv.bitDepth; shift = yuv.bitShift;
-            sampleBytes = depth > 8 ? 2 : 1;
-            width = plane.width; height = plane.height;
-          } else if (output.pixels && output.description.format === 'RGBA') {
-            bytes = new Uint8Array(output.pixels); depth = 8; channels = 3; sampleBytes = 4;
-            plane = { offset: 0, stride: output.description.stride };
-            width = output.description.width; height = output.description.height;
+          const signature = await samplePixels(output);
+          row.pixelSamples++;
+          const { values, ...layout } = signature;
+          Object.assign(row, { outputFormat: signature.outputFormat, readbackPath: signature.readbackPath, signatureLayout: layout });
+          if (row.count < expected.length) {
+            if (hlgSignatureHasSpatialVariation(signature)) row.nonFlatFrames++;
+            if (precedingSignature && hlgSignatureDifference(signature, precedingSignature) > .001) row.temporalChanges++;
+            precedingSignature = signature;
           }
-          row.outputFormat = frame?.format ?? output.description.format;
-          if (bytes) {
-            const signature = [];
-            for (let y = 0; y < 18; y++) for (let x = 0; x < 32; x++) {
-              const offset = plane.offset + Math.floor((y + .5) * height / 18) * plane.stride + Math.floor((x + .5) * width / 32) * sampleBytes;
-              for (let c = 0; c < channels; c++) signature.push(((bytes[offset + c] + (depth > 8 ? bytes[offset + c + 1] * 256 : 0)) >>> shift) / 2 ** (depth - 8));
-            }
-            const previous = signatures.get(ordinal);
-            if (previous) { assert(signature.reduce((n, value, i) => n + Math.abs(value - previous[i]), 0) / signature.length < 1.3, `seek changed picture ${ordinal}`); row.pixelChecks++; }
-            else signatures.set(ordinal, signature);
-          }
+          const previous = signatures.get(ordinal);
+          if (previous) { assert(hlgSignatureDifference(signature, previous) < 1.3, `seek changed picture ${ordinal}`); row.pixelChecks++; }
+          else signatures.set(ordinal, signature);
           return output.pts;
         } finally { output?.frame?.close(); }
       };
@@ -76,13 +62,21 @@ try {
           const pts = await inspect(frame, i); row.count++;
           frame = await source.next(pts);
         }
+        frame?.frame?.close();
         assert(frame === null, 'unexpected extra tail frame');
-        for (const i of [0, 8, 9, 10, Math.floor(expected.length / 2), expected.length - 2, expected.length - 1, 0]) {
+        for (const i of seekOrdinals) {
           const pts = await inspect(await source.at(expected[i]), i);
           if (i + 1 < expected.length) await inspect(await source.next(pts), i + 1);
-          else assert(await source.next(pts) === null, 'EOF step must end');
+          else {
+            const tail = await source.next(pts);
+            tail?.frame?.close();
+            assert(tail === null, 'EOF step must end');
+          }
           row.seeks.push(i);
         }
+        assert(row.pixelSamples === expected.length + seekSamples, 'every frame and seek/step must have a pixel signature');
+        assert(row.pixelChecks === seekSamples + (remote ? 0 : expected.length), 'all seek/step and local/Range picture identities must be checked');
+        assert(row.nonFlatFrames > 0 && row.temporalChanges > 0, 'HLG readback must contain nonuniform, changing pictures');
         rows.push(row);
       } finally { source.close(); }
     }
