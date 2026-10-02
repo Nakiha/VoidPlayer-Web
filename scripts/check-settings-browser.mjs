@@ -235,7 +235,13 @@ try {
  assert.ok(Math.abs(headerBefore.y-headerAfter.y)<1,'feedback glass header stays fixed while content scrolls');
  await page.locator('#settings-close').click();await page.locator('#settings').waitFor({state:'hidden'});await page.keyboard.press('Control+,');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
  await page.setViewportSize({width:1280,height:700});
- const desktopHeader=await page.locator('.settings-floating-header').boundingBox(),desktopClose=await page.locator('#settings-close').boundingBox();
+ // The keyboard shortcut returns during settings-enter. Wait for its transform to
+ // settle, then sample both rectangles in one frame before comparing their insets.
+ await page.waitForFunction(()=>{
+  const dialog=document.querySelector('#settings');
+  return dialog.open&&!dialog.hasAttribute('data-closing')&&dialog.getAnimations().every(animation=>animation.playState==='finished');
+ },null,{timeout:30000});
+ const [desktopHeader,desktopClose]=await page.evaluate(()=>['.settings-floating-header','#settings-close'].map(selector=>document.querySelector(selector).getBoundingClientRect().toJSON()));
  assert.ok(Math.abs((desktopClose.y-desktopHeader.y)-(desktopHeader.x+desktopHeader.width-desktopClose.x-desktopClose.width))<1,'desktop close button has equal top and right inset');
  if (!process.argv.includes('--ui-only')) {
  await page.evaluate(async()=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});await tools.find(t=>t.name==='load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});});

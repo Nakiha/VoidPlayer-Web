@@ -27,6 +27,8 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   let binding: SavedWorkspace | undefined, busy = false, available = false, before = '', next: string | null = null, search = '', sequence = 0;
   let refreshAfterBusy = false, bindingEpoch = 0;
   let idle: Promise<void> = Promise.resolve();
+  const captureRequest = () => ({ binding, owner: currentActor()?.id, epoch: bindingEpoch });
+  const isCurrent = (request: ReturnType<typeof captureRequest>) => !options.signal.aborted && request.epoch === bindingEpoch && request.owner === currentActor()?.id;
   const message = (value: string, error = false) => { $('message').hidden = !value; $('message').textContent = value; $('message').dataset.error = String(error); };
   const title = () => $<HTMLInputElement>('name').value.trim() || '未命名工作区';
   function controls() {
@@ -37,16 +39,19 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     $('list').querySelectorAll<HTMLButtonElement>('.saved-workspace-open').forEach(button => { const selected = button.dataset.workspaceId === binding?.id; button.setAttribute('aria-pressed', String(selected)); button.closest<HTMLElement>('.saved-workspace-row')!.dataset.selected = String(selected); button.disabled = busy; });
     document.querySelector<HTMLElement>('.saved-workspace-pages')!.hidden = !available || (!before && !next);
   }
-  async function act<T>(work: () => Promise<T>, propagate = false): Promise<T | undefined> {
+  async function act<T>(work: () => Promise<T>, propagate = false, request?: ReturnType<typeof captureRequest>): Promise<T | undefined> {
     if (busy) return; busy = true; let release!: () => void; idle = new Promise(resolve => { release = resolve; }); controls();
     try { return await work(); }
-    catch (error) { if (!options.signal.aborted) { message((error as Error).message, true); if (!propagate) options.report(error as Error); } if (propagate) throw error; }
+    catch (error) { if (!options.signal.aborted && (!request || isCurrent(request))) { message((error as Error).message, true); if (!propagate) options.report(error as Error); } if (propagate) throw error; }
     finally { busy = false; release(); controls(); if (refreshAfterBusy && !options.signal.aborted) { refreshAfterBusy = false; refresh(); } }
   }
+  // Saves and list work belong to the current document. Loading intentionally
+  // detaches while opening, so its own later failures must still be reported.
+  const actCurrent = <T>(work: () => Promise<T>, propagate = false) => act(work, propagate, captureRequest());
   async function list() {
-    const request = ++sequence;
+    const request = ++sequence, context = captureRequest();
     const page = await client.list(before, search, true);
-    if (request !== sequence) return;
+    if (request !== sequence || !isCurrent(context)) return;
     available = true; next = page.next;
     const rows = page.entries.map(record => {
       const row = document.createElement('div'); row.dataset.workspaceId = record.id; row.className = 'saved-workspace-row';
@@ -75,37 +80,44 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     binding = record; delete $('reload').dataset.unavailable; $<HTMLInputElement>('name').value = record.name; $('conflict').hidden = true; message(''); controls();
     const url = new URL(location.href); url.searchParams.delete('share'); url.searchParams.delete('review'); url.searchParams.set('workspace', record.id); history.replaceState(null, '', url);
   }
-  async function persist(document = options.snapshot()) {
-    const owner = currentActor()?.id;
+  async function persist(document = options.snapshot(), request = captureRequest()) {
+    // Keep the target and document from before any preparation/network await.
+    // An import or identity change invalidates this work, including its errors.
+    const snapshot = structuredClone(document), name = document.name || title();
     try {
-      const stored = await client.save(document.name || title(), binding?.space ? await prepareSharedWorkspace(document) : document, binding);
-      if (owner !== currentActor()?.id) return;
+      const prepared = request.binding?.space ? await prepareSharedWorkspace(snapshot) : snapshot;
+      if (!isCurrent(request)) return;
+      const stored = await client.save(name, prepared, request.binding);
+      if (!isCurrent(request)) return;
       binding = stored; $('conflict').hidden = true; before = ''; message(''); await list();
     } catch (error) {
-      if ([409, 404].includes((error as { status?: number }).status ?? 0) && binding) {
+      if (!isCurrent(request)) return;
+      if ([409, 404].includes((error as { status?: number }).status ?? 0) && request.binding) {
         $('conflict').hidden = false;
         $('reload').dataset.unavailable = String((error as { status?: number }).status === 404);
       }
       throw error;
     }
   }
-  $('save').onclick=()=>void act(()=>persist());
+  $('save').onclick=()=>void actCurrent(()=>persist());
   $('name').addEventListener('change', () => {
-    if (binding) void act(async () => {
-      const stored = await client.read(binding!.id);
+    if (binding) void actCurrent(async () => {
+      const request = captureRequest(), name = title();
+      const stored = await client.read(request.binding!.id);
+      if (!isCurrent(request)) return;
       // Renaming must not overwrite a newer server revision with the local session.
-      if (stored.revision !== binding!.revision) { $('conflict').hidden = false; throw new Error('工作区已被更新，请重新打开后继续。'); }
-      await persist({ ...stored.document, name: title() });
+      if (stored.revision !== request.binding!.revision) { $('conflict').hidden = false; throw new Error('工作区已被更新，请重新打开后继续。'); }
+      await persist({ ...stored.document, name }, request);
     });
   }, { signal: options.signal });
   $('name').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); $('name').blur(); } };
   $('reload').onclick = () => { if (binding) void act(() => load(binding!.id)); };
-  const refresh = () => void act(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
+  const refresh = () => void actCurrent(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   const syncVisibleList = () => {
     if (options.signal.aborted || !available || document.getElementById('settings-pane-workspace')!.hidden) return;
     if (busy) { refreshAfterBusy = true; return; }
-    void act(list);
+    void actCurrent(list);
   };
   window.addEventListener('focus', syncVisibleList, { signal: options.signal });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncVisibleList(); }, { signal: options.signal });
@@ -120,36 +132,39 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   }, { signal: options.signal });
   options.signal.addEventListener('abort', () => clearTimeout(searchTimer), { once: true });
   $('search').onkeydown = event => { if (event.key === 'Enter') { event.preventDefault(); refresh(); } };
-  $('first').onclick = () => void act(async () => { before = ''; await list(); });
-  $('next').onclick = () => void act(async () => { if (next) { before = next; await list(); } });
+  $('first').onclick = () => void actCurrent(async () => { before = ''; await list(); });
+  $('next').onclick = () => void actCurrent(async () => { if (next) { before = next; await list(); } });
   window.addEventListener('voidplayer-identity-change', event => {
     const { actor, previous } = (event as CustomEvent).detail;
     if (actor?.id === previous?.id) return;
-    ++sequence; binding = undefined; before = ''; next = null;
+    ++sequence; ++bindingEpoch; binding = undefined; before = ''; next = null;
     $('conflict').hidden = true; $('list').replaceChildren();
     search = ''; $('search-button').hidden = true; $<HTMLInputElement>('search').value = ''; message(''); controls();
     if (actor && !document.getElementById('settings-pane-workspace')!.hidden) { if (busy) refreshAfterBusy = true; else refresh(); }
   }, { signal: options.signal });
   const settings = document.getElementById('settings')!;
-  settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') void act(async () => {
+  settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') void actCurrent(async () => {
     message(''); const health = await identityHealth(); available = !!health.capabilities?.workspaces; controls();
     if (available) await list(); else message('工作区服务不可用。');
   }); }, { signal: options.signal });
   controls();
   return { name: title, binding: () => binding,
     async share(document: WorkspaceFile, id: string, previous?: SavedWorkspace) {
+      const request = captureRequest(), snapshot = structuredClone(document), name = document.name || title();
+      const ensureCurrent = () => {
+        if (options.signal.aborted) throw new Error('工作区页面已关闭。');
+        if (request.owner !== currentActor()?.id) throw new Error('用户已切换，请在当前工作区重新分享。');
+        if (request.epoch !== bindingEpoch) throw new Error('当前工作区已切换，请在新工作区重新分享。');
+      };
       while (busy) await idle;
-      if (options.signal.aborted) throw new Error('工作区页面已关闭。');
-      const stamp=bindingEpoch;
-      const result = await act(async () => {
-        const owner=currentActor()?.id;
+      ensureCurrent();
+      const result = await actCurrent(async () => {
         try {
-          const stored=await client.share(document.name || title(), document, id, previous);
-          if (owner !== currentActor()?.id) throw new Error('用户已切换，工作区已保存，请重新打开。');
-          if (stamp !== bindingEpoch) throw new Error('工作区已保存，但当前页面已切换，请在新工作区重新分享。');
-          binding=stored; $<HTMLInputElement>('name').value=stored.name; $('conflict').hidden=true; before=''; message(''); await list(); return stored;
+          const stored=await client.share(name, snapshot, id, previous);
+          ensureCurrent();
+          binding=stored; $<HTMLInputElement>('name').value=stored.name; $('conflict').hidden=true; before=''; message(''); await list(); ensureCurrent(); return stored;
         } catch(error) {
-          if (previous && [404,409].includes((error as {status?:number}).status ?? 0)) { $('conflict').hidden=false; $('reload').dataset.unavailable=String((error as {status?:number}).status===404); }
+          if (isCurrent(request) && previous && [404,409].includes((error as {status?:number}).status ?? 0)) { $('conflict').hidden=false; $('reload').dataset.unavailable=String((error as {status?:number}).status===404); }
           throw error;
         }
       },true);
