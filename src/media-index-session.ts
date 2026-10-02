@@ -73,7 +73,8 @@ export class FfmpegMediaIndexSession implements MediaIndexSession {
         this.notify();
       },
       batch => {
-        this.currentStableCoverageUs = Math.max(this.currentStableCoverageUs, batch.safePresentationUs);
+        // Transport receipt is diagnostic progress only. Seek coverage advances
+        // exclusively when the decoder acknowledges importing these records.
         options.sink.batch(batch, this.client.diagnostics());
         this.notify();
       },
@@ -120,14 +121,14 @@ export class FfmpegMediaIndexSession implements MediaIndexSession {
   }
 
   updateCoverage(stableCoverageUs: number, durationUs?: number) {
-    if (!Number.isFinite(stableCoverageUs) || stableCoverageUs < 0) return;
+    if (this.disposed || this.currentState !== 'building' || !Number.isFinite(stableCoverageUs) || stableCoverageUs < 0) return;
     this.currentStableCoverageUs = Math.max(this.currentStableCoverageUs, stableCoverageUs);
     if (durationUs !== undefined && Number.isFinite(durationUs)) this.currentDurationUs = Math.max(this.currentDurationUs ?? 0, durationUs);
     this.notify();
   }
 
   markComplete(durationUs: number) {
-    if (this.disposed) return;
+    if (this.disposed || this.currentState !== 'building') return;
     this.currentState = 'complete';
     this.currentDurationUs = Math.max(1, durationUs);
     this.currentStableCoverageUs = Math.max(this.currentStableCoverageUs, this.currentDurationUs);

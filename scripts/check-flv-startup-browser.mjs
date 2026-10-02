@@ -7,16 +7,22 @@ import { openGopFlv } from './open-gop-fixture.ts';
 import { startupFixture } from './flv-startup-fixture.ts';
 import { chooseTestGuest } from './test-identity.mjs';
 import { formatTime } from '../src/model.ts';
-const browserName = process.argv[2] ?? 'chromium', fixture = await startupFixture();
-let browser;
-async function within(promise, ms) {
-  let timer;
-  try { return await Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('startup waited for the blocked tail')), ms); })]); }
-  finally { clearTimeout(timer); }
-}
-try {
+import { withinBrowserPhase, recordBrowserEvidence, saveBrowserFailure } from './browser-failure-evidence.mjs';
+const browserName = process.argv[2] ?? 'chromium';
+let browser, page, fixture, evidence;
+let context = { engine: browserName, caseName: 'blocked-tail-startup', phase: 'fixture', targetPtsUs: null };
+const phase = (name, targetPtsUs = null) => { context = { ...context, phase: name, targetPtsUs }; };
+const within = (name, targetPtsUs, operation, timeoutMs = 30000) => {
+  phase(name, targetPtsUs);
+  return withinBrowserPhase(operation, timeoutMs, context);
+};
+async function run() {
+  fixture = await startupFixture();
+  phase('browser-launch');
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
-  const page = await browser.newPage(), errors = [], wasmRequests = [];
+  page = await browser.newPage();
+  evidence = recordBrowserEvidence(page);
+  const errors = [], wasmRequests = [];
   let packetWorkerStarts = 0, packetWorkerCloses = 0;
   await page.addInitScript(() => {
     window.testWorkerAt = 0;
@@ -32,20 +38,22 @@ try {
   });
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', req => { if (/voidplayer-core.*\.(js|wasm)$/.test(req.url())) wasmRequests.push(req.url()); });
+  phase('bootstrap');
   await page.goto(fixture.base); await page.waitForFunction(() => !!window.voidPlayer);
   const welcome = page.locator('#identity-welcome [data-guest]');
   await welcome.click();
   // Native startup assertions require browser matching mode; reference SDR
   // mode deliberately forces WASM for FLV (covered by check-flv-browser).
   await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' }));
-  const call = (name, params = {}) => page.evaluate(({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
+  const invoke = (name, params = {}) => page.evaluate(({ name, params }) => window.voidPlayer.tools.find(t => t.name === name).execute(params), { name, params });
+  const call = (name, params = {}) => within(name, params.ptsUs ?? null, () => invoke(name, params));
   // This policy suite blocks on correctness; throughput floors would only bind
   // hardware-backed environments, and the project's convention is that CI
   // runner performance is report-only (see the non-blocking bench step).
   // Software-rendered runners still must advance several frames per window.
   const mediaFloor = 100000;
   const start = performance.now();
-  const first = await within(call('load_library_item', { id: fixture.entry.id, slot: 'A' }), 8000);
+  const first = await within('load', 0, () => invoke('load_library_item', { id: fixture.entry.id, slot: 'A' }), 8000);
   const startupMs = Math.round(performance.now() - start);
   assert.equal(first.tracks[0].decoder, 'webcodecs'); assert.equal(first.tracks[0].frame.ptsUs, 0);
   assert.equal(first.tracks[0].indexState, 'building'); assert.equal(wasmRequests.length, 0, 'native startup never fetches a WASM core');
@@ -54,12 +62,13 @@ try {
   const dock = async () => page.evaluate(() => ({ duration: document.querySelector('.track-duration').textContent, ruler: document.querySelector('#subtrack-ruler').textContent }));
   const startupDock = await dock();
   await page.screenshot({ path: `.run/playback-reports/flv-startup-${browserName}.png` });
-  await within(call('seek_review', { ptsUs: 0 }), 3000);
-  let finished = false; const seek = call('seek_review', { ptsUs: 2500000 }).then(s => { finished = true; return s; });
+  await within('seek-to-zero', 0, () => invoke('seek_review', { ptsUs: 0 }), 3000);
+  let finished = false; const seek = within('seek-uncovered-region', 2500000, () => invoke('seek_review', { ptsUs: 2500000 }), 8000).then(s => { finished = true; return s; });
   await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(fixture.counts().delayed > 0);
   fixture.release(); await seek;
   // Progressive indexing resolves the seek on the validated prefix; the full
   // index completes asynchronously.
+  phase('complete-index-after-tail-release', 2500000);
   await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete');
   const complete = await call('get_review_session');
   const expectedDuration = formatTime(complete.tracks[0].durationUs);
@@ -76,6 +85,7 @@ try {
   await call('seek_review', { ptsUs: 0 });
   const benchmark = await call('benchmark_review', { durationMs: 1500 }); assert.equal(benchmark.passed, true, JSON.stringify(benchmark));
   const list = await call('list_frame_indexes'); assert.equal(list.count, 1);
+  context.caseName = 'frame-index-admin'; phase('cache-management');
   const admin = await browser.newPage(); await admin.goto(fixture.base + '/admin');
   await chooseTestGuest(admin);
   await admin.locator('[data-pane="caches"]').click();
@@ -92,6 +102,7 @@ try {
   // MCP mutations use the same endpoint and permission checks as the UI.
   assert.deepEqual(await call('clear_frame_indexes', { scope: 'all' }), { removed: 0 });
   for (const codec of ['h264', 'hevc']) {
+    context.caseName = `resolution-${codec}`; phase('load-local-file', 0);
     const bytes = [...await resolutionFlv(codec)];
     await page.evaluate(async ({ bytes, codec }) => {
       await window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], `resolution-${codec}.flv`));
@@ -106,6 +117,7 @@ try {
     await page.screenshot({ path: `.run/playback-reports/flv-resolution-${codec}-${browserName}.png` });
   }
   // A non-IDR H.264 recovery point has leading B pictures before its PTS.
+  context.caseName = 'open-gop'; phase('load-local-file', 0);
   const openGop = [...await openGopFlv()];
   await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'open-gop.flv')), openGop);
   const completedGop = await call('seek_review', { ptsUs: 1500000 });
@@ -120,6 +132,7 @@ try {
   assert.ok(openGopBench.measurements.mediaUs > mediaFloor, JSON.stringify(openGopBench));
   assert.ok((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].frame.ptsUs > mediaFloor, 'track must advance, not just the session clock');
   // Exercise a real packet/WASM producer across removal of a different track.
+  context.caseName = 'unrelated-track-removal'; phase('load-second-track', 0);
   await page.evaluate(async bytes => window.voidPlayer.loadFile('B', new File([Uint8Array.from(bytes)], 'resume-b.flv')), openGop);
   await page.evaluate(() => window.voidPlayer.play());
   await page.waitForFunction(() => window.voidPlayer.getState().tracks.find(t => t.slot === 'B')?.frame?.ptsUs > 200000);
@@ -132,6 +145,7 @@ try {
   assert.equal(await page.evaluate(() => window.testWorkerAt), resumeBefore.at, 'unrelated removal must not trigger packet random access');
   await call('remove_review_track', { slot: 'B' });
   // Portrait geometry must agree across the source, displayed metadata and capture.
+  context.caseName = 'portrait-hevc'; phase('load-local-file', 0);
   const portrait = [...await resolutionFlv('hevc', ['244x436'])];
   const portraitState = await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'portrait.flv')), portrait);
   assert.equal(portraitState.tracks[0].width, 244); assert.equal(portraitState.tracks[0].height, 436);
@@ -140,6 +154,7 @@ try {
   await page.screenshot({ path: `.run/playback-reports/hevc-portrait-${browserName}.png` });
   await call('remove_review_track', { slot:'A' });
   for (const codec of ['h264', 'hevc']) {
+    context.caseName = `preroll-${codec}`; phase('load-local-file', 0);
     const preroll = [...await prerollMp4(codec)];
     for (let round=0; round<3; round++) {
       await page.evaluate(async bytes => window.voidPlayer.loadFile('A', new File([Uint8Array.from(bytes)], 'preroll.mp4')), preroll);
@@ -158,4 +173,13 @@ try {
   assert.ok(packetWorkerCloses > 0, 'removing a packet source disposes its worker');
   assert.deepEqual(errors, []);
   console.log(`PASS ${browserName}: first frame ${startupMs} ms with 256 MiB tail blocked; no WASM load, cached reopening, playback, admin UI and MCP`);
-} finally { await browser?.close(); await fixture.close(); }
+}
+try {
+  // Leave time to capture diagnostics before the suite runner's hard deadline.
+  await withinBrowserPhase(run, 240000, { engine: browserName, caseName: 'flv-startup-suite', phase: 'suite' });
+} catch (error) {
+  const report = await saveBrowserFailure({ page, name: `flv-startup-${browserName}`, context, error, evidence,
+    extra: { fixtureCounts: fixture?.counts() ?? null } });
+  console.error(`FLV failure (${context.caseName}/${context.phase}, ${browserName}, target PTS ${context.targetPtsUs ?? 'n/a'}): ${report}`);
+  throw error;
+} finally { await browser?.close(); await fixture?.close(); }
