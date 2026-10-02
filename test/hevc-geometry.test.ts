@@ -1,17 +1,20 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { hevcGeometry, parseHevcSpsGeometry, verifyHevcFrame } from '../src/hevc-geometry.ts';
+import { hevcGeometry, hevcReorderFrames, parseHevcSpsGeometry, verifyHevcFrame } from '../src/hevc-geometry.ts';
 import { flvDecoderConfig, FlvReader, demuxFlv } from '../src/flv-demux.ts';
 import { resolutionFlv } from '../scripts/flv-resolution-fixture.ts';
 
-function sps(chroma = 1, right = 8) {
+function sps(chroma = 1, right = 8, reorder = 0, ordering = [reorder], allOrdering = false) {
   const bits: number[] = [];
   const n = (v: number, count: number) => { for (let i = count-1; i >= 0; i--) bits.push((v >>> i) & 1); };
   const ue = (v: number) => { const size = Math.floor(Math.log2(v+1)); n(0, size); n(v+1, size+1); };
-  n(0,4); n(0,3); n(1,1); for (let i=0;i<12;i++) n(0,8);
+  const layers = ordering.length - 1;
+  n(0,4); n(layers,3); n(1,1); for (let i=0;i<12;i++) n(0,8);
+  if (layers) { n(0, layers * 2); n(0, (8 - layers) * 2); }
   ue(0); ue(chroma); if(chroma===3)n(0,1); ue(736); ue(1280);
   n(1,1); ue(0); ue(right); ue(0); ue(0);
-  ue(0);ue(0);ue(4);n(0,1);ue(2);ue(0);ue(0);
+  ue(0);ue(0);ue(4);n(+allOrdering,1);
+  for (let i = allOrdering ? 0 : layers; i <= layers; i++) { ue(2);ue(ordering[i]);ue(0); }
   for(let i=0;i<6;i++)ue(0);
   n(0,1);n(0,2);n(0,1);ue(0);n(0,1);n(0,2);n(1,1);n(1,1);n(1,8);n(1,1);
   while(bits.length%8)bits.push(0);
@@ -25,6 +28,19 @@ test('HEVC crop units depend on chroma format: 736 minus 8 chroma samples is 720
   assert.equal(parseHevcSpsGeometry(sps(3)).width, 728);
   assert.throws(()=>parseHevcSpsGeometry(sps().subarray(0,8)));
   assert.equal(hevcGeometry(new Uint8Array(24)), null);
+});
+test('native HEVC reorder bounds use every SPS and reject missing, truncated or invalid declarations', () => {
+  const description = (...nals: Uint8Array[]) => {
+    const header = new Uint8Array(23); header[0] = 1; header[22] = 1;
+    return Uint8Array.from([...header, 33, 0, nals.length, ...nals.flatMap(nal => [nal.length >> 8, nal.length & 255, ...nal])]);
+  };
+  assert.equal(hevcReorderFrames(description(sps())), 0);
+  assert.equal(hevcReorderFrames(description(sps(1, 8, 1), sps(1, 8, 2))), 2);
+  assert.equal(hevcReorderFrames(description(sps(1, 8, 0, [0, 1, 2], true))), 2, 'explicit temporal sublayers');
+  assert.equal(hevcReorderFrames(description(sps(1, 8, 0, [0, 0, 2]))), 2, 'highest-sublayer ordering is inherited');
+  assert.equal(hevcReorderFrames(description(sps(1, 8, 3))), null, 'reordering cannot exceed declared buffering');
+  assert.equal(hevcReorderFrames(description()), null);
+  assert.equal(hevcReorderFrames(description(sps()).subarray(0, 30)), null);
 });
 test('wrong decoded pixel rectangles are rejected rather than stretched', () => {
   const frame = { codedWidth:1280,codedHeight:736,visibleRect:{width:1280,height:720},displayWidth:1280,displayHeight:720 } as VideoFrame;

@@ -24,7 +24,7 @@ class Bits {
   }
 }
 const ratios = [[1,1],[1,1],[12,11],[10,11],[16,11],[40,33],[24,11],[20,11],[32,11],[80,33],[18,11],[15,11],[64,33],[160,99],[4,3],[3,2],[2,1]];
-export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
+function hevcSpsHeader(nal: Uint8Array) {
   if (nal.length < 3 || nal[0] & 128 || ((nal[0] >> 1) & 63) !== 33 || !(nal[1] & 7)) throw new Error('invalid SPS NAL');
   const rbsp: number[] = [];
   for (let i = 2; i < nal.length; i++) {
@@ -46,7 +46,16 @@ export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
   if (width <= 0 || height <= 0) throw new Error('invalid conformance window');
   b.ue(8); b.ue(8); const pocBits = b.ue(12)+4;
   const allOrdering = b.read(1);
-  for (let i = allOrdering ? 0 : layers; i <= layers; i++) { b.ue(16); b.ue(16); b.ue(); }
+  let maxReorderFrames = 0;
+  for (let i = allOrdering ? 0 : layers; i <= layers; i++) {
+    const buffering = b.ue(16), reorder = b.ue(16); b.ue();
+    if (reorder > buffering) throw new Error('invalid HEVC reorder bound');
+    maxReorderFrames = Math.max(maxReorderFrames, reorder);
+  }
+  return { b, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
+}
+export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
+  const { b, pocBits, codedWidth, codedHeight, left, top, width, height } = hevcSpsHeader(nal);
   for (let i = 0; i < 6; i++) b.ue(32);
   if (b.read(1) && b.read(1)) {
     for (let size = 0; size < 4; size++) for (let matrix = 0; matrix < 6; matrix += size === 3 ? 3 : 1) {
@@ -79,21 +88,32 @@ export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
   if (!sarNum || !sarDen) throw new Error('invalid sample aspect ratio');
   return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen };
 }
+function hevcSpses(description: Uint8Array) {
+  if (description.length < 23 || description[0] !== 1) throw new Error('invalid hvcC');
+  let offset = 23;
+  const u16 = () => { if (offset+2 > description.length) throw new Error('truncated hvcC'); const n = description[offset]*256+description[offset+1]; offset += 2; return n; };
+  const spses: Uint8Array[] = [];
+  for (let array = 0; array < description[22]; array++) {
+    if (offset >= description.length) throw new Error('truncated hvcC');
+    const type = description[offset++] & 63, count = u16();
+    for (let i = 0; i < count; i++) {
+      const length = u16(); if (offset+length > description.length) throw new Error('truncated hvcC');
+      if (type === 33) spses.push(description.subarray(offset, offset+length));
+      offset += length;
+    }
+  }
+  if (!spses.length) throw new Error('missing HEVC SPS');
+  return spses;
+}
+/** Maximum declared output-picture reordering across active SPS sublayers.
+ * Unknown bounds cannot safely release a native decoder's asynchronous frames. */
+export function hevcReorderFrames(description: Uint8Array): number | null {
+  try { return Math.max(...hevcSpses(description).map(nal => hevcSpsHeader(nal).maxReorderFrames)); }
+  catch { return null; }
+}
 export function hevcGeometry(description: Uint8Array): HevcGeometry | null {
   try {
-    if (description.length < 23 || description[0] !== 1) return null;
-    let offset = 23;
-    const u16 = () => { if (offset+2 > description.length) throw new Error('truncated hvcC'); const n = description[offset]*256+description[offset+1]; offset += 2; return n; };
-    const geometries: HevcGeometry[] = [];
-    for (let array = 0; array < description[22]; array++) {
-      if (offset >= description.length) return null;
-      const type = description[offset++] & 63, count = u16();
-      for (let i = 0; i < count; i++) {
-        const length = u16(); if (offset+length > description.length) return null;
-        if (type === 33) geometries.push(parseHevcSpsGeometry(description.subarray(offset, offset+length)));
-        offset += length;
-      }
-    }
+    const geometries = hevcSpses(description).map(parseHevcSpsGeometry);
     // Multiple simultaneously active SPS geometries need packet-level selection.
     return geometries.length && geometries.every(g => JSON.stringify(g) === JSON.stringify(geometries[0])) ? geometries[0] : null;
   } catch { return null; }

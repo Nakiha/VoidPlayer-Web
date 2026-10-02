@@ -2,7 +2,7 @@ import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } fro
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { videoFrameDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
-import { hevcGeometry, verifyHevcFrame } from './hevc-geometry.ts';
+import { hevcGeometry, hevcReorderFrames, verifyHevcFrame } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -30,6 +30,8 @@ export interface PacketDecoder {
 
 export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }
+  const initialReorder = index.codec === 'hevc' ? hevcReorderFrames(index.description) : 0;
+  if (initialReorder === null) { diagnostic({ reason: 'hevc-reorder-unknown', codec: index.codec }); return null; }
   const parsed = initialConfig ?? flvDecoderConfig(index);
   if (!parsed || typeof VideoDecoder === 'undefined') { diagnostic({ reason: !parsed ? 'no-native-config' : 'webcodecs-unavailable', codec: index.codec }); return null; }
   let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true }, async candidate => {
@@ -46,8 +48,13 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
   const timestampOrigin = Math.min(0, index.firstPts);
   let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
   const frames: { frame: VideoFrame; pts: number; description: FrameDescription }[] = [];
-  const inputWindow = 8, maxFrames = 32;
+  let reorderFrames = initialReorder, drained = false;
+  const inputWindow = () => Math.max(8, reorderFrames + 1), maxFrames = () => Math.max(32, reorderFrames + inputWindow());
+  // A browser may emit a future reference picture before a delayed B picture.
+  // Keep the SPS-declared reorder window across callbacks, not just one batch.
+  const hasOutput = () => frames.length > (drained ? 0 : reorderFrames);
   let largestFrameBytes = 0, peakFrames = 0, peakBytes = 0;
+  const budgetBytes = () => Math.max(128 * 1024 * 1024, (reorderFrames + inputWindow()) * largestFrameBytes);
   const queuedBytes = () => frames.reduce((n, f) => n + f.description.byteLength, 0);
   const clearFrames = () => frames.splice(0).forEach(f => f.frame.close());
   let needsKey = true;
@@ -75,7 +82,7 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       peakFrames = Math.max(peakFrames, frames.length); peakBytes = Math.max(peakBytes, queuedBytes());
       // Reserve room for a complete accepted input batch. Output cannot block
       // inside the browser callback; backpressure belongs before decode().
-      if (frames.length > maxFrames || queuedBytes() > Math.max(128 * 1024 * 1024, inputWindow * largestFrameBytes)) {
+      if (frames.length > maxFrames() || queuedBytes() > budgetBytes()) {
         error = new MediaOpenError('resource', `浏览器解码输出超过队列上限：${JSON.stringify(snapshot())}`);
         clearFrames();
       }
@@ -84,7 +91,7 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
     error(e) { error = e; notify?.(); },
   });
   try { decoder.configure(config); } catch (error) { decoder.close(); throw error; }
-  const snapshot = () => ({ queuedFrames: frames.length, queuedBytes: queuedBytes(), outstanding, decodeQueueSize: decoder.decodeQueueSize, inputWindow, maxFrames, budgetBytes: Math.max(128 * 1024 * 1024, inputWindow * largestFrameBytes), largestFrameBytes, peakFrames, peakBytes });
+  const snapshot = () => ({ queuedFrames: frames.length, queuedBytes: queuedBytes(), outstanding, decodeQueueSize: decoder.decodeQueueSize, reorderFrames, inputWindow: inputWindow(), maxFrames: maxFrames(), budgetBytes: budgetBytes(), largestFrameBytes, peakFrames, peakBytes });
   const check = () => { if (error) throw packetDecodeError(error, `浏览器 ${index.codec} 解码器，队列 ${JSON.stringify(snapshot())}`); };
   const waitForOutput = () => new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => { notify = undefined; reject(new MediaOpenError('decode', `浏览器解码输出超时：${JSON.stringify(snapshot())}`)); }, 5000);
@@ -96,19 +103,21 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
     hardwareAcceleration: config.hardwareAcceleration,
     async reconfigure(next) {
       if(next.codec==='h264'&&!nativeAvcCompatible(avcGeometry(next.description)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码。');
+      const nextReorder = next.codec === 'hevc' ? hevcReorderFrames(next.description) : 0;
+      if (nextReorder === null) throw new MediaOpenError('decode', '无法确定 HEVC 配置的帧重排上限。');
       const parsed = flvDecoderConfig(next);
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
       clearFrames(); decoder.reset(); decoder.configure(nextConfig); needsKey = true;
-      config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : next.codec==='h264'?avcGeometry(next.description):null; outstanding = 0; error = null; minimum = -Infinity;
+      config = nextConfig; currentIndex = next; geometry = next.codec === 'hevc' ? hevcGeometry(next.description) : next.codec==='h264'?avcGeometry(next.description):null; outstanding = 0; error = null; minimum = -Infinity; reorderFrames = nextReorder; drained = false;
     },
-    reset() { clearFrames(); decoder.reset(); decoder.configure(config!); needsKey = true; outstanding = 0; error = null; minimum = -Infinity; },
+    reset() { clearFrames(); decoder.reset(); decoder.configure(config!); needsKey = true; outstanding = 0; error = null; minimum = -Infinity; drained = false; },
     async send(bytes, packet) {
       check();
-      if (frames.length) return false;
-      if (outstanding >= inputWindow) {
+      if (hasOutput()) return false;
+      if (outstanding >= inputWindow()) {
         await waitForOutput(); check();
-        if (frames.length) return false;
+        if (hasOutput()) return false;
       }
       if(currentIndex.codec==='h264'&&packet.key){
         const description=avcInBandDescription(bytes,currentIndex.description);
@@ -133,7 +142,8 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       }
       const key = currentIndex.codec === 'h264' ? avcHasIdr(bytes, currentIndex.description) : packet.key;
       if (needsKey && !key) throw new MediaOpenError('decode', '浏览器 AVC 起播需要 IDR；该恢复点需要软件解码。');
-      if (frames.length) return false;
+      if (hasOutput()) return false;
+      drained = false;
       outstanding++;
       decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp: packet.pts - timestampOrigin, data: bytes as Uint8Array<ArrayBuffer> }));
       needsKey = false;
@@ -145,12 +155,13 @@ export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDec
       minimum = target; check();
       frames.sort((a, b) => a.pts - b.pts);
       while (frames.length && frames[0].pts < target) frames.shift()!.frame.close();
+      if (!hasOutput()) return null;
       const output = frames.shift();
       if (!output) return null;
       const { frame, pts, description } = output;
       return {pts,width:frame.displayWidth,height:frame.displayHeight,frame,description};
     },
-    async drain() { await decoder.flush(); check(); },
+    async drain() { await decoder.flush(); check(); drained = true; },
     close() { error = new MediaOpenError('decode', '解码器已关闭。'); notify?.(); clearFrames(); if (decoder.state !== 'closed') decoder.close(); },
   };
 }

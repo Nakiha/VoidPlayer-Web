@@ -402,8 +402,8 @@ jobs:
             node "scripts/$script.mjs"
             echo "::endgroup::"
           done
-          # 标注回归校验实际采样像素，两个引擎都要过。
-          for script in check-annotation-browser check-annotation-rendering
+          # 标注采样与 HLG 完整帧/seek 回归，两个引擎都要过。
+          for script in check-annotation-browser check-annotation-rendering check-hlg-browser
           do
             for engine in chromium webkit
             do

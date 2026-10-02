@@ -40,7 +40,7 @@ the timestamp collision or prove the pictures contain identical pixels.
 - The shared packet timeline accepts nondecreasing decoder output PTS. The first
   output at each instant is displayed; subsequent equal-PTS resources are closed.
   Actual decreasing or invalid decoder timestamps still fail explicitly. This
-  policy adds no lookahead frame or extra startup decode for normal sources.
+  policy adds no lookahead frame or extra startup decode for zero-reorder sources.
   Some decoders recover distinct best-effort output times from DTS despite
   packet PTS collisions. Those distinct actual outputs remain visible; packet
   grouping must not override a decoder's recovered display timestamps.
@@ -56,6 +56,31 @@ the timestamp collision or prove the pictures contain identical pixels.
 This is a temporal display policy, not a lossless inspection UI for multiple
 pictures at one instant. Such an inspector would need picture IDs beyond PTS;
 ordinary playback and stepping advance through distinct display times.
+
+## Native HEVC callback reordering
+
+The shared MP4/FLV native decoder reads `sps_max_num_reorder_pics` across every
+SPS sublayer. It keeps that many decoded resources across asynchronous output
+callbacks and releases the smallest actual output PTS only when the queue exceeds
+the bound. Sorting one callback batch alone cannot handle a later B-picture
+callback arriving after a future reference picture. A zero bound preserves the
+existing immediate-output behavior; unknown/invalid bounds decline native
+decoding through the existing decode-stage selection.
+
+Input backpressure allows feeding while only the reorder window is retained,
+and the accepted input window is at least the reorder bound plus one. Otherwise
+a legal large DPB can stall before producing any output. Flush releases the final
+retained pictures; reset, configuration changes and close explicitly close old
+resources. Queue limits remain bounded and diagnostics report the reorder bound.
+The timeline still rejects genuinely decreasing output timestamps. No timestamp,
+source color tag or output pixel resource is relabeled.
+
+`check-hlg-browser.mjs` checks every frame against independent FFprobe display
+times for both local and Range inputs, including EOF, repeated seeks/steps and
+same-browser pixel identity. On macOS WebKit it also requires native decoding.
+The simulated decoder regressions cover separate out-of-order callbacks, the
+maximum declared reorder bound, deferred input and resource release. The real
+HLG UI regression continues to require successful playback in browser color.
 
 ## Regression evidence
 

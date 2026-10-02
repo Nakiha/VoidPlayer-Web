@@ -241,7 +241,7 @@ try {
     await warning.locator('.toast-action').click();
     assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
     await page.locator('[data-color-mode=browser]').click();
-    await page.waitForFunction(() => window.voidPlayer.getState().colorMode === 'browser');
+    await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.colorMode === 'browser' && !state.busy; });
     await page.locator('#settings-close').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
     await page.locator('#play').click();
