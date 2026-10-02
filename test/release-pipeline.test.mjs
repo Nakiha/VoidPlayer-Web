@@ -8,6 +8,59 @@ import { releaseVersion, readReleaseIdentity, readReleaseNotes } from '../script
 import { verifyReleaseSet, sha256, releasePlatforms } from '../scripts/check-release-set.mjs';
 import { stageRelease } from '../scripts/stage-release.mjs';
 
+// These structural contracts run in the identity job before npm ci. Keep them
+// dependency-free and fail closed if the workflow's job/needs syntax changes.
+function workflowJobs(source) {
+  const jobs = source.slice(source.indexOf('\njobs:\n') + 7);
+  return Object.fromEntries([...jobs.matchAll(/^  ([\w-]+):\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)]
+    .map(([, id, body]) => {
+      const value = /^    needs: (.+)$/m.exec(body)?.[1];
+      const needs = value ? (value.startsWith('[') ? value.slice(1, -1).split(',').map(item => item.trim()) : [value]) : [];
+      assert.ok(needs.every(item => /^[\w-]+$/.test(item)), `${id}: unsupported needs syntax`);
+      return [id, { body, needs }];
+    }));
+}
+
+test('release workflow gates verified artifacts and draft staging on every verification job', async () => {
+  const workflow = await readFile(new URL('../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
+  const jobs = workflowJobs(workflow);
+  const required = ['native-release', 'playback', 'analysis-logic', 'analysis-browser', 'hevc-browser', 'uncovered-regressions'];
+  assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
+  const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
+    assert.ok(jobs[need], `unknown dependency ${need}`);
+    return [need, ...dependencies(need)];
+  }));
+  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft'].includes(id)).sort(),
+    'every new required verification job must be in the release dependency graph');
+  for (const id of ['release-set', ...dependencies('release-set')]) {
+    assert.doesNotMatch(jobs[id].body, /^    (?:if|continue-on-error):/m, `${id} must retain success-only job gating`);
+  }
+  assert.deepEqual(jobs['release-draft'].needs, ['release-set']);
+  assert.match(jobs['release-draft'].body, /^    if: github\.ref_type == 'tag'$/m);
+  assert.doesNotMatch(jobs['release-draft'].body, /continue-on-error:/);
+  assert.match(jobs['release-set'].body, /name: verified-release-set/);
+  assert.match(jobs['release-draft'].body, /name: verified-release-set/);
+  assert.doesNotMatch(jobs['release-set'].body, /if:.*(?:always\(|!cancelled\(|failure\()/);
+  // Model GitHub's default success() dependency predicate for the observed
+  // missing edge: failure, cancellation, pending and skipped all block output.
+  for (const outcome of ['failure', 'cancelled', 'pending', 'skipped', 'success']) {
+    const outcomes = Object.fromEntries(required.map(id => [id, id === 'uncovered-regressions' ? outcome : 'success']));
+    const produceVerifiedSet = jobs['release-set'].needs.every(id => outcomes[id] === 'success');
+    const stageDraft = jobs['release-draft'].needs.every(id => id === 'release-set' && produceVerifiedSet);
+    assert.equal(produceVerifiedSet, outcome === 'success');
+    assert.equal(stageDraft, outcome === 'success');
+  }
+});
+
+test('browser workflow collects independent outcomes and uploads failure evidence', async () => {
+  const jobs = workflowJobs(await readFile(new URL('../.github/workflows/release-preview.yml', import.meta.url), 'utf8'));
+  assert.match(jobs['uncovered-regressions'].body, /run: node scripts\/run-browser-regressions\.mjs uncovered/);
+  assert.doesNotMatch(jobs['uncovered-regressions'].body, /continue-on-error:|set -euo pipefail/);
+  assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/browser-regressions\/uncovered\//);
+  assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-browser-regressions\.mjs flv-startup/);
+  assert.match(jobs.playback.body, /\.run\/browser-regressions\/flv-startup\//);
+});
+
 const revision = 'a'.repeat(40), identity = { version: '0.1.0', revision, dirty: false, tag: 'v0.1.0' };
 test('release versions match package and tag, reject dirty tags and invalid versions', () => {
   const input = { packageVersion: '0.1.0', revision, dirty: false };

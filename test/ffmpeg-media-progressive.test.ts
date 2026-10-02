@@ -14,6 +14,7 @@ class DelayedIndexWorker {
   initId = 0;
   terminated = false;
   extractRequests = 0;
+  indexActions: string[] = [];
   firstDuration: number;
   constructor(firstDuration = 3_600) { this.firstDuration = firstDuration; }
 
@@ -28,7 +29,9 @@ class DelayedIndexWorker {
   }
 
   postMessage(message: any) {
-    if (message.type === 'init') {
+    if (message.type === 'index-input') {
+      this.indexActions.push(message.action);
+    } else if (message.type === 'init') {
       this.initId = message.id;
       queueMicrotask(() => this.emit({
         id: message.id, type: 'ready', data: {
@@ -246,4 +249,117 @@ test('a stable FFmpeg record batch advances seek coverage before index completio
   } finally {
     source.dispose();
   }
+});
+
+for (const method of ['framesAfter', 'framesFrom'] as const) {
+  test(`${method} releases an internal index wait on repeated disposal`, { timeout: 2_000 }, async () => {
+    const worker = new DelayedIndexWorker();
+    const source = await openWith(worker);
+    try {
+      const iterator = method === 'framesFrom' ? source.framesFrom(0) : undefined;
+      if (iterator) (await iterator.next()).value!.close();
+      const pending = iterator ? iterator.next() : source.framesAfter(0, 1);
+      const rejected = assert.rejects(pending, /媒体已释放/);
+      await new Promise(resolve => setImmediate(resolve));
+      source.dispose();
+      source.dispose();
+      await rejected;
+      assert.equal(worker.terminated, true);
+    } finally { source.dispose(); }
+  });
+}
+
+const streamBuildId = '11111111-1111-4111-8111-111111111111';
+function indexStreamEvents() {
+  const identity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
+  const records = new Uint8Array(120);
+  const view = new DataView(records.buffer);
+  for (let i = 0; i < 3; i++) {
+    const offset = i * 40;
+    view.setBigInt64(offset, BigInt(originTicks + i * 3_600), true);
+    view.setBigInt64(offset + 8, BigInt(originTicks + i * 3_600), true);
+    view.setBigInt64(offset + 16, 3_600n, true);
+    view.setBigInt64(offset + 24, BigInt(i * 188), true);
+    view.setInt32(offset + 32, 188, true);
+    view.setUint32(offset + 36, i === 0 ? 3 : 1, true);
+  }
+  return [
+    { type: 'manifest', protocol: 2, epoch: 1, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64',
+      state: 'streaming', buildId: streamBuildId, identity, recordBytes: 40, lastSeq: -1,
+      metadata: { schema: 2, kind: 'ffmpeg-container', size: 1000, codec: 'mpeg2video', timeBaseNum: 1,
+        timeBaseDen: 90_000, width: 1, height: 1, streamIndex: 0, indexerBuild: identity.indexerBuild,
+        firstPts: String(originTicks), originVerified: true, recordBytes: 40 } },
+    { type: 'batch', buildId: streamBuildId, seq: 0, count: 3, safePresentationUs: 80_000,
+      data: Buffer.from(records).toString('base64') },
+  ];
+}
+
+for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
+  test(`transport coverage waits for decoder import (${outcome})`, { timeout: 2_000 }, async () => {
+    const originalFetch = globalThis.fetch;
+    let controller!: ReadableStreamDefaultController<Uint8Array>;
+    globalThis.fetch = (async () => new Response(new ReadableStream<Uint8Array>({
+      start(value) { controller = value; },
+    }), { headers: { 'content-type': 'application/x-ndjson' } })) as typeof fetch;
+    const worker = new DelayedIndexWorker(0);
+    const source = await openWith(worker);
+    try {
+      for (const event of indexStreamEvents()) controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
+      await new Promise(resolve => setImmediate(resolve));
+      let settled = false;
+      const pending = source.frameAt(50_000);
+      const observed = pending.then(value => { settled = true; return value; }, error => { settled = true; throw error; });
+      // A macrotask must continue to run while HTTP coverage is ahead of worker import.
+      await new Promise(resolve => setTimeout(resolve, 10));
+      assert.equal(settled, false, 'transport receipt must not expose unimported coverage');
+      assert.equal(source.info.stableCoverageUs, 1);
+      if (outcome === 'reset') {
+        controller.enqueue(new TextEncoder().encode(JSON.stringify({ type: 'reset', buildId: '22222222-2222-4222-8222-222222222222' }) + '\n'));
+        await new Promise(resolve => setImmediate(resolve));
+        assert.ok(worker.indexActions.includes('fallback'));
+        worker.publishBatch();
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(settled, false, 'the abandoned stream must not unlock a replacement build');
+        worker.finishIndex();
+        (await observed).close();
+      } else if (outcome === 'acknowledge') {
+        worker.emit({ id: worker.initId, type: 'index-batch', data: { ctx: 1, ticks: [originTicks + 3_600],
+          durations: [3_600], stableCoverageUs: 80_000, seekAnchorCount: 1,
+          buildId: '22222222-2222-4222-8222-222222222222' } });
+        await new Promise(resolve => setImmediate(resolve));
+        assert.equal(settled, false, 'acknowledgement from another build must not unlock this session');
+        worker.publishBatch([originTicks + 3_600, originTicks + 7_200], 120_000);
+        const decoded = await observed;
+        assert.equal(source.info.stableCoverageUs, 120_000);
+        assert.equal(decoded.ptsUs, 40_000, 'the pre-import cached first frame must not satisfy the seek');
+        decoded.close();
+        const later = await source.frameAt(50_000);
+        assert.equal(later.ptsUs, 40_000);
+        later.close();
+      } else {
+        const rejected = assert.rejects(observed, outcome === 'dispose' ? /媒体已释放/ : /import failed/);
+        if (outcome === 'dispose') source.dispose(); else worker.failIndex('import failed');
+        await rejected;
+        worker.publishBatch();
+        assert.equal(source.info.stableCoverageUs, 1, 'late acknowledgement must not resurrect failed/disposed coverage');
+      }
+    } finally {
+      source.dispose();
+      // A reset cancels and closes the response body before local fallback.
+      try { controller.close(); } catch {}
+      globalThis.fetch = originalFetch;
+    }
+  });
+}
+
+
+test('a rejected complete index releases session coverage waiters', async () => {
+  const worker = new DelayedIndexWorker();
+  const source = await openWith(worker);
+  try {
+    const rejected = assert.rejects(source.ensureIndexed!(90_000), /首帧时间轴/);
+    worker.emit({ id: worker.initId, type: 'index-complete', data: { ctx: 1, ticks: [0], durations: [3_600] } });
+    await rejected;
+    assert.equal(source.info.indexState, 'error');
+  } finally { source.dispose(); }
 });
