@@ -14,7 +14,7 @@ try {
  const base=`http://127.0.0.1:${server.address().port}/`;
  await page.goto(base);
  // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
- await page.waitForFunction(()=>window.voidPlayer?.tools,{timeout:30000});
+ await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
  const theme=()=>page.locator('html').getAttribute('data-theme');
  const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
@@ -28,6 +28,9 @@ try {
  await boot.route('**/assets/*.js',route=>route.abort());await boot.goto(base);
  assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');await boot.close();
  await page.reload();assert.equal(await theme(),'light');
+ // Reload resolves before bootstrap's dynamic main import necessarily publishes the tools.
+ // Keep the first-paint assertion above, then wait for the API before using it again.
+ await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
  const lib=await call('list_library');
  for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','h264_9s_1920x1080.mp4']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
  // 索引在后台构建：等它完成、会话空闲后再取基线。否则下面的 before/after 深比较
