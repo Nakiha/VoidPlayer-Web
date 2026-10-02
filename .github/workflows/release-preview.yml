@@ -3,7 +3,7 @@ name: Build and verify standalone releases
 on:
   pull_request:
   push:
-    branches: [main, codex/simplify-intranet-identity, codex/render-and-https-guide, codex/frame-contract-refactor, codex/annotation-persistence]
+    branches: [main]
     tags: ['v*']
     paths-ignore: ['docs/**', '**/*.md']
   workflow_dispatch:
@@ -337,6 +337,81 @@ jobs:
           path: .run/playback-reports/
           if-no-files-found: ignore
           retention-days: 30
+
+  uncovered-regressions:
+    name: Verify browser regressions no other job runs
+    needs: decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - run: npm ci
+      - name: Checkout pinned codec QA samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - name: Prepare generated fixtures
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          npm run fixtures:flv
+          npm run fixtures:hlg
+          node scripts/sync-fate-samples.mjs
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run build
+      - name: Verify regressions that no other job runs
+        run: |
+          set -euo pipefail
+          # 这批回归此前不在任何 workflow 里，腐化因此长期无人发现
+          # （例如 launch 竞态、去掉的 CSS 规则、重命名的 class）。
+          # 除标注类外统一跑 chromium：没有 WebGPU 后端差异，结果最确定。
+          for script in \
+            check-library-browser \
+            check-menu-browser \
+            check-metadata-browser \
+            check-timeline-browser \
+            check-theme-browser \
+            check-shortcuts-browser \
+            check-stepping-browser \
+            check-settings-browser \
+            check-saved-workspaces-browser \
+            check-admin-browser \
+            check-media-open-matrix
+          do
+            echo "::group::$script (chromium)"
+            node "scripts/$script.mjs" chromium
+            echo "::endgroup::"
+          done
+          # 这三个脚本固定使用 WebKit，不接受引擎参数。
+          for script in check-workspace-link-browser check-workspace-list-browser check-color-settings-browser
+          do
+            echo "::group::$script (webkit)"
+            node "scripts/$script.mjs"
+            echo "::endgroup::"
+          done
+          # 标注回归校验实际采样像素，两个引擎都要过。
+          for script in check-annotation-browser check-annotation-rendering
+          do
+            for engine in chromium webkit
+            do
+              echo "::group::$script ($engine)"
+              node "scripts/$script.mjs" "$engine"
+              echo "::endgroup::"
+            done
+          done
 
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})

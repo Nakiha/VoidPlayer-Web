@@ -128,12 +128,21 @@ try {
   // Download URLs and file-location URLs must still work with the version query.
   const download = await page.evaluate(() => document.querySelector('#source-action-A').getAttribute('data-action')); assert.equal(download, 'download');
   const downloaded = page.waitForEvent('download'); await page.locator('#source-action-A').click(); assert.equal((await downloaded).suggestedFilename(), 'sample.mp4');
-  const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 1000, 1000); await library.refresh();
+  // Rewrite the very same bytes under a different mtime: identity is (basename,
+  // size), so this is an mtime-only drift, while the service's ctime/inode churn
+  // rotates ?v= by itself. Resetting utimes to the recorded 1000s would make the
+  // rewrite invisible to identity and leave the warning path untested.
+  const bytes = await readFile(sample); await new Promise(r => setTimeout(r, 5)); await writeFile(sample, bytes); await utimes(sample, 2000, 2000); await library.refresh();
   assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').version, entry.version);
-  // mtime-only drift restores with a warning instead of pending relink.
+  assert.notEqual(library.browse().entries.find(e => e.name === 'sample.mp4').lastModified, entry.lastModified, 'the fixture must drift the recorded mtime while keeping the bytes');
+  // mtime-only drift restores with a warning instead of pending relink. Observe
+  // the toast stack before importing: the warning toast is informational and
+  // auto-dismisses after 5s, while the restore still has to index and decode the
+  // source, so an observer attached afterwards can miss it on a slow machine.
+  const mtimeWarning = page.locator('.toast').filter({ hasText: '修改时间与工作区记录不一致' }).waitFor({ timeout: 30000 });
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);
   await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.tracks.length > 0 && !state.busy && state.tracks.every(t => !t.pendingRelink); });
-  await page.locator('.toast').filter({ hasText: '修改时间与工作区记录不一致' }).waitFor();
+  await mtimeWarning;
   // A real byte change (size differs) still refuses with a field-level message.
   await writeFile(sample, Buffer.concat([bytes, Buffer.from([0])])); await library.refresh();
   await page.evaluate(value => window.voidPlayer.importWorkspace(value), saved);

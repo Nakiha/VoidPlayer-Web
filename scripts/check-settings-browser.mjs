@@ -12,6 +12,8 @@ try {
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
  assert.equal(await page.locator('#more-actions').count(),0);assert.equal(await page.locator('#help').count(),0);assert.equal(await page.locator('dialog.log-panel').count(),0);
  await page.locator('#settings-open').click();await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));const geometry=await page.locator('#settings').boundingBox();
+ assert.equal(await page.locator('#settings-tab-annotations, #settings-pane-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy recovery page is removed');
+ assert.equal(await page.locator('#settings [role=tab]').count(),7);
  assert.equal(await page.locator('#settings details, #settings summary').count(),0,'settings contain no disclosure controls');
  assert.equal(await page.locator('#settings [role=tabpanel]:not(#settings-pane-performance) select').count(),0,'settings use shared choice menus');
  for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
@@ -57,6 +59,9 @@ try {
    assert.equal(await page.locator('.log-panel [data-action=upload]').isVisible(),true);
    assert.equal(await page.locator('.log-panel .settings-group').count(),0);
    await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{'));
+   // 当前日志预览先于 IndexedDB 历史列表显示；等菜单真正启用后再测键盘。
+   // disabled 按钮无法获得焦点，ArrowDown 会误操作仍有焦点的设置标签页。
+   await page.waitForFunction(()=>!document.querySelector('#log-session').disabled);
    await page.locator('#log-session').focus(); await page.keyboard.press('ArrowDown');
    assert.equal(await page.locator('#log-session-menu').evaluate(e=>e.matches(':popover-open')),true);
    const menuBox=await page.locator('#log-session-menu').boundingBox(), triggerBox=await page.locator('#log-session').boundingBox();

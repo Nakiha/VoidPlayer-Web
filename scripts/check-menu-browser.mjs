@@ -12,6 +12,8 @@ try {
   const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
   await page.addInitScript(()=>localStorage.setItem('voidplayer.annotation.recent-colors','["#123456"]'));
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
+  await page.waitForFunction(() => window.voidPlayer?.tools, { timeout: 30000 });
   const load = () => page.evaluate(async () => {
     const tool = n => window.voidPlayer.tools.find(t => t.name === n);
     const lib = await tool('list_library').execute({});
@@ -69,6 +71,9 @@ try {
   for (const id of ['pixel-size', 'zoom-select']) await toggle(id);
   assert.equal(await page.locator('#more-actions').count(),0);
   await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);await page.keyboard.press('Escape');
+  // settings.ts 的 dismiss() 要等退场动画结束才 dialog.close()，期间 dialog[open] 仍在；
+  // main.ts 的键盘处理器遇到打开的 dialog 会直接返回，'n' 会被吞掉。等它真正关闭。
+  await page.locator('#settings').evaluate(e=>e.open?new Promise(resolve=>e.addEventListener('close',()=>resolve(),{once:true})):undefined);
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('[data-drawing-tool=rect]').click();
   assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).padding),'4px','compact wrapper preserves button targets');
   await page.mouse.move(280,240); await page.mouse.down(); await page.mouse.move(500,420,{steps:8}); await page.mouse.up();
@@ -119,11 +124,19 @@ try {
   await page.locator('#drawing-font-choice').click();
   assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),1);
   assert.equal(await page.locator('#drawing-font-choice-menu').evaluate(e=>e.matches(':popover-open')),true);
-  await page.mouse.click(20,20); assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),0,'outside click dismisses');
+  // 外部点击关掉 popup 菜单。不要用固定坐标 (20,20)：顶栏左上角已是品牌按钮
+  // #brand-about（main.ts 用它打开设置的「关于」面板），点到它会弹出模态框并
+  // 拦截后续的 #mark-close 点击。点顶栏空白处，并断言没有顺带打开任何对话框。
+  await page.locator('.topbar').click({position:{x:640,y:20}});
+  assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),0,'outside click dismisses');
+  assert.equal(await page.locator('#settings').evaluate(e=>e.open),false,'dismissing the popup must not open a dialog');
   await page.locator('#mark-close').click(); await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n');
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','a fresh editing session defaults to red');
   assert.equal((await state()).marks[0].drawings[0].color,'#007aff','existing colors are preserved');
-  await page.reload(); await load(); await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('#drawing-color-choice').click();
+  await page.reload();
+  // reload 后同样是动态 import 的启动过程，load() 之前必须等 window.voidPlayer 就绪。
+  await page.waitForFunction(() => window.voidPlayer?.tools, { timeout: 30000 });
+  await load(); await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('#drawing-color-choice').click();
   assert.equal(await page.getByRole('group',{name:'色盘',exact:true}).locator('button').count(),120,'palette is fixed across reloads');
   assert.equal(await page.evaluate(()=>localStorage.getItem('voidplayer.annotation.recent-colors')),null);
   assert.equal(await page.locator('#drawing-color').inputValue(),'#ff3b30','stateless palette keeps red as the default');

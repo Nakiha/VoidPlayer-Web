@@ -9,7 +9,13 @@ const name=process.argv[2]??'webkit';const browser=await (name==='chromium'?chro
 try{
  const page=await browser.newPage({viewport:{width:1280,height:800},deviceScaleFactor:2});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
+ await page.waitForFunction(()=>window.voidPlayer?.tools,{timeout:30000});
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name] of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv444p10le.mkv']])await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
+ // load_library_item 是异步的：必须等两条轨道都解码完成、索引 complete 后再读
+ // durationUs 与 #timeline 的 max。否则会读到部分时长（例如只到 33 ms），
+ // 之后用陈旧 max 计算 seek 目标，游标比例与断言全部对不上。
+ await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame&&t.indexState==='complete');},null,{timeout:60000});
  const seek=ptsUs=>page.evaluate(ptsUs=>window.voidPlayer.tools.find(t=>t.name==='seek_review').execute({ptsUs}),ptsUs);
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
  const timeline=page.locator('#timeline');
@@ -48,7 +54,12 @@ try{
  await page.locator('#toggle-marks').click();assert.equal(await page.locator('.marks-empty').isVisible(),true);
  assert.equal(await page.locator('.marks-empty .icon').count(),0);
  await page.waitForTimeout(250);
- assert.equal(Math.round((await page.locator('.subtrack-tools').boundingBox()).width),160,'annotation panel opens at its minimum width');
+ // a9ea458 用整行的 .annotation-strip 取代了可调宽的 .subtrack-tools rail，后者已按现行
+ // 契约删除（check-mark-cards-browser 断言该选择器必须不存在）。展开后标注条应与轨道列
+ // 同左边界同宽、位于轨道列下方，而不是缩回 rail 宽度。
+ const strip=await page.locator('.annotation-strip').boundingBox(),tracks=await page.locator('.subtrack-scroll').boundingBox();
+ assert.ok(Math.abs(strip.x-tracks.x)<1&&Math.abs(strip.width-tracks.width)<1,'expanded annotation strip spans the panel width');
+ assert.ok(tracks.y+tracks.height<=strip.y+1&&strip.height>0,'annotation strip sits below the tracks column with a real height');
  await page.locator('#toggle-marks').click();
  await seek(500000);
  await page.locator('#subtrack-add-mark').hover();

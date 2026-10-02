@@ -9,8 +9,14 @@ const browser = await (process.argv[2] === 'chromium' ? chromium : webkit).launc
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
+  // 后续像素断言从 #stage-A .frame-presentation 的 webgl 上下文回读。支持 WebGPU 的
+  // 机器上浏览器模式会在首帧后异步切到 WebGPU 画布（无 role、无 webgl 上下文），
+  // 此时同一选择器命中的是停留旧帧的 WebGL 画布，像素对比会出现 255 级偏差。
+  // 移除 navigator.gpu 使 createExternalSurface 必然失败，固定走 WebGL 呈现面，
+  // 让 CI（无 WebGPU）与本机得到同一后端。
+  await page.addInitScript(() => { Object.defineProperty(navigator, 'gpu', { value: undefined, configurable: true }); });
   await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.waitForFunction(() => window.voidPlayer);
+  await page.waitForFunction(() => window.voidPlayer?.tools);
   await page.evaluate(async () => {
     const tool = n => window.voidPlayer.tools.find(t => t.name === n);
     const lib = await tool('list_library').execute({});

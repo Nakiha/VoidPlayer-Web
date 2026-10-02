@@ -9,8 +9,14 @@ const browser = await (process.argv[2] === 'chromium' ? chromium : webkit).launc
 try {
  const page = await browser.newPage({ viewport:{width:1408,height:789}, deviceScaleFactor:2 });
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ // 本回归校验的是 WebGL 呈现面（presentation-surface.ts）的采样与图层约束：
+ // 断言直接读 gl.texParameteri / gl.readPixels。浏览器模式在支持 WebGPU 的机器
+ // 上会异步切到 WebGPU 画布（无 role、无 webgl 上下文），使这些断言在最需要它
+ // 的平台上读到 null。移除 navigator.gpu 让 createExternalSurface 必然失败，
+ // 应用保留既有 WebGL 路径，从而在 CI（无 WebGPU）与 Apple Silicon 上结果一致。
+ await page.addInitScript(()=>{Object.defineProperty(navigator,'gpu',{value:undefined,configurable:true});});
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
- await page.waitForFunction(()=>window.voidPlayer);
+ await page.waitForFunction(()=>window.voidPlayer?.tools);
  await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});for(const [slot,name]of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv422p_8bit.mkv']]) await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===name).id});});
  await page.locator('#toggle-sources').click();
  await page.evaluate(()=>window.voidPlayer.setViewport({zoom:4.568,offsetX:-52,offsetY:-81}));

@@ -13,6 +13,8 @@ try {
  page.on('pageerror',e=>errors.push(e.message));
  const base=`http://127.0.0.1:${server.address().port}/`;
  await page.goto(base);
+ // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
+ await page.waitForFunction(()=>window.voidPlayer?.tools,{timeout:30000});
  const theme=()=>page.locator('html').getAttribute('data-theme');
  const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
@@ -28,6 +30,9 @@ try {
  await page.reload();assert.equal(await theme(),'light');
  const lib=await call('list_library');
  for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','h264_9s_1920x1080.mp4']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
+ // 索引在后台构建：等它完成、会话空闲后再取基线。否则下面的 before/after 深比较
+ // 会把 indexState 从 building 推进到 complete、metadataRevision 自增误判成主题改动的差异。
+ await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame&&t.indexState==='complete');},null,{timeout:60000});
  for(const id of ['toggle-inspector','toggle-sources','toggle-subtracks'])await page.locator(`#${id}`).click();
  await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
  const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.5,stage.y+stage.height*.55,{steps:5});await page.mouse.up();
@@ -37,12 +42,18 @@ try {
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ // Dark palette: grouped and input surfaces are light translucent overlays, not opaque dark fills.
+ // The library scope trigger (#library-root) and the search field (#source-search-field) are
+ // deliberately transparent (style.css .library-navigation .choice-trigger / .source-tools
+ // #source-search-field); the light fill they sit on is --search-fill, painted by the
+ // .library-navigation row that hosts both. The segmented control no longer lives in
+ // .source-tools, so the selected segment is read from the comparison-layout group.
  const surfaces=await page.evaluate(()=>{
   const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
-  return {segment:bg('#library-root'),search:bg('.search-field'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+  return {segment:bg('#layout-mode [aria-pressed=true]'),search:bg('.library-navigation'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
  });
-  assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'library scope trigger uses a light overlay');
- assert.match(surfaces.search,/rgba\(255, 255, 255,/,'search uses a light overlay');
+  assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay (--segment-selected-fill)');
+ assert.match(surfaces.search,/rgba\(255, 255, 255,/,'library scope/search row uses a light overlay (--search-fill)');
   assert.equal(surfaces.placeholder,'rgb(182, 182, 182)');
  assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');
 
@@ -68,9 +79,12 @@ try {
  await page.keyboard.press('Escape');await page.locator('#mark-close').click();
  await page.emulateMedia({contrast:'more'});
  const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
- assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(32, 33, 37)');
- assert.equal(await page.locator('.source-tools .segmented [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
- assert.equal(await page.locator('.search-field').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(48, 52, 59)');
+ // prefers-contrast: more pins --viewport-chrome-fill to --surface and drops the blur
+ // (themes/accessibility.css), so the transport paints the opaque dark surface:
+ // themes/dark.css --surface #212121.
+ assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(33, 33, 33)');
+ assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
+ assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(48, 52, 59)');
  await page.emulateMedia({contrast:'no-preference'});
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();

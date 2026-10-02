@@ -9,6 +9,8 @@ const name=process.argv[2]??'webkit',browser=await (name==='chromium'?chromium:w
 try {
  const page=await browser.newPage({viewport:{width:1280,height:900},deviceScaleFactor:2});const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+ // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
+ await page.waitForFunction(()=>window.voidPlayer?.tools,{timeout:30000});
  for (const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','ffv1_yuv444p10le.mkv'],['C','mhw_hevc_fullrange_bt709_3s.mp4'],['D','dolby_hlg_1080p30.mp4']]) {
    await page.evaluate(async({slot,file})=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n),lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot,id:lib.entries.find(e=>e.name===file).id});},{slot,file});
    await page.locator(`[data-inspect=${slot}]`).click();
