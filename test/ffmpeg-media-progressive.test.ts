@@ -272,9 +272,9 @@ for (const method of ['framesAfter', 'framesFrom'] as const) {
 const streamBuildId = '11111111-1111-4111-8111-111111111111';
 function indexStreamEvents() {
   const identity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
-  const records = new Uint8Array(80);
+  const records = new Uint8Array(120);
   const view = new DataView(records.buffer);
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const offset = i * 40;
     view.setBigInt64(offset, BigInt(originTicks + i * 3_600), true);
     view.setBigInt64(offset + 8, BigInt(originTicks + i * 3_600), true);
@@ -289,7 +289,7 @@ function indexStreamEvents() {
       metadata: { schema: 2, kind: 'ffmpeg-container', size: 1000, codec: 'mpeg2video', timeBaseNum: 1,
         timeBaseDen: 90_000, width: 1, height: 1, streamIndex: 0, indexerBuild: identity.indexerBuild,
         firstPts: String(originTicks), originVerified: true, recordBytes: 40 } },
-    { type: 'batch', buildId: streamBuildId, seq: 0, count: 2, safePresentationUs: 40_000,
+    { type: 'batch', buildId: streamBuildId, seq: 0, count: 3, safePresentationUs: 80_000,
       data: Buffer.from(records).toString('base64') },
   ];
 }
@@ -307,7 +307,7 @@ for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
       for (const event of indexStreamEvents()) controller.enqueue(new TextEncoder().encode(JSON.stringify(event) + '\n'));
       await new Promise(resolve => setImmediate(resolve));
       let settled = false;
-      const pending = source.frameAt(20_000);
+      const pending = source.frameAt(50_000);
       const observed = pending.then(value => { settled = true; return value; }, error => { settled = true; throw error; });
       // A macrotask must continue to run while HTTP coverage is ahead of worker import.
       await new Promise(resolve => setTimeout(resolve, 10));
@@ -328,10 +328,10 @@ for (const outcome of ['acknowledge', 'reset', 'error', 'dispose'] as const) {
           buildId: '22222222-2222-4222-8222-222222222222' } });
         await new Promise(resolve => setImmediate(resolve));
         assert.equal(settled, false, 'acknowledgement from another build must not unlock this session');
-        worker.publishBatch();
+        worker.publishBatch([originTicks + 3_600, originTicks + 7_200], 120_000);
         const decoded = await observed;
-        assert.equal(source.info.stableCoverageUs, 80_000);
-        assert.equal(decoded.ptsUs, 0);
+        assert.equal(source.info.stableCoverageUs, 120_000);
+        assert.equal(decoded.ptsUs, 40_000, 'the pre-import cached first frame must not satisfy the seek');
         decoded.close();
         const later = await source.frameAt(50_000);
         assert.equal(later.ptsUs, 40_000);

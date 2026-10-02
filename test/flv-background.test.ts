@@ -10,7 +10,11 @@ test('first decoded frame precedes a server build; completed indexes are persist
   const core = new URL('../public/vendor/voidplayer-core/', import.meta.url);
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), forceWasm: true };
   const input = { url: `${f.base}/api/media/${f.entry.id}?v=${f.entry.version}`, size: f.entry.size };
-  const drawn: number[] = [], session = new ReviewSession((_slot, frame) => { drawn.push(frame.sourcePtsUs); });
+  const drawn: number[] = [], startupPixels: Buffer[] = [];
+  const session = new ReviewSession((_slot, frame) => {
+    drawn.push(frame.sourcePtsUs);
+    if (frame.ptsUs === 0 && frame.pixels) startupPixels.push(Buffer.from(frame.pixels));
+  });
   const deadline = async <T>(promise: Promise<T>, ms = 5000): Promise<T> => {
     let timer: ReturnType<typeof setTimeout>;
     try { return await Promise.race([promise, new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error('operation waited for blocked tail')), ms); })]); }
@@ -19,7 +23,14 @@ test('first decoded frame precedes a server build; completed indexes are persist
   try {
     await deadline(session.load('A', () => openFlvMedia(input, f.entry, deps)));
     assert.equal(drawn.length, 1); assert.equal(session.getState().tracks[0].indexState, 'building');
-    await deadline(session.seek(0));
+    await deadline((async () => { while (!f.counts().delayed) await new Promise(r => setTimeout(r, 10)); })());
+    for (let i = 0; i < 3; i++) {
+      await deadline(session.seek(0));
+      assert.equal(session.getState().tracks[0].frame?.ptsUs, 0);
+      assert.equal(session.getState().tracks[0].indexState, 'building');
+    }
+    assert.equal(startupPixels.length, 4);
+    for (const pixels of startupPixels.slice(1)) assert.deepEqual(pixels, startupPixels[0], 'worker transfers preserve the retained software startup pixels');
     const pending = session.seek(2500000); let finished = false; void pending.then(() => { finished = true; });
     await new Promise(r => setTimeout(r, 100)); assert.equal(finished, false); assert.ok(f.counts().delayed > 0);
     f.release(); await deadline(pending, 15000);
