@@ -198,19 +198,23 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .subtracks-panel .panel-heading button:not(.icon-button) { height: var(--control-small-height); min-height: var(--control-small-height); padding: 0 var(--space-3); font-size: var(--text-sm); }
 .subtrack-scroll { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: auto; }
 .subtrack-columns, .subtrack-row { display: grid; grid-template-columns: var(--track-label-size, var(--track-label-width)) var(--offset-column-width) minmax(0,1fr) var(--button-size); align-items: center; }
-.subtrack-columns { flex-shrink: 0; position: sticky; top: 0; z-index: 3; background: var(--surface-panel); height: var(--panel-heading-height); padding: 0 4px; color: var(--text-secondary); font-size: var(--text-xs);  }
+.subtrack-columns { flex-shrink: 0; position: sticky; top: 0; z-index: 3; background: var(--surface-panel); height: var(--panel-heading-height); padding: 0 var(--track-row-padding-inline); color: var(--text-secondary); font-size: var(--text-xs);  }
 .subtrack-name-heading { position: relative; align-self: stretch; display: flex; align-items: center; }
 #track-label-resize { position: absolute; right: calc(var(--panel-resize-hit-width) / -2); top: 0; bottom: 0; width: var(--panel-resize-hit-width); cursor: col-resize; touch-action: none; z-index: 4; }
 #track-label-resize::after { content: ''; position: absolute; top: 20%; bottom: 20%; left: 50%; width: 1px; transform: translateX(-50%); background: var(--divider); transition: width var(--transition-fast), background var(--transition-fast); }
 #track-label-resize:is(:hover, .resizing)::after { background: var(--accent); width: 2px; }
-.subtrack-row { height: var(--track-row-height); padding: 0 4px; gap: 0;  }
+.subtrack-row { height: var(--track-row-height); padding: 0 var(--track-row-padding-inline); gap: 0;  }
 .subtrack-row:nth-child(even) { background: var(--surface-stripe); }
 .subtrack-row.selected { background: color-mix(in srgb, var(--surface-selected) 40%, transparent); }
 .subtrack-name { flex: 1; max-width: 100%; }
 .subtrack-name[aria-pressed=true] { background: transparent; }
 .track-identity:hover:not(:disabled) { background: var(--surface-hover); }
 .track-lane { height: var(--control-height); position: relative; margin-right: var(--timeline-column-gap); min-width: 0; cursor: pointer; }
-.subtrack-row .track-lane { margin-right: var(--tool-inset); }
+/* 车道与标尺必须共享同一时间几何：标尺刻度按自身宽度取百分比，车道标记同样按车道宽度
+   取百分比，两者宽度差多少，刻度就偏多少。8111f7f 曾把车道的右间距改成 --tool-inset
+   （2px），使车道比标尺宽 6px，同时与 track-column-resize.ts 的可用宽度计算
+   （... - 2 * --tool-inset - --timeline-column-gap）和 themes/README.md 记录的
+   「时间轴列间隔」不符。这里不再覆写，让车道沿用 .track-lane 的 --timeline-column-gap。 */
 .track-duration { position: absolute; left: 0; top: var(--tool-inset); min-height: calc(var(--control-height) - 2 * var(--tool-inset)); height: calc(var(--control-height) - 2 * var(--tool-inset)); padding: 0 var(--space-2); border-radius: var(--radius-small); border: var(--control-border-width) solid var(--border); background: var(--track-fill); font: var(--text-xs)/1 var(--font-mono); color: var(--text-secondary); justify-content: flex-end; }
 .subtrack-row.selected .track-duration, .subtrack-row.selected .track-duration:hover:not(:disabled) { background: var(--track-active); }
 .track-marker { position: absolute; top: 0; transform: translateX(-50%); width: var(--control-small-height); height: var(--control-height); padding: 0; background: transparent; border: 0; color: var(--mark-color); z-index: 2; }
@@ -412,6 +416,10 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .selected-marks { flex: 1; flex-direction: row; align-items: stretch; overflow-x: auto; overflow-y: hidden; gap: 8px; min-width: 0; padding: 0; }
 .marks-collapsed .selected-marks { align-items: center; gap: 4px; }
 .marks-empty { align-self: center; color: var(--text-secondary); font-size: var(--text-xs); padding-inline: 4px; }
+/* 收起标注条时只保留紧凑的一行工具，空态占位符不出现在折叠条里。
+   a59423f 引入、a9ea458 重构底部标注条时丢失，bb83350 只补回了 hint 的隐藏；
+   这里恢复整块占位符的隐藏，避免折叠态仍渲染「暂无标注」。 */
+.marks-collapsed .selected-marks .marks-empty { display: none; }
 .marks-collapsed .marks-empty-hint { display: none; }
 .subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty { align-self: stretch; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 2px 0; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius-small); font-size: var(--text-sm); text-align: center; }
 .subtracks-panel:not(.marks-collapsed) .selected-marks .marks-empty-hint { font-size: var(--text-xs); }
@@ -753,14 +761,9 @@ button.icon-button[aria-pressed=true] {
 #annotation-save-state { color: var(--text-secondary); }
 #annotation-save-state[data-state=error] { color: var(--action-danger); }
 #annotation-save-state[data-state=pending] { color: var(--accent); }
-.annotation-sync-scope, .annotation-new-space, .annotation-sync-actions { display: flex; align-items: center; gap: 8px; }
-.annotation-sync-scope > .choice-trigger, .annotation-new-space input { flex: 1; min-width: 0; }
-.annotation-sync-actions { flex-wrap: wrap; }
-#settings-pane-annotations .annotation-sync-card { display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; }
-#settings-pane-annotations .annotation-sync-card #annotation-sync-status { margin: 0; }
-#settings-pane-annotations .annotation-sync-card .annotation-sync-actions { margin: 0; }
-#settings-pane-annotations .settings-section[hidden] { display: none; }
-.annotation-new-space button { flex-shrink: 0; }
+.annotation-sync-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#annotation-recovery { display: flex; flex-direction: column; gap: 12px; }
+#annotation-recovery[hidden], #annotation-recovery [hidden] { display: none; }
 .annotation-conflict { padding: 12px 0; }
 .annotation-conflict > button { margin-right: 8px; }
 #annotation-sync-status { color: var(--text-secondary); }
@@ -824,3 +827,30 @@ button.icon-button[aria-pressed=true] {
 .toast-close { flex: none; }
 .share-spinner { animation: share-spin 1s linear infinite; }
 @keyframes share-spin { to { transform: rotate(360deg); } }
+
+.workspace-share-link, .annotation-discussion { width:min(520px,calc(100vw - 32px)); max-height:calc(100dvh - 32px); overflow:auto; padding:22px; border:1px solid var(--divider); border-radius:var(--radius-lg,16px); color:var(--text); background:var(--surface-panel); }
+.workspace-share-link::backdrop, .annotation-discussion::backdrop { background:rgb(0 0 0 / .3); }
+.workspace-share-link .dialog-heading, .annotation-discussion .dialog-heading { display:flex;align-items:center;justify-content:space-between;gap:16px; }
+.workspace-share-link h2, .annotation-discussion h2 { margin:0;font-size:20px; }
+.workspace-share-link p { color:var(--text-secondary);font-size:13px;line-height:1.6; }
+.workspace-share-link label, .annotation-discussion label { display:grid;gap:8px;margin-block:16px;font-size:13px; }
+.workspace-share-link input, .annotation-discussion textarea { width:100%;box-sizing:border-box;padding:10px;border:1px solid var(--divider);border-radius:8px;background:var(--surface-input);color:inherit; }
+.annotation-discussion textarea { resize:vertical;min-height:80px;font:inherit; }
+.workspace-actions { display:flex;flex-wrap:wrap;gap:8px;margin-block:12px; }
+.discussion-replies { display:grid;gap:12px;max-height:35dvh;overflow:auto; }
+.discussion-replies article { padding:10px 12px;border-radius:8px;background:var(--surface-input); }
+.discussion-replies p, .discussion-note { white-space:pre-wrap;overflow-wrap:anywhere; }
+.discussion-replies small, .discussion-message { color:var(--text-secondary); }
+.discussion-replies p { margin:6px 0 0; }
+.annotation-row[data-resolved=true] .mark-note { color:var(--text-secondary); }
+#annotation-show-resolved { font-size:11px;white-space:nowrap; }
+@media(max-width:600px) { .workspace-share-link, .annotation-discussion { padding:16px; } }
+.annotation-row { display:flex; flex-direction:column; }
+.annotation-row .mark-entry { flex:1; min-height:0; height:auto; }
+.annotation-discuss { flex:none; align-self:flex-end; margin:2px 4px; padding:0 6px; min-height:20px; font-size:11px; }
+.marks-collapsed .annotation-row .mark-entry { height:100%; }
+.marks-collapsed .annotation-discuss { display:none; }
+.annotation-preview .annotation-row .mark-entry { flex:none; }
+.workspace-share-link :focus-visible, .annotation-discussion :focus-visible, #annotation-show-resolved:focus-visible, .annotation-discuss:focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
+/* Compact toolbars scroll as intact groups instead of overlapping share controls. */
+.topbar-primary-actions, .topbar-utility-actions, .view-controls { flex-shrink:0; }

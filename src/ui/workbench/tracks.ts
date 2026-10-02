@@ -182,7 +182,9 @@ export function createTracksPane(shared: WorkbenchShared) {
       visibility.setAttribute('aria-label', label);
       visibility.setAttribute('aria-pressed', String(!track.visible));
       visibility.dataset.tooltip = label;
-      visibility.innerHTML = icon(track.visible ? 'eye' : 'eyeClosed');
+      // 只在图标真正变化时重建 svg：选中轨道是原地更新，不应替换任何节点。
+      const glyph = track.visible ? 'eye' : 'eyeClosed';
+      if (visibility.firstElementChild?.getAttribute('data-icon') !== glyph) visibility.innerHTML = icon(glyph);
       const selected = row.dataset.trackDrag === view.selected;
       row.classList.toggle('selected', selected);
       row.querySelector('.subtrack-name')!.setAttribute('aria-pressed', String(selected));

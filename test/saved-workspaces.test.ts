@@ -5,6 +5,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { request } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import { WorkspaceStore, WORKSPACE_BYTES } from '../server/workspaces.ts';
 import { openIndexDatabase } from '../server/sqlite.ts';
 import { loadConfig } from '../server/config.ts';
@@ -97,47 +98,43 @@ test('a rejected SQLite write leaves workspace content and revision unchanged', 
   } finally { store.close(); }
 }));
 
-test('share snapshots are immutable, restart-safe and reject local or unpinned sources', () => temporary(async root => {
+test('shared workspaces replace immutable snapshots with writable restart-safe links', () => temporary(async root => {
   const file=path.join(root,'workspaces.sqlite'); let store=new WorkspaceStore(file);
-  const snapshot=document();
-  assert.throws(()=>store.share(snapshot,null),/本地文件/);
+  const snapshot=document(),id=randomUUID(),input=()=>({name:'共享工作区',document:snapshot});
+  assert.throws(()=>store.shareWorkspace(id,input(),undefined,alice),/本地文件/);
   snapshot.media[0].source={kind:'library',id:'sample',url:'http://example.test/api/media/sample'};
-  assert.throws(()=>store.share(snapshot,null),/固定媒体库版本/);
+  assert.throws(()=>store.shareWorkspace(id,input(),undefined,alice),/固定媒体库版本/);
   snapshot.media[0].source.url+='?v=0123456789abcdef01234567';
-  const expected=structuredClone(snapshot), share=store.share(snapshot,null);
+  const share=store.shareWorkspace(id,input(),undefined,alice).record;
   snapshot.positionUs=999; snapshot.viewport.zoom=3;
-  assert.deepEqual(store.shared(share.id).document,expected);
-  assert.throws(()=>store.update(share.id,'"1"',{name:'overwrite',document:snapshot},alice),/不存在/);
-  assert.equal(store.users().length,0);
-  store.close(); store=new WorkspaceStore(file);
-  try { assert.deepEqual(store.shared(share.id).document,expected); assert.equal(store.users().length,0); }
+  store.update(id,'"1"',input(),bob);
+  assert.equal(store.users().length,0);store.close();store=new WorkspaceStore(file);
+  try { assert.equal(store.read(share.id,bob).document.positionUs,999);assert.equal(store.read(share.id,bob).document.viewport.zoom,3);assert.equal(store.users().length,0); }
   finally { store.close(); }
 }));
 
-test('share HTTP API permits anonymous readers without creating users and refuses mutation', () => temporary(async root => {
+test('old share API creates writable workspaces, anonymous reads do not create identities', () => temporary(async root => {
   await fs.mkdir(path.join(root,'media'));
   const config=await loadConfig(['--folder','media'],'production',root); config.port=0; config.logsDir=null;
   const service=await startService(config,false), base=`http://127.0.0.1:${(service.server.address() as {port:number}).port}`;
   try {
     const snapshot=document(); snapshot.media[0].source={kind:'library',id:'sample',url:base+'/api/media/sample?v=0123456789abcdef01234567'};
-    const create=(origin:string)=>fetch(base+'/api/shares',{method:'POST',headers:{origin,'x-voidplayer-action':'workspace','content-type':'application/json'},body:JSON.stringify(snapshot)});
-    assert.equal((await create('https://other.test')).status,403);
-    const response=await create(base); assert.equal(response.status,201); assert.equal(response.headers.get('set-cookie'),null);
-    const shared=await response.json(); assert.equal(shared.path,`/?share=${shared.id}`);
-    const read=await fetch(base+'/api/shares/'+shared.id); assert.equal(read.status,200); assert.deepEqual((await read.json()).document,snapshot);
-    assert.equal(read.headers.get('set-cookie'),null);
-    assert.equal((await fetch(base+'/api/shares/'+shared.id,{method:'PUT',headers:{origin:base,'x-voidplayer-action':'workspace'}})).status,405);
-    assert.equal((await fetch(base+'/api/shares/00000000-0000-0000-0000-000000000000')).status,404);
     const guestResponse=await fetch(base+'/api/identity',{method:'POST',headers:{origin:base,'x-voidplayer-action':'identity','content-type':'application/json'},body:JSON.stringify({guest:true})});
     const guest=(await guestResponse.json()).actor,cookie=guestResponse.headers.get('set-cookie')!.split(';')[0];
-    const saved=await fetch(base+'/api/workspaces',{method:'POST',headers:{cookie,origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'},body:JSON.stringify({name:'访客工作区',document:snapshot})});
-    assert.equal(saved.status,201);assert.equal((await saved.json()).owner,guest.id);
+    const headers={cookie,origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'};
+    const create=(origin:string)=>fetch(base+'/api/shares',{method:'POST',headers:{...headers,origin},body:JSON.stringify(snapshot)});
+    assert.equal((await create('https://other.test')).status,403);
+    const response=await create(base); assert.equal(response.status,201); assert.equal(response.headers.get('set-cookie'),null);
+    const shared=await response.json(); assert.equal(shared.path,`/?workspace=${shared.id}`);
+    const read=await fetch(base+'/api/shares/'+shared.id); assert.equal(read.status,200);assert.equal((await read.json()).document.positionUs,snapshot.positionUs);assert.equal(read.headers.get('set-cookie'),null);
+    const edited=await fetch(base+'/api/shares/'+shared.id,{method:'PUT',headers:{...headers,'if-match':'"1"'},body:JSON.stringify({name:'修改',document:{...snapshot,positionUs:800}})});assert.equal(edited.status,200);
+    assert.equal((await fetch(base+'/api/workspaces/'+shared.id).then(r=>r.json())).document.positionUs,800);
+    assert.equal((await fetch(base+'/api/shares/00000000-0000-0000-0000-000000000000')).status,404);
     assert.equal((await (await fetch(base+'/api/workspaces',{headers:{cookie}})).json()).entries.length,1);
-    assert.equal((await fetch(base+'/api/workspaces',{method:'POST',headers:{origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'},body:JSON.stringify({name:'未选择身份',document:snapshot})})).status,409);
+    assert.equal((await fetch(base+'/api/workspaces/share',{method:'POST',headers:{origin:base,'x-voidplayer-action':'workspace','content-type':'application/json'},body:JSON.stringify({name:'未选择身份',document:snapshot})})).status,409);
     assert.deepEqual((await (await fetch(base+'/api/users')).json()).users,[]);
   } finally { await service.close(); }
 }));
-
 
 test('workspace search matches current owner names across users and orders newest first', () => temporary(async root => {
   const store = new WorkspaceStore(path.join(root, 'workspaces.sqlite'));

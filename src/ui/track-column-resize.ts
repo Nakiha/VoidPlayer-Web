@@ -5,7 +5,10 @@ export function installTrackColumnResize(container: HTMLElement, handle: HTMLEle
   const token = (name: string) => Number.parseFloat(getComputedStyle(container).getPropertyValue(name));
   let preferred: number | undefined;
   const bounds = () => {
-    const available = Math.max(0, container.clientWidth - token('--offset-column-width') - token('--button-size') - 2 * token('--tool-inset') - token('--timeline-column-gap'));
+    // 行内边距必须与 .subtrack-row / .subtrack-columns 使用同一个 token：少算像素时，
+    // 最大列宽会吃掉时间轴本应保留的空间（对应 check-timeline-browser 的
+    // 「splitter leaves timeline space」断言）。
+    const available = Math.max(0, container.clientWidth - token('--offset-column-width') - token('--button-size') - 2 * token('--track-row-padding-inline') - token('--timeline-column-gap'));
     const max = Math.max(32, available - Math.min(160, available / 2));
     return { min: Math.min(96, max), max };
   };

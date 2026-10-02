@@ -1,84 +1,79 @@
-import { currentActor } from '../identity.ts';
+import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
-import { pinLibraryReference } from '../media-reference.ts';
+import { prepareSharedWorkspace } from '../shared-workspace.ts';
+import { randomUUID } from '../uuid.ts';
 import { icon } from './icons.ts';
 import type { ToastStack } from './toast.ts';
 
-/** Immutable server snapshots reuse the same restore contract as workspace files. */
+/** Share is one action: save the current writable workspace and copy its URL. */
 export function installWorkspaceSharing(options: {
-  signal: AbortSignal; ready: Promise<void>; snapshot(): WorkspaceFile; toasts: ToastStack;
-  created?(document: WorkspaceFile): Promise<void>; open(value: unknown): Promise<boolean>; canShare(): boolean; report(error: unknown): void;
+  signal: AbortSignal;
+  snapshot(): WorkspaceFile;
+  binding(): SavedWorkspace | undefined;
+  save(document: WorkspaceFile, id: string, previous?: SavedWorkspace): Promise<SavedWorkspace>;
+  openSpace(space: string, seededIds: string[]): Promise<void>;
+  scope(): string;
+  canShare(): boolean;
+  closeSettings(): void | Promise<void>;
+  toasts: ToastStack;
+  report(error: unknown): void;
 }) {
-  const button = document.getElementById('workspace-share') as HTMLButtonElement;
-  const settingsButton = document.getElementById('saved-workspace-share') as HTMLButtonElement;
-  const toasts = options.toasts;
-  let busy = false;
-  let renderedBusy: boolean | undefined;
+  const buttons = ['workspace-share', 'saved-workspace-share'].map(id => document.getElementById(id) as HTMLButtonElement);
+  const dialog = document.createElement('dialog');
+  dialog.id = 'workspace-share-link'; dialog.className = 'workspace-share-link glass';
+  dialog.setAttribute('aria-labelledby', 'workspace-share-title');
+  dialog.innerHTML = `<header class="dialog-heading"><h2 id="workspace-share-title">工作区链接</h2><button class="icon-button" aria-label="关闭分享">${icon('close')}</button></header><p>打开链接可还原并编辑这个工作区。</p><label>链接<input readonly aria-label="工作区链接"></label>`;
+  document.body.append(dialog);
+  const input = dialog.querySelector<HTMLInputElement>('input')!;
+  let epoch = 0, busy = false, renderedBusy: boolean | undefined, focus: HTMLElement | null = null;
+  let pending: { id: string; document: WorkspaceFile; previous?: SavedWorkspace; pinned: boolean; attached: boolean } | undefined;
+
   function update() {
-    const disabled = busy || !options.canShare();
-    for (const control of [button, settingsButton]) {
-      if (control.disabled !== disabled) control.disabled = disabled;
-      if (control.getAttribute('aria-busy') !== String(busy)) control.setAttribute('aria-busy', String(busy));
-    }
-    // Session notifications also fire after seeks and on playback ticks. Keep
-    // the existing SVG node unless the share operation itself changes state.
+    for (const button of buttons) { button.disabled = busy || !options.canShare(); button.setAttribute('aria-busy', String(busy)); }
     if (renderedBusy !== busy) {
       renderedBusy = busy;
-      const content = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
-      for (const control of [button, settingsButton]) control.innerHTML = content;
+      for (const button of buttons) button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
     }
   }
-  function notify(message: string, link?: string, kind?: 'info' | 'error') {
-    // A modal settings dialog traps focus; show the toast where it is reachable.
-    (document.querySelector<HTMLDialogElement>('#settings[open]') ?? document.body).append(toasts.stack);
-    if (!link) { toasts.show(message, { kind, durationMs: kind === 'error' ? 0 : 7000 }); return; }
-    toasts.show(message, { kind, durationMs: 0, action: { label: '复制链接', onClick: () => void navigator.clipboard.writeText(link).catch(() => {}) } });
+  async function copy(url: string) {
+    try { await navigator.clipboard.writeText(url); options.toasts.show('工作区链接已复制，接收者可编辑和保存'); }
+    catch {
+      await options.closeSettings();
+      if (options.signal.aborted) return;
+      input.value = url; if (!dialog.open) dialog.showModal(); input.focus(); input.select();
+    }
   }
-  async function create() {
-    if (busy) throw new Error('分享正在创建，请等待完成。');
-    if (!options.canShare()) throw new Error('请等待视频载入后再分享。');
-    // Capture before any await: playback and later edits cannot alter this link.
-    const actorId = currentActor()?.id;
+  async function create(trigger?: HTMLElement) {
+    if (busy) throw new Error('工作区正在保存，请稍后再分享。');
+    focus = trigger ?? buttons[0];
+    // A retry retains the same request and ID if the server response was lost.
+    const previous = options.binding();
+    pending ??= { id: previous?.id ?? randomUUID(), document: structuredClone(options.snapshot()), previous, pinned: false, attached: !!previous?.space && options.scope() === previous.space };
+    const request = pending, stamp = epoch;
+    const ensureCurrent = () => { if(stamp !== epoch) throw new Error('当前工作区已切换，请在新工作区重新分享。'); };
     busy = true; update();
     try {
-      const snapshot = structuredClone(options.snapshot());
-      for (const media of snapshot.media) {
-        if (!media.source) throw new Error(`「${media.name}」是本地文件，请先放入服务端媒体库再分享。`);
-        media.source = await pinLibraryReference(media, location.href);
+      if (!options.canShare()) throw new Error('请先添加视频再分享。');
+      if (!request.pinned) { request.document = await prepareSharedWorkspace(request.document); request.pinned = true; }
+      ensureCurrent();
+      const record = await options.save(request.document, request.id, request.previous);
+      ensureCurrent();
+      if (record.space && !request.attached) {
+        await options.openSpace(record.space, request.document.marks.map(mark => mark.id)); request.attached = true;
       }
-      const response = await fetch('/api/shares', {method:'POST', headers:{'content-type':'application/json','x-voidplayer-action':'workspace',...(actorId ? {'x-voidplayer-actor':actorId} : {})}, body:JSON.stringify(snapshot), signal:AbortSignal.any([options.signal,AbortSignal.timeout(30000)])});
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? '分享创建失败。');
-      const link = new URL(result.path, location.origin).href;
-      await options.created?.(snapshot);
-      try { await navigator.clipboard.writeText(link); notify('分享链接已在服务端创建，并已复制'); }
-      catch { notify('分享链接已在服务端创建，请复制下方链接', link); }
-      return { id: result.id as string, url: link };
-    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } throw error; }
-    finally { busy = false; update(); }
+      ensureCurrent();
+      const current = new URL(location.href); current.searchParams.delete('share'); current.searchParams.delete('review'); current.searchParams.set('workspace', record.id); history.replaceState(null, '', current);
+      const url = new URL(`/?workspace=${record.id}`, location.origin).href;
+      pending = undefined; await copy(url); return { id: record.id, url };
+    } catch (error) {
+      if ([404,409].includes((error as {status?: number}).status ?? 0)) pending = undefined;
+      if (!options.signal.aborted) { options.toasts.show((error as Error).message, {kind:'error',durationMs:0}); options.report(error); }
+      throw error;
+    } finally { busy = false; update(); }
   }
-  settingsButton.addEventListener('click', () => void create().catch(() => {}), { signal: options.signal });
-  button.addEventListener('click', () => void create().catch(() => {}), {signal:options.signal});
-  const id = new URL(location.href).searchParams.get('share');
-  if (id) void options.ready.then(async () => {
-    try {
-      if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('分享链接无效。');
-      notify('正在还原分享的工作区…');
-      const response = await fetch(`/api/shares/${id}`, {signal:AbortSignal.any([options.signal,AbortSignal.timeout(30000)]),cache:'no-store'});
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? '无法读取分享快照。');
-      const snapshot = result.document as WorkspaceFile;
-      // Same server can be visited through another hostname; external libraries retain their origin.
-      const previousOrigin = new URL(snapshot.serverUrl).origin;
-      for (const media of snapshot.media) if (media.source && new URL(media.source.url).origin === previousOrigin) {
-        const old = new URL(media.source.url); media.source.url = new URL(old.pathname + old.search, location.origin).href;
-      }
-      snapshot.serverUrl = location.origin + '/';
-      if (await options.open(snapshot)) notify('已还原分享快照，可继续添加云端标注；再次分享会生成新链接');
-      else notify('已取消还原分享快照');
-    } catch(error) { if (!options.signal.aborted) { notify((error as Error).message, undefined, 'error'); options.report(error); } }
-  });
+  for (const button of buttons) button.addEventListener('click', () => void create(button).catch(() => {}), {signal:options.signal});
+  dialog.querySelector('button')!.onclick = () => dialog.close();
+  dialog.addEventListener('close', () => focus?.focus());
   update();
-  // Toast stack lifetime is owned by the caller (shared across notifiers).
-  return { create, update, dispose() {} };
+  return { create, update, detach() { epoch++; pending = undefined; }, dispose() { dialog.remove(); } };
 }

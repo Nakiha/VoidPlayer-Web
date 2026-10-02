@@ -49,6 +49,44 @@ export function installAnnotationPanel(
   preview.id = 'annotation-preview'; preview.className = 'annotation-preview';
   preview.role = 'dialog'; preview.setAttribute('aria-label', '标注'); preview.hidden = true; document.body.append(preview);
   const lifecycle = new AbortController();
+  const discussion = document.createElement('dialog'); discussion.id='annotation-discussion'; discussion.className='annotation-discussion glass'; discussion.setAttribute('aria-labelledby','annotation-discussion-title');
+  discussion.innerHTML=`<header class="dialog-heading"><h2 id="annotation-discussion-title">批注讨论</h2><button type="button" class="icon-button" aria-label="关闭讨论">${icon('close')}</button></header><p class="discussion-note"></p><div class="discussion-replies" aria-label="回复"></div><form><label>回复<textarea name="reply" maxlength="2000" required aria-label="回复内容" placeholder="说说你的看法…"></textarea></label><p class="discussion-message" role="status"></p><div class="workspace-actions"><button type="submit">发送回复</button><button type="button" class="discussion-resolve">标记已解决</button></div></form>`;
+  document.body.append(discussion);
+  let discussedId: string | undefined;
+  const discussionNote=discussion.querySelector<HTMLElement>('.discussion-note')!;
+  const discussionReplies=discussion.querySelector<HTMLElement>('.discussion-replies')!;
+  const discussionMessage=discussion.querySelector<HTMLElement>('.discussion-message')!;
+  const reply=discussion.querySelector<HTMLTextAreaElement>('textarea')!;
+  const resolveButton=discussion.querySelector<HTMLButtonElement>('.discussion-resolve')!;
+  function refreshDiscussion() {
+    if (!discussion.open || !discussedId) return;
+    const mark=session.getState().marks.find(mark=>mark.id===discussedId);
+    if(!mark){discussionMessage.textContent='这条批注已删除或不在当前评审中。';reply.disabled=true;resolveButton.disabled=true;discussion.querySelector<HTMLButtonElement>('[type=submit]')!.disabled=true;return;}
+    reply.disabled=false;resolveButton.disabled=false;discussion.querySelector<HTMLButtonElement>('[type=submit]')!.disabled=false;
+    discussionNote.textContent=`${mark.author?.name || '未署名'} · ${mark.text || '画面批注'}`;
+    resolveButton.textContent=mark.resolved?'重新打开':'标记已解决';
+    discussionReplies.replaceChildren(...(mark.replies??[]).map(item=>{
+      const row=document.createElement('article'),meta=document.createElement('small'),text=document.createElement('p');
+      meta.textContent=`${item.author.name} · ${new Date(item.createdAt).toLocaleString()}`;text.textContent=item.text;row.append(meta,text);return row;
+    }));
+  }
+  discussion.querySelector<HTMLButtonElement>('.icon-button')!.onclick=()=>discussion.close();
+  discussion.addEventListener('close',()=>{discussedId=undefined;toggle.focus();});
+  discussion.querySelector('form')!.onsubmit=event=>{
+    event.preventDefault();if(!discussedId)return;
+    try { session.updateMark(discussedId,{reply:reply.value});reply.value='';discussionMessage.textContent='回复已加入，保存状态见播放器。';refreshDiscussion(); }
+    catch(error){discussionMessage.textContent=(error as Error).message;}
+  };
+  resolveButton.onclick=()=>{
+    const mark=session.getState().marks.find(mark=>mark.id===discussedId);if(!mark)return;
+    try{session.updateMark(mark.id,{resolved:!mark.resolved});discussionMessage.textContent=mark.resolved?'已重新打开':'已标记解决';refreshDiscussion();}
+    catch(error){discussionMessage.textContent=(error as Error).message;}
+  };
+  const unsubscribeDiscussion=session.subscribe(refreshDiscussion);
+  const resolvedToggle=document.createElement('button');resolvedToggle.id='annotation-show-resolved';resolvedToggle.textContent='显示已解决';resolvedToggle.setAttribute('aria-pressed','false');
+  document.querySelector('.annotation-strip-tools')!.append(resolvedToggle);
+  let showResolved=false, lastEntries:AnnotationEntry[]=[];
+  resolvedToggle.onclick=()=>{showResolved=!showResolved;resolvedToggle.setAttribute('aria-pressed',String(showResolved));resolvedToggle.textContent=showResolved?'隐藏已解决':'显示已解决';renderEntries(lastEntries);};
   let expanded = false;
   let anchor: HTMLElement | null = null;
   let dismiss: ReturnType<typeof setTimeout> | undefined;
@@ -80,6 +118,9 @@ export function installAnnotationPanel(
     const entry = document.createElement(entryTag); entry.className = 'mark-entry';
     identifyMark(entry, mark.id); bindMarkHover(entry, mark.id);
     entry.append(markContent(mark, slot, actions(mark, slot, row), session)); row.append(entry);
+    const discuss=document.createElement('button');discuss.className='annotation-discuss';discuss.dataset.discussMark=mark.id;discuss.textContent=`${mark.resolved?'已解决 · ':''}讨论${mark.replies?.length?` ${mark.replies.length}`:''}`;discuss.setAttribute('aria-label',`讨论批注 ${mark.text || formatTime(mark.frame.ptsUs)}`);
+    discuss.onclick=()=>{hidePreview();discussedId=mark.id;reply.value='';discussionMessage.textContent='';discussion.showModal();refreshDiscussion();reply.focus();};row.append(discuss);
+    row.dataset.resolved=String(!!mark.resolved);
     return { row, entry };
   }
   function showPreview(button: HTMLElement, mark: Mark, slot: Slot) {
@@ -118,15 +159,15 @@ export function installAnnotationPanel(
       const button = anchor; hidePreview(); button?.focus(); hidePreview(); event.stopPropagation();
     }
   }, { capture: true, signal: lifecycle.signal });
-  return {
-    expanded: () => expanded, setExpanded, hidePreview,
-    render(entries: AnnotationEntry[]) {
+  function renderEntries(entries: AnnotationEntry[]) {
+      lastEntries=entries;
+      entries=entries.filter(entry=>showResolved || !entry.mark.resolved);
       const scrollLeft = list.scrollLeft;
       dock.classList.toggle('annotations-empty', !entries.length);
       hidePreview(); list.replaceChildren();
       if (!entries.length) {
         const empty = document.createElement('span'); empty.className = 'marks-empty';
-        const hint = document.createElement('span'); hint.className = 'marks-empty-hint'; hint.textContent = '点击 + 添加';
+        const hint = document.createElement('span'); hint.className = 'marks-empty-hint'; hint.textContent = lastEntries.some(entry=>entry.mark.resolved)?'可显示已解决批注':'点击 + 添加';
         empty.append('暂无标注', hint); list.append(empty);
       }
       for (const { mark: savedMark, slot, offsetUs } of entries) {
@@ -145,7 +186,9 @@ export function installAnnotationPanel(
         list.append(row);
       }
       list.scrollLeft = scrollLeft;
-    },
-    dispose() { hidePreview(); lifecycle.abort(); preview.remove(); toggle.onclick = null; },
+  }
+  return {
+    expanded: () => expanded, setExpanded, hidePreview, render: renderEntries,
+    dispose() { hidePreview(); lifecycle.abort(); unsubscribeDiscussion(); discussion.remove(); resolvedToggle.remove(); preview.remove(); toggle.onclick = null; },
   };
 }

@@ -1,5 +1,6 @@
 import type { ColorMode, ReferenceDecode } from './color-mode.ts';
 import { drawingsValue } from './annotation.ts';
+import { discussionValue } from './mark-discussion.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import { BITRATE_WINDOW_OPTIONS_US } from './analysis/statistics.ts';
@@ -93,6 +94,7 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       const c = object(value); if (!ids.has(c.mediaId)) throw new Error('标注对比片源不存在。');
       return { slot: slotValue(c.slot), mediaId: text(c.mediaId, 200), frame: frame(c.frame), ...(c.offsetUs === undefined ? {} : { offsetUs: integer(c.offsetUs) }) };
     }) };
+    Object.assign(mark, discussionValue(m));
     if (m.offsetUs !== undefined) mark.offsetUs = integer(m.offsetUs);
     if (m.sessionPtsUs !== undefined) mark.sessionPtsUs = timeUs(m.sessionPtsUs);
     if (m.author) { const a = object(m.author); mark.author = { id: text(a.id, 200), name: text(a.name, 200) }; }

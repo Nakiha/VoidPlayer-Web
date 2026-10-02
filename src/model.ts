@@ -42,7 +42,10 @@ export type MediaInfo = {
   /** Browser output buffer layout; may differ from the encoded source format. */
   decodedPixelFormat?: string | null;
 };
+export type MarkReply = { id: string; text: string; createdAt: string; author: { id: string; name: string } };
 export type Mark = {
+  resolved?: boolean;
+  replies?: MarkReply[];
   author?: { id: string; name: string };
   id: string; text: string; severity: number; origin: 'human' | 'agent';
   createdAt: string; slot: Slot; mediaId: string; frame: FrameInfo; offsetUs?:number; sessionPtsUs?:number;

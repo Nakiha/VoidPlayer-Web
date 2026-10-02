@@ -19,5 +19,6 @@ export class SavedWorkspaceClient {
   list(before = '', search = '', all = false) { return this.request<WorkspacePage>(`/api/workspaces?before=${encodeURIComponent(before)}&search=${encodeURIComponent(search)}${all ? '&all=1' : ''}`); }
   read(id: string) { return this.request<WorkspaceRecord>(`/api/workspaces/${id}`); }
   save(name: string, document: WorkspaceFile, previous?: SavedWorkspace) { return this.request<SavedWorkspace>(previous ? `/api/workspaces/${previous.id}` : '/api/workspaces', previous ? 'PUT' : 'POST', { name, document }, previous?.revision); }
+  share(name: string, document: WorkspaceFile, id: string, previous?: SavedWorkspace) { return this.request<SavedWorkspace>('/api/workspaces/share', 'POST', { id, name, document }, previous?.revision); }
   remove(record: SavedWorkspace) { return this.request(`/api/workspaces/${record.id}`, 'DELETE', undefined, record.revision); }
 }

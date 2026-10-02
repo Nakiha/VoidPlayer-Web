@@ -30,6 +30,7 @@
 | 内容留白 / 内容间隔 / 分组间隔 | `--content-inset`、`--content-gap`、`--section-gap` | 12px / 6px / 8px |
 | 标注列表间隔 | `--list-gap` | 4px |
 | 时间轴列间隔 | `--timeline-column-gap` | 8px，窄屏 4px |
+| 子轨道行/表头横向内边距 | `--track-row-padding-inline` | 4px，列宽上限计算与 CSS 共用此值 |
 | 浮层内边距 / tooltip 纵向内边距 | `--popover-padding`、`--tooltip-padding-block` | 8px / 6px |
 | 折叠标注列内边距 | `--rail-padding-inline` | 按列宽与按钮宽计算，当前 6px |
 

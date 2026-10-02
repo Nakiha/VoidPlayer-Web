@@ -45,7 +45,7 @@ test('legacy owners migrate without changing IDs and new identities survive rest
   try {
     let store = new WorkspaceStore(file); store.close();
     const db = openIndexDatabase(file);
-    db.exec("DROP TABLE users; PRAGMA user_version=1; INSERT INTO workspaces VALUES('legacy','review','local','now','now','local',1,2,0,0,'{}')"); db.close();
+    db.exec("ALTER TABLE workspaces DROP COLUMN space; ALTER TABLE workspaces DROP COLUMN share_hash; ALTER TABLE workspaces DROP COLUMN share_seeds; DROP TABLE users; PRAGMA user_version=1; INSERT INTO workspaces VALUES('legacy','review','local','now','now','local',1,2,0,0,'{}')"); db.close();
     store = new WorkspaceStore(file);
     assert.deepEqual(store.user('local'), { id: 'local', name: 'local' });
     const named = store.identify('local', '原来的用户'); const other = store.identify(undefined, '另一用户'); store.close();

@@ -8,7 +8,6 @@ import { currentActor, identityHealth } from '../identity.ts';
 import { randomUUID } from '../uuid.ts';
 import { AnnotationPendingQueue } from '../annotation-pending.ts';
 import type { PendingEdit } from '../annotation-pending.ts';
-import { installChoiceMenu } from './choice-menu.ts';
 import { icon } from './icons.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
 import { publishMarkPreview } from './mark-preview-publish.ts';
@@ -20,35 +19,34 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   // stage() 只在用户新编辑时调用并递增 seq；sync() 重试复用快照 pending，
   // 两次核对身份后才落盘，过期直接跳过，不覆盖更新的 B-new/删除。
   const pendingQueue = new AnnotationPendingQueue();
-  let scope = 'default', available = false, working = false, cursor = 0, generation = 0, error = '', saving = 0;
-  let spaces = [{ id: 'default', name: '共享评审' }], drafts: AnnotationDraft[] = [];
+  let scope = 'local', available = false, working = false, cursor = 0, generation = 0, error = '', saving = 0;
+  let syncIdle: Promise<void> = Promise.resolve();
+  let drafts: AnnotationDraft[] = [];
   const versions = new Map<string, number>(), managed = new Set<string>();
   let owner = randomUUID();
-  try { if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) owner = sessionStorage.getItem('voidplayer.annotation-window') || owner; sessionStorage.setItem('voidplayer.annotation-window', owner); scope=sessionStorage.getItem('voidplayer.annotation-space')||'default'; } catch {}
+  try { if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) owner = sessionStorage.getItem('voidplayer.annotation-window') || owner; sessionStorage.setItem('voidplayer.annotation-window', owner); if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) scope=sessionStorage.getItem('voidplayer.annotation-space')||'local'; } catch {}
   let actor = currentActor()?.id ?? 'local';
   try { actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
   const button = document.createElement('button'); button.className = 'icon-button'; button.id = 'annotation-save-state'; button.setAttribute('aria-label', '标注保存'); button.innerHTML = icon('check');
   document.querySelector('.annotation-strip-tools')!.append(button);
-  const pane = document.getElementById('settings-pane-annotations')!;
+  const pane = document.getElementById('settings-pane-workspace')!;
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => pane.querySelector<T>(`#${id}`)!;
-  const choice = installChoiceMenu('annotation-space-choice',[], value => { if (value !== scope) void switchSpace(value); });
   button.onclick=()=>{openSettings();void refreshDrafts();};
   const currentDrafts = () => drafts.filter(draft=>draft.space===scope && draft.actor===actor && draft.key.startsWith(`${actor}/${scope}/${owner}/`));
-  let choiceSignature='', conflictSignature='', otherSignature='';
+  let conflictSignature='', otherSignature='';
   function state() {
     const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
     const message=localFailure || error || (saving ? '正在保存到本机…' : conflicts.length ? `${conflicts.length} 条标注需要处理` : pending.length ? available && scope!=='local' ? '已存本机 · 等待同步' : '已存本机' : available && scope!=='local' ? '已同步' : '已存本机');
-    button.title=`${spaces.find(space=>space.id===scope)?.name ?? '本机快照'} · ${message}`;
-    button.dataset.state=localFailure || error || conflicts.length?'error':saving || pending.length?'pending':'saved';
+    button.title=`批注 · ${message}`;
+    button.dataset.state=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
     button.innerHTML=icon(localFailure || error || conflicts.length?'info':saving || pending.length?'refresh':'check');
-    $('annotation-sync-status').textContent=message;
-    const choices=[{value:'local',label:'本机快照'},...spaces.map(space=>({value:space.id,label:space.name}))];
-    const signature=JSON.stringify(choices);if(signature!==choiceSignature){choiceSignature=signature;choice.setOptions(choices);}
-    choice.sync(scope, spaces.find(space=>space.id===scope)?.name ?? '本机快照', !editing() && !pendingQueue.size);
-    $<HTMLButtonElement>('annotation-space-create').disabled=!available || editing();
-    $<HTMLButtonElement>('annotation-publish').textContent=scope==='local'?'另存到共享评审':'将当前标注另存到空间';
-    $<HTMLButtonElement>('annotation-publish').disabled=!available || editing() || !session.getState().marks.length;
+    $('annotation-sync-status').textContent=`批注 · ${message}`;
+    window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: button.dataset.state } }));
     const others=drafts.filter(draft=>draft.actor===actor && draft.space===scope && !draft.key.startsWith(`${actor}/${scope}/${owner}/`));
+    const trouble=!!(localFailure || error || conflicts.length || others.length);
+    $('annotation-recovery').hidden=!trouble;
+    $<HTMLButtonElement>('annotation-sync-now').disabled=working || saving>0;
+    $('annotation-drafts-export').hidden=!trouble || !(pending.some(draft=>draft.desired) || others.some(draft=>draft.desired) || pendingQueue.size);
     $('annotation-drafts-section').hidden=!others.length;
     const nextOthers=JSON.stringify(others);
     if(nextOthers!==otherSignature){otherSignature=nextOthers;$('annotation-other-drafts').replaceChildren(...others.map(draft=>{
@@ -122,7 +120,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       const token=`${record.revision}/${thumbnailSignature(record.document.mark)}`,key=`${space}/${record.id}`;
       if(uploaded.get(key)===token)continue;
       const preview=await storage.preview(space,record.id);
-      if(!preview || preview.signature!==thumbnailSignature(record.document.mark))continue;
+      if(!preview || !preview.url.startsWith('data:image/jpeg;base64,') || preview.signature!==thumbnailSignature(record.document.mark))continue;
       count++;
       const blob=await fetch(preview.url).then(response=>response.blob());
       const response=await fetch(`/api/annotations/spaces/${space}/${record.id}/preview?revision=${record.revision}&epoch=${previewEpoch}`,{method:'PUT',headers:{'x-voidplayer-action':'annotation','x-voidplayer-actor':actorId,'content-type':'image/jpeg'},body:blob,signal:AbortSignal.any([life.signal,AbortSignal.timeout(10000)])});
@@ -132,10 +130,13 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   window.addEventListener('voidplayer-annotation-preview',event=>{
     const {id,preview}=(event as CustomEvent).detail;
     const mark=session.getState().marks.find(mark=>mark.id===id);
-    if(mark && thumbnailSignature(mark)===preview.signature)void storage.savePreview(scope,id,preview).catch(()=>{});
+    if(mark && preview.url.startsWith('data:image/jpeg;base64,') && thumbnailSignature(mark)===preview.signature)void storage.savePreview(scope,id,preview).catch(()=>{});
   },{signal:life.signal});
   async function sync() {
-    if(working || life.signal.aborted)return;working=true;const captured=generation,space=scope,actorId=actor;
+    if(life.signal.aborted)return;
+    if(working)return syncIdle;
+    working=true;let release!:()=>void;syncIdle=new Promise(resolve=>{release=resolve;});
+    const captured=generation,space=scope,actorId=actor;
     try {
       // REVIEW-01：重试复用快照 pending，不产生新 seq；过期（被新编辑/删除取代）直接跳过。
       for(const [key, pending] of pendingQueue.snapshot())await persistRetry(key,pending);
@@ -172,16 +173,16 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       if(captured===generation)await apply();
       if(captured===generation && available && space!=='local')await uploadPreviews(space,actorId).catch(()=>{});
-    } catch(e){if(captured===generation){error=available?'连接中断 · 本机草稿保留':(e as Error).message;}}finally{working=false;await refreshDrafts();}
+    } catch(e){if(captured===generation){error=available?'连接中断 · 本机草稿保留':(e as Error).message;}}finally{working=false;await refreshDrafts();release();}
   }
   async function switchSpace(next:string) {
-    if(editing() || pendingQueue.size)return;
+    if(editing() || pendingQueue.size || saving)throw new Error('请先结束标注并等待本机草稿保存完成。');
     // Restoring the current scope (e.g. failed-import rollback) must not
     // touch live marks: there is nothing to load that the session lacks.
     if(next===scope)return;
     generation++;scope=next;try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();
     const previous=[...managed];managed.clear();
-    await apply(previous);void sync();
+    await syncIdle; await apply(previous); await sync();
   }
   let resolving=false;
   async function resolve(draft:AnnotationDraft,copy:boolean) {
@@ -196,18 +197,10 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     } catch(e){error=(e as Error).message;state();}finally{resolving=false;}
   }
   $('annotation-sync-now').onclick=()=>void sync();
-  $('annotation-space-create').onclick=()=>void(async()=>{try{const space=await client.createSpace($<HTMLInputElement>('annotation-space-name').value);spaces=await client.spaces();await switchSpace(space.id);$<HTMLInputElement>('annotation-space-name').value='';}catch(e){error=(e as Error).message;state();}})();
-  $('annotation-publish').onclick=()=>void(async()=>{
-    const snapshot=session.exportWorkspace(location.origin+'/');
-    // Keep the snapshot in memory while changing destination; never overwrite its old IDs.
-    if(scope==='local')await switchSpace('default');
-    for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);const document={mark:{...mark,id:randomUUID()},media:snapshot.media.filter(media=>ids.has(media.id))};await enqueue(document.mark.id,document,0);}
-    await apply();void sync();
-  })();
   $('annotation-drafts-export').onclick=()=>void(async()=>{
     try{
-      const drafts=(await storage.drafts().catch(()=>[])).filter(draft=>draft.actor===actor && draft.desired);
-      const payload=annotationWorkspace([...drafts.map(draft=>draft.desired!),...pendingQueue.snapshot().flatMap(([,value])=>value.document?[value.document]:[])],location.origin+'/');
+      const drafts=(await storage.drafts().catch(()=>[])).filter(draft=>draft.actor===actor && draft.space===scope && draft.desired);
+      const payload=annotationWorkspace([...drafts.map(draft=>draft.desired!),...pendingQueue.snapshot().flatMap(([,value])=>value.actorId===actor && value.space===scope && value.document?[value.document]:[])],location.origin+'/');
       const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='VoidPlayer-annotation-drafts.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
     }catch(e){error=(e as Error).message;state();}
   })();
@@ -218,7 +211,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   });
   window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
   const interval=setInterval(()=>{if(!document.hidden)void sync();},3000);
-  async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;if(available)spaces=await client.spaces();await apply();void sync();}catch{void apply();}}
+  async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply();}}
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
   window.addEventListener('focus',()=>void sync(),{signal:life.signal});
   window.addEventListener('voidplayer-identity-change',()=>{
@@ -229,8 +222,31 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   state();
   return {
     openSpace: switchSpace,
+    scope: () => scope,
+    async attachWorkspace(space: string, seededIds: string[] = []) {
+      // Read the seeded records before switching scope so edits made during the
+      // request keep their local draft. Set all bases before staging remote edits.
+      const records=new Map<string,AnnotationRecord>();
+      let after=0,page;
+      do { page=await client.changes(space,after);await storage.remember(page.entries);after=page.cursor;for(const record of page.entries)records.set(record.id,record); } while(page.more);
+      await syncIdle;
+      if (pendingQueue.size || saving) throw new Error('本机草稿正在保存，请稍后重试。');
+      const snapshot=session.exportWorkspace(location.origin+'/');
+      generation++; scope=space; cursor=after; versions.clear(); managed.clear();
+      for(const record of records.values())versions.set(record.id,record.revision);
+      try{sessionStorage.setItem('voidplayer.annotation-space',space);}catch{}
+      const ids=new Set([...snapshot.marks.map(mark=>mark.id),...seededIds]);
+      for (const id of ids) {
+        // Re-read each mark in case another edit occurred while earlier drafts saved.
+        const current=session.exportWorkspace(location.origin+'/'),mark=current.marks.find(mark=>mark.id===id),remote=records.get(id);
+        if(!mark){if(remote && !remote.deleted)await enqueue(id,null,remote.revision);continue;}
+        const mediaIds=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);
+        if (!remote || remote.deleted || JSON.stringify(mark)!==JSON.stringify(remote.document.mark)) await enqueue(id,{mark,media:current.media.filter(media=>mediaIds.has(media.id))},remote?.revision??0);
+      }
+      await sync();
+    },
     snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
-    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();choice.dispose();button.remove();},
+    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();button.remove();},
   };
 }

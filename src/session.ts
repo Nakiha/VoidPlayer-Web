@@ -1074,13 +1074,14 @@ export class ReviewSession {
     this.emit();
     return structuredClone(mark);
   }
-  updateMark(id: string, input: { text?: unknown; drawings?: unknown }) {
+  updateMark(id: string, input: import('./session/marks.ts').MarkEdit) {
     const mark = this.marks.find(m => m.id === id);
     if (!mark) throw new Error('标注不存在。');
-    if (this.busy || this.playing) throw new Error('请暂停并等待画面定位完成后再编辑标注。');
+    const editingFrame = input.text !== undefined || input.drawings !== undefined;
+    if (this.busy || (editingFrame && this.playing)) throw new Error('请暂停并等待画面定位完成后再编辑标注。');
     const track = [...this.tracks.values()].find(t => t.source.info.id === mark.mediaId);
-    if (!track?.frame || track.failure || track.syncState || track.frame.ptsUs !== mark.frame.ptsUs) throw new Error('请返回标注对应的画面后再编辑。');
-    applyMarkEdit(mark, input); this.markChanged(id);
+    if (editingFrame && (!track?.frame || track.failure || track.syncState || track.frame.ptsUs !== mark.frame.ptsUs)) throw new Error('请返回标注对应的画面后再编辑。');
+    applyMarkEdit(mark, input, this.actor); this.markChanged(id);
     log.info('session', '修改标注', { id, frameUs: mark.frame.ptsUs }); this.emit();
     return structuredClone(mark);
   }

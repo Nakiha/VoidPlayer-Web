@@ -4,6 +4,7 @@ import { drawingsValue } from '../annotation.ts';
 import { regionValue, slotValue } from '../model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from '../model.ts';
 import { randomUUID } from '../uuid.ts';
+import { discussionValue } from '../mark-discussion.ts';
 
 /** Pure mark helpers shared by UI and Agent through ReviewSession. No decoder/clock access. */
 
@@ -44,11 +45,18 @@ export function buildMark(input: { slot: unknown; text: unknown; severity?: unkn
   };
 }
 
-export function applyMarkEdit(mark: Mark, input: { text?: unknown; drawings?: unknown }) {
+export type MarkEdit = { text?: unknown; drawings?: unknown; resolved?: unknown; reply?: unknown };
+
+export function applyMarkEdit(mark: Mark, input: MarkEdit, actor: { id: string; name: string } | null = null) {
   const text = input.text === undefined ? mark.text : input.text;
   const drawings = input.drawings === undefined ? mark.drawings ?? [] : drawingsValue(input.drawings);
   const next = validateMarkText(text, drawings, '标注不能为空。');
-  mark.text = next; mark.drawings = drawings;
+  const discussion = discussionValue({ resolved: input.resolved });
+  if (input.reply !== undefined) {
+    if (typeof input.reply !== 'string' || !input.reply.trim() || input.reply.length > 2000) throw new Error('回复需要 1–2000 个字符。');
+    discussion.replies = discussionValue({ replies: [...(mark.replies ?? []), { id: randomUUID(), text: input.reply.trim(), createdAt: new Date().toISOString(), author: actor ?? { id: 'local', name: '本机' } }] }).replies;
+  }
+  mark.text = next; if (input.drawings !== undefined) mark.drawings = drawings; Object.assign(mark, discussion);
   return mark;
 }
 

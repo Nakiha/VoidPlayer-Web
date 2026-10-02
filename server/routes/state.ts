@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import { AdminError, adminWriteAllowed, readAdminJson } from '../admin.ts';
 import type { AdminController } from '../admin.ts';
 import { ANNOTATION_BYTES } from '../annotations.ts';
@@ -75,19 +75,39 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       sendJson(res, 405, { error: '不支持的标注操作。' }); return true;
     } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
   }
-  if (url.pathname === '/api/shares' || url.pathname.startsWith('/api/shares/')) {
-    if (!options.admin) { sendJson(res, 503, { error: '当前服务不支持分享。' }); return true; }
+  function seedWorkspace(id: string) {
+    const {record, seeds} = options.admin!.workspaces.sharedWorkspace(id);
+    if (!record.space) return;
+    const annotations = options.admin!.annotations;
+    annotations.ensureSpace(record.space, record.name);
+    for (const mark of seeds?.document.marks ?? []) {
+      const ids = new Set([mark.mediaId, ...mark.comparison.map(item => item.mediaId)]);
+      annotations.mutate(record.space, { operationId: `seed-${createHash('sha256').update(id + '/' + mark.id).digest('hex')}`, id: mark.id, revision: 0, action: 'put', document: { mark, media: seeds!.document.media.filter(media => ids.has(media.id)) } }, seeds!.actor);
+    }
+  }
+  if (url.pathname === '/api/shares' || url.pathname.startsWith('/api/shares/') || url.pathname.startsWith('/api/reviews/')) {
+    if (!options.admin) { sendJson(res, 503, { error: '当前服务不支持工作区分享。' }); return true; }
+    const store = options.admin.workspaces;
     try {
+      const id = /^\/api\/(shares|reviews)\/([a-f0-9-]{36})$/.exec(url.pathname);
       if (url.pathname === '/api/shares' && req.method === 'POST') {
-        if (!adminWriteAllowed(req, 'workspace')) { sendJson(res, 403, { error: '请从同源页面分享工作区。' }); return true; }
-        if (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor?.id) { sendJson(res, 409, { error: '用户已切换，请重新分享。' }); return true; }
-        const result = options.admin.workspaces.share(await readAdminJson(req, WORKSPACE_BYTES + 2048), ctx.actor);
-        sendJson(res, 201, { ...result, path: `/?share=${result.id}` }); return true;
+        if (!adminWriteAllowed(req, 'workspace')) throw new AdminError(403, '请从同源页面分享工作区。');
+        if (!ctx.actor || (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor.id)) throw new AdminError(409, '请先选择用户或以访客继续。');
+        const document = await readAdminJson(req, WORKSPACE_BYTES + 2048) as {name?: string};
+        const {record} = store.shareWorkspace(randomUUID(),{name:document.name || '共享工作区',document},undefined,ctx.actor);
+        seedWorkspace(record.id);sendJson(res,201,{...record,path:`/?workspace=${record.id}`});return true;
       }
-      const id = /^\/api\/shares\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
-      if (id && req.method === 'GET') { sendJson(res, 200, options.admin.workspaces.shared(id)); return true; }
-      sendJson(res, 405, { error: '分享快照不可修改。' });
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); }
+      if (!id) throw new AdminError(405, '不支持的工作区操作。');
+      const record = store.fromLegacy(id[2],id[1] === 'shares' ? 'share' : 'review').record;
+      seedWorkspace(record.id);
+      if (req.method === 'GET') { sendJson(res,200,{...store.read(record.id,ctx.actor ?? {id:'guest',name:'访客'}),path:`/?workspace=${record.id}`});return true; }
+      if (req.method === 'PUT') {
+        if (!adminWriteAllowed(req, 'workspace')) throw new AdminError(403, '请从同源页面更新工作区。');
+        if (!ctx.actor || (req.headers['x-voidplayer-actor'] && req.headers['x-voidplayer-actor'] !== ctx.actor.id)) throw new AdminError(409, '用户已切换，请重新打开工作区。');
+        sendJson(res,200,store.update(record.id,typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined,await readAdminJson(req,WORKSPACE_BYTES + 2048),ctx.actor));return true;
+      }
+      throw new AdminError(405, '不支持的工作区操作。');
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res,error instanceof AdminError ? error.status : 500,{error:(error as Error).message}); }
     return true;
   }
   if (url.pathname === '/api/workspaces' || url.pathname.startsWith('/api/workspaces/')) {
@@ -99,6 +119,11 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
     const store = options.admin.workspaces;
     const id = /^\/api\/workspaces\/([a-f0-9-]{36})$/.exec(url.pathname)?.[1];
     try {
+      if (url.pathname === '/api/workspaces/share' && req.method === 'POST') {
+        const input=await readAdminJson(req,WORKSPACE_BYTES + 4096) as {id?: string};
+        const result=store.shareWorkspace(input?.id ?? randomUUID(),input,typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined,workspaceActor);
+        seedWorkspace(result.record.id);sendJson(res,201,result.record);return true;
+      }
       if (url.pathname === '/api/workspaces') {
         if (req.method === 'GET') {
           sendJson(res, 200, store.list(workspaceActor, url.searchParams.get('all') === '1', url.searchParams.get('before') ?? '', url.searchParams.get('search') ?? '')); return true;
@@ -106,7 +131,7 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
         if (req.method === 'POST') { sendJson(res, 201, store.create(await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
       }
       if (id) {
-        if (req.method === 'GET') { const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return true; }
+        if (req.method === 'GET') { seedWorkspace(id); const value = store.read(id, workspaceActor); res.setHeader('etag', `"${value.revision}"`); sendJson(res, 200, value); return true; }
         const revision = typeof req.headers['if-match'] === 'string' ? req.headers['if-match'] : undefined;
         if (req.method === 'PUT') { sendJson(res, 200, store.update(id, revision, await readAdminJson(req, WORKSPACE_BYTES + 2048), workspaceActor)); return true; }
         if (req.method === 'DELETE') { sendJson(res, 200, store.remove(id, revision, workspaceActor)); return true; }

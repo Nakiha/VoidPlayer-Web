@@ -166,9 +166,11 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   render();
 }
 for (const canvas of Object.values(canvases)) bindPresentationResources(canvas, session.resources);
-const annotationSync = installAnnotationSync(session, () => drawingEditor.active(), () => settings.openPane('annotations', $<HTMLButtonElement>('annotation-save-state')));
+const annotationSync = installAnnotationSync(session, () => drawingEditor.active(), () => settings.openPane('workspace', $<HTMLButtonElement>('annotation-save-state')));
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
+  openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),
+  annotationScope: annotationSync.scope,
   identityReady: identitySettings.ready, act, toasts, closeSettings: settings.close, capture: () => ({ viewport: viewport.snapshot(), layout: workbench.getState() }),
   beforeRestore() { if (drawingEditor.active()) $('mark-close').click(); return annotationSync.snapshotMode(); },
   async restore(document, resumeCloudAnnotations) { if (!resumeCloudAnnotations) await annotationSync.captureSnapshot(); viewport.apply(document.viewport); setPresentationChannel(viewport.channel); await workbench.restore(document.layout ?? workbench.getState()); render(); },

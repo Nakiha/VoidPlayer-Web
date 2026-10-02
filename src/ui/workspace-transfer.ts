@@ -8,6 +8,8 @@ import type { MediaInfo } from '../model.ts';
 import { openMedia, openMediaFromUrl } from '../media.ts';
 import { parseWorkspace, readWorkspaceFile } from '../workspace-file.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
+import { mapSharedWorkspace } from '../shared-workspace.ts';
+import { SavedWorkspaceClient } from '../saved-workspaces.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { pinLibraryReference } from '../media-reference.ts';
 import { describeMediaMismatch, matchMediaIdentity, mediaMtimeWarning } from '../media-identity.ts';
@@ -68,11 +70,14 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   beforeRestore(): void | (() => void | Promise<void>);
   closeSettings(): Promise<void>;
   identityReady: Promise<void>;
+  openSharedSpace(space: string, seededIds?: string[]): Promise<void>;
+  annotationScope(): string;
   toasts: ToastStack;
 }) {
   const input = document.getElementById('workspace-file') as HTMLInputElement;
   const lifetime = new AbortController(); let importing = false;
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
+  let sharing: ReturnType<typeof installWorkspaceSharing> | undefined;
   function exportWorkspace() {
     const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? '未命名工作区' };
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
@@ -99,19 +104,19 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       } catch(error) { await rollback?.(); throw error; }
       annotationThumbnails.clear();
       for (const { id, ...image } of document.thumbnails ?? []) annotationThumbnails.set(id, image);
-      try { await options.restore(document, fromShare); }
-      finally { if (fromShare) await rollback?.(); }
+      await options.restore(document, fromShare);
+      if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       saved?.detach(document.name);
       if (!document.comparison) options.toasts.show('旧工作区未记录比较条件，已沿用当前色彩和解码设置。');
       return true;
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: value => importWorkspace(value), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   // A seek keeps the last committed workspace snapshot valid. Sharing is
   // available whenever there is a loaded track; the snapshot is captured
   // synchronously before any network work begins.
-  const sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, toasts:options.toasts, created: document => saved!.shared(document), open:value=>importWorkspace(value, [], false, true), ready:options.identityReady, canShare:()=>session.getState().tracks.length>0, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, closeSettings:options.closeSettings, openSpace:options.openSharedSpace, scope:options.annotationScope, canShare:()=>session.getState().tracks.length>0, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
@@ -139,9 +144,16 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       action: { label: '重新关联', onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
   }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
-  const unsubscribe = session.subscribe(() => { saved?.update(); sharing.update(); updateMissing(); });
-  const savedId = new URL(location.href).searchParams.get('workspace');
-  if (!new URL(location.href).searchParams.has('share') && savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));
+  const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); updateMissing(); });
+  const params = new URL(location.href).searchParams;
+  const savedId = params.get('workspace'), legacyId=params.get('share') ?? params.get('review');
+  if (savedId && /^[a-f0-9-]{36}$/.test(savedId)) void options.identityReady.then(()=>saved!.open(savedId));
+  else if (legacyId && /^[a-f0-9-]{36}$/.test(legacyId)) void options.identityReady.then(async()=>{
+    // Old share/review URLs join the same writable workspace flow.
+    const client=new SavedWorkspaceClient(lifetime.signal);
+    await client.request(`/api/${params.has('share')?'shares':'reviews'}/${legacyId}`);
+    await saved!.open(legacyId);
+  }).catch(error=>options.toasts.show((error as Error).message,{kind:'error',durationMs:0}));
   input.addEventListener('change', () => { const file = input.files?.[0]; input.value = ''; if (file) void options.act(() => importFile(file), 'workspace.import'); }, { signal: lifetime.signal });
   return { exportWorkspace, importWorkspace, importFile, relinkMissing, shareWorkspace: sharing.create, dispose() { recovery.dispose(); dismissMissing?.(); lifetime.abort(); unsubscribe(); sharing.dispose(); } };
 }

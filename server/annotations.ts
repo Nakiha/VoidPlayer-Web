@@ -35,6 +35,10 @@ export class AnnotationStore {
     if (typeof name !== 'string' || !name.trim() || name.length > 120) throw new AdminError(400, '请填写评审空间名称。');
     const id = randomUUID(); this.db.prepare('INSERT INTO spaces VALUES(?,?,?)').run(id, name.trim(), new Date().toISOString()); return { id, name: name.trim() };
   }
+  ensureSpace(id: string, name: string) {
+    if (!validId(id) || !name.trim() || name.length > 200) throw new AdminError(400, '评审名称无效。');
+    this.db.prepare('INSERT OR IGNORE INTO spaces VALUES(?,?,?)').run(id, name, new Date().toISOString());
+  }
   private space(id: string) { if (!validId(id) || !this.db.prepare('SELECT 1 FROM spaces WHERE id=?').get(id)) throw new AdminError(404, '评审空间不存在。'); }
   read(space: string, id: string): AnnotationRecord | null {
     this.space(space);
@@ -67,6 +71,11 @@ export class AnnotationStore {
       if (current && annotationAnchor(current.document) !== annotationAnchor(document)) throw new AdminError(409, '不能更改已有标注的媒体版本或帧位置。');
       if (!current) document.mark.author = { ...actor };
       else { document.mark.author = current.document.mark.author; document.mark.createdAt = current.document.mark.createdAt; }
+      if (document.mark.replies) {
+        const previous = new Map((current?.document.mark.replies ?? []).map(reply => [reply.id, reply]));
+        document.mark.replies = document.mark.replies.map(reply => previous.get(reply.id) ?? { ...reply, author: { ...actor }, createdAt: new Date().toISOString() });
+        if ([...previous.keys()].some(id => !document.mark.replies!.some(reply => reply.id === id))) throw new AdminError(409, '不能移除已有回复。');
+      } else if (current?.document.mark.replies?.length) throw new AdminError(409, '不能移除已有回复。');
       const json = JSON.stringify(document);
       if (Buffer.byteLength(json) > ANNOTATION_BYTES) throw new AdminError(413, '单条标注内容过大。');
       this.db.exec('UPDATE annotation_clock SET sequence=sequence+1 WHERE id=1');
