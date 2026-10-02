@@ -10,6 +10,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test --test-concurrency=4 test/*.test.ts test/*.test.mjs",
     "serve": "node server/main.ts",
+    "clean": "node scripts/clean.mjs",
     "dev:web": "vite --host 127.0.0.1",
     "start": "node server/main.ts",
     "service": "node scripts/service.mjs",

@@ -61,6 +61,12 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 源画布按需由 presenter.captureFrame 生成；取像素/缩略图不得依赖隐藏画布在每帧更新。
 改动视图尺寸调度、轨道操作或片源 UI 后跑 test:browser；需先同步样片/core 并安装 Playwright WebKit。
 
+本地会产生大量可再生成产物（`.run/` 的历史验收证据与测试素材、`artifacts/` 的历史打包产物）。
+用 `npm run clean` 先看各分类体积（默认 dry-run），`npm run clean -- --apply` 才删除；
+`--keep-days=N` 控制保留窗口（默认 14 天），`--only=media,logs` 限定分类。
+脚本只删「位于仓库内 + 被 git 忽略 + 不在保护清单」的路径，`.run/data`（服务端 SQLite）、
+`.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。
+
 ## 独立发布
 
 - 正式打包走 `.github/workflows/release-preview.yml`：固定解码器源码/工具链后准备共享 core，再在 Linux x64、Windows x64、macOS ARM64 原生 runner 打包和测试。
