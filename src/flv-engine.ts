@@ -22,6 +22,16 @@ export class FlvEngine {
   private timeline?: PacketTimeline;
   private decodeFailure?: MediaOpenError;
   private primed: FlvFrame | null = null;
+  // Startup is decoded against a finite one-packet prefix. A live decoder
+  // cannot flush that prefix again while waiting for index growth: flushing
+  // ends its reference chain. Keep one independently owned output until the
+  // complete index makes ordinary random access possible.
+  private startup: FlvFrame | null = null;
+  private releaseStartup() { this.startup?.frame?.close(); this.startup = null; }
+  private retainStartup() {
+    this.releaseStartup();
+    if (!this.indexComplete && this.primed) this.startup = cloneFrame(this.primed);
+  }
   private indexingFailure: unknown;
   private growing = false;
   onIndexWaiting?: (waiting: boolean) => void;
@@ -41,6 +51,7 @@ export class FlvEngine {
     this.checkpoint = checkpoint; this.index = checkpoint.index;
     this.timeline?.appendIndex(this.index);
     this.growing = !checkpoint.complete;
+    if (checkpoint.complete) this.releaseStartup();
     this.timeline?.setGrowth(this.growing ? this.waitForGrowth : undefined);
     this.wake();
   }
@@ -121,6 +132,7 @@ export class FlvEngine {
         onProgress?.('first-frame');
         this.primed = await this.extract(0);
       }
+      this.retainStartup();
       return { codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
@@ -142,6 +154,7 @@ export class FlvEngine {
   }
   async at(pts:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
     if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return f;}
+    if(this.startup?.pts===pts)return cloneFrame(this.startup,recycle);
     this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
   }
   next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
@@ -168,6 +181,7 @@ export class FlvEngine {
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
       this.primed?.frame?.close();this.timeline?.close();
       this.decoder=decoder;this.timeline=timeline;this.primed=primed;
+      this.retainStartup();
     }
     return {
       codec: this.index.codec, decoder: this.decoder.kind, width: this.primed!.width, height: this.primed!.height,
@@ -185,6 +199,7 @@ export class FlvEngine {
         let primed:FlvFrame;
         try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
         this.primed?.frame?.close();this.timeline?.close();this.decoder=decoder;this.timeline=timeline;this.primed=primed;
+        this.retainStartup();
       }
     }
     return this.decoderInfo();
@@ -196,5 +211,16 @@ export class FlvEngine {
     if(!Number.isInteger(position)||position<0||position>=(this.index.displayOrder ?? this.index.order).length)throw new MediaOpenError('input','FLV 帧位置越界。');
     return this.at(this.index.packets[(this.index.displayOrder ?? this.index.order)[position]].pts,recycle);
   }
-  close() { this.indexingFailure = new Error('媒体已释放。'); this.growing = false; this.wake(); this.scanReader?.close(); this.cache.close(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
+  close() { this.indexingFailure = new Error('媒体已释放。'); this.growing = false; this.wake(); this.scanReader?.close(); this.cache.close(); this.releaseStartup(); this.primed?.frame?.close(); this.primed = null; this.timeline?.close(); this.timeline=undefined; this.decoder = undefined!; this.reader.close(); }
+}
+
+/** Worker responses transfer their resource, so never return the retained
+ * resource itself. Software pixels also need independent transferable storage. */
+function cloneFrame(source: FlvFrame, recycle?: ArrayBuffer): FlvFrame {
+  let pixels: ArrayBuffer | undefined;
+  if (source.pixels) {
+    pixels = recycle?.byteLength === source.pixels.byteLength ? recycle : new ArrayBuffer(source.pixels.byteLength);
+    new Uint8Array(pixels).set(new Uint8Array(source.pixels));
+  }
+  return { ...source, frame: source.frame?.clone(), pixels };
 }

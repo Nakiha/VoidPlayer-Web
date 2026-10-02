@@ -6,16 +6,18 @@ import { chromium, webkit } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { trustTestCertificate } from './test-certificate-trust.mjs';
+import { identityBrowserService, cleanupIdentityBrowser } from './identity-browser-lifecycle.mjs';
 const insecure = process.env.VOIDPLAYER_HTTP_TEST === '1';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
 const temp = await mkdtemp(path.join(os.tmpdir(), 'vp-identity-browser-'));
-let service, browser, untrust;
+let service, lifecycle, browser, untrust, failure;
 try {
   await mkdir(path.join(temp, 'media'));
   if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') await writeFile(path.join(temp, 'media/http-smoke.mp4'), Buffer.from(await readFile(new URL('../test/http-smoke.mp4.base64', import.meta.url), 'utf8'), 'base64'));
   const config = await loadConfig(['--folder', path.join(temp, 'media'), '--data-dir', temp], 'production'); config.port = 0; config.logsDir = null;
   if (secure) config.tls = { hosts: ['voidplayer.test'] };
-  service = await startService(config); config.port = service.server.address().port;
+  lifecycle = identityBrowserService(config, startService);
+  service = await lifecycle.start();
   if (secure) untrust = await trustTestCertificate(service.tls.caFile);
   console.log('Identity browser: service ready, certificate trust configured');
   const base = `${secure ? 'https' : 'http'}://${insecure || secure ? 'voidplayer.test' : '127.0.0.1'}:${config.port}`;
@@ -144,7 +146,7 @@ try {
   const overflow = await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth - e.clientWidth); assert.ok(overflow <= 1);
   await page.screenshot({ path: '/tmp/voidplayer-identity-mobile.png' });
   console.log('Identity browser: users, cross-tab synchronization and layout passed; restarting service');
-  await service.close(); service = await startService(config);
+  service = await lifecycle.restart();
   console.log('Identity browser: service restarted');
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await a.clearCookies(); await page.reload(); await page.locator('#identity-welcome [data-guest]').click(); await settings(page);
@@ -243,9 +245,14 @@ try {
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
   console.log('PASS identity: explicit names and guests, no read-created users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
   }
+} catch (error) {
+  failure = { error };
 } finally {
-  console.log('Identity browser: closing browser'); await browser?.close();
-  console.log('Identity browser: closing service'); await service?.close();
-  untrust?.(); await rm(temp, { recursive: true, force: true });
+  await cleanupIdentityBrowser([
+    ['browser', async () => { console.log('Identity browser: closing browser'); await browser?.close(); }],
+    ['service', async () => { console.log('Identity browser: closing service'); await lifecycle?.close(); }],
+    ['certificate trust', () => untrust?.()],
+    ['temporary directory', () => rm(temp, { recursive: true, force: true })],
+  ], failure);
   console.log('Identity browser: cleanup complete');
 }
