@@ -129,6 +129,7 @@ export class WorkerRpc {
   private queuedIndexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
   private indexRequestId?: number;
   private indexReady = false;
+  private indexBuildId?: string;
   private indexTerminal = false;
   private workerId=randomUUID();
   private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
@@ -159,7 +160,8 @@ export class WorkerRpc {
         return;
       }
       if (data.type === 'index-batch') {
-        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal) return;
+        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal
+          || (this.indexBuildId !== undefined && data.data.buildId !== this.indexBuildId)) return;
         if (this.indexHandlers) this.indexHandlers.batch?.(data.data);
         else this.queuedIndexEvents.push({ type: 'index-batch', data: data.data });
         return;
@@ -236,6 +238,7 @@ export class WorkerRpc {
     }
   }
   sendIndexManifest(ctx: number, manifest: MediaIndexRecordManifest, trace: MediaIndexClientTrace) {
+    this.indexBuildId = manifest.buildId;
     this.pushIndexInput('manifest', ctx, { manifest, trace });
   }
   sendIndexBatch(ctx: number, batch: MediaIndexRecordBatch, trace: MediaIndexClientTrace) {
@@ -246,9 +249,15 @@ export class WorkerRpc {
     this.pushIndexInput('complete', ctx, { manifest, frames, trace });
   }
   sendLegacyIndex(ctx: number, index: unknown, trace: MediaIndexClientTrace) {
+    this.indexBuildId = '';
     this.pushIndexInput('legacy', ctx, { index, trace });
   }
-  startLocalIndex(ctx: number) { this.pushIndexInput('fallback', ctx); }
+  startLocalIndex(ctx: number) {
+    // A reset/failed transport can race an acknowledgement already in flight.
+    // The replacement local build must establish its own usable timeline.
+    this.indexBuildId = '';
+    this.pushIndexInput('fallback', ctx);
+  }
   reportIndexError(error: string, stage: OpenStage = 'resource') {
     if (this.failure || this.indexTerminal) return;
     this.indexTerminal = true;
@@ -481,7 +490,6 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       durationsUs = frameDurationsUs(ticks, durationsTicks);
     }
     const stableCoverageUs = Math.max(info.stableCoverageUs ?? 1, Math.floor(result.stableCoverageUs));
-    containerSession?.index.updateCoverage(stableCoverageUs);
     updateMediaInfo(source, {
       stableCoverageUs,
       durationUs: Math.max(info.durationUs, stableCoverageUs),
@@ -489,13 +497,13 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       seekAnchorCount: result.seekAnchorCount,
       seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
     }, 'index');
+    containerSession?.index.updateCoverage(stableCoverageUs, info.durationUs);
     wakeIndex();
   };
   const applyIndexComplete = (result: InitResult) => {
     if (disposed) return;
     if (!result.ticks.length || result.ticks[0] !== firstTick) {
-      updateMediaInfo(source, { indexState: 'error', indexError: '完整索引改变了首帧时间轴起点。' }, 'index');
-      wakeIndex();
+      applyIndexError({ error: '完整索引改变了首帧时间轴起点。' });
       return;
     }
     ticks = result.ticks;
@@ -503,7 +511,6 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     relUs = ticks.map(t => ticksToUs(t) - ticksToUs(firstTick));
     durationsUs = frameDurationsUs(ticks, durationsTicks);
     const durationUs = Math.max(1, relUs[relUs.length - 1] + durationsUs[durationsUs.length - 1]);
-    containerSession?.index.markComplete(durationUs);
     contextLog().info('media', 'FFmpeg 索引完成', {
       name: file.name, indexSource: result.indexSource, frames: ticks.length,
       firstPtsUs: info.firstPtsUs, durationUs, indexMs: result.indexMs,
@@ -523,6 +530,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
       seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
     }, 'index');
+    containerSession?.index.markComplete(durationUs);
     wakeIndex();
   };
   const applyIndexError = (result: { error: string; stage?: OpenStage }) => {
@@ -613,7 +621,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     async framesAfter(ptsUs, count) {
       if (count <= 0) return [];
       await ensureIndexed(ptsUs);
-      while (info.indexState === 'building' && nextIndex(relUs, ptsUs) < 0) await waitForIndexUpdate();
+      while (!disposed && info.indexState === 'building' && nextIndex(relUs, ptsUs) < 0) await waitForIndexUpdate();
+      if (disposed) throw new Error('媒体已释放。');
       if (info.indexState === 'error' && nextIndex(relUs, ptsUs) < 0) throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
       const start = nextIndex(relUs, ptsUs);
       if (start < 0) return [];
@@ -627,7 +636,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       await ensureIndexed(ptsUs);
       let idx = floorIndex(relUs, ptsUs);
       while (!disposed) {
-        while (idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
+        while (!disposed && idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
+        if (disposed) throw new Error('媒体已释放。');
         if (idx >= ticks.length) {
           if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
           break;
