@@ -66,20 +66,24 @@ export class ReviewSession {
     this.changingColor=true;
     try{await this.run('color-mode',{mode},async (current, signal)=>{
       const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
-      const reconfigured:MediaSource[]=[];
+      // Failed sources are already disposed; missing references are restored only by relink.
+      const entries = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
+      const reconfigured: { slot: Slot; track: Track }[] = [];
       const controller=new AbortController();let committed=false;
       const onAbort=()=>controller.abort(signal.reason ?? new DOMException('切换已取消。','AbortError'));
       if(signal.aborted)controller.abort(signal.reason);
       else signal.addEventListener('abort',onAbort,{once:true});
       try{
+        // Buffered frames belong to the old decoder/presentation contract, including
+        // when an in-place reconfiguration later has to roll back.
+        this.releaseReaders('color-mode', entries.map(([, track]) => track.source));
         setColorMode(mode);setReferenceDecode(decode);
-        for(const [slot,track] of this.tracks){
-          if (track.pendingRelink) continue;
+        for(const [slot,track] of entries){
           const reusesSession=!!track.source.reconfigureColorMode;
           let source:MediaSource;
           if(reusesSession){
             source=track.source;
-            reconfigured.push(source);
+            reconfigured.push({slot,track});
             await source.reconfigureColorMode!(mode,decode,controller.signal);
           }else{
             const open=this.openers.get(track.source);if(!open)throw new Error('当前片源无法重新载入。');
@@ -108,11 +112,55 @@ export class ReviewSession {
         committed=true;
         try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
       }catch(error){
-        setColorMode(previous);setReferenceDecode(previousDecode);await this.onColorModeChange?.();
-        for(const source of reconfigured)try{await source.reconfigureColorMode?.(previous??'browser',previousDecode);}catch{}
-        if(current() && !signal.aborted)for(const [slot,track] of this.tracks){
-          try{const frame=await track.source.frameAt(Math.max(0,this.positionUs-track.offsetUs));try{this.draw(slot,frame);}finally{frame.close();}}catch{}
+        setColorMode(previous);setReferenceDecode(previousDecode);
+        const rollbackErrors: Error[] = [];
+        const isolate = (slot: Slot, track: Track, phase: 'source' | 'presentation' | 'redraw', cause: unknown) => {
+          const failure = new Error(`色彩模式回滚失败（${phase}）：${errorText(cause)}`);
+          rollbackErrors.push(failure);
+          log.warn('session', '色彩模式回滚失败', { slot, mediaId: track.source.info.id, phase,
+            colorMode: previous, referenceDecode: previousDecode, error: errorText(cause), originalError: errorText(error) });
+          // A restored global preference is not evidence that this source is usable.
+          // Retain its identity/annotations, but never decode or present it again.
+          track.source.onInfoChange = undefined;
+          this.failTrack(slot, track, failure);
+        };
+        // A presenter rollback error must not prevent decoder restoration or hide
+        // the original preparation error. Its affected tracks cannot stay active.
+        let presentationError: unknown, presentationFailed = false;
+        try { await this.onColorModeChange?.(); }
+        catch (cause) { presentationError = cause; presentationFailed = true; }
+        for(const {slot,track} of reconfigured){
+          try { await track.source.reconfigureColorMode!(previous??'browser',previousDecode); }
+          catch (cause) { isolate(slot, track, 'source', cause); }
         }
+        if (presentationFailed) {
+          for (const [slot, track] of entries) isolate(slot, track, 'presentation', presentationError);
+          // There may be no tracks, but a failed presentation rollback is still observable.
+          if (!entries.length) {
+            rollbackErrors.push(new Error(`色彩模式回滚失败（presentation）：${errorText(presentationError)}`));
+            log.warn('session', '色彩模式回滚失败', { phase: 'presentation', error: errorText(presentationError), originalError: errorText(error) });
+          }
+        } else for(const [slot,track] of entries){
+          if (!current() || signal.aborted) break;
+          if (track.failure) continue;
+          try {
+            const target = Math.max(0, Math.min(this.positionUs-track.offsetUs, track.source.info.durationUs-1));
+            const frame = await abortableLoad(track.source.frameAt(target), signal, late => late.close());
+            try {
+              if (!current() || signal.aborted) break;
+              this.draw(slot, frame);
+              recordPresentedFrame(track.source, frame);
+              track.frame = this.frameInfo(frame);
+            } finally { frame.close(); }
+          } catch (cause) {
+            // A newer transport intent owns presentation. Cancellation is not a
+            // broken source, and its late rollback frame is closed by abortableLoad.
+            if (!current() || signal.aborted) break;
+            isolate(slot, track, 'redraw', cause);
+          }
+        }
+        if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
+          throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
         throw error;
       }
       finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed&&!p.reusesSession)p.source.dispose();}}
