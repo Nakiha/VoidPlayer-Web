@@ -166,7 +166,7 @@ async function act(action: () => unknown | Promise<unknown>, name = 'ui.action',
   render();
 }
 for (const canvas of Object.values(canvases)) bindPresentationResources(canvas, session.resources);
-const annotationSync = installAnnotationSync(session, () => drawingEditor.active(), () => settings.openPane('workspace', $<HTMLButtonElement>('annotation-save-state')));
+const annotationSync = installAnnotationSync(session, () => drawingEditor.active());
 const viewport = new Viewport();
 const workspaceTransfer = installWorkspaceTransfer(session, {
   openSharedSpace: (space, seededIds) => seededIds ? annotationSync.attachWorkspace(space, seededIds) : annotationSync.openSpace(space),

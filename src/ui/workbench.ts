@@ -1,5 +1,6 @@
 import { installSourceActivity } from './source-activity.ts';
 import { installTrackColumnResize } from './track-column-resize.ts';
+import { installStartPanelResize } from './start-panel-resize.ts';
 import { installResizeGesture } from './resize-gesture.ts';
 import { installPanelMotion, animatePanelLayout } from './panel-motion.ts';
 import { installPanelResize } from './panel-resize.ts';
@@ -27,6 +28,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const lifecyle = new AbortController();
   installSourceActivity(session, lifecyle.signal);
   const workspace = $('workspace');
+  installStartPanelResize($('start-panel'), lifecyle.signal);
   const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
   const panelMotion = installPanelMotion(workspace, lifecyle.signal);
   const panelResize = installPanelResize(workspace, lifecyle.signal, panel => {

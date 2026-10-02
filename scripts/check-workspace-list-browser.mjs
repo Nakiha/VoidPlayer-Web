@@ -30,10 +30,12 @@ try {
   await page.locator('#settings-tab-workspace').click();
   await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 3);
   assert.equal(await page.locator('#saved-workspace-name').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
-  assert.equal(await page.locator('#saved-workspace-name').evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('#settings').evaluate(el => getComputedStyle(el).backgroundColor), 'workspace name matches the darker log input surface');
+  assert.notEqual(await page.locator('#saved-workspace-name').evaluate(el => getComputedStyle(el).backgroundColor), await page.locator('.workspace-current-section').evaluate(el => getComputedStyle(el).backgroundColor), 'workspace name uses a distinct neutral input surface');
   assert.equal(await page.locator('#saved-workspace-refresh').count(), 0, 'saved workspaces synchronize without a manual refresh button');
   const names = await page.locator('.saved-workspace-open strong').allTextContents(); assert.deepEqual(names, ['交付检查', '第二轮评审', '第一轮评审']);
-  assert.equal(await page.locator('#workspace-import, #export, #saved-workspace-save').count(), 0);
+  assert.equal(await page.locator('#workspace-import, #export, #annotation-sync-status').count(), 0);
+  assert.equal(await page.locator('#saved-workspace-save').textContent(),'保存');
+  assert.equal(await page.locator('.saved-workspace-copy').count(),3);
   assert.equal(await page.locator('.saved-workspace-search').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
   const firstRow = page.locator('.saved-workspace-row').first();
   assert.ok(await firstRow.evaluate(el => parseFloat(getComputedStyle(el).paddingInlineStart) >= 16), 'saved workspace rows have comfortable horizontal padding');
@@ -41,20 +43,18 @@ try {
     const heading = el.querySelector('.workspace-list-columns');
     const row = el.querySelector('.saved-workspace-row');
     const name = row.querySelector('strong').getBoundingClientRect();
-    const time = row.querySelector('time').getBoundingClientRect();
+    const copy = row.querySelector('.saved-workspace-copy').getBoundingClientRect();
     const label = heading.firstElementChild.getBoundingClientRect();
     const updated = heading.lastElementChild.getBoundingClientRect();
-    return Math.abs(name.left - label.left) < 1 && Math.abs(time.right - updated.right) < 1;
+    return Math.abs(name.left - label.left) < 1 && Math.abs(copy.right - updated.right) < 1;
   }), true, 'column headings align with row content');
   assert.equal(await page.locator('.workspace-saved-section').evaluate(el => {
     const sectionTitle = el.querySelector('.settings-section-title').getBoundingClientRect();
     const columnTitle = el.querySelector('.workspace-list-columns span').getBoundingClientRect();
     return Math.abs(sectionTitle.left - columnTitle.left) < 1;
   }), true, 'saved workspace heading aligns with list content');
-  assert.equal(await firstRow.evaluate(el => {
-    const rect = el.getBoundingClientRect();
-    return el.tagName === 'BUTTON' && document.elementFromPoint(rect.right - 12, rect.top + rect.height / 2) === el;
-  }), true, 'the full saved workspace row is one button');
+  assert.equal(await firstRow.locator('button').count(),2,'opening and copying are separate sibling buttons');
+  assert.equal(await firstRow.locator('button button').count(),0,'workspace actions never nest buttons');
   const colors = await page.locator('.saved-workspace-row').evaluateAll(rows => rows.map(r => getComputedStyle(r).backgroundColor)); assert.notEqual(colors[0], colors[1]);
   assert.notEqual(colors[0], await page.locator('.workspace-list-columns').evaluate(el => getComputedStyle(el).backgroundColor), 'first row is distinct from the header');
   const normalFill = await firstRow.evaluate(el => getComputedStyle(el).backgroundColor);
@@ -68,8 +68,14 @@ try {
   await page.locator('.saved-workspace-open strong').filter({ hasText: '交付检查' }).waitFor();
   await page.locator('#saved-workspace-search-button').click(); await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 3);
   await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ colorScheme: 'light' });
-  await page.locator('#settings').screenshot({ path: '/tmp/vp-round2-workspace-mobile.png' });
-  assert.equal(await page.locator('#settings-pane-workspace').evaluate(e => e.scrollWidth > e.clientWidth), false);
+  for(const width of [390,320]) {
+    await page.setViewportSize({width,height:844});
+    await page.locator('#settings').screenshot({ path: `/tmp/vp-workspace-copy-mobile-${width}.png` });
+    assert.equal(await page.locator('#settings-pane-workspace').evaluate(e => e.scrollWidth > e.clientWidth), false);
+    const boxes=await page.locator('.workspace-current-row').evaluate(el=>[...el.querySelectorAll('input,button')].map(item=>item.getBoundingClientRect().y+item.getBoundingClientRect().height/2));
+    assert.ok(Math.max(...boxes)-Math.min(...boxes)<1,'current workspace controls stay on one line');
+  }
+  await page.setViewportSize({width:390,height:844});
   await page.locator('#settings-tab-identity').click();
   assert.equal(await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth > e.clientWidth), false);
   await page.locator('#settings').screenshot({ path: '/tmp/vp-round2-identity-mobile.png' });

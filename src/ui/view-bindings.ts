@@ -59,7 +59,9 @@ export function createViewBindings(deps: ViewBindingDeps) {
       const cut = Math.max(0, Math.min(1, viewport.splitPos));
       const left = split && !first ? cut : 0, right = split && first ? cut : 1;
       const recovery = $(`recover-${slot}`);
-      recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY: displayOffsetY }, left, right);
+      // Wiping hides a portion intentionally; recovery concerns pan/zoom outside
+      // the whole stage. Keep the control within the track's exposed portion.
+      recovery.hidden = !fitted || right - left < .08 || !needsViewRecovery({ width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted?.width ?? 0, imageHeight: fitted?.height ?? 0, zoom, offsetX, offsetY: displayOffsetY });
       recovery.style.left = `${(left + right) / 2 * 100}%`;
       grids[slot].update(fitted ? { width: stage.clientWidth, height: stage.clientHeight, imageWidth: fitted.width, imageHeight: fitted.height, sourceWidth: fitted.sourceWidth, sourceHeight: fitted.sourceHeight, zoom, panX: offsetX, panY: displayOffsetY } : null);
     }

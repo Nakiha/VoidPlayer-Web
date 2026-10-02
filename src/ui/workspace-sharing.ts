@@ -32,7 +32,10 @@ export function installWorkspaceSharing(options: {
     for (const button of buttons) { button.disabled = busy || !options.canShare(); button.setAttribute('aria-busy', String(busy)); }
     if (renderedBusy !== busy) {
       renderedBusy = busy;
-      for (const button of buttons) button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon('export')}<span>${busy ? '正在分享' : '分享'}</span>`;
+      for (const button of buttons) {
+        const copyButton = button.id === 'saved-workspace-share';
+        button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon(copyButton ? 'copy' : 'export')}<span>${busy ? '正在保存' : copyButton ? '复制链接' : '分享'}</span>`;
+      }
     }
   }
   async function copy(url: string) {
@@ -75,5 +78,5 @@ export function installWorkspaceSharing(options: {
   dialog.querySelector('button')!.onclick = () => dialog.close();
   dialog.addEventListener('close', () => focus?.focus());
   update();
-  return { create, update, detach() { epoch++; pending = undefined; }, dispose() { dialog.remove(); } };
+  return { create, update, async copySaved(id: string, trigger: HTMLElement) { focus = trigger; await copy(new URL(`/?workspace=${encodeURIComponent(id)}`, location.origin).href); }, detach() { epoch++; pending = undefined; }, dispose() { dialog.remove(); } };
 }

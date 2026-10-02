@@ -112,7 +112,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, copyLink: (id, trigger) => sharing!.copySaved(id, trigger), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   // A seek keeps the last committed workspace snapshot valid. Sharing is
   // available whenever there is a loaded track; the snapshot is captured
   // synchronously before any network work begins.

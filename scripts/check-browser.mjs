@@ -87,6 +87,99 @@ try {
     assert.equal(await version.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the version');
   });
 
+  await check('recent list resizes symmetrically, preserves rows/scroll and remembers its width', async page => {
+    await page.addInitScript(() => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i })))));
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    const panel = page.locator('#start-panel'), list = page.locator('#start-library-list');
+    const left = page.locator('#start-resize-left'), right = page.locator('#start-resize-right');
+    await page.waitForFunction(() => document.querySelectorAll('.start-recent-row').length === 40);
+    await list.locator('.start-recent-row').first().evaluate(el => el.setAttribute('data-resize-proof', 'retained'));
+    const scroll = await list.evaluate(el => { el.scrollTop = 240; return el.scrollTop; });
+    const initial = await panel.boundingBox(), center = initial.x + initial.width / 2;
+    assert.equal(await page.locator('#start-identity').evaluate(el => getComputedStyle(el).transitionDuration), '0s', 'identity changes have no transition even with motion enabled');
+    for (const handle of [left, right]) {
+      assert.equal(await handle.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'idle handles stay hidden');
+    }
+    async function drag(handle, delta) {
+      const box = await handle.boundingBox();
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+      await page.mouse.move(box.x + box.width / 2 + delta, box.y + box.height / 2, { steps: 6 });
+      await page.mouse.up(); await settle(page);
+      const next = await panel.boundingBox();
+      assert.ok(Math.abs(next.x + next.width / 2 - center) < 1, 'both sides retain the original center');
+      return next;
+    }
+    await right.hover();
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '1', 'hover illuminates the handle');
+    assert.equal(await left.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'only the hovered edge illuminates');
+    assert.match(await right.evaluate(el => getComputedStyle(el, '::after').maskImage), /linear-gradient/, 'vertical ends fade out');
+    assert.match(await right.evaluate(el => getComputedStyle(el, '::after').backgroundImage), /linear-gradient/, 'outer edge fades out');
+    const hoverBox = await right.boundingBox();
+    for (const y of [100, 300]) {
+      await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + y);
+      assert.ok(Math.abs(await right.evaluate(el => parseFloat(getComputedStyle(el, '::after').top)) - y) < 1, 'glow follows the pointer height');
+    }
+    for (const y of [1, hoverBox.height - 1]) {
+      await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + y);
+      const glow = await right.evaluate(el => {
+        const style = getComputedStyle(el, '::after');
+        return { center: parseFloat(style.top), height: parseFloat(style.height), inset: parseFloat(style.left) };
+      });
+      assert.ok(glow.center >= glow.height / 2 && glow.center <= hoverBox.height - glow.height / 2, 'the whole fade stays inside the gutter at the top and bottom');
+      assert.equal(glow.inset, 6, 'glow keeps a gap from the list');
+    }
+    await page.emulateMedia({ colorScheme: 'dark' }); await settle(page);
+    for (const [edge, y] of [['top', 1], ['bottom', hoverBox.height - 1]]) {
+      await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + y);
+      await page.screenshot({ path: path.join(screenshots, `start-panel-resize-${edge}-${browserName}.png`) });
+    }
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').transitionDuration), '0s', 'glow tracks without interpolation');
+    await page.mouse.move(center, initial.y + 10);
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'leaving hides the glow immediately');
+    await right.focus();
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'focus cannot leave the glow visible');
+    await right.click(); await page.mouse.move(center, initial.y + 10);
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'clicking then leaving keeps the handle hidden');
+    assert.equal(await right.evaluate(el => el.classList.contains('resizing')), false, 'click without dragging clears the drag state');
+    assert.ok(Math.abs((await drag(right, 50)).width - initial.width - 100) < 1);
+    const resized = await drag(left, 30);
+    assert.ok(Math.abs(resized.width - initial.width - 40) < 1, 'left edge moves in the mirrored direction');
+    assert.equal(await list.evaluate(el => el.scrollTop), scroll);
+    assert.equal(await list.locator('.start-recent-row').first().getAttribute('data-resize-proof'), 'retained', 'resizing does not rebuild recent rows');
+    assert.equal(await left.getAttribute('aria-valuenow'), await right.getAttribute('aria-valuenow'));
+    await page.mouse.move(center, initial.y + 10);
+    assert.equal(await left.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'dragging then leaving hides the handle too');
+    const box = await right.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2);
+    await right.press('Escape'); await page.mouse.up();
+    assert.ok(Math.abs((await panel.boundingBox()).width - resized.width) < 1, 'Escape restores the pre-drag width');
+    assert.equal(await panel.evaluate(el => el.classList.contains('resizing')), false);
+    await left.dblclick(); assert.ok(Math.abs((await panel.boundingBox()).width - initial.width) < 1, 'double-click restores the default');
+    await right.press('ArrowRight'); const preferred = (await panel.boundingBox()).width;
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    assert.ok(Math.abs((await panel.boundingBox()).width - preferred) < 1, 'reload preserves the preference');
+    await page.setViewportSize({ width: 390, height: 700 }); await settle(page);
+    const small = await panel.boundingBox(), host = await page.locator('#empty-A').boundingBox();
+    assert.ok(small.width <= host.width - 48 && Math.abs(small.x + small.width / 2 - host.x - host.width / 2) < 1);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'compact layout does not overflow');
+    await page.setViewportSize({ width: 1280, height: 800 }); await settle(page);
+    assert.ok(Math.abs((await panel.boundingBox()).width - preferred) < 1, 'expanding the window restores the preference');
+    await page.locator('#toggle-sources').click();
+    await page.waitForFunction(() => !document.querySelector('#workspace').classList.contains('panel-motion')); await settle(page);
+    await page.waitForFunction(() => {
+      const panel = document.querySelector('#start-panel').getBoundingClientRect(), host = document.querySelector('#empty-A').getBoundingClientRect();
+      return panel.width <= host.width - 48 && Math.abs(panel.x + panel.width / 2 - host.x - host.width / 2) < 1;
+    });
+    const { shifted, remaining } = await page.evaluate(() => ({ shifted: document.querySelector('#start-panel').getBoundingClientRect().toJSON(), remaining: document.querySelector('#empty-A').getBoundingClientRect().toJSON() }));
+    assert.ok(shifted.width <= remaining.width - 48 && Math.abs(shifted.x + shifted.width / 2 - remaining.x - remaining.width / 2) < 1, `sidebar layout keeps the list centered and bounded: ${JSON.stringify({ shifted, remaining })}`);
+    await page.locator('#toggle-sources').click();
+    await page.waitForFunction(() => !document.querySelector('#workspace').classList.contains('panel-motion'));
+    await page.waitForFunction(width => Math.abs(document.querySelector('#start-panel').getBoundingClientRect().width - width) < 1, preferred);
+    await settle(page); await right.hover();
+    await page.screenshot({ path: path.join(screenshots, `start-panel-resize-${browserName}.png`) });
+  }, { reducedMotion: 'no-preference' });
+
   await check('brand effects can leave the toolbar and keep the About button usable', async page => {
     const brand = page.locator('#brand-about');
     assert.equal(await brand.locator('.brand-ch').count(), 0, 'legacy rolling letters must not run alongside random effects');
@@ -371,6 +464,29 @@ try {
     assert.ok(splitHeader.aCenter > 1280 * .15, 'A controls remain past the moved video seam');
     assert.ok(Math.abs(splitHeader.bLeft - splitHeader.expectedBLeft) <= 1, 'B heading stays at the center');
     assert.equal(splitHeader.aCopyHit, true, 'A copy button receives clicks above the drawing surface');
+    // B is smaller in uniform-pixel mode. The wipe can hide it completely
+    // without either image leaving the stage, even with a small shared pan.
+    await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1.25, offsetX: 80, offsetY: 15, splitPos: .5 }));
+    await settle(page);
+    const stageBox = await page.locator('#stage-A').boundingBox();
+    const dividerBox = await page.locator('#divider').boundingBox();
+    await page.mouse.move(dividerBox.x + dividerBox.width / 2, dividerBox.y + dividerBox.height / 2);
+    await page.mouse.down();
+    for (const cut of [.05, .1, .2, .5, .8, .9, .95, 1, 0, .5]) {
+      await page.mouse.move(stageBox.x + stageBox.width * cut, dividerBox.y + dividerBox.height / 2, { steps: 3 });
+      await settle(page);
+      assert.equal(await page.locator('.recover-view:visible').count(), 0, `wipe at ${cut} does not trigger pan recovery`);
+    }
+    await page.mouse.up();
+    await page.evaluate(() => window.voidPlayer.setViewport({ zoom: 1.25, offsetX: 2000, offsetY: 0, splitPos: .5 }));
+    await settle(page);
+    assert.equal(await page.locator('#recover-B').isVisible(), true, 'real pan beyond the whole stage still offers recovery');
+    await page.locator('#recover-B').click(); await settle(page);
+    assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().zoom), 1.25, 'recovery retains zoom');
+    assert.equal(await page.locator('#recover-B').isVisible(), false, 'recovery brings the image back into view');
+    await page.evaluate(() => window.voidPlayer.setViewport({ offsetX: 80, offsetY: 15, splitPos: .95 }));
+    await settle(page);
+    await page.locator('.viewport-surface').screenshot({ path: path.join(screenshots, `${browserName}-split-wipe-recovery.png`) });
     // Repeat with real panel transitions enabled, including reversals while resizing.
     await page.emulateMedia({ reducedMotion: 'no-preference' });
     await page.setViewportSize({ width: 1280, height: 800 });
@@ -381,6 +497,19 @@ try {
     await settle(page);
     await page.locator('#reset-view').click(); await settle(page);
     assert.equal(await page.evaluate(() => window.voidPlayer.getViewport().zoom), 1);
+    await page.evaluate(() => window.voidPlayer.setViewport({ offsetX: 1200, offsetY: -500 }));
+    await settle(page);
+    assert.equal(await page.locator('#recover-A').isVisible(), true);
+    const wheelStage = await page.locator('#stage-A').boundingBox();
+    await page.mouse.move(wheelStage.x + wheelStage.width / 2, wheelStage.y + wheelStage.height / 2);
+    await page.mouse.wheel(0, 120);
+    await page.waitForFunction(() => { const view = window.voidPlayer.getViewport(); return view.zoom === 1 && view.offsetX === 0 && view.offsetY === 0; });
+    assert.equal(await page.locator('#recover-A').isVisible(), false, 'zooming out at 1x restores a panned-away image');
+    await page.evaluate(() => window.voidPlayer.setViewport({ offsetX: -1200, offsetY: 500 }));
+    await page.locator('#stage-A').dispatchEvent('wheel', { deltaY: 8.5, deltaMode: 0, ctrlKey: true, bubbles: true, cancelable: true });
+    await settle(page);
+    const pinchView = await page.evaluate(() => window.voidPlayer.getViewport());
+    assert.deepEqual([pinchView.zoom, pinchView.offsetX, pinchView.offsetY], [1, 0, 0], 'pinching to zoom out also recenters at the minimum zoom');
     const beforeFocus = await page.locator('#stage-A').boundingBox();
     const focusButton = await page.locator('#toggle-chrome').boundingBox();
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式');

@@ -118,17 +118,16 @@ export class Viewport {
 
   /** Zoom by `factor`, keeping the content point under the cursor fixed.
    *  anchorX/anchorY is the cursor relative to the layout (untransformed)
-   *  center of the wrap under it. Zooming to 1x clears the pan offset. */
+   *  center of the wrap under it. Zooming to or further out at 1x clears pan. */
   zoomAt(factor: number, anchorX = 0, anchorY = 0): boolean {
     if (!Number.isFinite(factor) || factor <= 0) return false;
     const zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, this.zoom * factor));
-    if (zoom === this.zoom) return false;
-    if (zoom === ZOOM_MIN) {
-      this.zoom = zoom;
-      this.offsetX = 0;
-      this.offsetY = 0;
-      return true;
+    if (zoom === ZOOM_MIN && factor < 1) {
+      const changed = this.zoom !== zoom || this.offsetX !== 0 || this.offsetY !== 0;
+      this.reset();
+      return changed;
     }
+    if (zoom === this.zoom) return false;
     const actual = zoom / this.zoom;
     this.offsetX = actual * this.offsetX + (1 - actual) * anchorX;
     this.offsetY = actual * this.offsetY + (1 - actual) * anchorY;

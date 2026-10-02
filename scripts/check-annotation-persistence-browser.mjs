@@ -17,13 +17,14 @@ try {
  const context=await browser.newContext({viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
  context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
  const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
+ await context.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));
  const a=await context.newPage();await a.goto(base);await chooseTestGuest(a);await a.waitForFunction(()=>window.voidPlayer);
  const library=await call(a,'list_library');await call(a,'load_library_item',{slot:'A',id:library.entries.find(e=>e.name==='ci_h264_smoke.mp4').id});
  await call(a,'share_workspace');await a.waitForFunction(()=>new URL(location.href).searchParams.has('workspace'));
  const workspace=new URL(a.url()).searchParams.get('workspace'),space=(await a.request.get(base+'/api/workspaces/'+workspace).then(r=>r.json())).space,endpoint=base+'/api/annotations/spaces/'+space,routePattern='**/api/annotations/spaces/'+space;
  const b=await context.newPage();await b.goto(a.url());await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
- assert.equal(await b.locator('#settings-tab-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy sync controls are removed');
+ assert.equal(await b.locator('#annotation-save-state, #settings-tab-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy sync controls are removed');
  assert.equal(await b.locator('#annotation-recovery').isVisible(),false,'normal workspace has no recovery controls');
  await b.locator('#settings-close').click();
  const mark=await call(a,'add_review_mark',{slot:'A',text:'持久化标注'});
@@ -36,7 +37,7 @@ try {
  // Hold only B's write path offline while A deletes the shared record.
  await b.route(routePattern,route=>route.request().method()==='POST'?route.abort():route.continue());
  await call(b,'update_review_mark',{id:mark.id,text:'离线编辑草稿'});
- await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.tooltip?.includes('本机'));
+ await b.waitForFunction(()=>window.testAnnotationStatus?.message?.includes('本机'));
  const actor=(await a.request.get(base+'/api/health').then(r=>r.json())).actor;
  const del=await a.request.post(endpoint,{headers:{origin:base,'x-voidplayer-action':'annotation','x-voidplayer-actor':actor.id},data:{operationId:'delete-from-admin',id:mark.id,revision:1,action:'delete'}});assert.equal(del.status(),200);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
@@ -45,8 +46,8 @@ try {
  const draftDownload=b.waitForEvent('download');await b.locator('#annotation-drafts-export').click();const draftExport=JSON.parse(await readFile(await (await draftDownload).path(),'utf8'));assert.ok(draftExport.marks.some(mark=>mark.text==='离线编辑草稿'));
  await b.locator('#settings-close').click();
  await b.unroute(routePattern);
- await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.state==='error');
- await b.locator('#toggle-subtracks').click();await b.locator('#annotation-save-state').click();
+ await b.waitForFunction(()=>window.testAnnotationStatus?.state==='error');
+ await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  await b.locator('#settings-pane-workspace .annotation-conflict').waitFor();
  assert.ok((await call(b,'get_review_session')).marks.some(mark=>mark.text==='离线编辑草稿'),'conflicting draft survives remote deletion');
  await b.getByRole('button',{name:'草稿另存为标注',exact:true}).click();
@@ -68,7 +69,7 @@ try {
  await admin.locator('#admin-annotations-active').click();await admin.locator(`[data-annotation-id="${copy.id}"]`).click();
  assert.equal((await call(a,'get_review_session')).positionUs,position);
  for(const scheme of ['dark','light']){await admin.emulateMedia({colorScheme:scheme});await admin.waitForFunction(s=>document.documentElement.dataset.theme===s,scheme);await admin.screenshot({path:`/tmp/voidplayer-annotation-admin-${scheme}-${name}.png`});}
- await b.locator('#annotation-save-state').click();await b.screenshot({path:`/tmp/voidplayer-annotation-save-${name}.png`});
+ await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();await b.screenshot({path:`/tmp/voidplayer-annotation-save-${name}.png`});
  await b.locator('#settings-close').click();
  // Existing old workspaces must not overwrite current shared revisions.
  const saved=await call(a,'export_workspace');await a.evaluate(value=>window.voidPlayer.importWorkspace(value),saved);
@@ -79,7 +80,7 @@ try {
  const retry=await call(b,'add_review_mark',{slot:'A',text:'响应丢失重试'});
  await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===retry.id));
  await b.reload();await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
- await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.state==='saved');
+ await b.waitForFunction(()=>window.testAnnotationStatus?.state==='saved');
  const retried=await b.request.get(endpoint).then(r=>r.json());assert.equal(retried.entries.find(e=>e.id===retry.id).revision,1);await b.unroute(routePattern);
  // Generate a real thumbnail through the editor and verify it reaches the cache separately.
  await b.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
@@ -89,10 +90,10 @@ try {
  await admin.locator('[data-pane=annotations]').click();await admin.locator(`[data-annotation-id="${preview.id}"]`).click();await admin.locator('#admin-annotation-image').evaluate(img=>img.decode());
  await admin.screenshot({path:`/tmp/voidplayer-annotation-preview-${name}.png`});
  const downloadPromise=admin.waitForEvent('download');await admin.locator('#admin-annotation-export').click();const download=await downloadPromise;const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.schema,'voidplayer-workspace');assert.ok(exported.marks[0].drawings.length);
- const link=await admin.locator('#admin-annotation-open').getAttribute('href');const opened=await context.newPage();await opened.goto(base+link);await opened.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id),preview.id);await opened.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.tooltip?.startsWith('批注 ·'));await opened.close();
+ const link=await admin.locator('#admin-annotation-open').getAttribute('href');const opened=await context.newPage();await opened.goto(base+link);await opened.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id),preview.id);await opened.waitForFunction(()=>!!window.testAnnotationStatus);await opened.close();
  // A rejected local write must retain the in-memory draft and retry, never report success.
  await b.evaluate(()=>{const put=IDBObjectStore.prototype.put;window.rejectDraftWrites=true;IDBObjectStore.prototype.put=function(...args){if(this.name==='drafts' && window.rejectDraftWrites)throw new DOMException('Disk full','QuotaExceededError');return put.apply(this,args);};});
- const quota=await call(b,'add_review_mark',{slot:'A',text:'本机写入失败后恢复'});await b.waitForFunction(()=>document.querySelector('#annotation-save-state').dataset.tooltip?.includes('本机保存失败'));assert.ok((await call(b,'get_review_session')).marks.some(m=>m.id===quota.id));
+ const quota=await call(b,'add_review_mark',{slot:'A',text:'本机写入失败后恢复'});await b.waitForFunction(()=>window.testAnnotationStatus?.message?.includes('本机保存失败'));assert.ok((await call(b,'get_review_session')).marks.some(m=>m.id===quota.id));
  await b.evaluate(()=>{window.rejectDraftWrites=false;window.dispatchEvent(new Event('focus'));});await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===quota.id));
  // Restart the actual service, keeping its data and address; confirmed revisions and JPEG survive.
  const port=service.server.address().port;await service.close();service=undefined;config.port=port;service=await startService(config);await service.library.refresh();

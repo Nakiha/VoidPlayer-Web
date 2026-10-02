@@ -33,6 +33,19 @@ try {
   const settings=async p=>{if(!await p.locator('#settings').evaluate(e=>e.open))await p.locator('#settings-open').click();await p.locator('#settings-tab-workspace').click();await p.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);};
   await settings(page);await page.locator('#saved-workspace-name').fill('镜头评审');await page.locator('#saved-workspace-save').click();
   await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).waitFor();
+  if(process.env.WORKSPACE_SCREENSHOTS) {
+    for(const close of await page.locator('.toast-close').all()) await close.click();
+    for(const theme of ['dark','light']) {
+      await page.setViewportSize({width:1200,height:800});
+      await page.locator('#settings-tab-appearance').click();await page.locator(`[data-theme-choice=${theme}]`).click();await settings(page);
+      for(const width of [767,390,320]) {
+        await page.setViewportSize({width,height:785});
+        await page.locator('.workspace-current-section').screenshot({path:`${process.env.WORKSPACE_SCREENSHOTS}-${theme}-${width}.png`});
+        await page.locator('.workspace-saved-section').screenshot({path:`${process.env.WORKSPACE_SCREENSHOTS}-list-${theme}-${width}.png`});
+      }
+    }
+    await page.setViewportSize({width:1200,height:800});
+  }
   const entries=(await(await fetch(base+'/api/workspaces')).json()).entries;assert.equal(entries.length,1);const id=entries[0].id;
   const record=await(await fetch(base+'/api/workspaces/'+id)).json();
   assert.equal(record.owner,identity.actor.id);assert.equal(record.document.marks.length,1);assert.equal(record.document.layout.sources.query,'h264');assert.equal(record.document.layout.sources.all,true);

@@ -6,6 +6,20 @@ import { createMediaServer } from '../server/app.ts';
 const root=path.resolve(import.meta.dirname,'..'),name=process.argv[2]??'webkit';
 const server=createMediaServer({roots:[path.join(root,'fixtures/video')],staticDir:path.join(root,'dist'),onLog(){}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
+// Check the rendered stroke, not just matching CSS values: CSS fills and SVG
+// strokes can rasterize differently even at the same nominal thickness.
+async function checkConnectorPixels(page) {
+ const png=await page.locator('.color-flow-connector-horizontal:visible').first().screenshot();
+ const columns=await page.evaluate(async png=>{
+  const image=new Image();image.src=`data:image/png;base64,${png}`;await image.decode();
+  const canvas=document.createElement('canvas');canvas.width=image.width;canvas.height=image.height;
+  const context=canvas.getContext('2d');context.drawImage(image,0,0);
+  const scale=image.width/60;
+  return [7,50].map(x=>[...context.getImageData(Math.floor(x*scale),0,1,image.height).data]);
+ },png.toString('base64'));
+ assert.deepEqual(columns[0],columns[1],'left and right line segments have identical rendered pixels');
+ assert.ok(new Set(Array.from({length:columns[0].length/4},(_,row)=>columns[0].slice(row*4,row*4+4).join(','))).size>1,'pixel comparison includes the visible stroke');
+}
 try {
  const page=await browser.newPage({viewport:{width:1280,height:700},colorScheme:'dark'}), errors=[];let uploads=0, originalSession='';
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/logs'))uploads++;});
@@ -41,6 +55,68 @@ try {
     return {fontSize:style.fontSize,color:style.color,fontWeight:style.fontWeight,paddingLeft:style.paddingLeft};
    }));
    assert.deepEqual(headings[0],headings[1],'color section heading matches other settings sections');
+   await page.locator('[data-color-mode=reference]').click();
+   await page.locator('[data-reference-decoder=hardware]').click();
+   await page.waitForFunction(()=>document.querySelector('#color-flow-diagram').dataset.decoder==='hardware'&&document.querySelector('#color-flow-diagram').dataset.mode==='reference');
+   const decoderGroup=page.locator('#reference-decoder');
+   await page.emulateMedia({reducedMotion:'no-preference'});
+   for(const decoder of ['software','hardware']) {
+    const selected=decoderGroup.locator(`[data-reference-decoder=${decoder}]`), other=decoderGroup.locator(`[data-reference-decoder=${decoder==='software'?'hardware':'software'}]`);
+    const icon=page.locator('.color-flow-unit > .icon').first(), before=await icon.boundingBox();
+    await selected.click();await page.waitForFunction(decoder=>document.querySelector(`[data-reference-decoder=${decoder}]`).getAttribute('aria-pressed')==='true',decoder);
+    assert.equal(await icon.evaluate(el=>el.getAnimations().length),0,'decoder icon swaps without motion even when animations are allowed');
+    assert.deepEqual(await icon.boundingBox(),before,'decoder icon keeps its position and size when switching');
+    const sizes=await decoderGroup.locator('button').evaluateAll(buttons=>buttons.map(button=>button.getBoundingClientRect().width));
+    assert.ok(Math.abs(sizes[0]-sizes[1])<1,'decoder segments have equal widths despite different label lengths');
+    assert.notEqual(await decoderGroup.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','decoder options share a visible base');
+    const fill=await selected.evaluate(el=>getComputedStyle(el).backgroundColor);
+    assert.notEqual(fill,'rgba(0, 0, 0, 0)','selected decoder fills its segment');
+    await other.hover();
+    assert.equal(await other.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','hover does not make the other segment look selected');
+    assert.equal(await selected.evaluate(el=>getComputedStyle(el).backgroundColor),fill,'hover preserves the selected segment');
+    assert.equal(await selected.evaluate(el=>getComputedStyle(el).transitionDuration),'0s','decoder selection changes instantly');
+    assert.equal(await decoderGroup.locator('[aria-pressed=true]').count(),1,'exactly one decoder is selected');
+    await page.locator('#reference-decode-settings').screenshot({path:`/tmp/voidplayer-decoder-segments-${decoder}-${name}.png`});
+   }
+   for(const mode of ['reference','browser']) {
+    await page.locator(`[data-color-mode=${mode}]`).click();
+    await page.waitForFunction(mode=>document.querySelector('#color-flow-diagram').dataset.mode===mode,mode);
+    for(const width of [1280,550,390,320]) {
+     await page.setViewportSize({width,height:800});
+     const lanes=await page.locator('.color-flow-nodes').evaluateAll(lanes=>lanes.map(lane=>{
+      const rect=el=>el.getBoundingClientRect().toJSON();
+      const horizontal=getComputedStyle(lane).display==='grid';
+      return {horizontal,bounds:rect(lane),host:rect(lane.parentElement),units:[...lane.querySelectorAll('.color-flow-unit')].map(rect),icons:[...lane.querySelectorAll('.color-flow-unit > .icon')].map(rect),titles:[...lane.querySelectorAll('.color-flow-unit > strong')].map(rect),links:[...lane.querySelectorAll('.color-flow-link')].map(link=>({arrow:rect(link.querySelector(horizontal?'.color-flow-connector-horizontal':'.color-flow-connector-vertical')),text:rect(link.querySelector('span'))}))};
+     }));
+     for(const lane of lanes) {
+      if(lane.horizontal) {
+       const centers=lane.icons.map(icon=>icon.y+icon.height/2);
+       assert.ok(Math.max(...centers)-Math.min(...centers)<1,'node icons share one axis');
+       assert.ok(Math.max(...lane.titles.map(title=>title.y))-Math.min(...lane.titles.map(title=>title.y))<1,'node titles align');
+       lane.links.forEach(link=>{
+        assert.ok(Math.abs(link.arrow.y+link.arrow.height/2-centers[0])<1,'arrows align to the node axis');
+        assert.ok(Math.abs(link.text.y+link.text.height/2-centers[0])<1,'action labels sit on the same axis');
+        assert.ok(link.text.x>=link.arrow.x+13&&link.text.x+link.text.width<=link.arrow.x+47,'labels stay inside the gap between line segments');
+       });
+      } else {
+       assert.ok(Math.abs(lane.bounds.x+lane.bounds.width/2-lane.host.x-lane.host.width/2)<1,'vertical steps center within the lane');
+       lane.links.forEach((link,index)=>{
+        const icon=lane.icons[index];
+        assert.ok(Math.abs(link.arrow.x+link.arrow.width/2-icon.x-icon.width/2)<1,'vertical arrows align with node icons');
+        assert.ok(link.arrow.y>=lane.units[index].y+lane.units[index].height&&link.arrow.y+link.arrow.height<=lane.units[index+1].y,'connector fits between vertical steps');
+       });
+      }
+     }
+     if(width===1280)await checkConnectorPixels(page);
+     if(mode==='reference'&&[1280,390].includes(width))await page.locator('#settings').screenshot({path:`/tmp/voidplayer-color-flow-${width===1280?'wide':'compact'}-${name}.png`});
+    }
+   }
+   await page.setViewportSize({width:1280,height:700});
+   const retina=await browser.newPage({viewport:{width:1280,height:700},deviceScaleFactor:2,colorScheme:'dark',reducedMotion:'reduce'});
+   try {
+    await retina.goto(page.url());await retina.locator('#settings-open').click();await retina.locator('#settings-tab-performance').click();
+    await checkConnectorPixels(retina);
+   } finally { await retina.close(); }
   }
   if(pane==='about') {
    const links=await page.locator('#settings-pane-about a').evaluateAll(es=>es.map(e=>e.getAttribute('href')));
@@ -124,6 +200,31 @@ try {
   }
   const box=await page.locator('#settings').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=390&&box.y>=0&&box.y+box.height<=700);
  }
+ for (const width of [320,390,550]) {
+  await page.setViewportSize({width,height:785});
+  const nav=page.locator('.settings-navigation'), tablist=nav.locator('[role=tablist]');
+  assert.equal(await tablist.getAttribute('aria-orientation'),'horizontal');
+  await page.locator('#settings-tab-about').press('Home');
+  await page.locator('#settings-tab-appearance').press('End');
+  const selected=await page.locator('#settings-tab-about').boundingBox(), rail=await nav.boundingBox();
+  assert.ok(selected.x>=rail.x&&selected.x+selected.width<=rail.x+rail.width+1,`${width}px keyboard navigation reveals the active tab`);
+  if(width===320)assert.ok(await nav.evaluate(el=>el.scrollLeft)>0,'narrow tab rail scrolls to the final category');
+  await page.locator('#settings-tab-about').press('Home');
+  const first=await page.locator('#settings-tab-appearance').boundingBox();
+  assert.ok(first.x>=rail.x&&first.x+first.width<=rail.x+rail.width+1,'Home reveals the first category');
+  const header=await page.locator('.settings-floating-header').boundingBox(), pane=await page.locator('#settings-pane-appearance').boundingBox();
+  assert.ok(header.y+header.height<=rail.y+1&&rail.y+rail.height<=pane.y+1,'title, category rail and content occupy independent rows');
+  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','mobile selection uses an underline without a filled tile');
+  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el,'::after').height),'2px');
+  if(width===550) {
+   for(const theme of ['light','dark']) {
+    await page.locator(`[data-theme-choice=${theme}]`).click();
+    await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-tabs-portrait-${theme}-${name}.png`});
+   }
+   await page.locator('[data-theme-choice=light]').click();
+  }
+ }
+ await page.setViewportSize({width:390,height:700});
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:`/tmp/voidplayer-settings-unified-mobile-${name}.png`});
  assert.equal(await page.locator('#settings-current-title').textContent(),'反馈');
  const headerBefore=await page.locator('.settings-floating-header').boundingBox();

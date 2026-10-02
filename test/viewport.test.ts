@@ -179,6 +179,23 @@ test('choosing 1x recenters even when already at 1x after panning', () => {
   assert.equal(view.offsetX, 0); assert.equal(view.offsetY, 0); assert.equal(view.zoom, 1);
 });
 
+test('zooming out at 1x recenters for wheel and pinch without changing magnification', () => {
+  for (const factor of [wheelZoomFactor(120, 0, false), wheelZoomFactor(8.5, 0, true), .95]) {
+    const view = new Viewport(); view.panBy(1000, -500);
+    assert.equal(view.zoomAt(factor, 300, -160), true);
+    assert.deepEqual([view.zoom, view.offsetX, view.offsetY], [1, 0, 0]);
+    assert.equal(view.zoomAt(factor, 300, -160), false, 'already centered is unchanged');
+  }
+});
+
+test('neutral and invalid zoom input at 1x preserve pan', () => {
+  const view = new Viewport(); view.panBy(1000, -500);
+  for (const factor of [1, wheelZoomFactor(NaN, 0, true), 0, -1, Infinity]) {
+    assert.equal(view.zoomAt(factor), false);
+    assert.deepEqual([view.zoom, view.offsetX, view.offsetY], [1, 1000, -500]);
+  }
+});
+
 
 test('pinch recovers browser scale independent of event coalescing and keeps its anchor', () => {
   const delta = -100 * Math.log(2);

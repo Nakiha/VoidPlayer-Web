@@ -2,9 +2,9 @@ import { icon } from './icons.ts';
 import type { ColorMode } from '../color-mode.ts';
 
 type Node = [Parameters<typeof icon>[0], string, string];
-const connector = '<svg class="color-flow-connector" viewBox="0 0 48 20" aria-hidden="true" focusable="false"><path d="M2 10H44M37 3L44 10L37 17" /></svg>';
+const connector = '<svg class="color-flow-connector color-flow-connector-horizontal" viewBox="0 0 60 12" aria-hidden="true" focusable="false"><path d="M1 6H13M47 6H59M55 2L59 6L55 10" /></svg><svg class="color-flow-connector color-flow-connector-vertical" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 1V15M4 11L8 15L12 11" /></svg>';
 function lane(title: string, nodes: Node[], links: string[]) {
-  return `<div class="color-flow-lane"><h5>${title}</h5><ol class="color-flow-nodes">${nodes.map(([glyph, title, detail], i) => `<li class="color-flow-step"><div class="color-flow-unit">${icon(glyph)}<strong>${title}</strong><span>${detail}</span></div>${i < nodes.length - 1 ? `<div class="color-flow-link"><span>${links[i]}</span>${connector}</div>` : ''}</li>`).join('')}</ol></div>`;
+  return `<div class="color-flow-lane"><h5>${title}</h5><ol class="color-flow-nodes" style="--flow-edges:${nodes.length - 1}">${nodes.map(([glyph, title, detail], i) => `<li class="color-flow-step"><div class="color-flow-unit">${icon(glyph)}<strong>${title}</strong><span>${detail}</span></div>${i < nodes.length - 1 ? `<div class="color-flow-link"><span>${links[i]}</span>${connector}</div>` : ''}</li>`).join('')}</ol></div>`;
 }
 
 /** Decoder changes only alter the first unit; keep the rest of the lane mounted. */
@@ -20,9 +20,6 @@ export function updateColorFlow(root: HTMLElement, mode: ColorMode, decoder: 'ha
     unit.querySelector('strong')!.textContent = hardware ? '硬件解码单元' : 'CPU';
     unit.querySelector('span')!.textContent = hardware ? '浏览器优先请求' : '软件解码';
     root.querySelector('.color-flow-link span')!.textContent = hardware ? '读回' : '解码';
-    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      unit.querySelector('svg')!.animate([{ transform: 'translateY(2px)' }, { transform: 'none' }], { duration: 140, easing: 'ease-out' });
-    }
   }
   root.dataset.decoder = decoder;
 }
@@ -37,7 +34,7 @@ export function colorFlow(mode: ColorMode, decoder: 'hardware' | 'software') {
   ], ['原生帧', '上屏']) + lane('无法原生解码时', [software, ram, ['gpu', 'GPU', '近似浏览器颜色'], screen], ['解码', '上传', '上屏']);
   return lane(decoder === 'hardware' ? '原生平面核对通过时' : '软件解码', [
     decoder === 'hardware' ? ['gpu', '硬件解码单元', '浏览器优先请求'] : software,
-    ram, ['gpu', 'GPU', 'VoidPlayer 转换颜色'], screen,
+    ram, ['gpu', 'GPU', '自有色彩转换'], screen,
   ], [decoder === 'hardware' ? '读回' : '解码', '上传', '上屏']);
 }
 
@@ -50,7 +47,7 @@ export function colorSettingsShell() {
         <button data-color-mode="browser" aria-pressed="false"><strong>浏览器色彩</strong><span>沿用原生帧转换</span></button>
       </div>
       <div id="reference-decode-settings" class="color-decode-controls">
-        <span>解码方式</span><div id="reference-decoder" class="color-segmented" role="group" aria-label="解码方式"><button data-reference-decoder="software" aria-pressed="false">软件</button><button data-reference-decoder="hardware" aria-pressed="false">硬件优先</button></div>
+        <span>解码方式</span><div id="reference-decoder" class="color-segmented segmented" role="group" aria-label="解码方式"><button data-reference-decoder="software" aria-pressed="false">软件</button><button data-reference-decoder="hardware" aria-pressed="false">硬件优先</button></div>
         <div id="hardware-depth-row"><label for="hardware-buffer-depth">缓冲</label><button id="hardware-buffer-depth" class="settings-choice" aria-label="硬件缓冲深度"></button></div>
       </div>
       <figure class="color-flow"><figcaption>帧数据流 <span>路径示意</span></figcaption><div id="color-flow-diagram"></div></figure>

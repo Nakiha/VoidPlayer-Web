@@ -63,6 +63,10 @@ try {
   await page.waitForFunction(() => document.querySelector('#start-workspace-card .start-workspace-thumb img')?.naturalWidth > 0, null, { timeout: 5000 });
   assert.equal(await page.locator('.toast').filter({ hasText: '发现上次的工作区' }).count(), 0);
   assert.equal(await card.evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
+  if (process.env.RECOVERY_SCREENSHOTS) {
+    await card.hover();
+    await card.screenshot({ path: process.env.RECOVERY_SCREENSHOTS });
+  }
   await card.click();
   await page.getByText('工作区已恢复。', { exact: true }).waitFor();
   let restored = await page.evaluate(() => window.voidPlayer.exportWorkspace());

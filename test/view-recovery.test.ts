@@ -9,8 +9,11 @@ test('recovery appears only after the video leaves the visible viewport', () => 
   assert.equal(needsViewRecovery({ ...view, offsetY: -600 }), true);
   assert.equal(needsViewRecovery({ ...view, zoom: 4, offsetX: 801 }), false);
 });
-test('recovery accounts for the clipped portion of a split view', () => {
+test('a smaller image needs recovery only after it leaves the whole stage', () => {
   const small = { ...view, imageWidth: 200 };
-  assert.equal(needsViewRecovery(small, 0, .2), true);
-  assert.equal(needsViewRecovery(small, .2, 1), false);
+  assert.equal(needsViewRecovery(small), false);
+  for (const direction of [-1, 1]) {
+    assert.equal(needsViewRecovery({ ...small, offsetX: direction * 499 }), false);
+    assert.equal(needsViewRecovery({ ...small, offsetX: direction * 500 }), true);
+  }
 });

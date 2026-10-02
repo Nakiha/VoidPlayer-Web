@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "node scripts/dev.ts",
     "build": "tsc --noEmit && vite build",
+    "icons:generate": "node scripts/make-icons.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test --test-concurrency=4 test/*.test.ts test/*.test.mjs",
     "serve": "node server/main.ts",

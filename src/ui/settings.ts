@@ -9,7 +9,13 @@ export function installSettings() {
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-settings-pane]')];
   const life = new AbortController();
   const narrow = matchMedia('(max-width: 600px)');
-  const orientation = () => dialog.querySelector('[role=tablist]')!.setAttribute('aria-orientation', narrow.matches ? 'horizontal' : 'vertical');
+  const revealTab = () => {
+    if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+  };
+  const orientation = () => {
+    dialog.querySelector('[role=tablist]')!.setAttribute('aria-orientation', narrow.matches ? 'horizontal' : 'vertical');
+    revealTab();
+  };
   narrow.addEventListener('change', orientation, { signal: life.signal }); orientation();
   let selected = 'appearance'; let returnFocus: HTMLElement | null = null;
   let closeEpoch = 0; let outsidePointer: number | null = null;
@@ -22,6 +28,7 @@ export function installSettings() {
       tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
       document.getElementById(`settings-pane-${key}`)!.hidden = !active;
     }
+    revealTab();
     dialog.dispatchEvent(new CustomEvent('settings-pane-change', { detail: selected }));
   }
   function open(invoker: HTMLElement | null = trigger) {
@@ -31,7 +38,7 @@ export function installSettings() {
     }
     returnFocus = invoker;
     dialog.showModal(); trigger.setAttribute('aria-expanded', 'true'); select(selected);
-    tabs.find(t => t.dataset.settingsPane === selected)!.focus();
+    tabs.find(t => t.dataset.settingsPane === selected)!.focus({ preventScroll: true });
   }
   async function dismiss() {
     if (!dialog.open) return;
@@ -62,7 +69,7 @@ export function installSettings() {
       if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
       event.preventDefault();
       const index = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1 : (tabs.indexOf(tab) + (['ArrowDown','ArrowRight'].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
-      tabs[index].focus(); tabs[index].click();
+      tabs[index].focus({ preventScroll: true }); tabs[index].click();
     }, { signal: life.signal });
   }
   document.addEventListener('keydown', event => {
@@ -70,6 +77,6 @@ export function installSettings() {
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
     if (!SETTINGS_PANES.some(([key]) => key === id)) throw new Error('未知设置页面。');
-    select(id); open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus();
+    select(id); open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
   }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };
 }

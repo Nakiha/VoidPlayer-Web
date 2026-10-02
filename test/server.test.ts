@@ -251,6 +251,28 @@ test('ordinary HTTP serves media without isolation warnings or a favicon error',
   });
 });
 
+test('static hosting serves the favicon with its image MIME type for GET and HEAD', async () => {
+  await withFixture(async root => {
+    const web = path.join(root, 'web'); await fs.mkdir(web);
+    const ico = await fs.readFile(new URL('../public/favicon.ico', import.meta.url));
+    await fs.writeFile(path.join(web, 'favicon.ico'), ico);
+    await fs.copyFile(new URL('../public/favicon.svg', import.meta.url), path.join(web, 'favicon.svg'));
+    const server = createMediaServer({ roots: [root], staticDir: web, onLog() {} });
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const base = `http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}`;
+    try {
+      const response = await fetch(base + '/favicon.ico');
+      assert.equal(response.status, 200); assert.equal(response.headers.get('content-type'), 'image/x-icon');
+      assert.deepEqual(Buffer.from(await response.arrayBuffer()), ico);
+      const head = await fetch(base + '/favicon.ico', { method: 'HEAD' });
+      assert.equal(head.status, 200); assert.equal(head.headers.get('content-length'), String(ico.length));
+      assert.equal((await head.arrayBuffer()).byteLength, 0);
+      const svg = await fetch(base + '/favicon.svg');
+      assert.equal(svg.status, 200); assert.equal(svg.headers.get('content-type'), 'image/svg+xml');
+    } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
+  });
+});
+
 
 test('paginated browse, versioned media and guarded scan controls use the shared index', async () => {
   await withFixture(async root => {

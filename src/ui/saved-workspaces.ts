@@ -6,8 +6,7 @@ import { prepareSharedWorkspace } from '../shared-workspace.ts';
 import { icon } from './icons.ts';
 export function savedWorkspaceShell() {
   return `<div class="settings-section"><h4 class="settings-section-title">当前工作区</h4><div class="workspace-current-section settings-card">
-    <div class="workspace-single-row"><input id="saved-workspace-name" maxlength="200" aria-label="工作区名称" placeholder="命名工作区"><button id="saved-workspace-save">保存工作区</button><button id="saved-workspace-share">${icon('export')}<span>分享</span></button></div>
-    <p id="annotation-sync-status" class="settings-caption" role="status"></p>
+    <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="工作区名称" placeholder="未命名工作区"><div class="workspace-current-actions"><button id="saved-workspace-save">保存</button><button id="saved-workspace-share">${icon('copy')}<span>复制链接</span></button></div></div>
     <div id="annotation-recovery" hidden>
       <div class="annotation-sync-actions"><button id="annotation-sync-now">重试保存</button><button id="annotation-drafts-export">导出未保存的批注</button></div>
       <div id="annotation-conflicts-section" hidden><div id="annotation-conflicts"></div></div>
@@ -18,11 +17,11 @@ export function savedWorkspaceShell() {
     </div>
     </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">已保存的工作区</h4></div>
     <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="搜索工作区名或用户名" placeholder="搜索工作区名或用户名" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="清除搜索" hidden>${icon('close')}</button></div>
-    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>名称 / 用户</span><span>最近更新 ↓</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
+    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>名称 / 用户 · 最近更新 ↓</span><span>链接</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
     <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>返回最新</button><button id="saved-workspace-next" disabled>下一页</button></div></div>`;
 }
 
-export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; canSave(): boolean; report(error: Error): void }) {
+export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void }) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`saved-workspace-${id}`) as T;
   const client = new SavedWorkspaceClient(options.signal);
   let binding: SavedWorkspace | undefined, busy = false, available = false, before = '', next: string | null = null, search = '', sequence = 0;
@@ -35,7 +34,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     $('save').toggleAttribute('disabled',busy || !options.canSave());
     $('reload').toggleAttribute('disabled', busy || $('reload').dataset.unavailable === 'true');
     $('first').toggleAttribute('disabled', busy || !before); $('next').toggleAttribute('disabled', busy || !next);
-    $('list').querySelectorAll<HTMLButtonElement>('.saved-workspace-open').forEach(button => { button.setAttribute('aria-pressed', String(button.dataset.workspaceId === binding?.id)); button.disabled = busy; });
+    $('list').querySelectorAll<HTMLButtonElement>('.saved-workspace-open').forEach(button => { const selected = button.dataset.workspaceId === binding?.id; button.setAttribute('aria-pressed', String(selected)); button.closest<HTMLElement>('.saved-workspace-row')!.dataset.selected = String(selected); button.disabled = busy; });
     document.querySelector<HTMLElement>('.saved-workspace-pages')!.hidden = !available || (!before && !next);
   }
   async function act<T>(work: () => Promise<T>, propagate = false): Promise<T | undefined> {
@@ -50,13 +49,18 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     if (request !== sequence) return;
     available = true; next = page.next;
     const rows = page.entries.map(record => {
-      const row = document.createElement('button'); row.type = 'button'; row.dataset.workspaceId = record.id; row.className = 'saved-workspace-row saved-workspace-open'; row.setAttribute('aria-pressed', String(record.id === binding?.id));
+      const row = document.createElement('div'); row.dataset.workspaceId = record.id; row.className = 'saved-workspace-row';
+      const open = document.createElement('button'); open.type = 'button'; open.dataset.workspaceId = record.id; open.className = 'saved-workspace-open'; open.setAttribute('aria-pressed', String(record.id === binding?.id));
       const info = document.createElement('span'); info.className = 'saved-workspace-info';
       const name = document.createElement('strong'); name.textContent = record.name;
       const detail = document.createElement('span'); detail.textContent = record.ownerName ?? '访客';
-      info.append(name, detail); row.onclick = () => void act(() => load(record.id));
+      const metadata = document.createElement('span'); metadata.className = 'saved-workspace-meta';
+      open.onclick = () => void act(() => load(record.id));
       const time = document.createElement('time'); time.className = 'workspace-row-time'; time.dateTime = record.updatedAt; time.textContent = new Date(record.updatedAt).toLocaleString();
-      row.append(info, time); return row;
+      metadata.append(detail, time); info.append(name, metadata); open.append(info);
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'saved-workspace-copy'; copy.setAttribute('aria-label', `复制工作区链接：${record.name}`); copy.innerHTML = `${icon('copy')}<span>复制链接</span>`;
+      copy.onclick = () => { copy.disabled = true; void options.copyLink(record.id, copy).catch(error => { message((error as Error).message, true); options.report(error as Error); }).finally(() => { copy.disabled = false; }); };
+      row.append(open, copy); return row;
     });
     if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-caption'; empty.textContent = search ? '没有匹配的工作区' : '暂无工作区'; $('list').replaceChildren(empty); }
     else $('list').replaceChildren(...rows);

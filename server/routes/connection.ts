@@ -34,7 +34,7 @@ export async function handleConnectionRoutes(ctx: RouteContext, req: IncomingMes
     res.end(req.method === 'HEAD' ? undefined : AGENT_GUIDE);
     return true;
   }
-  if (url.pathname === '/favicon.ico' && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return true; }
+  if (url.pathname === '/favicon.ico' && !options.staticDir && ['GET', 'HEAD'].includes(req.method ?? '')) { res.writeHead(204); res.end(); return true; }
   if (url.pathname === '/api/health' && req.method === 'GET') {
     sendJson(res, 200, { service: 'voidplayer-media', version: 1, actor: ctx.actor, capabilities: { admin: !!options.admin, workspaces: !!options.admin, annotations: !!options.admin, reveal: !!options.allowLocalReveal && localRequest(req) } });
     return true;
