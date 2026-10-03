@@ -15,8 +15,9 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：共享 FLV 扫描器（媒体库由服务端 Worker 本地读盘建索引，本地文件由客户端 Worker 建索引）及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
 - `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`app.ts` 只做装配与分发，路由按域在 `routes/{connection,content,state}.ts`（`context.ts` 为共享请求上下文），HTTP 基元在 `http-utils.ts`；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
-- `test/`：node:test，无浏览器依赖；WASM 用例在 Node worker_threads 里跑真实 core。
-- `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/ui/` 保存已迁移的 UI 浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
+- `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
+- `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
+- `scripts/tools/{development,fixtures,diagnostics,perf,release}/`：已归类工具实现，旧入口保留兼容；专用工具与职责索引见 `scripts/README.md`。
 - `scripts/`：`sync-wasm-core.sh`（从 VoidPlayer-FFmpeg-Build 产物同步 core，可用
   `WASM_CORE_DIR` 覆盖）、`sync-samples.sh`（样片进 `fixtures/video/`，可用
   `VOIDPLAYER_SAMPLES` 覆盖）、`bench-playback.mjs`（Playwright 离屏播放基准）。

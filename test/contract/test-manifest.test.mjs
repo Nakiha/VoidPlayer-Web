@@ -30,7 +30,27 @@ test('new checks cannot silently escape registration', async () => {
     await mkdir(path.join(root, 'scripts/testing/browser/ui'), { recursive: true });
     await writeFile(path.join(root, 'scripts/testing/browser/ui/unregistered.mjs'), '');
     assert.throws(() => validateManifest({ ...testManifest, cases: [] }, root), /Unregistered check: scripts\/testing\/browser/);
+    await rm(path.join(root, 'scripts/testing/browser/ui/unregistered.mjs'));
+    await mkdir(path.join(root, 'scripts/tools/perf'), { recursive: true });
+    await writeFile(path.join(root, 'scripts/tools/perf/unregistered.mjs'), '');
+    assert.throws(() => validateManifest({ ...testManifest, cases: [] }, root), /Unregistered check: scripts\/tools\/perf/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('Node implementations have one classified owner while every old command remains registered', () => {
+  const owners = new Map();
+  for (const row of testManifest.cases.filter(row => row.script.startsWith('test/'))) {
+    assert.match(row.implementation, /^test\/(unit|contract|media)\/[^/]+\.test\.(ts|mjs)$/);
+    const prior = owners.get(row.implementation);
+    assert.ok(!prior || prior === row.script, `${row.id}: two commands would execute the same implementation twice`);
+    owners.set(row.implementation, row.script);
+  }
+  assert.ok(owners.size >= 127, 'retain every original Node implementation; new registered cases may be added');
+  for (const name of ['flv-fixture.ts', 'http-request.ts', 'packet-fixture.ts', 'range-bridge-worker.ts']) {
+    const source = readFileSync(new URL('../' + name, import.meta.url), 'utf8');
+    assert.ok(source.includes(`'./helpers/${name}'`), `${name}: old helper or worker URL no longer forwards`);
+    assert.ok(readFileSync(new URL('../helpers/' + name, import.meta.url), 'utf8').length > 0);
+  }
 });
 test('coverage floor retains original commands, required cells and CI membership', () => {
   const baseline = JSON.parse(readFileSync(new URL('.././testing-coverage-baseline.json', import.meta.url), 'utf8'));
@@ -78,8 +98,8 @@ test('single-engine scripts cannot be advertised as a different browser matrix',
 test('compatibility entries point to registered domain implementations without changing CLI behavior', () => {
   for (const row of testManifest.cases.filter(row => row.implementation)) {
     const entry = readFileSync(new URL('../../' + row.script, import.meta.url), 'utf8').replace(/^\/\/.*$/gm, '').trim();
-    const match = /^import ['"]([^'"]+)['"];?$/.exec(entry);
-    assert.ok(match, `${row.id}: entry must only import its implementation`);
+    const match = /^(?:import|export \* from) ['"]([^'"]+)['"];?$/.exec(entry);
+    assert.ok(match, `${row.id}: entry must only load its implementation`);
     assert.equal(new URL(match[1], new URL('../../' + row.script, import.meta.url)).href,
       new URL('../../' + row.implementation, import.meta.url).href);
   }

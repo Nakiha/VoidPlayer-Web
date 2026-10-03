@@ -45,7 +45,7 @@ node scripts/run-tests.mjs uncovered --prepared
 
 每个 case 是独立子进程，断言失败、准备失败或超时后仍运行其他独立 case；required 的失败、取消或缺失结果使总检查失败。报告从运行前开始写入，未完成的通过前缀不会成为通过套件。informational 失败保留原始退出码、日志和状态，但不阻断 required 聚合。纯 informational 套件有失败时仍返回非零，CI 在独立性能步骤使用 `continue-on-error` 并显示警告。SIGINT/SIGTERM 会清理活动子进程树并记录取消结果。
 
-menu、settings、theme、shortcuts、feedback 和 mark-cards 已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。其余浏览器用例继续使用专用 lifecycle，原有产物目录也记录在清单中；后续按领域渐进迁移。主题的受限存储 context 与设置的 DPR 2 context 通过 `newContext` 登记；额外 context 的启动失败或取消也属于同一 case 的清理范围。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
+13 类回归（menu、settings、theme、shortcuts、feedback、mark-cards、color-settings、metadata、stepping、timeline、annotation、annotation-rendering、workspace）已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。可信 HTTPS/身份、服务重启、Range 故障注入、Vite 测试页及原生包浏览器保留专用生命周期和服务扩展；它们仍由统一 runner 执行并登记既有产物目录。主题的受限存储 context 与设置的 DPR 2 context 通过 `newContext` 登记；额外 context 的启动失败或取消也属于同一 case 的清理范围。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
 
 ### 迁移覆盖对照与兼容期
 
@@ -53,7 +53,7 @@ menu、settings、theme、shortcuts、feedback 和 mark-cards 已迁入 `scripts
 
 CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
 
-旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。UI 领域实现已归入 `scripts/testing/browser/ui/`，清单的 `implementation` 记录实际文件；原 `scripts/check-*-browser.mjs` 只转入对应实现，保留 npm 命令与引擎参数。契约同时检查兼容入口的指向，以及领域目录内漏登记或悬空的实现。其余领域与夹具逐步迁移，不一次性大规模搬迁。
+旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 继续枚举旧顶层入口，Bun 和单文件命令也保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。详细覆盖对照见 [迁移验收](testing-coverage.md)。
 
 ## 准备
 

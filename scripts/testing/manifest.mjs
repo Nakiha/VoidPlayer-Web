@@ -16,7 +16,7 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     ids.add(row.id); registered.add(row.script);
     if (!existsSync(path.join(root, row.script))) fail(`Dangling script: ${row.script}`);
     if (row.implementation !== undefined) {
-      if (typeof row.implementation !== 'string' || !/^(scripts\/testing\/browser|test\/(unit|contract|media))\//.test(row.implementation) || row.implementation.split('/').includes('..')) {
+      if (typeof row.implementation !== 'string' || !/^(scripts\/testing\/browser|scripts\/tools\/(development|fixtures|diagnostics|perf|release)|test\/(unit|contract|media))\//.test(row.implementation) || row.implementation.split('/').includes('..')) {
         fail(`${row.id}: unsafe implementation path`);
       } else {
         registered.add(row.implementation);
@@ -40,7 +40,7 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
       if (entry.isDirectory()) { inspect(relative, category); continue; }
       const candidate = category === 'test' ? /\.test\.(ts|mjs)$/.test(entry.name)
         : /^(check-|bench-|repro-|diagnose-|test-|compare-index).*\.(mjs|ts|py)$/.test(entry.name)
-          || relative.startsWith('scripts/testing/browser/') && /\.mjs$/.test(entry.name);
+          || /^(scripts\/testing\/browser|scripts\/tools)\//.test(relative) && /\.mjs$/.test(entry.name);
       if (candidate && !registered.has(relative)) fail(`Unregistered check: ${relative}`);
     }
   }
