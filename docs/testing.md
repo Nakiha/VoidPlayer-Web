@@ -1,6 +1,59 @@
 # 验证说明
 
-验证命令以 `package.json` 为准。不要把某次历史测试数量或构建成功当作当前兼容性结论。
+套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
+
+## 统一套件与单项筛选
+
+| 入口 | 范围与准备 | CI 对应 |
+| --- | --- | --- |
+| `npm run test:fast` | 明确登记的轻量 Node 逻辑与测试基础设施契约；不需要媒体、core 或浏览器 | 本地快速反馈；完整 Node 检查由 playback job 运行 |
+| `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
+| `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | playback job 的 `unit` |
+| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
+| `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
+| `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
+| `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | `ci-perf`，保留 `continue-on-error`；可信 HTTPS 仅在一次性 CI 主机执行 |
+
+`browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
+
+```sh
+npm run test:manifest
+npm run test:suite -- browser --list
+npm run test:suite -- browser --engine webkit --list
+npm run test:suite -- --case browser-menu-webkit,browser-settings-chromium
+npm run test:suite -- browser --case hevc-timeline-webkit-remote
+npm run test:suite -- ci-native-console --platform win32 --list
+```
+
+`--case` 使用精确 ID，可逗号分隔；与套件、引擎、输入筛选取交集。带内部多引擎/输入循环的脚本作为一个 case 整体执行，筛选不会改写它的内部覆盖。`--platform` 仅用于枚举，不允许在另一平台伪执行。`--list` 输出适用 case、命令、引擎、输入、平台、夹具、外部工具、超时、产物目录、required 属性及不适用理由；空选择不算通过。参数拼写错误直接失败。缺少夹具、工具、浏览器或原生包是失败，不是自动跳过。
+
+清单中 `fixtures.*.prepare` 给出准备命令；suite 不隐式下载、更换参考结果或生成缺失媒体。CI 每个 job 只准备一次可复用媒体/core，并继续负责下载、系统依赖、浏览器和平台矩阵。只有内部断言专用的可写夹具仍由各 case 自行生成。
+
+### 构建、隔离与报告
+
+普通套件运行会为需要构建的 case 构建一次。多个 CI 步骤复用同一个源码/配置的构建时使用：
+
+```sh
+node scripts/run-tests.mjs --prepare
+node scripts/run-tests.mjs ci-playback --prepared
+node scripts/run-tests.mjs uncovered --prepared
+```
+
+`--prepared` 必须有当前 job 显式生成的凭据，校验源码（包括未提交改动）、配置、Node/平台、实际 core 字节和 dist 输出；过期或损坏时失败。普通运行不自动读取旧凭据。不同平台/job 不共享构建凭据。构建日志在报告下的 `build/`，显示本次构建或验证后的复用。
+
+新入口的选择清单在 `.run/test-suites/<suite>/selection.json`，逐项日志和聚合结果在同目录的 `<case>.log`、`results.json`；单例筛选默认目录为 `selected`，可用 `--directory` 另选目录。旧 runner 仍支持 `node scripts/run-browser-regressions.mjs uncovered` / `flv-startup`，保留 `.run/browser-regressions/<suite>/` 的报告路径与 case 名。
+
+每个 case 是独立子进程，断言失败、准备失败或超时后仍运行其他独立 case；required 的失败、取消或缺失结果使总检查失败。报告从运行前开始写入，未完成的通过前缀不会成为通过套件。informational 失败保留原始退出码、日志和状态，但不阻断 required 聚合。纯 informational 套件有失败时仍返回非零，CI 在独立性能步骤使用 `continue-on-error` 并显示警告。SIGINT/SIGTERM 会清理活动子进程树并记录取消结果。
+
+menu、settings 已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。其余浏览器用例继续使用专用 lifecycle，原有产物目录也记录在清单中；后续按领域渐进迁移。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
+
+### 迁移覆盖对照与兼容期
+
+`test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。原来 `uncovered` 的 20 格、FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。原来多次运行同一 Node 文件的步骤由 `unit` 的一次完整覆盖替代；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。
+
+CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
+
+旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。目录只新增 `scripts/testing/` 的基础设施，现有领域脚本与夹具暂不大规模搬迁。
 
 ## 准备
 
@@ -10,11 +63,13 @@ bash scripts/sync-wasm-core.sh
 bash scripts/sync-samples.sh
 npx playwright install webkit chromium
 npm run fixtures:flv
+npm run fixtures:hlg
+node scripts/sync-fate-samples.mjs
 ```
 
 FLV 样片生成需要 Python 3、ffmpeg 和 ffprobe。`fixtures/`、`dist/` 和 `public/vendor/voidplayer-core/` 是本机产物，不进入 Git。需要基础合成样片时运行 `python3 test/generate-fixtures.py`。
 
-本次发布的 FLV 硬件优先策略回归使用 `FLV_CASE=standard-h264`，同时限定素材生成与浏览器用例，验证 WebCodecs、Range、seek 和播放。完整 FLV 回归仍默认覆盖所有编码，其中 H.266 素材生成需要支持 VVC 的新版 FFmpeg；Ubuntu 24.04 自带的 FFmpeg 6 无法生成该素材。
+发布 CI 的 FLV 硬件优先策略回归使用 `FLV_CASE=standard-h264`，同时限定素材生成与浏览器用例，验证 WebCodecs、Range、seek 和播放。完整 FLV 回归仍默认覆盖所有编码，其中 H.266 素材生成需要支持 VVC 的新版 FFmpeg；Ubuntu 24.04 自带的 FFmpeg 6 无法生成该素材。
 
 ## 常规检查
 
@@ -26,7 +81,7 @@ node --test test/range-reader.test.ts test/mp4-packets.test.ts test/range-media.
 npm run test:range:browser
 ```
 
-单元测试使用 Node test runner，包含真实 WASM 和 FLV 解码。浏览器脚本启动独立的临时媒体服务并清理，不需要刷新用户页面或重启后台服务。浏览器脚本默认 WebKit，可用末尾参数 `-- chromium` 切换。
+单元测试使用 Node test runner，包含真实 WASM 和 FLV 解码。浏览器脚本启动独立的临时媒体服务并清理，不需要刷新用户页面或重启后台服务。各脚本的默认引擎和可接受参数不同：支持引擎参数的旧 npm 命令可在末尾追加 `-- chromium`；固定引擎或内部矩阵不能用该参数扩大覆盖。组合执行优先使用上文的清单筛选。
 
 | 改动 | 补充验证 |
 | --- | --- |
@@ -55,7 +110,7 @@ node scripts/bench-playback.mjs chromium
 
 `BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/benchmark.ts` 为准。
 
-应用内“快捷键与说明”的性能检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
+应用内“设置 → 色彩与解码 → 播放流畅度”的检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
 远程 HTTP 现在进入连接准备页，不再启动播放器或 WASM。对应检查为：
 
@@ -79,6 +134,10 @@ CI 将这两类检查分开运行：`--functional-only` 检查载入、解码路
 使用 `.bun-version` 对应的 Bun 执行 `npm run release`，可用 `BUN_BIN` 指定可执行路径。`npm run test:release` 校验最新归档并在临时目录解压运行；也可传归档路径。测试服务使用空 PATH，不依赖源码或 node_modules，覆盖配置初始化、不同工作目录、HTTP/HEAD/Range、并发、中断、鉴权、上传日志、退出及升级保留数据。`RELEASE_BENCH=1 npm run test:release` 额外用 WebKit 在独立服务上跑四组真实播放基准，需要同步样片和浏览器。
 
 远程 WASM 专项验证包含 MP4/VVC 索引不遍历 mdat、与原 FFmpeg 路径逐像素对比、B 帧/GOP 随机跳转和尾帧、5 GiB 稀疏来源、Range 响应校验与取消。`range-media.test.ts` 使用真实本地 HTTP 服务；`range-reader.test.ts` 使用可控响应检查缓存与 AVIO 桥接，不替代浏览器网络验证。私有 FLV 继续由 `test/flv.test.ts` 和 `test:flv:browser` 覆盖。
+
+## 专项回归与行为边界
+
+下列说明帮助选择专项检查；完整行为契约见 [架构](architecture.md)、[渐进索引](progressive-indexing.md) 和 [色彩链路](color-pipeline.md)，历史阶段计数见 [文档导航](README.md)。
 
 ### FLV first-frame and shared index cache
 
@@ -114,7 +173,7 @@ HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位�
 
 软件解码预滚：逐个探测负时间前缀，仅将返回时间不匹配的不可输出包移出显示索引，原始包仍留在 core 中用于解码参考。最多探测 128 个，非负时间包及其他错误不跳过。`test/preroll.test.ts` 使用真实 HEVC open-GOP 裁切文件验证首次及重复定位；浏览器回归同时覆盖原生与可用的软件回退路径。
 
-HDR 上屏一致性：首帧在展示层创建前走 Canvas 2D，后续帧原先直接上传 VideoFrame 到 WebGL，两种浏览器转换路径可能产生不同的 HDR→SDR 结果。现在所有原生 PQ/HLG 帧都经显式 sRGB Canvas 2D 后上传，首帧、播放、定位一致；SDR 仍直接上传，没有逐帧 CPU readback。以解码 sample 的 transfer 为准，不将容器 HDR 标签强行贴到可能已经转成 SDR 的输出像素。浏览器决定具体 tone mapping，本改动不提供 HDR 显示输出或 WASM RGBA 的 HDR tone mapping。首次及色彩状态变化写本地“上屏色彩路径”日志。
+HDR 上屏一致性：自有色彩模式明确拒绝 HLG/PQ；浏览器色彩模式下，原生 HDR 资源经 sRGB Canvas 2D 路径呈现，避免 external texture 缺少 tone mapping。首帧、播放、定位应使用相同路径。以实际资源 transfer 为准，不用容器标签覆盖可能已经转换的资源。具体准入、回退与日志以 [色彩链路契约](color-pipeline.md) 为准，相关检查不认证 HDR 显示输出。
 
 `check-presentation-browser.mjs` 使用相同 PQ/HLG 像素的真实 VideoFrame 和 VideoSample，验证 clone/toVideoFrame 元数据、展示层创建前后、连续帧、回到首帧的像素完全一致，并检查随后 SDR 恢复直接上传；保留旋转、像素提取、无 WebGL 回退和资源释放检查。
 
@@ -123,10 +182,10 @@ WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core �
 后台索引时长：子轨道 dock 的刷新签名纳入 durationUs/indexState。FLV 启动浏览器回归在阻塞尾部时记录临时时长，解除阻塞后验证子轨道时长文字和标尺更新到完整索引时长，不靠切换轨道/修改标记触发刷新。
 
 
-## 帧契约门禁（PR #2 后的四批重构）
+## 帧契约与 FATE 门禁
 
 先同步 core、普通样片和 FATE 样本，再运行 `npm test` / `npm run build`。
-新增 `test/avc-geometry.test.ts` 和 `test/media-state.test.ts` 使用固定 FATE 样本。
+`test/avc-geometry.test.ts` 和 `test/media-state.test.ts` 使用固定 FATE 样本。
 
 ```
 node scripts/sync-fate-samples.mjs
@@ -140,6 +199,5 @@ npm run test:fate:browser
 允许浏览器 YUV 转换舍入，不代表 HDR 色准或逐像素 bit-exact 验收。
 
 `fate-expectations.json` 按片源和后端区分成功与预期拒绝；新失败令检查返回非零。
-当前 15 个 Node 适用组合、40 次浏览器本地/HTTP 重开都必须通过，8 个 Node
-入口为明确的 container 拒绝，没有已知失败豁免。CI 已将此步骤改为阻塞门禁；
+组合数量以当前参考和预期文件及执行报告为准，不能沿用历史验收计数。适用组合及浏览器本地/HTTP 重开必须通过；明确的 container 能力拒绝按预期校验，不作为已知失败豁免。CI 将此步骤作为阻塞门禁；
 独立性能报告保持非阻塞。报告仍写入 `.run/playback-reports/`。

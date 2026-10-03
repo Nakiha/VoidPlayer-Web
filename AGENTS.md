@@ -36,6 +36,10 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 ## 验证
 
 ```sh
+npm run test:fast        # 无媒体/core/浏览器依赖的快速逻辑与基础设施契约
+npm run test:contract    # 清单、生命周期、发布与执行报告契约
+npm run test:browser:all # 完整自动化浏览器套件（单次构建，独立结果）
+npm run test:suite -- browser --list # 统一清单与矩阵枚举
 npm test                 # 单元 + Node 内真实 WASM 解码
 npm run build            # tsc --noEmit && vite build
 npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/ffprobe）
@@ -49,7 +53,7 @@ npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服�
 npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
-npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
+npm run test:browser     # 兼容入口：仅基础 WebKit UI 回归，非完整浏览器套件
 npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
 npm run test:webgpu:browser -- chrome msedge # 有窗口的 Windows Chrome/Edge 呈现回归
 npm run test:color:windows # 默认资源契约、彩色色块、H264/HEVC/10-bit 与独立 FFmpeg 平面对照
@@ -67,6 +71,8 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 `--keep-days=N` 控制保留窗口（默认 14 天），`--only=media,logs` 限定分类。
 脚本只删「位于仓库内 + 被 git 忽略 + 不在保护清单」的路径，`.run/data`（服务端 SQLite）、
 `.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。
+
+套件注册与 CI 选例共用 `scripts/testing/manifest.json`，执行入口为 `scripts/run-tests.mjs`；新增测试必须登记。完整说明见 `docs/testing.md`。旧 npm 命令和脚本路径保留兼容。
 
 ## 独立发布
 

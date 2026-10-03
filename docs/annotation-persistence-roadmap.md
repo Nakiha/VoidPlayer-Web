@@ -1,6 +1,8 @@
 # 标注持久化与协作
 
-基线：PR #3 已合入 main（d72fa84）。本轮分支：codex/annotation-persistence。
+本文保留已完成四批交付的计划与验收记录。当前使用约定见 [用户、访客与工作区分享](identity-and-sharing.md)，执行检查见 [验证说明](testing.md)。
+
+当时基线：PR #3 已合入 main（d72fa84）。实施分支：codex/annotation-persistence。
 
 ## 产品约定
 
