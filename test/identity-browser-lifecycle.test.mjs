@@ -9,7 +9,7 @@ import { startService } from '../server/runtime.ts';
 import { httpFetch } from './http-request.ts';
 import { identityBrowserService, cleanupIdentityBrowser } from '../scripts/identity-browser-lifecycle.mjs';
 
-test('identity HTTPS restart keeps its origin when the adjacent guide port is occupied', async () => {
+for (const host of [undefined, '127.0.0.1']) test(`identity HTTPS restart (${host ?? 'default host'}) keeps its origin when the adjacent guide port is occupied`, async () => {
   const temp = await mkdtemp(path.join(tmpdir(), 'vp-identity-lifecycle-'));
   const blocker = createServer();
   let lifecycle;
@@ -17,9 +17,7 @@ test('identity HTTPS restart keeps its origin when the adjacent guide port is oc
     await mkdir(path.join(temp, 'media'));
     await mkdir(path.join(temp, 'dist'));
     await writeFile(path.join(temp, 'dist/index.html'), 'VoidPlayer');
-    // Use the blocker's address too: macOS can allow wildcard and loopback
-    // listeners to share a port, which would bypass the expected conflict.
-    const config = await loadConfig(['--https', 'voidplayer.test', '--host', '127.0.0.1', '--folder', path.join(temp, 'media'),
+    const config = await loadConfig(['--https', 'voidplayer.test', ...(host ? ['--host', host] : []), '--folder', path.join(temp, 'media'),
       '--static', path.join(temp, 'dist'), '--data-dir', path.join(temp, 'data'), '--no-logs'], 'production', temp);
     config.port = 0;
     lifecycle = identityBrowserService(config, startService);
@@ -28,9 +26,11 @@ test('identity HTTPS restart keeps its origin when the adjacent guide port is oc
     const adjacent = port === 65535 ? 65534 : port + 1;
     await lifecycle.close();
     await new Promise((resolve, reject) => {
+      // Bind the same address as the guide: on macOS a wildcard listener
+      // can coexist with loopback, which would hide the intended conflict.
       // A pre-existing listener provides the same regression condition.
       blocker.once('error', error => error.code === 'EADDRINUSE' ? resolve() : reject(error));
-      blocker.listen(adjacent, '127.0.0.1', resolve);
+      blocker.listen(adjacent, config.host, resolve);
     });
     let unexpected;
     try {

@@ -1,26 +1,13 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, rename } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { finished } from 'node:stream/promises';
 
-const browserCase = (script, engine) => ({
-  name: `${script}-${engine ?? 'webkit'}`,
-  args: [`scripts/${script}.mjs`, ...(engine ? [engine] : [])],
-});
+import { browserEntries } from './testing/manifest.mjs';
 
-export const browserRegressionSuites = {
-  uncovered: [
-    ...['library', 'menu', 'metadata', 'timeline', 'theme', 'shortcuts', 'stepping', 'settings', 'saved-workspaces', 'admin']
-      .map(name => browserCase(`check-${name}-browser`, 'chromium')),
-    browserCase('check-media-open-matrix', 'chromium'),
-    ...['workspace-link', 'workspace-list', 'color-settings'].map(name => browserCase(`check-${name}-browser`)),
-    ...['check-annotation-browser', 'check-annotation-rendering', 'check-hlg-browser']
-      .flatMap(script => ['chromium', 'webkit'].map(engine => browserCase(script, engine))),
-  ],
-  'flv-startup': ['chromium', 'webkit'].map(engine => browserCase('check-flv-startup-browser', engine)),
-};
+export const browserRegressionSuites = Object.fromEntries(['uncovered', 'flv-startup'].map(suite => [suite, browserEntries(suite)]));
 
 function terminateOwnedProcesses(child, grouped) {
   const failures = [];
@@ -28,7 +15,13 @@ function terminateOwnedProcesses(child, grouped) {
     try { process.kill(pid, 'SIGKILL'); }
     catch (cause) { if (cause.code !== 'ESRCH') failures.push(cause.message); }
   };
-  if (!grouped || !child.pid) { child.kill('SIGKILL'); return failures; }
+  if (!child.pid) return failures;
+  if (process.platform === 'win32') {
+    try { execFileSync('taskkill', ['/pid', String(child.pid), '/T', '/F'], { timeout: 5000, stdio: 'pipe' }); }
+    catch (cause) { if (child.exitCode === null && child.signalCode === null) failures.push(cause.message); }
+    return failures;
+  }
+  if (!grouped) { child.kill('SIGKILL'); return failures; }
   // Playwright deliberately creates detached browser process groups. Snapshot
   // the wrapper's descendants BEFORE killing it, while parentage proves which
   // processes belong to this case. Never kill by name or an unrelated group.
@@ -52,20 +45,22 @@ function terminateOwnedProcesses(child, grouped) {
   return failures;
 }
 
-async function runCase(entry, logPath, { cwd, timeoutMs, output }) {
+async function runCase(entry, logPath, { cwd, timeoutMs, output, signal, directory }) {
   const started = performance.now();
-  let timedOut = false, error = null;
+  let timedOut = false, cancelled = false, error = null;
   const log = createWriteStream(logPath);
   // Observe open/write errors immediately, not after the child has exited.
   const logFinished = finished(log, { cleanup: true }).catch(cause => { error = `log: ${cause.message}`; });
   const grouped = process.platform !== 'win32';
-  const child = spawn(process.execPath, entry.args, { cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'] });
+  const command = entry.args ? ['node', ...entry.args] : entry.command;
+  const executable = command[0] === 'node' ? process.execPath : command[0];
+  const child = spawn(executable, command.slice(1), { cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ...entry.env, VOIDPLAYER_TEST_CASE: entry.id ?? entry.name, VOIDPLAYER_TEST_ARTIFACTS: path.resolve(directory, entry.name) } });
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { if (!log.destroyed) log.write(chunk); output.write(chunk); });
   const result = await new Promise(resolve => {
-    let cleanupTimer;
-    const finish = result => { clearTimeout(timer); clearTimeout(cleanupTimer); resolve(result); };
-    const timer = setTimeout(() => {
-      timedOut = true;
+    let cleanupTimer, timer;
+    const finish = result => { clearTimeout(timer); clearTimeout(cleanupTimer); signal?.removeEventListener('abort', abort); resolve(result); };
+    const terminate = () => {
       const failures = terminateOwnedProcesses(child, grouped);
       if (failures.length) error = `termination: ${failures.join('; ')}`;
       // Even an escaped/reparented process or OS cleanup error must not retain
@@ -75,30 +70,50 @@ async function runCase(entry, logPath, { cwd, timeoutMs, output }) {
         error = [error, 'process/pipe cleanup exceeded 1000 ms'].filter(Boolean).join('; ');
         finish({ exitCode: child.exitCode, signal: child.signalCode });
       }, 1000);
-    }, timeoutMs);
+    };
+    const abort = () => { cancelled = true; terminate(); };
+    timer = setTimeout(() => { timedOut = true; terminate(); }, timeoutMs);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
     child.on('error', cause => { error = cause.message; });
     child.on('close', (exitCode, signal) => finish({ exitCode, signal }));
   });
   log.end(); await logFinished;
-  return { ...result, timedOut, error, durationMs: Math.round(performance.now() - started) };
+  return { ...result, timedOut, cancelled, error, durationMs: Math.round(performance.now() - started) };
 }
 
 // Each browser owns its process and result. One failing script must never hide
 // later correctness checks; the aggregate exit status still gates the release.
 export async function runBrowserRegressions(entries, {
-  directory, cwd = process.cwd(), timeoutMs = 300000, output = process.stdout,
+  directory, cwd = process.cwd(), timeoutMs, output = process.stdout, signal, beforeCase,
 } = {}) {
   await mkdir(directory, { recursive: true });
   const results = [];
+  const names = entries.map(entry => entry.name);
+  if (new Set(names).size !== names.length || names.some(name => !/^[a-zA-Z0-9_-]+$/.test(name))) throw new Error('Duplicate or unsafe case name');
   const report = () => ({ complete: results.length === entries.length, expectedCount: entries.length,
-    passed: results.length === entries.length && results.every(result => result.status === 'passed'), results });
-  const saveReport = () => writeFile(path.join(directory, 'results.json'), JSON.stringify(report(), null, 2) + '\n');
+    passed: results.length === entries.length && results.every(result => result.required === false || result.status === 'passed'), results });
+  const saveReport = async () => {
+    const target = path.join(directory, 'results.json');
+    await writeFile(target + '.tmp', JSON.stringify(report(), null, 2) + '\n');
+    await rename(target + '.tmp', target);
+  };
   await saveReport();
   for (const entry of entries) {
     const logPath = path.join(directory, `${entry.name}.log`);
     output.write(`::group::${entry.name}\n`);
-    const result = await runCase(entry, logPath, { cwd, timeoutMs, output });
-    const status = result.exitCode === 0 && !result.timedOut && !result.error ? 'passed' : 'failed';
+    let result;
+    try {
+      if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
+      else {
+        await beforeCase?.(entry);
+        result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000, output, signal, directory });
+      }
+    } catch (cause) {
+      result = { error: cause.message, phase: 'prepare', durationMs: 0, exitCode: null };
+      await writeFile(logPath, cause.stack + '\n');
+    }
+    const status = result.cancelled ? 'cancelled' : result.exitCode === 0 && !result.timedOut && !result.error ? 'passed' : 'failed';
     results.push({ ...entry, ...result, status, logPath });
     output.write(`::endgroup::\n${status.toUpperCase()} ${entry.name} (${result.durationMs} ms)\n`);
     // Flush after every script so partial evidence survives cancellation.

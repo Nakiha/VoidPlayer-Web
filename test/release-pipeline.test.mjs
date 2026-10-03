@@ -54,11 +54,11 @@ test('release workflow gates verified artifacts and draft staging on every verif
 
 test('browser workflow collects independent outcomes and uploads failure evidence', async () => {
   const jobs = workflowJobs(await readFile(new URL('../.github/workflows/release-preview.yml', import.meta.url), 'utf8'));
-  assert.match(jobs['uncovered-regressions'].body, /run: node scripts\/run-browser-regressions\.mjs uncovered/);
+  assert.match(jobs['uncovered-regressions'].body, /run: node scripts\/run-tests\.mjs uncovered --prepared/);
   assert.doesNotMatch(jobs['uncovered-regressions'].body, /continue-on-error:|set -euo pipefail/);
-  assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/browser-regressions\/uncovered\//);
-  assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-browser-regressions\.mjs flv-startup/);
-  assert.match(jobs.playback.body, /\.run\/browser-regressions\/flv-startup\//);
+  assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/test-suites\/uncovered\//);
+  assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs flv-startup --prepared/);
+  assert.match(jobs.playback.body, /\.run\/test-suites\//);
 });
 
 const revision = 'a'.repeat(40), identity = { version: '0.1.0', revision, dirty: false, tag: 'v0.1.0' };

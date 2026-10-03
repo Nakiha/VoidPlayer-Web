@@ -1,17 +1,10 @@
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { webkit, chromium } from 'playwright';
-import { createMediaServer } from '../server/app.ts';
-const root = path.resolve(import.meta.dirname, '..');
-const server = createMediaServer({ roots: [path.join(root, 'fixtures/video')], staticDir: path.join(root, 'dist'), onLog() {} });
-await new Promise(r => server.listen(0, '127.0.0.1', r));
+import { withBrowserFixture } from './testing/browser-fixture.mjs';
 const name = process.argv[2] ?? 'webkit';
-const browser = await (name === 'chromium' ? chromium : webkit).launch({ headless: true });
-try {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 });
+await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
   await page.addInitScript(()=>localStorage.setItem('voidplayer.annotation.recent-colors','["#123456"]'));
-  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await ready();
   // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
   await page.waitForFunction(() => window.voidPlayer?.tools, { timeout: 30000 });
   const load = () => page.evaluate(async () => {
@@ -81,7 +74,7 @@ try {
   for (const id of ['drawing-width-choice', 'drawing-font-choice', 'drawing-color-choice']) await toggle(id);
   await page.locator('#drawing-width-choice').click();
   assert.deepEqual(await page.locator('#drawing-width-choice-menu .stroke-sample').evaluateAll(nodes => nodes.map(e => e.getBoundingClientRect().height)), [1,2,4,6,8,12]);
-  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:'/tmp/voidplayer-stroke-menu.png'});
+  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:artifact('stroke-menu.png')});
   await page.getByRole('menuitemradio',{name:'粗 · 8 px',exact:true}).click();
   assert.equal((await state()).marks[0].drawings[0].strokeWidth,8);
   assert.equal(await page.locator('#drawing-width-choice .stroke-sample').evaluate(e=>e.getBoundingClientRect().height),8);
@@ -99,7 +92,7 @@ try {
   const feedback=await cyan.evaluate(e=>({background:getComputedStyle(e,'::before').backgroundColor,inset:getComputedStyle(e,'::before').top,radius:getComputedStyle(e,'::before').borderRadius,shadow:getComputedStyle(e.querySelector('.color-swatch')).boxShadow}));
   assert.equal(feedback.background,'rgb(255, 255, 255)'); assert.equal(feedback.inset,'-6px'); assert.equal(feedback.radius,'12px'); assert.equal(feedback.shadow,'none');
   assert.equal((await state()).marks[0].drawings[0].color,beforeHover,'hover is a preview, not a color change');
-  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:'/tmp/voidplayer-color-feedback.png'});
+  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:artifact('color-feedback.png')});
   await page.keyboard.press('Escape');
   assert.equal(await page.locator('#drawing-color-choice').evaluate(e=>getComputedStyle(e).outlineStyle),'none','keyboard focus has no outline');
   await page.locator('#drawing-color-choice').click();
@@ -119,7 +112,7 @@ try {
   await page.keyboard.press('Home'); await page.keyboard.press('ArrowRight');
   assert.equal(await page.evaluate(()=>document.activeElement.dataset.color),'#ff9500','palette supports horizontal keyboard navigation');
   await page.keyboard.press('ArrowDown'); assert.equal(await page.evaluate(()=>document.activeElement.dataset.color),'#ebebeb');
-  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:'/tmp/voidplayer-color-menu.png'});
+  if (process.env.MENU_SCREENSHOTS) await page.screenshot({path:artifact('color-menu.png')});
   // Switching between invokers leaves exactly one menu and no tooltip.
   await page.locator('#drawing-font-choice').click();
   assert.equal(await page.locator('.popup-menu:popover-open:not([data-menu-exit-for])').count(),1);
@@ -161,4 +154,4 @@ try {
   assert.equal(await page.getByRole('group',{name:'常用色',exact:true}).locator('[aria-checked=true]').evaluate(e=>getComputedStyle(e,'::before').backgroundColor),'rgb(53, 59, 69)');
   assert.deepEqual(errors,[]);
   console.log(`PASS ${name}: repeated click/keyboard toggle, tooltip exclusion, stroke previews, shared style edits, fixed gapless palette, no color history, red defaults`);
-} finally { await browser.close(); server.closeAllConnections(); await new Promise(r=>server.close(r)); }
+});
