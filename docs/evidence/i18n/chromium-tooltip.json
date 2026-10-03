@@ -1,0 +1,79 @@
+[
+  {
+    "kind": "hover",
+    "lang": "en",
+    "hovered": true,
+    "rect": {
+      "x": 99.5,
+      "y": 331.171875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 331.171875,
+      "right": 191,
+      "bottom": 355.96875,
+      "left": 99.5
+    },
+    "text": "Browser decoder memory format; may differ from the source pixel format"
+  },
+  {
+    "kind": "hover",
+    "lang": "zh-CN",
+    "hovered": true,
+    "rect": {
+      "x": 99.5,
+      "y": 314.375,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 314.375,
+      "right": 191,
+      "bottom": 339.171875,
+      "left": 99.5
+    },
+    "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+  },
+  {
+    "kind": "focus",
+    "lang": "en",
+    "rect": {
+      "x": 99.5,
+      "y": 331.171875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 331.171875,
+      "right": 191,
+      "bottom": 355.96875,
+      "left": 99.5
+    },
+    "text": "Browser decoder memory format; may differ from the source pixel format"
+  },
+  {
+    "kind": "focus",
+    "lang": "zh-CN",
+    "rect": {
+      "x": 99.5,
+      "y": 314.375,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 314.375,
+      "right": 191,
+      "bottom": 339.171875,
+      "left": 99.5
+    },
+    "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+  },
+  {
+    "kind": "focus",
+    "lang": "en",
+    "rect": {
+      "x": 99.5,
+      "y": 331.171875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 331.171875,
+      "right": 191,
+      "bottom": 355.96875,
+      "left": 99.5
+    },
+    "text": "Browser decoder memory format; may differ from the source pixel format"
+  }
+]

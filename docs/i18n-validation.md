@@ -38,6 +38,16 @@ Headless Chromium chooses FFmpeg WASM for HEVC and fails the unchanged real-time
 
 The first draft surfaced four new regressions, all repaired without changing the original assertions: portable scope/inventory paths and Vite IDs on Windows, CRLF checkout artifacts versus generated LF, and source status functions disappearing from JSON fingerprints (preventing the stalled-load cancel button). Narrow Chinese workspace controls also retain their original one-line layout; English and pseudo text wrap as needed. The original Chromium/WebKit complete player regressions and WebKit workspace-list case pass on Mac after these fixes. The Windows catalog build, source archive (including `locales/`) and packaged release checks pass on the repair commit. PR CI remains the source of truth for full Linux/Windows completion.
 
+## Tooltip and HTTPS follow-up
+
+The `70806f6` CI run exposed two test assumptions after localization: the Chromium tooltip read raced the next layout frame, and the legacy trusted-HTTPS functional page used its default English browser locale while locating Chinese buttons. Both are repaired without increasing timeouts or removing visible text assertions.
+
+The tooltip issue was reproduced on this Mac with event and geometry tracing. The English decoded-format value occupied y=331.17–355.97px, with the pointer at y=343.57px. Switching to Chinese moved the same value to y=314.38–339.17px because preceding labels no longer wrapped. The open popup first updated correctly to Chinese; a subsequent pointerover targeted the next value and hid it through the existing tooltip lifecycle. There was no scroll or window-blur cause. [Diagnostic evidence](evidence/i18n/tooltip-diagnostic.json) records this sequence.
+
+The regression now waits for translated layout, hovers the actual value, and verifies real English and Chinese popup text. A separate focused-anchor sequence switches English → Chinese → English without another hover/focus event, waits two animation frames, then checks visible translated text, unchanged anchor/popup nodes, retained focus and `aria-describedby`. [Chromium](evidence/i18n/chromium-tooltip.json) and [WebKit](evidence/i18n/webkit-tooltip.json) record the actual texts and geometry. All four `ci-i18n` cells and all six original feedback/menu/shortcut cells pass on Mac. The tooltip runtime and performance source digest remain unchanged.
+
+The HTTPS page now explicitly requests `locale: 'zh-CN'`; its Chinese selectors and original media/decoder assertions are unchanged. Other directly constructed browser contexts with Chinese UI selectors were reviewed and already specify Chinese. The trusted-certificate case is restricted to disposable Linux/Windows CI hosts and was not run against this Mac's trust store. Its exact-head CI result remains the validation source.
+
 ## Actual UI captures
 
 ![English playback and cached inspector](evidence/i18n/playing-en.png)

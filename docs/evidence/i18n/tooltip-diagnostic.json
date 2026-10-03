@@ -1,0 +1,253 @@
+{
+  "engine": "chromium",
+  "platform": "Mac arm64",
+  "head": "70806f6b6ad4057252dda5cd886b9fe8227d8d6b",
+  "events": [
+    {
+      "at": 581.4499998092651,
+      "label": "before-switch",
+      "lang": "en",
+      "anchor": {
+        "x": 99.5,
+        "y": 331.171875,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 331.171875,
+        "right": 191,
+        "bottom": 355.96875,
+        "left": 99.5
+      },
+      "hovered": true,
+      "popup": {
+        "hidden": false,
+        "text": "Browser decoder memory format; may differ from the source pixel format",
+        "rect": {
+          "x": 8,
+          "y": 361.96875,
+          "width": 300,
+          "height": 47.1875,
+          "top": 361.96875,
+          "right": 308,
+          "bottom": 409.15625,
+          "left": 8
+        }
+      }
+    },
+    {
+      "at": 588.5449998378754,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": true,
+      "popup": {
+        "hidden": false,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 8,
+          "y": 345.171875,
+          "width": 300,
+          "height": 47.1875,
+          "top": 345.171875,
+          "right": 308,
+          "bottom": 392.359375,
+          "left": 8
+        }
+      }
+    },
+    {
+      "at": 588.6050000190735,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": true,
+      "popup": {
+        "hidden": false,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 8,
+          "y": 345.171875,
+          "width": 300,
+          "height": 47.1875,
+          "top": 345.171875,
+          "right": 308,
+          "bottom": 392.359375,
+          "left": 8
+        }
+      }
+    },
+    {
+      "at": 593.1499998569489,
+      "label": {
+        "type": "pointerover",
+        "target": "DD",
+        "related": "DD",
+        "x": 145.25,
+        "y": 343.57000732421875
+      },
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": false,
+      "popup": {
+        "hidden": false,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 8,
+          "y": 345.171875,
+          "width": 300,
+          "height": 47.1875,
+          "top": 345.171875,
+          "right": 308,
+          "bottom": 392.359375,
+          "left": 8
+        }
+      }
+    },
+    {
+      "at": 593.2249999046326,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": false,
+      "popup": {
+        "hidden": true,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "at": 593.5099999904633,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": false,
+      "popup": {
+        "hidden": true,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "at": 594.8499999046326,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": false,
+      "popup": {
+        "hidden": true,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    },
+    {
+      "at": 793.4349999427795,
+      "label": "after-switch",
+      "lang": "zh-CN",
+      "anchor": {
+        "x": 99.5,
+        "y": 314.375,
+        "width": 91.5,
+        "height": 24.796875,
+        "top": 314.375,
+        "right": 191,
+        "bottom": 339.171875,
+        "left": 99.5
+      },
+      "hovered": false,
+      "popup": {
+        "hidden": true,
+        "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        }
+      }
+    }
+  ]
+}

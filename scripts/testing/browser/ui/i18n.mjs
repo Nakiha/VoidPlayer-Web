@@ -32,8 +32,34 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  // A refresh cache hit must not rebuild inspector, dock, marks or input nodes.
  await page.evaluate(()=>window.voidPlayer.getState());
  const tooltip=page.locator('#track-properties dd[data-tooltip]').first();
- await tooltip.hover();await page.getByRole('tooltip').waitFor({state:'visible'});assert.match(await page.getByRole('tooltip').innerText(),/format|metadata|bitstream|container/i);
- await switchLanguage('zh-CN');assert.match(await page.getByRole('tooltip').innerText(),/格式|来源/);await switchLanguage('en');
+ const tooltipPopup=page.getByRole('tooltip');
+ const tooltipEvidence=[];
+ const settleLayout=()=>page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ async function checkHoveredTooltip(locale,pattern){
+  await switchLanguage(locale);await settleLayout();
+  // Translated labels above the value can wrap, moving the value away from a
+  // stationary pointer. Hover the actual localized geometry before reading it.
+  await tooltip.hover();await tooltipPopup.waitFor({state:'visible'});
+  assert.match(await tooltipPopup.innerText(),pattern);
+  tooltipEvidence.push(await tooltip.evaluate(e=>({kind:'hover',lang:document.documentElement.lang,hovered:e.matches(':hover'),rect:e.getBoundingClientRect().toJSON(),text:document.querySelector('#control-tooltip').textContent})));
+  assert.equal(tooltipEvidence.at(-1).hovered,true);
+ }
+ await checkHoveredTooltip('en',/format|metadata|bitstream|container/i);
+ await checkHoveredTooltip('zh-CN',/格式|来源/);
+ // Keyboard focus remains on the original value despite translated layout.
+ // This specifically verifies MutationObserver refresh without another hover
+ // or focus event, so stale translations cannot pass by reopening the popup.
+ await page.mouse.move(700,400);await page.keyboard.press('Tab');await tooltip.focus();
+ await tooltipPopup.waitFor({state:'visible'});
+ await tooltip.evaluate(e=>{window.__tooltipAnchor=e;window.__tooltipPopup=document.querySelector('#control-tooltip');});
+ for(const [locale,pattern] of [['en',/format|metadata|bitstream|container/i],['zh-CN',/格式|来源/],['en',/format|metadata|bitstream|container/i]]){
+  await switchLanguage(locale);await settleLayout();
+  assert.equal(await tooltipPopup.isVisible(),true,'focused tooltip stays visible through locale commit and layout');
+  assert.match(await tooltipPopup.innerText(),pattern);
+  assert.deepEqual(await page.evaluate(()=>({anchor:window.__tooltipAnchor===document.querySelector('#track-properties dd[data-tooltip]'),popup:window.__tooltipPopup===document.querySelector('#control-tooltip'),focus:document.activeElement===window.__tooltipAnchor,described:window.__tooltipAnchor.getAttribute('aria-describedby')})),{anchor:true,popup:true,focus:true,described:'control-tooltip'});
+  tooltipEvidence.push(await tooltip.evaluate(e=>({kind:'focus',lang:document.documentElement.lang,rect:e.getBoundingClientRect().toJSON(),text:document.querySelector('#control-tooltip').textContent})));
+ }
+ await writeFile(artifact('tooltip-report.json'),JSON.stringify(tooltipEvidence,null,2));
  await page.evaluate(()=>window.voidPlayer.addMark({slot:'A',text:'',drawings:[{id:'empty-preview',tool:'rect',color:'#ff3b30',strokeWidth:4,points:[{x:.2,y:.2},{x:.4,y:.4}]}]}));
  await page.locator('#toggle-marks').click();
  const emptyThumbnail=page.locator('.mark-thumbnail').filter({hasText:'No preview'});

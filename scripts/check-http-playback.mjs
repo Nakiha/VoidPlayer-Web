@@ -37,7 +37,7 @@ try {
   if (tls) untrust = await trustTestCertificate(tls.caFile);
   if (functional) {
     browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server', '--enable-precise-memory-info'] });
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce' });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN', reducedMotion: 'reduce' });
     page.setDefaultTimeout(90000);
     await page.addInitScript(() => {
       window.decoderConfigurations = 0;
