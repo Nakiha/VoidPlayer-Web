@@ -1,6 +1,15 @@
 {
   "version": 1,
   "files": [
+    "src/admin/annotations.ts",
+    "src/admin/caches.ts",
+    "src/admin/diagnostics.ts",
+    "src/admin/main.ts",
+    "src/admin/measurement.ts",
+    "src/admin/presentation.ts",
+    "src/admin/shell.ts",
+    "src/admin/workspaces.ts",
+    "src/connection-guide.ts",
     "src/log-panel.ts",
     "src/main.ts",
     "src/ui/analysis-canvas.ts",
@@ -27,6 +36,7 @@
     "src/ui/language.ts",
     "src/ui/library-browser.ts",
     "src/ui/library-link.ts",
+    "src/ui/live-localization.ts",
     "src/ui/localized-shell.ts",
     "src/ui/mark-preview-backfill.ts",
     "src/ui/mark-preview-publish.ts",
@@ -99,14 +109,6 @@
   ],
   "notCovered": [
     {
-      "area": "Connection guide and administration console",
-      "files": [
-        "src/connection-guide.ts",
-        "src/admin.ts"
-      ],
-      "reason": "Outside the issue’s first-stage player/settings/track scope."
-    },
-    {
       "area": "Raw diagnostics from server, session, codecs and import clients",
       "files": [
         "server/",
@@ -117,7 +119,7 @@
         "src/workspace-file.ts",
         "src/library.ts"
       ],
-      "reason": "Raw underlying failure reasons remain original, alongside localized owning UI context. Only reference-color capability failures have stable translated codes in this phase."
+      "reason": "Original underlying diagnostic reasons are retained alongside localized UI context. Stable root reason codes, cache display data, HTTP status/code metadata and measurement error codes cover server-owned admin summaries; codec reference capability errors retain their existing semantic codes."
     },
     {
       "area": "Raw diagnostic JSON, filenames, media titles, actors, comments and workspace content",

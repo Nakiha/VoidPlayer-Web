@@ -1,0 +1,57 @@
+{
+  "complete": true,
+  "expectedCount": 10,
+  "passed": true,
+  "cases": [
+    {
+      "id": "browser-i18n-admin-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-admin-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-guide-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-guide-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-admin-layout-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-admin-layout-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-layout-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-layout-webkit",
+      "status": "passed",
+      "exitCode": 0
+    }
+  ]
+}

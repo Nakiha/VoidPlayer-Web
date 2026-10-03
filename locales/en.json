@@ -59,9 +59,1117 @@
     "source": "等待添加片源",
     "translation": "Waiting for a source"
   },
+  "admin.addDir": {
+    "source": "添加目录",
+    "translation": "Add directory"
+  },
+  "admin.annotationMeta": {
+    "source": "{author} · 版本 {revision} · {date}",
+    "translation": "{author} · Revision {revision} · {date}"
+  },
+  "admin.anonymous": {
+    "source": "匿名",
+    "translation": "Anonymous"
+  },
+  "admin.backToLatest": {
+    "source": "返回最新",
+    "translation": "Back to latest"
+  },
+  "admin.backToPlayer": {
+    "source": "返回播放器",
+    "translation": "Back to player"
+  },
+  "admin.blocks": {
+    "source": "请求 / 读取块",
+    "translation": "Requests / read blocks"
+  },
+  "admin.cacheBudget": {
+    "source": "{used} / {limit} 上限 · 达到上限后自动清理旧缓存",
+    "translation": "{used} / {limit} limit · Old caches are cleared automatically at the limit"
+  },
+  "admin.cacheContents": {
+    "source": "缓存内容",
+    "translation": "Cached contents"
+  },
+  "admin.cacheDesc": {
+    "source": "查看占用，清理可重新生成的数据。",
+    "translation": "Storage use; clean up data that regenerates."
+  },
+  "admin.cacheQuota": {
+    "source": "缓存限额占用",
+    "translation": "Cache quota usage"
+  },
+  "admin.cacheTitle": {
+    "source": "缓存",
+    "translation": "Caches"
+  },
+  "admin.cacheType": {
+    "source": "缓存类型",
+    "translation": "Cache type"
+  },
+  "admin.cachesCount": {
+    "source": "{n, plural, other {# 个缓存}}",
+    "translation": "{n, plural, one {# cached item} other {# cached items}}"
+  },
+  "admin.cancel": {
+    "source": "取消",
+    "translation": "Cancel"
+  },
+  "admin.cancelTest": {
+    "source": "取消测试",
+    "translation": "Cancel test"
+  },
+  "admin.capNote": {
+    "source": "达到任一上限即结束。",
+    "translation": "Stops at whichever cap hits first."
+  },
+  "admin.chooseMedia": {
+    "source": "选择媒体",
+    "translation": "Choose media"
+  },
+  "admin.clearAllFrames": {
+    "source": "清理全部帧索引？保留视频文件。",
+    "translation": "Clear all frame indexes? Video files are kept."
+  },
+  "admin.clearAllPreviews": {
+    "source": "清理全部标注预览？保留标注内容。",
+    "translation": "Clear all annotation previews? Annotation content is kept."
+  },
+  "admin.clearAllThumbnails": {
+    "source": "清理全部媒体缩略图？保留视频文件，仅删小图。清理后从头打开可重建。",
+    "translation": "Clear all media thumbnails? Video files are kept. Thumbnails are rebuilt when you open videos from the start."
+  },
+  "admin.clearCache": {
+    "source": "清理缓存",
+    "translation": "Clear cache"
+  },
+  "admin.clearFrames": {
+    "source": "清理帧索引",
+    "translation": "Clear frame indexes"
+  },
+  "admin.clearLabel": {
+    "source": "清理{label}",
+    "translation": "Clear {label}"
+  },
+  "admin.clearName": {
+    "source": "清理 {name} 的{label}",
+    "translation": "Clear {label} for {name}"
+  },
+  "admin.confirmClear": {
+    "source": "确认清理",
+    "translation": "Confirm clear"
+  },
+  "admin.confirmOne": {
+    "source": "清理「{name}」的{label}？",
+    "translation": "Clear {label} for “{name}”?"
+  },
+  "admin.connections": {
+    "source": "连接数",
+    "translation": "Connections"
+  },
+  "admin.countLine": {
+    "source": "{done} 次完成 · {errors} 次错误 · {pending} 次处理中",
+    "translation": "{done} done · {errors} errors · {pending} active"
+  },
+  "admin.cpuCaption": {
+    "source": "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。",
+    "translation": "CPU is percent of one logical core. Connections include idle browser keep-alives."
+  },
+  "admin.currentIdentity": {
+    "source": "当前身份",
+    "translation": "Current identity"
+  },
+  "admin.dataDir": {
+    "source": "数据目录",
+    "translation": "Data directory"
+  },
+  "admin.dataDone": {
+    "source": "已完成数据",
+    "translation": "Data completed"
+  },
+  "admin.dbSize": {
+    "source": "数据库 {db} · 写入日志 {journal}",
+    "translation": "Database {db} · journal {journal}"
+  },
+  "admin.deleteLog": {
+    "source": "删除日志",
+    "translation": "Delete log"
+  },
+  "admin.deleteLogConfirm": {
+    "source": "从服务器删除这份日志？此操作无法撤销。",
+    "translation": "Delete this log from the server? This cannot be undone."
+  },
+  "admin.deleteSelectedLog": {
+    "source": "删除选中日志",
+    "translation": "Delete the selected log"
+  },
+  "admin.deleteSelectedWorkspace": {
+    "source": "删除选中工作区",
+    "translation": "Delete the selected workspace"
+  },
+  "admin.deleteWorkspace": {
+    "source": "删除工作区",
+    "translation": "Delete workspace"
+  },
+  "admin.deleteWsConfirm": {
+    "source": "删除服务器工作区？不删除视频或已打开的会话。",
+    "translation": "Delete the server workspace? Videos and open sessions stay."
+  },
+  "admin.descConcurrent": {
+    "source": "浏览器同时读取四路媒体，统计合计吞吐。包含文件读取、网络、缓存和浏览器调度。",
+    "translation": "The browser reads four media streams at once and totals throughput. Includes reads, network, caches, and browser scheduling."
+  },
+  "admin.descDownload": {
+    "source": "服务器 → 浏览器，传输内存数据，不读取媒体文件。",
+    "translation": "Server → browser, in-memory data, no media files read."
+  },
+  "admin.descPreviews": {
+    "source": "标注卡片使用的画面预览。清理保留文字和绘图，再次编辑对应画面时生成。",
+    "translation": "Image previews for mark cards. Text and drawings are kept; regenerates while editing that frame."
+  },
+  "admin.descStorage": {
+    "source": "服务器重复读取所选媒体。包含系统缓存，不代表磁盘物理带宽。",
+    "translation": "The server re-reads the selected media. Includes OS caches, not physical disk bandwidth."
+  },
+  "admin.descThumbs": {
+    "source": "媒体库首帧小图。清理后只在正常从头打开时重建，不主动解码。",
+    "translation": "First-frame thumbnails for the library. Rebuilds only on plain reopening, never by proactive decoding."
+  },
+  "admin.descUpload": {
+    "source": "当前浏览器 → 服务器。单路上传随机数据，收到后即丢弃，不保存到磁盘。",
+    "translation": "This browser → server. One stream of random uploads, discarded on receipt, never stored."
+  },
+  "admin.detailFrames": {
+    "source": "{root} · {format} · {frames, plural, other {# 帧}}",
+    "translation": "{root} · {format} · {frames, plural, one {# frame} other {# frames}}"
+  },
+  "admin.dirHelp": {
+    "source": "填写服务器上的完整路径。移除目录不会删除原文件。",
+    "translation": "Enter the full path on the server. Removing a directory does not delete files."
+  },
+  "admin.dirNameAria": {
+    "source": "目录名称",
+    "translation": "Directory name"
+  },
+  "admin.dirNamePh": {
+    "source": "例如：拍摄素材",
+    "translation": "e.g. footage"
+  },
+  "admin.dirsSaved": {
+    "source": "目录配置已保存",
+    "translation": "Directory config saved"
+  },
+  "admin.dirsSavedNotice": {
+    "source": "媒体目录已保存，后台开始校准索引。",
+    "translation": "Media directories saved; background index calibration started."
+  },
+  "admin.disk": {
+    "source": "所在磁盘",
+    "translation": "Volume"
+  },
+  "admin.diskFree": {
+    "source": "{bytes} 可用",
+    "translation": "{bytes} free"
+  },
+  "admin.diskTotal": {
+    "source": "共 {bytes}",
+    "translation": "Total {bytes}"
+  },
+  "admin.diskUnavailable": {
+    "source": "磁盘容量不可用",
+    "translation": "Disk capacity unavailable"
+  },
+  "admin.diskUsage": {
+    "source": "磁盘占用",
+    "translation": "Disk usage"
+  },
+  "admin.diskUsed": {
+    "source": "已用 {bytes}",
+    "translation": "Used {bytes}"
+  },
+  "admin.download": {
+    "source": "下载",
+    "translation": "Download"
+  },
+  "admin.elapsed": {
+    "source": "实际耗时",
+    "translation": "Elapsed"
+  },
+  "admin.emptyPreviews": {
+    "source": "编辑标注后，画面预览会在播放暂停时保存。",
+    "translation": "Edit a mark and its frame preview is saved on pause."
+  },
+  "admin.emptyThumbs": {
+    "source": "从头打开媒体库视频后，首帧小图会保存在这里。",
+    "translation": "Open a library video from the start and its first-frame thumbnail lands here."
+  },
+  "admin.endReason": {
+    "source": "结束原因",
+    "translation": "Stop reason"
+  },
+  "admin.errAccess": {
+    "source": "无法读取此目录",
+    "translation": "Cannot read this directory"
+  },
+  "admin.errNoEnt": {
+    "source": "路径不存在",
+    "translation": "Path does not exist"
+  },
+  "admin.errStorage": {
+    "source": "网络存储已断开",
+    "translation": "Network storage disconnected"
+  },
+  "admin.errorAccess": {
+    "source": "操作未获授权。请从服务器的同源页面重试。",
+    "translation": "This action is not authorized. Retry from a page on the server’s origin."
+  },
+  "admin.errorConflict": {
+    "source": "内容已改变。请载入最新版本后重试；你的草稿仍保留。",
+    "translation": "The content has changed. Load the latest version and retry; your draft is preserved."
+  },
+  "admin.errorDiagnostic": {
+    "source": "{summary}\n原始原因：{reason}",
+    "translation": "{summary}\nOriginal cause: {reason}"
+  },
+  "admin.errorInvalid": {
+    "source": "请求无法处理。请检查输入和当前版本后重试。",
+    "translation": "The request could not be processed. Check your input and the current version, then retry."
+  },
+  "admin.errorMissing": {
+    "source": "内容已不存在。请刷新列表后重试。",
+    "translation": "The content no longer exists. Refresh the list and retry."
+  },
+  "admin.errorSize": {
+    "source": "提交内容过大。请减少数据量后重试。",
+    "translation": "The submitted content is too large. Reduce its size and retry."
+  },
+  "admin.errorTruncated": {
+    "source": " · 详情保留前 1000 条",
+    "translation": " · details kept for the first 1000"
+  },
+  "admin.errorUnavailable": {
+    "source": "无法完成请求。请检查连接与服务状态后重试。",
+    "translation": "The request could not be completed. Check the connection and service, then retry."
+  },
+  "admin.exportMarks": {
+    "source": "导出标注",
+    "translation": "Export marks"
+  },
+  "admin.filterMedia": {
+    "source": "筛选媒体",
+    "translation": "Filter media"
+  },
+  "admin.framesDescription": {
+    "source": "加快媒体库视频再次打开和定位。支持的 FFmpeg 容器由服务端重建索引；FLV 仍在播放时重建。",
+    "translation": "Open library videos and seek faster. The server rebuilds indexes for supported FFmpeg containers; FLV indexes are rebuilt during playback."
+  },
+  "admin.framesEmpty": {
+    "source": "打开支持的媒体库视频后，索引会自动保存在这里。",
+    "translation": "Indexes are saved here automatically when you open supported library videos."
+  },
+  "admin.guestId": {
+    "source": "访客 · {id}",
+    "translation": "Guest · {id}"
+  },
+  "admin.historyLogLine": {
+    "source": "历史日志 · {size}",
+    "translation": "History log · {size}"
+  },
+  "admin.hoursMinutes": {
+    "source": "{h} 小时 {m} 分",
+    "translation": "{h} h {m} min"
+  },
+  "admin.httpRequests": {
+    "source": "HTTP 请求",
+    "translation": "HTTP requests"
+  },
+  "admin.indexAfterSave": {
+    "source": "保存后开始索引",
+    "translation": "Indexing starts after saving"
+  },
+  "admin.indexTitle": {
+    "source": "媒体索引",
+    "translation": "Media index"
+  },
+  "admin.itemsCount": {
+    "source": "{n, plural, other {# 条}}",
+    "translation": "{n, plural, one {# item} other {# items}}"
+  },
+  "admin.kindFrameIndexes": {
+    "source": "帧索引",
+    "translation": "Frame indexes"
+  },
+  "admin.kindPreviews": {
+    "source": "标注预览",
+    "translation": "Mark previews"
+  },
+  "admin.kindThumbs": {
+    "source": "媒体缩略图",
+    "translation": "Media thumbnails"
+  },
+  "admin.libraryDesc": {
+    "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
+    "translation": "Add server directories, then browse videos in the player after saving."
+  },
+  "admin.libraryTitle": {
+    "source": "媒体库",
+    "translation": "Library"
+  },
+  "admin.listHeadMedia": {
+    "source": "媒体 / 内容",
+    "translation": "Media / item"
+  },
+  "admin.listHeadSize": {
+    "source": "占用",
+    "translation": "Size"
+  },
+  "admin.listHeadUpdated": {
+    "source": "更新时间",
+    "translation": "Updated"
+  },
+  "admin.loadLatest": {
+    "source": "载入最新版本",
+    "translation": "Load the latest version"
+  },
+  "admin.loadMore": {
+    "source": "加载更多",
+    "translation": "Load more"
+  },
+  "admin.localUser": {
+    "source": "本机用户",
+    "translation": "Local user"
+  },
+  "admin.logDeleted": {
+    "source": "日志已从服务器删除。",
+    "translation": "Log deleted from the server."
+  },
+  "admin.logJson": {
+    "source": "日志 JSON",
+    "translation": "Log JSON"
+  },
+  "admin.logPlaceholder": {
+    "source": "日志内容会显示在这里",
+    "translation": "Log contents appear here"
+  },
+  "admin.logType": {
+    "source": "日志类型",
+    "translation": "Log type"
+  },
+  "admin.logUploaderLine": {
+    "source": "上传者：{user} · {size}",
+    "translation": "Uploader: {user} · {size}"
+  },
+  "admin.logsDesc": {
+    "source": "查看用户上传的诊断日志，或检查服务器收到的请求。",
+    "translation": "Uploaded diagnostic logs, or requests received by the server."
+  },
+  "admin.logsDisabled": {
+    "source": "未开启日志接收",
+    "translation": "Log receiving is off"
+  },
+  "admin.logsEmptyHint": {
+    "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。",
+    "translation": "In the player, open “Settings → Logs” and click “Upload logs” to see them here."
+  },
+  "admin.logsNoDir": {
+    "source": "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。",
+    "translation": "The server has no log directory configured. You can still download local logs in the player."
+  },
+  "admin.logsTitle": {
+    "source": "日志",
+    "translation": "Logs"
+  },
+  "admin.marksDesc": {
+    "source": "检索评审记录，恢复已删除的标注。",
+    "translation": "Search review records and restore deleted marks."
+  },
+  "admin.marksTab": {
+    "source": "标注",
+    "translation": "Marks"
+  },
+  "admin.measureBusyError": {
+    "source": "已有测速任务。请等待完成，或取消当前任务后重试。",
+    "translation": "A speed test is already running. Wait for it to finish, or cancel the current test and retry."
+  },
+  "admin.measureCancelled": {
+    "source": "已取消",
+    "translation": "Cancelled"
+  },
+  "admin.measureDesc": {
+    "source": "选择测试类型和上限，再点击“开始测试”。",
+    "translation": "Pick a test type and caps, then click “Start test”."
+  },
+  "admin.measureDone": {
+    "source": "已完成",
+    "translation": "Done"
+  },
+  "admin.measureFailed": {
+    "source": "测试失败",
+    "translation": "Failed"
+  },
+  "admin.measureFinishError": {
+    "source": "当前读取仍在结束。请稍等片刻再提交测量结果。",
+    "translation": "The current reads are still finishing. Wait a moment before submitting the measurement result."
+  },
+  "admin.measureFinishing": {
+    "source": "正在结束，等待当前读取释放",
+    "translation": "Finishing, waiting for reads to release"
+  },
+  "admin.measureMediaError": {
+    "source": "媒体不可读或版本已改变。请重新选择当前可读的非空媒体。",
+    "translation": "The media is unreadable or its version has changed. Select a readable, nonempty media file again."
+  },
+  "admin.measurePreparing": {
+    "source": "准备中",
+    "translation": "Preparing"
+  },
+  "admin.measureRunning": {
+    "source": "进行中",
+    "translation": "Running"
+  },
+  "admin.measureSource": {
+    "source": "测量来源",
+    "translation": "Measured by"
+  },
+  "admin.measureTitle": {
+    "source": "测速",
+    "translation": "Speed test"
+  },
+  "admin.mediaDirs": {
+    "source": "媒体目录",
+    "translation": "Media directories"
+  },
+  "admin.mediaVersion": {
+    "source": "媒体与版本",
+    "translation": "Media & version"
+  },
+  "admin.moveToTrash": {
+    "source": "移入回收站",
+    "translation": "Move to trash"
+  },
+  "admin.nameSaved": {
+    "source": "名称已保存。",
+    "translation": "Name saved."
+  },
+  "admin.navCaption": {
+    "source": "服务管理",
+    "translation": "Service admin"
+  },
+  "admin.navCategory": {
+    "source": "管理分类",
+    "translation": "Admin sections"
+  },
+  "admin.netRate": {
+    "source": "网络速率",
+    "translation": "Network rate"
+  },
+  "admin.nextErrors": {
+    "source": "下一页错误",
+    "translation": "Next page of errors"
+  },
+  "admin.nextPage": {
+    "source": "下一页",
+    "translation": "Next page"
+  },
+  "admin.noCacheKind": {
+    "source": "暂无{label}缓存",
+    "translation": "No {label} cached yet"
+  },
   "admin.noMarksAdmin": {
     "source": "暂无标注",
     "translation": "No marks yet"
+  },
+  "admin.noMatchCache": {
+    "source": "没有匹配的缓存",
+    "translation": "No matching caches"
+  },
+  "admin.noMatchMarks": {
+    "source": "没有匹配的标注",
+    "translation": "No matching marks"
+  },
+  "admin.noMatchWs": {
+    "source": "没有找到匹配的工作区",
+    "translation": "No matching workspaces"
+  },
+  "admin.noReadErrors": {
+    "source": "本次扫描没有读取错误",
+    "translation": "No read errors in this scan"
+  },
+  "admin.noReadableMedia": {
+    "source": "本页没有可读媒体",
+    "translation": "No readable media on this page"
+  },
+  "admin.noScan": {
+    "source": "尚未扫描",
+    "translation": "Not scanned yet"
+  },
+  "admin.noScanJob": {
+    "source": "尚无扫描任务",
+    "translation": "No scan jobs yet"
+  },
+  "admin.noUploadedLogs": {
+    "source": "暂无上传日志",
+    "translation": "No uploaded logs"
+  },
+  "admin.noWsYet": {
+    "source": "还没有保存的工作区",
+    "translation": "No saved workspaces yet"
+  },
+  "admin.notStarted": {
+    "source": "尚未开始",
+    "translation": "Not started"
+  },
+  "admin.openInPlayer": {
+    "source": "打开播放器",
+    "translation": "Open in player"
+  },
+  "admin.openInPlayerLink": {
+    "source": "在播放器中打开",
+    "translation": "Open in player"
+  },
+  "admin.optKind": {
+    "source": "测试类型",
+    "translation": "Test type"
+  },
+  "admin.optLimit": {
+    "source": "数据量上限",
+    "translation": "Data cap"
+  },
+  "admin.optSeconds": {
+    "source": "最长时长",
+    "translation": "Max duration"
+  },
+  "admin.originBrowserTiming": {
+    "source": "发起浏览器计时（含请求往返）",
+    "translation": "Browser-side timing (incl. round trips)"
+  },
+  "admin.originServerCount": {
+    "source": "服务端计数；浏览器结果尚未提交",
+    "translation": "Server counting; browser result not submitted yet"
+  },
+  "admin.originServerRead": {
+    "source": "服务端文件读取（含系统缓存）",
+    "translation": "Server file reads (incl. OS caches)"
+  },
+  "admin.overviewDesc": {
+    "source": "查看服务状态、资源占用和媒体扫描进度。",
+    "translation": "Service status, resource usage, and media scan progress."
+  },
+  "admin.overviewTitle": {
+    "source": "概览",
+    "translation": "Overview"
+  },
+  "admin.pageCaption": {
+    "source": "共 {total} 项 · 第 {n} 页，仅显示可读的非空文件",
+    "translation": "{total} items · page {n}, readable non-empty files only"
+  },
+  "admin.pageTitle": {
+    "source": "管理 · VoidPlayer",
+    "translation": "Administration · VoidPlayer"
+  },
+  "admin.prevErrors": {
+    "source": "上一页错误",
+    "translation": "Previous page of errors"
+  },
+  "admin.prevPage": {
+    "source": "上一页",
+    "translation": "Previous page"
+  },
+  "admin.procCpu": {
+    "source": "进程 CPU",
+    "translation": "Process CPU"
+  },
+  "admin.procMemory": {
+    "source": "进程内存",
+    "translation": "Process memory"
+  },
+  "admin.rawData": {
+    "source": "原始工作区数据",
+    "translation": "Raw workspace data"
+  },
+  "admin.readMedia": {
+    "source": "读取的媒体",
+    "translation": "Media to read"
+  },
+  "admin.reading": {
+    "source": "正在读取…",
+    "translation": "Reading…"
+  },
+  "admin.readingScan": {
+    "source": "正在读取扫描状态…",
+    "translation": "Reading scan status…"
+  },
+  "admin.reasonBrowser": {
+    "source": "浏览器完成测量",
+    "translation": "Browser finished measuring"
+  },
+  "admin.reasonClosed": {
+    "source": "服务关闭",
+    "translation": "Service stopped"
+  },
+  "admin.reasonData": {
+    "source": "达到数据量上限",
+    "translation": "Data cap reached"
+  },
+  "admin.reasonDuration": {
+    "source": "达到时长上限",
+    "translation": "Duration cap reached"
+  },
+  "admin.reasonError": {
+    "source": "发生错误",
+    "translation": "Error"
+  },
+  "admin.reasonUser": {
+    "source": "用户取消或连接中断",
+    "translation": "Cancelled by user or connection lost"
+  },
+  "admin.recentRequests": {
+    "source": "最近 200 条请求，服务重启后清空。",
+    "translation": "Recent 200 requests, cleared on restart."
+  },
+  "admin.refreshCaches": {
+    "source": "刷新缓存",
+    "translation": "Refresh caches"
+  },
+  "admin.refreshLogs": {
+    "source": "刷新日志",
+    "translation": "Refresh logs"
+  },
+  "admin.refreshMarks": {
+    "source": "刷新标注",
+    "translation": "Refresh marks"
+  },
+  "admin.refreshStatus": {
+    "source": "刷新状态",
+    "translation": "Refresh status"
+  },
+  "admin.refreshWorkspaces": {
+    "source": "刷新工作区",
+    "translation": "Refresh workspaces"
+  },
+  "admin.removeDir": {
+    "source": "移除目录",
+    "translation": "Remove directory"
+  },
+  "admin.removeDirTitle": {
+    "source": "移出媒体库，不删除文件",
+    "translation": "Remove from the library, keep files"
+  },
+  "admin.reqDuration": {
+    "source": "耗时",
+    "translation": "Duration"
+  },
+  "admin.reqRequest": {
+    "source": "请求",
+    "translation": "Request"
+  },
+  "admin.reqStatus": {
+    "source": "状态",
+    "translation": "Status"
+  },
+  "admin.reqTimeUser": {
+    "source": "时间 / 用户",
+    "translation": "Time / user"
+  },
+  "admin.requestRecords": {
+    "source": "请求记录",
+    "translation": "Request records"
+  },
+  "admin.requestsSummary": {
+    "source": "{done} 次完成 · {active} 次处理中 · {aborted} 次中断",
+    "translation": "{done} completed · {active} active · {aborted} aborted"
+  },
+  "admin.rescan": {
+    "source": "重新扫描",
+    "translation": "Rescan"
+  },
+  "admin.resourceNote": {
+    "source": "测试期间会占用网络或存储资源。",
+    "translation": "Testing uses network or storage resources."
+  },
+  "admin.restoreMark": {
+    "source": "恢复标注",
+    "translation": "Restore mark"
+  },
+  "admin.resultConditions": {
+    "source": "{concurrency} 路 · 最长 {seconds} 秒 · 上限 {limit} MiB · {date}",
+    "translation": "{concurrency} streams · Up to {seconds} seconds · {limit} MiB limit · {date}"
+  },
+  "admin.resultsHint": {
+    "source": "完成测试后显示速度、传输量和耗时。",
+    "translation": "Speed, volume, and elapsed time appear after a run."
+  },
+  "admin.resultsTitle": {
+    "source": "测试结果",
+    "translation": "Results"
+  },
+  "admin.revertChanges": {
+    "source": "还原修改",
+    "translation": "Revert changes"
+  },
+  "admin.reviewSpace": {
+    "source": "评审空间",
+    "translation": "Review space"
+  },
+  "admin.rootCli": {
+    "source": "当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。",
+    "translation": "The current roots are overridden by --folder. Change the startup arguments or use a configuration file."
+  },
+  "admin.rootDirs": {
+    "source": "根目录",
+    "translation": "Root directories"
+  },
+  "admin.rootExternal": {
+    "source": "配置文件已被外部修改，请重启服务以重新载入。",
+    "translation": "The configuration file was changed externally. Restart the service to reload it."
+  },
+  "admin.rootFallback": {
+    "source": "(根目录)",
+    "translation": "(root)"
+  },
+  "admin.rootNoSource": {
+    "source": "此服务未提供可写配置来源。",
+    "translation": "This service has no writable configuration source."
+  },
+  "admin.rootPermission": {
+    "source": "配置所在目录不可写，请调整数据目录权限。",
+    "translation": "The configuration directory is not writable. Adjust the data directory permissions."
+  },
+  "admin.rootsSummary": {
+    "source": "{n, plural, other {# 个目录}} · {o} 个离线",
+    "translation": "{n, plural, one {# directory} other {# directories}} · {o} offline"
+  },
+  "admin.runtime": {
+    "source": "运行环境",
+    "translation": "Runtime"
+  },
+  "admin.saveCopy": {
+    "source": "将当前版本另存副本",
+    "translation": "Save the current version as a copy"
+  },
+  "admin.saveDirs": {
+    "source": "保存目录",
+    "translation": "Save directories"
+  },
+  "admin.saveName": {
+    "source": "保存名称",
+    "translation": "Save name"
+  },
+  "admin.savedAsCopy": {
+    "source": "已另存为当前用户的副本。",
+    "translation": "Saved as your own copy."
+  },
+  "admin.saving": {
+    "source": "正在保存…",
+    "translation": "Saving…"
+  },
+  "admin.scanActive": {
+    "source": "扫描中 · {visited} 个目录",
+    "translation": "Scanning · {visited} directories"
+  },
+  "admin.scanDesc": {
+    "source": "目录变化会自动更新；找不到新增视频时，可重新扫描。",
+    "translation": "Directory changes update automatically; rescan when new videos are missing."
+  },
+  "admin.scanDetailOk": {
+    "source": "目录离线时保留已有视频索引。",
+    "translation": "Offline directories keep their existing video index."
+  },
+  "admin.scanDetailPartial": {
+    "source": "部分目录无法读取，请检查下方路径或网络挂载。",
+    "translation": "Some directories are unreadable. Check the paths or network mounts below."
+  },
+  "admin.scanDetailReading": {
+    "source": "正在读取根目录…",
+    "translation": "Reading root directories…"
+  },
+  "admin.scanErrors": {
+    "source": "{count} 处读取错误{truncated}",
+    "translation": "{count} read errors{truncated}"
+  },
+  "admin.scanJobSummary": {
+    "source": "{state} · {files} 个媒体",
+    "translation": "{state} · {files} media"
+  },
+  "admin.scanJobs": {
+    "source": "扫描任务",
+    "translation": "Scan jobs"
+  },
+  "admin.scanMedia": {
+    "source": "扫描媒体",
+    "translation": "Scan media"
+  },
+  "admin.scanProgressLine": {
+    "source": "{state} · {visited} 个目录 · {files} 个媒体",
+    "translation": "{state} · {visited} directories · {files} media"
+  },
+  "admin.search": {
+    "source": "搜索",
+    "translation": "Search"
+  },
+  "admin.searchAllWorkspaces": {
+    "source": "搜索全部工作区",
+    "translation": "Search all workspaces"
+  },
+  "admin.searchCaches": {
+    "source": "搜索缓存",
+    "translation": "Search caches"
+  },
+  "admin.searchLibrary": {
+    "source": "搜索媒体库",
+    "translation": "Search the library"
+  },
+  "admin.searchMarks": {
+    "source": "搜索标注",
+    "translation": "Search marks"
+  },
+  "admin.searchMarksPh": {
+    "source": "搜索媒体、标注或作者",
+    "translation": "Search media, marks, or authors"
+  },
+  "admin.searchMediaMark": {
+    "source": "搜索媒体、标注或评审空间",
+    "translation": "Search media, marks, or review spaces"
+  },
+  "admin.searchMediaName": {
+    "source": "搜索媒体名称",
+    "translation": "Search media names"
+  },
+  "admin.selectLog": {
+    "source": "选择一份日志查看内容",
+    "translation": "Select a log to view"
+  },
+  "admin.selectToView": {
+    "source": "选择一个工作区查看详情",
+    "translation": "Select a workspace to view"
+  },
+  "admin.serverChanged": {
+    "source": "服务器内容已改变，未覆盖任何修改。",
+    "translation": "Server content changed; nothing was overwritten."
+  },
+  "admin.serverPath": {
+    "source": "服务器路径",
+    "translation": "Server path"
+  },
+  "admin.serverPathAria": {
+    "source": "服务器上的目录路径",
+    "translation": "Directory path on the server"
+  },
+  "admin.serverPathPh": {
+    "source": "填写完整目录路径",
+    "translation": "Enter the full directory path"
+  },
+  "admin.serviceDesc": {
+    "source": "可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。",
+    "translation": "Trusted-intranet mode: user names attribute content, they are not authentication. Visitors may pick an existing identity and use admin features; this service does not provide secure multi-tenant isolation."
+  },
+  "admin.serviceTitle": {
+    "source": "服务",
+    "translation": "Service"
+  },
+  "admin.sharedDb": {
+    "source": "与业务数据共用数据库。清理后空间可复用，文件不一定缩小。",
+    "translation": "Shares the database with operational data. Space is reusable after cleanup; the file may not shrink."
+  },
+  "admin.sourceRandom": {
+    "source": "随机内存数据，不写入磁盘",
+    "translation": "Random in-memory data, never written to disk"
+  },
+  "admin.speedConcurrent": {
+    "source": "多路视频读取",
+    "translation": "Concurrent media reads"
+  },
+  "admin.speedDownload": {
+    "source": "下载速度",
+    "translation": "Download speed"
+  },
+  "admin.speedStorage": {
+    "source": "服务器读取速度",
+    "translation": "Server read speed"
+  },
+  "admin.speedUpload": {
+    "source": "上传速度",
+    "translation": "Upload speed"
+  },
+  "admin.startTest": {
+    "source": "开始测试",
+    "translation": "Start test"
+  },
+  "admin.stateCancelled": {
+    "source": "已停止",
+    "translation": "Stopped"
+  },
+  "admin.stateError": {
+    "source": "扫描出错",
+    "translation": "Scan error"
+  },
+  "admin.stateFailed": {
+    "source": "失败",
+    "translation": "Failed"
+  },
+  "admin.stateInterrupted": {
+    "source": "上次任务被中断",
+    "translation": "Last job interrupted"
+  },
+  "admin.stateOffline": {
+    "source": "存储离线",
+    "translation": "Storage offline"
+  },
+  "admin.statePartial": {
+    "source": "部分路径不可读",
+    "translation": "Some paths unreadable"
+  },
+  "admin.stateReady": {
+    "source": "可用",
+    "translation": "Ready"
+  },
+  "admin.stateScanning": {
+    "source": "扫描中",
+    "translation": "Scanning"
+  },
+  "admin.stateUnscanned": {
+    "source": "等待扫描",
+    "translation": "Waiting for scan"
+  },
+  "admin.stopScan": {
+    "source": "停止扫描",
+    "translation": "Stop scan"
+  },
+  "admin.storageLocation": {
+    "source": "存储位置",
+    "translation": "Storage location"
+  },
+  "admin.systemMemory": {
+    "source": "系统可用内存",
+    "translation": "System free memory"
+  },
+  "admin.testConditions": {
+    "source": "测试条件",
+    "translation": "Conditions"
+  },
+  "admin.testSettings": {
+    "source": "测试设置",
+    "translation": "Test settings"
+  },
+  "admin.throughput": {
+    "source": "传输速度",
+    "translation": "Throughput"
+  },
+  "admin.trashConfirm": {
+    "source": "将这条标注移入回收站？",
+    "translation": "Move this mark to trash?"
+  },
+  "admin.trashEmpty": {
+    "source": "回收站为空",
+    "translation": "Trash is empty"
+  },
+  "admin.trashTab": {
+    "source": "回收站",
+    "translation": "Trash"
+  },
+  "admin.tryKeywords": {
+    "source": "换个关键词试试。",
+    "translation": "Try other keywords."
+  },
+  "admin.tryOtherNames": {
+    "source": "试试其他名称，或清空搜索。",
+    "translation": "Try other names, or clear the search."
+  },
+  "admin.unknownUser": {
+    "source": "未知",
+    "translation": "Unknown"
+  },
+  "admin.unsavedChanges": {
+    "source": "有未保存的修改",
+    "translation": "Unsaved changes"
+  },
+  "admin.uploadedLogs": {
+    "source": "上传日志",
+    "translation": "Uploaded logs"
+  },
+  "admin.uptime": {
+    "source": "已运行",
+    "translation": "Uptime"
+  },
+  "admin.version": {
+    "source": "版本",
+    "translation": "Version"
+  },
+  "admin.waitStable": {
+    "source": "等待媒体写入稳定或扫描完成…",
+    "translation": "Waiting for media writes or the scan to settle…"
+  },
+  "admin.watchCalibrated": {
+    "source": " · 其余由周期校准覆盖",
+    "translation": " · rest covered by periodic calibration"
+  },
+  "admin.watchDirs": {
+    "source": "目录监听",
+    "translation": "Directory watchers"
+  },
+  "admin.watchPartial": {
+    "source": " · 部分目录监听不可用",
+    "translation": " · some directory watchers unavailable"
+  },
+  "admin.watchPollOnly": {
+    "source": "仅周期校准",
+    "translation": "Periodic calibration only"
+  },
+  "admin.watchSummary": {
+    "source": "{active} / {limit} 个目录{calibration}{partial}",
+    "translation": "{active} / {limit} directories{calibration}{partial}"
+  },
+  "admin.workspaceCopyName": {
+    "source": "{name} 副本",
+    "translation": "{name} copy"
+  },
+  "admin.workspaceRow": {
+    "source": "{owner} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}",
+    "translation": "{owner} · {tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# annotation} other {# annotations}}"
+  },
+  "admin.wsCreator": {
+    "source": "创建者",
+    "translation": "Creator"
+  },
+  "admin.wsDeleted": {
+    "source": "已删除服务器工作区。",
+    "translation": "Server workspace deleted."
+  },
+  "admin.wsDesc": {
+    "source": "打开已保存的评审，或修改名称、下载副本。",
+    "translation": "Open a saved review, or rename it and download a copy."
+  },
+  "admin.wsEmptyHint": {
+    "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。",
+    "translation": "In the player, open “Settings → Workspaces” and click “Save to server” to manage them here."
+  },
+  "admin.wsJson": {
+    "source": "工作区 JSON",
+    "translation": "Workspace JSON"
+  },
+  "admin.wsLastEdit": {
+    "source": "最后编辑",
+    "translation": "Last edited"
+  },
+  "admin.wsMetaLine": {
+    "source": "版本 {rev} · {tracks, plural, other {# 条轨道}} · {marks, plural, other {# 个标注}}",
+    "translation": "Revision {rev} · {tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# mark} other {# marks}}"
+  },
+  "admin.wsName": {
+    "source": "名称",
+    "translation": "Name"
+  },
+  "admin.wsNoVideos": {
+    "source": "无视频",
+    "translation": "No videos"
+  },
+  "admin.wsTitle": {
+    "source": "工作区",
+    "translation": "Workspaces"
+  },
+  "admin.wsVideos": {
+    "source": "视频",
+    "translation": "Videos"
   },
   "analysis.bitrate": {
     "source": "码率",
@@ -530,6 +1638,158 @@
   "colorFlow.whenNativePlaneVerificationPasses": {
     "source": "原生平面核对通过时",
     "translation": "When native plane verification passes"
+  },
+  "connection.cantInstall": {
+    "source": "无法安装或找不到证书？",
+    "translation": "Cannot install or find the certificate?"
+  },
+  "connection.cantInstallBody": {
+    "source": "浏览器不能代替你安装系统证书。请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署。",
+    "translation": "The browser cannot install a system certificate for you. Make sure voidplayer-ca.crt is downloaded; on a managed device, ask your administrator to deploy it."
+  },
+  "connection.certReady": {
+    "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。",
+    "translation": "The server has a certificate. Ask your administrator for the matching HTTPS address."
+  },
+  "connection.certSettings": {
+    "source": "证书设置",
+    "translation": "Certificate setup"
+  },
+  "connection.certTitle": {
+    "source": "证书设置 · VoidPlayer",
+    "translation": "Certificate setup · VoidPlayer"
+  },
+  "connection.checkingConfig": {
+    "source": "正在检查连接配置…",
+    "translation": "Checking the connection setup…"
+  },
+  "connection.connectingTitle": {
+    "source": "正在连接 · VoidPlayer",
+    "translation": "Connecting · VoidPlayer"
+  },
+  "connection.contactAdmin": {
+    "source": "请联系管理员开启 HTTPS。",
+    "translation": "Ask your administrator to enable HTTPS."
+  },
+  "connection.defaultPorts": {
+    "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。",
+    "translation": "Default HTTPS port is 5180 and the certificate guide port is 5181. When enabled, use the guide address from your administrator."
+  },
+  "connection.downloadAgain": {
+    "source": "再次下载证书",
+    "translation": "Download the certificate again"
+  },
+  "connection.downloadCert": {
+    "source": "下载证书",
+    "translation": "Download certificate"
+  },
+  "connection.downloading": {
+    "source": "正在下载…",
+    "translation": "Downloading…"
+  },
+  "connection.httpsOff": {
+    "source": "服务器尚未开启 HTTPS。",
+    "translation": "The server has not enabled HTTPS."
+  },
+  "connection.httpsUnavailable": {
+    "source": "服务器未开启 HTTPS",
+    "translation": "The server has not enabled HTTPS"
+  },
+  "connection.installTitle": {
+    "source": "安装并信任",
+    "translation": "Install and trust"
+  },
+  "connection.macRich1": {
+    "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书。",
+    "translation": "Open <strong>Keychain Access</strong>, select “login”, and import the downloaded certificate using “File → Import Items”."
+  },
+  "connection.macRich2": {
+    "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开。",
+    "translation": "Find the <strong>VoidPlayer Local CA</strong> certificate and double-click it."
+  },
+  "connection.macRich3": {
+    "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”。",
+    "translation": "Expand “Trust” and set <strong>Secure Sockets Layer (SSL)</strong> to “Always Trust”."
+  },
+  "connection.macStep4": {
+    "source": "关闭窗口，按系统提示验证身份并保存。",
+    "translation": "Close the window, verify your identity when prompted, and save."
+  },
+  "connection.openPlayerHint": {
+    "source": "安装完成后，点击“打开播放器”重新检查。",
+    "translation": "When done, click “Open the player” to recheck."
+  },
+  "connection.os": {
+    "source": "操作系统",
+    "translation": "Operating system"
+  },
+  "connection.ownCertHint": {
+    "source": "此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。",
+    "translation": "This server uses its own certificate. If the browser still warns about certificates, contact your administrator."
+  },
+  "connection.pageTitle": {
+    "source": "连接",
+    "translation": "Connection"
+  },
+  "connection.recheck": {
+    "source": "重新检查",
+    "translation": "Recheck"
+  },
+  "connection.recheckLabel": {
+    "source": "重新检查连接配置",
+    "translation": "Recheck the connection setup"
+  },
+  "connection.retryDownload": {
+    "source": "重试下载",
+    "translation": "Retry download"
+  },
+  "connection.serverCa": {
+    "source": "服务器信任证书",
+    "translation": "Server trust certificate"
+  },
+  "connection.standaloneExample": {
+    "source": "独立程序启动示例：",
+    "translation": "Standalone launch example:"
+  },
+  "connection.untrusted": {
+    "source": "暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。",
+    "translation": "Cannot establish a trusted HTTPS connection yet. Recheck after installing the certificate."
+  },
+  "connection.verifyNote": {
+    "source": "安装前，请与管理员核对服务器地址和证书指纹。",
+    "translation": "Before installing, confirm the server address and certificate fingerprint with your administrator."
+  },
+  "connection.viewFingerprint": {
+    "source": "查看证书指纹",
+    "translation": "View the certificate fingerprint"
+  },
+  "connection.viewServerDocs": {
+    "source": "查看服务器设置说明",
+    "translation": "View the server setup guide"
+  },
+  "connection.whyBody": {
+    "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。",
+    "translation": "Once you trust the server certificate, the browser can open a trusted HTTPS connection with native WebCodecs decoding. Actual hardware acceleration depends on the browser, GPU, and video format."
+  },
+  "connection.whyTitle": {
+    "source": "为什么需要证书？",
+    "translation": "Why is a certificate needed?"
+  },
+  "connection.winRich1": {
+    "source": "双击下载的证书，选择<strong>安装证书</strong>。",
+    "translation": "Double-click the downloaded certificate and select <strong>Install Certificate</strong>."
+  },
+  "connection.winRich2": {
+    "source": "选择<strong>当前用户</strong>，点击“下一步”。",
+    "translation": "Select <strong>Current User</strong>, then click “Next”."
+  },
+  "connection.winRich3": {
+    "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。",
+    "translation": "Select “Place all certificates in the following store”, then browse to <strong>Trusted Root Certification Authorities</strong>."
+  },
+  "connection.winStep4": {
+    "source": "核对来源与指纹，按系统提示完成导入。",
+    "translation": "Verify the source and fingerprint, then finish the import as prompted."
   },
   "drawing.changed": {
     "source": "画面已变化，未将编辑写入其他帧。",

@@ -1,3 +1,4 @@
+import { apiError } from './api-error.ts';
 import { currentActor, identityHealth } from './identity.ts';
 import type { SavedWorkspace } from '../server/workspaces.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
@@ -13,7 +14,7 @@ export class SavedWorkspaceClient {
     if (previous && previous.id !== health.actor?.id) throw new Error('用户已切换，请重新选择工作区。');
     const response = await fetch(url, { method, cache: 'no-store', headers: { ...(health.actor ? { 'x-voidplayer-actor': health.actor.id } : {}), ...(method === 'GET' ? {} : { 'x-voidplayer-action': 'workspace', 'content-type': 'application/json' }), ...(revision === undefined ? {} : { 'if-match': `"${revision}"` }) }, body: value === undefined ? undefined : JSON.stringify(value), signal: AbortSignal.any([this.signal, AbortSignal.timeout(30000)]) });
     const result = await response.json();
-    if (!response.ok) throw Object.assign(new Error(result.error ?? `请求失败 (${response.status})`), { status: response.status });
+    if (!response.ok) throw apiError(response.status, result);
     return result;
   }
   list(before = '', search = '', all = false) { return this.request<WorkspacePage>(`/api/workspaces?before=${encodeURIComponent(before)}&search=${encodeURIComponent(search)}${all ? '&all=1' : ''}`); }

@@ -58,7 +58,9 @@ test('root edits persist stable identities, preserve unrelated config and reject
   const loaded = await loadConfig([], 'production', root); assert.deepEqual(loaded.mediaRoots, roots); assert.deepEqual(loaded.adminUsers, ['owner']); assert.equal(loaded.indexWatch, false);
   const stale = await fetch(base + '/api/admin/roots', mutation(base, 'PUT', { revision: before.revision, roots })); assert.equal(stale.status, 409);
   await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: roots, adminUsers: ['new-owner'] }));
-  assert.equal((await (await fetch(base + '/api/admin/roots')).json()).writable, false);
+  const externalRoots = await (await fetch(base + '/api/admin/roots')).json();
+  assert.equal(externalRoots.writable, false); assert.equal(externalRoots.reasonCode, 'external-change');
+  assert.equal(externalRoots.reason, '配置文件已被外部修改，请重启服务以重新载入。');
   const external = await fetch(base + '/api/admin/roots', mutation(base, 'PUT', { revision: after.revision, roots })); assert.equal(external.status, 409);
   assert.deepEqual(JSON.parse(await fs.readFile(config.origin!.file, 'utf8')).adminUsers, ['new-owner']);
 }));

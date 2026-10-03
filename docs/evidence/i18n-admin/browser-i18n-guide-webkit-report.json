@@ -1,0 +1,13 @@
+{
+  "engine": "webkit",
+  "destination": "preserved",
+  "checks": [
+    "English initial mount",
+    "full Windows and macOS steps",
+    "OS/details/focus/node identity",
+    "download failure/retry",
+    "HTTPS unavailable",
+    "custom certificate",
+    "no player/decoder imports"
+  ]
+}

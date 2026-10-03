@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import {readFile,writeFile,mkdir,cp} from 'node:fs/promises';
+import {readFile,writeFile,mkdir,cp,readdir} from 'node:fs/promises';
 import path from 'node:path';import {gzipSync} from 'node:zlib';import os from 'node:os';
 import {withBrowserFixture} from '../../testing/browser-fixture.mjs';
 import {createMediaServer} from '../../../server/app.ts';import {MediaLibraryIndex} from '../../../server/library.ts';
@@ -10,6 +10,12 @@ const order=process.env.I18N_ORDER??'baseline-first',profileCpu=process.env.I18N
 if(!['baseline-first','feature-first'].includes(order)||!/^[a-z0-9-]*$/.test(reportSuffix))throw new Error('Invalid performance order/report suffix');
 if(!['mixed','webcodecs'].includes(mediaMode))throw new Error('I18N_MEDIA_MODE must be mixed or webcodecs');
 const budgets={startupGzipIncreaseBytes:32768,startupExtraRequests:3,englishStartupGzipIncreaseBytes:49152,englishStartupExtraRequests:4,startupMedianIncreaseMs:100,startupMedianMultiplier:1.3,coldLocaleMs:250,cachedLocaleMs:100,existingPlaybackThresholds:'unchanged benchmark_review defaults'};
+async function distributionEvidence(root) {
+ const assets=await readdir(path.join(root,'dist/assets'));
+ let sourceDigest=null;
+ for(const file of assets.filter(file=>file.endsWith('.js'))){const code=await readFile(path.join(root,'dist/assets',file),'utf8');const match=code.match(/sourceDigest:\s*[`"']([a-f0-9]{64})/);if(match){sourceDigest=match[1];break;}}
+ assert.ok(sourceDigest,'production build must carry source evidence');return {root,sourceDigest};
+}
 async function measure(name,root){
  await withBrowserFixture({caseName:`i18n-perf-${name}`,engine,launchOptions:{headless},pageOptions:{viewport:{width:1280,height:800},locale:'zh-CN',reducedMotion:'reduce'},dependencies:{startService:async({temp,defer})=>{
    const distribution=path.join(temp,'dist');await cp(path.join(root,'dist'),distribution,{recursive:true});
@@ -32,7 +38,8 @@ async function measure(name,root){
   // Both distributions enter/leave the same settings pane before playback.
   await page.locator('#settings-open').click();
   await page.locator('#settings-tab-appearance').click();
-  if(name==='feature'){
+  // The merged baseline also has locale controls: warm both distributions identically.
+  if(await page.locator('#language-choice').count()){
     await page.evaluate(()=>{
       document.addEventListener('click',e=>{if(e.target.closest('#language-choice-menu [data-value]')){window.__localeStart=performance.now();window.__localeCommit=undefined;}},true);
       new MutationObserver(()=>{if(window.__localeStart!==undefined)window.__localeCommit=performance.now()-window.__localeStart;}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
@@ -53,13 +60,13 @@ async function measure(name,root){
     playback.push({...report,repeat,taskDurationMs,cpuMetrics});
   }
   if(profileCpu&&cdp){const cpu=await cdp.send('Profiler.stop');await writeFile(artifact(name+'-cpu.json'),JSON.stringify(cpu));}
-  const result={preparation,name,engine,browserVersion:browser.version(),starts,switches,playback};results.push(result);await writeFile(artifact(name+'-report.json'),JSON.stringify(result,null,2));
+  const result={distribution:await distributionEvidence(root),preparation,name,engine,browserVersion:browser.version(),starts,switches,playback};results.push(result);await writeFile(artifact(name+'-report.json'),JSON.stringify(result,null,2));
  });
 }
 for(const name of order==='baseline-first'?['baseline','feature']:['feature','baseline'])await measure(name,name==='baseline'?path.resolve(baseline):feature);
 const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];const b=results.find(r=>r.name==='baseline'),f=results.find(r=>r.name==='feature');
 // UI automation timing includes two clicks and scheduler waits; report it separately from catalog commit timing.
-await mkdir(path.join(feature,'.run/i18n-performance'),{recursive:true});const report={order,profileCpu,preparation:'same appearance settings open/close and two animation frames in both distributions',headless,mediaMode,device:{platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version},baseline:baseline,budgets,notes:['gzip sizes are offline gzip estimates; the local static server sends uncompressed content','UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling','same-engine same-media paired runs; do not infer hardware decoder usage'],results};
+await mkdir(path.join(feature,'.run/i18n-performance'),{recursive:true});const report={order,profileCpu,preparation:'same appearance settings open, en/zh/en/zh locale switches, close and two animation frames in both distributions',headless,mediaMode,device:{platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version},baseline:baseline,budgets,notes:['gzip sizes are offline gzip estimates; the local static server sends uncompressed content','UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling','same-engine same-media paired runs; do not infer hardware decoder usage'],results};
 const reportFile=path.join(feature,`.run/i18n-performance/${engine}${headless?'':'-headed'}${mediaMode==='webcodecs'?'-webcodecs':''}${reportSuffix}.json`);
 await writeFile(reportFile,JSON.stringify(report,null,2));for(const browserLocale of ['zh-CN','en-US'])for(const cache of ['cold','warm']){
  const bs=b.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale),fs=f.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale);assert.ok(median(fs.map(x=>x.gzipBytes))-median(bs.map(x=>x.gzipBytes))<=(browserLocale==='en-US'?budgets.englishStartupGzipIncreaseBytes:budgets.startupGzipIncreaseBytes));assert.ok(median(fs.map(x=>x.requests))-median(bs.map(x=>x.requests))<=(browserLocale==='en-US'?budgets.englishStartupExtraRequests:budgets.startupExtraRequests));

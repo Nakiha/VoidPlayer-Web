@@ -1,3 +1,4 @@
+import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
@@ -230,7 +231,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     const revision = url.searchParams.has('revision') ? Number(url.searchParams.get('revision')) : undefined;
     if (revision !== undefined && (!Number.isSafeInteger(revision) || revision < 0)) { sendJson(res, 400, { error: '无效版本参数。' }); return true; }
     try { sendJson(res, 200, library.browse({ rootId: url.searchParams.get('root') || undefined, directory: url.searchParams.get('directory') ?? '', search: url.searchParams.get('search') ?? '', recursive: url.searchParams.get('recursive') === '1', limit, offset, revision })); }
-    catch (error) { sendJson(res, (error as { code?: string }).code === 'INDEX_CHANGED' ? 409 : 400, { error: (error as Error).message }); }
+    catch (error) { sendJson(res, (error as { code?: string }).code === 'INDEX_CHANGED' ? 409 : 400, adminErrorBody(error)); }
     return true;
   }
   const indexMatch = /^\/api\/media\/([0-9a-f]{24})\/frame-index$/.exec(url.pathname);
@@ -367,7 +368,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           res.end();
         } catch {}
       } else if (!res.headersSent && error instanceof AdminError && error.status === 503) res.setHeader('retry-after', '1');
-      else if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message });
+      else if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
       return true;
     } finally {
       if (indexStreamTimer) clearTimeout(indexStreamTimer);
@@ -426,7 +427,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
         return true;
       }
       throw new AdminError(405, '不支持的缩略图操作。');
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
   }
   const actionMatch = /^\/api\/media\/([0-9a-f]{24})\/(location|reveal|metadata)$/.exec(url.pathname);
   if (actionMatch) {
@@ -458,7 +459,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     let doc: { schema?: unknown; sessionId?: unknown };
     try {
       doc = await readAdminJson(req, 10 * 1024 * 1024) as { schema?: unknown; sessionId?: unknown };
-    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, { error: (error as Error).message }); return true; }
+    } catch (error) { if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error)); return true; }
     if (doc?.schema !== 'voidplayer-web-log' || typeof doc.sessionId !== 'string' || !/^[0-9a-zA-Z-]{1,100}$/.test(doc.sessionId)) {
       sendJson(res, 400, { error: '不是有效的日志文档' });
       return true;

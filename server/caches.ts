@@ -6,7 +6,7 @@ import type { AnnotationStore } from './annotations.ts';
 import { AdminError } from './admin-error.ts';
 
 export type CacheKind = 'frame-indexes' | 'annotation-previews' | 'media-thumbnails';
-export type CacheEntry = { id: string; version: string; scope?: string; name: string; detail: string; bytes: number; updatedAt: number; previewUrl?: string };
+export type CacheEntry = { id: string; version: string; scope?: string; name: string; detail: string; nameCode?: 'frame-annotation'; detailData?: {kind:'frames';root:string;format:string;frames:number} | {kind:'thumbnail';root:string;width:number;height:number} | {kind:'annotation';space:string;text:string}; bytes: number; updatedAt: number; previewUrl?: string };
 export class CacheManager {
   private directory: string; private frames: FrameIndexStore; private annotations: AnnotationStore; private thumbnails: MediaThumbnailStore | null;
   constructor(directory: string, frames: FrameIndexStore, annotations: AnnotationStore, thumbnails: MediaThumbnailStore | null = null) { this.directory=directory; this.frames=frames; this.annotations=annotations; this.thumbnails=thumbnails; }
@@ -34,7 +34,7 @@ export class CacheManager {
   list(kind: string, offset = 0, search = '') {
     if (kind === 'frame-indexes') {
       const page = this.frames.list(offset, search);
-      return { ...page, entries: page.entries.map(row => ({ id: String(row.id), version: String(row.version), name: String(row.name), detail: `${row.root} · ${row.kind} · ${row.frames} 帧`, bytes: Number(row.bytes), updatedAt: Number(row.createdAt) } satisfies CacheEntry)) };
+      return { ...page, entries: page.entries.map(row => ({ id: String(row.id), version: String(row.version), name: String(row.name), detail: `${row.root} · ${row.kind} · ${row.frames} 帧`, detailData: {kind:'frames',root:String(row.root),format:String(row.kind),frames:Number(row.frames)}, bytes: Number(row.bytes), updatedAt: Number(row.createdAt) } satisfies CacheEntry)) };
     }
     if (kind === 'annotation-previews') return this.annotations.previewList(offset, search);
     if (kind === 'media-thumbnails') {
@@ -45,7 +45,7 @@ export class CacheManager {
         ...page,
         entries: (page.entries as unknown as ThumbRow[]).map(row => ({
           id: String(row.id), version: String(row.version), scope: String(row.recipe),
-          name: String(row.name), detail: `${row.root} · ${row.width}×${row.height}`,
+          name: String(row.name), detail: `${row.root} · ${row.width}×${row.height}`, detailData: {kind:'thumbnail',root:String(row.root),width:row.width,height:row.height},
           bytes: Number(row.bytes), updatedAt: Number(row.createdAt),
           previewUrl: `/api/media/${row.id}/thumbnail?v=${encodeURIComponent(row.version)}&recipe=${encodeURIComponent(row.recipe)}`,
         } satisfies CacheEntry)),
