@@ -34,7 +34,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   function state() {
     const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
     const failure=localFailure || error;
-    const message=(typeof failure === 'function' ? failure() : failure) || (saving ? t(msg("sync.savingLocal", "正在保存到本机…")) : conflicts.length ? t(msg("sync.pendingCount", "{n} 条标注需要处理"), { n: conflicts.length }) : pending.length ? available && scope!=='local' ? t(msg("sync.savedPendingSync", "已存本机 · 等待同步")) : t(msg("sync.savedLocal", "已存本机")) : available && scope!=='local' ? t(msg("sync.synced", "已同步")) : t(msg("sync.savedLocal", "已存本机")));
+    const message=(typeof failure === 'function' ? failure() : failure) || (saving ? t(msg("sync.savingLocal", "正在保存到本机…")) : conflicts.length ? t(msg("sync.pendingCount", "{n, plural, other {# 条标注需要处理}}"), { n: conflicts.length }) : pending.length ? available && scope!=='local' ? t(msg("sync.savedPendingSync", "已存本机 · 等待同步")) : t(msg("sync.savedLocal", "已存本机")) : available && scope!=='local' ? t(msg("sync.synced", "已同步")) : t(msg("sync.savedLocal", "已存本机")));
     const saveState=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
     window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: saveState } }));
     const others=drafts.filter(draft=>draft.actor===actor && draft.space===scope && !draft.key.startsWith(`${actor}/${scope}/${owner}/`));

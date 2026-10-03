@@ -1,8 +1,8 @@
 {
   "activity.buildingIndexes": {
-    "source": "已上屏 · {count} 条轨道正在建立索引",
+    "source": "已上屏 · {count, plural, other {# 条轨道正在建立索引}}",
     "params": {
-      "count": "string | number"
+      "count": "number"
     },
     "locations": [
       "src/ui/source-activity.ts:42"
@@ -1146,7 +1146,8 @@
     "source": "选择已有用户",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:26"
+      "src/ui/identity-onboarding.ts:26",
+      "src/ui/identity-onboarding.ts:99"
     ]
   },
   "identity.continueAsGuest": {
@@ -1168,7 +1169,7 @@
     "source": "正在读取用户…",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:100"
+      "src/ui/identity-onboarding.ts:92"
     ]
   },
   "identity.nameOptional": {
@@ -1176,14 +1177,15 @@
     "params": {},
     "locations": [
       "src/ui/identity-onboarding.ts:24",
-      "src/ui/identity-onboarding.ts:24"
+      "src/ui/identity-onboarding.ts:24",
+      "src/ui/identity-onboarding.ts:97"
     ]
   },
   "identity.noMatchingUsers": {
     "source": "没有匹配的用户",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:100"
+      "src/ui/identity-onboarding.ts:92"
     ]
   },
   "identity.unconfirmedHint": {
@@ -1197,14 +1199,15 @@
     "source": "暂时无法读取用户，可直接输入名字继续。",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:100"
+      "src/ui/identity-onboarding.ts:92"
     ]
   },
   "identity.welcomeTitle": {
     "source": "怎么称呼你？",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:22"
+      "src/ui/identity-onboarding.ts:22",
+      "src/ui/identity-onboarding.ts:96"
     ]
   },
   "identitySettings.confirm": {
@@ -1237,6 +1240,7 @@
     "locations": [
       "src/ui/identity-onboarding.ts:27",
       "src/ui/identity-onboarding.ts:51",
+      "src/ui/identity-onboarding.ts:100",
       "src/ui/identity-settings.ts:31"
     ]
   },
@@ -1297,7 +1301,7 @@
     "source": "无法读取用户列表。",
     "params": {},
     "locations": [
-      "src/ui/identity-onboarding.ts:157",
+      "src/ui/identity-onboarding.ts:171",
       "src/ui/identity-settings.ts:46"
     ]
   },
@@ -1765,7 +1769,7 @@
     "params": {},
     "locations": [
       "src/ui/annotation-panel.ts:35",
-      "src/ui/annotation-panel.ts:162"
+      "src/ui/annotation-panel.ts:164"
     ]
   },
   "marks.cancel": {
@@ -1773,7 +1777,7 @@
     "params": {},
     "locations": [
       "src/ui/annotation-panel.ts:72",
-      "src/ui/annotation-panel.ts:164"
+      "src/ui/annotation-panel.ts:166"
     ]
   },
   "marks.colorBlack": {
@@ -1879,7 +1883,7 @@
     "params": {},
     "locations": [
       "src/ui/annotation-panel.ts:73",
-      "src/ui/annotation-panel.ts:164"
+      "src/ui/annotation-panel.ts:166"
     ]
   },
   "marks.deleteConfirm": {
@@ -1887,7 +1891,7 @@
     "params": {},
     "locations": [
       "src/ui/annotation-panel.ts:71",
-      "src/ui/annotation-panel.ts:164"
+      "src/ui/annotation-panel.ts:166"
     ]
   },
   "marks.deleteMark": {
@@ -1895,7 +1899,7 @@
     "params": {},
     "locations": [
       "src/ui/annotation-panel.ts:67",
-      "src/ui/annotation-panel.ts:163"
+      "src/ui/annotation-panel.ts:165"
     ]
   },
   "marks.deleteMarkName": {
@@ -1905,7 +1909,7 @@
     },
     "locations": [
       "src/ui/annotation-panel.ts:67",
-      "src/ui/annotation-panel.ts:163"
+      "src/ui/annotation-panel.ts:165"
     ]
   },
   "marks.entryLabel": {
@@ -1917,14 +1921,15 @@
     },
     "locations": [
       "src/ui/annotation-panel.ts:138",
-      "src/ui/annotation-panel.ts:169"
+      "src/ui/annotation-panel.ts:171"
     ]
   },
   "marks.noPreview": {
     "source": "暂无预览",
     "params": {},
     "locations": [
-      "src/ui/annotation-panel.ts:31"
+      "src/ui/annotation-panel.ts:31",
+      "src/ui/annotation-panel.ts:163"
     ]
   },
   "marks.palette": {
@@ -2426,9 +2431,9 @@
     ]
   },
   "player.tracks": {
-    "source": "{p0} 条轨道",
+    "source": "{p0, plural, other {# 条轨道}}",
     "params": {
-      "p0": "string | number"
+      "p0": "number"
     },
     "locations": [
       "src/main.ts:349"
@@ -2732,7 +2737,7 @@
     "params": {},
     "locations": [
       "src/ui/saved-workspaces.ts:10",
-      "src/ui/workspace-transfer.ts:83"
+      "src/ui/workspace-transfer.ts:112"
     ]
   },
   "savedWorkspaces.updatedReopen": {
@@ -4080,15 +4085,15 @@
     "source": "当前身份 · ",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:620"
+      "src/ui/workbench/sources.ts:621"
     ]
   },
   "sources.emptyDirectory": {
     "source": "当前目录没有片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:523",
-      "src/ui/workbench/sources.ts:673"
+      "src/ui/workbench/sources.ts:524",
+      "src/ui/workbench/sources.ts:674"
     ]
   },
   "sources.folderMetaLibrary": {
@@ -4097,7 +4102,8 @@
       "root": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:518"
+      "src/ui/workbench/sources.ts:518",
+      "src/ui/workbench/sources.ts:681"
     ]
   },
   "sources.guest": {
@@ -4106,7 +4112,7 @@
     "locations": [
       "src/ui/saved-workspaces.ts:63",
       "src/ui/saved-workspaces.ts:82",
-      "src/ui/workbench/sources.ts:618"
+      "src/ui/workbench/sources.ts:619"
     ]
   },
   "sources.identityAria": {
@@ -4115,7 +4121,7 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:622"
+      "src/ui/workbench/sources.ts:623"
     ]
   },
   "sources.identityTitle": {
@@ -4124,7 +4130,7 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:621"
+      "src/ui/workbench/sources.ts:622"
     ]
   },
   "sources.inLibrary": {
@@ -4177,7 +4183,7 @@
     "source": "本地文件",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:529"
+      "src/ui/workbench/sources.ts:530"
     ]
   },
   "sources.localFilesCount": {
@@ -4186,7 +4192,7 @@
       "n": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:529"
+      "src/ui/workbench/sources.ts:530"
     ]
   },
   "sources.localNoUpload": {
@@ -4201,16 +4207,16 @@
     "source": "没有匹配的片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:523",
-      "src/ui/workbench/sources.ts:673"
+      "src/ui/workbench/sources.ts:524",
+      "src/ui/workbench/sources.ts:674"
     ]
   },
   "sources.noRecentShort": {
     "source": "暂无最近片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:523",
-      "src/ui/workbench/sources.ts:673"
+      "src/ui/workbench/sources.ts:524",
+      "src/ui/workbench/sources.ts:674"
     ]
   },
   "sources.noRecentVideos": {
@@ -4218,7 +4224,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/sources.ts:466",
-      "src/ui/workbench/sources.ts:675"
+      "src/ui/workbench/sources.ts:676"
     ]
   },
   "sources.openFolder": {
@@ -4227,8 +4233,8 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:519",
-      "src/ui/workbench/sources.ts:678"
+      "src/ui/workbench/sources.ts:520",
+      "src/ui/workbench/sources.ts:679"
     ]
   },
   "sources.openName": {
@@ -4261,7 +4267,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/sources.ts:313",
-      "src/ui/workbench/sources.ts:680"
+      "src/ui/workbench/sources.ts:683"
     ]
   },
   "sources.reselectInSourcesName": {
@@ -4288,7 +4294,8 @@
     },
     "locations": [
       "src/ui/workbench/sources.ts:323",
-      "src/ui/workspace-transfer.ts:45"
+      "src/ui/workspace-transfer.ts:63",
+      "src/ui/workspace-transfer.ts:69"
     ]
   },
   "sources.reselectNeeded": {
@@ -4447,9 +4454,9 @@
     ]
   },
   "sync.pendingCount": {
-    "source": "{n} 条标注需要处理",
+    "source": "{n, plural, other {# 条标注需要处理}}",
     "params": {
-      "n": "string | number"
+      "n": "number"
     },
     "locations": [
       "src/ui/annotation-sync.ts:37"
@@ -4931,73 +4938,124 @@
     "source": "取消导入",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:40"
+      "src/ui/workspace-transfer.ts:50",
+      "src/ui/workspace-transfer.ts:58"
+    ]
+  },
+  "transfer.detailSeparator": {
+    "source": "、",
+    "params": {},
+    "locations": [
+      "src/ui/workspace-transfer.ts:25"
+    ]
+  },
+  "transfer.identityMismatch": {
+    "source": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。",
+    "params": {
+      "details": "string | number",
+      "name": "string | number"
+    },
+    "locations": [
+      "src/ui/workspace-transfer.ts:26"
     ]
   },
   "transfer.importing": {
     "source": "工作区正在导入，请等待完成。",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:88"
+      "src/ui/workspace-transfer.ts:117"
     ]
   },
   "transfer.later": {
     "source": "稍后关联",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:40"
+      "src/ui/workspace-transfer.ts:50",
+      "src/ui/workspace-transfer.ts:60"
     ]
   },
   "transfer.legacyConditions": {
     "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:111"
+      "src/ui/workspace-transfer.ts:140"
+    ]
+  },
+  "transfer.mtimeWarning": {
+    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。",
+    "params": {
+      "name": "string | number"
+    },
+    "locations": [
+      "src/ui/workspace-transfer.ts:22"
+    ]
+  },
+  "transfer.nameMismatch": {
+    "source": "文件名 {expected} → {actual}",
+    "params": {
+      "actual": "string | number",
+      "expected": "string | number"
+    },
+    "locations": [
+      "src/ui/workspace-transfer.ts:25"
     ]
   },
   "transfer.notAuthorized": {
     "source": "本地文件尚未授权，请重新选择。",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:99"
+      "src/ui/workspace-transfer.ts:128"
     ]
   },
   "transfer.openWorkspace": {
     "source": "打开工作区",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:40"
+      "src/ui/workspace-transfer.ts:50",
+      "src/ui/workspace-transfer.ts:61"
     ]
   },
   "transfer.pendingRelink": {
-    "source": "{n} 个片源待重新关联；轨道、偏移和标注已保留。",
+    "source": "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}",
     "params": {
-      "n": "string | number"
+      "n": "number"
     },
     "locations": [
-      "src/ui/workspace-transfer.ts:144"
+      "src/ui/workspace-transfer.ts:173"
     ]
   },
   "transfer.relinkBody": {
     "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:40"
+      "src/ui/workspace-transfer.ts:50",
+      "src/ui/workspace-transfer.ts:59"
     ]
   },
   "transfer.relinkNow": {
     "source": "重新关联",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:145"
+      "src/ui/workspace-transfer.ts:174"
     ]
   },
   "transfer.relinkTitle": {
     "source": "重新连接本地视频",
     "params": {},
     "locations": [
-      "src/ui/workspace-transfer.ts:39",
-      "src/ui/workspace-transfer.ts:40"
+      "src/ui/workspace-transfer.ts:49",
+      "src/ui/workspace-transfer.ts:50",
+      "src/ui/workspace-transfer.ts:56"
+    ]
+  },
+  "transfer.sizeMismatch": {
+    "source": "大小 {expected} → {actual}",
+    "params": {
+      "actual": "string | number",
+      "expected": "string | number"
+    },
+    "locations": [
+      "src/ui/workspace-transfer.ts:25"
     ]
   },
   "ui.pixelWidth": {

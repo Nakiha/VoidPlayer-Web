@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';import test from 'node:test';import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 import ts from 'typescript-ast';
-import {extract,validate,parameters,pseudo,generate,validateScope} from '../../scripts/i18n.mjs';
+import {extract,validate,parameters,pseudo,generate,validateScope,portablePath} from '../../scripts/i18n.mjs';
 import {lowerDescriptors} from '../../scripts/testing/i18n-transform.mjs';
 const root=join(import.meta.dirname,'../..');
 test('ICU validation rejects stale/missing translations, malformed syntax, wrong parameters and conflicting IDs',()=>{
@@ -11,6 +11,11 @@ test('ICU validation rejects stale/missing translations, malformed syntax, wrong
  const temp=mkdtempSync(join(tmpdir(),'vp-i18n-'));try{mkdirSync(join(temp,'src'));writeFileSync(join(temp,'src/a.ts'),"msg('duplicate','原文'); msg('duplicate','different');");assert.throws(()=>extract(temp),/Conflicting message ID/);}finally{rmSync(temp,{recursive:true});}
  assert.deepEqual(parameters(pseudo('{count, plural, one {One {name}} other {# {name}}}')),{count:'number',name:'string | number'});
 });
+test('catalog paths normalize Windows separators and keep nested source locations portable',()=>{
+ assert.equal(portablePath('src\\ui\\analysis-canvas.ts'),'src/ui/analysis-canvas.ts');
+ const inventory=extract(root);for(const message of Object.values(inventory))for(const location of message.locations)assert.ok(!location.includes('\\'),location);
+});
+
 test('generated catalogs are deterministic and browser lowering removes defaults without a runtime ICU parser',()=>{
  const before=readFileSync(join(root,'src/i18n/generated/en.js'),'utf8');generate(root,'check');assert.equal(readFileSync(join(root,'src/i18n/generated/en.js'),'utf8'),before);
  const lowered=lowerDescriptors("import {msg} from './i18n.ts';const x=msg('semantic.id','源码默认文案');",'/src/ui/example.ts');assert.ok(lowered.code.includes('"semantic.id"'));assert.ok(!lowered.code.includes('源码默认文案'));

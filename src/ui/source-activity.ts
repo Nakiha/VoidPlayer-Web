@@ -39,7 +39,7 @@ export function installSourceActivity(session: ReviewSession, signal: AbortSigna
       const p = status.indexProgress; progress.value = p.totalBytes > 0 ? p.scannedBytes / p.totalBytes : 0;
       label += ` · ${(progress.value * 100).toFixed(1)}%`;
     } else if (!progress.hidden) {
-      label = t(msg("activity.buildingIndexes", "已上屏 · {count} 条轨道正在建立索引"), { count: building.length });
+      label = t(msg("activity.buildingIndexes", "已上屏 · {count, plural, other {# 条轨道正在建立索引}}"), { count: building.length });
       const scanned = building.reduce((n, t) => n + (t.indexProgress?.scannedBytes ?? 0), 0);
       const total = building.reduce((n, t) => n + (t.indexProgress?.totalBytes ?? t.size), 0);
       progress.value = total > 0 ? scanned / total : 0;

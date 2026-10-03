@@ -1,7 +1,7 @@
 {
   "activity.buildingIndexes": {
-    "source": "已上屏 · {count} 条轨道正在建立索引",
-    "translation": "On screen · {count} tracks building indexes"
+    "source": "已上屏 · {count, plural, other {# 条轨道正在建立索引}}",
+    "translation": "On screen · {count, plural, one {# track building indexes} other {# tracks building indexes}}"
   },
   "activity.durationMinutesSeconds": {
     "source": "{m} 分 {s} 秒",
@@ -1260,8 +1260,8 @@
     "translation": "Track {p0} stalled"
   },
   "player.tracks": {
-    "source": "{p0} 条轨道",
-    "translation": "{p0} tracks"
+    "source": "{p0, plural, other {# 条轨道}}",
+    "translation": "{p0, plural, one {# track} other {# tracks}}"
   },
   "player.tracksOutOfSync": {
     "source": "双轨不同步",
@@ -2316,8 +2316,8 @@
     "translation": "Drafts from other pages: {text}"
   },
   "sync.pendingCount": {
-    "source": "{n} 条标注需要处理",
-    "translation": "{n} marks need attention"
+    "source": "{n, plural, other {# 条标注需要处理}}",
+    "translation": "{n, plural, one {# mark needs attention} other {# marks need attention}}"
   },
   "sync.saveDraftAsMark": {
     "source": "草稿另存为标注",
@@ -2563,6 +2563,14 @@
     "source": "取消导入",
     "translation": "Cancel import"
   },
+  "transfer.detailSeparator": {
+    "source": "、",
+    "translation": ", "
+  },
+  "transfer.identityMismatch": {
+    "source": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。",
+    "translation": "Source {name} has changed and differs from the workspace record ({details}). Pick the source again and check its marks."
+  },
   "transfer.importing": {
     "source": "工作区正在导入，请等待完成。",
     "translation": "The workspace is importing. Wait for it to finish."
@@ -2575,6 +2583,14 @@
     "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
     "translation": "The old workspace recorded no compare conditions; current color and decode settings apply."
   },
+  "transfer.mtimeWarning": {
+    "source": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。",
+    "translation": "The modification time of “{name}” differs from the workspace record. The file was restored using its name and size; recheck marks if its contents were replaced."
+  },
+  "transfer.nameMismatch": {
+    "source": "文件名 {expected} → {actual}",
+    "translation": "Filename {expected} → {actual}"
+  },
   "transfer.notAuthorized": {
     "source": "本地文件尚未授权，请重新选择。",
     "translation": "Local file not authorized yet. Pick it again."
@@ -2584,8 +2600,8 @@
     "translation": "Open workspace"
   },
   "transfer.pendingRelink": {
-    "source": "{n} 个片源待重新关联；轨道、偏移和标注已保留。",
-    "translation": "{n} sources need relinking; tracks, offsets, and marks are kept."
+    "source": "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}",
+    "translation": "{n, plural, one {# source needs relinking; tracks, offsets, and marks are kept.} other {# sources need relinking; tracks, offsets, and marks are kept.}}"
   },
   "transfer.relinkBody": {
     "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
@@ -2598,6 +2614,10 @@
   "transfer.relinkTitle": {
     "source": "重新连接本地视频",
     "translation": "Reconnect local videos"
+  },
+  "transfer.sizeMismatch": {
+    "source": "大小 {expected} → {actual}",
+    "translation": "Size {expected} → {actual}"
   },
   "ui.pixelWidth": {
     "source": "{width} 像素",

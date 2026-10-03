@@ -159,6 +159,8 @@ export function installAnnotationPanel(
       for(const row of root.querySelectorAll<HTMLElement>('.annotation-row')) {
         const saved=lastEntries.find(entry=>entry.mark.id===row.dataset.markId);if(!saved)continue;
         const mark=saved.mark;
+        const thumbnail=row.querySelector('.mark-thumbnail');
+        if(thumbnail&&!thumbnail.querySelector('img'))thumbnail.textContent=mark.text||t(msg('marks.noPreview','暂无预览'));
         const author=row.querySelector('.mark-author');if(author&&!mark.author?.name)author.textContent=t(msg('marks.anonymous','未署名'));
         const remove=row.querySelector<HTMLElement>('.annotation-remove');if(remove){remove.setAttribute('aria-label',t(msg('marks.deleteMarkName','删除标注 {label}'),{label:mark.text||formatTime(mark.frame.ptsUs)}));remove.dataset.tooltip=t(msg('marks.deleteMark','删除标注'));}
         for(const confirm of row.querySelectorAll('.annotation-confirm')){confirm.querySelector('span')!.textContent=t(msg('marks.deleteConfirm','删除这条标注？'));const buttons=confirm.querySelectorAll('button');buttons[0].textContent=t(msg('marks.cancel','取消'));buttons[1].textContent=t(msg('marks.delete','删除'));}

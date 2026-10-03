@@ -1,5 +1,5 @@
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
-import { defineConfig } from 'vite';
+import { defineConfig, normalizePath } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -41,7 +41,7 @@ export default defineConfig({
     configResolved(config) { buildCatalog = config.command === 'build'; },
     buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
     transform(code,id) {
-      if(id.split('?')[0]!==resolve(sourceDir,'i18n.ts'))return;
+      if(normalizePath(id.split('?')[0])!==normalizePath(resolve(sourceDir,'i18n.ts')))return;
       return {code:code.replace("'__EN_CATALOG_URL__'",englishCatalogRef ? `import.meta.ROLLUP_FILE_URL_${englishCatalogRef}` : "'/src/i18n/generated/en.js'"),map:null};
     },
   }, { name: 'voidplayer-i18n-descriptors', enforce: 'pre', transform: lowerDescriptors }, {
@@ -64,10 +64,10 @@ export default defineConfig({
   }, {
     name: 'voidplayer-build-evidence',
     transform(code, id) {
-      if (id.split('?')[0] === infoFile) return { code: `export const buildInfo = ${JSON.stringify(buildInfo())}`, map: null };
+      if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(buildInfo())}`, map: null };
     },
     handleHotUpdate({ file, server }) {
-      if (file.startsWith(sourceDir) || file.startsWith(coreDir)) {
+      if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(coreDir))) {
         const module = server.moduleGraph.getModuleById(infoFile);
         if (module) server.moduleGraph.invalidateModule(module);
       }

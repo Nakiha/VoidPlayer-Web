@@ -4,6 +4,9 @@ import compileModule from '@messageformat/core/compile-module.js';
 import { parse } from '@messageformat/parser';
 import { readFileSync, writeFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
+// Catalogs and scope paths are portable Git paths, regardless of host separators.
+export const portablePath = path => path.replaceAll('\\', '/');
+const sourcePath = (root, file) => portablePath(relative(root, file));
 import { fileURLToPath } from 'node:url';
 export function parameters(source) {
   const result = {};
@@ -24,11 +27,11 @@ export function extract(root) {
     function visit(node){
       if(ts.isCallExpression(node)&&ts.isIdentifier(node.expression)&&node.expression.text==='msg'){
         const [id,text]=node.arguments;
-        if(!id||!text||!ts.isStringLiteral(id)||!ts.isStringLiteral(text))throw new Error(`Descriptor must use literal id and source: ${relative(root,file)}`);
+        if(!id||!text||!ts.isStringLiteral(id)||!ts.isStringLiteral(text))throw new Error(`Descriptor must use literal id and source: ${sourcePath(root,file)}`);
         const params=parameters(text.text);
         if(messages[id.text]&&messages[id.text].source!==text.text)throw new Error(`Conflicting message ID: ${id.text}`);
         const message=messages[id.text]??={source:text.text,params,locations:[]};
-        message.locations.push(`${relative(root,file)}:${tree.getLineAndCharacterOfPosition(node.getStart()).line+1}`);
+        message.locations.push(`${sourcePath(root,file)}:${tree.getLineAndCharacterOfPosition(node.getStart()).line+1}`);
       }ts.forEachChild(node,visit);
     } visit(tree);
   }}scan(resolve(root,'src'));return Object.fromEntries(Object.entries(messages).sort());
@@ -48,7 +51,7 @@ export function validateScope(root) {
     for(const entry of readdirSync(directory,{withFileTypes:true})) {
       const file=resolve(directory,entry.name);
       if(entry.isDirectory())classified(file);
-      else if(file.endsWith('.ts')&&!scope.files.includes(relative(root,file)))throw new Error(`Unclassified UI file: ${relative(root,file)}; add it to scope.json`);
+      else if(file.endsWith('.ts')&&!scope.files.includes(sourcePath(root,file)))throw new Error(`Unclassified UI file: ${sourcePath(root,file)}; add it to scope.json`);
     }
   }
   if(existsSync(resolve(root,'src/ui')))classified(resolve(root,'src/ui'));

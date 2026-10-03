@@ -87,7 +87,22 @@ async function choose(signal: AbortSignal) {
     if (busy || closing) return;
     input.value = user.name; alert.textContent = ''; sync(); renderList(); setExpanded(false); input.focus();
   }
+  let showAllUsers = false;
+  function localizeEmpty() {
+    empty.textContent = listState === 'loading' ? t(msg("identity.loadingUsers", "正在读取用户…")) : listState === 'error' ? t(msg("identity.usersLoadFailed", "暂时无法读取用户，可直接输入名字继续。")) : filtered.length ? '' : t(msg("identity.noMatchingUsers", "没有匹配的用户"));
+    empty.hidden = !empty.textContent;
+  }
+  function localize() {
+    welcome.querySelector('#identity-welcome-title')!.textContent = t(msg("identity.welcomeTitle", "怎么称呼你？"));
+    input.placeholder = t(msg("identity.nameOptional", "名字（选填）"));
+    input.setAttribute('aria-label', input.placeholder);
+    toggle.setAttribute('aria-label', t(msg("identity.chooseExisting", "选择已有用户")));
+    list.setAttribute('aria-label', t(msg("identitySettings.existingUser", "已有用户")));
+    // Names, filter mode, options and keyboard selection are user state.
+    sync(); localizeEmpty(); positionDropdown();
+  }
   function renderList(showAll = false) {
+    showAllUsers = showAll;
     filtered = showAll ? users : users.filter(user => user.name.toLocaleLowerCase().includes(name().toLocaleLowerCase()));
     list.replaceChildren(...filtered.map((user, index) => {
       const row = document.createElement('div'); row.id = `welcome-user-${index}`; row.className = 'welcome-user';
@@ -97,8 +112,7 @@ async function choose(signal: AbortSignal) {
       row.addEventListener('click', () => select(user));
       return row;
     }));
-    empty.textContent = listState === 'loading' ? t(msg("identity.loadingUsers", "正在读取用户…")) : listState === 'error' ? t(msg("identity.usersLoadFailed", "暂时无法读取用户，可直接输入名字继续。")) : filtered.length ? '' : t(msg("identity.noMatchingUsers", "没有匹配的用户"));
-    empty.hidden = !empty.textContent;
+    localizeEmpty();
     setActive(-1);
   }
   input.addEventListener('input', () => { alert.textContent = ''; sync(); renderList(); });
@@ -147,7 +161,7 @@ async function choose(signal: AbortSignal) {
   window.visualViewport?.addEventListener('resize', positionDropdown);
   window.visualViewport?.addEventListener('scroll', positionDropdown);
   signal.addEventListener('abort', abort, { once: true });
-  onLanguageChange(() => { if (!closing) { sync(); renderList(); } }, controller.signal);
+  onLanguageChange(() => { if (!closing) localize(); }, controller.signal);
   sync(); renderList(); welcome.showModal();
   // Listing never delays guest entry or steals focus after the user starts typing.
   void (async () => {
@@ -158,7 +172,7 @@ async function choose(signal: AbortSignal) {
       users = result.users; listState = 'ready';
     } catch { listState = 'error'; }
     if (closing) return;
-    sync(); renderList();
+    sync(); renderList(showAllUsers);
     if (toggle.hidden) setExpanded(false);
   })();
   if (signal.aborted) abort();

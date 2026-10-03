@@ -481,13 +481,13 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const failedKey = sourceLoadError?.key ?? null;
     // Only source and navigation state affect the list. A seek must not
     // disable every row or rebuild any of their action controls.
-    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
+    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
     // excluded; completion patches the placeholder <img> via notify.
     const stableRoots = page?.roots.map(root => [root.id, root.state]);
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.status : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), stableRoots]);
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), stableRoots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
@@ -516,6 +516,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
           const glyph = document.createElement('span'); glyph.innerHTML = icon('open');
           const info = text('span', '', 'source-info');
           info.append(text('span', folder.name, 'filename'), text('span', t(msg("sources.folderMetaLibrary", "媒体库 · {root}"), { root: page?.roots.find(root => root.id === folder.rootId)?.name ?? '' }), 'source-meta'));
+          row.dataset.rootId = folder.rootId;
           row.setAttribute('aria-label', t(msg("sources.openFolder", "打开目录：{name}"), { name: folder.name })); row.append(glyph, info); row.onclick = () => libraryBrowser.navigate(folder.rootId, folder.path); return row;
         });
       }
@@ -650,7 +651,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     $('local-add').onclick = () => $<HTMLInputElement>('source-files').click();
   }
 
-  /** Language change: drop row fingerprints and re-render all labels. */
+  /** Relabel cached nodes in place; keep row focus and event handlers. */
   function localize() {
     function patch(row: HTMLElement, fresh: HTMLElement) {
       const attrs = ['aria-label', 'title', 'data-tooltip'];
@@ -676,6 +677,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     for(const row of document.querySelectorAll<HTMLElement>('.library-folder')) {
       const name=row.querySelector('.filename')?.textContent??'';
       row.setAttribute('aria-label',t(msg("sources.openFolder", "打开目录：{name}"),{name}));
+      const meta=row.querySelector('.source-meta');
+      if(meta)meta.textContent=t(msg("sources.folderMetaLibrary", "媒体库 · {root}"),{root:libraryBrowser.page()?.roots.find(root=>root.id===row.dataset.rootId)?.name??''});
     }
     for(const button of $('replace-source-targets').querySelectorAll<HTMLElement>('button'))button.dataset.tooltip=t(msg("sources.replaceTrack", "替换当前轨道"));
     sourceSignature = ''; // Reuses unchanged rows and updates source heading/count/status controls.

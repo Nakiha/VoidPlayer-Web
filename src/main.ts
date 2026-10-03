@@ -346,7 +346,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
     ? tr(msg("player.aBFrameStartDifferenceMs", "A / B 帧起点差 {p0} ms"), { p0: Math.abs(times[0]! - times[1]!) / 1000 })
-    : loaded ? tr(msg("player.tracks", "{p0} 条轨道"), { p0: state.tracks.length }) : '';
+    : loaded ? tr(msg("player.tracks", "{p0, plural, other {# 条轨道}}"), { p0: state.tracks.length }) : '';
   drawingEditor.render(state);
   markPreviewBackfill.schedule();
   workbench.render(state);

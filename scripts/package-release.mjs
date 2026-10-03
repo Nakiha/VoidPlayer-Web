@@ -46,7 +46,7 @@ await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js']);
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
-const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|admin|scripts|test|docs|public\/licenses|\.github)\//.test(f) || /^deploy\/(README\.md|standalone\.md|operations\.md|admin\.md|licenses\/[^/]+)$/.test(f));
+const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|admin|scripts|test|docs|locales|public\/licenses|\.github)\//.test(f) || /^deploy\/(README\.md|standalone\.md|operations\.md|admin\.md|licenses\/[^/]+)$/.test(f));
 const sourceDir = path.join(out, '.source');
 for (const file of sourceFiles) { await mkdir(path.dirname(path.join(sourceDir, file)), { recursive: true }); await cp(path.join(root, file), path.join(sourceDir, file)); }
 execFileSync(tar, ['-czf', path.join(out, 'source.tar.gz'), '-C', sourceDir, '.']);

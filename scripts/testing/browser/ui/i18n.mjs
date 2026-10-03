@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
-import {writeFile} from 'node:fs/promises';
+import {writeFile,mkdir,copyFile,readFile,utimes} from 'node:fs/promises';
+import path from 'node:path';
+import {loadConfig} from '../../../../server/config.ts';
+import {startService} from '../../../../server/runtime.ts';
+import {repositoryRoot} from '../../manifest.mjs';
 import {withBrowserFixture} from '../../browser-fixture.mjs';
 const engine=process.argv[2]??'chromium';
 await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:1280,height:800},locale:'zh-CN',reducedMotion:'reduce'}},async ({page,context,newContext,ready,artifact,url})=>{
@@ -30,6 +34,13 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  const tooltip=page.locator('#track-properties dd[data-tooltip]').first();
  await tooltip.hover();await page.getByRole('tooltip').waitFor({state:'visible'});assert.match(await page.getByRole('tooltip').innerText(),/format|metadata|bitstream|container/i);
  await switchLanguage('zh-CN');assert.match(await page.getByRole('tooltip').innerText(),/格式|来源/);await switchLanguage('en');
+ await page.evaluate(()=>window.voidPlayer.addMark({slot:'A',text:'',drawings:[{id:'empty-preview',tool:'rect',color:'#ff3b30',strokeWidth:4,points:[{x:.2,y:.2},{x:.4,y:.4}]}]}));
+ await page.locator('#toggle-marks').click();
+ const emptyThumbnail=page.locator('.mark-thumbnail').filter({hasText:'No preview'});
+ await emptyThumbnail.waitFor();await emptyThumbnail.evaluate(e=>{window.__emptyThumbnail=e;});
+ await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'暂无预览');
+ await switchLanguage('en');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'No preview');
+ assert.equal(await page.evaluate(()=>window.__emptyThumbnail.isConnected),true);
  await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();
  await page.locator('#saved-workspace-name').fill('未保存 Workspace name');await page.locator('#saved-workspace-name').evaluate(e=>{e.focus();e.setSelectionRange(2,6);window.__edit=e;});
  await switchLanguage('zh-CN');
@@ -75,4 +86,72 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  await writeFile(artifact('report.json'),JSON.stringify({engine,switchMs,assertions:['playing-switch','no-session-operations','stable-workers/source/canvas','cached-inspector','offset-selection','workspace-draft','report-draft','open-settings','open-menu-focus','flow-nodes','user-marks','rapid-switch','reload-preference','cold-chunk-failure/retry','complete-settings','cold-stale-response','system-locale-normalization','stored-preference-precedence'],errors},null,2));
  console.log(`PASS ${engine}: i18n state preservation, complete settings, rapid switching, load failure and persistence`);
  await peer.close();
+});
+
+// Real identity service and an owned directory exercise modal/cached-row lifetimes.
+await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{width:1280,height:800},locale:'zh-CN',reducedMotion:'reduce'},dependencies:{startService:async({temp,defer})=>{
+ const media=path.join(temp,'media');await mkdir(path.join(media,'用户目录'),{recursive:true});
+ await copyFile(path.join(repositoryRoot,'fixtures/video/ci_h264_smoke.mp4'),path.join(media,'sample.mp4'));await utimes(path.join(media,'sample.mp4'),1000,1000);
+ const config=await loadConfig(['--folder',media,'--data-dir',temp],'production');config.port=0;config.logsDir=null;config.indexWatch=false;
+ const service=await startService(config);let closed=false;const close=async()=>{if(closed)return;closed=true;await service.close();};defer('partial-service',close);await service.library.refresh();
+ return {...service,close,url:`http://127.0.0.1:${service.server.address().port}/`};
+}}},async({page,context,newContext,url,artifact})=>{
+ const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const seed=await newContext({locale:'zh-CN'});
+ for(const name of ['用户甲','用户乙']){const response=await seed.request.post(`${url}api/identity`,{headers:{origin:url.slice(0,-1),'x-voidplayer-action':'identity'},data:{name,mode:'create'}});assert.equal(response.status(),200);}
+ await seed.close();
+ // The peer changes only locale storage; it need not enter onboarding.
+ const peer=await context.newPage();await peer.goto(url);
+ await page.goto(url);const welcome=page.locator('#identity-welcome');await welcome.waitFor({state:'visible'});
+ const input=welcome.locator('input');await page.waitForFunction(()=>!document.querySelector('.welcome-toggle').hidden);
+ await input.fill('不匹配的用户草稿');await welcome.locator('.welcome-toggle').click();await input.press('ArrowDown');
+ const snapshot=await input.evaluate(e=>{e.setSelectionRange(1,4);window.__welcomeInput=e;window.__welcomeOption=document.getElementById(e.getAttribute('aria-activedescendant'));return {active:e.getAttribute('aria-activedescendant'),options:[...document.querySelectorAll('#welcome-users [role=option]')].map(e=>e.textContent)};});
+ async function switchLanguage(locale){await peer.evaluate(locale=>localStorage.setItem('voidplayer.language',locale),locale);await page.waitForFunction(locale=>document.documentElement.lang===locale,locale);}
+ await switchLanguage('en');
+ assert.equal(await welcome.locator('#identity-welcome-title').innerText(),'What should we call you?');
+ assert.equal(await input.getAttribute('placeholder'),'Name (optional)');assert.equal(await input.getAttribute('aria-label'),'Name (optional)');
+ assert.equal(await welcome.locator('.welcome-toggle').getAttribute('aria-label'),'Choose an existing user');
+ assert.equal(await welcome.locator('#welcome-users').getAttribute('aria-label'),'Existing user');
+ assert.deepEqual(await input.evaluate(e=>({same:e===window.__welcomeInput,focus:e===document.activeElement,value:e.value,selection:[e.selectionStart,e.selectionEnd],active:e.getAttribute('aria-activedescendant'),option:window.__welcomeOption===document.getElementById(e.getAttribute('aria-activedescendant')),options:[...document.querySelectorAll('#welcome-users [role=option]')].map(e=>e.textContent),expanded:e.getAttribute('aria-expanded')})),{same:true,focus:true,value:'不匹配的用户草稿',selection:[1,4],active:snapshot.active,option:true,options:snapshot.options,expanded:'true'});
+ assert.equal(snapshot.options.length,2,'show-all mode retains both users despite unmatched input');
+ await page.screenshot({path:artifact('welcome-en.png')});await switchLanguage('zh-CN');
+ assert.equal(await welcome.locator('#identity-welcome-title').innerText(),'怎么称呼你？');
+ await input.press('Escape');await input.fill('');await welcome.locator('button[type=submit]').click();await page.waitForFunction(()=>window.voidPlayer?.tools);await welcome.waitFor({state:'detached'});
+ await page.locator('#toggle-sources').click();await page.locator('#library-root').click();await page.locator('#library-root-menu [data-value]').filter({hasText:'media'}).click();
+ const folder=page.locator('#source-list .library-folder').filter({hasText:'用户目录'});await folder.waitFor();await folder.evaluate(e=>{e.focus();window.__folder=e;});
+ await switchLanguage('en');assert.match(await folder.locator('.source-meta').innerText(),/^Library · /);assert.equal(await folder.getAttribute('aria-label'),'Open folder: 用户目录');
+ assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);
+ await switchLanguage('zh-CN');assert.match(await folder.locator('.source-meta').innerText(),/^媒体库 · /);assert.equal(await folder.evaluate(e=>e===window.__folder&&document.activeElement===e),true);
+ await page.waitForFunction(async()=>{const library=await window.voidPlayer.tools.find(t=>t.name==='list_library').execute({});return library.entries.find(e=>e.name==='sample.mp4')?.state==='ready';});
+ const library=await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='list_library').execute({}));
+ const sample=library.entries.find(e=>e.name==='sample.mp4');const stalled=[];
+ await page.route(`**/api/media/${sample.id}?*`,route=>stalled.push(route));
+ const sampleRow=page.locator('#source-list .source-row').filter({hasText:'sample.mp4'});
+ const requested=page.waitForRequest(request=>new URL(request.url()).pathname===`/api/media/${sample.id}`);
+ await sampleRow.getByRole('button',{name:'添加到视图：sample.mp4',exact:true}).click();await requested;
+ const cancel=sampleRow.getByRole('button',{name:'取消载入：sample.mp4',exact:true});await cancel.waitFor();
+ await cancel.evaluate(e=>{e.focus();window.__cancel=e;});await switchLanguage('en');
+ assert.equal(await sampleRow.locator('[data-action=cancel-load]').getAttribute('aria-label'),'Cancel load: sample.mp4');
+ assert.equal(await sampleRow.locator('[data-action=cancel-load]').evaluate(e=>e===window.__cancel&&e===document.activeElement),true);
+ assert.match(await page.locator('#source-activity-stage').innerText(),/Reading video information/i);
+ await switchLanguage('zh-CN');assert.equal(await cancel.evaluate(e=>e===window.__cancel),true);await cancel.click();
+ for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}?*`);
+ await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);
+ const workspace=await page.evaluate(()=>window.voidPlayer.exportWorkspace());delete workspace.media[0].source;
+ // Keep import pending so the open dialog remains reviewable during peer switches.
+ await page.evaluate(document=>{window.__import=window.voidPlayer.importWorkspace(document);},workspace);
+ const relink=page.locator('.workspace-relink');await relink.waitFor({state:'visible'});
+ const bytes=await readFile(path.join(repositoryRoot,'fixtures/video/ci_h264_smoke.mp4'));
+ await relink.locator('input[type=file]').setInputFiles({name:'sample.mp4',mimeType:'video/mp4',buffer:bytes});
+ await relink.locator('.relink-continue').waitFor({state:'visible'});assert.equal(await relink.locator('.relink-continue').isEnabled(),true);
+ await relink.locator('input').evaluate(e=>{e.focus();window.__relinkInput=e;window.__selectedFile=e.files[0];window.__relinkDialog=e.closest('dialog');});
+ await switchLanguage('en');assert.match(await relink.locator('[role=alert]').innerText(),/modification time/);assert.equal(await relink.getAttribute('aria-label'),'Reconnect local videos');assert.equal(await relink.locator('h2').innerText(),'Reconnect local videos');
+ assert.equal(await relink.locator('header button').getAttribute('aria-label'),'Cancel import');assert.equal(await relink.locator('.relink-later').innerText(),'Later');
+ assert.equal(await relink.locator('.relink-continue').innerText(),'Open workspace');assert.match(await relink.locator('input').getAttribute('aria-label'),/^Pick sample.mp4 again$/);
+ assert.deepEqual(await relink.locator('input').evaluate(e=>({same:e===window.__relinkInput,dialog:e.closest('dialog')===window.__relinkDialog,file:e.files[0]===window.__selectedFile,focus:e===document.activeElement,name:e.files[0].name,enabled:!document.querySelector('.relink-continue').disabled})),{same:true,dialog:true,file:true,focus:true,name:'sample.mp4',enabled:true});
+ await page.screenshot({path:artifact('relink-en.png')});await switchLanguage('zh-CN');assert.equal(await relink.locator('h2').innerText(),'重新连接本地视频');
+ await relink.locator('header button').click();assert.equal(await page.evaluate(()=>window.__import),false);
+ await peer.close();assert.deepEqual(errors,[]);
+ await writeFile(artifact('dialog-report.json'),JSON.stringify({engine,assertions:['onboarding-text/aria','onboarding-filter/active-option/node/focus/selection','folder-meta/node/focus','stalled-load-stage/cancel-node/focus','relink-text/aria','relink-file/dialog/node/focus','relink-cancel-preserves-session'],errors},null,2));
+ console.log(`PASS ${engine}: onboarding, folder cache and relink modal switch in place`);
 });

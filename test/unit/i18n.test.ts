@@ -30,6 +30,11 @@ test('messages use compiled ICU, escape user content, preserve ASCII timecode an
  await setLanguage('en',{persist:false});
  assert.equal(t(msg('player.frames','{count, plural, other {# 帧}}'),{count:1}),'1 frame');
  assert.equal(t(msg('player.frames','{count, plural, other {# 帧}}'),{count:2}),'2 frames');
+ for(const [id,source,single,multiple] of [
+  ['player.tracks','{p0, plural, other {# 条轨道}}','1 track','2 tracks'],
+ ] as const){assert.equal(t(msg(id,source),{p0:1}),single);assert.equal(t(msg(id,source),{p0:2}),multiple);}
+ assert.equal(t(msg('sync.pendingCount','{n, plural, other {# 条标注需要处理}}'),{n:1}),'1 mark needs attention');
+ assert.match(t(msg('transfer.pendingRelink','{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}'),{n:1}),/^1 source needs relinking;/);
  assert.match(t(msg('shell.trackActions','轨道 {p0} 操作'),{p0:'A'}),/A/);
  assert.ok(th(msg('shell.trackActions','轨道 {p0} 操作'),{p0:'<用户 & "name">'}).includes('&lt;'));
  const error=new MediaOpenError('decode','原始理由','reference-hdr-unsupported');
