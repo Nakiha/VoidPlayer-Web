@@ -8,6 +8,7 @@
     "src/admin/measurement.ts",
     "src/admin/presentation.ts",
     "src/admin/shell.ts",
+    "src/admin/workspace-copy-name.ts",
     "src/admin/workspaces.ts",
     "src/connection-guide.ts",
     "src/log-panel.ts",

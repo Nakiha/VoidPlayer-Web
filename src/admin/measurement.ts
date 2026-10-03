@@ -85,7 +85,7 @@ export function installMeasurements(life: AbortSignal, notice: (message: Localiz
     text('measure-bytes', () => `${(sample.bytes / MiB).toFixed(1)} MiB`); text('measure-elapsed', () => t(msg("activity.durationSeconds", "{s} 秒"), { s: (elapsed / 1000).toFixed(2) }));
     text('measure-result-condition', () => t(msg("admin.resultConditions", "{concurrency} 路 · 最长 {seconds} 秒 · 上限 {limit} MiB · {date}"), {concurrency:current.concurrency,seconds:current.seconds,limit:current.limitBytes / MiB,date:formatDate(current.startedAt)}));
     text('measure-origin', () => current.kind === 'storage' ? t(msg("admin.originServerRead", "服务端文件读取（含系统缓存）")) : (current.id === ownId && client) || current.client ? t(msg("admin.originBrowserTiming", "发起浏览器计时（含请求往返）")) : t(msg("admin.originServerCount", "服务端计数；浏览器结果尚未提交")));
-    text('measure-count', () => t(msg("admin.countLine", "{done} 次完成 · {errors} 次错误 · {pending} 次处理中"), { done: sample.requests, errors: current.errors, pending: current.activeRequests }));
+    text('measure-count', () => t(msg("admin.countLine", "{done} 次完成 · {errors, plural, other {# 次错误}} · {pending} 次处理中"), { done: sample.requests, errors: current.errors, pending: current.activeRequests }));
     text('measure-source', () => current.media ? `${current.media.root} / ${current.media.name} · ${current.media.version}` : t(msg("admin.sourceRandom", "随机内存数据，不写入磁盘")));
     text('measure-reason', () => current.reason ? reasons[current.reason] : '—');
   }

@@ -168,8 +168,8 @@
     "translation": "Connections"
   },
   "admin.countLine": {
-    "source": "{done} 次完成 · {errors} 次错误 · {pending} 次处理中",
-    "translation": "{done} done · {errors} errors · {pending} active"
+    "source": "{done} 次完成 · {errors, plural, other {# 次错误}} · {pending} 次处理中",
+    "translation": "{done} done · {errors, plural, one {# error} other {# errors}} · {pending} active"
   },
   "admin.cpuCaption": {
     "source": "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。",
@@ -864,8 +864,8 @@
     "translation": "Saving…"
   },
   "admin.scanActive": {
-    "source": "扫描中 · {visited} 个目录",
-    "translation": "Scanning · {visited} directories"
+    "source": "扫描中 · {visited, plural, other {# 个目录}}",
+    "translation": "Scanning · {visited, plural, one {# directory} other {# directories}}"
   },
   "admin.scanDesc": {
     "source": "目录变化会自动更新；找不到新增视频时，可重新扫描。",
@@ -884,8 +884,8 @@
     "translation": "Reading root directories…"
   },
   "admin.scanErrors": {
-    "source": "{count} 处读取错误{truncated}",
-    "translation": "{count} read errors{truncated}"
+    "source": "{count, plural, other {# 处读取错误}}{truncated}",
+    "translation": "{count, plural, one {# read error} other {# read errors}}{truncated}"
   },
   "admin.scanJobSummary": {
     "source": "{state} · {files} 个媒体",
@@ -900,8 +900,8 @@
     "translation": "Scan media"
   },
   "admin.scanProgressLine": {
-    "source": "{state} · {visited} 个目录 · {files} 个媒体",
-    "translation": "{state} · {visited} directories · {files} media"
+    "source": "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体",
+    "translation": "{state} · {visited, plural, one {# directory} other {# directories}} · {files} media"
   },
   "admin.search": {
     "source": "搜索",
@@ -1116,8 +1116,8 @@
     "translation": "Periodic calibration only"
   },
   "admin.watchSummary": {
-    "source": "{active} / {limit} 个目录{calibration}{partial}",
-    "translation": "{active} / {limit} directories{calibration}{partial}"
+    "source": "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}",
+    "translation": "{active} / {limit, plural, one {# directory} other {# directories}}{calibration}{partial}"
   },
   "admin.workspaceCopyName": {
     "source": "{name} 副本",

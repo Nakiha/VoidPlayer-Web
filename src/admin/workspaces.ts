@@ -1,3 +1,4 @@
+import { workspaceCopyName } from './workspace-copy-name.ts';
 import { requestError } from './diagnostics.ts';
 import { localizedText, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { formatDate, formatNumber, t, th, msg } from '../i18n.ts';
@@ -60,7 +61,7 @@ export function installWorkspaceAdmin(signal: AbortSignal, notice: (value: Local
   $('admin-workspaces-next').onclick = () => void act(async () => { if (next) { before = next; await list(); } });
   $('admin-workspace-rename').onclick = () => void act(async () => { if (!selected) return; const stored = await client.save($<HTMLInputElement>('admin-workspace-name').value, selected.document, selected); render({ ...stored, document: selected.document }); await list(); notice(() => t(msg("admin.nameSaved", "名称已保存。"))); });
   $('admin-workspace-reload').onclick = () => void act(async () => { if (selected) render(await client.read(selected.id)); });
-  $('admin-workspace-copy').onclick = () => void act(async () => { if (!selected) return; const document = selected.document, saved = await client.save(t(msg("admin.workspaceCopyName", "{name} 副本"), {name:$<HTMLInputElement>('admin-workspace-name').value.trim().slice(0,197)}), document); render({ ...saved, document }); before = ''; await list(); notice(() => t(msg("admin.savedAsCopy", "已另存为当前用户的副本。"))); });
+  $('admin-workspace-copy').onclick = () => void act(async () => { if (!selected) return; const document = selected.document, saved = await client.save(workspaceCopyName($<HTMLInputElement>('admin-workspace-name').value, name => t(msg("admin.workspaceCopyName", "{name} 副本"), {name})), document); render({ ...saved, document }); before = ''; await list(); notice(() => t(msg("admin.savedAsCopy", "已另存为当前用户的副本。"))); });
   $('admin-workspace-download').onclick = () => void act(async () => { if (!selected) return; const url = URL.createObjectURL(await compressWorkspace(selected.document)); const link = document.createElement('a'); link.href = url; link.download = selected.name.replace(/[\\/:*?"<>|]/g, '_') + '.voidplayer'; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); });
   $('admin-workspace-delete').onclick = () => { $('admin-workspace-delete-confirm').hidden = false; };
   $('admin-workspace-cancel-delete').onclick = () => { $('admin-workspace-delete-confirm').hidden = true; };

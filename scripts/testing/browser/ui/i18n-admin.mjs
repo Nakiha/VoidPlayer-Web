@@ -52,6 +52,41 @@ await withBrowserFixture({caseName:'i18n-admin',engine,pageOptions:{viewport:{wi
  await page.screenshot({path:artifact('admin-workspace-en-confirm.png')});
  await page.locator('#admin-workspace-cancel-delete').click();await page.locator('#admin-workspaces-search').fill('用户');await page.locator('#admin-workspaces-search-button').click();await page.locator('#admin-workspaces-list button').waitFor();
  await locale('zh-CN');assert.equal(await page.locator('#admin-workspaces-search').inputValue(),'用户');assert.equal(await page.locator('#admin-workspace-name').inputValue(),'未提交 rename {name}');await locale('en');
+ // Real revision conflicts must save copies of the selected document, including maximum-length names.
+ const copyCases=[];
+ const selectedDocument=JSON.parse(await page.locator('#admin-workspace-json').inputValue());
+ for(const language of ['en','zh-CN']){
+  await locale(language);
+  for(const length of [195,196,197,200]){
+   const name='x'.repeat(length),suffix=language==='en'?' copy':' 副本';
+   const original=await page.evaluate(async({document,name})=>{
+    const response=await fetch('/api/workspaces',{method:'POST',headers:{'x-voidplayer-action':'workspace','content-type':'application/json'},body:JSON.stringify({name,document})});
+    if(response.status!==201)throw new Error(await response.text());return response.json();
+   },{document:selectedDocument,name:`conflict-${language}-${length}`});
+   await page.locator('#admin-workspaces-search').fill(original.name);await page.locator('#admin-workspaces-search-button').click();
+   await page.locator('#admin-workspaces-list button').filter({hasText:original.name}).click();
+   await page.waitForFunction(name=>document.querySelector('#admin-workspace-name').value===name&&!document.querySelector('#admin-workspace-name').disabled,original.name);
+   const newerDocument={...selectedDocument,positionUs:123};
+   await page.evaluate(async({original,document})=>{
+    const response=await fetch('/api/workspaces/'+original.id,{method:'PUT',headers:{'x-voidplayer-action':'workspace','content-type':'application/json','if-match':`"${original.revision}"`},body:JSON.stringify({name:'newer server copy',document})});
+    if(!response.ok)throw new Error(await response.text());
+   },{original,document:newerDocument});
+   await page.locator('#admin-workspace-name').fill(name);
+   const conflictResponse=page.waitForResponse(response=>response.url().endsWith('/api/workspaces/'+original.id)&&response.request().method()==='PUT');
+   await page.locator('#admin-workspace-rename').click();assert.equal((await conflictResponse).status(),409);
+   await page.locator('#admin-workspace-conflict').waitFor({state:'visible'});
+   const copyResponse=page.waitForResponse(response=>response.url().endsWith('/api/workspaces')&&response.request().method()==='POST');
+   await page.locator('#admin-workspace-copy').click();const response=await copyResponse;assert.equal(response.status(),201,`${language}: copy ${length}`);
+   const copied=await response.json();assert.equal(copied.name,name.slice(0,200-suffix.length)+suffix);assert.notEqual(copied.id,original.id);
+   await page.waitForFunction(name=>document.querySelector('#admin-workspace-name').value===name&&!document.querySelector('#admin-workspace-name').disabled,copied.name);
+   const records=await page.evaluate(async ids=>Promise.all(ids.map(async id=>{const response=await fetch('/api/workspaces/'+id);if(!response.ok)throw new Error(await response.text());return response.json();})),[original.id,copied.id]);
+   assert.equal(records[0].name,'newer server copy');assert.deepEqual(records[0].document,newerDocument);
+   assert.deepEqual(records[1].document,selectedDocument);assert.equal(records[1].revision,1);
+   assert.equal(await page.locator('#admin-workspace-conflict').isHidden(),true);
+   copyCases.push({language,length,status:response.status(),copiedLength:copied.name.length});
+  }
+ }
+ await locale('en');
  // Populated cache rows, pagination, search drafts and inline confirmation all relabel in place.
  await page.locator('[data-pane=caches]').click();await page.locator('#cache-total-count').filter({hasText:/cache/}).waitFor();
  await page.locator('[data-cache-kind=annotation-previews]').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===50);await page.locator('#cache-more').click();await page.waitForFunction(()=>document.querySelectorAll('.cache-row').length===53);
@@ -87,6 +122,6 @@ await withBrowserFixture({caseName:'i18n-admin',engine,pageOptions:{viewport:{wi
  await locale('zh-CN');await page.screenshot({path:artifact('admin-measurement-zh.png')});await locale('en');
  // All panels are included in the scoped source audit and English smoke pass.
  const checks=[];for(const pane of ['overview','library','caches','workspaces','annotations','logs','measurements']){await page.locator(`[data-pane=${pane}]`).click();await page.waitForTimeout(100);checks.push({pane,title:await page.locator(`#pane-${pane} h1`).innerText(),lang:await page.locator('html').getAttribute('lang')});}
- assert.deepEqual(errors,[]);await writeFile(artifact('report.json'),JSON.stringify({engine,checks,rawDiagnostic:'preserved',state:['root draft','workspace rename','search','cache pagination/confirmation','selected annotation/preview','raw log/confirmation','radio menu','running measurement']},null,2));
+ assert.deepEqual(errors,[]);await writeFile(artifact('report.json'),JSON.stringify({engine,checks,copyCases,rawDiagnostic:'preserved',state:['root draft','workspace rename','search','cache pagination/confirmation','selected annotation/preview','raw log/confirmation','radio menu','running measurement']},null,2));
  console.log(`PASS ${engine}: English initialization, live seven-panel copy, drafts/focus/selection, confirmation/search, open radio menu, raw conflict and running measurement preserved`);
 });

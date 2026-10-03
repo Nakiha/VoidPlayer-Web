@@ -156,7 +156,7 @@
     "params": {},
     "locations": [
       "src/admin/shell.ts:38",
-      "src/admin/workspaces.ts:12"
+      "src/admin/workspaces.ts:13"
     ]
   },
   "admin.backToPlayer": {
@@ -235,7 +235,7 @@
       "src/admin/annotations.ts:13",
       "src/admin/caches.ts:20",
       "src/admin/shell.ts:39",
-      "src/admin/workspaces.ts:16"
+      "src/admin/workspaces.ts:17"
     ]
   },
   "admin.cancelTest": {
@@ -339,10 +339,10 @@
     ]
   },
   "admin.countLine": {
-    "source": "{done} 次完成 · {errors} 次错误 · {pending} 次处理中",
+    "source": "{done} 次完成 · {errors, plural, other {# 次错误}} · {pending} 次处理中",
     "params": {
       "done": "string | number",
-      "errors": "string | number",
+      "errors": "number",
       "pending": "string | number"
     },
     "locations": [
@@ -412,21 +412,21 @@
     "source": "删除选中工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:14"
+      "src/admin/workspaces.ts:15"
     ]
   },
   "admin.deleteWorkspace": {
     "source": "删除工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:16"
+      "src/admin/workspaces.ts:17"
     ]
   },
   "admin.deleteWsConfirm": {
     "source": "删除服务器工作区？不删除视频或已打开的会话。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:16"
+      "src/admin/workspaces.ts:17"
     ]
   },
   "admin.descConcurrent": {
@@ -570,7 +570,7 @@
     "params": {},
     "locations": [
       "src/admin/shell.ts:39",
-      "src/admin/workspaces.ts:14"
+      "src/admin/workspaces.ts:15"
     ]
   },
   "admin.elapsed": {
@@ -716,7 +716,7 @@
       "id": "string | number"
     },
     "locations": [
-      "src/admin/workspaces.ts:25"
+      "src/admin/workspaces.ts:26"
     ]
   },
   "admin.historyLogLine": {
@@ -832,7 +832,7 @@
     "source": "载入最新版本",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:15"
+      "src/admin/workspaces.ts:16"
     ]
   },
   "admin.loadMore": {
@@ -1052,7 +1052,7 @@
     "source": "名称已保存。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:61"
+      "src/admin/workspaces.ts:62"
     ]
   },
   "admin.navCaption": {
@@ -1089,7 +1089,7 @@
     "locations": [
       "src/admin/measurement.ts:24",
       "src/admin/shell.ts:38",
-      "src/admin/workspaces.ts:12"
+      "src/admin/workspaces.ts:13"
     ]
   },
   "admin.noCacheKind": {
@@ -1128,7 +1128,7 @@
     "source": "没有找到匹配的工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:52"
+      "src/admin/workspaces.ts:53"
     ]
   },
   "admin.noReadErrors": {
@@ -1171,7 +1171,7 @@
     "source": "还没有保存的工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:52"
+      "src/admin/workspaces.ts:53"
     ]
   },
   "admin.notStarted": {
@@ -1195,7 +1195,7 @@
     "params": {},
     "locations": [
       "src/admin/annotations.ts:13",
-      "src/admin/workspaces.ts:14"
+      "src/admin/workspaces.ts:15"
     ]
   },
   "admin.optKind": {
@@ -1304,7 +1304,7 @@
     "source": "原始工作区数据",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:17"
+      "src/admin/workspaces.ts:18"
     ]
   },
   "admin.readMedia": {
@@ -1410,7 +1410,7 @@
     "source": "刷新工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:10"
+      "src/admin/workspaces.ts:11"
     ]
   },
   "admin.removeDir": {
@@ -1597,7 +1597,7 @@
     "source": "将当前版本另存副本",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:15"
+      "src/admin/workspaces.ts:16"
     ]
   },
   "admin.saveDirs": {
@@ -1611,14 +1611,14 @@
     "source": "保存名称",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:13"
+      "src/admin/workspaces.ts:14"
     ]
   },
   "admin.savedAsCopy": {
     "source": "已另存为当前用户的副本。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:63"
+      "src/admin/workspaces.ts:64"
     ]
   },
   "admin.saving": {
@@ -1629,9 +1629,9 @@
     ]
   },
   "admin.scanActive": {
-    "source": "扫描中 · {visited} 个目录",
+    "source": "扫描中 · {visited, plural, other {# 个目录}}",
     "params": {
-      "visited": "string | number"
+      "visited": "number"
     },
     "locations": [
       "src/admin/main.ts:100"
@@ -1666,9 +1666,9 @@
     ]
   },
   "admin.scanErrors": {
-    "source": "{count} 处读取错误{truncated}",
+    "source": "{count, plural, other {# 处读取错误}}{truncated}",
     "params": {
-      "count": "string | number",
+      "count": "number",
       "truncated": "string | number"
     },
     "locations": [
@@ -1700,11 +1700,11 @@
     ]
   },
   "admin.scanProgressLine": {
-    "source": "{state} · {visited} 个目录 · {files} 个媒体",
+    "source": "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体",
     "params": {
       "files": "string | number",
       "state": "string | number",
-      "visited": "string | number"
+      "visited": "number"
     },
     "locations": [
       "src/admin/main.ts:117"
@@ -1717,15 +1717,15 @@
       "src/admin/annotations.ts:13",
       "src/admin/caches.ts:19",
       "src/admin/measurement.ts:24",
-      "src/admin/workspaces.ts:11"
+      "src/admin/workspaces.ts:12"
     ]
   },
   "admin.searchAllWorkspaces": {
     "source": "搜索全部工作区",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:11",
-      "src/admin/workspaces.ts:11"
+      "src/admin/workspaces.ts:12",
+      "src/admin/workspaces.ts:12"
     ]
   },
   "admin.searchCaches": {
@@ -1784,15 +1784,15 @@
     "source": "选择一个工作区查看详情",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:13",
-      "src/admin/workspaces.ts:37"
+      "src/admin/workspaces.ts:14",
+      "src/admin/workspaces.ts:38"
     ]
   },
   "admin.serverChanged": {
     "source": "服务器内容已改变，未覆盖任何修改。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:15"
+      "src/admin/workspaces.ts:16"
     ]
   },
   "admin.serverPath": {
@@ -2016,7 +2016,7 @@
     "source": "试试其他名称，或清空搜索。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:52"
+      "src/admin/workspaces.ts:53"
     ]
   },
   "admin.unknownUser": {
@@ -2091,11 +2091,11 @@
     ]
   },
   "admin.watchSummary": {
-    "source": "{active} / {limit} 个目录{calibration}{partial}",
+    "source": "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}",
     "params": {
       "active": "string | number",
       "calibration": "string | number",
-      "limit": "string | number",
+      "limit": "number",
       "partial": "string | number"
     },
     "locations": [
@@ -2108,7 +2108,7 @@
       "name": "string | number"
     },
     "locations": [
-      "src/admin/workspaces.ts:63"
+      "src/admin/workspaces.ts:64"
     ]
   },
   "admin.workspaceRow": {
@@ -2119,49 +2119,49 @@
       "tracks": "number"
     },
     "locations": [
-      "src/admin/workspaces.ts:49"
+      "src/admin/workspaces.ts:50"
     ]
   },
   "admin.wsCreator": {
     "source": "创建者",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:39"
+      "src/admin/workspaces.ts:40"
     ]
   },
   "admin.wsDeleted": {
     "source": "已删除服务器工作区。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:67"
+      "src/admin/workspaces.ts:68"
     ]
   },
   "admin.wsDesc": {
     "source": "打开已保存的评审，或修改名称、下载副本。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:10"
+      "src/admin/workspaces.ts:11"
     ]
   },
   "admin.wsEmptyHint": {
     "source": "在播放器的“设置 → 工作区”中点击“保存到服务器”，即可在这里打开和管理。",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:52"
+      "src/admin/workspaces.ts:53"
     ]
   },
   "admin.wsJson": {
     "source": "工作区 JSON",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:17"
+      "src/admin/workspaces.ts:18"
     ]
   },
   "admin.wsLastEdit": {
     "source": "最后编辑",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:39"
+      "src/admin/workspaces.ts:40"
     ]
   },
   "admin.wsMetaLine": {
@@ -2172,7 +2172,7 @@
       "tracks": "number"
     },
     "locations": [
-      "src/admin/workspaces.ts:37"
+      "src/admin/workspaces.ts:38"
     ]
   },
   "admin.wsName": {
@@ -2180,14 +2180,14 @@
     "params": {},
     "locations": [
       "src/admin/main.ts:69",
-      "src/admin/workspaces.ts:13"
+      "src/admin/workspaces.ts:14"
     ]
   },
   "admin.wsNoVideos": {
     "source": "无视频",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:39"
+      "src/admin/workspaces.ts:40"
     ]
   },
   "admin.wsTitle": {
@@ -2195,14 +2195,14 @@
     "params": {},
     "locations": [
       "src/admin/shell.ts:7",
-      "src/admin/workspaces.ts:10"
+      "src/admin/workspaces.ts:11"
     ]
   },
   "admin.wsVideos": {
     "source": "视频",
     "params": {},
     "locations": [
-      "src/admin/workspaces.ts:39"
+      "src/admin/workspaces.ts:40"
     ]
   },
   "analysis.bitrate": {

@@ -97,9 +97,9 @@ function renderStatus(value: Status) {
   text('requests', () => t(msg("admin.requestsSummary", "{done} 次完成 · {active} 次处理中 · {aborted} 次中断"), { done: value.http.completedRequests, active: value.http.activeRequests, aborted: value.http.abortedRequests }));
   text('root-summary', () => t(msg("admin.rootsSummary", "{n, plural, other {# 个目录}} · {o} 个离线"), { n: value.library.roots.length, o: value.library.roots.filter(r => r.state === 'offline').length }));
   const job = value.library.job;
-  text('scan-summary', () => value.library.scanning ? t(msg("admin.scanActive", "扫描中 · {visited} 个目录"), { visited: Number(job?.visited ?? 0) }) : job ? t(msg("admin.scanJobSummary", "{state} · {files} 个媒体"), { state: stateLabels[String(job.state)] ?? String(job.state), files: Number(job.files) }) : t(msg("admin.noScan", "尚未扫描")));
+  text('scan-summary', () => value.library.scanning ? t(msg("admin.scanActive", "扫描中 · {visited, plural, other {# 个目录}}"), { visited: Number(job?.visited ?? 0) }) : job ? t(msg("admin.scanJobSummary", "{state} · {files} 个媒体"), { state: stateLabels[String(job.state)] ?? String(job.state), files: Number(job.files) }) : t(msg("admin.noScan", "尚未扫描")));
   const watch = value.library.watch;
-  text('watch-summary', () => watch ? t(msg("admin.watchSummary", "{active} / {limit} 个目录{calibration}{partial}"), {active:watch.active,limit:watch.limit,calibration:watch.limited ? t(msg('admin.watchCalibrated', ' · 其余由周期校准覆盖')) : '',partial:watch.unavailableRoots.length ? t(msg('admin.watchPartial', ' · 部分目录监听不可用')) : ''}) : t(msg("admin.watchPollOnly", "仅周期校准")));
+  text('watch-summary', () => watch ? t(msg("admin.watchSummary", "{active} / {limit, plural, other {# 个目录}}{calibration}{partial}"), {active:watch.active,limit:watch.limit,calibration:watch.limited ? t(msg('admin.watchCalibrated', ' · 其余由周期校准覆盖')) : '',partial:watch.unavailableRoots.length ? t(msg('admin.watchPartial', ' · 部分目录监听不可用')) : ''}) : t(msg("admin.watchPollOnly", "仅周期校准")));
   renderRootStates();
   if (pane === 'logs' && logsMode === 'requests') renderRequests();
 }
@@ -114,7 +114,7 @@ async function loadScan() {
   const value = await api<Scan>(`/api/admin/scan?offset=${errorsOffset}`);
   if (sequence !== scanSequence) return;
   if (errorsJob !== value.job?.id) { errorsJob = value.job?.id; if (errorsOffset) { errorsOffset = 0; return loadScan(); } }
-  text('scan-progress', () => value.job ? t(msg("admin.scanProgressLine", "{state} · {visited} 个目录 · {files} 个媒体"), { state: stateLabels[String(value.job.state)] ?? value.job.state, visited: Number(value.job.visited), files: Number(value.job.files) }) : t(msg("admin.noScanJob", "尚无扫描任务")));
+  text('scan-progress', () => value.job ? t(msg("admin.scanProgressLine", "{state} · {visited, plural, other {# 个目录}} · {files} 个媒体"), { state: stateLabels[String(value.job.state)] ?? value.job.state, visited: Number(value.job.visited), files: Number(value.job.files) }) : t(msg("admin.noScanJob", "尚无扫描任务")));
   text('scan-detail', () => value.scanning ? String(value.job?.current_path || t(msg("admin.scanDetailReading", "正在读取根目录…"))) : Number(value.job?.errors ?? 0) ? t(msg("admin.scanDetailPartial", "部分目录无法读取，请检查下方路径或网络挂载。")) : t(msg("admin.scanDetailOk", "目录离线时保留已有视频索引。")));
   $('scan-cancel').hidden = !value.scanning; $('scan-refresh').toggleAttribute('disabled', value.scanning);
   $('scan-cancel').toggleAttribute('disabled', !value.scanning);
@@ -123,7 +123,7 @@ async function loadScan() {
     const code = document.createElement('span'); const rawCode = String(error.code); localizedText(code, () => ({ ENOENT: t(msg("admin.errNoEnt", "路径不存在")), EACCES: t(msg("admin.errAccess", "无法读取此目录")), EPERM: t(msg("admin.errAccess", "无法读取此目录")), ESTORAGECHANGED: t(msg("admin.errStorage", "网络存储已断开")) } as Record<string, string>)[rawCode] ?? rawCode); localizedAttribute(code, 'title', () => rawCode); row.append(name, code); return row; });
   $('scan-errors').replaceChildren(...nodes);
   const count = Number(value.job?.errors ?? 0); $('scan-issues').hidden = count === 0; $('scan-error-pages').hidden = count <= 100;
-  text('scan-error-count', () => count ? t(msg("admin.scanErrors", "{count} 处读取错误{truncated}"), {count,truncated:value.errorDetailsTruncated ? t(msg('admin.errorTruncated', ' · 详情保留前 1000 条')) : ''}) : t(msg("admin.noReadErrors", "本次扫描没有读取错误")));
+  text('scan-error-count', () => count ? t(msg("admin.scanErrors", "{count, plural, other {# 处读取错误}}{truncated}"), {count,truncated:value.errorDetailsTruncated ? t(msg('admin.errorTruncated', ' · 详情保留前 1000 条')) : ''}) : t(msg("admin.noReadErrors", "本次扫描没有读取错误")));
   $('errors-prev').toggleAttribute('disabled', errorsOffset === 0);
   $('errors-next').toggleAttribute('disabled', errorsOffset + value.errors.length >= Math.min(count, 1000));
 }
