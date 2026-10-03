@@ -35,7 +35,7 @@ try {
     ['h264.mp4', true, false], ['h264.mp4', false, false],
     ['h264.ts', true, true], ['h264.ts', false, true],
   ]) {
-    const context = await browser.newContext(), page = await context.newPage(), errors = [], requests = [];
+    const context = await browser.newContext({locale:'zh-CN'}), page = await context.newPage(), errors = [], requests = [];
     let libraryEntryId;
     page.on('pageerror', e => errors.push(e.message));
     page.on('request', r => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(r.url()).pathname)) requests.push(r.headers()); });

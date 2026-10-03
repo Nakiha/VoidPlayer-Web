@@ -1,9 +1,12 @@
+import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig } from 'vite';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 const sourceDir = resolve(import.meta.dirname, 'src');
+let englishCatalogRef = '';
+let buildCatalog = false;
 const infoFile = resolve(sourceDir, 'build-info.ts');
 const coreDir = resolve(import.meta.dirname, 'public/vendor/voidplayer-core');
 const isolationHeaders = {
@@ -21,7 +24,7 @@ function buildInfo() {
     for (const entry of readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
       const relative = `${prefix}${entry.name}`;
       if (entry.isDirectory()) hashSources(resolve(directory, entry.name), `${relative}/`);
-      else if (/\.(ts|mjs|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
+      else if (/\.(ts|js|mjs|css)$/.test(entry.name)) hash.update(relative).update(readFileSync(resolve(directory, entry.name)));
     }
   }
   hashSources(sourceDir);
@@ -34,7 +37,14 @@ function buildInfo() {
 }
 export default defineConfig({
   build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
-  plugins: [{
+  plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
+    configResolved(config) { buildCatalog = config.command === 'build'; },
+    buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
+    transform(code,id) {
+      if(id.split('?')[0]!==resolve(sourceDir,'i18n.ts'))return;
+      return {code:code.replace("'__EN_CATALOG_URL__'",englishCatalogRef ? `import.meta.ROLLUP_FILE_URL_${englishCatalogRef}` : "'/src/i18n/generated/en.js'"),map:null};
+    },
+  }, { name: 'voidplayer-i18n-descriptors', enforce: 'pre', transform: lowerDescriptors }, {
     name: 'voidplayer-admin-entry',
     configureServer(server) {
       // Vite's conditional module responses bypass server.headers. WebKit

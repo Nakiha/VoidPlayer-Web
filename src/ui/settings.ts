@@ -1,4 +1,5 @@
-import { SETTINGS_PANES } from './settings-shell.ts';
+import { t, onLanguageChange, msg } from '../i18n.ts';
+import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
@@ -21,8 +22,8 @@ export function installSettings() {
   let closeEpoch = 0; let outsidePointer: number | null = null;
   function select(id: string) {
     selected = id;
-    document.getElementById('settings-current-title')!.textContent = SETTINGS_PANES.find(([key]) => key === id)![1];
-    for (const [key] of SETTINGS_PANES) {
+    document.getElementById('settings-current-title')!.textContent = settingsPanes().find(([key]) => key === id)![1];
+    for (const [key] of settingsPanes()) {
       const active = key === id;
       const tab = document.getElementById(`settings-tab-${key}`)!;
       tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
@@ -31,6 +32,7 @@ export function installSettings() {
     revealTab();
     dialog.dispatchEvent(new CustomEvent('settings-pane-change', { detail: selected }));
   }
+  onLanguageChange(() => { document.getElementById('settings-current-title')!.textContent = settingsPanes().find(([key]) => key === selected)![1]; }, life.signal);
   function open(invoker: HTMLElement | null = trigger) {
     if (dialog.open) {
       ++closeEpoch; delete dialog.dataset.closing;
@@ -76,7 +78,7 @@ export function installSettings() {
     if (matchesShortcut(event, 'settings') && !event.isComposing) { event.preventDefault(); if (!document.querySelector('dialog[open]') || dialog.open) open(document.activeElement instanceof HTMLElement ? document.activeElement : trigger); }
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
-    if (!SETTINGS_PANES.some(([key]) => key === id)) throw new Error('未知设置页面。');
+    if (!settingsPanes().some(([key]) => key === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面。")));
     select(id); open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
   }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };
 }

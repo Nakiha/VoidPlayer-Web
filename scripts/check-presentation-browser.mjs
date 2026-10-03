@@ -7,7 +7,7 @@ let browser;
 try {
   for (const [name, engine] of Object.entries({ chromium, webkit })) {
     browser = await engine.launch({ headless: true });
-    const page = await browser.newPage();
+    const page = await browser.newPage({locale:'zh-CN'});
     await page.route('**/presentation-test', route => route.fulfill({ contentType: 'text/html', body: '<div class="frame-stage"><canvas id="source" width="2" height="2"></canvas></div>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/presentation-test`);
     const result = await page.evaluate(async () => {

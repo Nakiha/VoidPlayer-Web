@@ -330,12 +330,15 @@ jobs:
       - name: Verify regressions that no other job runs
         # The runner records every exit status and fails only after all cases ran.
         run: node scripts/run-tests.mjs uncovered --prepared
+      - name: Verify language switching and expanded layouts
+        run: node scripts/run-tests.mjs ci-i18n --prepared
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: uncovered-browser-reports
           path: |
             .run/test-suites/uncovered/
+            .run/test-suites/ci-i18n/
             .run/playback-reports/
           if-no-files-found: error
           retention-days: 30

@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { installResizeGesture } from './resize-gesture.ts';
 
 const WIDTH_KEY = 'voidplayer.start-panel-width.v1';
@@ -24,7 +25,7 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
     panel.style.setProperty('--start-panel-width', `${width}px`);
     for (const handle of handles) {
       handle.setAttribute('aria-valuemin', String(min)); handle.setAttribute('aria-valuemax', String(max));
-      handle.setAttribute('aria-valuenow', String(Math.round(width))); handle.setAttribute('aria-valuetext', `${Math.round(width)} 像素`);
+      handle.setAttribute('aria-valuenow', String(Math.round(width))); handle.setAttribute('aria-valuetext', t(msg('ui.pixelWidth','{width} 像素'),{width:Math.round(width)}));
       handle.setAttribute('aria-disabled', String(max <= min)); handle.tabIndex = max > min ? 0 : -1;
     }
   }
@@ -54,6 +55,7 @@ export function installStartPanelResize(panel: HTMLElement, signal: AbortSignal)
   }
   const observer = new ResizeObserver(refresh); observer.observe(host);
   window.addEventListener('resize', refresh, { signal });
+  onLanguageChange(refresh, signal);
   signal.addEventListener('abort', () => { observer.disconnect(); panel.classList.remove('resizing'); }, { once: true });
   refresh();
 }

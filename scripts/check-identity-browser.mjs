@@ -23,8 +23,8 @@ try {
   console.log('Identity browser: service ready, certificate trust configured');
   const base = `${secure ? 'https' : 'http'}://${insecure || secure ? 'voidplayer.test' : '127.0.0.1'}:${config.port}`;
   browser = await (process.env.IDENTITY_BROWSER === 'webkit' ? webkit : chromium).launch({ headless: true, args: insecure || secure ? ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] : [], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
-  const a = await browser.newContext({ viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
-  const b = await browser.newContext(); const errors = [];
+  const a = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
+  const b = await browser.newContext({locale:'zh-CN'}); const errors = [];
   const page = await a.newPage(), other = await b.newPage();
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
@@ -187,7 +187,7 @@ try {
     }
   }
   // The shared admin welcome also selects an existing identity without creating a duplicate.
-  const returningContext = await browser.newContext(); const returning = await returningContext.newPage();
+  const returningContext = await browser.newContext({locale:'zh-CN'}); const returning = await returningContext.newPage();
   returning.on('pageerror', error => errors.push(error.message));
   await returning.goto(base + '/admin/');
   await returning.locator('#identity-welcome .welcome-toggle').click();
@@ -198,7 +198,7 @@ try {
   assert.equal(await returning.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.identity')).id), id);
   await returningContext.close();
   // Explicit settings actions keep rename, create and switch distinct.
-  const editContext = await browser.newContext(); const editPage = await editContext.newPage();
+  const editContext = await browser.newContext({locale:'zh-CN'}); const editPage = await editContext.newPage();
   await editPage.goto(base); await editPage.locator('#identity-welcome input').fill('原用户');
   await editPage.locator('#identity-welcome .welcome-enter').click(); await settings(editPage);
   const originalId = await editPage.locator('#identity-id').getAttribute('data-tooltip');
@@ -219,7 +219,7 @@ try {
   assert.equal(await editPage.locator('#saved-workspace-share').isEnabled(), false);
   await editContext.close();
   // A failed list must not label unknown names as new; failed submission remains retryable.
-  const failureContext = await browser.newContext(); const failure = await failureContext.newPage();
+  const failureContext = await browser.newContext({locale:'zh-CN'}); const failure = await failureContext.newPage();
   failure.on('pageerror', error => errors.push(error.message));
   await failure.route('**/api/users', route => route.fulfill({ status: 503, json: { error: '不可用' } }));
   await failure.route('**/api/identity', route => route.fulfill({ status: 503, json: { error: '暂时无法进入，请重试。' } }));
@@ -235,7 +235,7 @@ try {
   await failure.locator('#identity-welcome').waitFor({ state: 'hidden' });
   await failureContext.close();
   // A stalled list must not block visitor entry or keep the welcome dialog alive.
-  const slowContext = await browser.newContext(); const slow = await slowContext.newPage();
+  const slowContext = await browser.newContext({locale:'zh-CN'}); const slow = await slowContext.newPage();
   let releaseList;
   const listGate = new Promise(resolve => { releaseList = resolve; });
   await slow.route('**/api/users', async route => { await listGate; await route.abort().catch(() => {}); });

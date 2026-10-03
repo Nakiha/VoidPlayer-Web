@@ -2,6 +2,8 @@
 // DOM 负责工具条/tooltip/可访问文本；Canvas 只画高密度柱、线、网格。
 // 播放游标与悬停线是独立 DOM 覆盖层，只做 transform，不触发重绘。
 
+import { t, msg } from '../i18n.ts';
+
 export interface CanvasBitrate { t: number; mbps: number | null }
 export interface CanvasTrack {
   slot: string;
@@ -191,7 +193,7 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
       for (const track of rows) {
         if (track.provisional) {
           ctx.fillStyle = model.colors.axisText;
-          ctx.fillText('暂定', geom.gutter + geom.plotW - 30, row.y + 10);
+          ctx.fillText(t(msg("analysis.provisional", "暂定")), geom.gutter + geom.plotW - 30, row.y + 10);
         }
       }
     }

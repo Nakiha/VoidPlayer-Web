@@ -15,7 +15,7 @@ try {
 for(const [browserName,engine] of Object.entries({chromium,webkit})){
   const browser=await engine.launch({headless:true});
   try {for(const sample of manifest)for(const remote of [false,true]){
-    const page=await browser.newPage();let timer;
+    const page=await browser.newPage({locale:'zh-CN'});let timer;
     try {
       await page.route('**/fate-test',r=>r.fulfill({
         contentType:'text/html',

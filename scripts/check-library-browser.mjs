@@ -19,7 +19,7 @@ await new Promise(r => server.listen(0, '127.0.0.1', r));
 const base = `http://127.0.0.1:${server.address().port}`;
 const engine = process.argv.find(arg => arg === 'webkit' || arg === 'chromium') ?? 'webkit'; const browser = await (engine === 'chromium' ? chromium : webkit).launch({ headless: true });
 try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, colorScheme: 'light' });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 }, colorScheme: 'light' });
   const page = await context.newPage(); const errors = [], legacy = [];
   page.on('pageerror', e => errors.push(e.message)); page.on('request', r => { if (new URL(r.url()).pathname === '/api/library') legacy.push(r.url()); });
   const choose = async name => { await page.locator('#library-root').click(); await page.locator('#library-root-menu').getByRole('menuitemradio', { name, exact: true }).click(); };

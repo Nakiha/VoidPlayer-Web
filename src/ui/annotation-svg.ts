@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { DEFAULT_ANNOTATION_COLOR, drawingStrokeWidth } from '../annotation.ts';
 import type { PresentationGeometry } from '../presentation-surface.ts';
 import type { Drawing } from '../annotation.ts';
@@ -29,7 +30,7 @@ export function textElement(d: Drawing, width: number, height: number, editing =
   const box = svgElement('foreignObject', { x: p.x * width, y: p.y * height, width, height });
   const div = document.createElement('div'); div.className = 'annotation-text'; div.textContent = d.text ?? '';
   div.style.color = d.color ?? DEFAULT_ANNOTATION_COLOR; div.style.fontSize = `${(d.fontSize ?? 1 / 42) * width}px`;
-  if (editing) { div.contentEditable = 'true'; div.role = 'textbox'; div.setAttribute('aria-label', '画面文字'); div.spellcheck = false; div.dataset.placeholder = '输入文字'; }
+  if (editing) { div.contentEditable = 'true'; div.role = 'textbox'; div.setAttribute('aria-label', t(msg('drawing.frameText', '画面文字'))); div.spellcheck = false; div.dataset.placeholder = t(msg('drawing.enterText', '输入文字')); }
   box.append(div); return { box, div };
 }
 export function renderAnnotations(svg: SVGSVGElement, drawings: Drawing[], aspect: number, editingId?: string) {

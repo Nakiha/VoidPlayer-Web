@@ -14,7 +14,7 @@ try {
  const config=await loadConfig([],'production',temp);config.port=0;service=await startService(config);await service.library.refresh();
  const base=`http://127.0.0.1:${service.server.address().port}`;
  browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
- const context=await browser.newContext({viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
+ const context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'}), errors=[];
  context.on('page',page=>page.on('pageerror',error=>errors.push(error.message)));
  const call=(page,name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  await context.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));

@@ -1,9 +1,10 @@
-import { indexProgressLabel } from '../../index-progress.ts';
+import { t, msg } from '../../i18n.ts';
+import { indexProgressLabel } from '../index-progress.ts';
 import { installTimeInput } from '../../time-input.ts';
 import { parseTimeInput } from '../../time-input.ts';
 import type { Slot, Mark } from '../../model.ts';
 import { formatTime } from '../../model.ts';
-import { colorLabel, rangeLabel } from '../../media-metadata.ts';
+import { colorLabel, rangeLabel } from '../media-labels.ts';
 import { isHdrTransfer } from '../../presentation-color.ts';
 import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
@@ -39,18 +40,18 @@ export function createTracksPane(shared: WorkbenchShared) {
     const color = track.color;
     const hdr = isHdrTransfer(color?.transfer);
     return [
-      ['编码', track.codec], ['尺寸', `${track.width} × ${track.height}`],
-      ...(track.indexWarning ? [['文件完整性', track.indexWarning]] : []),
-      ...(track.indexState ? [['帧索引', track.indexState === 'building' ? `${indexProgressLabel(track)} · 时长为已索引范围` : track.indexState === 'error' ? `索引失败：${track.indexError}` : track.indexSource === 'server' ? '已复用服务器缓存' : '已完成']] : []),
-      ['时长', formatTime(track.durationUs)], ['解码', track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
-      ['加速请求', track.decoder === 'ffmpeg-wasm' ? '软件解码' : track.hardwareAcceleration === 'prefer-hardware' ? '硬件优先（实际硬件使用未验证）' : '浏览器自动选择'],
-      ...(track.seekStrategy ? [['定位方式', ({ 'packet-anchor': '包索引定位', 'demuxer-keyframe': '容器关键帧定位', 'demuxer-timestamp': '容器时间戳定位（可能回扫）', browser: '浏览器媒体索引' })[track.seekStrategy]]] : []),
-      [track.pixelFormat ? '像素格式' : '解码像素格式', track.pixelFormat || track.decodedPixelFormat || '未提供'],
-      ['色域原色', colorLabel(color?.primaries)],
-      ['传递特性', colorLabel(color?.transfer)],
-      ['矩阵系数', colorLabel(color?.matrix)],
-      ['范围', rangeLabel(color?.fullRange)],
-      ...(hdr ? [['HDR 源', track.decoder === 'ffmpeg-wasm' ? 'SDR 兜底显示' : '浏览器输出未验证']] : []),
+      [t(msg("tracks.codec", "编码")), track.codec], [t(msg("tracks.dimensions", "尺寸")), `${track.width} × ${track.height}`],
+      ...(track.indexWarning ? [[t(msg("tracks.fileIntegrity", "文件完整性")), track.indexWarning]] : []),
+      ...(track.indexState ? [[t(msg("tracks.frameIndex", "帧索引")), track.indexState === 'building' ? t(msg("tracks.durationCoversIndexedPortion", "{p0} · 时长为已索引范围"), { p0: indexProgressLabel(track) }) : track.indexState === 'error' ? t(msg("tracks.indexFailed", "索引失败：{p0}"), { p0: track.indexError ?? '' }) : track.indexSource === 'server' ? t(msg("tracks.reusedServerCache", "已复用服务器缓存")) : t(msg("tracks.complete", "已完成"))]] : []),
+      [t(msg("tracks.duration", "时长")), formatTime(track.durationUs)], [t(msg("colorFlow.decode", "解码")), track.decoder === 'webcodecs' ? 'WebCodecs' : 'FFmpeg WASM'],
+      [t(msg("tracks.accelerationRequest", "加速请求")), track.decoder === 'ffmpeg-wasm' ? t(msg("colorFlow.softwareDecoding", "软件解码")) : track.hardwareAcceleration === 'prefer-hardware' ? t(msg("tracks.preferHardwareActualHardwareUseUnverified", "硬件优先（实际硬件使用未验证）")) : t(msg("tracks.browserDefault", "浏览器自动选择"))],
+      ...(track.seekStrategy ? [[t(msg("tracks.seekMethod", "定位方式")), ({ 'packet-anchor': t(msg("tracks.packetIndex", "包索引定位")), 'demuxer-keyframe': t(msg("tracks.containerKeyframes", "容器关键帧定位")), 'demuxer-timestamp': t(msg("tracks.containerTimestampsMayScanBackward", "容器时间戳定位（可能回扫）")), browser: t(msg("tracks.browserMediaIndex", "浏览器媒体索引")) })[track.seekStrategy]]] : []),
+      [track.pixelFormat ? t(msg("tracks.pixelFormat", "像素格式")) : t(msg("tracks.decodedPixelFormat", "解码像素格式")), track.pixelFormat || track.decodedPixelFormat || t(msg("tracks.notProvided", "未提供")), track.pixelFormat ? 'pixel-format' : 'decoded-format'],
+      [t(msg("tracks.colorPrimaries", "色域原色")), colorLabel(color?.primaries), 'color-metadata'],
+      [t(msg("tracks.transferFunction", "传递特性")), colorLabel(color?.transfer), 'color-metadata'],
+      [t(msg("tracks.matrixCoefficients", "矩阵系数")), colorLabel(color?.matrix), 'color-metadata'],
+      [t(msg("tracks.range", "范围")), rangeLabel(color?.fullRange), 'color-metadata'],
+      ...(hdr ? [[t(msg("tracks.hdrSource", "HDR 源")), track.decoder === 'ffmpeg-wasm' ? t(msg("tracks.sdrFallbackDisplay", "SDR 兜底显示")) : t(msg("tracks.browserOutputUnverified", "浏览器输出未验证"))]] : []),
     ];
   }
 
@@ -62,25 +63,26 @@ export function createTracksPane(shared: WorkbenchShared) {
       const list = $('track-selector'); list.replaceChildren();
       for (const track of state.tracks) {
         const button = document.createElement('button'); button.className = 'track-choice';
-        button.setAttribute('aria-label', `选择轨道 ${track.slot}`);
+        button.setAttribute('aria-label', t(msg("tracks.selectTrack", "选择轨道 {p0}"), { p0: track.slot }));
         button.setAttribute('aria-pressed', String(track.slot === view.selected));
         button.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', track.name, 'filename'));
-        button.dataset.tooltip = '查看轨道详情'; button.onclick = () => shared.select(track.slot); list.append(button);
+        button.dataset.tooltip = t(msg("tracks.viewTrackDetails", "查看轨道详情")); button.onclick = () => shared.select(track.slot); list.append(button);
       }
       const properties = $('track-properties'); properties.replaceChildren();
-      if (!selected) properties.append(text('p', '尚未载入轨道', 'panel-empty'));
+      if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
       else {
-        properties.append(text('h3', `轨道 ${selected.slot}`));
+        properties.append(text('h3', t(msg("tracks.track", "轨道 {p0}"), { p0: selected.slot })));
         const dl = document.createElement('dl');
-        for (const [label, value] of propertyRows(selected)) {
+        for (const [label, value, id] of propertyRows(selected)) {
           const dd = text('dd', value);
-          if (label === '解码像素格式') dd.title = '浏览器解码输出的内存格式，可能与源视频的像素格式不同';
-          if (['色域原色', '传递特性', '矩阵系数', '范围'].includes(label) && selected.colorSource) dd.title = selected.colorSource === 'container' ? '来源：封装标记' : '来源：解码器读取的码流元数据';
+          if (id === 'decoded-format') dd.dataset.tooltip = t(msg("tracks.browserDecoderMemoryFormatMayDifferFrom", "浏览器解码输出的内存格式，可能与源视频的像素格式不同"));
+          if (id === 'color-metadata' && selected.colorSource) dd.title = selected.colorSource === 'container' ? t(msg("tracks.sourceContainerTags", "来源：封装标记")) : t(msg("tracks.sourceBitstreamMetadataReadByDecoder", "来源：解码器读取的码流元数据"));
+          if(dd.dataset.tooltip) { dd.tabIndex=0; dd.setAttribute('aria-description',dd.dataset.tooltip); }
           dl.append(text('dt', label), dd);
         }
-        properties.append(dl, text('h3', '当前帧'));
+        properties.append(dl, text('h3', t(msg("tracks.currentFrame", "当前帧"))));
         const timing = document.createElement('dl');
-        for (const [label, id] of [['片内 PTS', 'inspect-pts'], ['源 PTS', 'inspect-source-pts'], ['帧时长', 'inspect-frame-duration'], ['相对游标', 'inspect-frame-delta']]) {
+        for (const [label, id] of [[t(msg("tracks.clipPts", "片内 PTS")), 'inspect-pts'], [t(msg("tracks.sourcePts", "源 PTS")), 'inspect-source-pts'], [t(msg("tracks.frameDuration", "帧时长")), 'inspect-frame-duration'], [t(msg("tracks.relativeToPlayhead", "相对游标")), 'inspect-frame-delta']]) {
           const dd = text('dd', '—'); dd.id = id; timing.append(text('dt', label), dd);
         }
         properties.append(timing);
@@ -113,7 +115,7 @@ export function createTracksPane(shared: WorkbenchShared) {
         const label = document.createElement('div'); label.className = 'subtrack-label';
 
         const name = document.createElement('button'); name.className = 'subtrack-name track-identity'; name.dataset.dragSurface = track.slot;
-        name.setAttribute('aria-label', `检视子轨道 ${track.slot}`);
+        name.setAttribute('aria-label', t(msg("tracks.inspectSubtrack", "检视子轨道 {p0}"), { p0: track.slot }));
         name.setAttribute('aria-pressed', String(track.slot === view.selected));
         name.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', track.name, 'filename'));
         name.onclick = () => shared.inspect(track.slot);
@@ -121,8 +123,8 @@ export function createTracksPane(shared: WorkbenchShared) {
         const seek = document.createElement('button'); seek.className = 'track-duration';
         seek.style.left = `${Math.max(0, track.offsetUs) / maxDuration * 100}%`;
         seek.style.width = `${Math.max(0, track.durationUs + Math.min(0, track.offsetUs)) / maxDuration * 100}%`;
-        seek.textContent = formatTime(track.durationUs); seek.title = `轨道 ${track.slot} 时长 ${formatTime(track.durationUs)}；点击定位`;
-        seek.setAttribute('aria-label', `定位轨道 ${track.slot}`);
+        seek.textContent = formatTime(track.durationUs); seek.title = t(msg("tracks.trackDurationClickToSeek", "轨道 {p0} 时长 {p1}；点击定位"), { p0: track.slot, p1: formatTime(track.durationUs) });
+        seek.setAttribute('aria-label', t(msg("tracks.seekTrack", "定位轨道 {p0}"), { p0: track.slot }));
         const trackMarks = marksForTrack(track, state.marks).map(m => ({ ...m, frame: { ...m.frame, ptsUs: m.frame.ptsUs + track.offsetUs } })).filter(m => m.frame.ptsUs >= 0);
         const preview = $('subtrack-preview'); preview.hidden = true;
         const targetAt = (x: number) => { const r = lane.getBoundingClientRect(); const target = seekTarget(x - r.left, r.width, maxDuration, trackMarks.filter(m => m.frame.ptsUs < maxDuration)); return { ...target, ptsUs: Math.max(0, Math.min(target.ptsUs, maxDuration - 1)) }; };
@@ -148,7 +150,7 @@ export function createTracksPane(shared: WorkbenchShared) {
           identifyMark(marker, mark.id); bindMarkHover(marker, mark.id);
           marker.style.left = `${Math.max(0, Math.min(100, mark.frame.ptsUs / maxDuration * 100))}%`;
           marker.title = `${formatTime(mark.frame.ptsUs)} · ${mark.text}`;
-          marker.setAttribute('aria-label', `标记 ${track.slot} ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
+          marker.setAttribute('aria-label', t(msg("tracks.mark", "标记 {p0} {p1} {p2}"), { p0: track.slot, p1: formatTime(mark.frame.ptsUs), p2: mark.text }));
           marker.onpointerenter = () => showTarget({ ptsUs: mark.frame.ptsUs, nearby: trackMarks.filter(m => m.frame.ptsUs === mark.frame.ptsUs) });
           marker.onfocus = () => showTarget({ ptsUs: mark.frame.ptsUs, nearby: [mark] });
           marker.onblur = hideSeekPreview;
@@ -159,26 +161,26 @@ export function createTracksPane(shared: WorkbenchShared) {
         const hover = document.createElement('span'); hover.className = 'track-playhead track-seek-preview'; hover.hidden = true; lane.append(hover);
         cursors.set(track.slot, { current: cursor, hover, startUs: Math.max(0, track.offsetUs), endUs: track.durationUs + track.offsetUs });
         const offset = document.createElement('input'); offset.type = 'text'; offset.className = 'track-offset offset-input';
-        offset.setAttribute('aria-label', `轨道 ${track.slot} 偏移，毫秒`); offset.dataset.tooltip = '同步偏移：正值延后，负值提前（毫秒）';
+        offset.setAttribute('aria-label', t(msg("tracks.trackOffsetMilliseconds", "轨道 {p0} 偏移，毫秒"), { p0: track.slot })); offset.dataset.tooltip = t(msg("tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds", "同步偏移：正值延后，负值提前（毫秒）"));
         installTimeInput(offset, {
           read: () => session.getState().tracks.find(t => t.slot === track.slot)?.offsetUs ?? 0,
           format: value => `${+(value / 1000).toFixed(3)} ms`, parse: value => parseTimeInput(value, 'ms', true), begin: () => session.pause(),
           commit: offsetUs => act(() => session.setTrackOffset(track.slot, offsetUs), 'ui.track-offset', { slot: track.slot, offsetUs }),
         });
-        const visibility = createIconButton({ glyph: 'eye', label: `隐藏轨道 ${track.slot}`, className: 'track-visibility' });
+        const visibility = createIconButton({ glyph: 'eye', label: t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }), className: 'track-visibility' });
         visibility.onclick = () => {
           const current = session.getState().tracks.find(t => t.slot === track.slot);
           if (current) session.setTrackVisibility(track.slot, !current.visible);
         };
         label.append(name); row.append(label, offset, lane, visibility); list.append(row);
       }
-      if (!state.tracks.length) list.append(text('p', '载入视频后查看轨道与标记', 'panel-empty'));
+      if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
     }
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
       const track = state.tracks.find(t => t.slot === row.dataset.trackDrag)!;
       const visibility = row.querySelector<HTMLButtonElement>('.track-visibility')!;
-      const label = `${track.visible ? '隐藏' : '显示'}轨道 ${track.slot}`;
+      const label = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });
       visibility.setAttribute('aria-label', label);
       visibility.setAttribute('aria-pressed', String(!track.visible));
       visibility.dataset.tooltip = label;
@@ -204,10 +206,55 @@ export function createTracksPane(shared: WorkbenchShared) {
     for (const c of cursors.values()) c.current.style.left = `${trackTimelineRatio(positionUs, c.startUs, c.endUs, durationUs) * 100}%`;
   }
 
+  function localize(state: WorkbenchState) {
+    // The dock owns editable offsets and annotation cards. Keep their nodes and
+    // pending input intact, including when a peer tab changes the language.
+    const selected = state.tracks.find(track => track.slot === view.selected);
+    for(const button of $('track-selector').querySelectorAll<HTMLElement>('.track-choice')) {
+      const slot = button.querySelector('.slot')!.textContent!;
+      button.setAttribute('aria-label', t(msg('tracks.selectTrack', '选择轨道 {p0}'), {p0:slot}));
+      button.dataset.tooltip = t(msg('tracks.viewTrackDetails', '查看轨道详情'));
+    }
+    if(selected && $('track-properties').querySelector('dl')) {
+      const rows = propertyRows(selected), properties = $('track-properties').querySelector('dl')!;
+      [...properties.querySelectorAll('dt')].forEach((node,i)=>{node.textContent=rows[i][0];});
+      [...properties.querySelectorAll('dd')].forEach((node,i)=>{node.textContent=rows[i][1];
+        if(rows[i][2]==='decoded-format')node.dataset.tooltip=t(msg('tracks.browserDecoderMemoryFormatMayDifferFrom', '浏览器解码输出的内存格式，可能与源视频的像素格式不同'));
+        if(rows[i][2]==='color-metadata'&&selected.colorSource)node.title=selected.colorSource==='container'?t(msg('tracks.sourceContainerTags', '来源：封装标记')):t(msg('tracks.sourceBitstreamMetadataReadByDecoder', '来源：解码器读取的码流元数据'));
+        if(node.dataset.tooltip)node.setAttribute('aria-description',node.dataset.tooltip);
+      });
+      const headings = $('track-properties').querySelectorAll('h3');
+      headings[0].textContent=t(msg('tracks.track', '轨道 {p0}'), {p0:selected.slot});
+      headings[1].textContent=t(msg('tracks.currentFrame', '当前帧'));
+      const labels=[t(msg('tracks.clipPts','片内 PTS')),t(msg('tracks.sourcePts','源 PTS')),t(msg('tracks.frameDuration','帧时长')),t(msg('tracks.relativeToPlayhead','相对游标'))];
+      [...$('track-properties').querySelectorAll('dl')[1].querySelectorAll('dt')].forEach((node,i)=>node.textContent=labels[i]);
+    } else if(!selected) $('track-properties').querySelector('.panel-empty')?.replaceChildren(t(msg('tracks.noTrackLoaded','尚未载入轨道')));
+    for (const track of state.tracks) {
+      const row = $('subtrack-list').querySelector<HTMLElement>(`[data-track-drag="${track.slot}"]`);
+      if (!row) continue;
+      row.querySelector('.subtrack-name')!.setAttribute('aria-label', t(msg("tracks.inspectSubtrack", "检视子轨道 {p0}"), { p0: track.slot }));
+      const seek = row.querySelector<HTMLElement>('.track-duration')!;
+      seek.title = t(msg("tracks.trackDurationClickToSeek", "轨道 {p0} 时长 {p1}；点击定位"), { p0: track.slot, p1: formatTime(track.durationUs) });
+      seek.setAttribute('aria-label', t(msg("tracks.seekTrack", "定位轨道 {p0}"), { p0: track.slot }));
+      const offset = row.querySelector<HTMLElement>('.track-offset')!;
+      offset.setAttribute('aria-label', t(msg("tracks.trackOffsetMilliseconds", "轨道 {p0} 偏移，毫秒"), { p0: track.slot }));
+      offset.dataset.tooltip = t(msg("tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds", "同步偏移：正值延后，负值提前（毫秒）"));
+      const visibility = row.querySelector<HTMLElement>('.track-visibility');
+      if (visibility) {
+        const visibilityLabel = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });
+        visibility.setAttribute('aria-label', visibilityLabel); visibility.dataset.tooltip = visibilityLabel;
+      }
+      for (const marker of row.querySelectorAll<HTMLElement>('.track-marker')) {
+        const mark = state.marks.find(mark => mark.id === marker.dataset.markId);
+        if (mark) marker.setAttribute('aria-label', t(msg("tracks.mark", "标记 {p0} {p1} {p2}"), { p0: track.slot, p1: formatTime(mark.frame.ptsUs + track.offsetUs), p2: mark.text }));
+      }
+    }
+  }
+
   function resetSignatures() { trackSignature = ''; dockSignature = ''; annotationSignature = ''; }
 
   /** Selection only rebuilds the inspector; the dock syncs selection in place. */
   function resetInspectorSignature() { trackSignature = ''; }
 
-  return { renderInspector, renderDock, renderProgress, hideSeekPreview, resetSignatures, resetInspectorSignature };
+  return { localize, renderInspector, renderDock, renderProgress, hideSeekPreview, resetSignatures, resetInspectorSignature };
 }

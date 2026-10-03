@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { formatTime } from '../model.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 
@@ -18,7 +19,7 @@ export function showSeekPreview(output: HTMLElement, x: number, ptsUs: number, n
   if (thumbnail) {
     const image = document.createElement('img'); image.className = 'seek-preview-thumbnail';
     image.src = thumbnail.url; image.width = thumbnail.width; image.height = thumbnail.height;
-    image.alt = '标注画面'; image.dataset.markId = mark.id;
+    image.alt = t(msg('annotation.framePreview', '标注画面')); image.dataset.markId = mark.id;
     output.append(image);
   }
   const time = document.createElement('time'); time.textContent = formatTime(ptsUs); output.append(time);

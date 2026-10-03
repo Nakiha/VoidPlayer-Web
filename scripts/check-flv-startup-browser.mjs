@@ -20,7 +20,7 @@ async function run() {
   fixture = await startupFixture();
   phase('browser-launch');
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
-  page = await browser.newPage();
+  page = await browser.newPage({locale:'zh-CN'});
   evidence = recordBrowserEvidence(page);
   const errors = [], wasmRequests = [];
   let packetWorkerStarts = 0, packetWorkerCloses = 0;
@@ -86,7 +86,7 @@ async function run() {
   const benchmark = await call('benchmark_review', { durationMs: 1500 }); assert.equal(benchmark.passed, true, JSON.stringify(benchmark));
   const list = await call('list_frame_indexes'); assert.equal(list.count, 1);
   context.caseName = 'frame-index-admin'; phase('cache-management');
-  const admin = await browser.newPage(); await admin.goto(fixture.base + '/admin');
+  const admin = await browser.newPage({locale:'zh-CN'}); await admin.goto(fixture.base + '/admin');
   await chooseTestGuest(admin);
   await admin.locator('[data-pane="caches"]').click();
   await admin.locator('[data-cache-kind="frame-indexes"]').click();

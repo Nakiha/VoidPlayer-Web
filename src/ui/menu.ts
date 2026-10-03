@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 /** Shared top-layer menu behavior for choices and actions. */
 export function installMenu(button: HTMLButtonElement, menu: HTMLElement, options: {
   align?: 'start' | 'end';
@@ -12,7 +13,8 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   menu.classList.add('popup-menu');
   menu.setAttribute('popover', 'auto');
   menu.setAttribute('role', 'menu');
-  menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? '操作');
+  menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? t(msg('menu.actions', '操作')));
+  onLanguageChange(() => menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? t(msg('menu.actions', '操作'))), lifecycle.signal);
   button.setAttribute('aria-controls', menu.id);
   button.setAttribute('aria-haspopup', 'menu');
   button.setAttribute('aria-expanded', 'false');

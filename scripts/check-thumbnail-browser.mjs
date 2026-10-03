@@ -39,7 +39,7 @@ async function openSamples(page) {
 }
 
 try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -82,7 +82,7 @@ try {
   await context.close();
 
   // A fresh profile (empty local cache) reuses the server image directly.
-  const fresh = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const fresh = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });
   const page2 = await fresh.newPage();
   page2.on('pageerror', e => errors.push(e.message));
   const reuseVideoRequests = [];

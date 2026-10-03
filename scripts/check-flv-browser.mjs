@@ -29,7 +29,7 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   for (const name of ['standard-h264', 'legacy-hevc', 'private-av1', 'private-vvc', 'enhanced-hevc', 'enhanced-av1', 'enhanced-vvc']) {
     if (process.env.FLV_CASE && name !== process.env.FLV_CASE) continue;
-    const page = await browser.newPage();
+    const page = await browser.newPage({locale:'zh-CN'});
     const errors = [], mediaRequests = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(request.url()).pathname)) mediaRequests.push(request.headers()); });

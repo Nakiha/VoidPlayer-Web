@@ -1,17 +1,18 @@
+import { t, msg } from '../i18n.ts';
 /** UI accents only; annotation ink and stable mark identities retain their own colors. */
 export const ACCENTS = [
-  { id: 'blue', name: '蓝色', light: '#007aff', dark: '#6aaeff' },
-  { id: 'indigo', name: '靛蓝', light: '#5552b8', dark: '#aaa7ff' },
-  { id: 'purple', name: '紫色', light: '#8050c8', dark: '#bd9aff' },
-  { id: 'rose', name: '玫红', light: '#bf3b72', dark: '#f18bb4' },
-  { id: 'red', name: '红色', light: '#c43d3d', dark: '#ff9690' },
-  { id: 'orange', name: '橙色', light: '#b75b0a', dark: '#ffb269' },
-  { id: 'amber', name: '琥珀', light: '#936b00', dark: '#e9c567' },
-  { id: 'lime', name: '草绿', light: '#608021', dark: '#b1d478' },
-  { id: 'green', name: '绿色', light: '#25834f', dark: '#70cc99' },
-  { id: 'mint', name: '薄荷', light: '#168169', dark: '#78d5b8' },
-  { id: 'teal', name: '青色', light: '#087f8c', dark: '#63cbd5' },
-  { id: 'sky', name: '天蓝', light: '#087fa9', dark: '#7acded' },
+  { id: 'blue', get name() { return t(msg("appearance.blue", "蓝色")); }, light: '#007aff', dark: '#6aaeff' },
+  { id: 'indigo', get name() { return t(msg("appearance.indigo", "靛蓝")); }, light: '#5552b8', dark: '#aaa7ff' },
+  { id: 'purple', get name() { return t(msg("appearance.purple", "紫色")); }, light: '#8050c8', dark: '#bd9aff' },
+  { id: 'rose', get name() { return t(msg("appearance.rose", "玫红")); }, light: '#bf3b72', dark: '#f18bb4' },
+  { id: 'red', get name() { return t(msg("appearance.red", "红色")); }, light: '#c43d3d', dark: '#ff9690' },
+  { id: 'orange', get name() { return t(msg("appearance.orange", "橙色")); }, light: '#b75b0a', dark: '#ffb269' },
+  { id: 'amber', get name() { return t(msg("appearance.amber", "琥珀")); }, light: '#936b00', dark: '#e9c567' },
+  { id: 'lime', get name() { return t(msg("appearance.lime", "草绿")); }, light: '#608021', dark: '#b1d478' },
+  { id: 'green', get name() { return t(msg("appearance.green", "绿色")); }, light: '#25834f', dark: '#70cc99' },
+  { id: 'mint', get name() { return t(msg("appearance.mint", "薄荷")); }, light: '#168169', dark: '#78d5b8' },
+  { id: 'teal', get name() { return t(msg("appearance.teal", "青色")); }, light: '#087f8c', dark: '#63cbd5' },
+  { id: 'sky', get name() { return t(msg("appearance.sky", "天蓝")); }, light: '#087fa9', dark: '#7acded' },
 ] as const;
 
 export function normalizeAccent(value: string): string | null {

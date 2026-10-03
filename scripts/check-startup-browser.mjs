@@ -23,7 +23,7 @@ try {
   for (const [name, engine] of [['webkit', webkit], ['chromium', chromium]]) {
     browser = await engine.launch({ headless: true });
     for (const theme of ['dark', 'light']) {
-      const page = await browser.newPage({ colorScheme: theme });
+      const page = await browser.newPage({locale:'zh-CN',  colorScheme: theme });
       const errors = []; page.on('pageerror', error => errors.push(error.message));
       await page.addInitScript(() => {
         // Hold GPU setup after shell insertion; no real GPU/decode is needed here.
@@ -57,7 +57,7 @@ try {
       await page.close();
     }
     // A module failure must produce a visible retry instead of a permanently hidden app.
-    const failed = await browser.newPage();
+    const failed = await browser.newPage({locale:'zh-CN'});
     await failed.route('**/src/main.ts*', route => route.fulfill({ status: 503, body: 'Unavailable' }));
     await failed.goto(base);
     await failed.locator('.startup-error a').waitFor();

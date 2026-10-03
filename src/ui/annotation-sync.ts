@@ -1,3 +1,4 @@
+import { t, msg, th, onLanguageChange } from '../i18n.ts';
 import type { ReviewSession } from '../session.ts';
 import { AnnotationStorage } from '../annotation-storage.ts';
 import type { AnnotationDraft } from '../annotation-storage.ts';
@@ -13,12 +14,12 @@ import { publishMarkPreview } from './mark-preview-publish.ts';
 
 export function installAnnotationSync(session: ReviewSession, editing: () => boolean) {
   const storage = new AnnotationStorage(), life = new AbortController(), client = new AnnotationClient(life.signal);
-  let previewEpoch = 0, editGeneration=0, localFailure='';
+  let previewEpoch = 0, editGeneration=0, localFailure: string | (() => string) = '';
   // REVIEW-01：待保存队列按 key 串行、重试不产生新编辑版本。
   // stage() 只在用户新编辑时调用并递增 seq；sync() 重试复用快照 pending，
   // 两次核对身份后才落盘，过期直接跳过，不覆盖更新的 B-new/删除。
   const pendingQueue = new AnnotationPendingQueue();
-  let scope = 'local', available = false, working = false, cursor = 0, generation = 0, error = '', saving = 0;
+  let scope = 'local', available = false, working = false, cursor = 0, generation = 0, error: string | (() => string) = '', saving = 0;
   let syncIdle: Promise<void> = Promise.resolve();
   let drafts: AnnotationDraft[] = [];
   const versions = new Map<string, number>(), managed = new Set<string>();
@@ -32,7 +33,8 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   let conflictSignature='', otherSignature='';
   function state() {
     const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
-    const message=localFailure || error || (saving ? '正在保存到本机…' : conflicts.length ? `${conflicts.length} 条标注需要处理` : pending.length ? available && scope!=='local' ? '已存本机 · 等待同步' : '已存本机' : available && scope!=='local' ? '已同步' : '已存本机');
+    const failure=localFailure || error;
+    const message=(typeof failure === 'function' ? failure() : failure) || (saving ? t(msg("sync.savingLocal", "正在保存到本机…")) : conflicts.length ? t(msg("sync.pendingCount", "{n} 条标注需要处理"), { n: conflicts.length }) : pending.length ? available && scope!=='local' ? t(msg("sync.savedPendingSync", "已存本机 · 等待同步")) : t(msg("sync.savedLocal", "已存本机")) : available && scope!=='local' ? t(msg("sync.synced", "已同步")) : t(msg("sync.savedLocal", "已存本机")));
     const saveState=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
     window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: saveState } }));
     const others=drafts.filter(draft=>draft.actor===actor && draft.space===scope && !draft.key.startsWith(`${actor}/${scope}/${owner}/`));
@@ -43,16 +45,16 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     $('annotation-drafts-section').hidden=!others.length;
     const nextOthers=JSON.stringify(others);
     if(nextOthers!==otherSignature){otherSignature=nextOthers;$('annotation-other-drafts').replaceChildren(...others.map(draft=>{
-      const row=document.createElement('div');row.className='annotation-conflict';const text=document.createElement('p');text.textContent=`其他页面的草稿：${draft.desired?.mark.text || '画面标注'}`;
-      const button=document.createElement('button');button.textContent='在这里继续';button.onclick=()=>void(async()=>{try{await storage.claim(draft.key,`${actor}/${scope}/${owner}/${draft.id}`);await apply();void sync();}catch(e){error=(e as Error).message;state();}})();row.append(text,button);return row;
+      const row=document.createElement('div');row.className='annotation-conflict';const text=document.createElement('p');text.textContent=t(msg("sync.otherDrafts", "其他页面的草稿：{text}"), { text: draft.desired?.mark.text || t(msg("sync.frameMark", "画面标注")) });
+      const button=document.createElement('button');button.textContent=t(msg("sync.continueHere", "在这里继续"));button.onclick=()=>void(async()=>{try{await storage.claim(draft.key,`${actor}/${scope}/${owner}/${draft.id}`);await apply();void sync();}catch(e){error=(e as Error).message;state();}})();row.append(text,button);return row;
     }));}
     const nextConflicts=JSON.stringify(conflicts);$('annotation-conflicts-section').hidden=!conflicts.length;if(nextConflicts===conflictSignature)return;conflictSignature=nextConflicts;
     const rows=conflicts.map(draft=>{
       const row=document.createElement('div'); row.className='annotation-conflict';
-      const text=document.createElement('p');text.textContent=draft.desired?.mark.text || '标注已被修改或删除';
+      const text=document.createElement('p');text.textContent=draft.desired?.mark.text || t(msg("sync.conflictChanged", "标注已被修改或删除"));
       const message=document.createElement('p');message.className='muted';message.textContent=draft.conflict!;
-      const reload=document.createElement('button');reload.textContent='采用服务器版本'; reload.onclick=()=>void resolve(draft,false);
-      const copy=document.createElement('button');copy.textContent='草稿另存为标注';copy.disabled=!draft.desired;copy.onclick=()=>void resolve(draft,true);
+      const reload=document.createElement('button');reload.textContent=t(msg("sync.useServerVersion", "采用服务器版本")); reload.onclick=()=>void resolve(draft,false);
+      const copy=document.createElement('button');copy.textContent=t(msg("sync.saveDraftAsMark", "草稿另存为标注"));copy.disabled=!draft.desired;copy.onclick=()=>void resolve(draft,true);
       row.append(text,message,reload,copy);return row;
     }); $('annotation-conflicts').replaceChildren(...rows);
   }
@@ -68,7 +70,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
         await storage.change(key,previous=>({key,space,actor:actorId,id,base:previous?.base ?? base,desired:document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
         pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
       });
-    } catch(e) {localFailure=`本机保存失败：${(e as Error).message}`;} finally {saving--;await refreshDrafts();}
+    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();}
   }
   async function persistRetry(key: string, pending: PendingEdit) {
     if(pendingQueue.get(key)!==pending)return;
@@ -78,7 +80,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
         await storage.change(key,previous=>({key,space:pending.space,actor:pending.actorId,id:pending.id,base:previous?.base ?? pending.base,desired:pending.document,generation:(previous?.generation ?? 0)+1,...(previous?.attempt?{attempt:previous.attempt,sentGeneration:previous.sentGeneration}:{}),...(previous?.conflict?{conflict:previous.conflict}:{})}));
         pendingQueue.removeIfCurrent(key,pending);if(!pendingQueue.size)localFailure='';
       });
-    } catch(e) {localFailure=`本机保存失败：${(e as Error).message}`;} finally {saving--;await refreshDrafts();}
+    } catch(e) {localFailure=()=>t(msg("sync.localSaveFailed", "本机保存失败：{error}"), { error: (e as Error).message });} finally {saving--;await refreshDrafts();}
   }
   const unsubscribeMarks=session.subscribeMarkChanges((id,document)=>{void enqueue(id,document);});
   async function apply(removeIds: string[] = []) {
@@ -166,10 +168,10 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       if(captured===generation)await apply();
       if(captured===generation && available && space!=='local')await uploadPreviews(space,actorId).catch(()=>{});
-    } catch(e){if(captured===generation){error=available?'连接中断 · 本机草稿保留':(e as Error).message;}}finally{working=false;await refreshDrafts();release();}
+    } catch(e){if(captured===generation){error=available?()=>t(msg("sync.disconnectedKeepDrafts", "连接中断 · 本机草稿保留")):(e as Error).message;}}finally{working=false;await refreshDrafts();release();}
   }
   async function switchSpace(next:string) {
-    if(editing() || pendingQueue.size || saving)throw new Error('请先结束标注并等待本机草稿保存完成。');
+    if(editing() || pendingQueue.size || saving)throw new Error(t(msg("sync.waitForDrafts", "请先结束标注并等待本机草稿保存完成。")));
     // Restoring the current scope (e.g. failed-import rollback) must not
     // touch live marks: there is nothing to load that the session lacks.
     if(next===scope)return;
@@ -180,7 +182,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   let resolving=false;
   async function resolve(draft:AnnotationDraft,copy:boolean) {
     if(resolving)return;
-    if(editing()){error='请先结束当前标注编辑。';state();return;}
+    if(editing()){error=()=>t(msg("sync.finishEditingFirst", "请先结束当前标注编辑。"));state();return;}
     resolving=true;
     try {
       const record=await client.read(draft.space,draft.id);await storage.remember([record]);
@@ -214,6 +216,20 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const next=currentActor()?.id ?? 'local';if(next===actor)return;
     generation++;actor=next;cursor=0;versions.clear();void apply();
   },{signal:life.signal});
+  onLanguageChange(() => {
+    for(const [index,row] of [...$('annotation-other-drafts').children].entries()) {
+      const draft=drafts.filter(d=>d.actor===actor && d.space===scope && !d.key.startsWith(`${actor}/${scope}/${owner}/`))[index];
+      if(!draft)continue;
+      row.querySelector('p')!.textContent=t(msg("sync.otherDrafts", "其他页面的草稿：{text}"), { text: draft.desired?.mark.text || t(msg("sync.frameMark", "画面标注")) });
+      row.querySelector('button')!.textContent=t(msg("sync.continueHere", "在这里继续"));
+    }
+    for(const row of $('annotation-conflicts').children) {
+      const buttons=row.querySelectorAll('button');
+      buttons[0].textContent=t(msg("sync.useServerVersion", "采用服务器版本"));
+      buttons[1].textContent=t(msg("sync.saveDraftAsMark", "草稿另存为标注"));
+    }
+    state();
+  }, life.signal);
   void connect();
   state();
   return {
@@ -226,7 +242,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       let after=0,page;
       do { page=await client.changes(space,after);await storage.remember(page.entries);after=page.cursor;for(const record of page.entries)records.set(record.id,record); } while(page.more);
       await syncIdle;
-      if (pendingQueue.size || saving) throw new Error('本机草稿正在保存，请稍后重试。');
+      if (pendingQueue.size || saving) throw new Error(t(msg("sync.savingDrafts", "本机草稿正在保存，请稍后重试。")));
       const snapshot=session.exportWorkspace(location.origin+'/');
       generation++; scope=space; cursor=after; versions.clear(); managed.clear();
       for(const record of records.values())versions.set(record.id,record.revision);
@@ -241,7 +257,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       await sync();
     },
-    snapshotMode(){if(pendingQueue.size)throw new Error('本机草稿尚未保存，请先重试或导出。');const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
+    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机草稿尚未保存，请先重试或导出。")));const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();},
   };

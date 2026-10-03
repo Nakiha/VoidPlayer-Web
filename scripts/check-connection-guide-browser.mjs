@@ -13,7 +13,7 @@ try {
   const config = await loadConfig(['--folder', path.join(temp, 'media'), '--data-dir', temp, '--https', 'voidplayer.test', '--host', '127.0.0.1', '--no-logs'], 'production'); config.port = 0;
   service = await startService(config);
   browser = await chromium.launch({ headless: true, args: ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 700 } });
+  const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 700 } });
   await page.emulateMedia({ colorScheme: 'light' });
   // Resolve the test hostname through loopback even on hosts with a system proxy.
   // The browser keeps a genuinely insecure remote origin; all bytes come from the real server.

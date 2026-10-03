@@ -1,3 +1,4 @@
+import { t, onLanguageChange, msg } from '../i18n.ts';
 import { randomUUID } from '../uuid.ts';
 import { captureFrame } from '../presenter.ts';
 import { annotationThumbnails, thumbnailSignature } from './annotation-thumbnails.ts';
@@ -133,7 +134,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     saving = true;
     try {
       const state = session.getState();
-      if (!annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks) || state.playing || state.busy) throw new Error('画面已变化，未将编辑写入其他帧。');
+      if (!annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks) || state.playing || state.busy) throw new Error(t(msg("drawing.changed", "画面已变化，未将编辑写入其他帧。")));
       for (const [slot, draft] of drafts) for (const group of draft.groups) {
         const drawings = group.drawings.filter(d => d.tool !== 'text' || d.text?.trim());
         const exists = session.getState().marks.find(m => m.id === group.markId);
@@ -142,8 +143,8 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
         if (exists) { if (JSON.stringify(exists.drawings) !== JSON.stringify(drawings) || exists.text !== value.text) session.updateMark(exists.id, value); }
         else group.markId = session.addMark({ slot, ...value }).id;
       }
-      $('drawing-status').textContent = '已记录'; error.hidden = true; thumbnails();
-    } catch (e) { error.hidden = false; error.textContent = e instanceof Error ? e.message : String(e); $('drawing-status').textContent = '未记录'; }
+      $('drawing-status').textContent = t(msg("shell.recorded", "已记录")); error.hidden = true; thumbnails();
+    } catch (e) { error.hidden = false; error.textContent = e instanceof Error ? e.message : String(e); $('drawing-status').textContent = t(msg("drawing.notRecorded", "未记录")); }
     finally { saving = false; }
   }
   function finishText() {
@@ -195,12 +196,15 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   };
   $('drawing-undo').onclick = () => restore(undo, redo); $('drawing-redo').onclick = () => restore(redo, undo);
   const styleMenus = [
-    installChoiceMenu('drawing-width-choice', [{ value: '1', label: '1 px' }, { value: '2', label: '细 · 2 px' }, { value: '4', label: '中 · 4 px' }, { value: '6', label: '6 px' }, { value: '8', label: '粗 · 8 px' }, { value: '12', label: '12 px' }], value => setStyle('drawing-width', value), undefined, strokePreview),
-    installChoiceMenu('drawing-font-choice', [{ value: '18', label: '小 · 18 px' }, { value: '24', label: '中 · 24 px' }, { value: '36', label: '大 · 36 px' }], value => setStyle('drawing-font', value), 'text'),
+    installChoiceMenu('drawing-width-choice', () => [{ value: '1', label: '1 px' }, { value: '2', label: t(msg("drawing.thin", "细 · 2 px")) }, { value: '4', label: t(msg("drawing.mediumStroke", "中 · 4 px")) }, { value: '6', label: '6 px' }, { value: '8', label: t(msg("drawing.thick", "粗 · 8 px")) }, { value: '12', label: '12 px' }], value => setStyle('drawing-width', value), undefined, strokePreview),
+    installChoiceMenu('drawing-font-choice', () => [{ value: '18', label: t(msg("drawing.smallText", "小 · 18 px")) }, { value: '24', label: t(msg("drawing.mediumText", "中 · 24 px")) }, { value: '36', label: t(msg("drawing.largeText", "大 · 36 px")) }], value => setStyle('drawing-font', value), 'text'),
     installColorMenu('drawing-color-choice', value => setStyle('drawing-color', value)),
   ];
   function setStyle(id: string, value: string) { const input = $<HTMLInputElement>(id); input.value = value; input.dispatchEvent(new Event('change')); syncStyleMenus(); }
-  function syncStyleMenus() { styleMenus[0].sync($<HTMLInputElement>('drawing-width').value, '笔画粗细', true); styleMenus[1].sync($<HTMLInputElement>('drawing-font').value, '文字大小', true); styleMenus[2].sync($<HTMLInputElement>('drawing-color').value, '标注颜色', true); }
+  onLanguageChange(() => {
+    for(const element of document.querySelectorAll<HTMLElement>('.annotation-text[contenteditable]')) { element.setAttribute('aria-label',t(msg('drawing.frameText', '画面文字'))); element.dataset.placeholder=t(msg('drawing.enterText', '输入文字')); }
+    syncStyleMenus(); $('drawing-status').textContent = error.hidden ? t(msg("shell.recorded", "已记录")) : t(msg("drawing.notRecorded", "未记录")); }, life.signal);
+  function syncStyleMenus() { styleMenus[0].sync($<HTMLInputElement>('drawing-width').value, t(msg("shell.strokeWidth", "笔画粗细")), true); styleMenus[1].sync($<HTMLInputElement>('drawing-font').value, t(msg("shell.textSize", "文字大小")), true); styleMenus[2].sync($<HTMLInputElement>('drawing-color').value, t(msg("shell.annotationColor", "标注颜色")), true); }
   syncStyleMenus();
   for (const id of ['drawing-color', 'drawing-width', 'drawing-font']) $<HTMLInputElement>(id).onchange = () => {
     finishText(); const d = selected(); if (!d) return;

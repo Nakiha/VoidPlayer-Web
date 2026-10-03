@@ -14,7 +14,7 @@ try {
   const config = await loadConfig([], 'production', temp); config.port = 0; service = await startService(config); await service.library.refresh();
   config.port = service.server.address().port; const base = `http://127.0.0.1:${config.port}`;
   browser = await (name === 'chromium' ? chromium : webkit).launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', page => { page.setDefaultTimeout(20000); page.on('pageerror', error => errors.push(error.message)); });
   const page = await context.newPage(); await page.goto(base);
   await page.locator('#identity-welcome input').fill('工作区测试用户'); await page.locator('#identity-welcome button[type=submit]').click();
@@ -71,7 +71,7 @@ try {
   assert.equal((await fetch(base+'/api/workspaces/'+id)).status,200,'stale delete cannot remove the workspace');
   for(const width of [720,390]){await admin.setViewportSize({width,height:900});assert.ok(await admin.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));}
   const storageState=await context.storageState();await context.close();await service.close();service=await startService(config);await service.library.refresh();
-  const restarted=await browser.newContext({viewport:{width:1200,height:800},storageState});const restored=await restarted.newPage();restored.on('pageerror',e=>errors.push(e.message));
+  const restarted=await browser.newContext({locale:'zh-CN', viewport:{width:1200,height:800},storageState});const restored=await restarted.newPage();restored.on('pageerror',e=>errors.push(e.message));
   await restored.goto(base+'/?workspace='+id);await restored.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===2&&!window.voidPlayer.getState().busy&&document.querySelector('#source-search').value==='h264');
   assert.deepEqual((await restored.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources,record.document.layout.sources);
   assert.equal((await restored.evaluate(()=>window.voidPlayer.getState())).marks.length,1);

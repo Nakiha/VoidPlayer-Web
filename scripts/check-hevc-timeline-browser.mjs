@@ -30,7 +30,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
   const browser=await engine.launch({headless:true});
   try{for(const remote of [false,true]){
     if(selectedInput&&(selectedInput==='remote')!==remote)continue;
-    const page=await browser.newPage(),requests=[];
+    const page=await browser.newPage({locale:'zh-CN'}),requests=[];
     page.on('request',r=>{if(r.url().includes('/fixtures/video/'))requests.push(r.headers());});
     try{
       await page.route('**/timeline-test',r=>r.fulfill({contentType:'text/html',headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'},body:'<div class="frame-stage"><canvas></canvas></div>'}));

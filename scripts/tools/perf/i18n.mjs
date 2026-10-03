@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {readFile,writeFile,mkdir,cp} from 'node:fs/promises';
+import path from 'node:path';import {gzipSync} from 'node:zlib';import os from 'node:os';
+import {withBrowserFixture} from '../../testing/browser-fixture.mjs';
+import {createMediaServer} from '../../../server/app.ts';import {MediaLibraryIndex} from '../../../server/library.ts';
+const feature=path.resolve(import.meta.dirname,'../../..'),baseline=process.env.I18N_BASELINE_ROOT;
+if(!baseline)throw new Error('I18N_BASELINE_ROOT must point to the separately built baseline checkout');
+const engine=process.argv[2]??'chromium', headless=process.env.I18N_HEADFUL!=='1',mediaMode=process.env.I18N_MEDIA_MODE??'mixed';const results=[];
+if(!['mixed','webcodecs'].includes(mediaMode))throw new Error('I18N_MEDIA_MODE must be mixed or webcodecs');
+const budgets={startupGzipIncreaseBytes:32768,startupExtraRequests:3,englishStartupGzipIncreaseBytes:49152,englishStartupExtraRequests:4,startupMedianIncreaseMs:100,startupMedianMultiplier:1.3,coldLocaleMs:250,cachedLocaleMs:100,existingPlaybackThresholds:'unchanged benchmark_review defaults'};
+async function measure(name,root){
+ await withBrowserFixture({caseName:`i18n-perf-${name}`,engine,launchOptions:{headless},pageOptions:{viewport:{width:1280,height:800},locale:'zh-CN',reducedMotion:'reduce'},dependencies:{startService:async({temp,defer})=>{
+   const distribution=path.join(temp,'dist');await cp(path.join(root,'dist'),distribution,{recursive:true});
+   const roots=[path.join(feature,'fixtures/video')];const library=new MediaLibraryIndex(roots,{database:path.join(temp,'library.sqlite'),watch:false});const server=createMediaServer({roots,library,staticDir:distribution,onLog(){}});let closed=false;
+   const close=async()=>{if(closed)return;closed=true;server.closeAllConnections();if(server.listening)await new Promise(resolve=>server.close(resolve));await library.close();};defer('partial-server',close);library.start();await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve);});return {server,url:`http://127.0.0.1:${server.address().port}/`,close};
+ }}},async({page,context,browser,artifact,url,temp})=>{
+  const starts=[],playback=[],switches=[];
+  const cdp=engine==='chromium'?await context.newCDPSession(page):null;if(cdp)await cdp.send('Performance.enable');
+  for(const browserLocale of ['zh-CN','en-US'])for(let repeat=0;repeat<3;repeat++){
+   const coldContext=await browser.newContext({viewport:{width:1280,height:800},locale:browserLocale,reducedMotion:'reduce'});const p=await coldContext.newPage();
+   for(const cache of ['cold','warm']){
+    const start=performance.now();if(cache==='cold')await p.goto(url);else await p.reload();await p.waitForFunction(()=>window.voidPlayer?.tools);const readyMs=performance.now()-start;await p.waitForTimeout(300);
+    const resources=await p.evaluate(()=>performance.getEntriesByType('resource').filter(r=>new URL(r.name).pathname.startsWith('/assets/')||new URL(r.name).pathname.startsWith('/themes/')||new URL(r.name).pathname==='/theme-init.js').map(r=>({path:new URL(r.name).pathname,transferSize:r.transferSize,duration:r.duration})));
+    let raw=0,gzip=0;for(const res of resources){const bytes=await readFile(path.join(temp,'dist',res.path));raw+=bytes.length;gzip+=gzipSync(bytes).length;}
+    starts.push({browserLocale,repeat,cache,readyMs,requests:resources.length,rawBytes:raw,gzipBytes:gzip,transferredBytes:resources.reduce((s,r)=>s+r.transferSize,0),resources});
+   }await coldContext.close();
+  }
+  await page.goto(url);await page.waitForFunction(()=>window.voidPlayer?.tools);await page.bringToFront();
+  await page.evaluate(async mediaMode=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});for(const [slot,file]of [['A','h264_9s_1920x1080.mp4'],['B',mediaMode==='webcodecs'?'ci_h264_smoke.mp4':'h265_10s_1920x1080.mp4']]){const entry=lib.entries.find(e=>e.name===file);if(!entry)throw new Error('Missing benchmark media '+file);await tools.find(t=>t.name==='load_library_item').execute({slot,id:entry.id});}},mediaMode);
+  if(name==='feature'){
+    await page.evaluate(()=>{
+      document.addEventListener('click',e=>{if(e.target.closest('#language-choice-menu [data-value]')){window.__localeStart=performance.now();window.__localeCommit=undefined;}},true);
+      new MutationObserver(()=>{if(window.__localeStart!==undefined)window.__localeCommit=performance.now()-window.__localeStart;}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
+    });
+    await page.locator('#settings-open').click();for(const locale of ['en','zh-CN','en','zh-CN']){const before=await page.evaluate(()=>performance.now());await page.locator('#language-choice').click();await page.locator(`#language-choice-menu [data-value="${locale}"]`).click();await page.waitForFunction(locale=>document.documentElement.lang===locale,locale);const ms=await page.evaluate(before=>performance.now()-before,before);switches.push({locale,cache:switches.length?'warm':'cold',clickToReadyMs:ms,commitMs:await page.evaluate(()=>window.__localeCommit)});}await page.locator('#settings-close').click();
+  }
+  for(let repeat=0;repeat<3;repeat++){
+    const before=cdp?(await cdp.send('Performance.getMetrics')).metrics:null;
+    const report=await page.evaluate(async()=>await window.voidPlayer.tools.find(t=>t.name==='benchmark_review').execute({durationMs:4000}));
+    const after=cdp?(await cdp.send('Performance.getMetrics')).metrics:null;
+    const taskDurationMs=before?(after.find(m=>m.name==='TaskDuration').value-before.find(m=>m.name==='TaskDuration').value)*1000:null;
+    playback.push({...report,repeat,taskDurationMs});
+  }
+  const result={name,engine,browserVersion:browser.version(),starts,switches,playback};results.push(result);await writeFile(artifact(name+'-report.json'),JSON.stringify(result,null,2));
+ });
+}
+await measure('baseline',path.resolve(baseline));await measure('feature',feature);
+const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];const b=results[0],f=results[1];
+// UI automation timing includes two clicks and scheduler waits; report it separately from catalog commit timing.
+await mkdir(path.join(feature,'.run/i18n-performance'),{recursive:true});const report={headless,mediaMode,device:{platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version},baseline:baseline,budgets,notes:['gzip sizes are offline gzip estimates; the local static server sends uncompressed content','UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling','same-engine same-media paired runs; do not infer hardware decoder usage'],results};
+await writeFile(path.join(feature,`.run/i18n-performance/${engine}${headless?'':'-headed'}${mediaMode==='webcodecs'?'-webcodecs':''}.json`),JSON.stringify(report,null,2));for(const browserLocale of ['zh-CN','en-US'])for(const cache of ['cold','warm']){
+ const bs=b.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale),fs=f.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale);assert.ok(median(fs.map(x=>x.gzipBytes))-median(bs.map(x=>x.gzipBytes))<=(browserLocale==='en-US'?budgets.englishStartupGzipIncreaseBytes:budgets.startupGzipIncreaseBytes));assert.ok(median(fs.map(x=>x.requests))-median(bs.map(x=>x.requests))<=(browserLocale==='en-US'?budgets.englishStartupExtraRequests:budgets.startupExtraRequests));
+ assert.ok(median(fs.map(x=>x.readyMs))<=median(bs.map(x=>x.readyMs))*budgets.startupMedianMultiplier+budgets.startupMedianIncreaseMs);
+}
+for(const result of results)for(const report of result.playback)assert.equal(report.passed,true,`${result.name}/${engine}/${report.repeat}: original playback thresholds`);
+for(const sample of f.switches)assert.ok(sample.commitMs <= (sample.cache==='cold'?budgets.coldLocaleMs:budgets.cachedLocaleMs),JSON.stringify(sample));
+
+console.log(`PASS ${engine}: paired startup budgets and six unchanged playback benchmark runs; report .run/i18n-performance/${engine}.json`);

@@ -17,7 +17,7 @@ const base = `http://127.0.0.1:${server.address().port}`;
 const engine = process.argv[2] ?? 'chromium';
 const browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true, ...(engine === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}) });
 try {
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 } });
   await context.addInitScript(() => localStorage.setItem('voidplayer.color-mode', 'browser'));
   const page = await context.newPage(), errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(base); await page.waitForFunction(() => window.voidPlayer);

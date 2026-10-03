@@ -1,3 +1,4 @@
+import { t, msg } from '../i18n.ts';
 import { installSourceActivity } from './source-activity.ts';
 import { installTrackColumnResize } from './track-column-resize.ts';
 import { installStartPanelResize } from './start-panel-resize.ts';
@@ -66,7 +67,8 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       const open = view.panels[panel];
       panelMotion.set(panel, open);
       $(`toggle-${panel}`).setAttribute('aria-expanded', String(open));
-      const label = `${open ? '收起' : '展开'}${{ inspector: '轨道信息', subtracks: '子轨道', sources: '片源', analysis: '码流分析' }[panel]}`;
+      const panelName = { inspector: t(msg("shell.trackInfo", "轨道信息")), subtracks: t(msg("shell.tracks", "子轨道")), sources: t(msg("shell.sources", "片源")), analysis: t(msg("shell.bitstreamAnalysis", "码流分析")) }[panel];
+      const label = open ? t(msg("workbench.collapsePanel", "收起{panel}"), { panel: panelName }) : t(msg("workbench.expandPanel", "展开{panel}"), { panel: panelName });
       $(`toggle-${panel}`).dataset.tooltip = shortcutTooltip(label, PANEL_SHORTCUTS[panel]);
 
     }
@@ -126,7 +128,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     dockHeight = Math.round(Math.max(min, Math.min(max, value)));
     workspace.style.setProperty('--dock-height', `${dockHeight}px`);
     resizer.setAttribute('aria-valuemin', String(min)); resizer.setAttribute('aria-valuemax', String(max));
-    resizer.setAttribute('aria-valuenow', String(dockHeight)); resizer.setAttribute('aria-valuetext', `${dockHeight} 像素`);
+    resizer.setAttribute('aria-valuenow', String(dockHeight)); resizer.setAttribute('aria-valuetext', t(msg("workbench.pixels", "{p0} 像素"), { p0: dockHeight }));
   };
   installResizeGesture(resizer, {
     axis: 'y', direction: -1, size: () => dockHeight, bounds: dockBounds, resize,
@@ -156,7 +158,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     analysisHeight = Math.round(Math.max(min, Math.min(max, value)));
     workspace.style.setProperty('--analysis-height', `${analysisHeight}px`);
     analysisResizer.setAttribute('aria-valuemin', String(min)); analysisResizer.setAttribute('aria-valuemax', String(max));
-    analysisResizer.setAttribute('aria-valuenow', String(analysisHeight)); analysisResizer.setAttribute('aria-valuetext', `${analysisHeight} 像素`);
+    analysisResizer.setAttribute('aria-valuenow', String(analysisHeight)); analysisResizer.setAttribute('aria-valuetext', t(msg("workbench.pixels", "{p0} 像素"), { p0: analysisHeight }));
     try { localStorage.setItem(ANALYSIS_HEIGHT_KEY, JSON.stringify(analysisHeight)); } catch { /* 高度偏好可选。 */ }
   };
   installResizeGesture(analysisResizer, {
@@ -175,6 +177,9 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   resize(dockHeight); syncPanels();
   void sources.refreshLibrary();
   return {
+    localize() { tracks.localize(session.getState()); sources.localize(); syncPanels();
+      resizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:dockHeight}));
+      analysisResizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:analysisHeight})); },
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
     getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),

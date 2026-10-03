@@ -1,8 +1,9 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { icon } from './icons.ts';
 
 export type ToastKind = 'info' | 'warning' | 'error';
 
-export type ToastAction = { label: string; onClick: () => void };
+export type ToastAction = { label: string | (() => string); onClick: () => void };
 
 export type ToastOptions = {
   /** 'info' auto-dismisses; 'warning' and 'error' stay until closed unless durationMs is set. */
@@ -56,6 +57,7 @@ export function installToasts(signal?: AbortSignal) {
   const onClose = (event: Event) => { if (event.target instanceof HTMLDialogElement) raise(); };
   document.addEventListener('close', onClose, true);
   function remove(el: HTMLElement) {
+    el.dispatchEvent(new Event('toast-remove'));
     el.remove();
     if (!stack.childElementCount && stack.matches(':popover-open')) stack.hidePopover();
   }
@@ -70,7 +72,7 @@ export function installToasts(signal?: AbortSignal) {
     setTimeout(() => remove(el), ms);
   }
 
-  function show(message: string, options: ToastOptions = {}) {
+  function show(message: string | (() => string), options: ToastOptions = {}) {
     const kind = options.kind ?? 'info';
     const duration = options.durationMs ?? DEFAULT_DURATION[kind];
     const el = document.createElement('div');
@@ -78,20 +80,27 @@ export function installToasts(signal?: AbortSignal) {
     el.setAttribute('role', kind === 'info' ? 'status' : 'alert');
     const label = document.createElement('span');
     label.className = 'toast-message';
-    label.textContent = message;
+    label.textContent = typeof message === 'function' ? message() : message;
     el.append(label);
+    const stopLanguage = onLanguageChange(() => {
+      if(!el.isConnected) return;
+      if(typeof message === 'function')label.textContent = message();
+      if(typeof options.action?.label === 'function')el.querySelector('.toast-action')!.textContent=options.action.label();
+      el.querySelector('.toast-close')?.setAttribute('aria-label',t(msg("toast.dismissNotification", "关闭通知")));
+    });
+    el.addEventListener('toast-remove', stopLanguage, {once:true});
     if (options.action) {
       const button = document.createElement('button');
       button.type = 'button';
       button.className = 'toast-action';
-      button.textContent = options.action.label;
+      button.textContent = typeof options.action.label === 'function' ? options.action.label() : options.action.label;
       button.onclick = () => { options.action!.onClick(); dismiss(el, timer); };
       el.append(button);
     }
     const close = document.createElement('button');
     close.type = 'button';
     close.className = 'toast-close icon-button remove-track';
-    close.setAttribute('aria-label', '关闭通知');
+    close.setAttribute('aria-label', t(msg("toast.dismissNotification", "关闭通知")));
     close.innerHTML = icon('close');
     close.onclick = () => dismiss(el, timer);
     el.append(close);
@@ -117,6 +126,7 @@ export function installToasts(signal?: AbortSignal) {
     dialogs.disconnect();
     document.removeEventListener('toggle', onToggle, true);
     document.removeEventListener('close', onClose, true);
+    for(const child of stack.children)child.dispatchEvent(new Event('toast-remove'));
     stack.remove();
   }
   return { show, dispose, stack };

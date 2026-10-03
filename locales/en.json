@@ -1,0 +1,2658 @@
+{
+  "activity.buildingIndexes": {
+    "source": "已上屏 · {count} 条轨道正在建立索引",
+    "translation": "On screen · {count} tracks building indexes"
+  },
+  "activity.durationMinutesSeconds": {
+    "source": "{m} 分 {s} 秒",
+    "translation": "{m} min {s} s"
+  },
+  "activity.durationSeconds": {
+    "source": "{s} 秒",
+    "translation": "{s} s"
+  },
+  "activity.elapsedSpent": {
+    "source": "用时",
+    "translation": "Elapsed"
+  },
+  "activity.elapsedWaiting": {
+    "source": "已等待",
+    "translation": "Waiting"
+  },
+  "activity.loadCancelled": {
+    "source": "已取消载入",
+    "translation": "Load cancelled"
+  },
+  "activity.loadFailedAtStage": {
+    "source": "{stage}时失败：{error}",
+    "translation": "{stage}: {error}"
+  },
+  "activity.loadFailedState": {
+    "source": "载入失败",
+    "translation": "Load failed"
+  },
+  "activity.presented": {
+    "source": "已上屏",
+    "translation": "On screen"
+  },
+  "activity.retryOrPickAnother": {
+    "source": "请重试或选择其他片源",
+    "translation": "Retry or pick another source"
+  },
+  "activity.scanProgress": {
+    "source": "帧索引扫描进度",
+    "translation": "Frame-index scan progress"
+  },
+  "activity.sourceTrack": {
+    "source": "{name} · 轨道 {slot}",
+    "translation": "{name} · track {slot}"
+  },
+  "activity.stillWorking": {
+    "source": "仍在处理，可取消或选择其他视频",
+    "translation": "Still working; you can cancel or pick another video"
+  },
+  "activity.trackIndexProgress": {
+    "source": "轨道 {slot}：{progress}",
+    "translation": "Track {slot}: {progress}"
+  },
+  "activity.waitingForSource": {
+    "source": "等待添加片源",
+    "translation": "Waiting for a source"
+  },
+  "admin.noMarksAdmin": {
+    "source": "暂无标注",
+    "translation": "No marks yet"
+  },
+  "analysis.bitrate": {
+    "source": "码率",
+    "translation": "Bitrate"
+  },
+  "analysis.bitrateMbps": {
+    "source": "码率 · Mbps",
+    "translation": "Bitrate · Mbps"
+  },
+  "analysis.bitrateTitle": {
+    "source": "视频样本负载码率，按 PTS/DTS 归集的滑动时间窗",
+    "translation": "Payload bitrate of video samples, bucketed by PTS/DTS over a sliding window"
+  },
+  "analysis.bitrateWindow": {
+    "source": "码率窗口",
+    "translation": "Bitrate window"
+  },
+  "analysis.bitrateWindowTitle": {
+    "source": "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）",
+    "translation": "Bitrate window: sliding window for sample payload bitrate (a real time window, not an N-frame window)"
+  },
+  "analysis.canvasLabel": {
+    "source": "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。",
+    "translation": "Bitstream plot: bitrate curve and frame-size bars. Arrow keys move the inspection point, Enter seeks, Escape exits inspection."
+  },
+  "analysis.compareTracks": {
+    "source": "对比轨道",
+    "translation": "Compared tracks"
+  },
+  "analysis.currentFrameNumbers": {
+    "source": "当前上屏帧号",
+    "translation": "Current on-screen frame numbers"
+  },
+  "analysis.currentFrameNumbersEmpty": {
+    "source": "当前上屏帧号：尚未载入视频",
+    "translation": "Current on-screen frame numbers: no video loaded"
+  },
+  "analysis.dtsOrder": {
+    "source": "DTS序",
+    "translation": "DTS order"
+  },
+  "analysis.editTrackFrameNumber": {
+    "source": "轨道 {slot} {axis}帧号，点击编辑",
+    "translation": "Track {slot} {axis} frame number; activate to edit"
+  },
+  "analysis.emptyAllHidden": {
+    "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
+    "translation": "All hidden; pick tracks to compare in the toolbar."
+  },
+  "analysis.emptyNoVideo": {
+    "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
+    "translation": "No video loaded yet. Load one to inspect bitrate and frame-size trends here."
+  },
+  "analysis.emptyQuerying": {
+    "source": "正在查询统计…",
+    "translation": "Querying statistics…"
+  },
+  "analysis.enterFrameNumber": {
+    "source": "输入轨道 {slot} 的{axis}帧号后按回车跳转",
+    "translation": "Type the {axis} frame number of track {slot}, then press Enter to seek"
+  },
+  "analysis.followOff": {
+    "source": "跟随：关",
+    "translation": "Follow: off"
+  },
+  "analysis.followOn": {
+    "source": "跟随：开",
+    "translation": "Follow: on"
+  },
+  "analysis.followTitle": {
+    "source": "跟随播放范围；框选放大后自动关闭，不强制跳回播放位置",
+    "translation": "Follow the playback range; auto-disables after rubber-band zoom and never forces a jump back"
+  },
+  "analysis.frameNumberMustBeNonNegativeInteger": {
+    "source": "帧号必须是非负整数。",
+    "translation": "The frame number must be a non-negative integer."
+  },
+  "analysis.frameNumberOrder": {
+    "source": "帧号顺序",
+    "translation": "Frame number order"
+  },
+  "analysis.frameRateFps": {
+    "source": "帧率 · fps",
+    "translation": "Frame rate · fps"
+  },
+  "analysis.frameSize": {
+    "source": "帧大小",
+    "translation": "Frame size"
+  },
+  "analysis.frameSizeKib": {
+    "source": "帧大小 · KiB",
+    "translation": "Frame size · KiB"
+  },
+  "analysis.frameSizeTitle": {
+    "source": "压缩样本字节（demux 负载），非解码内存",
+    "translation": "Compressed sample bytes (demux payload), not decoded memory"
+  },
+  "analysis.frameTitleBase": {
+    "source": "轨道 {slot} 上屏帧：会话 PTS {pts}（{ptsUs} µs）",
+    "translation": "Track {slot} on-screen frame: session PTS {pts} ({ptsUs} µs)"
+  },
+  "analysis.frameTitleDtsMissing": {
+    "source": " · DTS序 —（解码 PTS 不在包表内，不猜测）",
+    "translation": " · DTS order — (decode PTS is not in the packet table; no guessing)"
+  },
+  "analysis.frameTitleDtsOrdinal": {
+    "source": " · DTS序 #{ordinal}（解码顺序号）",
+    "translation": " · DTS order #{ordinal} (decode order)"
+  },
+  "analysis.frameTitleProvisional": {
+    "source": "（索引构建中，暂定）",
+    "translation": " (index still building; provisional)"
+  },
+  "analysis.frameTitlePtsRank": {
+    "source": " · PTS序 #{rank}",
+    "translation": " · PTS order #{rank}"
+  },
+  "analysis.frameTitlePtsTotal": {
+    "source": " / 共 {total} 帧",
+    "translation": " / {total} frames total"
+  },
+  "analysis.frameTitleQuerying": {
+    "source": " · 帧号查询中",
+    "translation": " · frame number resolving"
+  },
+  "analysis.frameTitleRankPending": {
+    "source": " · 帧号 —（{note}）",
+    "translation": " · frame number — ({note})"
+  },
+  "analysis.frameTitleSourcePts": {
+    "source": " · 源 PTS {sourcePtsUs} µs",
+    "translation": " · source PTS {sourcePtsUs} µs"
+  },
+  "analysis.fullRange": {
+    "source": "完整范围",
+    "translation": "Full range"
+  },
+  "analysis.fullRangeTitle": {
+    "source": "双击图也可恢复完整范围",
+    "translation": "Double-click the plot to restore the full range too"
+  },
+  "analysis.hideTrack": {
+    "source": "隐藏轨道 {slot}",
+    "translation": "Hide track {slot}"
+  },
+  "analysis.indexNotReady": {
+    "source": "帧索引尚未就绪",
+    "translation": "Frame index not ready"
+  },
+  "analysis.layoutMerged": {
+    "source": "合并",
+    "translation": "Merged"
+  },
+  "analysis.layoutRows": {
+    "source": "分轨",
+    "translation": "Rows"
+  },
+  "analysis.multiTrackLayout": {
+    "source": "多轨布局",
+    "translation": "Multi-track layout"
+  },
+  "analysis.multiTrackLayoutTitle": {
+    "source": "合并：多轨同一基线按时间交错；分轨：各轨独立行",
+    "translation": "Merged: tracks share one baseline interleaved by time; Rows: each track gets its own row"
+  },
+  "analysis.noLocatablePeak": {
+    "source": "轨道 {slot}：该区间没有可定位的峰值样本。",
+    "translation": "Track {slot}: no locatable peak sample in this range."
+  },
+  "analysis.noSampleAtTime": {
+    "source": "轨道 {slot} 在该时间无可定位样本。",
+    "translation": "Track {slot} has no locatable sample at this time."
+  },
+  "analysis.noVideoYet": {
+    "source": "尚未载入视频",
+    "translation": "No video loaded yet"
+  },
+  "analysis.peakSeekFailed": {
+    "source": "轨道 {slot}：峰值样本定位失败。",
+    "translation": "Track {slot}: peak sample seek failed."
+  },
+  "analysis.pinnedSuffix": {
+    "source": " · 已固定",
+    "translation": " · pinned"
+  },
+  "analysis.provisional": {
+    "source": "暂定",
+    "translation": "Provisional"
+  },
+  "analysis.ptsOrder": {
+    "source": "PTS序",
+    "translation": "PTS order"
+  },
+  "analysis.queryFailed": {
+    "source": "轨道 {slot} 查询失败：{error}",
+    "translation": "Track {slot} query failed: {error}"
+  },
+  "analysis.sampleRate": {
+    "source": "样本率 /s",
+    "translation": "Sample rate /s"
+  },
+  "analysis.seekReason": {
+    "source": "轨道 {slot}：{reason}",
+    "translation": "Track {slot}: {reason}"
+  },
+  "analysis.showTrack": {
+    "source": "显示轨道 {slot}（{name}）",
+    "translation": "Show track {slot} ({name})"
+  },
+  "analysis.stateError": {
+    "source": "索引错",
+    "translation": "Index error"
+  },
+  "analysis.statePending": {
+    "source": "统计中",
+    "translation": "Pending"
+  },
+  "analysis.stateUnsupported": {
+    "source": "不可用",
+    "translation": "Unsupported"
+  },
+  "analysis.statusLabel": {
+    "source": "当前上屏帧号（{axis}）：{summary}",
+    "translation": "Current on-screen frame numbers ({axis}): {summary}"
+  },
+  "analysis.timeBase": {
+    "source": "时间基准",
+    "translation": "Time base"
+  },
+  "analysis.timeBaseTitle": {
+    "source": "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图",
+    "translation": "PTS is presentation time, DTS is decode time; tracks without reliable DTS do not support the DTS view"
+  },
+  "analysis.tools": {
+    "source": "分析选项",
+    "translation": "Analysis options"
+  },
+  "analysis.trackFocus": {
+    "source": "轨道焦点 {slot}",
+    "translation": "Track focus {slot}"
+  },
+  "analysis.trackFocusWithContext": {
+    "source": "轨道焦点 {slot}。{rest}",
+    "translation": "Track focus {slot}. {rest}"
+  },
+  "analysis.trackFrameNumber": {
+    "source": "轨道 {slot} {axis}帧号",
+    "translation": "Track {slot} {axis} frame number"
+  },
+  "analysis.trackHasNoFrame": {
+    "source": "轨道 {slot}：暂无上屏帧",
+    "translation": "Track {slot}: no on-screen frame"
+  },
+  "annotation.framePreview": {
+    "source": "标注画面",
+    "translation": "Annotated frame"
+  },
+  "appearance.amber": {
+    "source": "琥珀",
+    "translation": "Amber"
+  },
+  "appearance.blue": {
+    "source": "蓝色",
+    "translation": "Blue"
+  },
+  "appearance.green": {
+    "source": "绿色",
+    "translation": "Green"
+  },
+  "appearance.indigo": {
+    "source": "靛蓝",
+    "translation": "Indigo"
+  },
+  "appearance.lime": {
+    "source": "草绿",
+    "translation": "Lime"
+  },
+  "appearance.mint": {
+    "source": "薄荷",
+    "translation": "Mint"
+  },
+  "appearance.orange": {
+    "source": "橙色",
+    "translation": "Orange"
+  },
+  "appearance.purple": {
+    "source": "紫色",
+    "translation": "Purple"
+  },
+  "appearance.red": {
+    "source": "红色",
+    "translation": "Red"
+  },
+  "appearance.rose": {
+    "source": "玫红",
+    "translation": "Rose"
+  },
+  "appearance.sky": {
+    "source": "天蓝",
+    "translation": "Sky"
+  },
+  "appearance.teal": {
+    "source": "青色",
+    "translation": "Teal"
+  },
+  "bootstrap.reload": {
+    "source": "重新加载",
+    "translation": "Reload"
+  },
+  "bootstrap.startupFailed": {
+    "source": "页面未能加载，请刷新重试。",
+    "translation": "The page failed to load. Refresh and retry."
+  },
+  "colorFlow.approximateBrowserColors": {
+    "source": "近似浏览器颜色",
+    "translation": "Approximate browser colors"
+  },
+  "colorFlow.browserColor": {
+    "source": "浏览器色彩",
+    "translation": "Browser color"
+  },
+  "colorFlow.browserColorConversion": {
+    "source": "浏览器转换颜色",
+    "translation": "Browser color conversion"
+  },
+  "colorFlow.browserDecoder": {
+    "source": "浏览器解码器",
+    "translation": "Browser decoder"
+  },
+  "colorFlow.browserHardwarePreference": {
+    "source": "浏览器优先请求",
+    "translation": "Browser hardware preference"
+  },
+  "colorFlow.buffer": {
+    "source": "缓冲",
+    "translation": "Buffer"
+  },
+  "colorFlow.checkResults": {
+    "source": "检查结果",
+    "translation": "Check results"
+  },
+  "colorFlow.colorConversion": {
+    "source": "色彩转换",
+    "translation": "Color conversion"
+  },
+  "colorFlow.currentRuntime": {
+    "source": "当前运行",
+    "translation": "Current runtime"
+  },
+  "colorFlow.decode": {
+    "source": "解码",
+    "translation": "Decode"
+  },
+  "colorFlow.decoder": {
+    "source": "解码方式",
+    "translation": "Decoder"
+  },
+  "colorFlow.displayImage": {
+    "source": "显示画面",
+    "translation": "Display image"
+  },
+  "colorFlow.frameDataFlow": {
+    "source": "帧数据流",
+    "translation": "Frame data flow"
+  },
+  "colorFlow.hardwareBufferDepth": {
+    "source": "硬件缓冲深度",
+    "translation": "Hardware buffer depth"
+  },
+  "colorFlow.hardwareDecoder": {
+    "source": "硬件解码单元",
+    "translation": "Hardware decoder"
+  },
+  "colorFlow.managedColor": {
+    "source": "自有色彩",
+    "translation": "Managed color"
+  },
+  "colorFlow.managedConversionSupportsCpuFallbackSwitchingPauses": {
+    "source": "自有转换支持 CPU 兜底。切换会暂停，保留进度与标注。",
+    "translation": "Managed conversion supports CPU fallback. Switching pauses playback and keeps position and annotations."
+  },
+  "colorFlow.memory": {
+    "source": "内存",
+    "translation": "Memory"
+  },
+  "colorFlow.nativeDecoding": {
+    "source": "原生解码",
+    "translation": "Native decoding"
+  },
+  "colorFlow.nativeFrameConversion": {
+    "source": "沿用原生帧转换",
+    "translation": "Native frame conversion"
+  },
+  "colorFlow.nativeFrames": {
+    "source": "原生帧",
+    "translation": "Native frames"
+  },
+  "colorFlow.pathOverview": {
+    "source": "路径示意",
+    "translation": "Path overview"
+  },
+  "colorFlow.playFromTheStartThenPauseAfter": {
+    "source": "从头播放，检查后暂停。",
+    "translation": "Play from the start, then pause after checking."
+  },
+  "colorFlow.playbackPerformanceReportJson": {
+    "source": "播放性能报告 JSON",
+    "translation": "Playback performance report JSON"
+  },
+  "colorFlow.playbackSmoothness": {
+    "source": "播放流畅度",
+    "translation": "Playback smoothness"
+  },
+  "colorFlow.preferHardware": {
+    "source": "优先请求硬件",
+    "translation": "Prefer hardware"
+  },
+  "colorFlow.preferHardware2": {
+    "source": "硬件优先",
+    "translation": "Prefer hardware"
+  },
+  "colorFlow.present": {
+    "source": "上屏",
+    "translation": "Present"
+  },
+  "colorFlow.rawYuvFrames": {
+    "source": "原始 YUV 帧",
+    "translation": "Raw YUV frames"
+  },
+  "colorFlow.readBack": {
+    "source": "读回",
+    "translation": "Read back"
+  },
+  "colorFlow.runCheck": {
+    "source": "开始检查",
+    "translation": "Run check"
+  },
+  "colorFlow.screen": {
+    "source": "屏幕",
+    "translation": "Screen"
+  },
+  "colorFlow.software": {
+    "source": "软件",
+    "translation": "Software"
+  },
+  "colorFlow.softwareDecoding": {
+    "source": "软件解码",
+    "translation": "Software decoding"
+  },
+  "colorFlow.unifiedSdrConversion": {
+    "source": "统一 SDR 转换",
+    "translation": "Unified SDR conversion"
+  },
+  "colorFlow.upload": {
+    "source": "上传",
+    "translation": "Upload"
+  },
+  "colorFlow.voidplayerColorConversion": {
+    "source": "VoidPlayer 转换颜色",
+    "translation": "VoidPlayer color conversion"
+  },
+  "colorFlow.whenNativeDecodingIsUnavailable": {
+    "source": "无法原生解码时",
+    "translation": "When native decoding is unavailable"
+  },
+  "colorFlow.whenNativePlaneVerificationPasses": {
+    "source": "原生平面核对通过时",
+    "translation": "When native plane verification passes"
+  },
+  "drawing.changed": {
+    "source": "画面已变化，未将编辑写入其他帧。",
+    "translation": "The frame changed. Edits were not written to a different frame."
+  },
+  "drawing.enterText": {
+    "source": "输入文字",
+    "translation": "Enter text"
+  },
+  "drawing.frameText": {
+    "source": "画面文字",
+    "translation": "Frame text"
+  },
+  "drawing.largeText": {
+    "source": "大 · 36 px",
+    "translation": "Large · 36 px"
+  },
+  "drawing.mediumStroke": {
+    "source": "中 · 4 px",
+    "translation": "Medium · 4 px"
+  },
+  "drawing.mediumText": {
+    "source": "中 · 24 px",
+    "translation": "Medium · 24 px"
+  },
+  "drawing.notRecorded": {
+    "source": "未记录",
+    "translation": "Not recorded"
+  },
+  "drawing.smallText": {
+    "source": "小 · 18 px",
+    "translation": "Small · 18 px"
+  },
+  "drawing.thick": {
+    "source": "粗 · 8 px",
+    "translation": "Thick · 8 px"
+  },
+  "drawing.thin": {
+    "source": "细 · 2 px",
+    "translation": "Thin · 2 px"
+  },
+  "error.diagnostic": {
+    "source": "{summary}\n[{code} / {stage}] {reason}",
+    "translation": "{summary}\n[{code} / {stage}] {reason}"
+  },
+  "error.referenceFormat": {
+    "source": "自有色彩不支持此像素格式或颜色信息。请切换为浏览器色彩后重试。",
+    "translation": "Managed color does not support this pixel format or color metadata. Switch to browser color and retry."
+  },
+  "error.referenceHdr": {
+    "source": "自有色彩目前仅支持 SDR。请切换为浏览器色彩后重试。",
+    "translation": "Managed color currently supports SDR only. Switch to browser color and retry."
+  },
+  "identity.chooseExisting": {
+    "source": "选择已有用户",
+    "translation": "Choose an existing user"
+  },
+  "identity.continueAsGuest": {
+    "source": "以访客身份继续",
+    "translation": "Continue as guest"
+  },
+  "identity.entering": {
+    "source": "正在进入…",
+    "translation": "Entering…"
+  },
+  "identity.loadingUsers": {
+    "source": "正在读取用户…",
+    "translation": "Loading users…"
+  },
+  "identity.nameOptional": {
+    "source": "名字（选填）",
+    "translation": "Name (optional)"
+  },
+  "identity.noMatchingUsers": {
+    "source": "没有匹配的用户",
+    "translation": "No matching users"
+  },
+  "identity.unconfirmedHint": {
+    "source": "用户列表尚未确认，继续时会按名字匹配或创建用户",
+    "translation": "The user list is not confirmed yet; continuing matches or creates a user by name"
+  },
+  "identity.usersLoadFailed": {
+    "source": "暂时无法读取用户，可直接输入名字继续。",
+    "translation": "Cannot load users right now; type a name to continue."
+  },
+  "identity.welcomeTitle": {
+    "source": "怎么称呼你？",
+    "translation": "What should we call you?"
+  },
+  "identitySettings.confirm": {
+    "source": "确认",
+    "translation": "Confirm"
+  },
+  "identitySettings.continueAs": {
+    "source": "以「{p0}」的身份继续",
+    "translation": "Continue as “{p0}”"
+  },
+  "identitySettings.create": {
+    "source": "创建",
+    "translation": "Create"
+  },
+  "identitySettings.existingUser": {
+    "source": "已有用户",
+    "translation": "Existing user"
+  },
+  "identitySettings.newUser": {
+    "source": "新用户",
+    "translation": "New user"
+  },
+  "identitySettings.renameCurrentUser": {
+    "source": "修改当前用户名…",
+    "translation": "Rename current user…"
+  },
+  "identitySettings.renameTo": {
+    "source": "改名为「{p0}」",
+    "translation": "Rename to “{p0}”"
+  },
+  "identitySettings.renameYourself": {
+    "source": "修改当前名字",
+    "translation": "Rename yourself"
+  },
+  "identitySettings.save": {
+    "source": "保存",
+    "translation": "Save"
+  },
+  "identitySettings.saving": {
+    "source": "保存中…",
+    "translation": "Saving…"
+  },
+  "identitySettings.switch": {
+    "source": "切换",
+    "translation": "Switch"
+  },
+  "identitySettings.unableToReadUserList": {
+    "source": "无法读取用户列表。",
+    "translation": "Unable to read user list."
+  },
+  "identitySettings.unconfirmed": {
+    "source": "待确认",
+    "translation": "Unconfirmed"
+  },
+  "index.progress": {
+    "source": "{waiting, select, yes {等待索引数据} other {正在建立索引}} {percent}%{packets, select, none {} other { · {packets} 包}}",
+    "translation": "{waiting, select, yes {Waiting for index data} other {Building index}} {percent}%{packets, select, none {} other { · {packets} packets}}"
+  },
+  "language.description": {
+    "source": "仅更改本机界面语言，不影响视频与工作区内容。",
+    "translation": "Changes this browser’s interface language; keeps videos and workspace content."
+  },
+  "language.label": {
+    "source": "语言 / Language",
+    "translation": "Language"
+  },
+  "language.loadFailed": {
+    "source": "语言包未能加载，请重试。",
+    "translation": "Unable to load this language. Please retry."
+  },
+  "language.system": {
+    "source": "跟随浏览器",
+    "translation": "Browser default"
+  },
+  "libraryBrowser.allLibraries": {
+    "source": "所有媒体库",
+    "translation": "All libraries"
+  },
+  "libraryBrowser.allMedia": {
+    "source": "全部媒体",
+    "translation": "All media"
+  },
+  "libraryBrowser.closeSearch": {
+    "source": "关闭搜索",
+    "translation": "Close search"
+  },
+  "libraryBrowser.closeSearchAndClear": {
+    "source": "关闭搜索并清空",
+    "translation": "Close search and clear"
+  },
+  "libraryBrowser.goUp": {
+    "source": "返回上一级",
+    "translation": "Go up one level"
+  },
+  "libraryBrowser.library": {
+    "source": "媒体库",
+    "translation": "Library"
+  },
+  "libraryBrowser.locationLabel": {
+    "source": "媒体库路径或链接",
+    "translation": "Library path or link"
+  },
+  "libraryBrowser.offlineSuffix": {
+    "source": " · 离线",
+    "translation": " · offline"
+  },
+  "libraryBrowser.recent": {
+    "source": "最近使用",
+    "translation": "Recent"
+  },
+  "libraryBrowser.scopeLabel": {
+    "source": "媒体库范围",
+    "translation": "Library scope"
+  },
+  "libraryBrowser.searchIn": {
+    "source": "搜索{scope}",
+    "translation": "Search {scope}"
+  },
+  "libraryBrowser.searchRecent": {
+    "source": "搜索最近打开",
+    "translation": "Search recently opened"
+  },
+  "libraryBrowser.toggleSearch": {
+    "source": "搜索片源",
+    "translation": "Search sources"
+  },
+  "libraryBrowser.unknownLibrary": {
+    "source": "此媒体库在当前服务中不存在。",
+    "translation": "This library does not exist on the current service."
+  },
+  "libraryLink.incompletePath": {
+    "source": "媒体库路径不完整。",
+    "translation": "Incomplete library path."
+  },
+  "libraryLink.invalidDirectory": {
+    "source": "媒体库目录无效。",
+    "translation": "Invalid library directory."
+  },
+  "libraryLink.invalidRoot": {
+    "source": "媒体库标识无效。",
+    "translation": "Invalid library identifier."
+  },
+  "libraryLink.notLocationLink": {
+    "source": "这不是媒体库位置链接。",
+    "translation": "This is not a library location link."
+  },
+  "libraryLink.otherService": {
+    "source": "链接来自另一个媒体服务，请在浏览器中打开该链接。",
+    "translation": "This link belongs to another media service. Open it in a browser."
+  },
+  "libraryLink.pasteLink": {
+    "source": "请粘贴复制的媒体库链接。",
+    "translation": "Paste a copied library link."
+  },
+  "logPanel.aboutLogs": {
+    "source": "日志说明",
+    "translation": "About logs"
+  },
+  "logPanel.copyFailedDownloadLogsToSaveThe": {
+    "source": "复制失败，请使用下载日志保存完整内容。",
+    "translation": "Copy failed. Download logs to save the full contents."
+  },
+  "logPanel.copyLogs": {
+    "source": "复制日志",
+    "translation": "Copy logs"
+  },
+  "logPanel.current": {
+    "source": "本次",
+    "translation": "Current"
+  },
+  "logPanel.currentSession": {
+    "source": "本次会话",
+    "translation": "Current session"
+  },
+  "logPanel.downloadLogs": {
+    "source": "下载日志",
+    "translation": "Download logs"
+  },
+  "logPanel.downloadStarted": {
+    "source": "下载已开始。",
+    "translation": "Download started."
+  },
+  "logPanel.history": {
+    "source": "历史",
+    "translation": "History"
+  },
+  "logPanel.keepsTheLast3SessionsLocallyFor": {
+    "source": "本机保留最近 3 次会话，最长 7 天。",
+    "translation": "Keeps the last 3 sessions locally for up to 7 days."
+  },
+  "logPanel.localLogs": {
+    "source": "本地日志",
+    "translation": "Local logs"
+  },
+  "logPanel.localSavingFailedDownloadABackupOf": {
+    "source": "本地保存失败，请下载日志备份。",
+    "translation": "Local saving failed. Download a backup of your logs."
+  },
+  "logPanel.logContents": {
+    "source": "日志内容",
+    "translation": "Log contents"
+  },
+  "logPanel.logPages": {
+    "source": "日志分页",
+    "translation": "Log pages"
+  },
+  "logPanel.logSession": {
+    "source": "日志会话",
+    "translation": "Log session"
+  },
+  "logPanel.logsCopied": {
+    "source": "日志已复制。",
+    "translation": "Logs copied."
+  },
+  "logPanel.logsIncludeDeviceInformationFilenamesActionsAnd": {
+    "source": "日志包含设备信息、文件名、操作记录及你填写的问题描述，不含视频或标注正文。",
+    "translation": "Logs include device information, filenames, actions and your problem description, but no video or annotation text."
+  },
+  "logPanel.logsUploadedFilenameCopied": {
+    "source": "日志已上传，文件名已复制：{p0}",
+    "translation": "Logs uploaded; filename copied: {p0}"
+  },
+  "logPanel.logsUploadedUnableToCopyFilename": {
+    "source": "日志已上传，无法自动复制文件名：{p0}",
+    "translation": "Logs uploaded; unable to copy filename: {p0}"
+  },
+  "logPanel.noLogsYet": {
+    "source": "暂无日志",
+    "translation": "No logs yet"
+  },
+  "logPanel.pagination": {
+    "source": "第 {page}/{pages} 页 · 共 {count} 条事件",
+    "translation": "Page {page}/{pages} · {count} events"
+  },
+  "logPanel.previewTruncated": {
+    "source": " …（完整内容见下载日志）",
+    "translation": " … (download logs for full content)"
+  },
+  "logPanel.previousPage": {
+    "source": "上一页",
+    "translation": "Previous page"
+  },
+  "logPanel.problemDescriptionOptional": {
+    "source": "问题描述（选填）",
+    "translation": "Problem description (optional)"
+  },
+  "logPanel.sendLogs": {
+    "source": "发送日志",
+    "translation": "Send logs"
+  },
+  "logPanel.sendTo": {
+    "source": "发送到",
+    "translation": "Send to"
+  },
+  "logPanel.sentToTheCurrentServerOnlyWhen": {
+    "source": "仅点击“发送日志”后，才发送到当前服务器。",
+    "translation": "Sent to the current server only when you click “Send logs”."
+  },
+  "logPanel.unableToConnectToThisServerRetry": {
+    "source": "无法连接当前服务器，请重试或下载日志。",
+    "translation": "Unable to connect to this server. Retry or download logs."
+  },
+  "logPanel.unableToReadLogHistory": {
+    "source": "历史日志读取异常：{p0}",
+    "translation": "Unable to read log history: {p0}"
+  },
+  "logPanel.uploadFailed": {
+    "source": "上传失败（{p0}）{p1}",
+    "translation": "Upload failed ({p0}){p1}"
+  },
+  "logPanel.uploadLogs": {
+    "source": "上传日志",
+    "translation": "Upload logs"
+  },
+  "logPanel.uploadedOnlyWhenYouClickSend": {
+    "source": "仅在点击发送时上传",
+    "translation": "Uploaded only when you click Send"
+  },
+  "logPanel.whatHappenedHowCanItBeReproduced": {
+    "source": "遇到了什么问题？如何复现？",
+    "translation": "What happened? How can it be reproduced?"
+  },
+  "logPanel.youCanDownloadLogsInstead": {
+    "source": "，可改用下载日志。",
+    "translation": "; you can download logs instead."
+  },
+  "marks.addHint": {
+    "source": "点击 + 添加",
+    "translation": "Click + to add"
+  },
+  "marks.anonymous": {
+    "source": "未署名",
+    "translation": "Anonymous"
+  },
+  "marks.cancel": {
+    "source": "取消",
+    "translation": "Cancel"
+  },
+  "marks.colorBlack": {
+    "source": "黑色",
+    "translation": "Black"
+  },
+  "marks.colorBlue": {
+    "source": "蓝色",
+    "translation": "Blue"
+  },
+  "marks.colorBrown": {
+    "source": "棕色",
+    "translation": "Brown"
+  },
+  "marks.colorCyan": {
+    "source": "青色",
+    "translation": "Cyan"
+  },
+  "marks.colorGeneric": {
+    "source": "颜色",
+    "translation": "Color"
+  },
+  "marks.colorGray": {
+    "source": "灰色",
+    "translation": "Gray"
+  },
+  "marks.colorGreen": {
+    "source": "绿色",
+    "translation": "Green"
+  },
+  "marks.colorMagenta": {
+    "source": "品红色",
+    "translation": "Magenta"
+  },
+  "marks.colorOrange": {
+    "source": "橙色",
+    "translation": "Orange"
+  },
+  "marks.colorPurple": {
+    "source": "紫色",
+    "translation": "Purple"
+  },
+  "marks.colorRed": {
+    "source": "红色",
+    "translation": "Red"
+  },
+  "marks.colorWhite": {
+    "source": "白色",
+    "translation": "White"
+  },
+  "marks.colorYellow": {
+    "source": "黄色",
+    "translation": "Yellow"
+  },
+  "marks.commonColors": {
+    "source": "常用色",
+    "translation": "Common colors"
+  },
+  "marks.delete": {
+    "source": "删除",
+    "translation": "Delete"
+  },
+  "marks.deleteConfirm": {
+    "source": "删除这条标注？",
+    "translation": "Delete this mark?"
+  },
+  "marks.deleteMark": {
+    "source": "删除标注",
+    "translation": "Delete mark"
+  },
+  "marks.deleteMarkName": {
+    "source": "删除标注 {label}",
+    "translation": "Delete mark {label}"
+  },
+  "marks.entryLabel": {
+    "source": "轨道 {slot} 标注 {time} {text}",
+    "translation": "Track {slot} mark {time} {text}"
+  },
+  "marks.noPreview": {
+    "source": "暂无预览",
+    "translation": "No preview"
+  },
+  "marks.palette": {
+    "source": "色盘",
+    "translation": "Palette"
+  },
+  "marks.previewDialog": {
+    "source": "标注",
+    "translation": "Mark"
+  },
+  "marks.previewImage": {
+    "source": "标注画面",
+    "translation": "Mark image"
+  },
+  "marks.showCards": {
+    "source": "显示标注卡片",
+    "translation": "Show mark cards"
+  },
+  "marks.showSymbols": {
+    "source": "显示标注符号",
+    "translation": "Show mark symbols"
+  },
+  "menu.actions": {
+    "source": "操作",
+    "translation": "Actions"
+  },
+  "metadata.fullRange": {
+    "source": "全范围 (PC)",
+    "translation": "Full range (PC)"
+  },
+  "metadata.limitedRange": {
+    "source": "有限范围 (TV)",
+    "translation": "Limited range (TV)"
+  },
+  "metadata.unspecified": {
+    "source": "未标记",
+    "translation": "Unspecified"
+  },
+  "page.title": {
+    "source": "VoidPlayer · 视频对比",
+    "translation": "VoidPlayer · Video comparison"
+  },
+  "player.aBFrameStartDifferenceMs": {
+    "source": "A / B 帧起点差 {p0} ms",
+    "translation": "A / B frame start difference {p0} ms"
+  },
+  "player.actualSpeed": {
+    "source": "实际速度 {p0}×",
+    "translation": "Actual speed {p0}×"
+  },
+  "player.arrangeTracksHorizontally": {
+    "source": "横向排列轨道",
+    "translation": "Arrange tracks horizontally"
+  },
+  "player.browserNativeDecoding": {
+    "source": "浏览器原生解码",
+    "translation": "Browser native decoding"
+  },
+  "player.catchingUpToPlayback": {
+    "source": " · 正在追赶播放位置",
+    "translation": " · Catching up to playback"
+  },
+  "player.catchingUpToPlayback2": {
+    "source": "正在追赶播放位置",
+    "translation": "Catching up to playback"
+  },
+  "player.checkInterrupted": {
+    "source": "测试被中断",
+    "translation": "Check interrupted"
+  },
+  "player.checkingPlaybackPerformance": {
+    "source": "正在检查播放性能…",
+    "translation": "Checking playback performance…"
+  },
+  "player.comparisonVideo": {
+    "source": "对比视频",
+    "translation": "Comparison video"
+  },
+  "player.decoding": {
+    "source": "正在解码…",
+    "translation": "Decoding…"
+  },
+  "player.exitFullscreen": {
+    "source": "退出全屏",
+    "translation": "Exit fullscreen"
+  },
+  "player.failed": {
+    "source": "未通过：{p0}",
+    "translation": "Failed: {p0}"
+  },
+  "player.fallback": {
+    "source": "（已回退）",
+    "translation": " (fallback)"
+  },
+  "player.fallsBackToSoftwareIfFirstFrame": {
+    "source": "首帧核对失败则改用软件解码；读回帧有额外开销。",
+    "translation": "Falls back to software if first-frame verification fails; reading frames back adds overhead."
+  },
+  "player.fileImportWasSupersededByANewer": {
+    "source": "文件导入已被新的请求取代。",
+    "translation": "File import was superseded by a newer request."
+  },
+  "player.fillView": {
+    "source": "填满视图",
+    "translation": "Fill view"
+  },
+  "player.frameChangedAfterPausing": {
+    "source": "暂停后画面改变",
+    "translation": "Frame changed after pausing"
+  },
+  "player.frames": {
+    "source": "{count, plural, other {# 帧}}",
+    "translation": "{count, plural, one {# frame} other {# frames}}"
+  },
+  "player.framesLagging": {
+    "source": "画面落后",
+    "translation": "Frames lagging"
+  },
+  "player.hdrSource": {
+    "source": " · HDR 源",
+    "translation": " · HDR source"
+  },
+  "player.hdrSourceSdrFallback": {
+    "source": " · HDR 源（SDR 兜底显示）",
+    "translation": " · HDR source (SDR fallback)"
+  },
+  "player.incompleteTailPlayingCompletePortion": {
+    "source": " · 尾部不完整，播放完整部分",
+    "translation": " · Incomplete tail; playing complete portion"
+  },
+  "player.indexFailed": {
+    "source": " · 索引失败",
+    "translation": " · Index failed"
+  },
+  "player.invalidAnnotationAddress": {
+    "source": "标注地址无效。",
+    "translation": "Invalid annotation address."
+  },
+  "player.lastSeekMs": {
+    "source": "最近定位 {p0} ms",
+    "translation": "Last seek {p0} ms"
+  },
+  "player.mixingSoftwareAndNativeFramesInBrowser": {
+    "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
+    "translation": "Mixing software and native frames in Browser color may produce inconsistent colors. Consider switching color modes."
+  },
+  "player.noFramesPresented": {
+    "source": "没有输出画面",
+    "translation": "No frames presented"
+  },
+  "player.noReadableFrameInThisTrack": {
+    "source": "轨道没有可读取的画面。",
+    "translation": "No readable frame in this track."
+  },
+  "player.notLoaded": {
+    "source": "尚未载入",
+    "translation": "Not loaded"
+  },
+  "player.openColorSettings": {
+    "source": "前往色彩设置",
+    "translation": "Open color settings"
+  },
+  "player.openOneWorkspaceFileAtATime": {
+    "source": "每次请打开一个工作区文件。",
+    "translation": "Open one workspace file at a time."
+  },
+  "player.pageHiddenDuringCheck": {
+    "source": "测试期间页面不可见",
+    "translation": "Page hidden during check"
+  },
+  "player.passed": {
+    "source": "通过",
+    "translation": "Passed"
+  },
+  "player.pause": {
+    "source": "暂停",
+    "translation": "Pause"
+  },
+  "player.paused": {
+    "source": "已暂停",
+    "translation": "Paused"
+  },
+  "player.playbackDidNotFinish": {
+    "source": "画面未播完",
+    "translation": "Playback did not finish"
+  },
+  "player.playbackError": {
+    "source": "播放出错",
+    "translation": "Playback error"
+  },
+  "player.playbackTooSlow": {
+    "source": "播放速度不足",
+    "translation": "Playback too slow"
+  },
+  "player.playingMuted": {
+    "source": "播放中 · 静音",
+    "translation": "Playing · Muted"
+  },
+  "player.preservesOriginalFramePrecisionWithConsistentConversion": {
+    "source": "保留原始帧精度，按统一规则转换；仅支持 SDR。",
+    "translation": "Preserves original frame precision with consistent conversion; SDR only."
+  },
+  "player.rawPlanes": {
+    "source": "原始平面",
+    "translation": "Raw planes"
+  },
+  "player.referenceVideo": {
+    "source": "参考视频",
+    "translation": "Reference video"
+  },
+  "player.relinkSource": {
+    "source": "重新关联片源",
+    "translation": "Relink source"
+  },
+  "player.sampleTooShort": {
+    "source": "样本时长不足",
+    "translation": "Sample too short"
+  },
+  "player.showAllTracksSeparately": {
+    "source": "独立显示所有轨道",
+    "translation": "Show all tracks separately"
+  },
+  "player.slowPauseResponse": {
+    "source": "暂停响应慢",
+    "translation": "Slow pause response"
+  },
+  "player.softwareFallbackIsAnApproximationColorsMay": {
+    "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
+    "translation": "Software fallback is an approximation; colors may differ from native frames."
+  },
+  "player.sourceTimestampSFrameDurationS": {
+    "source": "源时间戳 {p0} µs · 帧时长 {p1} µs",
+    "translation": "Source timestamp {p0} µs · Frame duration {p1} µs"
+  },
+  "player.switchToHorizontalLayout": {
+    "source": "切换为横向布局",
+    "translation": "Switch to horizontal layout"
+  },
+  "player.switchToManagedColorInColorDecoding": {
+    "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。",
+    "translation": "Switch to Managed color in Color & decoding before choosing a YUV channel."
+  },
+  "player.thisAnnotationIsInTheRecycleBin": {
+    "source": "这条标注已在回收站。",
+    "translation": "This annotation is in the recycle bin."
+  },
+  "player.trackDisabled": {
+    "source": "轨道 {p0} 已停用：{p1}",
+    "translation": "Track {p0} disabled: {p1}"
+  },
+  "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
+    "source": "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。",
+    "translation": "Track {p0} disabled · Frame updates have stopped. {p1} Please reload this source."
+  },
+  "player.trackFrameNotSynchronizedOtherTracksContinue": {
+    "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。",
+    "translation": "Track {p0}: {p1} · Frame not synchronized; other tracks continue playing."
+  },
+  "player.trackNeedsRelinkingTrackOffsetAndAnnotations": {
+    "source": "轨道 {p0} 待重新关联 · 轨道、偏移和标注已保留。",
+    "translation": "Track {p0} needs relinking · Track, offset and annotations are preserved."
+  },
+  "player.trackStalled": {
+    "source": "{p0} 轨画面卡顿",
+    "translation": "Track {p0} stalled"
+  },
+  "player.tracks": {
+    "source": "{p0} 条轨道",
+    "translation": "{p0} tracks"
+  },
+  "player.tracksOutOfSync": {
+    "source": "双轨不同步",
+    "translation": "Tracks out of sync"
+  },
+  "player.uChannel": {
+    "source": "U 通道",
+    "translation": "U channel"
+  },
+  "player.uniformPixels": {
+    "source": "统一像素",
+    "translation": "Uniform pixels"
+  },
+  "player.vChannel": {
+    "source": "V 通道",
+    "translation": "V channel"
+  },
+  "player.videoReplacedDuringCheck": {
+    "source": "测试期间视频被替换",
+    "translation": "Video replaced during check"
+  },
+  "player.waitingForFrame": {
+    "source": "等待帧",
+    "translation": "Waiting for frame"
+  },
+  "player.waitingForIndexData": {
+    "source": "等待索引数据",
+    "translation": "Waiting for index data"
+  },
+  "player.waitingForIndexFrameNotSynchronized": {
+    "source": " · 等待索引，画面暂未同步",
+    "translation": " · Waiting for index; frame not synchronized"
+  },
+  "player.waitingForVideo": {
+    "source": "等待视频",
+    "translation": "Waiting for video"
+  },
+  "player.wasmSoftwareDecoding": {
+    "source": "WASM 软件解码",
+    "translation": "WASM software decoding"
+  },
+  "player.webcodecsBrowserDecoding": {
+    "source": "WebCodecs · 浏览器解码",
+    "translation": "WebCodecs · Browser decoding"
+  },
+  "player.webcodecsPreferHardware": {
+    "source": "WebCodecs · 硬件优先",
+    "translation": "WebCodecs · Prefer hardware"
+  },
+  "player.wipeBetweenTheFirstTwoTracksIn": {
+    "source": "擦拭对比当前排序的前两个轨道",
+    "translation": "Wipe between the first two tracks in the current order"
+  },
+  "player.yChannel": {
+    "source": "Y 通道",
+    "translation": "Y channel"
+  },
+  "player.yuvChannelsSwitchToManagedColorFirst": {
+    "source": "YUV 通道：请先切换为自有色彩",
+    "translation": "YUV channels: switch to Managed color first"
+  },
+  "progress.decode": {
+    "source": "正在选择解码方式",
+    "translation": "Selecting a decoder"
+  },
+  "progress.decoder": {
+    "source": "正在启动软件解码器",
+    "translation": "Starting the software decoder"
+  },
+  "progress.download": {
+    "source": "正在读取视频数据",
+    "translation": "Reading video data"
+  },
+  "progress.firstFrame": {
+    "source": "正在解码首帧",
+    "translation": "Decoding the first frame"
+  },
+  "progress.index": {
+    "source": "正在建立帧索引",
+    "translation": "Building the frame index"
+  },
+  "progress.inspect": {
+    "source": "正在读取视频信息",
+    "translation": "Reading video information"
+  },
+  "progress.queued": {
+    "source": "正在准备载入",
+    "translation": "Preparing to load"
+  },
+  "progress.synchronize": {
+    "source": "正在定位到当前播放位置",
+    "translation": "Seeking to the current position"
+  },
+  "recovery.readFailed": {
+    "source": "无法读取本机工作区恢复记录，请检查浏览器存储。",
+    "translation": "Cannot read local workspace recovery. Check browser storage."
+  },
+  "recovery.restore": {
+    "source": "恢复工作区",
+    "translation": "Restore workspace"
+  },
+  "recovery.restored": {
+    "source": "工作区已恢复。",
+    "translation": "Workspace restored."
+  },
+  "recovery.saveFailed": {
+    "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
+    "translation": "Local recovery saving failed. Export a file or save explicitly to the server."
+  },
+  "recovery.savingResumed": {
+    "source": "工作区本机自动恢复已恢复保存。",
+    "translation": "Local workspace recovery saving has resumed."
+  },
+  "recovery.summary": {
+    "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}} · {time}",
+    "translation": "{tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# mark} other {# marks}} · {time}"
+  },
+  "resize.releaseToCollapse": {
+    "source": "松开收起面板",
+    "translation": "Release to collapse panel"
+  },
+  "savedWorkspaces.backToLatest": {
+    "source": "返回最新",
+    "translation": "Back to latest"
+  },
+  "savedWorkspaces.clearSearch": {
+    "source": "清除搜索",
+    "translation": "Clear search"
+  },
+  "savedWorkspaces.currentWorkspace": {
+    "source": "当前工作区",
+    "translation": "Current workspace"
+  },
+  "savedWorkspaces.guest": {
+    "source": "访客",
+    "translation": "Guest"
+  },
+  "savedWorkspaces.nextPage": {
+    "source": "下一页",
+    "translation": "Next page"
+  },
+  "savedWorkspaces.noMatchingWorkspaces": {
+    "source": "没有匹配的工作区",
+    "translation": "No matching workspaces"
+  },
+  "savedWorkspaces.noWorkspacesYet": {
+    "source": "暂无工作区",
+    "translation": "No workspaces yet"
+  },
+  "savedWorkspaces.reopen": {
+    "source": "重新打开",
+    "translation": "Reopen"
+  },
+  "savedWorkspaces.savedWorkspaces": {
+    "source": "已保存的工作区",
+    "translation": "Saved workspaces"
+  },
+  "savedWorkspaces.searchWorkspaceOrUserName": {
+    "source": "搜索工作区名或用户名",
+    "translation": "Search workspace or user name"
+  },
+  "savedWorkspaces.untitledWorkspace": {
+    "source": "未命名工作区",
+    "translation": "Untitled workspace"
+  },
+  "savedWorkspaces.updatedReopen": {
+    "source": "工作区已被更新，请重新打开后继续。",
+    "translation": "This workspace has changed. Reopen it to continue."
+  },
+  "savedWorkspaces.workspaceName": {
+    "source": "工作区名称",
+    "translation": "Workspace name"
+  },
+  "savedWorkspaces.workspaceServiceUnavailable": {
+    "source": "工作区服务不可用。",
+    "translation": "Workspace service unavailable."
+  },
+  "settings.unknownSettingsPage": {
+    "source": "未知设置页面。",
+    "translation": "Unknown settings page."
+  },
+  "settingsShell.about": {
+    "source": "关于",
+    "translation": "About"
+  },
+  "settingsShell.accentColor": {
+    "source": "主题色",
+    "translation": "Accent color"
+  },
+  "settingsShell.accentColorHex": {
+    "source": "主题色 HEX",
+    "translation": "Accent color HEX"
+  },
+  "settingsShell.appearance": {
+    "source": "外观",
+    "translation": "Appearance"
+  },
+  "settingsShell.av1Decoding": {
+    "source": "AV1 解码",
+    "translation": "AV1 decoding"
+  },
+  "settingsShell.chooseAUserOrRenameYourself": {
+    "source": "选择用户或修改当前名字",
+    "translation": "Choose a user or rename yourself"
+  },
+  "settingsShell.chooseCustomAccentColor": {
+    "source": "选择自定义主题色",
+    "translation": "Choose custom accent color"
+  },
+  "settingsShell.closeSettings": {
+    "source": "关闭设置",
+    "translation": "Close settings"
+  },
+  "settingsShell.colorDecoding": {
+    "source": "色彩与解码",
+    "translation": "Color & decoding"
+  },
+  "settingsShell.currentUser": {
+    "source": "当前用户",
+    "translation": "Current user"
+  },
+  "settingsShell.custom": {
+    "source": "自定义",
+    "translation": "Custom"
+  },
+  "settingsShell.customAccentColor": {
+    "source": "自定义主题色",
+    "translation": "Custom accent color"
+  },
+  "settingsShell.dark": {
+    "source": "暗色",
+    "translation": "Dark"
+  },
+  "settingsShell.decoderSource": {
+    "source": "解码器源码",
+    "translation": "Decoder source"
+  },
+  "settingsShell.developmentBuild": {
+    "source": "开发版本",
+    "translation": "Development build"
+  },
+  "settingsShell.displayMode": {
+    "source": "显示模式",
+    "translation": "Display mode"
+  },
+  "settingsShell.enterAName": {
+    "source": "输入名字",
+    "translation": "Enter a name"
+  },
+  "settingsShell.enterANameOrChooseAnExisting": {
+    "source": "输入名字或选择已有用户",
+    "translation": "Enter a name or choose an existing user"
+  },
+  "settingsShell.feedback": {
+    "source": "反馈",
+    "translation": "Feedback"
+  },
+  "settingsShell.finishAnnotatingCloseWindow": {
+    "source": "结束标注 / 关闭窗口",
+    "translation": "Finish annotating / Close window"
+  },
+  "settingsShell.interfaceIcons": {
+    "source": "界面图标",
+    "translation": "Interface icons"
+  },
+  "settingsShell.license": {
+    "source": "许可证",
+    "translation": "License"
+  },
+  "settingsShell.light": {
+    "source": "亮色",
+    "translation": "Light"
+  },
+  "settingsShell.lineTextEraser": {
+    "source": "线条 / 文字 / 橡皮擦",
+    "translation": "Line / Text / Eraser"
+  },
+  "settingsShell.mediaDemuxing": {
+    "source": "媒体解封装",
+    "translation": "Media demuxing"
+  },
+  "settingsShell.name": {
+    "source": "名字",
+    "translation": "Name"
+  },
+  "settingsShell.openSourceCredits": {
+    "source": "开源致谢",
+    "translation": "Open-source credits"
+  },
+  "settingsShell.playbackView": {
+    "source": "播放与视图",
+    "translation": "Playback & view"
+  },
+  "settingsShell.previousNextFrame": {
+    "source": "上一帧 / 下一帧",
+    "translation": "Previous / Next frame"
+  },
+  "settingsShell.projectSource": {
+    "source": "项目源码",
+    "translation": "Project source"
+  },
+  "settingsShell.rectangleEllipse": {
+    "source": "矩形 / 椭圆",
+    "translation": "Rectangle / Ellipse"
+  },
+  "settingsShell.selectPen": {
+    "source": "选择 / 画笔",
+    "translation": "Select / Pen"
+  },
+  "settingsShell.settingsCategories": {
+    "source": "设置分类",
+    "translation": "Settings categories"
+  },
+  "settingsShell.shortcuts": {
+    "source": "快捷键",
+    "translation": "Shortcuts"
+  },
+  "settingsShell.spaceAndArrowKeysRemainAvailableWhen": {
+    "source": "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。",
+    "translation": "Space and arrow keys remain available when typing. Scroll or pinch to zoom; right-drag or scroll with two fingers to pan."
+  },
+  "settingsShell.startAnnotating": {
+    "source": "开始标注",
+    "translation": "Start annotating"
+  },
+  "settingsShell.system": {
+    "source": "跟随系统",
+    "translation": "System"
+  },
+  "settingsShell.user": {
+    "source": "用户",
+    "translation": "User"
+  },
+  "settingsShell.version": {
+    "source": "版本",
+    "translation": "Version"
+  },
+  "settingsShell.videoDecoding": {
+    "source": "视频解码",
+    "translation": "Video decoding"
+  },
+  "settingsShell.workspace": {
+    "source": "工作区",
+    "translation": "Workspace"
+  },
+  "sharing.addVideo": {
+    "source": "请先添加视频再分享。",
+    "translation": "Add a video before sharing."
+  },
+  "sharing.close": {
+    "source": "关闭分享",
+    "translation": "Close sharing"
+  },
+  "sharing.copyLink": {
+    "source": "复制链接",
+    "translation": "Copy link"
+  },
+  "sharing.editableCopied": {
+    "source": "工作区链接已复制，接收者可编辑和保存",
+    "translation": "Workspace link copied. Recipients can edit and save."
+  },
+  "sharing.editableLink": {
+    "source": "打开链接可还原并编辑这个工作区。",
+    "translation": "Open this link to restore and edit the workspace."
+  },
+  "sharing.link": {
+    "source": "链接",
+    "translation": "Link"
+  },
+  "sharing.saving": {
+    "source": "正在保存",
+    "translation": "Saving"
+  },
+  "sharing.title": {
+    "source": "工作区链接",
+    "translation": "Workspace link"
+  },
+  "shell.aboutVoidplayer": {
+    "source": "关于 VoidPlayer",
+    "translation": "About VoidPlayer"
+  },
+  "shell.addAnnotation": {
+    "source": "添加标注",
+    "translation": "Add annotation"
+  },
+  "shell.addLocalFilesToTheListLocal": {
+    "source": "选择本地文件加入列表（仅本机预览，不上传）",
+    "translation": "Add local files to the list (local preview only; no upload)"
+  },
+  "shell.addLocalVideo": {
+    "source": "添加本地视频",
+    "translation": "Add local video"
+  },
+  "shell.allTrackAnnotations": {
+    "source": "所有轨道标注",
+    "translation": "All track annotations"
+  },
+  "shell.annotationColor": {
+    "source": "标注颜色",
+    "translation": "Annotation color"
+  },
+  "shell.annotationToolbar": {
+    "source": "标注工具条",
+    "translation": "Annotation toolbar"
+  },
+  "shell.annotationTools": {
+    "source": "标注工具",
+    "translation": "Annotation tools"
+  },
+  "shell.annotations": {
+    "source": "标注",
+    "translation": "Annotations"
+  },
+  "shell.arrangeTracksInAGrid": {
+    "source": "田字排列轨道",
+    "translation": "Arrange tracks in a grid"
+  },
+  "shell.bitstreamAnalysis": {
+    "source": "码流分析",
+    "translation": "Bitstream analysis"
+  },
+  "shell.browseLibrary": {
+    "source": "浏览媒体库",
+    "translation": "Browse library"
+  },
+  "shell.cancel": {
+    "source": "取消",
+    "translation": "Cancel"
+  },
+  "shell.cancelAdding": {
+    "source": "取消添加",
+    "translation": "Cancel adding"
+  },
+  "shell.centerTrackKeepingZoom": {
+    "source": "居中轨道 {p30} 画面，保留倍率",
+    "translation": "Center track {p30}, keeping zoom"
+  },
+  "shell.checkingConnection10OpenServerSettingsNew": {
+    "source": "正在检查连接\n打开服务管理（新标签页）",
+    "translation": "Checking connection\nOpen server settings (new tab)"
+  },
+  "shell.checkingLibraryConnectionOpenServerSettingsNew": {
+    "source": "正在检查媒体库连接，打开服务管理（新标签页）",
+    "translation": "Checking library connection; open server settings (new tab)"
+  },
+  "shell.chooseAViewToReplace": {
+    "source": "选择要替换的视图",
+    "translation": "Choose a view to replace"
+  },
+  "shell.chooseLocalFiles": {
+    "source": "选择本地文件",
+    "translation": "Choose local files"
+  },
+  "shell.closeTrack": {
+    "source": "关闭轨道 {p0}",
+    "translation": "Close track {p0}"
+  },
+  "shell.closeTrack2": {
+    "source": "关闭轨道",
+    "translation": "Close track"
+  },
+  "shell.collapseTrackInfo": {
+    "source": "收起轨道信息",
+    "translation": "Collapse track info"
+  },
+  "shell.comparisonLayout": {
+    "source": "对比布局",
+    "translation": "Comparison layout"
+  },
+  "shell.copyTrackAbsolutePath": {
+    "source": "拷贝轨道 {p0} 绝对路径",
+    "translation": "Copy track {p0} absolute path"
+  },
+  "shell.deleteSelection": {
+    "source": "删除选中对象",
+    "translation": "Delete selection"
+  },
+  "shell.dragToolbar": {
+    "source": "拖动工具条",
+    "translation": "Drag toolbar"
+  },
+  "shell.editAnnotationsForVideo": {
+    "source": "编辑视频 {p28} 的标注",
+    "translation": "Edit annotations for video {p28}"
+  },
+  "shell.ellipse": {
+    "source": "椭圆",
+    "translation": "Ellipse"
+  },
+  "shell.eraser": {
+    "source": "橡皮擦",
+    "translation": "Eraser"
+  },
+  "shell.finishAnnotating": {
+    "source": "结束标注",
+    "translation": "Finish annotating"
+  },
+  "shell.focusMode": {
+    "source": "专注模式",
+    "translation": "Focus mode"
+  },
+  "shell.fullscreen": {
+    "source": "全屏",
+    "translation": "Fullscreen"
+  },
+  "shell.inspectTrack": {
+    "source": "检查轨道 {p4}",
+    "translation": "Inspect track {p4}"
+  },
+  "shell.line": {
+    "source": "线条",
+    "translation": "Line"
+  },
+  "shell.localFiles": {
+    "source": "本地文件",
+    "translation": "Local files"
+  },
+  "shell.locateFile": {
+    "source": "定位文件",
+    "translation": "Locate file"
+  },
+  "shell.locateTrackFile": {
+    "source": "定位轨道 {p0} 文件",
+    "translation": "Locate track {p0} file"
+  },
+  "shell.logs": {
+    "source": "日志",
+    "translation": "Logs"
+  },
+  "shell.nextFrame": {
+    "source": "下一帧",
+    "translation": "Next frame"
+  },
+  "shell.offset": {
+    "source": "偏移",
+    "translation": "Offset"
+  },
+  "shell.openSettings": {
+    "source": "打开设置",
+    "translation": "Open settings"
+  },
+  "shell.openVideo": {
+    "source": "打开视频 {p16}",
+    "translation": "Open video {p16}"
+  },
+  "shell.orDropFilesHere": {
+    "source": "或将文件拖入这里",
+    "translation": "Or drop files here"
+  },
+  "shell.pen": {
+    "source": "画笔",
+    "translation": "Pen"
+  },
+  "shell.pixelSizeMode": {
+    "source": "像素尺寸模式",
+    "translation": "Pixel size mode"
+  },
+  "shell.play": {
+    "source": "播放",
+    "translation": "Play"
+  },
+  "shell.playPause": {
+    "source": "播放 / 暂停",
+    "translation": "Play / Pause"
+  },
+  "shell.playbackControls": {
+    "source": "播放功能",
+    "translation": "Playback controls"
+  },
+  "shell.previousFrame": {
+    "source": "上一帧",
+    "translation": "Previous frame"
+  },
+  "shell.recentlyOpened": {
+    "source": "最近打开",
+    "translation": "Recently opened"
+  },
+  "shell.recorded": {
+    "source": "已记录",
+    "translation": "Recorded"
+  },
+  "shell.rectangle": {
+    "source": "矩形",
+    "translation": "Rectangle"
+  },
+  "shell.redo": {
+    "source": "重做",
+    "translation": "Redo"
+  },
+  "shell.resetView": {
+    "source": "重置视图",
+    "translation": "Reset view"
+  },
+  "shell.resetViewCenterAt1": {
+    "source": "重置视图：恢复 1× 并居中",
+    "translation": "Reset view: center at 1×"
+  },
+  "shell.resizeBitstreamAnalysis": {
+    "source": "调整码流分析高度",
+    "translation": "Resize bitstream analysis"
+  },
+  "shell.resizeFilenameColumn": {
+    "source": "调整文件名列宽度",
+    "translation": "Resize filename column"
+  },
+  "shell.resizeRecent": {
+    "source": "调整最近打开列表宽度（{side, select, left {左} other {右}}侧）",
+    "translation": "Resize recent list ({side, select, left {left} other {right}} side)"
+  },
+  "shell.resizeRecentHint": {
+    "source": "拖动调整宽度，双击恢复默认",
+    "translation": "Drag to resize; double-click to reset"
+  },
+  "shell.resizeSourcesPanel": {
+    "source": "调整片源宽度",
+    "translation": "Resize sources panel"
+  },
+  "shell.resizeTrackInfoPanel": {
+    "source": "调整轨道信息宽度",
+    "translation": "Resize track info panel"
+  },
+  "shell.resizeTracksPanel": {
+    "source": "调整子轨道高度",
+    "translation": "Resize tracks panel"
+  },
+  "shell.seekToTime": {
+    "source": "定位时间",
+    "translation": "Seek to time"
+  },
+  "shell.selectMove": {
+    "source": "选择 / 移动",
+    "translation": "Select / Move"
+  },
+  "shell.selectTrackToInspect": {
+    "source": "选择检查轨道",
+    "translation": "Select track to inspect"
+  },
+  "shell.settings": {
+    "source": "设置",
+    "translation": "Settings"
+  },
+  "shell.share": {
+    "source": "分享",
+    "translation": "Share"
+  },
+  "shell.sharedPlaybackControls": {
+    "source": "共用播放控制",
+    "translation": "Shared playback controls"
+  },
+  "shell.sharedTimelineMicroseconds": {
+    "source": "共用时间轴，微秒",
+    "translation": "Shared timeline, microseconds"
+  },
+  "shell.showAllTracks": {
+    "source": "显示所有轨道",
+    "translation": "Show all tracks"
+  },
+  "shell.showAnnotationCards": {
+    "source": "显示标注卡片",
+    "translation": "Show annotation cards"
+  },
+  "shell.sideBySide": {
+    "source": "并排",
+    "translation": "Side by side"
+  },
+  "shell.sourceLoadingStatus": {
+    "source": "片源载入状态",
+    "translation": "Source loading status"
+  },
+  "shell.sources": {
+    "source": "片源",
+    "translation": "Sources"
+  },
+  "shell.split": {
+    "source": "分屏",
+    "translation": "Split"
+  },
+  "shell.splitPosition": {
+    "source": "分割线位置",
+    "translation": "Split position"
+  },
+  "shell.startVersionAbout": {
+    "source": "当前构建 {revision}，打开关于页面",
+    "translation": "Build {revision}; open About"
+  },
+  "shell.strokeWidth": {
+    "source": "笔画粗细",
+    "translation": "Stroke width"
+  },
+  "shell.switchToGridLayout": {
+    "source": "切换为田字布局",
+    "translation": "Switch to grid layout"
+  },
+  "shell.text": {
+    "source": "文字",
+    "translation": "Text"
+  },
+  "shell.textSize": {
+    "source": "文字大小",
+    "translation": "Text size"
+  },
+  "shell.timeRuler": {
+    "source": "时间标尺",
+    "translation": "Time ruler"
+  },
+  "shell.toggleSideBySideSplit": {
+    "source": "切换并排 / 分屏",
+    "translation": "Toggle side by side / split"
+  },
+  "shell.track": {
+    "source": "轨道",
+    "translation": "Track"
+  },
+  "shell.trackActions": {
+    "source": "轨道 {p0} 操作",
+    "translation": "Track {p0} actions"
+  },
+  "shell.trackActions2": {
+    "source": "轨道操作",
+    "translation": "Track actions"
+  },
+  "shell.trackInfo": {
+    "source": "轨道信息",
+    "translation": "Track info"
+  },
+  "shell.tracks": {
+    "source": "子轨道",
+    "translation": "Tracks"
+  },
+  "shell.tracksHiddenHint": {
+    "source": "点击轨道旁的眼睛图标，或显示所有轨道以继续查看。",
+    "translation": "Click the eye icon next to a track, or show all tracks to continue viewing."
+  },
+  "shell.tracksHiddenTitle": {
+    "source": "所有轨道已隐藏",
+    "translation": "All tracks hidden"
+  },
+  "shell.undo": {
+    "source": "撤销",
+    "translation": "Undo"
+  },
+  "shell.videoComparison": {
+    "source": "视频对比",
+    "translation": "Video comparison"
+  },
+  "shell.videoCurrentFrameTime": {
+    "source": "视频 {p9} 当前帧时间",
+    "translation": "Video {p9} current frame time"
+  },
+  "shell.videoDecodedFrame": {
+    "source": "视频 {p24} 当前解码画面",
+    "translation": "Video {p24} decoded frame"
+  },
+  "shell.viewIsOffscreenCenter": {
+    "source": "画面已移出 · 居中",
+    "translation": "View is offscreen · Center"
+  },
+  "shell.viewLayout": {
+    "source": "视图布局",
+    "translation": "View layout"
+  },
+  "shell.waitingForASource": {
+    "source": "等待添加片源",
+    "translation": "Waiting for a source"
+  },
+  "shell.workspacePanels": {
+    "source": "工作区功能",
+    "translation": "Workspace panels"
+  },
+  "shell.yuvChannels": {
+    "source": "YUV 通道",
+    "translation": "YUV channels"
+  },
+  "shell.yuvChannelsRawYuvFramesOnly": {
+    "source": "YUV 通道：仅原始平面帧生效",
+    "translation": "YUV channels: raw YUV frames only"
+  },
+  "shell.zoom": {
+    "source": "画面缩放",
+    "translation": "Zoom"
+  },
+  "sourceActions.connected": {
+    "source": "媒体服务已连接",
+    "translation": "Media service connected"
+  },
+  "sourceActions.copied": {
+    "source": "绝对路径已拷贝",
+    "translation": "Absolute path copied"
+  },
+  "sourceActions.copyAbsolutePath": {
+    "source": "拷贝绝对路径",
+    "translation": "Copy absolute path"
+  },
+  "sourceActions.disconnected": {
+    "source": "媒体服务未连接；本地文件仍可播放",
+    "translation": "Media service disconnected; local files still play"
+  },
+  "sourceActions.downloadFile": {
+    "source": "下载文件",
+    "translation": "Download file"
+  },
+  "sourceActions.fetchingPath": {
+    "source": "正在获取路径；服务需支持文件位置接口",
+    "translation": "Fetching the path; the service must support the file-location API"
+  },
+  "sourceActions.locateFailed": {
+    "source": "文件定位失败",
+    "translation": "Failed to reveal the file"
+  },
+  "sourceActions.locateInManager": {
+    "source": "在文件管理器中定位",
+    "translation": "Reveal in the file manager"
+  },
+  "sourceActions.noAbsolutePath": {
+    "source": "浏览器未提供本地绝对路径；从本机媒体库打开可使用路径和定位",
+    "translation": "The browser did not provide a local absolute path; open it from the on-device library for path and reveal"
+  },
+  "sourceActions.noLocate": {
+    "source": "浏览器未提供本地文件定位；可从本机媒体库打开",
+    "translation": "The browser did not provide local file reveal; open it from the on-device library"
+  },
+  "sourceActions.offline": {
+    "source": "网络离线；本地文件仍可播放",
+    "translation": "Network offline; local files still play"
+  },
+  "sourceActions.openAdminNewLine": {
+    "source": "\n打开服务管理（新标签页）",
+    "translation": "\nOpen service admin (new tab)"
+  },
+  "sourceActions.openAdminSuffix": {
+    "source": "，打开服务管理（新标签页）",
+    "translation": ", open service admin (new tab)"
+  },
+  "sources.accessDenied": {
+    "source": "已拒绝访问本地文件 {name}，如需打开请重新选择",
+    "translation": "Access to local file {name} was denied. Pick it again to open"
+  },
+  "sources.accessExpired": {
+    "source": "本地文件访问已过期，请重新选择 {name}",
+    "translation": "Local file access expired. Pick {name} again"
+  },
+  "sources.addToView": {
+    "source": "添加到视图",
+    "translation": "Add to view"
+  },
+  "sources.addToViewName": {
+    "source": "添加到视图：{name}",
+    "translation": "Add to view: {name}"
+  },
+  "sources.cancelAndAdd": {
+    "source": "取消当前载入并添加到视图",
+    "translation": "Cancel the current load and add to view"
+  },
+  "sources.cancelLoad": {
+    "source": "取消载入",
+    "translation": "Cancel load"
+  },
+  "sources.cancelLoadName": {
+    "source": "取消载入：{name}",
+    "translation": "Cancel load: {name}"
+  },
+  "sources.checkReference": {
+    "source": "检查媒体引用",
+    "translation": "Check the media reference"
+  },
+  "sources.contentChanged": {
+    "source": "内容已改变或不可用，请在媒体库中重新选择",
+    "translation": "The content changed or is unavailable. Pick it again in the library"
+  },
+  "sources.currentIdentityPrefix": {
+    "source": "当前身份 · ",
+    "translation": "Current identity · "
+  },
+  "sources.emptyDirectory": {
+    "source": "当前目录没有片源",
+    "translation": "No sources in this folder"
+  },
+  "sources.folderMetaLibrary": {
+    "source": "媒体库 · {root}",
+    "translation": "Library · {root}"
+  },
+  "sources.guest": {
+    "source": "访客",
+    "translation": "Guest"
+  },
+  "sources.identityAria": {
+    "source": "当前身份：{name}，打开用户设置",
+    "translation": "Current identity: {name}; open user settings"
+  },
+  "sources.identityTitle": {
+    "source": "点击打开用户设置（当前身份：{name}）",
+    "translation": "Open user settings (current identity: {name})"
+  },
+  "sources.inLibrary": {
+    "source": "媒体库",
+    "translation": "Library"
+  },
+  "sources.inUse": {
+    "source": "使用中",
+    "translation": "In use"
+  },
+  "sources.lastOpened": {
+    "source": " · 上次打开 {date}",
+    "translation": " · last opened {date}"
+  },
+  "sources.loadFailedWith": {
+    "source": "载入失败：{reason}",
+    "translation": "Load failed: {reason}"
+  },
+  "sources.loading": {
+    "source": "正在载入",
+    "translation": "Loading"
+  },
+  "sources.localFile": {
+    "source": "本地文件",
+    "translation": "Local file"
+  },
+  "sources.localFiles": {
+    "source": "本地文件",
+    "translation": "Local files"
+  },
+  "sources.localFilesCount": {
+    "source": "本地文件（{n}）",
+    "translation": "Local files ({n})"
+  },
+  "sources.localNoUpload": {
+    "source": "本机（不上传）",
+    "translation": "Local (no upload)"
+  },
+  "sources.noMatch": {
+    "source": "没有匹配的片源",
+    "translation": "No matching sources"
+  },
+  "sources.noRecentShort": {
+    "source": "暂无最近片源",
+    "translation": "No recent sources"
+  },
+  "sources.noRecentVideos": {
+    "source": "还没有最近打开的视频",
+    "translation": "No recently opened videos yet"
+  },
+  "sources.openFolder": {
+    "source": "打开目录：{name}",
+    "translation": "Open folder: {name}"
+  },
+  "sources.openName": {
+    "source": "打开：{name}",
+    "translation": "Open: {name}"
+  },
+  "sources.removeFromView": {
+    "source": "从视图移除",
+    "translation": "Remove from view"
+  },
+  "sources.removeFromViewName": {
+    "source": "从视图移除：{name}",
+    "translation": "Remove from view: {name}"
+  },
+  "sources.replaceTrack": {
+    "source": "替换当前轨道",
+    "translation": "Replace the current track"
+  },
+  "sources.reselectInSourcesName": {
+    "source": "在片源中重新选择：{name}",
+    "translation": "Pick again in sources: {name}"
+  },
+  "sources.reselectLocalFile": {
+    "source": "重新选择本地文件",
+    "translation": "Pick the local file again"
+  },
+  "sources.reselectName": {
+    "source": "重新选择 {name}",
+    "translation": "Pick {name} again"
+  },
+  "sources.reselectNeeded": {
+    "source": " · 需重新选择",
+    "translation": " · needs re-picking"
+  },
+  "sources.reselectRowName": {
+    "source": "重新选择：{name}",
+    "translation": "Pick again: {name}"
+  },
+  "sources.showingFirstFrame": {
+    "source": "正在显示首帧",
+    "translation": "Showing the first frame"
+  },
+  "sources.staleLibraryToast": {
+    "source": "媒体库中的文件已变化，请在片源中重新选择",
+    "translation": "The file in the library changed. Pick it again in sources"
+  },
+  "sources.startMetaLibrary": {
+    "source": "媒体库",
+    "translation": "Library"
+  },
+  "sources.startMetaLocal": {
+    "source": "本地文件",
+    "translation": "Local file"
+  },
+  "sources.stillWriting": {
+    "source": "片源仍在写入，请稍后重试",
+    "translation": "The source is still being written. Retry later"
+  },
+  "sources.storageOffline": {
+    "source": "存储离线",
+    "translation": "Storage offline"
+  },
+  "sources.storageOfflineWait": {
+    "source": "媒体存储离线，请等待重新连接",
+    "translation": "Media storage is offline; wait for reconnection"
+  },
+  "sources.tooltipLibrary": {
+    "source": "{name}（{root}）",
+    "translation": "{name} ({root})"
+  },
+  "sources.tooltipLocalOnly": {
+    "source": "{name}（本地文件，仅本机预览）",
+    "translation": "{name} (local file, preview on this device only)"
+  },
+  "sources.writing": {
+    "source": "写入中",
+    "translation": "Writing"
+  },
+  "sync.conflictChanged": {
+    "source": "标注已被修改或删除",
+    "translation": "The mark was changed or deleted"
+  },
+  "sync.continueHere": {
+    "source": "在这里继续",
+    "translation": "Continue here"
+  },
+  "sync.disconnectedKeepDrafts": {
+    "source": "连接中断 · 本机草稿保留",
+    "translation": "Disconnected · local drafts kept"
+  },
+  "sync.draftsUnsaved": {
+    "source": "本机草稿尚未保存，请先重试或导出。",
+    "translation": "Local drafts are not saved yet. Retry or export first."
+  },
+  "sync.finishEditingFirst": {
+    "source": "请先结束当前标注编辑。",
+    "translation": "Finish the current mark edit first."
+  },
+  "sync.frameMark": {
+    "source": "画面标注",
+    "translation": "Frame mark"
+  },
+  "sync.localSaveFailed": {
+    "source": "本机保存失败：{error}",
+    "translation": "Local save failed: {error}"
+  },
+  "sync.otherDrafts": {
+    "source": "其他页面的草稿：{text}",
+    "translation": "Drafts from other pages: {text}"
+  },
+  "sync.pendingCount": {
+    "source": "{n} 条标注需要处理",
+    "translation": "{n} marks need attention"
+  },
+  "sync.saveDraftAsMark": {
+    "source": "草稿另存为标注",
+    "translation": "Save the draft as a mark"
+  },
+  "sync.savedLocal": {
+    "source": "已存本机",
+    "translation": "Saved locally"
+  },
+  "sync.savedPendingSync": {
+    "source": "已存本机 · 等待同步",
+    "translation": "Saved locally · waiting to sync"
+  },
+  "sync.savingDrafts": {
+    "source": "本机草稿正在保存，请稍后重试。",
+    "translation": "Local drafts are being saved. Try again shortly."
+  },
+  "sync.savingLocal": {
+    "source": "正在保存到本机…",
+    "translation": "Saving locally…"
+  },
+  "sync.synced": {
+    "source": "已同步",
+    "translation": "Synced"
+  },
+  "sync.useServerVersion": {
+    "source": "采用服务器版本",
+    "translation": "Use the server version"
+  },
+  "sync.waitForDrafts": {
+    "source": "请先结束标注并等待本机草稿保存完成。",
+    "translation": "Finish annotating and wait for local drafts to save."
+  },
+  "theme.custom": {
+    "source": "自定义 · {p0}",
+    "translation": "Custom · {p0}"
+  },
+  "theme.enterAValidHexColorSuchAs": {
+    "source": "请输入有效的 HEX 颜色，例如 #3478F6。",
+    "translation": "Enter a valid HEX color, such as #3478F6."
+  },
+  "toast.dismissNotification": {
+    "source": "关闭通知",
+    "translation": "Dismiss notification"
+  },
+  "tracks.accelerationRequest": {
+    "source": "加速请求",
+    "translation": "Acceleration request"
+  },
+  "tracks.browserDecoderMemoryFormatMayDifferFrom": {
+    "source": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
+    "translation": "Browser decoder memory format; may differ from the source pixel format"
+  },
+  "tracks.browserDefault": {
+    "source": "浏览器自动选择",
+    "translation": "Browser default"
+  },
+  "tracks.browserMediaIndex": {
+    "source": "浏览器媒体索引",
+    "translation": "Browser media index"
+  },
+  "tracks.browserOutputUnverified": {
+    "source": "浏览器输出未验证",
+    "translation": "Browser output unverified"
+  },
+  "tracks.clipPts": {
+    "source": "片内 PTS",
+    "translation": "Clip PTS"
+  },
+  "tracks.codec": {
+    "source": "编码",
+    "translation": "Codec"
+  },
+  "tracks.colorPrimaries": {
+    "source": "色域原色",
+    "translation": "Color primaries"
+  },
+  "tracks.complete": {
+    "source": "已完成",
+    "translation": "Complete"
+  },
+  "tracks.containerKeyframes": {
+    "source": "容器关键帧定位",
+    "translation": "Container keyframes"
+  },
+  "tracks.containerTimestampsMayScanBackward": {
+    "source": "容器时间戳定位（可能回扫）",
+    "translation": "Container timestamps (may scan backward)"
+  },
+  "tracks.currentFrame": {
+    "source": "当前帧",
+    "translation": "Current frame"
+  },
+  "tracks.decodedPixelFormat": {
+    "source": "解码像素格式",
+    "translation": "Decoded pixel format"
+  },
+  "tracks.dimensions": {
+    "source": "尺寸",
+    "translation": "Dimensions"
+  },
+  "tracks.duration": {
+    "source": "时长",
+    "translation": "Duration"
+  },
+  "tracks.durationCoversIndexedPortion": {
+    "source": "{p0} · 时长为已索引范围",
+    "translation": "{p0} · Duration covers indexed portion"
+  },
+  "tracks.fileIntegrity": {
+    "source": "文件完整性",
+    "translation": "File integrity"
+  },
+  "tracks.frameDuration": {
+    "source": "帧时长",
+    "translation": "Frame duration"
+  },
+  "tracks.frameIndex": {
+    "source": "帧索引",
+    "translation": "Frame index"
+  },
+  "tracks.hdrSource": {
+    "source": "HDR 源",
+    "translation": "HDR source"
+  },
+  "tracks.hideTrack": {
+    "source": "隐藏轨道 {slot}",
+    "translation": "Hide track {slot}"
+  },
+  "tracks.indexFailed": {
+    "source": "索引失败：{p0}",
+    "translation": "Index failed: {p0}"
+  },
+  "tracks.inspectSubtrack": {
+    "source": "检视子轨道 {p0}",
+    "translation": "Inspect subtrack {p0}"
+  },
+  "tracks.loadAVideoToViewTracksAnd": {
+    "source": "载入视频后查看轨道与标记",
+    "translation": "Load a video to view tracks and marks"
+  },
+  "tracks.mark": {
+    "source": "标记 {p0} {p1} {p2}",
+    "translation": "Mark {p0} {p1} {p2}"
+  },
+  "tracks.matrixCoefficients": {
+    "source": "矩阵系数",
+    "translation": "Matrix coefficients"
+  },
+  "tracks.noTrackLoaded": {
+    "source": "尚未载入轨道",
+    "translation": "No tracks loaded"
+  },
+  "tracks.noTracksLoaded": {
+    "source": "尚未载入轨道",
+    "translation": "No tracks loaded"
+  },
+  "tracks.notProvided": {
+    "source": "未提供",
+    "translation": "Not provided"
+  },
+  "tracks.packetIndex": {
+    "source": "包索引定位",
+    "translation": "Packet index"
+  },
+  "tracks.pixelFormat": {
+    "source": "像素格式",
+    "translation": "Pixel format"
+  },
+  "tracks.preferHardwareActualHardwareUseUnverified": {
+    "source": "硬件优先（实际硬件使用未验证）",
+    "translation": "Prefer hardware (actual hardware use unverified)"
+  },
+  "tracks.range": {
+    "source": "范围",
+    "translation": "Range"
+  },
+  "tracks.relativeToPlayhead": {
+    "source": "相对游标",
+    "translation": "Relative to playhead"
+  },
+  "tracks.reusedServerCache": {
+    "source": "已复用服务器缓存",
+    "translation": "Reused server cache"
+  },
+  "tracks.sdrFallbackDisplay": {
+    "source": "SDR 兜底显示",
+    "translation": "SDR fallback display"
+  },
+  "tracks.seekMethod": {
+    "source": "定位方式",
+    "translation": "Seek method"
+  },
+  "tracks.seekTrack": {
+    "source": "定位轨道 {p0}",
+    "translation": "Seek track {p0}"
+  },
+  "tracks.selectTrack": {
+    "source": "选择轨道 {p0}",
+    "translation": "Select track {p0}"
+  },
+  "tracks.showTrack": {
+    "source": "显示轨道 {slot}",
+    "translation": "Show track {slot}"
+  },
+  "tracks.sourceBitstreamMetadataReadByDecoder": {
+    "source": "来源：解码器读取的码流元数据",
+    "translation": "Source: bitstream metadata read by decoder"
+  },
+  "tracks.sourceContainerTags": {
+    "source": "来源：封装标记",
+    "translation": "Source: container tags"
+  },
+  "tracks.sourcePts": {
+    "source": "源 PTS",
+    "translation": "Source PTS"
+  },
+  "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": {
+    "source": "同步偏移：正值延后，负值提前（毫秒）",
+    "translation": "Sync offset: positive delays, negative advances (milliseconds)"
+  },
+  "tracks.track": {
+    "source": "轨道 {p0}",
+    "translation": "Track {p0}"
+  },
+  "tracks.trackDurationClickToSeek": {
+    "source": "轨道 {p0} 时长 {p1}；点击定位",
+    "translation": "Track {p0} duration {p1}; click to seek"
+  },
+  "tracks.trackOffsetMilliseconds": {
+    "source": "轨道 {p0} 偏移，毫秒",
+    "translation": "Track {p0} offset, milliseconds"
+  },
+  "tracks.transferFunction": {
+    "source": "传递特性",
+    "translation": "Transfer function"
+  },
+  "tracks.viewTrackDetails": {
+    "source": "查看轨道详情",
+    "translation": "View track details"
+  },
+  "transfer.cancelImport": {
+    "source": "取消导入",
+    "translation": "Cancel import"
+  },
+  "transfer.importing": {
+    "source": "工作区正在导入，请等待完成。",
+    "translation": "The workspace is importing. Wait for it to finish."
+  },
+  "transfer.later": {
+    "source": "稍后关联",
+    "translation": "Later"
+  },
+  "transfer.legacyConditions": {
+    "source": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。",
+    "translation": "The old workspace recorded no compare conditions; current color and decode settings apply."
+  },
+  "transfer.notAuthorized": {
+    "source": "本地文件尚未授权，请重新选择。",
+    "translation": "Local file not authorized yet. Pick it again."
+  },
+  "transfer.openWorkspace": {
+    "source": "打开工作区",
+    "translation": "Open workspace"
+  },
+  "transfer.pendingRelink": {
+    "source": "{n} 个片源待重新关联；轨道、偏移和标注已保留。",
+    "translation": "{n} sources need relinking; tracks, offsets, and marks are kept."
+  },
+  "transfer.relinkBody": {
+    "source": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。",
+    "translation": "The workspace saved video references. Pick those local files again, or link them later and restore tracks and marks first."
+  },
+  "transfer.relinkNow": {
+    "source": "重新关联",
+    "translation": "Relink now"
+  },
+  "transfer.relinkTitle": {
+    "source": "重新连接本地视频",
+    "translation": "Reconnect local videos"
+  },
+  "ui.pixelWidth": {
+    "source": "{width} 像素",
+    "translation": "{width} pixels"
+  },
+  "ui.releaseCollapse": {
+    "source": "松开收起面板",
+    "translation": "Release to collapse panel"
+  },
+  "workbench.collapsePanel": {
+    "source": "收起{panel}",
+    "translation": "Collapse {panel}"
+  },
+  "workbench.expandPanel": {
+    "source": "展开{panel}",
+    "translation": "Expand {panel}"
+  },
+  "workbench.pixels": {
+    "source": "{p0} 像素",
+    "translation": "{p0} pixels"
+  },
+  "workspace.actorChanged": {
+    "source": "用户已切换，请在当前工作区重新分享。",
+    "translation": "The user has changed. Share again from the current workspace."
+  },
+  "workspace.changed": {
+    "source": "当前工作区已切换，请在新工作区重新分享。",
+    "translation": "The workspace has changed. Share again from the new workspace."
+  },
+  "workspace.closed": {
+    "source": "工作区页面已关闭。",
+    "translation": "The workspace page has closed."
+  },
+  "workspace.columns": {
+    "source": "名称 / 用户 · 最近更新 ↓",
+    "translation": "Name / user · Updated ↓"
+  },
+  "workspace.conflict": {
+    "source": "工作区已被更新，请重新打开后继续。",
+    "translation": "This workspace has changed. Reopen it to continue."
+  },
+  "workspace.copyNamed": {
+    "source": "复制工作区链接：{name}",
+    "translation": "Copy workspace link: {name}"
+  },
+  "workspace.exportDrafts": {
+    "source": "导出未保存的批注",
+    "translation": "Export unsaved annotations"
+  },
+  "workspace.retry": {
+    "source": "重试保存",
+    "translation": "Retry saving"
+  },
+  "workspace.saving": {
+    "source": "工作区正在保存，请稍后再分享。",
+    "translation": "The workspace is being saved. Try sharing again shortly."
+  }
+}

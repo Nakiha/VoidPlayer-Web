@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { panelDragIntent } from './panel-resize.ts';
 
 type ResizeOptions = {
@@ -11,6 +12,7 @@ type ResizeOptions = {
 /** Shared pointer/keyboard lifecycle for the dock and its annotation sidebar. */
 export function installResizeGesture(handle: HTMLElement, options: ResizeOptions, signal: AbortSignal) {
   let drag: {pointer:number; origin:number; size:number; collapse:boolean} | null = null;
+  onLanguageChange(() => { if(drag?.collapse)handle.setAttribute('aria-valuetext',t(msg('resize.releaseToCollapse', '松开收起面板'))); }, signal);
   const position = (e:PointerEvent) => options.axis === 'x' ? e.clientX : e.clientY;
   function finish(cancel:boolean) {
     if (!drag) return;
@@ -34,7 +36,7 @@ export function installResizeGesture(handle: HTMLElement, options: ResizeOptions
     drag.collapse = intent.collapse; options.resize(intent.width);
     const overshoot = Math.max(0,bounds.min - (drag.size + options.direction * delta));
     options.preview(-options.direction * Math.min(bounds.min,overshoot),Math.min(1,overshoot/options.threshold()));
-    if (intent.collapse) handle.setAttribute('aria-valuetext','松开收起面板');
+    if (intent.collapse) handle.setAttribute('aria-valuetext',t(msg('resize.releaseToCollapse', '松开收起面板')));
   }, {signal});
   handle.addEventListener('pointerup', () => finish(false), {signal});
   handle.addEventListener('pointercancel', () => finish(true), {signal});

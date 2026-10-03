@@ -1,3 +1,4 @@
+import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
 import { currentActor, identityHealth } from '../identity.ts';
 import { SavedWorkspaceClient } from '../saved-workspaces.ts';
 import type { SavedWorkspace } from '../saved-workspaces.ts';
@@ -5,20 +6,20 @@ import type { WorkspaceFile } from '../workspace-file.ts';
 import { prepareSharedWorkspace } from '../shared-workspace.ts';
 import { icon } from './icons.ts';
 export function savedWorkspaceShell() {
-  return `<div class="settings-section"><h4 class="settings-section-title">当前工作区</h4><div class="workspace-current-section settings-card">
-    <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="工作区名称" placeholder="未命名工作区"><div class="workspace-current-actions"><button id="saved-workspace-save">保存</button><button id="saved-workspace-share">${icon('copy')}<span>复制链接</span></button></div></div>
+  return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("savedWorkspaces.currentWorkspace", "当前工作区"))}</h4><div class="workspace-current-section settings-card">
+    <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="${th(msg("savedWorkspaces.workspaceName", "工作区名称"))}" placeholder="${th(msg("savedWorkspaces.untitledWorkspace", "未命名工作区"))}"><div class="workspace-current-actions"><button id="saved-workspace-save">${th(msg("identitySettings.save", "保存"))}</button><button id="saved-workspace-share">${icon('copy')}<span>${th(msg("sharing.copyLink", "复制链接"))}</span></button></div></div>
     <div id="annotation-recovery" hidden>
-      <div class="annotation-sync-actions"><button id="annotation-sync-now">重试保存</button><button id="annotation-drafts-export">导出未保存的批注</button></div>
+      <div class="annotation-sync-actions"><button id="annotation-sync-now">${th(msg("workspace.retry", "重试保存"))}</button><button id="annotation-drafts-export">${th(msg("workspace.exportDrafts", "导出未保存的批注"))}</button></div>
       <div id="annotation-conflicts-section" hidden><div id="annotation-conflicts"></div></div>
       <div id="annotation-drafts-section" hidden><div id="annotation-other-drafts"></div></div>
     </div>
     <p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
-    <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>工作区已被更新，请重新打开后继续。</span><button id="saved-workspace-reload">重新打开</button></div>
+    <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>${th(msg("savedWorkspaces.updatedReopen", "工作区已被更新，请重新打开后继续。"))}</span><button id="saved-workspace-reload">${th(msg("savedWorkspaces.reopen", "重新打开"))}</button></div>
     </div>
-    </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">已保存的工作区</h4></div>
-    <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="搜索工作区名或用户名" placeholder="搜索工作区名或用户名" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="清除搜索" hidden>${icon('close')}</button></div>
-    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>名称 / 用户 · 最近更新 ↓</span><span>链接</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
-    <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>返回最新</button><button id="saved-workspace-next" disabled>下一页</button></div></div>`;
+    </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">${th(msg("savedWorkspaces.savedWorkspaces", "已保存的工作区"))}</h4></div>
+    <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" placeholder="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="${th(msg("savedWorkspaces.clearSearch", "清除搜索"))}" hidden>${icon('close')}</button></div>
+    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>${th(msg("workspace.columns", "名称 / 用户 · 最近更新 ↓"))}</span><span>${th(msg("sharing.link", "链接"))}</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
+    <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>`;
 }
 
 export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void }) {
@@ -29,7 +30,8 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   let idle: Promise<void> = Promise.resolve();
   const captureRequest = () => ({ binding, owner: currentActor()?.id, epoch: bindingEpoch });
   const isCurrent = (request: ReturnType<typeof captureRequest>) => !options.signal.aborted && request.epoch === bindingEpoch && request.owner === currentActor()?.id;
-  const message = (value: string, error = false) => { $('message').hidden = !value; $('message').textContent = value; $('message').dataset.error = String(error); };
+  let messageText: string | (() => string) = '';
+  const message = (value: string | (() => string), error = false) => { messageText = value; const text = typeof value === 'function' ? value() : value; $('message').hidden = !text; $('message').textContent = text; $('message').dataset.error = String(error); };
   const title = () => $<HTMLInputElement>('name').value.trim() || '未命名工作区';
   function controls() {
     $('name').toggleAttribute('disabled', busy);
@@ -58,19 +60,30 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
       const open = document.createElement('button'); open.type = 'button'; open.dataset.workspaceId = record.id; open.className = 'saved-workspace-open'; open.setAttribute('aria-pressed', String(record.id === binding?.id));
       const info = document.createElement('span'); info.className = 'saved-workspace-info';
       const name = document.createElement('strong'); name.textContent = record.name;
-      const detail = document.createElement('span'); detail.textContent = record.ownerName ?? '访客';
+      const detail = document.createElement('span'); detail.dataset.localeGuest = String(!record.ownerName); detail.textContent = record.ownerName ?? t(msg("sources.guest", "访客"));
       const metadata = document.createElement('span'); metadata.className = 'saved-workspace-meta';
       open.onclick = () => void act(() => load(record.id));
-      const time = document.createElement('time'); time.className = 'workspace-row-time'; time.dateTime = record.updatedAt; time.textContent = new Date(record.updatedAt).toLocaleString();
+      const time = document.createElement('time'); time.className = 'workspace-row-time'; time.dateTime = record.updatedAt; time.textContent = formatDate(record.updatedAt);
       metadata.append(detail, time); info.append(name, metadata); open.append(info);
-      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'saved-workspace-copy'; copy.setAttribute('aria-label', `复制工作区链接：${record.name}`); copy.innerHTML = `${icon('copy')}<span>复制链接</span>`;
+      const copy = document.createElement('button'); copy.type = 'button'; copy.className = 'saved-workspace-copy'; copy.setAttribute('aria-label', t(msg("workspace.copyNamed", "复制工作区链接：{name}"), {name:record.name})); copy.innerHTML = `${icon('copy')}<span>${th(msg("sharing.copyLink", "复制链接"))}</span>`;
       copy.onclick = () => { copy.disabled = true; void options.copyLink(record.id, copy).catch(error => { message((error as Error).message, true); options.report(error as Error); }).finally(() => { copy.disabled = false; }); };
       row.append(open, copy); return row;
     });
-    if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-caption'; empty.textContent = search ? '没有匹配的工作区' : '暂无工作区'; $('list').replaceChildren(empty); }
+    if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-caption'; empty.textContent = search ? t(msg("savedWorkspaces.noMatchingWorkspaces", "没有匹配的工作区")) : t(msg("savedWorkspaces.noWorkspacesYet", "暂无工作区")); $('list').replaceChildren(empty); }
     else $('list').replaceChildren(...rows);
     controls();
   }
+  onLanguageChange(() => {
+    $('message').textContent = typeof messageText === 'function' ? messageText() : messageText;
+    for(const row of $('list').querySelectorAll<HTMLElement>('.saved-workspace-row')) {
+      const name = row.querySelector('strong')!.textContent!;
+      row.querySelector('.saved-workspace-copy')!.setAttribute('aria-label',t(msg('workspace.copyNamed','复制工作区链接：{name}'),{name}));
+      row.querySelector('.saved-workspace-copy span')!.textContent=t(msg('sharing.copyLink','复制链接'));
+      const guest=row.querySelector<HTMLElement>('[data-locale-guest=true]'); if(guest)guest.textContent=t(msg('sources.guest','访客'));
+      const time=row.querySelector('time')!;time.textContent=formatDate(time.dateTime);
+    }
+    const empty=$('list').querySelector('p'); if(empty)empty.textContent=search?t(msg('savedWorkspaces.noMatchingWorkspaces','没有匹配的工作区')):t(msg('savedWorkspaces.noWorkspacesYet','暂无工作区'));
+  },options.signal);
   async function load(id: string) {
     const owner = (await identityHealth()).actor?.id;
     const record = await client.read(id);
@@ -106,7 +119,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
       const stored = await client.read(request.binding!.id);
       if (!isCurrent(request)) return;
       // Renaming must not overwrite a newer server revision with the local session.
-      if (stored.revision !== request.binding!.revision) { $('conflict').hidden = false; throw new Error('工作区已被更新，请重新打开后继续。'); }
+      if (stored.revision !== request.binding!.revision) { $('conflict').hidden = false; throw new Error(t(msg("workspace.conflict", "工作区已被更新，请重新打开后继续。"))); }
       await persist({ ...stored.document, name }, request);
     });
   }, { signal: options.signal });
@@ -145,16 +158,16 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   const settings = document.getElementById('settings')!;
   settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') void actCurrent(async () => {
     message(''); const health = await identityHealth(); available = !!health.capabilities?.workspaces; controls();
-    if (available) await list(); else message('工作区服务不可用。');
+    if (available) await list(); else message(() => t(msg("savedWorkspaces.workspaceServiceUnavailable", "工作区服务不可用。")));
   }); }, { signal: options.signal });
   controls();
   return { name: title, binding: () => binding,
     async share(document: WorkspaceFile, id: string, previous?: SavedWorkspace) {
       const request = captureRequest(), snapshot = structuredClone(document), name = document.name || title();
       const ensureCurrent = () => {
-        if (options.signal.aborted) throw new Error('工作区页面已关闭。');
-        if (request.owner !== currentActor()?.id) throw new Error('用户已切换，请在当前工作区重新分享。');
-        if (request.epoch !== bindingEpoch) throw new Error('当前工作区已切换，请在新工作区重新分享。');
+        if (options.signal.aborted) throw new Error(t(msg("workspace.closed", "工作区页面已关闭。")));
+        if (request.owner !== currentActor()?.id) throw new Error(t(msg("workspace.actorChanged", "用户已切换，请在当前工作区重新分享。")));
+        if (request.epoch !== bindingEpoch) throw new Error(t(msg("workspace.changed", "当前工作区已切换，请在新工作区重新分享。")));
       };
       while (busy) await idle;
       ensureCurrent();
@@ -168,7 +181,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
           throw error;
         }
       },true);
-      if (!result) throw new Error('工作区正在保存，请稍后再分享。');
+      if (!result) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
       return result;
     }, detach(name = '') { bindingEpoch++; binding = undefined; $<HTMLInputElement>('name').value = name; $('conflict').hidden = true; controls(); }, open(id: string) { return act(() => load(id)); }, update: controls };
 }

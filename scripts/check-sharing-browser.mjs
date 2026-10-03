@@ -18,7 +18,7 @@ try{
   service=await startService(config);await service.library.refresh();config.port=service.server.address().port;
   const base=`http://127.0.0.1:${config.port}`;
   browser=await(name==='chromium'?chromium:webkit).launch({headless:true});
-  const context=await browser.newContext({viewport:{width:1280,height:900}}),page=await context.newPage(),errors=[];
+  const context=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}}),page=await context.newPage(),errors=[];
   const watch=p=>p.on('pageerror',e=>errors.push(e.message));watch(page);
   await page.addInitScript(()=>Object.defineProperty(navigator.clipboard,'writeText',{value:async value=>{window.testClipboard=value;}}));
   await page.addInitScript(()=>window.addEventListener('voidplayer-annotation-status',event=>{window.testAnnotationStatus=event.detail;}));
@@ -41,7 +41,7 @@ try{
   assert.equal(await page.locator('dialog[open]').count(),0,'one click shares without a wizard');assert.equal(await page.locator('#review-sharing,#review-context').count(),0);
   const record=await page.request.get(base+'/api/workspaces/'+id).then(r=>r.json());assert.equal(record.name,'画质对比');assert.equal(record.document.marks.length,0);assert.equal(record.document.positionUs,200000);
   await page.screenshot({path:path.join(evidence,'01-one-click-sharing.png')});
-  const recipient=await browser.newContext({viewport:{width:1280,height:900}}),other=await recipient.newPage();watch(other);
+  const recipient=await browser.newContext({locale:'zh-CN', viewport:{width:1280,height:900}}),other=await recipient.newPage();watch(other);
   await other.goto(link);await other.locator('#identity-welcome [data-guest]').click();
   await other.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id) && !window.voidPlayer.getState().busy,later.id);
   assert.ok(!(await call(other,'get_review_session')).marks.some(m=>m.id===removed.id),'sharing must not resurrect a deletion');

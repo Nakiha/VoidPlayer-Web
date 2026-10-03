@@ -12,7 +12,7 @@ try{
   const config=await loadConfig(['--folder',path.join(root,'media'),'--data-dir',root],'production');config.port=0;config.logsDir=null;
   service=await startService(config);
   vite=await createServer({configFile:false,cacheDir:path.join(root,'vite-cache'),optimizeDeps:{noDiscovery:true},server:{host:'127.0.0.1',port:0,proxy:{'/api':{target:`http://127.0.0.1:${service.server.address().port}`,changeOrigin:false}}}});await vite.listen();
-  browser=await webkit.launch();const page=await browser.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  browser=await webkit.launch();const page=await browser.newPage({locale:'zh-CN'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/controls.html',route=>route.fulfill({contentType:'text/html',body:'<body></body>'}));
   await page.route('**/api/media/*/metadata*',route=>route.fulfill({json:{id:'a'.repeat(24),version:'b'.repeat(24),size:100,lastModified:10,state:'ready'}}));
   await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/controls.html`);

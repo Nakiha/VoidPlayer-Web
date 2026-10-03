@@ -1,7 +1,13 @@
+import { mediaDiagnostic } from './media-errors.ts';
+import type { MediaDiagnostic } from './media-errors.ts';
+import { diagnosticMessage } from './ui/diagnostic-message.ts';
+import { mountLocalizedShell } from './ui/localized-shell.ts';
+import { installLanguageControls } from './ui/language.ts';
+import { t, th, t as tr, getLocale, onLanguageChange, msg } from './i18n.ts';
 import { isHdrTransfer } from './presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { initializeGpuPresentation } from './webgpu-presenter.ts';
-import { indexProgressLabel } from './index-progress.ts';
+import { indexProgressLabel } from './ui/index-progress.ts';
 import { AnnotationClient } from './annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
@@ -55,12 +61,14 @@ const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
 
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
-$('app').innerHTML = shell();
+mountLocalizedShell($<HTMLElement>('app'), shell, uiEvents.signal);
+installLanguageControls(uiEvents.signal);
+document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
-$('brand-about').onclick = () => settings.openPane('about', $('brand-about'));
-$('start-version-about').onclick = () => settings.openPane('about', $('start-version-about'));
+$('brand-about').onclick = () => settings.openPane('about', $<HTMLElement>('brand-about'));
+$<HTMLElement>('start-version-about').onclick = () => settings.openPane('about', $<HTMLElement>('start-version-about'));
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
@@ -80,7 +88,7 @@ const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], fr
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
 const decoderButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-reference-decoder]')];
-const depthMenu = installChoiceMenu('hardware-buffer-depth', [1,2,4,8].map(n=>({value:String(n),label:`${n} 帧`})), value=>{
+const depthMenu = installChoiceMenu('hardware-buffer-depth', () => [1,2,4,8].map(n=>({value:String(n),label:tr(msg("player.frames", "{count, plural, other {# 帧}}"), { count: n })})), value=>{
   void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,depth:Number(value) as 1|2|4|8})).finally(renderColorMode);
 });
 let flowKey = '';
@@ -91,12 +99,12 @@ const renderColorMode=()=>{
   $('reference-decode-settings').hidden=mode!=='reference';
   $('hardware-depth-row').style.visibility=decoder==='hardware'?'visible':'hidden';
   $('hardware-depth-row').inert=decoder!=='hardware';
-  depthMenu.sync(String(state.referenceDecode.depth),`${state.referenceDecode.depth} 帧`,!state.busy);
+  depthMenu.sync(String(state.referenceDecode.depth),tr(msg("player.frames", "{count, plural, other {# 帧}}"), { count: state.referenceDecode.depth }),!state.busy);
   $('color-mode').setAttribute('aria-busy',String(state.busy));
-  const key=`${mode}/${decoder}`;
+  const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
-    $('color-mode-description').textContent=mode==='browser'?'软件回退仅近似匹配，颜色可能与原生帧不同。':decoder==='hardware'?'首帧核对失败则改用软件解码；读回帧有额外开销。':'保留原始帧精度，按统一规则转换；仅支持 SDR。';
+    $('color-mode-description').textContent=mode==='browser'?tr(msg("player.softwareFallbackIsAnApproximationColorsMay", "软件回退仅近似匹配，颜色可能与原生帧不同。")):decoder==='hardware'?tr(msg("player.fallsBackToSoftwareIfFirstFrame", "首帧核对失败则改用软件解码；读回帧有额外开销。")):tr(msg("player.preservesOriginalFramePrecisionWithConsistentConversion", "保留原始帧精度，按统一规则转换；仅支持 SDR。"));
   }
 };
 session.subscribe(renderColorMode);renderColorMode();
@@ -110,6 +118,7 @@ let inputTrigger = 'pointer';
 let warningMessage = '';
 let dismissWarning: (() => void) | null = null;
 let benchmarkRunning = false;
+let benchmarkSummary: (() => void) | undefined;
 let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
@@ -147,19 +156,19 @@ function openMarkDialog(slot: Slot = workbench.selected(), markId?: string) {
 }
 
 
-function showWarning(message: string) {
+function showWarning(message: string, diagnostic: MediaDiagnostic | undefined = session.getErrorDiagnostic()) {
   if (message === warningMessage) return;
   warningMessage = message;
   dismissWarning?.();
-  const colorIssue = message.includes('自有色彩');
-  dismissWarning = toasts.show(message, {
+  const pane = diagnostic ? 'performance' : 'logs';
+  dismissWarning = toasts.show(() => diagnosticMessage(message, diagnostic), {
     kind: 'warning',
-    action: { label: colorIssue ? '色彩与解码' : '日志', onClick: () => settings.openPane(colorIssue ? 'performance' : 'logs', $('settings-open')) },
+    action: { label: () => diagnostic ? tr(msg("settingsShell.colorDecoding", "色彩与解码")) : tr(msg("shell.logs", "日志")), onClick: () => settings.openPane(pane, $<HTMLElement>('settings-open')) },
   });
 }
 function showError(error: unknown) {
   session.captureDiagnostics('ui-error', error);
-  showWarning(error instanceof Error ? error.message : String(error));
+  showWarning(error instanceof Error ? error.message : String(error), mediaDiagnostic(error));
 }
 async function act(action: () => unknown | Promise<unknown>, name = 'ui.action', data: unknown = {}) {
   try { await traceOperation('ui', name, { trigger: inputTrigger, data }, action); } catch (e) { showError(e); }
@@ -187,23 +196,23 @@ for (const el of document.querySelectorAll('.viewport-surface .card-heading, .vi
 const zoomMenu = installChoiceMenu('zoom-select',ZOOM_PRESETS.map(p=>({value:String(p),label:`${p}×`})),value=>{
   viewport.setZoom(Number(value)); log.info('ui','缩放预设',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true);
 },'search');
-const pixelMenu = installChoiceMenu('pixel-size',[{value:'uniform',label:'统一像素'},{value:'fill',label:'填满视图'}],value=>{
+const pixelMenu = installChoiceMenu('pixel-size',() => [{value:'uniform',label:tr(msg("player.uniformPixels", "统一像素"))},{value:'fill',label:tr(msg("player.fillView", "填满视图"))}],value=>{
   viewport.setPixelSize(value as PixelSizeMode); log.info('ui','切换像素尺寸模式',{pixelSize:viewport.pixelSize,trigger:inputTrigger}); fitTask.schedule();
-  pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',true);
+  pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),true);
 },'monitor');
-const channelLabels: Record<ChannelMode, string> = { rgb: 'RGB', y: 'Y 通道', u: 'U 通道', v: 'V 通道' };
-const channelMenu = installChoiceMenu('channel-select', (Object.keys(channelLabels) as ChannelMode[]).map(value => ({ value, label: channelLabels[value] })), value => {
+const channelLabels = (): Record<ChannelMode, string> => ({ rgb: 'RGB', y: tr(msg("player.yChannel", "Y 通道")), u: tr(msg("player.uChannel", "U 通道")), v: tr(msg("player.vChannel", "V 通道")) });
+const channelMenu = installChoiceMenu('channel-select', () => (Object.keys(channelLabels()) as ChannelMode[]).map(value => ({ value, label: channelLabels()[value] })), value => {
   viewport.setChannel(value as ChannelMode); setPresentationChannel(viewport.channel);
   log.info('ui', '切换 YUV 通道', { channel: viewport.channel, trigger: inputTrigger });
-  channelMenu.sync(viewport.channel, channelLabels[viewport.channel], true);
+  channelMenu.sync(viewport.channel, channelLabels()[viewport.channel], true);
   // Playback frames pick up the new channel on their next paint; only a
   // paused view needs an explicit re-decode of the current position.
   const state = session.getState();
   if (state.tracks.length && !state.playing && !state.busy) void act(() => session.seek(state.positionUs), 'channel.seek', { channel: viewport.channel });
 },'appearance', undefined, undefined, () => {
   if (session.getState().colorMode === 'reference') return true;
-  toasts.show('请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。', {
-    action: { label: '前往色彩设置', onClick: () => settings.openPane('performance', $('channel-select')) },
+  toasts.show(() => tr(msg("player.switchToManagedColorInColorDecoding", "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。")), {
+    action: { label: () => tr(msg("player.openColorSettings", "前往色彩设置")), onClick: () => settings.openPane('performance', $<HTMLElement>('channel-select')) },
   });
   return false;
 });
@@ -215,9 +224,10 @@ function render() {
   $('tracks-hidden').hidden = !loaded || visibleTracks.length > 0;
   $('performance-current').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
-    const native=track.decoder==='webcodecs', label=native?'浏览器原生解码':'软件解码';
+    const native=track.decoder==='webcodecs', label=native?tr(msg("player.browserNativeDecoding", "浏览器原生解码")):tr(msg("colorFlow.softwareDecoding", "软件解码"));
     const fallback=!native && (state.colorMode==='browser'||state.referenceDecode.decoder==='hardware');
-    return `${track.slot} · ${track.name}\n${label}${fallback?'（已回退）':''} · ${track.output?.yuv?'原始平面':track.output?.format??'等待帧'}`;
+    return `${track.slot} · ${track.name}
+${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.output?.yuv?tr(msg("player.rawPlanes", "原始平面")):track.output?.format??tr(msg("player.waitingForFrame", "等待帧"))}`;
   }).join('\n');
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');
@@ -231,8 +241,8 @@ function render() {
   if ($('arrangement').dataset.arrangement !== viewport.arrangement) {
     $('arrangement').dataset.arrangement = viewport.arrangement;
   $('arrangement').innerHTML = icon(viewport.arrangement === 'grid' ? 'columns' : 'grid');
-  $('arrangement').setAttribute('aria-label', viewport.arrangement === 'grid' ? '切换为横向布局' : '切换为田字布局');
-  $('arrangement').dataset.tooltip = viewport.arrangement === 'grid' ? '横向排列轨道' : '田字排列轨道';
+  $('arrangement').setAttribute('aria-label', viewport.arrangement === 'grid' ? tr(msg("player.switchToHorizontalLayout", "切换为横向布局")) : tr(msg("shell.switchToGridLayout", "切换为田字布局")));
+  $('arrangement').dataset.tooltip = viewport.arrangement === 'grid' ? tr(msg("player.arrangeTracksHorizontally", "横向排列轨道")) : tr(msg("shell.arrangeTracksInAGrid", "田字排列轨道"));
   }
   syncSplitGeometry();
   for (const card of cards) {
@@ -251,22 +261,22 @@ function render() {
     const t = state.tracks.find(t => t.slot === slot);
     $(`empty-${slot}`).hidden = !!t;
     $(`image-${slot}`).hidden = !t || !!t.pendingRelink;
-    $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? '参考视频' : '对比视频');
+    $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
-    const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? ' · HDR 源（SDR 兜底显示）' : ' · HDR 源') : '';
-    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? 'WASM 软件解码' : t.hardwareAcceleration === 'prefer-hardware' ? 'WebCodecs · 硬件优先' : 'WebCodecs · 浏览器解码'}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? ' · 等待索引，画面暂未同步' : ' · 正在追赶播放位置') : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? ' · 索引失败' : t.indexWarning ? ' · 尾部不完整，播放完整部分' : ''}` : '尚未载入';
+    const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 兜底显示）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
+    $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? tr(msg("player.wasmSoftwareDecoding", "WASM 软件解码")) : t.hardwareAcceleration === 'prefer-hardware' ? tr(msg("player.webcodecsPreferHardware", "WebCodecs · 硬件优先")) : tr(msg("player.webcodecsBrowserDecoding", "WebCodecs · 浏览器解码"))}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexFrameNotSynchronized", " · 等待索引，画面暂未同步")) : tr(msg("player.catchingUpToPlayback", " · 正在追赶播放位置"))) : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? tr(msg("player.indexFailed", " · 索引失败")) : t.indexWarning ? tr(msg("player.incompleteTailPlayingCompletePortion", " · 尾部不完整，播放完整部分")) : ''}` : tr(msg("player.notLoaded", "尚未载入"));
     $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
-    $(`failure-${slot}`).textContent = t?.failure ? `轨道 ${slot} 已停用 · 画面已停止更新。${t.failure.message} 请重新载入此片源。` : t?.syncState ? `轨道 ${slot} ${t.syncState === 'index-wait' ? '等待索引数据' : '正在追赶播放位置'} · 当前画面暂未同步，其他轨道继续播放。` : '';
+    $(`failure-${slot}`).textContent = t?.failure ? tr(msg("player.trackDisabledFrameUpdatesHaveStoppedPlease", "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。"), { p0: slot, p1: t.failure.message }) : t?.syncState ? tr(msg("player.trackFrameNotSynchronizedOtherTracksContinue", "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。"), { p0: slot, p1: t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexData", "等待索引数据")) : tr(msg("player.catchingUpToPlayback2", "正在追赶播放位置")) }) : '';
     if (t?.pendingRelink) {
       const failure = $(`failure-${slot}`);
-      failure.textContent = `轨道 ${slot} 待重新关联 · 轨道、偏移和标注已保留。`;
-      const reconnect = document.createElement('button'); reconnect.type = 'button'; reconnect.textContent = '重新关联片源';
+      failure.textContent = tr(msg("player.trackNeedsRelinkingTrackOffsetAndAnnotations", "轨道 {p0} 待重新关联 · 轨道、偏移和标注已保留。"), { p0: slot });
+      const reconnect = document.createElement('button'); reconnect.type = 'button'; reconnect.textContent = tr(msg("player.relinkSource", "重新关联片源"));
       reconnect.onclick = () => { void act(() => workspaceTransfer.relinkMissing(), 'workspace.relink'); };
       failure.append(reconnect);
     }
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
-    $(`pts-${slot}`).title = t?.frame ? `源时间戳 ${t.frame.sourcePtsUs} µs · 帧时长 ${t.frame.durationUs} µs` : '';
+    $(`pts-${slot}`).title = t?.frame ? tr(msg("player.sourceTimestampSFrameDurationS", "源时间戳 {p0} µs · 帧时长 {p1} µs"), { p0: t.frame.sourcePtsUs, p1: t.frame.durationUs }) : '';
   }
   fitTask.schedule();
   const divider = $('divider');
@@ -274,7 +284,7 @@ function render() {
   divider.setAttribute('aria-valuenow', String(Math.round(viewport.splitPos * 100)));
   for (const button of document.querySelectorAll<HTMLButtonElement>('#layout-mode button')) {
     button.disabled = !loaded || (button.dataset.mode === 'split' && visibleTracks.length < 2);
-    button.dataset.tooltip = button.dataset.mode === 'split' ? '擦拭对比当前排序的前两个轨道' : '独立显示所有轨道';
+    button.dataset.tooltip = button.dataset.mode === 'split' ? tr(msg("player.wipeBetweenTheFirstTwoTracksIn", "擦拭对比当前排序的前两个轨道")) : tr(msg("player.showAllTracksSeparately", "独立显示所有轨道"));
     button.setAttribute('aria-pressed', String(button.dataset.mode === (splitActive ? 'split' : 'side-by-side')));
   }
   // All topbar view controls key off the same empty-session flag: no tracks,
@@ -283,10 +293,10 @@ function render() {
   for (const id of ['arrangement', 'reset-view', 'toggle-inspector', 'toggle-subtracks', 'toggle-analysis']) {
     $<HTMLButtonElement>(id).disabled = !loaded;
   }
-  pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?'统一像素':'填满视图',loaded);
-  channelMenu.sync(viewport.channel, channelLabels[viewport.channel], loaded);
-  $('channel-select').dataset.tooltip = state.colorMode === 'reference'
-    ? 'YUV 通道：仅原始平面帧生效' : 'YUV 通道：请先切换为自有色彩';
+  pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),loaded);
+  channelMenu.sync(viewport.channel, channelLabels()[viewport.channel], loaded);
+  $<HTMLElement>('channel-select').dataset.tooltip = state.colorMode === 'reference'
+    ? tr(msg("shell.yuvChannelsRawYuvFramesOnly", "YUV 通道：仅原始平面帧生效")) : tr(msg("player.yuvChannelsSwitchToManagedColorFirst", "YUV 通道：请先切换为自有色彩"));
   syncZoomSelect(loaded);
   // Transient seek preparation must not dim the row or steal button focus.
   // Keep native disabled for empty sessions; busy actions are guarded below.
@@ -302,16 +312,16 @@ function render() {
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
   }
-  const playLabel = state.playing ? '暂停' : '播放';
+  const playLabel = state.playing ? tr(msg("player.pause", "暂停")) : tr(msg("shell.play", "播放"));
   if ($('play').getAttribute('aria-label') !== playLabel) $('play').setAttribute('aria-label', playLabel);
   const timeline = $<HTMLInputElement>('timeline');
   timeline.disabled = !loaded;
   timeline.setAttribute('aria-busy', String(state.busy));
   renderProgress(state.positionUs, state.durationUs);
   $('duration').textContent = formatTime(state.durationUs);
-  $('status').textContent = state.busy ? '正在解码…' : state.playing ? '播放中 · 静音' : loaded ? '已暂停' : '等待视频';
-  $('decode').textContent = state.playback && state.playback.wallMs > 500 ? `实际速度 ${state.playback.speed.toFixed(2)}×` : loaded ? `最近定位 ${state.lastDecodeMs} ms` : '—';
-  const trackFailures = state.tracks.filter(t => t.failure).map(t => `轨道 ${t.slot} 已停用：${t.failure!.message}`).join('；');
+  $('status').textContent = state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
+  $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
+  const trackFailures = state.tracks.filter(t => t.failure).map(t => tr(msg("player.trackDisabled", "轨道 {p0} 已停用：{p1}"), { p0: t.slot, p1: t.failure!.message })).join('；');
   const warning = state.error || trackFailures;
   if (warning) showWarning(warning);
   else warningMessage = '';
@@ -324,9 +334,9 @@ function render() {
     && presented.some(t => t.decoder === 'ffmpeg-wasm');
   if (mixedColor) {
     if (!mixedColorToast) {
-      mixedColorToast = toasts.show('浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。', {
+      mixedColorToast = toasts.show(() => tr(msg("player.mixingSoftwareAndNativeFramesInBrowser", "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。")), {
         kind: 'error', durationMs: 0,
-        action: { label: '前往色彩设置', onClick: () => settings.openPane('performance', $('settings-open')) },
+        action: { label: () => tr(msg("player.openColorSettings", "前往色彩设置")), onClick: () => settings.openPane('performance', $<HTMLElement>('settings-open')) },
       });
     }
   } else if (mixedColorToast) {
@@ -335,8 +345,8 @@ function render() {
   }
   const times = state.tracks.map(t => t.frame?.ptsUs);
   $('alignment').textContent = times.length === 2 && times.every(t => t != null)
-    ? `A / B 帧起点差 ${Math.abs(times[0]! - times[1]!) / 1000} ms`
-    : loaded ? `${state.tracks.length} 条轨道` : '';
+    ? tr(msg("player.aBFrameStartDifferenceMs", "A / B 帧起点差 {p0} ms"), { p0: Math.abs(times[0]! - times[1]!) / 1000 })
+    : loaded ? tr(msg("player.tracks", "{p0} 条轨道"), { p0: state.tracks.length }) : '';
   drawingEditor.render(state);
   markPreviewBackfill.schedule();
   workbench.render(state);
@@ -355,7 +365,7 @@ async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle
   const context = operationContext();
   const revision = ++importRevision;
   for (let i = 0; i < files.length; i++) {
-    if (revision !== importRevision) throw new DOMException('文件导入已被新的请求取代。', 'AbortError');
+    if (revision !== importRevision) throw new DOMException(tr(msg("player.fileImportWasSupersededByANewer", "文件导入已被新的请求取代。")), 'AbortError');
     await withLogContext(context, () => session.load(slots[i], (signal, progress) => openMedia(files[i], undefined, progress, signal), files[i].name));
     workbench.rememberFile(files[i]);
     // Remember drop-time handles so history rows can reopen without a picker.
@@ -367,7 +377,7 @@ async function importFiles(files: File[], slots: Slot[], handles?: (FsFileHandle
 const unbindDrop = bindFileDrop(document.body, {
   document: {
     accepts: files => files.some(isWorkspaceFile),
-    load: files => act(async () => { const documents = files.filter(isWorkspaceFile); if (documents.length !== 1) throw new Error('每次请打开一个工作区文件。'); await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f))); }, 'workspace.drop'),
+    load: files => act(async () => { const documents = files.filter(isWorkspaceFile); if (documents.length !== 1) throw new Error(tr(msg("player.openOneWorkspaceFileAtATime", "每次请打开一个工作区文件。"))); await workspaceTransfer.importFile(documents[0], files.filter(f => !isWorkspaceFile(f))); }, 'workspace.drop'),
   },
   target: event => {
     const stage = event.target instanceof Element ? event.target.closest('.video-card')?.querySelector('.frame-stage') : null;
@@ -437,10 +447,12 @@ $('fullscreen').onclick = () => void act(async () => {
   if (document.fullscreenElement) await document.exitFullscreen();
   else await document.documentElement.requestFullscreen();
 }, 'ui.fullscreen');
-document.addEventListener('fullscreenchange', () => {
-  const label = document.fullscreenElement ? '退出全屏' : '全屏';
+const syncFullscreenLabel = () => {
+  const label = document.fullscreenElement ? tr(msg("player.exitFullscreen", "退出全屏")) : tr(msg("shell.fullscreen", "全屏"));
   $('fullscreen').setAttribute('aria-label', label); $('fullscreen').title = label;
-});
+};
+document.addEventListener('fullscreenchange', syncFullscreenLabel);
+onLanguageChange(syncFullscreenLabel, uiEvents.signal);
 $<HTMLButtonElement>('fullscreen').disabled = !document.fullscreenEnabled;
 $('open').onclick = () => {
   const state = session.getState();
@@ -523,6 +535,15 @@ for (const eventName of ['click', 'change', 'invalid'] as const) document.addEve
   }
   log.info('ui', '界面操作', { event: eventName, control: control.id || control.dataset.action || control.tagName.toLowerCase(), trigger: inputTrigger, value });
 }, { capture: true, signal: uiEvents.signal });
+onLanguageChange(() => {
+  benchmarkSummary?.();
+  document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
+  delete $('arrangement').dataset.arrangement;
+  flowKey = '';
+  renderColorMode();
+  workbench.localize();
+  render();
+}, uiEvents.signal);
 session.subscribe(render);
 session.subscribeProgress(renderProgress);
 const unregister = registerReviewTools(session, workspaceTransfer);
@@ -530,7 +551,7 @@ const apiCall = <T>(name: string, data: unknown, action: () => T) => traceOperat
 const api = {
   getState: () => session.getState(),
   captureFrame: (slot: Slot) => {
-    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error('轨道没有可读取的画面。');
+    if (!SLOTS.includes(slot) || !session.getState().tracks.some(track => track.slot === slot)) throw new Error(tr(msg("player.noReadableFrameInThisTrack", "轨道没有可读取的画面。")));
     return captureFrame(canvases[slot]);
   },
   loadFile: (slot: Slot, file: File) => apiCall('loadFile', { slot, file }, async () => {
@@ -567,15 +588,15 @@ Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configu
 const annotationLink = new URL(location.href).searchParams;
 if (annotationLink.has('annotation')) void act(async () => {
   const space=annotationLink.get('space') ?? 'default', id=annotationLink.get('annotation')!;
-  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error('标注地址无效。');
+  if(!/^[a-zA-Z0-9_-]{1,200}$/.test(space) || !/^[a-zA-Z0-9_-]{1,200}$/.test(id))throw new Error(tr(msg("player.invalidAnnotationAddress", "标注地址无效。")));
   const record=await new AnnotationClient(uiEvents.signal).read(space,id);
-  if(record.deleted)throw new Error('这条标注已在回收站。');
+  if(record.deleted)throw new Error(tr(msg("player.thisAnnotationIsInTheRecycleBin", "这条标注已在回收站。")));
   const mark=record.document.mark;
   const opened=await workspaceTransfer.importWorkspace({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:location.origin+'/',positionUs:mark.frame.ptsUs,tracks:[{slot:mark.slot,mediaId:mark.mediaId,offsetUs:0}],media:record.document.media,marks:[mark],viewport:viewport.snapshot()});
   if(opened)await annotationSync.openSpace(space);
 },'annotation.open');
 
-import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
+import.meta.hot?.dispose(() => { unregister(); annotationSync.dispose(); identitySettings.dispose(); workspaceTransfer.dispose(); removeThemeControls(); settings.dispose(); depthMenu.dispose(); zoomMenu.dispose(); pixelMenu.dispose(); channelMenu.dispose(); removeHeaderActions(); drawingEditor.dispose(); markPreviewBackfill.dispose(); disposePresentation(); unbindDrop(); removeTooltips(); removeLogPanel(); workbench.dispose(); sourceActions.dispose(); removeTrackDrag(); Object.values(grids).forEach(grid => grid.dispose()); uiEvents.abort(); resizeObserver.disconnect(); fitTask.dispose(); void session.dispose().finally(stopLogging); });
 render();
 // First frame is rendered and handlers are wired; only GPU warmup (background)
 // and the annotation deep-link restore (already async) are still outstanding,
@@ -587,16 +608,19 @@ $('benchmark').addEventListener('click', () => {
     const button = $<HTMLButtonElement>('benchmark');
     benchmarkRunning = true; button.disabled = true;
     $('benchmark-result').removeAttribute('hidden');
-    $('benchmark-summary').textContent = '正在检查播放性能…';
+    benchmarkSummary = () => { $('benchmark-summary').textContent = tr(msg("player.checkingPlaybackPerformance", "正在检查播放性能…")); }; benchmarkSummary();
     let report;
     try { report = await benchmarkPlayback(session); }
     catch (error) { $('benchmark-summary').textContent = error instanceof Error ? error.message : String(error); throw error; }
     finally { benchmarkRunning = false; }
-    const reasons: Record<string, string> = { 'below-realtime': '播放速度不足', 'frame-lag': '画面落后',
-      'track-skew': '双轨不同步', 'insufficient-sample': '样本时长不足', 'page-not-visible': '测试期间页面不可见',
-      'pause-latency': '暂停响应慢', 'stale-frame-after-pause': '暂停后画面改变', 'premature-end': '画面未播完',
-      'playback-error': '播放出错', 'interrupted': '测试被中断', 'media-changed': '测试期间视频被替换', 'no-frames': '没有输出画面' };
-    $('benchmark-summary').textContent = report.passed ? '通过' : `未通过：${report.failures.map(f => reasons[f] ?? (f.endsWith('presentation-stall') ? `${f[0]} 轨画面卡顿` : f)).join('、')}`;
+    const result = report;
+    benchmarkSummary = () => {
+    const reasons: Record<string, string> = { 'below-realtime': tr(msg("player.playbackTooSlow", "播放速度不足")), 'frame-lag': tr(msg("player.framesLagging", "画面落后")),
+      'track-skew': tr(msg("player.tracksOutOfSync", "双轨不同步")), 'insufficient-sample': tr(msg("player.sampleTooShort", "样本时长不足")), 'page-not-visible': tr(msg("player.pageHiddenDuringCheck", "测试期间页面不可见")),
+      'pause-latency': tr(msg("player.slowPauseResponse", "暂停响应慢")), 'stale-frame-after-pause': tr(msg("player.frameChangedAfterPausing", "暂停后画面改变")), 'premature-end': tr(msg("player.playbackDidNotFinish", "画面未播完")),
+      'playback-error': tr(msg("player.playbackError", "播放出错")), 'interrupted': tr(msg("player.checkInterrupted", "测试被中断")), 'media-changed': tr(msg("player.videoReplacedDuringCheck", "测试期间视频被替换")), 'no-frames': tr(msg("player.noFramesPresented", "没有输出画面")) };
+    $('benchmark-summary').textContent = result.passed ? tr(msg("player.passed", "通过")) : tr(msg("player.failed", "未通过：{p0}"), { p0: result.failures.map(f => reasons[f] ?? (f.endsWith('presentation-stall') ? tr(msg("player.trackStalled", "{p0} 轨画面卡顿"), { p0: f[0] }) : f)).join('、') });
+    }; benchmarkSummary();
     $<HTMLTextAreaElement>('benchmark-json').value = JSON.stringify(report, null, 2);
 
   }, 'ui.benchmark');

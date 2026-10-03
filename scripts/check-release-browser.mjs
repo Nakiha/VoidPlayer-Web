@@ -65,7 +65,7 @@ try {
   await start();
   const generatedEntries = await generated?.verify(base);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
   const page = await context.newPage(); await page.goto(base);await chooseTestGuest(page);
   const call = (p, name, args = {}) => p.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
@@ -124,7 +124,7 @@ try {
     assert.equal((await (await fetch(base + '/api/workspaces/' + stored.id)).json()).id, stored.id);
     await generated.reconnect();
   }
-  const restarted = await browser.newPage(); restarted.on('pageerror', e => errors.push(e.message));
+  const restarted = await browser.newPage({locale:'zh-CN'}); restarted.on('pageerror', e => errors.push(e.message));
   await restarted.goto(base + '/?workspace=' + stored.id);
   await restarted.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && window.voidPlayer.getState().marks.length === 1 && !window.voidPlayer.getState().busy);
   const reopened = await call(restarted, 'export_workspace');
