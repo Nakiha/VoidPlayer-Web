@@ -33,9 +33,9 @@ Range 压缩数据缓存每轨最多 8 MiB（MP4 解封装库另有最多 1 MiB 
 
 WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓库的 `wasm` 分支。本仓库通过 `scripts/sync-wasm-core.sh` 消费产物，产物不进入 Git。FLV 和 MP4 压缩包路径复用已有 packet API，不需要修改 core。跨源隔离时优先尝试多线程 core，否则使用单线程；多轨共享线程预算。
 
-`presenter.ts` 是上屏入口，解码器不直接绘制。`presentation-surface.ts` 使用视口大小的 WebGL 表面，缩小时 LINEAR、放大时 NEAREST；不可用时回退 Canvas 2D。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
+`presenter.ts` 是上屏入口，解码器不直接绘制。呈现层优先使用 WebGPU，回退由 `presentation-surface.ts` 使用视口大小的 WebGL 表面或 Canvas 2D；缩小时 LINEAR、放大时 NEAREST。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
 
-当前没有原生 HDR 输出管线。WASM 输出为 8-bit RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。
+当前没有原生 HDR 输出管线。WASM ABI v2 交付原精度 YUV，由呈现层转换，兼容资源仍可使用 RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。实际资源、源标签与转换责任见 [色彩链路契约](color-pipeline.md)。
 
 ## 标注与界面
 

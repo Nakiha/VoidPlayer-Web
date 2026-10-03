@@ -6,6 +6,7 @@ import { chromium, webkit } from 'playwright';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 import { trustTestCertificate } from './test-certificate-trust.mjs';
+import { routeInsecureTestOrigin } from './testing/http-origin.mjs';
 import { identityBrowserService, cleanupIdentityBrowser } from './identity-browser-lifecycle.mjs';
 const insecure = process.env.VOIDPLAYER_HTTP_TEST === '1';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
@@ -27,6 +28,7 @@ try {
   const page = await a.newPage(), other = await b.newPage();
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
   const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
+  if (insecure) await routeInsecureTestOrigin(page);
   const initial = await page.goto(base);
   if (insecure) {
     await page.locator('#connection-unavailable').waitFor({ state: 'visible' });

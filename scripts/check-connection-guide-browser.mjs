@@ -3,6 +3,7 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { chromium } from 'playwright';
+import { routeInsecureTestOrigin } from './testing/http-origin.mjs';
 import { loadConfig } from '../server/config.ts';
 import { startService } from '../server/runtime.ts';
 const temp = await mkdtemp(path.join(tmpdir(), 'vp-guide-browser-'));
@@ -16,12 +17,7 @@ try {
   await page.emulateMedia({ colorScheme: 'light' });
   // Resolve the test hostname through loopback even on hosts with a system proxy.
   // The browser keeps a genuinely insecure remote origin; all bytes come from the real server.
-  await page.route(/^http:\/\/voidplayer\.test(?::\d+)?\//, async route => {
-    const request = route.request(), url = new URL(request.url());
-    const host = url.host; url.hostname = '127.0.0.1';
-    const response = await page.request.fetch(url.href, { method: request.method(), headers: { ...request.headers(), host }, maxRedirects: 0 });
-    await route.fulfill({ response });
-  });
+  await routeInsecureTestOrigin(page);
   const errors = [], workers = [], requests = [];
   page.on('pageerror', error => errors.push(error.message)); page.on('worker', worker => workers.push(worker)); page.on('request', request => requests.push(request.url()));
   await page.goto(`http://voidplayer.test:${service.guide.address().port}/connection`);

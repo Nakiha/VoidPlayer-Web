@@ -18,12 +18,8 @@ export function identityBrowserService(config, startService) {
 
 // Attempt every cleanup even when an earlier resource fails. In particular, a
 // secondary teardown exception must never replace a restart/assertion failure.
-export async function cleanupIdentityBrowser(steps, failure, report = console.error) {
-  const errors = [];
-  for (const [name, cleanup] of steps) {
-    try { await cleanup(); }
-    catch (error) { errors.push(error); report(`Identity browser: ${name} cleanup failed`, error); }
-  }
-  if (failure) throw failure.error;
-  if (errors.length) throw new AggregateError(errors, 'Identity browser cleanup failed');
+export { cleanupIdentityBrowser };
+import { cleanupResources } from './testing/lifecycle.mjs';
+function cleanupIdentityBrowser(steps, failure, report = console.error) {
+  return cleanupResources(steps, failure, report, 'Identity browser');
 }

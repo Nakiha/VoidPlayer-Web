@@ -15,7 +15,9 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 - `src/flv-demux.ts` / `flv-engine.ts` / `flv-decoder.ts`：共享 FLV 扫描器（媒体库由服务端 Worker 本地读盘建索引，本地文件由客户端 Worker 建索引）及压缩包解码；`flv-media.ts` 接入共享 MediaSource。FLV 不进入 FFmpeg 解封装。
 - `server/`：基于 Node API 的服务（本地 SQLite 持久化索引 + 后台扫描 + Range + 静态网页 + 内网自选用户身份）；`app.ts` 只做装配与分发，路由按域在 `routes/{connection,content,state}.ts`（`context.ts` 为共享请求上下文），HTTP 基元在 `http-utils.ts`；`tls.ts` 用 WebCrypto 与打包内的 X.509 库签发便携证书；开发使用 Node 24+，`standalone.ts` 用固定 Bun 编译成独立程序；`config.ts` / `runtime.ts` 为共享配置与运行入口。
 - `scripts/dev.ts` 同进程启动 Vite 和媒体 API；`scripts/service.mjs` 管理 macOS 用户服务；`deploy/` 为便携运行与自动用户使用说明。
-- `test/`：node:test，无浏览器依赖；WASM 用例在 Node worker_threads 里跑真实 core。
+- `test/{unit,contract,media}/`：node:test，无浏览器依赖；`helpers/` 为可复用模块，顶层旧文件为兼容入口。WASM 用例在 Node worker_threads 里跑真实 core。
+- `scripts/testing/`：统一清单、构建、生命周期与报告接入；`browser/{ui,annotations,media,workspace}/` 保存领域浏览器用例，顶层 `check-*-browser.mjs` 保留兼容入口。
+- `scripts/tools/{development,fixtures,diagnostics,perf,release}/`：已归类工具实现，旧入口保留兼容；专用工具与职责索引见 `scripts/README.md`。
 - `scripts/`：`sync-wasm-core.sh`（从 VoidPlayer-FFmpeg-Build 产物同步 core，可用
   `WASM_CORE_DIR` 覆盖）、`sync-samples.sh`（样片进 `fixtures/video/`，可用
   `VOIDPLAYER_SAMPLES` 覆盖）、`bench-playback.mjs`（Playwright 离屏播放基准）。
@@ -36,6 +38,10 @@ VoidPlayer Web：浏览器内的视频评审工具。WebCodecs 优先、自建�
 ## 验证
 
 ```sh
+npm run test:fast        # 无媒体/core/浏览器依赖的快速逻辑与基础设施契约
+npm run test:contract    # 清单、生命周期、发布与执行报告契约
+npm run test:browser:all # 完整自动化浏览器套件（单次构建，独立结果）
+npm run test:suite -- browser --list # 统一清单与矩阵枚举
 npm test                 # 单元 + Node 内真实 WASM 解码
 npm run build            # tsc --noEmit && vite build
 npm run fixtures:flv     # 从 QA 样片生成 FLV 回归素材（需要 ffmpeg/ffprobe）
@@ -49,7 +55,7 @@ npm run test:saved-workspaces:browser # 双窗口冲突、副本、管理与服�
 npm run test:admin:browser # 管理配置/日志、主动测速取消与亮暗响应式布局
 npm run test:library:browser # 目录分页、搜索、离线恢复与版本引用（WebKit）
 npm run test:release:browser -- /path/to/package.tar.gz webkit # 只从原生包运行浏览器回归，不重新构建
-npm run test:browser     # 构建 + WebKit UI 回归，自建临时服务并清理
+npm run test:browser     # 兼容入口：仅基础 WebKit UI 回归，非完整浏览器套件
 npm run test:presentation:browser # 直接上传、按需源像素、旋转与无 WebGL 回退
 npm run test:webgpu:browser -- chrome msedge # 有窗口的 Windows Chrome/Edge 呈现回归
 npm run test:color:windows # 默认资源契约、彩色色块、H264/HEVC/10-bit 与独立 FFmpeg 平面对照
@@ -67,6 +73,8 @@ node scripts/bench-playback.mjs webkit    # 需要先起 npm run serve
 `--keep-days=N` 控制保留窗口（默认 14 天），`--only=media,logs` 限定分类。
 脚本只删「位于仓库内 + 被 git 忽略 + 不在保护清单」的路径，`.run/data`（服务端 SQLite）、
 `.run/identity-private`、`logs/`、`artifacts/latest-release.json` 与文档引用的取证报告永不删除。
+
+套件注册与 CI 选例共用 `scripts/testing/manifest.json`，执行入口为 `scripts/run-tests.mjs`；新增测试必须登记。完整说明见 `docs/testing.md`。旧 npm 命令和脚本路径保留兼容。
 
 ## 独立发布
 

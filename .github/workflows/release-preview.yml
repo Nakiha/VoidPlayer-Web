@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: '24.15.0'
       - run: node scripts/release-version.mjs
-      - run: node --test test/release-pipeline.test.mjs
+      - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
 
   decoder:
     name: Build pinned WASM decoder
@@ -107,7 +107,7 @@ jobs:
           bash .run/core-source/scripts/build-wasm.sh --ffmpeg-ref "$FFMPEG_REF" --skip-package --mt
           node scripts/prepare-release-core.mjs .run/core-source
       - name: Verify decoder provenance and required interfaces
-        run: node scripts/check-release-core.mjs
+        run: node scripts/run-tests.mjs --case release-core
       - uses: actions/upload-artifact@v4
         with:
           name: release-core
@@ -127,11 +127,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Run analysis unit contracts
-        run: node --experimental-strip-types --test test/analysis-*.test.ts
-      - name: Run session analysis projection contracts
-        # 选择集回归 analysis-selection 与会话投影共用同一入口，显式列出，
-        # 不只依赖上面的 glob（B4）。
-        run: node --experimental-strip-types --test test/session.test.ts test/media-loading.test.ts test/analysis-selection.test.ts
+        run: node scripts/run-tests.mjs ci-analysis-logic
 
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
@@ -163,16 +159,18 @@ jobs:
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: npx playwright install --with-deps chromium webkit
-      - run: npm run build
+      - run: node scripts/run-tests.mjs --prepare
       - name: Verify analysis panel on ${{ matrix.engine }}
-        run: node scripts/check-analysis-browser.mjs ${{ matrix.engine }}
+        run: node scripts/run-tests.mjs ci-analysis-browser --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: analysis-browser-reports-${{ matrix.engine }}
           # B4：诊断与临时输入分离，脚本写入固定目录；失败现场保留，
           # 缺件时报错而不静默忽略。
-          path: .run/analysis-reports/${{ matrix.engine }}/
+          path: |
+            .run/analysis-reports/${{ matrix.engine }}/
+            .run/test-suites/ci-analysis-browser/
           if-no-files-found: error
           retention-days: 14
 
@@ -227,49 +225,13 @@ jobs:
       - run: npx playwright install --with-deps chromium webkit
       - name: Build browser regression inputs
         id: browser-inputs
-        run: npm run build
-      - run: npm test
+        run: node scripts/run-tests.mjs --prepare
+      - run: node scripts/run-tests.mjs unit
         env:
           VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
-      - run: npm run test:browser
-      - run: npm run test:recovery:browser -- chromium
-      - run: node scripts/check-recovery-browser.mjs webkit
-      - run: node scripts/check-reference-flv-browser.mjs chromium
-      - run: node scripts/check-reference-flv-browser.mjs webkit
-      - run: node scripts/check-container-browser.mjs chromium
-      - run: node scripts/check-container-browser.mjs webkit
-      - name: Verify thumbnails, startup and restored workspace lifecycle
-        run: |
-          node scripts/check-thumbnail-browser.mjs webkit
-          node scripts/check-thumbnail-browser.mjs chromium
-          node scripts/check-thumbnail-worker.mjs
-          node scripts/check-startup-browser.mjs
-          node scripts/check-workspace-browser.mjs webkit
-          node scripts/check-workspace-browser.mjs chromium
-
-      - run: node scripts/check-presentation-browser.mjs
-      - run: node scripts/check-feedback-browser.mjs chromium
-      - run: node scripts/check-connection-guide-browser.mjs
-      - name: Verify HTTP and HTTPS entry policy
-        run: |
-          node --test test/protocol-server.test.ts test/connection-routing.test.ts test/connection-guide.test.ts
-          node scripts/check-http-entry-browser.mjs chromium
-          node scripts/check-http-entry-browser.mjs webkit
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: http-entry-screenshots
-          path: /tmp/voidplayer-http-*.png
-          if-no-files-found: ignore
-      - name: Verify report descriptions and explicit log submission
-        run: |
-          node --test test/log.test.ts test/server.test.ts
-          node scripts/check-log-report-browser.mjs webkit
-          node scripts/check-log-report-browser.mjs chromium
-      - name: Verify annotation strip and cross-track editing
-        run: |
-          node scripts/check-mark-cards-browser.mjs webkit
-          node scripts/check-mark-cards-browser.mjs chromium
+      - name: Verify independent playback and source UI cases
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-playback --prepared
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
@@ -277,13 +239,8 @@ jobs:
           sudo apt-get install -y ffmpeg libnss3-tools
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
-        run: |
-          node --test test/annotations-store.test.ts test/frame-index-cache.test.ts test/frame-index-worker.test.ts test/resource-budget.test.ts test/workspace-storage.test.ts
-          node scripts/check-annotation-persistence-browser.mjs webkit
-          node scripts/check-annotation-persistence-browser.mjs chromium
-          node scripts/check-cache-browser.mjs webkit
-          node scripts/check-cache-browser.mjs chromium
-          node scripts/check-sharing-browser.mjs
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-cache --prepared
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -293,25 +250,17 @@ jobs:
             /tmp/voidplayer-caches-*.png
           if-no-files-found: ignore
       - name: Test FLV native decode policy
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         env:
           FLV_CASE: standard-h264
-        run: |
-          npm run fixtures:flv
-          node scripts/check-flv-browser.mjs webkit
-          node scripts/check-range-browser.mjs webkit
-          node scripts/check-range-browser.mjs chromium
-          node --test test/flv-background.test.ts test/flv-open-gop.test.ts test/range-bridge-large.test.ts test/mp4-boundary.test.ts
-          node --test test/flv-resolution.test.ts test/hevc-geometry.test.ts test/preroll.test.ts
+        run: node scripts/run-tests.mjs ci-flv --prepared
       - name: Verify FLV startup in each engine independently
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-browser-regressions.mjs flv-startup
+        run: node scripts/run-tests.mjs flv-startup --prepared
       - name: Verify FATE frame contracts and metadata regressions
         timeout-minutes: 6
-        run: |
-          node scripts/sync-fate-samples.mjs
-          node --test test/fate-oracle.test.ts test/frame-description.test.ts test/avc-geometry.test.ts test/packet-timeline.test.ts test/media-state.test.ts
-          node scripts/check-fate.mjs
-          node scripts/check-fate-browser.mjs
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-fate --prepared
       - name: Audit FATE transport-stream clock faults (exploratory report)
         timeout-minutes: 8
         run: |
@@ -319,14 +268,14 @@ jobs:
           node scripts/check-timestamp-corpus.mjs --report-only
       - name: Test trusted HTTPS loading and repeated dual WebCodecs playback
         if: ${{ !cancelled() && steps.playback-inputs.outcome == 'success' }}
-        run: node scripts/check-http-playback.mjs --functional-only
+        run: node scripts/run-tests.mjs ci-https --prepared
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
       - name: Report playback performance on this runner (non-blocking)
         id: benchmark
         if: success()
         continue-on-error: true
-        run: node scripts/check-http-playback.mjs --benchmark-only
+        run: node scripts/run-tests.mjs ci-perf --prepared
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
       - name: Summarize playback benchmark
@@ -340,7 +289,7 @@ jobs:
           name: https-playback-reports
           path: |
             .run/playback-reports/
-            .run/browser-regressions/flv-startup/
+            .run/test-suites/
           if-no-files-found: ignore
           retention-days: 30
 
@@ -377,16 +326,16 @@ jobs:
           npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
       - run: npx playwright install --with-deps chromium webkit
-      - run: npm run build
+      - run: node scripts/run-tests.mjs --prepare
       - name: Verify regressions that no other job runs
         # The runner records every exit status and fails only after all cases ran.
-        run: node scripts/run-browser-regressions.mjs uncovered
+        run: node scripts/run-tests.mjs uncovered --prepared
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: uncovered-browser-reports
           path: |
-            .run/browser-regressions/uncovered/
+            .run/test-suites/uncovered/
             .run/playback-reports/
           if-no-files-found: error
           retention-days: 30
@@ -422,12 +371,14 @@ jobs:
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       # Preserve all eight full 600-frame sweeps (two reopen rounds per cell).
-      - run: node scripts/check-hevc-timeline-browser.mjs ${{ matrix.engine }} ${{ matrix.input }}
+      - run: node scripts/run-tests.mjs --case hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: hevc-timeline-${{ matrix.engine }}-${{ matrix.input }}
-          path: .run/playback-reports/hevc-timeline-browser.json
+          path: |
+            .run/playback-reports/hevc-timeline-browser.json
+            .run/test-suites/selected/
           if-no-files-found: error
 
   native-release:
@@ -459,13 +410,14 @@ jobs:
           name: release-core
           path: public/vendor/voidplayer-core
       - run: npm ci
-      - run: node scripts/check-release-core.mjs
+      - run: node scripts/run-tests.mjs --case release-core
       - name: Verify configuration and persistent index on Node
-        run: node --test test/tls.test.ts test/decoder-policy.test.ts test/identity.test.ts test/config.test.ts test/library-index.test.ts test/library-incremental.test.ts test/library-storage.test.ts test/media-reference.test.ts test/admin.test.ts test/measurement.test.ts test/saved-workspaces.test.ts test/frame-index-cache.test.ts
+        run: node scripts/run-tests.mjs ci-native-node
       - name: Verify persistent index on packaged runtime
-        run: bun test --timeout 60000 ./test/identity.test.ts ./test/library-index.test.ts ./test/library-incremental.test.ts ./test/library-storage.test.ts ./test/admin.test.ts ./test/measurement.test.ts ./test/saved-workspaces.test.ts ./test/frame-index-cache.test.ts
-      - run: npm run release -- --target bun-${{ matrix.platform }}
-      - run: npm run test:release
+        run: node scripts/run-tests.mjs ci-native-bun
+      - run: node scripts/run-tests.mjs --prepare
+      - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
+      - run: node scripts/run-tests.mjs --case release
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium
@@ -474,26 +426,32 @@ jobs:
         run: sudo apt-get install -y libnss3-tools
       - name: Verify ordinary HTTP connection guide
         if: runner.os == 'Linux'
-        run: node scripts/check-identity-browser.mjs
+        run: node scripts/run-tests.mjs ci-native-http --prepared
         env:
           VOIDPLAYER_HTTP_TEST: '1'
           VOIDPLAYER_HTTP_PLAYBACK: '1'
       - name: Verify trusted HTTPS and WebCodecs on client platforms
         timeout-minutes: 3
         if: runner.os == 'Linux' || runner.os == 'Windows'
-        run: node scripts/check-identity-browser.mjs
+        run: node scripts/run-tests.mjs ci-native-https --prepared
         env:
           VOIDPLAYER_HTTPS_TEST: '1'
           VOIDPLAYER_HTTP_PLAYBACK: '1'
       - name: Verify Windows console shutdown
         if: runner.os == 'Windows'
-        run: python scripts/check-windows-console.py
+        run: node scripts/run-tests.mjs ci-native-console
       - uses: actions/upload-artifact@v4
         with:
           name: voidplayer-${{ matrix.platform }}
           path: artifacts/*.tar.gz*
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-test-reports-${{ matrix.platform }}
+          path: .run/test-suites/
+          if-no-files-found: ignore
       - name: Write download summary
         env:
           PLATFORM: ${{ matrix.platform }}
@@ -517,7 +475,7 @@ jobs:
           pattern: voidplayer-*
           merge-multiple: true
           path: artifacts/release-set
-      - run: node scripts/check-release-set.mjs
+      - run: node scripts/run-tests.mjs --case release-set
       - uses: actions/upload-artifact@v4
         with:
           name: verified-release-set
