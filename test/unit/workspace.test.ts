@@ -125,7 +125,7 @@ test('used library entries match source IDs, not same-named files in other roots
   const { sourceInUse, sourceKey } = await import('../../src/ui/source-catalog.ts');
   const metadata = {name:'same.mp4',size:123,lastModified:456};
   const item = {...metadata,key:sourceKey(metadata),libraryId:'root-a-file'};
-  const loaded = {...metadata,id:'decoded-id',source:{kind:'library' as const,id:'root-a-file',url:'/api/media/root-a-file'}} as import('../src/model.ts').MediaInfo;
+  const loaded = {...metadata,id:'decoded-id',source:{kind:'library' as const,id:'root-a-file',url:'/api/media/root-a-file'}} as import('../../src/model.ts').MediaInfo;
   assert.equal(sourceInUse(item, [loaded]), true);
   assert.equal(sourceInUse({...item,libraryId:'root-b-file'}, [loaded]), false);
   assert.equal(sourceInUse(item, []), false);

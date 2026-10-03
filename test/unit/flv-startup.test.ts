@@ -125,7 +125,7 @@ test('scanner publishes immutable validated prefixes while the next range is blo
   let release!: () => void;
   const gate = new Promise<void>(resolve => { release = resolve; });
   reader.read = async (offset, size) => { if (offset > 65536) await gate; return read(offset, size); };
-  const prefixes: import('../src/flv-demux.ts').FlvCheckpoint[] = [];
+  const prefixes: import('../../src/flv-demux.ts').FlvCheckpoint[] = [];
   const scan = scanFlv(reader, undefined, startup, false, prefix => prefixes.push(prefix));
   try {
     await new Promise(resolve => setTimeout(resolve, 650));

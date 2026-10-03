@@ -692,7 +692,7 @@ test('cancelling while showing the first frame releases the incoming decoder exa
 
 test('shared load status reports stages and terminal results, ignoring progress from a cancelled load', { timeout: 2000 }, async () => {
   const session = new ReviewSession(() => {}), pending = deferred<MediaSource>(), started = deferred<void>();
-  let report!: import('../src/media-progress.ts').MediaOpenProgress;
+  let report!: import('../../src/media-progress.ts').MediaOpenProgress;
   const loading = session.load('A', async (_, progress) => { report = progress; progress('index'); started.resolve(); return pending.promise; }, 'capture.ts');
   const rejected = assert.rejects(loading, { name: 'AbortError' });
   assert.equal(session.getState().mediaLoad?.stage, 'queued');

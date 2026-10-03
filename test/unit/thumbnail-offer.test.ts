@@ -94,8 +94,8 @@ test('accepted video-sample clones without touching the original', () => {
   assert.equal(originalClosed, false);
   // Epoch is frozen at accept.
   assert.equal(thumbnailState.cachedEpoch((offered as { context: FirstFrameContext }).context.cacheKey), 7);
-  const owned = (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).owned;
-  (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).release();
+  const owned = (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).owned;
+  (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).release();
   assert.equal(closes(), 1);
   assert.equal(originalClosed, false);
   settleOffer((offered as { context: FirstFrameContext }).context.cacheKey, true);
@@ -107,11 +107,11 @@ test('accepted pixel frames copy once and stay independent', () => {
   const frame = rgbaFrame(16);
   const offered = offerFirstFrameCandidate(context(), frame);
   assert.equal((offered as { result: string }).result, 'accepted');
-  const owned = (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).owned;
+  const owned = (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).owned;
   assert.notEqual(owned.pixels!.buffer, frame.pixels!.buffer);
   frame.pixels!.fill(9);
   assert.equal(owned.pixels![0], 0);
-  (offered as import('../src/thumbnails/offer.ts').AcceptedOffer).release();
+  (offered as import('../../src/thumbnails/offer.ts').AcceptedOffer).release();
   settleOffer((offered as { context: FirstFrameContext }).context.cacheKey, false);
   assert.equal(thumbnailState.holdingFull, false);
   assert.ok(!thumbnailState.completed.has((offered as { context: FirstFrameContext }).context.cacheKey));
