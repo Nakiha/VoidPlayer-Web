@@ -17,7 +17,9 @@ test('identity HTTPS restart keeps its origin when the adjacent guide port is oc
     await mkdir(path.join(temp, 'media'));
     await mkdir(path.join(temp, 'dist'));
     await writeFile(path.join(temp, 'dist/index.html'), 'VoidPlayer');
-    const config = await loadConfig(['--https', 'voidplayer.test', '--folder', path.join(temp, 'media'),
+    // Use the blocker's address too: macOS can allow wildcard and loopback
+    // listeners to share a port, which would bypass the expected conflict.
+    const config = await loadConfig(['--https', 'voidplayer.test', '--host', '127.0.0.1', '--folder', path.join(temp, 'media'),
       '--static', path.join(temp, 'dist'), '--data-dir', path.join(temp, 'data'), '--no-logs'], 'production', temp);
     config.port = 0;
     lifecycle = identityBrowserService(config, startService);
