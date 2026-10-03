@@ -30,7 +30,17 @@ test('release workflow gates verified artifacts and draft staging on every verif
     assert.ok(jobs[need], `unknown dependency ${need}`);
     return [need, ...dependencies(need)];
   }));
-  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft'].includes(id)).sort(),
+  // This one PR-only measurement is informational. Every other verification
+  // job remains required, including any newly added job not explicitly audited.
+  const informational = jobs['paired-https'];
+  assert.ok(informational, 'paired performance job exists');
+  assert.deepEqual(informational.needs, ['decoder']);
+  assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
+  assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
+  assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
+  assert.match(informational.body, /if: always\(\)[\s\S]*name: paired-https-performance-reports/);
+  assert.doesNotMatch(informational.body, /stage-release|check-release-set|verified-release-set/);
+  assert.deepEqual([...dependencies('release-set')].sort(), Object.keys(jobs).filter(id => !['release-set', 'release-draft', 'paired-https'].includes(id)).sort(),
     'every new required verification job must be in the release dependency graph');
   for (const id of ['release-set', ...dependencies('release-set')]) {
     assert.doesNotMatch(jobs[id].body, /^    (?:if|continue-on-error):/m, `${id} must retain success-only job gating`);

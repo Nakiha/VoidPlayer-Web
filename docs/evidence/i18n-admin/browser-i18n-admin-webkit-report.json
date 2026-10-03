@@ -1,0 +1,51 @@
+{
+  "engine": "webkit",
+  "checks": [
+    {
+      "pane": "overview",
+      "title": "Overview",
+      "lang": "en"
+    },
+    {
+      "pane": "library",
+      "title": "Library",
+      "lang": "en"
+    },
+    {
+      "pane": "caches",
+      "title": "Caches",
+      "lang": "en"
+    },
+    {
+      "pane": "workspaces",
+      "title": "Workspaces",
+      "lang": "en"
+    },
+    {
+      "pane": "annotations",
+      "title": "Marks",
+      "lang": "en"
+    },
+    {
+      "pane": "logs",
+      "title": "Logs",
+      "lang": "en"
+    },
+    {
+      "pane": "measurements",
+      "title": "Speed test",
+      "lang": "en"
+    }
+  ],
+  "rawDiagnostic": "preserved",
+  "state": [
+    "root draft",
+    "workspace rename",
+    "search",
+    "cache pagination/confirmation",
+    "selected annotation/preview",
+    "raw log/confirmation",
+    "radio menu",
+    "running measurement"
+  ]
+}

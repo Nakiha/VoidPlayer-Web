@@ -1,0 +1,347 @@
+{
+  "method": "CDP main-thread Profiler across three full playback repetitions and setup intervals; self time uses samples/timeDeltas. Translation frames are matched to the compiled controller/message helper source positions.",
+  "limitations": [
+    "Sampling misses short calls and perturbs execution. Profile timings are separate from unprofiled AB/BA comparisons.",
+    "Worker/media/decoder dependency isolation is established by source graph contracts, not zero samples."
+  ],
+  "profiles": {
+    "baseline": {
+      "durationMs": 13449.797,
+      "samples": 10693,
+      "sha256": "9f8d8a2713c846cd39ce0dd4c847f8850c55a0da48dde732774386948ff453cf",
+      "catalogAsset": "i18n-CPoMqOlt.js",
+      "functionPositions": [
+        {
+          "name": "_",
+          "line": 4,
+          "column": 7785,
+          "excerpt": "function _(e,...t){return f.message(e,t[0])}function v(e,...t){return _(e,...t).replaceAll"
+        },
+        {
+          "name": "message",
+          "line": 4,
+          "column": 6573,
+          "excerpt": "message(t,n){let r=a[t]??e[t];if(!r)throw Error(`Unknown message ID: ${t}`);if(n)return r("
+        }
+      ],
+      "sampledTranslationInclusiveMs": 2.5119999999999996,
+      "sampledTranslationSelfMs": 0,
+      "translationFrames": [],
+      "topSelf": [
+        {
+          "functionName": "(idle)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 10768.466000000084
+        },
+        {
+          "functionName": "(program)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 1891.2130000000006
+        },
+        {
+          "functionName": "(garbage collector)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 60.888
+        },
+        {
+          "functionName": "nt",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 247,
+          "columnNumber": 10305,
+          "selfMs": 54.16900000000002
+        },
+        {
+          "functionName": "Zm",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 253,
+          "columnNumber": 7466,
+          "selfMs": 50.60100000000001
+        },
+        {
+          "functionName": "",
+          "scriptId": "47",
+          "url": "http://127.0.0.1:65040/assets/ffmpeg-media-Cf1qER0V.js",
+          "lineNumber": 2,
+          "columnNumber": 18136,
+          "selfMs": 24.17
+        },
+        {
+          "functionName": "e",
+          "scriptId": "24",
+          "url": "http://127.0.0.1:65040/assets/sample-2jlXr25-.js",
+          "lineNumber": 0,
+          "columnNumber": 12077,
+          "selfMs": 17.798000000000002
+        },
+        {
+          "functionName": "importExternalTexture",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 15.387
+        },
+        {
+          "functionName": "querySelectorAll",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 13.878
+        },
+        {
+          "functionName": "getState",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 247,
+          "columnNumber": 111877,
+          "selfMs": 13.876
+        },
+        {
+          "functionName": "getCurrentTexture",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 12.733
+        },
+        {
+          "functionName": "setProperty",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 12.615
+        },
+        {
+          "functionName": "writeBuffer",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 10.244
+        },
+        {
+          "functionName": "",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 247,
+          "columnNumber": 104562,
+          "selfMs": 9.975
+        },
+        {
+          "functionName": "_p",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 247,
+          "columnNumber": 35804,
+          "selfMs": 9.942
+        },
+        {
+          "functionName": "I",
+          "scriptId": "22",
+          "url": "http://127.0.0.1:65040/assets/webgpu-presenter-B5UTaIsN.js",
+          "lineNumber": 82,
+          "columnNumber": 11224,
+          "selfMs": 9.029
+        },
+        {
+          "functionName": "t",
+          "scriptId": "23",
+          "url": "http://127.0.0.1:65040/assets/media-metadata-Bl7HFq40.js",
+          "lineNumber": 0,
+          "columnNumber": 44,
+          "selfMs": 8.828
+        },
+        {
+          "functionName": "_h",
+          "scriptId": "10",
+          "url": "http://127.0.0.1:65040/assets/main-CkY3DKjA.js",
+          "lineNumber": 253,
+          "columnNumber": 10517,
+          "selfMs": 8.788
+        }
+      ]
+    },
+    "feature": {
+      "durationMs": 13440.324,
+      "samples": 10697,
+      "sha256": "6018836ca273e2e4476bbf33333d9161910cfe21c91d05bb7b77075f7edfdfdd",
+      "catalogAsset": "i18n-CUev7gDq.js",
+      "functionPositions": [
+        {
+          "name": "_",
+          "line": 5,
+          "column": 7785,
+          "excerpt": "function _(e,...t){return f.message(e,t[0])}function v(e,...t){return _(e,...t).replaceAll"
+        },
+        {
+          "name": "message",
+          "line": 5,
+          "column": 6573,
+          "excerpt": "message(t,n){let r=a[t]??e[t];if(!r)throw Error(`Unknown message ID: ${t}`);if(n)return r("
+        }
+      ],
+      "sampledTranslationInclusiveMs": 2.518,
+      "sampledTranslationSelfMs": 0,
+      "translationFrames": [],
+      "topSelf": [
+        {
+          "functionName": "(idle)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 10978.862000000117
+        },
+        {
+          "functionName": "(program)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 1725.8210000000004
+        },
+        {
+          "functionName": "(garbage collector)",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 54.38899999999998
+        },
+        {
+          "functionName": "nt",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 247,
+          "columnNumber": 10304,
+          "selfMs": 48.980999999999995
+        },
+        {
+          "functionName": "qm",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 253,
+          "columnNumber": 7461,
+          "selfMs": 45.24000000000001
+        },
+        {
+          "functionName": "",
+          "scriptId": "49",
+          "url": "http://127.0.0.1:65224/assets/ffmpeg-media-Cf1qER0V.js",
+          "lineNumber": 2,
+          "columnNumber": 18136,
+          "selfMs": 23.878
+        },
+        {
+          "functionName": "importExternalTexture",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 17.62
+        },
+        {
+          "functionName": "getState",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 247,
+          "columnNumber": 111857,
+          "selfMs": 16.292
+        },
+        {
+          "functionName": "",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 247,
+          "columnNumber": 104542,
+          "selfMs": 13.510000000000002
+        },
+        {
+          "functionName": "writeBuffer",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 12.7
+        },
+        {
+          "functionName": "V",
+          "scriptId": "23",
+          "url": "http://127.0.0.1:65224/assets/webgpu-presenter-B5UTaIsN.js",
+          "lineNumber": 82,
+          "columnNumber": 516,
+          "selfMs": 12.509
+        },
+        {
+          "functionName": "e",
+          "scriptId": "24",
+          "url": "http://127.0.0.1:65224/assets/sample-2jlXr25-.js",
+          "lineNumber": 0,
+          "columnNumber": 12077,
+          "selfMs": 10.224
+        },
+        {
+          "functionName": "I",
+          "scriptId": "23",
+          "url": "http://127.0.0.1:65224/assets/webgpu-presenter-B5UTaIsN.js",
+          "lineNumber": 82,
+          "columnNumber": 11224,
+          "selfMs": 10.012
+        },
+        {
+          "functionName": "getCurrentTexture",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 9.985999999999999
+        },
+        {
+          "functionName": "beginRenderPass",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 8.800999999999998
+        },
+        {
+          "functionName": "p",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 247,
+          "columnNumber": 89210,
+          "selfMs": 8.777999999999999
+        },
+        {
+          "functionName": "requestAnimationFrame",
+          "scriptId": "0",
+          "url": "",
+          "lineNumber": -1,
+          "columnNumber": -1,
+          "selfMs": 8.771
+        },
+        {
+          "functionName": "getState",
+          "scriptId": "11",
+          "url": "http://127.0.0.1:65224/assets/main-yqrPkCHM.js",
+          "lineNumber": 247,
+          "columnNumber": 111857,
+          "selfMs": 8.716999999999999
+        }
+      ]
+    }
+  }
+}

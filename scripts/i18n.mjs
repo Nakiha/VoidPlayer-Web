@@ -42,6 +42,11 @@ export function validate(messages,catalog) {
     const entry=catalog[id];if(!entry?.translation)throw new Error(`Missing English translation: ${id}`);
     if(entry.needsReview || entry.source!==message.source)throw new Error(`Stale translation: ${id}; review translation and update source`);
     if(JSON.stringify(parameters(entry.translation))!==JSON.stringify(message.params))throw new Error(`Translation parameters differ: ${id}`);
+    if (message.source.includes('<strong>')) {
+      const tags = text => text.match(/<[^>]*>/g) ?? [];
+      const expected = tags(message.source);
+      if (Object.keys(message.params).length || expected.some(tag => !['<strong>','</strong>'].includes(tag)) || JSON.stringify(tags(entry.translation)) !== JSON.stringify(expected) || /[<>]/.test(entry.translation.replaceAll('<strong>','').replaceAll('</strong>',''))) throw new Error(`Invalid static rich translation: ${id}`);
+    }
     new MessageFormat('en').compile(entry.translation);new MessageFormat('zh').compile(message.source);
   }
   for(const id of Object.keys(catalog))if(!messages[id])throw new Error(`Unknown catalog ID: ${id}`);
@@ -55,7 +60,7 @@ export function validateScope(root) {
       else if(file.endsWith('.ts')&&!scope.files.includes(sourcePath(root,file)))throw new Error(`Unclassified UI file: ${sourcePath(root,file)}; add it to scope.json`);
     }
   }
-  if(existsSync(resolve(root,'src/ui')))classified(resolve(root,'src/ui'));
+  for (const directory of ['src/ui','src/admin']) if(existsSync(resolve(root,directory)))classified(resolve(root,directory));
   const used = new Set();
   for (const file of scope.files) {
     const tree = ts.createSourceFile(file,readFileSync(resolve(root,file),'utf8'),ts.ScriptTarget.Latest,true);
@@ -82,7 +87,7 @@ export function validateScope(root) {
 // Pseudo text expands only literal tokens; placeholders and ICU selection syntax survive.
 export function pseudo(source) {
   let out=''; const ast=parse(source);
-  function emit(tokens){return tokens.map(t=>t.type==='content'?t.value.replace(/[A-Za-z]/g,c=>c+'~') :t.type==='argument'?`{${t.arg}}`:t.type==='octothorpe'?'#':t.cases?`{${t.arg}, ${t.type}, ${t.cases.map(c=>`${c.key}{${emit(c.tokens)}}`).join(' ')}}`:`{${t.arg}, ${t.key}${t.param?', '+emit(t.param):''}}`).join('');}
+  function emit(tokens){return tokens.map(t=>t.type==='content'?t.value.split(/(<strong>|<\/strong>)/).map(part => /^<\/?strong>$/.test(part) ? part : part.replace(/[A-Za-z]/g,c=>c+'~')).join('') :t.type==='argument'?`{${t.arg}}`:t.type==='octothorpe'?'#':t.cases?`{${t.arg}, ${t.type}, ${t.cases.map(c=>`${c.key}{${emit(c.tokens)}}`).join(' ')}}`:`{${t.arg}, ${t.key}${t.param?', '+emit(t.param):''}}`).join('');}
   out=emit(ast);return `［${out} ········］`;
 }
 export function generate(root,mode='check') {

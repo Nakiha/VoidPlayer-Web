@@ -1,0 +1,542 @@
+{
+  "pairs": [
+    {
+      "tag": "ab1",
+      "order": "baseline-first",
+      "values": {
+        "baseline": {
+          "medianSpeed": 0.607671225462331,
+          "medianTaskMs": 4360.473000000001,
+          "samples": [
+            {
+              "speed": 0.6128723348236474,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 2,
+                "totalMs": 494
+              },
+              "pauseMs": 0.8450000286102295,
+              "cpu": {
+                "TaskDuration": 4482.749,
+                "ScriptDuration": 28.561000000000003,
+                "LayoutDuration": 18.465000000000003,
+                "RecalcStyleDuration": 36.617,
+                "LayoutCount": 197,
+                "RecalcStyleCount": 473
+              }
+            },
+            {
+              "speed": 0.6033165554818117,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 1,
+              "cpu": {
+                "TaskDuration": 4324.973,
+                "ScriptDuration": 27.264999999999983,
+                "LayoutDuration": 18.724999999999998,
+                "RecalcStyleDuration": 37.72299999999999,
+                "LayoutCount": 208,
+                "RecalcStyleCount": 492
+              }
+            },
+            {
+              "speed": 0.607671225462331,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 1.1850001811981201,
+              "cpu": {
+                "TaskDuration": 4360.473000000001,
+                "ScriptDuration": 27.261000000000006,
+                "LayoutDuration": 18.526999999999994,
+                "RecalcStyleDuration": 37.257,
+                "LayoutCount": 206,
+                "RecalcStyleCount": 492
+              }
+            }
+          ]
+        },
+        "feature": {
+          "medianSpeed": 0.5878284622889925,
+          "medianTaskMs": 4287.889,
+          "samples": [
+            {
+              "speed": 0.6029480382463172,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 417
+              },
+              "pauseMs": 0.9250001907348633,
+              "cpu": {
+                "TaskDuration": 4511.49,
+                "ScriptDuration": 28.22000000000001,
+                "LayoutDuration": 17.877,
+                "RecalcStyleDuration": 36.328,
+                "LayoutCount": 194,
+                "RecalcStyleCount": 467
+              }
+            },
+            {
+              "speed": 0.5878284622889925,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 50
+              },
+              "pauseMs": 1.0250000953674316,
+              "cpu": {
+                "TaskDuration": 4274.443,
+                "ScriptDuration": 26.678999999999995,
+                "LayoutDuration": 18.396000000000004,
+                "RecalcStyleDuration": 36.812999999999995,
+                "LayoutCount": 197,
+                "RecalcStyleCount": 471
+              }
+            },
+            {
+              "speed": 0.5729280659944257,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 75
+              },
+              "pauseMs": 0.9950001239776611,
+              "cpu": {
+                "TaskDuration": 4287.889,
+                "ScriptDuration": 26.558,
+                "LayoutDuration": 17.506,
+                "RecalcStyleDuration": 34.73099999999999,
+                "LayoutCount": 194,
+                "RecalcStyleCount": 463
+              }
+            }
+          ]
+        }
+      },
+      "speedDeltaPercent": -3.2653781093948564,
+      "cpuDeltaPercent": -1.6645900570878558
+    },
+    {
+      "tag": "ba1",
+      "order": "feature-first",
+      "values": {
+        "feature": {
+          "medianSpeed": 0.6158519080964168,
+          "medianTaskMs": 4339.813000000001,
+          "samples": [
+            {
+              "speed": 0.6158519080964168,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 412
+              },
+              "pauseMs": 0.9749999046325684,
+              "cpu": {
+                "TaskDuration": 4457.902000000001,
+                "ScriptDuration": 28.38099999999999,
+                "LayoutDuration": 17.538999999999998,
+                "RecalcStyleDuration": 35.289,
+                "LayoutCount": 199,
+                "RecalcStyleCount": 477
+              }
+            },
+            {
+              "speed": 0.615887516856601,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9849998950958252,
+              "cpu": {
+                "TaskDuration": 4259.084000000001,
+                "ScriptDuration": 27.263999999999996,
+                "LayoutDuration": 17.987000000000002,
+                "RecalcStyleDuration": 36.589,
+                "LayoutCount": 202,
+                "RecalcStyleCount": 483
+              }
+            },
+            {
+              "speed": 0.6017581107553124,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9300000667572021,
+              "cpu": {
+                "TaskDuration": 4339.813000000001,
+                "ScriptDuration": 27.284000000000002,
+                "LayoutDuration": 18.298000000000002,
+                "RecalcStyleDuration": 36.90700000000001,
+                "LayoutCount": 202,
+                "RecalcStyleCount": 482
+              }
+            }
+          ]
+        },
+        "baseline": {
+          "medianSpeed": 0.5767967938681517,
+          "medianTaskMs": 4330.285,
+          "samples": [
+            {
+              "speed": 0.5987726762932268,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 419
+              },
+              "pauseMs": 0.8949999809265137,
+              "cpu": {
+                "TaskDuration": 4458.309,
+                "ScriptDuration": 26.567999999999994,
+                "LayoutDuration": 17.819000000000006,
+                "RecalcStyleDuration": 35.72399999999999,
+                "LayoutCount": 191,
+                "RecalcStyleCount": 462
+              }
+            },
+            {
+              "speed": 0.5767967938681517,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 1.0149998664855957,
+              "cpu": {
+                "TaskDuration": 4265.225000000001,
+                "ScriptDuration": 26.760000000000005,
+                "LayoutDuration": 17.892,
+                "RecalcStyleDuration": 36.652,
+                "LayoutCount": 195,
+                "RecalcStyleCount": 464
+              }
+            },
+            {
+              "speed": 0.5577567860328002,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 98
+              },
+              "pauseMs": 0.8949999809265137,
+              "cpu": {
+                "TaskDuration": 4330.285,
+                "ScriptDuration": 27.491000000000003,
+                "LayoutDuration": 17.805,
+                "RecalcStyleDuration": 36.28999999999999,
+                "LayoutCount": 192,
+                "RecalcStyleCount": 458
+              }
+            }
+          ]
+        }
+      },
+      "speedDeltaPercent": 6.771035249060775,
+      "cpuDeltaPercent": 0.22003170692002083
+    },
+    {
+      "tag": "ab2",
+      "order": "baseline-first",
+      "values": {
+        "baseline": {
+          "medianSpeed": 0.5919088208508358,
+          "medianTaskMs": 4321.308999999999,
+          "samples": [
+            {
+              "speed": 0.6193996290711026,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 417
+              },
+              "pauseMs": 0.9300000667572021,
+              "cpu": {
+                "TaskDuration": 4512.816,
+                "ScriptDuration": 26.49599999999999,
+                "LayoutDuration": 18.380999999999997,
+                "RecalcStyleDuration": 36.454,
+                "LayoutCount": 199,
+                "RecalcStyleCount": 478
+              }
+            },
+            {
+              "speed": 0.5504596521956712,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 4,
+                "totalMs": 243
+              },
+              "pauseMs": 0.8399999141693115,
+              "cpu": {
+                "TaskDuration": 4261.214,
+                "ScriptDuration": 25.29400000000001,
+                "LayoutDuration": 17.190000000000005,
+                "RecalcStyleDuration": 34.621,
+                "LayoutCount": 185,
+                "RecalcStyleCount": 460
+              }
+            },
+            {
+              "speed": 0.5919088208508358,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9800000190734863,
+              "cpu": {
+                "TaskDuration": 4321.308999999999,
+                "ScriptDuration": 27.456999999999994,
+                "LayoutDuration": 18.179999999999996,
+                "RecalcStyleDuration": 37.006,
+                "LayoutCount": 200,
+                "RecalcStyleCount": 479
+              }
+            }
+          ]
+        },
+        "feature": {
+          "medianSpeed": 0.5822755348614369,
+          "medianTaskMs": 4366.017999999999,
+          "samples": [
+            {
+              "speed": 0.586820530069526,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 425
+              },
+              "pauseMs": 1.2549998760223389,
+              "cpu": {
+                "TaskDuration": 4524.262000000001,
+                "ScriptDuration": 26.922,
+                "LayoutDuration": 17.899999999999995,
+                "RecalcStyleDuration": 35.509,
+                "LayoutCount": 191,
+                "RecalcStyleCount": 462
+              }
+            },
+            {
+              "speed": 0.5822755348614369,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9149999618530273,
+              "cpu": {
+                "TaskDuration": 4366.017999999999,
+                "ScriptDuration": 26.697,
+                "LayoutDuration": 17.877000000000002,
+                "RecalcStyleDuration": 36.72299999999999,
+                "LayoutCount": 199,
+                "RecalcStyleCount": 478
+              }
+            },
+            {
+              "speed": 0.562612526978306,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 102
+              },
+              "pauseMs": 1.0099999904632568,
+              "cpu": {
+                "TaskDuration": 4304.575,
+                "ScriptDuration": 26.66400000000001,
+                "LayoutDuration": 17.841,
+                "RecalcStyleDuration": 35.77800000000002,
+                "LayoutCount": 193,
+                "RecalcStyleCount": 459
+              }
+            }
+          ]
+        }
+      },
+      "speedDeltaPercent": -1.6274949198343824,
+      "cpuDeltaPercent": 1.034617057007492
+    },
+    {
+      "tag": "ba2",
+      "order": "feature-first",
+      "values": {
+        "feature": {
+          "medianSpeed": 0.59167184399252,
+          "medianTaskMs": 4276.544999999999,
+          "samples": [
+            {
+              "speed": 0.6026862593316376,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 3,
+                "totalMs": 539
+              },
+              "pauseMs": 0.8999998569488525,
+              "cpu": {
+                "TaskDuration": 4486.881,
+                "ScriptDuration": 26.519000000000002,
+                "LayoutDuration": 17.947000000000003,
+                "RecalcStyleDuration": 35.45000000000001,
+                "LayoutCount": 195,
+                "RecalcStyleCount": 466
+              }
+            },
+            {
+              "speed": 0.59167184399252,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 1.0550000667572021,
+              "cpu": {
+                "TaskDuration": 4276.544999999999,
+                "ScriptDuration": 27.011000000000006,
+                "LayoutDuration": 17.924999999999997,
+                "RecalcStyleDuration": 37.55399999999999,
+                "LayoutCount": 200,
+                "RecalcStyleCount": 475
+              }
+            },
+            {
+              "speed": 0.5895250997356367,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 1.0750000476837158,
+              "cpu": {
+                "TaskDuration": 4274.016000000001,
+                "ScriptDuration": 26.097999999999995,
+                "LayoutDuration": 17.691,
+                "RecalcStyleDuration": 36.59000000000001,
+                "LayoutCount": 199,
+                "RecalcStyleCount": 471
+              }
+            }
+          ]
+        },
+        "baseline": {
+          "medianSpeed": 0.5666231548934431,
+          "medianTaskMs": 4328.874000000001,
+          "samples": [
+            {
+              "speed": 0.5955958299690184,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 1,
+                "totalMs": 421
+              },
+              "pauseMs": 1.0249998569488525,
+              "cpu": {
+                "TaskDuration": 4475.660000000001,
+                "ScriptDuration": 26.610999999999997,
+                "LayoutDuration": 17.683,
+                "RecalcStyleDuration": 35.56400000000001,
+                "LayoutCount": 190,
+                "RecalcStyleCount": 457
+              }
+            },
+            {
+              "speed": 0.5666231548934431,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9700000286102295,
+              "cpu": {
+                "TaskDuration": 4301.174,
+                "ScriptDuration": 26.437,
+                "LayoutDuration": 18.15,
+                "RecalcStyleDuration": 37.044,
+                "LayoutCount": 189,
+                "RecalcStyleCount": 454
+              }
+            },
+            {
+              "speed": 0.5575998949178764,
+              "failures": [
+                "below-realtime"
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "pauseMs": 0.9549999237060547,
+              "cpu": {
+                "TaskDuration": 4328.874000000001,
+                "ScriptDuration": 27.85399999999999,
+                "LayoutDuration": 17.895,
+                "RecalcStyleDuration": 36.45200000000001,
+                "LayoutCount": 191,
+                "RecalcStyleCount": 453
+              }
+            }
+          ]
+        }
+      },
+      "speedDeltaPercent": 4.420696345137465,
+      "cpuDeltaPercent": -1.2088362932254793
+    }
+  ],
+  "balancedSpeedRatio": 1.0149015762748765,
+  "note": "Descriptive equal-order log ratio; small samples are not an equivalence test."
+}

@@ -1,0 +1,850 @@
+{
+  "index": 2,
+  "name": "feature",
+  "exitCode": 1,
+  "configurationErrors": [],
+  "reports": [
+    {
+      "scenario": "https-1080p-solo",
+      "repeat": 1,
+      "browserName": "chromium",
+      "headless": true,
+      "schema": "voidplayer-playback-benchmark",
+      "version": 1,
+      "passed": true,
+      "failures": [],
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "revision": "081d5fa",
+          "builtAt": "2026-10-03T20:16:30.374Z",
+          "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "fda4a9c04073b82271e797a3965dcf8bc939363bccb3318bd1da8e1fa0871295",
+            "voidplayer-core-mt.wasm": "5ae1565301da5fb826d6f80a12b5737ba839883cee73d107c42af6083d9c7103"
+          }
+        },
+        "page": "https://voidplayer.test:38565/",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": true,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      },
+      "startupMs": 2.0499999999883585,
+      "requestedWallMs": 12000,
+      "reachedEnd": false,
+      "error": null,
+      "pauseMs": 2.0900000000256114,
+      "staleAfterPause": false,
+      "measurements": {
+        "wallMs": 12052.359999999986,
+        "mediaUs": 12039490,
+        "waitingMs": 5.611198172772447e-9,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9989321593447271,
+        "maxFrameLagUs": 33300,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 361,
+            "dropped": 0,
+            "fps": 29.952639980883447,
+            "maxGapMs": 56.77500000002328,
+            "p95GapMs": 45.8300000000163
+          }
+        }
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "17251e83-59d8-4a3d-b334-ee1ff42cc6c5",
+          "name": "http-1080p-a.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584811,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "38b24a462e80cf546fd0d289",
+            "url": "/api/media/38b24a462e80cf546fd0d289?v=3970f300c4db316b187f3610"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 12033333,
+            "sourcePtsUs": 12033333,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 1
+        }
+      ],
+      "longTasks": {
+        "count": 1,
+        "totalMs": 54
+      },
+      "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+      "presentationSurfaces": [
+        {
+          "performance": "{\"count\":353,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":11.90500000002794,\"p95\":15.019999999960419,\"max\":25.349999999976717}}",
+          "id": "canvas-A",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        }
+      ]
+    },
+    {
+      "scenario": "https-1080p-solo",
+      "repeat": 2,
+      "browserName": "chromium",
+      "headless": true,
+      "schema": "voidplayer-playback-benchmark",
+      "version": 1,
+      "passed": true,
+      "failures": [],
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "revision": "081d5fa",
+          "builtAt": "2026-10-03T20:16:30.374Z",
+          "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "fda4a9c04073b82271e797a3965dcf8bc939363bccb3318bd1da8e1fa0871295",
+            "voidplayer-core-mt.wasm": "5ae1565301da5fb826d6f80a12b5737ba839883cee73d107c42af6083d9c7103"
+          }
+        },
+        "page": "https://voidplayer.test:38565/",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": true,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      },
+      "startupMs": 2.2100000000209548,
+      "requestedWallMs": 12000,
+      "reachedEnd": false,
+      "error": null,
+      "pauseMs": 2.099999999976717,
+      "staleAfterPause": false,
+      "measurements": {
+        "wallMs": 12084.299999999988,
+        "mediaUs": 12070640,
+        "waitingMs": 5.159531024645503e-9,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 3,
+            "bytes": 9331200,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9988696076727664,
+        "maxFrameLagUs": 33247,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 361,
+            "dropped": 1,
+            "fps": 29.873472191190253,
+            "maxGapMs": 57.054999999993015,
+            "p95GapMs": 43.26000000000931
+          }
+        }
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "cb5410b5-ec73-4ce0-9c53-4bfdca1ebccf",
+          "name": "http-1080p-a.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584811,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "38b24a462e80cf546fd0d289",
+            "url": "/api/media/38b24a462e80cf546fd0d289?v=3970f300c4db316b187f3610"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 12066667,
+            "sourcePtsUs": 12066667,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "longTasks": {
+        "count": 1,
+        "totalMs": 53
+      },
+      "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+      "presentationSurfaces": [
+        {
+          "performance": "{\"count\":737,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":11.994999999995343,\"p95\":14.684999999997672,\"max\":30.05999999999767}}",
+          "id": "canvas-A",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        }
+      ]
+    },
+    {
+      "scenario": "https-1080p-dual",
+      "repeat": 1,
+      "browserName": "chromium",
+      "headless": true,
+      "schema": "voidplayer-playback-benchmark",
+      "version": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "revision": "081d5fa",
+          "builtAt": "2026-10-03T20:16:30.374Z",
+          "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "fda4a9c04073b82271e797a3965dcf8bc939363bccb3318bd1da8e1fa0871295",
+            "voidplayer-core-mt.wasm": "5ae1565301da5fb826d6f80a12b5737ba839883cee73d107c42af6083d9c7103"
+          }
+        },
+        "page": "https://voidplayer.test:38565/",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": true,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      },
+      "startupMs": 2.1649999999790452,
+      "requestedWallMs": 12000,
+      "reachedEnd": false,
+      "error": null,
+      "pauseMs": 2.179999999993015,
+      "staleAfterPause": false,
+      "measurements": {
+        "wallMs": 12071.195000000007,
+        "mediaUs": 9533333,
+        "waitingMs": 2514.5220000002178,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.7897588432628248,
+        "maxFrameLagUs": 30655,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 283,
+            "dropped": 3,
+            "fps": 23.444240607495765,
+            "maxGapMs": 69.44000000000233,
+            "p95GapMs": 50.97499999997672
+          },
+          "B": {
+            "drawn": 283,
+            "dropped": 3,
+            "fps": 23.444240607495765,
+            "maxGapMs": 66.16500000003725,
+            "p95GapMs": 52.84000000002561
+          }
+        }
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "d67bcdcf-c296-4458-bce9-96a2dd76737e",
+          "name": "http-1080p-a.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584811,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "38b24a462e80cf546fd0d289",
+            "url": "/api/media/38b24a462e80cf546fd0d289?v=3970f300c4db316b187f3610"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 9533333,
+            "sourcePtsUs": 9533333,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 1
+        },
+        {
+          "slot": "B",
+          "id": "57bbd58e-c4de-4069-86f5-bdb8bea2075f",
+          "name": "http-1080p-b.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584853,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "532fe9302bdc33c631549e87",
+            "url": "/api/media/532fe9302bdc33c631549e87?v=d4aa9aed7a5c82570ced9b24"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 9533333,
+            "sourcePtsUs": 9533333,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "longTasks": {
+        "count": 27,
+        "totalMs": 1515
+      },
+      "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+      "presentationSurfaces": [
+        {
+          "performance": "{\"count\":289,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":12.489999999990687,\"p95\":21.274999999965075,\"max\":29.994999999995343}}",
+          "id": "canvas-A",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        },
+        {
+          "performance": "{\"count\":289,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":11.455000000016298,\"p95\":14.715000000025611,\"max\":27.679999999993015}}",
+          "id": "canvas-B",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        }
+      ]
+    },
+    {
+      "scenario": "https-1080p-dual",
+      "repeat": 2,
+      "browserName": "chromium",
+      "headless": true,
+      "schema": "voidplayer-playback-benchmark",
+      "version": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "environment": {
+        "build": {
+          "revision": "081d5fa",
+          "builtAt": "2026-10-03T20:16:30.374Z",
+          "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+          "wasmDigests": {
+            "voidplayer-core.wasm": "fda4a9c04073b82271e797a3965dcf8bc939363bccb3318bd1da8e1fa0871295",
+            "voidplayer-core-mt.wasm": "5ae1565301da5fb826d6f80a12b5737ba839883cee73d107c42af6083d9c7103"
+          }
+        },
+        "page": "https://voidplayer.test:38565/",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "crossOriginIsolated": true,
+        "secureContext": true,
+        "webCodecsAvailable": true,
+        "hardwareUseVerified": false,
+        "sharedArrayBuffer": true,
+        "visibility": "visible",
+        "viewport": {
+          "width": 1280,
+          "height": 800,
+          "devicePixelRatio": 1
+        }
+      },
+      "startupMs": 2.7150000000256114,
+      "requestedWallMs": 12000,
+      "reachedEnd": false,
+      "error": null,
+      "pauseMs": 2.7950000000419095,
+      "staleAfterPause": false,
+      "measurements": {
+        "wallMs": 12010.210000000021,
+        "mediaUs": 9433333,
+        "waitingMs": 2532.3570000001205,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 3110400,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.78544280241561,
+        "maxFrameLagUs": 33310,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 280,
+            "dropped": 3,
+            "fps": 23.313497432601054,
+            "maxGapMs": 89.86999999999534,
+            "p95GapMs": 50.75500000000466
+          },
+          "B": {
+            "drawn": 280,
+            "dropped": 3,
+            "fps": 23.313497432601054,
+            "maxGapMs": 82.33500000002095,
+            "p95GapMs": 52.914999999979045
+          }
+        }
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "e354fe6d-b63f-4eda-84a5-d1af7ff9ffdf",
+          "name": "http-1080p-a.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584811,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "38b24a462e80cf546fd0d289",
+            "url": "/api/media/38b24a462e80cf546fd0d289?v=3970f300c4db316b187f3610"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 9433333,
+            "sourcePtsUs": 9433333,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 3
+        },
+        {
+          "slot": "B",
+          "id": "185f73e3-69a0-478c-bb0d-12d14ef36fbe",
+          "name": "http-1080p-b.mp4",
+          "size": 100858247,
+          "lastModified": 1791058584853,
+          "indexSource": "client",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "h264",
+          "decoder": "webcodecs",
+          "hardwareAcceleration": "no-preference",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "container",
+          "color": {
+            "primaries": null,
+            "transfer": null,
+            "matrix": null,
+            "fullRange": false
+          },
+          "firstPtsUs": 0,
+          "durationUs": 40000000,
+          "container": "isobmff",
+          "source": {
+            "kind": "library",
+            "id": "532fe9302bdc33c631549e87",
+            "url": "/api/media/532fe9302bdc33c631549e87?v=d4aa9aed7a5c82570ced9b24"
+          },
+          "metadataRevision": 2,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1090,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "byteLengthEstimated": false,
+            "format": "I420",
+            "color": {
+              "primaries": null,
+              "transfer": null,
+              "matrix": null,
+              "fullRange": false
+            }
+          },
+          "decodedPixelFormat": "I420",
+          "frame": {
+            "ptsUs": 9433333,
+            "sourcePtsUs": 9433333,
+            "durationUs": 33333
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 4
+        }
+      ],
+      "longTasks": {
+        "count": 18,
+        "totalMs": 1023
+      },
+      "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+      "presentationSurfaces": [
+        {
+          "performance": "{\"count\":577,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":12.695000000006985,\"p95\":20.59499999997206,\"max\":37.4550000000163}}",
+          "id": "canvas-A",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        },
+        {
+          "performance": "{\"count\":577,\"window\":256,\"copyMs\":{\"p50\":0,\"p95\":0,\"max\":0},\"submitMs\":{\"p50\":11.570000000006985,\"p95\":14.084999999962747,\"max\":21.40500000002794}}",
+          "id": "canvas-B",
+          "executor": "browser-managed",
+          "width": 1920,
+          "height": 1080
+        }
+      ]
+    }
+  ]
+}

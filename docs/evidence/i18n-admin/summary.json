@@ -1,0 +1,668 @@
+{
+  "baselineCommit": "92e4d0a3b25acfc86f32201eeb061333d5837758",
+  "baselineSourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5",
+  "featureSourceDigest": "74b0fc06a6dc248688243e00c3e71001b03ae28b55865efcb0b33796b6fc881b",
+  "reports": {
+    "chromium-visible-ab": {
+      "order": "baseline-first",
+      "headless": false,
+      "mediaMode": "mixed",
+      "results": {
+        "baseline": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 104.424125,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 54.5187920000003,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 94.56683299999986,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 61.44100000000071,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            16.09999990463257,
+            5.9700000286102295,
+            6.065000057220459,
+            6.445000171661377
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9992854693394021,
+            0.999970157834903,
+            0.9993236959385614
+          ],
+          "taskDurationMs": [
+            1088.426,
+            825.701,
+            1083.1310000000003
+          ]
+        },
+        "feature": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 99.23654199999874,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 57.097209000003204,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 91.13766599999872,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 58.59929199999897,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            12.569999933242798,
+            6.384999990463257,
+            6.309999942779541,
+            6.5400002002716064
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9991580701703606,
+            0.9992665484309552,
+            0.9999577279927189
+          ],
+          "taskDurationMs": [
+            1098.1609999999998,
+            1068.2029999999997,
+            840.2289999999999
+          ]
+        }
+      }
+    },
+    "chromium-visible-ba": {
+      "order": "feature-first",
+      "headless": false,
+      "mediaMode": "mixed",
+      "results": {
+        "feature": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 97.06600000000026,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 59.08179199999995,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 94.67766699999993,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 62.85283400000026,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            17.12000012397766,
+            6.919999837875366,
+            6.134999990463257,
+            6.3500001430511475
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9999962748877346,
+            0.9993222720023541,
+            0.9999962756406204
+          ],
+          "taskDurationMs": [
+            845.372,
+            1099.114,
+            842.463
+          ]
+        },
+        "baseline": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 93.66783399999986,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 58.058084000000235,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 89.1362079999999,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 55.77687499999956,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            11.724999904632568,
+            6.085000038146973,
+            6.0299999713897705,
+            7.005000114440918
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9999564898615586,
+            0.9992030185981595,
+            0.9999987589925663
+          ],
+          "taskDurationMs": [
+            829.788,
+            1121.077,
+            851.9730000000001
+          ]
+        }
+      }
+    },
+    "webkit-headless": {
+      "order": "baseline-first",
+      "headless": true,
+      "mediaMode": "mixed",
+      "results": {
+        "baseline": {
+          "browserVersion": "26.6",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 225.35433299999977,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 82.60795800000005,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 202.07595800000036,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 72.90712500000063,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            24.299999999999955,
+            13.700000000000045,
+            14.259999999999991,
+            15.200000000000045
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.999095949253284,
+            0.9992190276894732,
+            0.9991023786964542
+          ],
+          "taskDurationMs": [
+            null,
+            null,
+            null
+          ]
+        },
+        "feature": {
+          "browserVersion": "26.6",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 223.48012500000186,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 79.5064999999995,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 211.04041599999982,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 73.43070799999987,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            24.699999999999932,
+            14.180000000000064,
+            14.780000000000086,
+            15.100000000000023
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9990942119644092,
+            0.9992694630553456,
+            0.9992359703176965
+          ],
+          "taskDurationMs": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    "chromium-h264-headless": {
+      "order": "baseline-first",
+      "headless": true,
+      "mediaMode": "webcodecs",
+      "results": {
+        "baseline": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 104.56587499999978,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 51.52670899999998,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 98.55999999999995,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 52.06312500000013,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            25.829999923706055,
+            6.884999990463257,
+            7.1549999713897705,
+            6.505000114440918
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9986104626374753,
+            0.9987012012593309,
+            0.9990033382940119
+          ],
+          "taskDurationMs": [
+            2332.571,
+            2282.475,
+            2334.543
+          ]
+        },
+        "feature": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 96.85062499999913,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 52.51208399999814,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 99.73479099999895,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 51.1742090000007,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            26.380000114440918,
+            6.819999933242798,
+            6.620000123977661,
+            6.819999933242798
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9989855830494362,
+            0.9988684161548483,
+            0.9990669954515168
+          ],
+          "taskDurationMs": [
+            2292.621,
+            2390.7189999999996,
+            2255.248
+          ]
+        }
+      }
+    },
+    "chromium-profile": {
+      "order": "baseline-first",
+      "headless": false,
+      "mediaMode": "mixed",
+      "results": {
+        "baseline": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 91.25466600000004,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 57.12183399999981,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 91.47037499999988,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 53.21391600000061,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            11.349999904632568,
+            6.2200000286102295,
+            6.139999866485596,
+            6.724999904632568
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.9992937615232441,
+            0.9993565233818417,
+            0.9992902776645688
+          ],
+          "taskDurationMs": [
+            988.5260000000002,
+            1020.9299999999998,
+            834.4399999999998
+          ]
+        },
+        "feature": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 93.33662499999991,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 50.57550000000265,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 91.41841700000077,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 55.817833000000974,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            17.91000008583069,
+            7.275000095367432,
+            6.269999980926514,
+            6.6600000858306885
+          ],
+          "playbackPassed": [
+            true,
+            true,
+            true
+          ],
+          "playbackSpeed": [
+            0.999286794588821,
+            0.9999987539653488,
+            0.9999600451537445
+          ],
+          "taskDurationMs": [
+            1004.6579999999998,
+            827.2659999999998,
+            833.9539999999998
+          ]
+        }
+      }
+    },
+    "chromium-hevc-negative": {
+      "order": "baseline-first",
+      "headless": true,
+      "mediaMode": "mixed",
+      "results": {
+        "baseline": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 105.23441700000012,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 51.88666599999988,
+              "requests": 30,
+              "rawBytes": 1072670,
+              "gzipBytes": 315649
+            },
+            "en-US-cold": {
+              "medianReadyMs": 94.73941599999989,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            },
+            "en-US-warm": {
+              "medianReadyMs": 50.27570800000012,
+              "requests": 31,
+              "rawBytes": 1111334,
+              "gzipBytes": 327300
+            }
+          },
+          "switchCommitMs": [
+            26.56500005722046,
+            7.375,
+            7.429999828338623,
+            7.934999942779541
+          ],
+          "playbackPassed": [
+            false,
+            false,
+            false
+          ],
+          "playbackSpeed": [
+            0.6036512787546429,
+            0.590583640601711,
+            0.5818723419923136
+          ],
+          "taskDurationMs": [
+            4487.696,
+            4314.692000000001,
+            4344.415999999999
+          ]
+        },
+        "feature": {
+          "browserVersion": "153.0.8010.12",
+          "startup": {
+            "zh-CN-cold": {
+              "medianReadyMs": 100.28295799999978,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "zh-CN-warm": {
+              "medianReadyMs": 51.72870899999907,
+              "requests": 30,
+              "rawBytes": 1091880,
+              "gzipBytes": 321823
+            },
+            "en-US-cold": {
+              "medianReadyMs": 102.28087500000038,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            },
+            "en-US-warm": {
+              "medianReadyMs": 51.272916999998415,
+              "requests": 31,
+              "rawBytes": 1150059,
+              "gzipBytes": 339097
+            }
+          },
+          "switchCommitMs": [
+            24.829999923706055,
+            7.105000019073486,
+            6.869999885559082,
+            7.570000171661377
+          ],
+          "playbackPassed": [
+            false,
+            false,
+            false
+          ],
+          "playbackSpeed": [
+            0.5889680615977415,
+            0.5717456008157837,
+            0.5601047562357441
+          ],
+          "taskDurationMs": [
+            4458.103999999999,
+            4336.703999999999,
+            4295.982999999999
+          ]
+        }
+      }
+    }
+  },
+  "budgetSource": "Unchanged budgets inherited from PR40. Playback limits are the existing benchmark_review defaults.",
+  "device": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "node": "v24.15.0"
+  },
+  "budgets": {
+    "startupGzipIncreaseBytes": 32768,
+    "startupExtraRequests": 3,
+    "englishStartupGzipIncreaseBytes": 49152,
+    "englishStartupExtraRequests": 4,
+    "startupMedianIncreaseMs": 100,
+    "startupMedianMultiplier": 1.3,
+    "coldLocaleMs": 250,
+    "cachedLocaleMs": 100,
+    "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+  },
+  "preparation": "same appearance settings open, en/zh/en/zh locale switches, close and two animation frames in both distributions"
+}

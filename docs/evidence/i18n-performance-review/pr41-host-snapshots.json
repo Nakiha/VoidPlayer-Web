@@ -1,0 +1,22 @@
+[
+  {
+    "stage": "after AB1",
+    "at": "2026-10-03T19:29:17.029567+00:00",
+    "loadAverage": [
+      6.0849609375,
+      4.693359375,
+      4.03076171875
+    ],
+    "platform": "macOS-27.0-arm64-arm-64bit",
+    "thermal": "Error:Failed to get thermal warning level with error code 0xe00002bc\nError: Failed to get performance warning level with error code 0xe00002bc\nError: No CPU power status with error code 0xe00002bc\n"
+  },
+  {
+    "stage": "after AB2 / before BA2",
+    "at": "2026-10-03T19:33:56.658780+00:00",
+    "loadAverage": [
+      4.91455078125,
+      5.12060546875,
+      4.43212890625
+    ]
+  }
+]

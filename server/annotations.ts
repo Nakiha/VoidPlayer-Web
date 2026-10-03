@@ -123,7 +123,7 @@ export class AnnotationStore {
       FROM annotation_previews p JOIN annotations a ON a.space=p.space AND a.id=p.id JOIN spaces s ON s.id=p.space
       WHERE instr(lower(coalesce(text,'') || ' ' || coalesce(media_name,'') || ' ' || s.name),lower(?))>0
       ORDER BY a.updated_at DESC,p.space,p.id LIMIT 51 OFFSET ?`).all(search,offset);
-    const entries: CacheEntry[] = rows.slice(0,50).map(row=>({id:String(row.id),scope:String(row.space),version:String(row.revision),name:String(row.media_name ?? '画面标注'),detail:`${row.space_name} · ${String(row.text || '画面标注').slice(0,160)}`,bytes:Number(row.bytes),updatedAt:Date.parse(String(row.updated_at)),previewUrl:`/api/annotations/spaces/${row.space}/${row.id}/preview?revision=${row.revision}`}));
+    const entries: CacheEntry[] = rows.slice(0,50).map(row=>({id:String(row.id),scope:String(row.space),version:String(row.revision),name:String(row.media_name ?? '画面标注'),...(row.media_name == null ? {nameCode:'frame-annotation' as const} : {}),detailData:{kind:'annotation' as const,space:String(row.space_name),text:String(row.text || '').slice(0,160)},detail:`${row.space_name} · ${String(row.text || '画面标注').slice(0,160)}`,bytes:Number(row.bytes),updatedAt:Date.parse(String(row.updated_at)),previewUrl:`/api/annotations/spaces/${row.space}/${row.id}/preview?revision=${row.revision}`}));
     return {entries,nextOffset:rows.length>50?offset+50:null,count:Number(total.count),bytes:Number(total.bytes),limitBytes:256*1024*1024,epoch:this.previewEpoch};
   }
   removePreview(space: string, id: string, revision: number) {

@@ -153,3 +153,34 @@ test('workspace search matches current owner names across users and orders newes
     assert.equal(store.list(firstUser, false, '', '新名字').entries.length, 0);
   } finally { store.close(); }
 }));
+
+
+test('admin copy names fit the localized server UTF-16 limit without splitting graphemes', async () => {
+  const { workspaceCopyName } = await import('../../src/admin/workspace-copy-name.ts');
+  const { setLanguage, t, msg } = await import('../../src/i18n.ts');
+  const store = new WorkspaceStore(':memory:');
+  try {
+    for (const locale of ['en', 'zh-CN'] as const) {
+      await setLanguage(locale, { persist: false });
+      const format = (name: string) => t(msg('admin.workspaceCopyName', '{name} 副本'), { name });
+      const suffix = locale === 'en' ? ' copy' : ' 副本';
+      for (const length of [195, 196, 197, 200]) {
+        const name = 'x'.repeat(length), copy = workspaceCopyName('  ' + name + '  ', format);
+        assert.equal(copy, name.slice(0, 200 - suffix.length) + suffix, `${locale}: ${length}`);
+        assert.ok(copy.length <= 200);
+        assert.equal(store.create({ name: copy, document: document() }, alice).name, copy);
+      }
+      for (const cluster of ['😀', 'e\u0301', '👩‍💻']) {
+        const name = 'x'.repeat(194) + cluster + 'tail';
+        const copy = workspaceCopyName(name, format);
+        assert.ok(copy.length <= 200);
+        assert.doesNotMatch(copy, /[\uD800-\uDFFF]/u);
+        const prefix = copy.slice(0, -suffix.length);
+        const boundaries = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(name)].map(part => part.index);
+        assert.ok(boundaries.includes(prefix.length), `${locale}: split ${cluster}`);
+        assert.equal(store.create({ name: copy, document: document() }, alice).name, copy);
+      }
+    }
+    assert.throws(() => store.create({ name: 'x'.repeat(201), document: document() }, alice), /1–200/);
+  } finally { store.close(); await setLanguage('zh-CN', { persist: false }); }
+});

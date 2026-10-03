@@ -9,9 +9,10 @@ function revealApp() {
 // Theme styles are render-blocking HTML links, so the shell never flashes
 // unstyled; main.ts signals shell-ready once its first frame is rendered, and
 // heavier warmup (GPU, library) finishes after reveal without blocking it.
+let disposeLanguage = () => {};
 try {
   if (!globalThis.isSecureContext || location.pathname === '/connection') {
-    await initializeLanguage().catch(() => {});
+    disposeLanguage = await initializeLanguage();
     const { showConnectionGuide } = await import('./connection-guide.ts');
     const ready = showConnectionGuide({ automatic: location.pathname !== '/connection' });
     revealApp(); // The guide is usable while its connection probe is still pending.
@@ -23,7 +24,7 @@ try {
     let shellReady!: () => void;
     const shell = new Promise<void>(resolve => { shellReady = resolve; });
     window.addEventListener('voidplayer:shell-ready', () => shellReady(), { once: true });
-    await initializeLanguage();
+    disposeLanguage = await initializeLanguage();
     const loaded = import('./main.ts');
     await Promise.race([shell, loaded]);
     revealApp();
@@ -38,3 +39,5 @@ try {
     app.querySelector('a')!.textContent = t(msg("bootstrap.reload", "重新加载"));
   } catch { /* Keep the built-in Chinese fallback. */ }
 } finally { revealApp(); }
+
+window.addEventListener('pagehide', () => disposeLanguage(), {once:true});

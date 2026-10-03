@@ -1,0 +1,80 @@
+{
+  "testedHead": "346cbcc088a902fb23520c476163f254c1d5b0ee",
+  "runtimeSourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+  "suite": "contract",
+  "complete": true,
+  "passed": true,
+  "expectedCount": 10,
+  "results": [
+    {
+      "id": "node-analysis-contracts",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 111
+    },
+    {
+      "id": "node-browser-regression-harness",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 2948
+    },
+    {
+      "id": "node-hlg-pixel-signature",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 60
+    },
+    {
+      "id": "node-identity-browser-lifecycle",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 10264
+    },
+    {
+      "id": "node-release-pipeline",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 413
+    },
+    {
+      "id": "node-thumbnails-contract",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 77
+    },
+    {
+      "id": "node-test-manifest",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 97
+    },
+    {
+      "id": "node-test-runner",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 1098
+    },
+    {
+      "id": "node-browser-fixture",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 210
+    },
+    {
+      "id": "node-i18n-build",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 448
+    }
+  ]
+}

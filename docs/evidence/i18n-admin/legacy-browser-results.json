@@ -1,0 +1,52 @@
+{
+  "complete": true,
+  "expectedCount": 9,
+  "passed": true,
+  "cases": [
+    {
+      "id": "browser-i18n-admin-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-i18n-admin-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-admin-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-admin-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-cache-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-cache-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-connection-guide-chromium",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-saved-workspaces-webkit",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "browser-saved-workspaces-chromium",
+      "status": "passed",
+      "exitCode": 0
+    }
+  ]
+}
