@@ -39,10 +39,14 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     steps.unshift([name, () => cleanup(name, close)]);
   };
   const artifact = name => path.join(directory, path.basename(name));
-  const operation = (name, run) => {
+  const operation = async (name, run) => {
     if (closing || controller.signal.aborted) throw controller.signal.reason ?? new Error('Fixture already closing');
+    const previousPhase = phase;
     phase = name;
-    return withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), phaseTimeoutMs, { caseName, engine, phase });
+    const result = await withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), phaseTimeoutMs, { caseName, engine, phase });
+    // A completed ready/load phase must not label a later assertion failure.
+    if (phase === name) phase = previousPhase;
+    return result;
   };
   let timer, onAbort;
   const stopped = new Promise((_, reject) => {
@@ -78,7 +82,14 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     context = await acquire('browser-context', () => browser.newContext(pageOptions), value => value.close());
     page = await acquire('page-create', () => context.newPage(), value => value.close());
     evidence = recordBrowserEvidence(page);
+    let extraContexts = 0;
     const fixture = { page, browser, context, server: service.server, url: service.url, temp, directory, artifact,
+      newContext: async options => {
+        const previousPhase = phase;
+        const value = await acquire(`extra-context-${++extraContexts}`, () => browser.newContext(options), value => value.close());
+        phase = previousPhase;
+        return value;
+      },
       signal: controller.signal, phase: operation, defer,
       ready: () => operation('ready', async () => {
         await page.goto(service.url);

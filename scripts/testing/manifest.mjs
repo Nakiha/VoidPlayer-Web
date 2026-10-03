@@ -15,6 +15,14 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if (!/^[a-z0-9][a-z0-9-]*$/.test(row.id) || ids.has(row.id)) fail(`Invalid or duplicate ID: ${row.id}`);
     ids.add(row.id); registered.add(row.script);
     if (!existsSync(path.join(root, row.script))) fail(`Dangling script: ${row.script}`);
+    if (row.implementation !== undefined) {
+      if (typeof row.implementation !== 'string' || !row.implementation.startsWith('scripts/testing/browser/') || row.implementation.split('/').includes('..')) {
+        fail(`${row.id}: unsafe implementation path`);
+      } else {
+        registered.add(row.implementation);
+        if (!existsSync(path.join(root, row.implementation))) fail(`Dangling implementation: ${row.implementation}`);
+      }
+    }
     if (typeof row.required !== 'boolean') fail(`${row.id}: missing required flag`);
     if (!kinds.has(row.kind)) fail(`${row.id}: unknown kind`);
     if (row.kind !== 'regression' && (!row.restrictions?.length || row.required)) fail(`${row.id}: tool exception needs a reason and required=false`);
@@ -30,7 +38,9 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
       const relative = `${directory}/${entry.name}`;
       if (entry.isDirectory()) { inspect(relative, category); continue; }
-      const candidate = category === 'test' ? /\.test\.(ts|mjs)$/.test(entry.name) : /^(check-|bench-|repro-|diagnose-|test-|compare-index).*\.(mjs|ts|py)$/.test(entry.name);
+      const candidate = category === 'test' ? /\.test\.(ts|mjs)$/.test(entry.name)
+        : /^(check-|bench-|repro-|diagnose-|test-|compare-index).*\.(mjs|ts|py)$/.test(entry.name)
+          || relative.startsWith('scripts/testing/browser/') && /\.mjs$/.test(entry.name);
       if (candidate && !registered.has(relative)) fail(`Unregistered check: ${relative}`);
     }
   }

@@ -14,6 +14,8 @@ test('manifest rejects duplicate IDs, dangling paths, unknown suites/engines and
     m => m.cases.push(m.cases[0]), m => { m.cases[0].script = 'test/missing.test.ts'; },
     m => { m.cases[0].suites.push('unknown'); }, m => { m.cases[0].engines = ['safari']; },
     m => { delete m.cases[0].required; }, m => { m.cases[0].kind = 'tool'; },
+    m => { m.cases[0].implementation = 'scripts/testing/browser/missing.mjs'; },
+    m => { m.cases[0].implementation = 'scripts/testing/browser/../outside.mjs'; },
     m => { m.cases.find(row => row.kind === 'diagnostic').restrictions = []; },
     m => { m.cases.find(row => row.suites.includes('fast')).fixtures = ['core']; },
   ]) { const manifest = clone(); mutate(manifest); assert.throws(() => validateManifest(manifest)); }
@@ -24,6 +26,10 @@ test('new checks cannot silently escape registration', async () => {
     await mkdir(path.join(root, 'test')); await mkdir(path.join(root, 'scripts'));
     await writeFile(path.join(root, 'test/unregistered.test.ts'), '');
     assert.throws(() => validateManifest({ ...testManifest, cases: [] }, root), /Unregistered check/);
+    await rm(path.join(root, 'test/unregistered.test.ts'));
+    await mkdir(path.join(root, 'scripts/testing/browser/ui'), { recursive: true });
+    await writeFile(path.join(root, 'scripts/testing/browser/ui/unregistered.mjs'), '');
+    assert.throws(() => validateManifest({ ...testManifest, cases: [] }, root), /Unregistered check: scripts\/testing\/browser/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 test('coverage floor retains original commands, required cells and CI membership', () => {
@@ -60,11 +66,29 @@ test('CI uses the catalog for required suites and keeps platform/input matrices 
 test('single-engine scripts cannot be advertised as a different browser matrix', () => {
   for (const row of testManifest.cases) {
     if (!row.script.startsWith('scripts/')) continue;
-    const source = readFileSync(new URL('../' + row.script, import.meta.url), 'utf8');
+    const source = readFileSync(new URL('../' + (row.implementation ?? row.script), import.meta.url), 'utf8');
     const imports = /import\s*\{([^}]+)\}\s*from\s*['"]playwright['"]/.exec(source)?.[1].split(',').map(name => name.trim());
     if (!imports) continue;
     for (const engine of row.engines.filter(engine => ['chromium','webkit'].includes(engine))) {
       assert.ok(imports.includes(engine), `${row.id}: does not import ${engine}`);
     }
+  }
+});
+
+test('compatibility entries point to registered domain implementations without changing CLI behavior', () => {
+  for (const row of testManifest.cases.filter(row => row.implementation)) {
+    const entry = readFileSync(new URL('../' + row.script, import.meta.url), 'utf8').replace(/^\/\/.*$/gm, '').trim();
+    const match = /^import ['"]([^'"]+)['"];?$/.exec(entry);
+    assert.ok(match, `${row.id}: entry must only import its implementation`);
+    assert.equal(new URL(match[1], new URL('../' + row.script, import.meta.url)).href,
+      new URL('../' + row.implementation, import.meta.url).href);
+  }
+});
+
+test('identity source checks require no downloaded core, media or browser build', () => {
+  for (const row of selectCases({ suite: 'ci-identity-unit' }).selected) {
+    assert.deepEqual(row.fixtures, [], `${row.id}: identity unit job does not download fixtures`);
+    assert.equal(row.build, false);
+    assert.deepEqual(row.engines, ['node']);
   }
 });

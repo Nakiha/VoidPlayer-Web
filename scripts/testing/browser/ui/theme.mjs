@@ -1,0 +1,129 @@
+import assert from 'node:assert/strict';
+import { withBrowserFixture } from '../../browser-fixture.mjs';
+const name=process.argv[2]??'webkit';
+await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewport:{width:1280,height:900},deviceScaleFactor:2,colorScheme:'light'} }, async ({ page, context, newContext, url, ready, artifact }) => {
+ const errors=[];
+ page.on('pageerror',e=>errors.push(e.message));
+ const base=url;
+ await ready();
+ // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
+ await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
+ const theme=()=>page.locator('html').getAttribute('data-theme');
+ const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
+ const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
+ assert.equal(await theme(),'light');
+ await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
+ assert.equal(await page.locator('[data-theme-choice=system]').getAttribute('aria-checked'),'true');
+ await choose('light');assert.equal(await theme(),'light');
+ await page.emulateMedia({colorScheme:'light'});await page.emulateMedia({colorScheme:'dark'});assert.equal(await theme(),'light');
+ // Inline bootstrap must resolve the stored choice even before the app module runs.
+ const boot=await context.newPage();await boot.emulateMedia({colorScheme:'dark'});
+ await boot.route('**/assets/*.js',route=>route.abort());await boot.goto(base);
+ assert.equal(await boot.locator('html').getAttribute('data-theme'),'light');await boot.close();
+ await page.reload();assert.equal(await theme(),'light');
+ // Reload resolves before bootstrap's dynamic main import necessarily publishes the tools.
+ // Keep the first-paint assertion above, then wait for the API before using it again.
+ await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
+ const lib=await call('list_library');
+ for(const [slot,file] of [['A','av1_10s_1920x1080.webm'],['B','h264_9s_1920x1080.mp4']])await call('load_library_item',{slot,id:lib.entries.find(e=>e.name===file).id});
+ // 索引在后台构建：等它完成、会话空闲后再取基线。否则下面的 before/after 深比较
+ // 会把 indexState 从 building 推进到 complete、metadataRevision 自增误判成主题改动的差异。
+ await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame&&t.indexState==='complete');},null,{timeout:60000});
+ for(const id of ['toggle-inspector','toggle-sources','toggle-subtracks'])await page.locator(`#${id}`).click();
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('[data-drawing-tool=rect]').click();
+ const stage=await page.locator('#drawing-A').boundingBox();await page.mouse.move(stage.x+stage.width*.2,stage.y+stage.height*.2);await page.mouse.down();await page.mouse.move(stage.x+stage.width*.5,stage.y+stage.height*.55,{steps:5});await page.mouse.up();
+ await page.waitForTimeout(220);await page.locator('#mark-close').click();await page.locator('#toggle-marks').click();
+ const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:window.voidPlayer.captureFrame('A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
+ const before=await evidence();
+ const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
+ await choose('dark');assert.equal(await theme(),'dark');
+ await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ // Dark palette: grouped and input surfaces are light translucent overlays, not opaque dark fills.
+ // The library scope trigger (#library-root) and the search field (#source-search-field) are
+ // deliberately transparent (style.css .library-navigation .choice-trigger / .source-tools
+ // #source-search-field); the light fill they sit on is --search-fill, painted by the
+ // .library-navigation row that hosts both. The segmented control no longer lives in
+ // .source-tools, so the selected segment is read from the comparison-layout group.
+ const surfaces=await page.evaluate(()=>{
+  const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
+  return {segment:bg('#layout-mode [aria-pressed=true]'),search:bg('.library-navigation'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+ });
+  assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay (--segment-selected-fill)');
+ assert.match(surfaces.search,/rgba\(255, 255, 255,/,'library scope/search row uses a light overlay (--search-fill)');
+  assert.equal(surfaces.placeholder,'rgb(182, 182, 182)');
+ assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');
+
+ const after=await evidence();assert.deepEqual(after,before,'theme changes preserve session, pixels, mark shape and geometry');
+ assert.notEqual(await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color),lightMark);
+ const contrast=await page.evaluate(()=>{
+  const root=getComputedStyle(document.documentElement),rgb=value=>value.match(/[\d.]+/g).slice(0,3).map(Number);
+  const probe=document.createElement('span');document.body.append(probe);
+  const color=token=>{probe.style.color=`var(${token})`;return rgb(getComputedStyle(probe).color);};
+  const luminance=v=>v.map(c=>{c/=255;return c<=.04045?c/12.92:((c+.055)/1.055)**2.4;}).reduce((s,c,i)=>s+c*[.2126,.7152,.0722][i],0);
+  const ratio=(a,b)=>{const x=luminance(a),y=luminance(b);return(Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
+  const results=['--surface','--surface-panel','--preview-fill'].flatMap(bg=>['--text','--text-secondary'].map(fg=>({bg,fg,ratio:ratio(color(bg),color(fg))})));
+  probe.remove();return results;
+ });assert.ok(contrast.every(c=>c.ratio>=4.5),JSON.stringify(contrast));
+ const screenshots=async mode=>{
+  await choose(mode);await page.mouse.move(1260,890);await page.waitForTimeout(250);
+  await page.screenshot({path:artifact(`voidplayer-theme-${mode}-${name}.png`)});
+ };
+ await screenshots('light');await screenshots('dark');
+ await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');await page.locator('#drawing-color-choice').click();
+ await page.screenshot({path:artifact(`voidplayer-theme-palette-${name}.png`)});
+ assert.equal(await page.locator('#drawing-color-choice-menu').evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'blur(8px)');
+ await page.keyboard.press('Escape');await page.locator('#mark-close').click();
+ await page.emulateMedia({contrast:'more'});
+ const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
+ // prefers-contrast: more pins --viewport-chrome-fill to --surface and drops the blur
+ // (themes/accessibility.css), so the transport paints the opaque dark surface:
+ // themes/dark.css --surface #212121.
+ assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(33, 33, 33)');
+ assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
+ assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(48, 52, 59)');
+ await page.emulateMedia({contrast:'no-preference'});
+ // Compact presets and custom colors stay independent of the review.
+ const reviewBefore=await evidence();
+ await page.locator('#settings-open').click();
+ assert.equal(await page.locator('.accent-choices [role=radio]').count(),12);
+ await page.locator('[data-accent-choice=sky]').click();assert.equal(await page.locator('html').getAttribute('data-accent'),'sky');
+ const hex=page.locator('#accent-hex');await hex.fill('#E048B8');await hex.press('Enter');
+ assert.equal(await page.locator('html').getAttribute('data-accent'),'custom');
+ const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent')));
+ assert.equal(stored.color,'#e048b8');assert.notEqual(stored.light,stored.dark);
+ await hex.fill('#oops');await hex.press('Enter');assert.equal(await hex.getAttribute('aria-invalid'),'true');
+ assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('voidplayer.custom-accent'))),stored,'invalid input never changes the active color');
+ await hex.press('Escape');assert.equal(await hex.inputValue(),'#E048B8');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
+ await page.locator('[data-accent-choice=green]').click();await page.locator('[data-accent-choice=custom]').click();
+ assert.equal(await hex.inputValue(),'#E048B8','custom color survives switching to a preset');
+ await page.locator('#accent-picker').evaluate(e=>{e.value='#2148ab';e.dispatchEvent(new Event('input',{bubbles:true}));});
+ assert.equal(await hex.inputValue(),'#2148AB');
+ assert.deepEqual(await evidence(),reviewBefore,'accent edits preserve video, marks and layout');
+ for (const mode of ['light','dark']) {
+  await page.locator(`[data-theme-choice=${mode}]`).click();await page.locator('#settings').screenshot({path:artifact(`voidplayer-accent-${mode}-${name}.png`)});
+ }
+ const customBoot=await context.newPage();await customBoot.route('**/assets/*.js',route=>route.abort());await customBoot.goto(base);
+ assert.equal(await customBoot.locator('html').getAttribute('data-accent'),'custom');
+ assert.equal(await customBoot.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),await page.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),'custom first paint matches the loaded app');
+ await customBoot.close();
+ await page.setViewportSize({width:390,height:700});await page.locator('#settings').screenshot({path:artifact(`voidplayer-accent-mobile-${name}.png`)});
+ assert.equal(await page.locator('#settings-pane-appearance').evaluate(e=>e.scrollWidth>e.clientWidth),false);
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
+ const peer=await context.newPage();await peer.goto(base);assert.equal(await peer.locator('html').getAttribute('data-theme'),'dark');
+ await choose('system');await page.waitForFunction(()=>localStorage.getItem('voidplayer.theme')===null);
+ await peer.waitForFunction(()=>document.querySelector('[data-theme-choice=system]').getAttribute('aria-checked')==='true');
+ await page.emulateMedia({colorScheme:'light'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='light');
+ await page.locator('#settings-open').click();await hex.fill('#ABC');await hex.press('Enter');
+ await peer.waitForFunction(()=>document.querySelector('#accent-hex').value==='#AABBCC');
+ await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open);
+ await peer.close();assert.deepEqual(errors,[]);
+ // Blocked storage still permits an in-memory explicit selection.
+ const isolated=await newContext({colorScheme:'dark'});
+ await isolated.addInitScript(()=>{Object.defineProperty(Storage.prototype,'getItem',{value(){throw new Error('blocked');}});Object.defineProperty(Storage.prototype,'setItem',{value(){throw new Error('blocked');}});Object.defineProperty(Storage.prototype,'removeItem',{value(){throw new Error('blocked');}});});
+ const restricted=await isolated.newPage();await restricted.goto(base);assert.equal(await restricted.locator('html').getAttribute('data-theme'),'dark');
+ await restricted.locator('#settings-open').click();await restricted.locator('[data-theme-choice=light]').click();assert.equal(await restricted.locator('html').getAttribute('data-theme'),'light');
+ await restricted.locator('#accent-hex').fill('#246ABC');await restricted.locator('#accent-hex').press('Enter');
+ assert.equal(await restricted.locator('html').getAttribute('data-accent'),'custom');
+ console.log(`PASS ${name}: system/manual/reload/early paint/storage sync, blocked storage, contrast, unchanged video/marks/layout, dark palette and high contrast`);
+});

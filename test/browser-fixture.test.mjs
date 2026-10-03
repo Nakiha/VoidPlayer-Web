@@ -63,3 +63,41 @@ test('cleanup-only failures fail the fixture after every cleanup was attempted',
   await assert.rejects(withBrowserFixture(options,async()=>{}),AggregateError);assert.deepEqual(events,['page','context','browser','server','temp']);
   const report=JSON.parse(await readFile(path.join(directory,'fixture-test-failure.json'),'utf8'));assert.equal(report.phase,'cleanup');
 }));
+
+test('extra contexts remain case-owned and close before the primary page and browser on failure', async () => scenario(async ({ options, events, browser }) => {
+  const primary = new Error('secondary-context assertion');
+  const original = browser.newContext;
+  browser.newContext = async value => value?.extra ? { close: async () => events.push(value.extra) } : original();
+  await assert.rejects(withBrowserFixture(options, async fixture => {
+    await fixture.newContext({ extra: 'first-extra' });
+    await fixture.newContext({ extra: 'second-extra' });
+    throw primary;
+  }), error => error === primary);
+  assert.deepEqual(events, ['second-extra', 'first-extra', 'page', 'context', 'browser', 'server', 'temp']);
+}));
+
+test('an extra context arriving after cancellation is closed and cannot leak into the next case', async () => scenario(async ({ options, events, browser }) => {
+  const controller = new AbortController(), original = browser.newContext;
+  let release, started;
+  const entered = new Promise(resolve => { started = resolve; });
+  browser.newContext = value => value?.extra ? new Promise(resolve => {
+    release = () => resolve({ close: async () => events.push('late-context') }); started();
+  }) : original();
+  const running = withBrowserFixture({ ...options, signal: controller.signal }, fixture => fixture.newContext({ extra: true }));
+  await entered; controller.abort(new Error('cancel extra context'));
+  await assert.rejects(running, /cancel extra context/);
+  assert.deepEqual(events, ['page', 'context', 'browser', 'server', 'temp']);
+  release(); await new Promise(resolve => setTimeout(resolve, 10));
+  assert.equal(events.at(-1), 'late-context');
+}));
+
+test('completed ready and extra-context phases do not mislabel a later assertion failure', async () => scenario(async ({ options, directory }) => {
+  await assert.rejects(withBrowserFixture(options, async fixture => {
+    await fixture.ready();
+    await fixture.newContext({});
+    await fixture.phase('completed-operation', async () => {});
+    throw new Error('later assertion');
+  }), /later assertion/);
+  const report = JSON.parse(await readFile(path.join(directory, 'fixture-test-failure.json'), 'utf8'));
+  assert.equal(report.phase, 'assertions');
+}));
