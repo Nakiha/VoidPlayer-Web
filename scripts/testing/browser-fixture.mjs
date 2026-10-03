@@ -7,13 +7,20 @@ import { repositoryRoot } from './manifest.mjs';
 
 // Acquisition is registered as soon as it succeeds, including late completion
 // after timeout/abort. Every fixture owns its data, port, browser and contexts.
-export async function withBrowserFixture({ caseName, engine = 'webkit', pageOptions = {}, timeoutMs = 300000,
+export async function withBrowserFixture({ caseName, engine = 'webkit', pageOptions = {}, launchOptions = {}, timeoutMs = 300000,
   phaseTimeoutMs = 30000, cleanupTimeoutMs = 10000, signal, directory = process.env.VOIDPLAYER_TEST_ARTIFACTS ?? path.join(repositoryRoot, '.run/browser-fixtures', `${caseName}-${engine}`),
   dependencies = {}, roots = [path.join(repositoryRoot, 'fixtures/video')],
 }, body) {
   if (!['chromium', 'webkit'].includes(engine)) throw new Error(`Unknown browser engine: ${engine}`);
   await mkdir(directory, { recursive: true });
   const steps = [], cleanupErrors = [];
+  const reportCleanup = (message, error) => {
+    cleanupErrors.push({ message, error: error.message });
+    console.error(message, error);
+  };
+  const persistCleanupErrors = () => cleanupErrors.length
+    ? writeFile(path.join(directory, 'cleanup-errors.json'), JSON.stringify({ caseName, engine, phase: 'cleanup', errors: cleanupErrors }, null, 2) + '\n').catch(error => console.error(error))
+    : Promise.resolve();
   let failure, closing = false, phase = 'temporary-data', page, evidence, temp, browser, context, service;
   const controller = new AbortController();
   const abort = () => controller.abort(signal?.reason ?? new Error(`${caseName}: cancelled`));
@@ -28,7 +35,10 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     const resource = await open();
     if (closing || controller.signal.aborted) {
       try { await cleanup(name, () => close(resource)); }
-      catch (error) { console.error(`${caseName}: late ${name} cleanup failed`, error); }
+      catch (error) {
+        reportCleanup(`${caseName}: late ${name} cleanup failed`, error);
+        await persistCleanupErrors();
+      }
       throw controller.signal.reason ?? new Error('Fixture already closing');
     }
     steps.unshift([name, () => cleanup(name, () => close(resource))]);
@@ -77,7 +87,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     service = await acquire('server-start', () => startService({ temp, roots, defer, signal: controller.signal }), value => value.close());
     browser = await acquire('browser-launch', async () => {
       if (dependencies.launchBrowser) return dependencies.launchBrowser(engine);
-      return (await import('playwright'))[engine].launch({ headless: true });
+      return (await import('playwright'))[engine].launch({ headless: true, ...launchOptions });
     }, value => value.close());
     context = await acquire('browser-context', () => browser.newContext(pageOptions), value => value.close());
     page = await acquire('page-create', () => context.newPage(), value => value.close());
@@ -109,7 +119,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
   } finally {
     closing = true; clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); signal?.removeEventListener('abort', abort);
     try {
-      await cleanupResources(steps, failure, (message, error) => { cleanupErrors.push({ message, error: error.message }); console.error(message, error); });
+      await cleanupResources(steps, failure, reportCleanup);
     } catch (error) {
       if (!failure) {
         try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase: 'cleanup' }, error, evidence }); }
@@ -117,7 +127,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
       }
       throw error;
     } finally {
-      if (cleanupErrors.length) await writeFile(artifact('cleanup-errors.json'), JSON.stringify({ caseName, engine, phase: 'cleanup', errors: cleanupErrors }, null, 2) + '\n').catch(error => console.error(error));
+      await persistCleanupErrors();
     }
   }
   return result;

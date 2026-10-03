@@ -16,7 +16,7 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     ids.add(row.id); registered.add(row.script);
     if (!existsSync(path.join(root, row.script))) fail(`Dangling script: ${row.script}`);
     if (row.implementation !== undefined) {
-      if (typeof row.implementation !== 'string' || !row.implementation.startsWith('scripts/testing/browser/') || row.implementation.split('/').includes('..')) {
+      if (typeof row.implementation !== 'string' || !/^(scripts\/testing\/browser|test\/(unit|contract|media))\//.test(row.implementation) || row.implementation.split('/').includes('..')) {
         fail(`${row.id}: unsafe implementation path`);
       } else {
         registered.add(row.implementation);
