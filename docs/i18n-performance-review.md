@@ -2,7 +2,7 @@
 
 The original headless mixed H.264/HEVC comparison (baseline-first, `3d452be`) showed a **3.19% lower feature median**. That was a signal requiring investigation, even though both builds failed real-time assertions. This review retains that negative result and adds predetermined AB/BA order reversals, rather than dismissing it or changing thresholds. All 40 new Mac samples use the copy-name/plural-fixed runtime from `1944ab321e9709529a80f71699d7bda2cf706384`.
 
-The mixed workload still fails real-time playback on both builds. The order-reversed samples do not show a consistent feature slowdown; they do **not** establish real-time success or statistical equivalence. Trusted HTTPS CI comparison is executed separately on one disposable Linux runner using the canonical benchmark and its unchanged assertions. Its raw artifact and exact final-head result are linked from [draft PR #41](https://github.com/Nakiha/VoidPlayer-Web/pull/41); they must be inspected before accepting a CI performance conclusion.
+The mixed workload still fails real-time playback on both builds. The order-reversed samples do not show a consistent feature slowdown; they do **not** establish real-time success or statistical equivalence. Trusted HTTPS CI comparison is executed separately on one disposable Linux runner using the canonical benchmark and its unchanged assertions. The first controlled CI run is archived below; its raw artifact and exact final-head replication are linked from [draft PR #41](https://github.com/Nakiha/VoidPlayer-Web/pull/41); they must be inspected before accepting a CI performance conclusion.
 
 ## Source and controls
 
@@ -42,6 +42,23 @@ Unpaired CI at `1944ab3`, run `37144012341`, contains four failing benchmarks: s
 The new registered `ci-perf-pair` case runs the unchanged canonical trusted HTTPS benchmark in **baseline→feature→feature→baseline** order on one disposable Ubuntu runner, pinning the PR base SHA. Each session has two solo and two dual 12-second samples, for 16 expected samples. Both checkouts use identical generated media and WASM core. Harness hashes, media/core hashes, source digests, real HTTPS/isolation, decoder preferences and complete sample identities are validated; missing reports or mismatched controls fail explicitly. Child exit statuses and complete logs are retained. Existing report files are restored after each child. Certificate trust uses the project's existing temporary NSS entry and exact removal; no system security settings are changed.
 
 The PR-only job adds measurement cost but stays outside release aggregation. The release contract explicitly audits this sole informational exception and retains every required verification dependency. Benchmark exit 1 remains an informational **failed** case; its raw `passed`, failures and `configurationValid` must be read separately from job color. CI artifacts retain every report and log for 30 days. Final CI interpretation and any blockers are recorded in the PR description against the exact tested head; results are not extrapolated across changed runtime digests.
+
+### First controlled HTTPS run: complete, with a small negative difference
+
+Run [37150851591](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/37150851591), PR head `346cbcc088a902fb23520c476163f254c1d5b0ee`, merge checkout `081d5fa220fc2c40c82afdf420dd80126162ebdf`, matches feature runtime `8afc83a…` and baseline `a64d2afd…`. Controls validate, all 16 samples are present, and every child exits 1 because both dual repetitions fail. **Solo 8/8 pass; dual 8/8 fail below-realtime**, with no presentation-stall failure in this paired job. The separate original playback job and previous CI stalls remain distinct evidence.
+
+| Pair / workload | Baseline median | Feature median | Feature change |
+| --- | ---: | ---: | ---: |
+| AB solo | 0.99928 | 0.99937 | +0.01% |
+| BA solo | 0.99939 | 0.99890 | −0.05% |
+| AB dual | 0.80120 | 0.79095 | −1.28% |
+| BA dual | 0.80041 | 0.78760 | −1.60% |
+
+**Both paired dual feature medians are lower**; this is not a no-regression finding. The difference is smaller than the original Mac signal, but must not be hidden behind all builds missing real-time limits. A second predefined ABBA run on final-head CI is used to check reproducibility; its results and final status are recorded in the PR description. No runtime fix is inferred before that replication. This runner is AMD EPYC 9V45; hardware decoding remains unverified. Same-pair synthetic SHA-256 is `8c7ae793c59a5d9dd3553fb7b69e5a57902491c3132f56c4228d66d5bea4a81f`; both Linux WASM hashes are unchanged across distributions. [Raw sessions, child logs and comparison](evidence/i18n-performance-review/trusted-https-346cbcc/) are permanently archived; [original artifact](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/37150851591/artifacts/11284072481) expires after 30 days.
+
+### Exact-source Mac functional review
+
+Public fast **31/31**, contract **10/10**, and Chromium/WebKit bilingual browser **10/10** passed at `346cbcc`. The conflict-copy reports record **16/16 HTTP 201** successes with both locales and 195/196/197/200-unit boundary inputs. [Compact results and browser reports](evidence/i18n-performance-review/) include tested head and the unchanged runtime digest. Actual current-source screenshots: [playing in English](evidence/i18n-performance-review/playing-en.png), [unsaved workspace and confirmation](evidence/i18n-performance-review/admin-workspace-en-confirm.png), [running measurement](evidence/i18n-performance-review/admin-measurement-en-running.png), [macOS guide](evidence/i18n-performance-review/guide-macos-en.png). The later archive commit changes documentation/evidence only; the PR records its exact-head CI and runtime digest separately.
 
 ## Evidence integrity and limits
 

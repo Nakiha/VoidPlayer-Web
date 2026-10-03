@@ -1,0 +1,80 @@
+{
+  "testedHead": "346cbcc088a902fb23520c476163f254c1d5b0ee",
+  "runtimeSourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+  "suite": "mac-i18n",
+  "complete": true,
+  "passed": true,
+  "expectedCount": 10,
+  "results": [
+    {
+      "id": "browser-i18n-admin-chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 5948
+    },
+    {
+      "id": "browser-i18n-admin-webkit",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 6618
+    },
+    {
+      "id": "browser-i18n-guide-chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 4481
+    },
+    {
+      "id": "browser-i18n-guide-webkit",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 4781
+    },
+    {
+      "id": "browser-i18n-admin-layout-chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 4363
+    },
+    {
+      "id": "browser-i18n-admin-layout-webkit",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 4671
+    },
+    {
+      "id": "browser-i18n-chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 5844
+    },
+    {
+      "id": "browser-i18n-webkit",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 8471
+    },
+    {
+      "id": "browser-i18n-layout-chromium",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 2028
+    },
+    {
+      "id": "browser-i18n-layout-webkit",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 2366
+    }
+  ]
+}

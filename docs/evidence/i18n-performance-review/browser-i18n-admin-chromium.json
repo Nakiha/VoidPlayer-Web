@@ -1,0 +1,101 @@
+{
+  "engine": "chromium",
+  "checks": [
+    {
+      "pane": "overview",
+      "title": "Overview",
+      "lang": "en"
+    },
+    {
+      "pane": "library",
+      "title": "Library",
+      "lang": "en"
+    },
+    {
+      "pane": "caches",
+      "title": "Caches",
+      "lang": "en"
+    },
+    {
+      "pane": "workspaces",
+      "title": "Workspaces",
+      "lang": "en"
+    },
+    {
+      "pane": "annotations",
+      "title": "Marks",
+      "lang": "en"
+    },
+    {
+      "pane": "logs",
+      "title": "Logs",
+      "lang": "en"
+    },
+    {
+      "pane": "measurements",
+      "title": "Speed test",
+      "lang": "en"
+    }
+  ],
+  "copyCases": [
+    {
+      "language": "en",
+      "length": 195,
+      "status": 201,
+      "copiedLength": 200
+    },
+    {
+      "language": "en",
+      "length": 196,
+      "status": 201,
+      "copiedLength": 200
+    },
+    {
+      "language": "en",
+      "length": 197,
+      "status": 201,
+      "copiedLength": 200
+    },
+    {
+      "language": "en",
+      "length": 200,
+      "status": 201,
+      "copiedLength": 200
+    },
+    {
+      "language": "zh-CN",
+      "length": 195,
+      "status": 201,
+      "copiedLength": 198
+    },
+    {
+      "language": "zh-CN",
+      "length": 196,
+      "status": 201,
+      "copiedLength": 199
+    },
+    {
+      "language": "zh-CN",
+      "length": 197,
+      "status": 201,
+      "copiedLength": 200
+    },
+    {
+      "language": "zh-CN",
+      "length": 200,
+      "status": 201,
+      "copiedLength": 200
+    }
+  ],
+  "rawDiagnostic": "preserved",
+  "state": [
+    "root draft",
+    "workspace rename",
+    "search",
+    "cache pagination/confirmation",
+    "selected annotation/preview",
+    "raw log/confirmation",
+    "radio menu",
+    "running measurement"
+  ]
+}

@@ -1,0 +1,227 @@
+{
+  "testedHead": "346cbcc088a902fb23520c476163f254c1d5b0ee",
+  "runtimeSourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69",
+  "suite": "fast",
+  "complete": true,
+  "passed": true,
+  "expectedCount": 31,
+  "results": [
+    {
+      "id": "node-admin-localization",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 91
+    },
+    {
+      "id": "node-analysis-contracts",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 111
+    },
+    {
+      "id": "node-analysis-geometry",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 84
+    },
+    {
+      "id": "node-analysis-grouping",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 77
+    },
+    {
+      "id": "node-analysis-projection",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 76
+    },
+    {
+      "id": "node-analysis-selection",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 73
+    },
+    {
+      "id": "node-analysis-statistics",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 77
+    },
+    {
+      "id": "node-annotation",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 81
+    },
+    {
+      "id": "node-appearance",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 82
+    },
+    {
+      "id": "node-decoder-policy",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 348
+    },
+    {
+      "id": "node-file-drop",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 101
+    },
+    {
+      "id": "node-frame-description",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 84
+    },
+    {
+      "id": "node-frame-task",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 75
+    },
+    {
+      "id": "node-measurement",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 5906
+    },
+    {
+      "id": "node-media-diagnostics",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 81
+    },
+    {
+      "id": "node-media-index-identity",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 75
+    },
+    {
+      "id": "node-media-policy",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 98
+    },
+    {
+      "id": "node-media-reference",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 88
+    },
+    {
+      "id": "node-pixel-grid",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 76
+    },
+    {
+      "id": "node-resize-gesture",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 83
+    },
+    {
+      "id": "node-resource-budget",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 82
+    },
+    {
+      "id": "node-seek-preview",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 80
+    },
+    {
+      "id": "node-time-input",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 74
+    },
+    {
+      "id": "node-uuid",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 77
+    },
+    {
+      "id": "node-viewport-gestures",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 84
+    },
+    {
+      "id": "node-viewport",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 81
+    },
+    {
+      "id": "node-test-manifest",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 97
+    },
+    {
+      "id": "node-test-runner",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 1101
+    },
+    {
+      "id": "node-browser-fixture",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 205
+    },
+    {
+      "id": "node-i18n",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 98
+    },
+    {
+      "id": "node-i18n-build",
+      "status": "passed",
+      "exitCode": 0,
+      "error": null,
+      "durationMs": 442
+    }
+  ]
+}
