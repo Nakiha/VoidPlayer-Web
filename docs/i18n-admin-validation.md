@@ -2,7 +2,7 @@
 
 This follow-up extends the merged #40 implementation for #38. The development branch is `codex/i18n-admin-guide`, based on actual main `92e4d0a3b25acfc86f32201eeb061333d5837758`. No merge, tag, deployment, original-checkout mutation or existing-service shutdown is part of this work.
 
-The final runtime source digest is `74b0fc06a6dc248688243e00c3e71001b03ae28b55865efcb0b33796b6fc881b`. The separately built merged-main baseline is `a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5`. Every final performance report embeds both source digests and the existing benchmark build/media/decoder evidence. Old #40 evidence remains in its original directory; earlier extension measurements are preserved in [history](evidence/i18n-admin/history/), with their distinct predecessor source digest.
+This original validation records pre-review commit `3d452be` (the document originally called it final). Current copy-name/plural fixes and counterbalanced performance evidence are documented in [the performance review](i18n-performance-review.md). The historical runtime source digest is `74b0fc06a6dc248688243e00c3e71001b03ae28b55865efcb0b33796b6fc881b`. The separately built merged-main baseline is `a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5`. Every final performance report embeds both source digests and the existing benchmark build/media/decoder evidence. Old #40 evidence remains in its original directory; earlier extension measurements are preserved in [history](evidence/i18n-admin/history/), with their distinct predecessor source digest.
 
 ## Coverage and state preservation
 

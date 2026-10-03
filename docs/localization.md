@@ -58,3 +58,5 @@ I18N_BASELINE_ROOT=/path/to/baseline I18N_HEADFUL=1 \
 ```
 
 The required `ci-i18n` cases run after the original uncovered suite in the existing browser job. Both suites upload separate artifacts. Existing tests explicitly select Chinese for their unchanged Chinese assertions; the new cases test English/system/invalid/stored preferences independently. Performance cases are informational because some existing platform/media combinations miss the baseline throughput floor; they still assert the original playback limits and exit nonzero on failure. They always save both raw comparison reports before assessing budgets. Do not reinterpret such a failed cell as a pass or alter its thresholds. See the validation report for the measured environment, budgets, results and remaining limitations.
+
+Performance review after copy-name and plural fixes: [counterbalanced Mac and trusted HTTPS evidence](i18n-performance-review.md).

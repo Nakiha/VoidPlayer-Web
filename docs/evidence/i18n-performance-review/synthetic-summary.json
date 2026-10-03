@@ -1,0 +1,158 @@
+[
+  {
+    "file": "chromium-ci-1080p-dual-review-ab.json",
+    "order": "baseline-first",
+    "mediaMode": "ci-1080p-dual",
+    "results": [
+      {
+        "name": "baseline",
+        "speeds": [
+          0.9991957780732251,
+          0.9992286697169096
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          5968.066000000001,
+          6019.995000000001
+        ],
+        "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5"
+      },
+      {
+        "name": "feature",
+        "speeds": [
+          0.9991649071975641,
+          0.999156621186532
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          5986.1230000000005,
+          6052.342000000001
+        ],
+        "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69"
+      }
+    ]
+  },
+  {
+    "file": "chromium-ci-1080p-dual-review-ba.json",
+    "order": "feature-first",
+    "mediaMode": "ci-1080p-dual",
+    "results": [
+      {
+        "name": "feature",
+        "speeds": [
+          0.9991644028228958,
+          0.9991673518761433
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          6061.301,
+          6029.617
+        ],
+        "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69"
+      },
+      {
+        "name": "baseline",
+        "speeds": [
+          0.9992121778901415,
+          0.9991642731504744
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          5993.736999999999,
+          6167.138000000001
+        ],
+        "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5"
+      }
+    ]
+  },
+  {
+    "file": "chromium-ci-1080p-solo-review-ab.json",
+    "order": "baseline-first",
+    "mediaMode": "ci-1080p-solo",
+    "results": [
+      {
+        "name": "baseline",
+        "speeds": [
+          0.9995545897984144,
+          0.9996549851398338
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          4267.138,
+          4145.119000000001
+        ],
+        "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5"
+      },
+      {
+        "name": "feature",
+        "speeds": [
+          0.9998877489056767,
+          0.9995549184652884
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          4261.14,
+          4283.771
+        ],
+        "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69"
+      }
+    ]
+  },
+  {
+    "file": "chromium-ci-1080p-solo-review-ba.json",
+    "order": "feature-first",
+    "mediaMode": "ci-1080p-solo",
+    "results": [
+      {
+        "name": "feature",
+        "speeds": [
+          0.9995107308246044,
+          0.9996622720638747
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          4329.481000000001,
+          4160.969000000001
+        ],
+        "sourceDigest": "8afc83a04f7d5bebe27513316f873429181c51f786455e0a5f64fc554d850e69"
+      },
+      {
+        "name": "baseline",
+        "speeds": [
+          0.9995086154612183,
+          1.0000000000079279
+        ],
+        "passed": [
+          true,
+          true
+        ],
+        "cpuMs": [
+          4256.985000000001,
+          4180.518999999999
+        ],
+        "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5"
+      }
+    ]
+  }
+]

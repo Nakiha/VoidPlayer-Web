@@ -174,6 +174,66 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  paired-https:
+    name: Compare trusted HTTPS performance against PR base
+    if: github.event_name == 'pull_request'
+    needs: decoder
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - name: Checkout exact PR base in an isolated directory
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .run/i18n-https-baseline
+      - name: Prepare identical media, dependencies and core
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libnss3-tools
+          npx playwright install --with-deps chromium
+          node scripts/make-playback-fixtures.mjs
+          baseline="$PWD/.run/i18n-https-baseline"
+          if cmp -s package-lock.json "$baseline/package-lock.json"; then
+            ln -s "$PWD/node_modules" "$baseline/node_modules"
+          else
+            (cd "$baseline" && npm ci)
+          fi
+          mkdir -p "$baseline/public/vendor" "$baseline/.run/playback-media"
+          cp -R public/vendor/voidplayer-core "$baseline/public/vendor/voidplayer-core"
+          cp .run/playback-media/*.mp4 "$baseline/.run/playback-media/"
+          (cd "$baseline" && node scripts/run-tests.mjs --prepare)
+          node scripts/run-tests.mjs --prepare
+      - name: Original HTTPS thresholds, baseline-feature-feature-baseline
+        id: paired-performance
+        continue-on-error: true
+        env:
+          I18N_BASELINE_ROOT: ${{ github.workspace }}/.run/i18n-https-baseline
+        run: node scripts/run-tests.mjs ci-perf-pair --prepared
+      - name: Report informational benchmark failure explicitly
+        if: always() && steps.paired-performance.outcome != 'success'
+        run: |
+          echo '::warning::Paired HTTPS benchmark did not pass. Read raw reports and configurationValid; do not infer real-time success from a green informational job.'
+          echo 'Paired HTTPS benchmark did not pass. See paired-https-performance-reports for every sample and child exit status.' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: paired-https-performance-reports
+          retention-days: 30
+          path: |
+            .run/test-suites/ci-perf-pair/
+            .run/test-suites/build-receipt.json
+            .run/i18n-https-baseline/.run/test-suites/build-receipt.json
+
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
