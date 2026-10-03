@@ -118,3 +118,21 @@ test('late acquisition cleanup errors are persisted without replacing the timeou
   assert.match(report.errors[0].message, /late browser-launch cleanup failed/);
   assert.match(JSON.parse(await readFile(path.join(directory, 'fixture-test-failure.json'), 'utf8')).error.message, /timed out/);
 }));
+
+test('legacy direct CLI interrupt handlers cancel the fixture and are removed after teardown', async () => {
+  for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) await scenario(async ({ options, events, getTemp }) => {
+    const previous = new Set(process.listeners(name)); let entered;
+    const started = new Promise(resolve => { entered = resolve; });
+    const running = withBrowserFixture(options, async fixture => {
+      entered(); await fixture.phase('direct-cli-wait', () => new Promise(() => {}));
+    });
+    await started;
+    const handler = process.listeners(name).find(handler => !previous.has(handler));
+    assert.equal(typeof handler, 'function');
+    handler();
+    await assert.rejects(running, new RegExp(`cancelled by ${name}`));
+    assert.deepEqual(events, ['page', 'context', 'browser', 'server', 'temp']);
+    await assert.rejects(access(getTemp()));
+    assert.deepEqual(new Set(process.listeners(name)), previous);
+  });
+});

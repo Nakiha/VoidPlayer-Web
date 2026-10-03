@@ -23,6 +23,9 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     : Promise.resolve();
   let failure, closing = false, phase = 'temporary-data', page, evidence, temp, browser, context, service;
   const controller = new AbortController();
+  const interrupts = ['SIGINT', 'SIGTERM', 'SIGHUP'].map(name => [name,
+    () => controller.abort(new Error(`${engine} ${caseName}: cancelled by ${name}`))]);
+  for (const [name, handler] of interrupts) process.on(name, handler);
   const abort = () => controller.abort(signal?.reason ?? new Error(`${caseName}: cancelled`));
   signal?.addEventListener('abort', abort, { once: true });
   if (signal?.aborted) abort();
@@ -87,7 +90,10 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     service = await acquire('server-start', () => startService({ temp, roots, defer, signal: controller.signal }), value => value.close());
     browser = await acquire('browser-launch', async () => {
       if (dependencies.launchBrowser) return dependencies.launchBrowser(engine);
-      return (await import('playwright'))[engine].launch({ headless: true, ...launchOptions });
+      // Own signal cleanup through this fixture, including legacy direct CLI
+      // entries; Playwright must not exit the process before teardown finishes.
+      return (await import('playwright'))[engine].launch({ headless: true,
+        handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, ...launchOptions });
     }, value => value.close());
     context = await acquire('browser-context', () => browser.newContext(pageOptions), value => value.close());
     page = await acquire('page-create', () => context.newPage(), value => value.close());
@@ -128,6 +134,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
       throw error;
     } finally {
       await persistCleanupErrors();
+      for (const [name, handler] of interrupts) process.off(name, handler);
     }
   }
   return result;
