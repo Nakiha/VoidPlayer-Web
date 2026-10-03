@@ -65,3 +65,50 @@ test('empty selections and unknown CLI options fail rather than produce an all-p
   for(const args of [['--wat'],['browser','--engine'],['browser','--platform','linux']])assert.throws(()=>parseOptions(args));
   assert.deepEqual(parseOptions(['browser','--case','browser-menu-webkit','--prepared']).caseIds,['browser-menu-webkit']);
 });
+
+test('parent removes exclusive temporary data after normal, failed and forcibly timed-out child processes', async () => temporary(async directory => {
+  const code = 'const fs=require("node:fs"),os=require("node:os"),path=require("node:path");console.log(os.tmpdir());fs.writeFileSync(path.join(os.tmpdir(),"owned"),"case data");';
+  const report = await runBrowserRegressions([
+    entry('normal-temp', code), entry('failed-temp', code + 'process.exit(7);'),
+    entry('timed-out-temp', code + 'setInterval(()=>{},1000);', { timeoutMs: 500 }),
+    entry('after-temp-timeout', code),
+  ], { directory, output: silent });
+  assert.equal(report.complete, true); assert.equal(report.passed, false);
+  assert.deepEqual(report.results.map(row => row.status), ['passed', 'failed', 'failed', 'passed']);
+  assert.equal(report.results[1].exitCode, 7); assert.equal(report.results[2].timedOut, true);
+  assert.equal(new Set(report.results.map(row => row.temporaryDirectory)).size, 4);
+  for (const row of report.results) {
+    assert.equal(row.phase, 'execute');
+    assert.equal(row.temporaryDataRemoved, true);
+    assert.ok((await readFile(row.logPath, 'utf8')).includes(row.temporaryDirectory));
+    await assert.rejects(readFile(path.join(row.temporaryDirectory, 'owned')), { code: 'ENOENT' });
+  }
+}));
+
+test('cancelled child data is removed by its parent even when the child has no cleanup handler', async () => temporary(async directory => {
+  const controller = new AbortController(); let entered;
+  const started = new Promise(resolve => { entered = resolve; });
+  const running = runBrowserRegressions([entry('cancel-temp', 'const fs=require("node:fs"),os=require("node:os"),path=require("node:path");fs.writeFileSync(path.join(os.tmpdir(),"owned"),"data");console.log("ready-to-cancel");setInterval(()=>{},1000);')], {
+    directory, signal: controller.signal, output: { write(chunk) { if (String(chunk).includes('ready-to-cancel')) entered(); } },
+  });
+  await started; controller.abort(new Error('cancel test'));
+  const report = await running;
+  assert.equal(report.passed, false); assert.equal(report.results[0].status, 'cancelled');
+  assert.equal(report.results[0].temporaryDataRemoved, true);
+  await assert.rejects(readFile(path.join(report.results[0].temporaryDirectory, 'owned')), { code: 'ENOENT' });
+}));
+
+test('parent temporary cleanup failure retains the child exit and every following independent result', async () => temporary(async directory => {
+  const report = await runBrowserRegressions([entry('cleanup-primary', 'process.exit(7)'), entry('cleanup-next', 'process.exit(0)')], {
+    directory, output: silent, removeTemporary: async () => { throw new Error('injected temporary cleanup failure'); },
+  });
+  try {
+    assert.equal(report.complete, true); assert.equal(report.passed, false);
+    assert.equal(report.results[0].exitCode, 7);
+    assert.match(report.results[0].error, /^exit 7; temporary-data cleanup:/);
+    assert.equal(report.results[1].exitCode, 0); assert.equal(report.results[1].status, 'failed');
+    for (const row of report.results) assert.equal(row.cleanupErrors[0].message, 'injected temporary cleanup failure');
+  } finally {
+    for (const row of report.results) await rm(row.temporaryDirectory, { recursive: true, force: true });
+  }
+}));

@@ -1,6 +1,7 @@
 import { spawn, execFileSync } from 'node:child_process';
 import { createWriteStream } from 'node:fs';
-import { mkdir, writeFile, rename } from 'node:fs/promises';
+import { mkdir, writeFile, rename, mkdtemp, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { finished } from 'node:stream/promises';
@@ -45,7 +46,27 @@ function terminateOwnedProcesses(child, grouped) {
   return failures;
 }
 
-async function runCase(entry, logPath, { cwd, timeoutMs, output, signal, directory }) {
+async function runCase(entry, logPath, options) {
+  // The parent owns this directory: even SIGKILL cannot bypass its teardown.
+  // os.tmpdir(), Playwright profiles and nested workers inherit the same scope.
+  const temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'vp-test-case-'));
+  let result;
+  try { result = await runOwnedCase(entry, logPath, { ...options, temporaryDirectory }); }
+  catch (cause) { result = { exitCode: null, error: cause.message, durationMs: 0 }; }
+  try {
+    await options.removeTemporary(temporaryDirectory);
+    result.temporaryDataRemoved = true;
+  } catch (cause) {
+    result.temporaryDataRemoved = false;
+    result.cleanupErrors = [{ phase: 'temporary-data', message: cause.message }];
+    const primary = result.error ?? (result.cancelled ? 'suite cancelled' : result.timedOut ? 'case timed out'
+      : result.exitCode !== 0 ? `exit ${result.exitCode}` : 'case cleanup failed');
+    result.error = `${primary}; temporary-data cleanup: ${cause.message}`;
+  }
+  return { ...result, phase: 'execute', temporaryDirectory };
+}
+
+async function runOwnedCase(entry, logPath, { cwd, timeoutMs, output, signal, directory, temporaryDirectory }) {
   const started = performance.now();
   let timedOut = false, cancelled = false, error = null;
   const log = createWriteStream(logPath);
@@ -55,7 +76,8 @@ async function runCase(entry, logPath, { cwd, timeoutMs, output, signal, directo
   const command = entry.args ? ['node', ...entry.args] : entry.command;
   const executable = command[0] === 'node' ? process.execPath : command[0];
   const child = spawn(executable, command.slice(1), { cwd, detached: grouped, stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ...entry.env, VOIDPLAYER_TEST_CASE: entry.id ?? entry.name, VOIDPLAYER_TEST_ARTIFACTS: path.resolve(directory, entry.name) } });
+    env: { ...process.env, ...entry.env, TMPDIR: temporaryDirectory, TEMP: temporaryDirectory, TMP: temporaryDirectory,
+      VOIDPLAYER_TEST_CASE: entry.id ?? entry.name, VOIDPLAYER_TEST_ARTIFACTS: path.resolve(directory, entry.name) } });
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => { if (!log.destroyed) log.write(chunk); output.write(chunk); });
   const result = await new Promise(resolve => {
     let cleanupTimer, timer;
@@ -86,6 +108,7 @@ async function runCase(entry, logPath, { cwd, timeoutMs, output, signal, directo
 // later correctness checks; the aggregate exit status still gates the release.
 export async function runBrowserRegressions(entries, {
   directory, cwd = process.cwd(), timeoutMs, output = process.stdout, signal, beforeCase,
+  removeTemporary = directory => rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
 } = {}) {
   await mkdir(directory, { recursive: true });
   const results = [];
@@ -107,7 +130,7 @@ export async function runBrowserRegressions(entries, {
       if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
       else {
         await beforeCase?.(entry);
-        result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000, output, signal, directory });
+        result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000, output, signal, directory, removeTemporary });
       }
     } catch (cause) {
       result = { error: cause.message, phase: 'prepare', durationMs: 0, exitCode: null };
