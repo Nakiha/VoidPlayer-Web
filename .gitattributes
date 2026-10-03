@@ -1,0 +1,3 @@
+# Deterministic localization artifacts use LF on every checkout.
+/locales/*.json text eol=lf
+/src/i18n/generated/* text eol=lf
