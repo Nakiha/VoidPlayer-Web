@@ -1,6 +1,6 @@
 {
   "engine": "chromium",
-  "switchMs": 28.14687499999991,
+  "switchMs": 20.21745800000008,
   "assertions": [
     "playing-switch",
     "no-session-operations",

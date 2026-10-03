@@ -1,6 +1,6 @@
 {
   "engine": "webkit",
-  "switchMs": 38.475582999999915,
+  "switchMs": 48.22516600000017,
   "assertions": [
     "playing-switch",
     "no-session-operations",

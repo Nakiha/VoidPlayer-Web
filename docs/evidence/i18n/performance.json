@@ -1,0 +1,2426 @@
+{
+  "baselineCommit": "83de4b039a2c13fdea44ce4ad35abcd282264589",
+  "featureRuntimeCommit": "3126002d1c10dea6b548cbe8e2eab96e0badfe3d",
+  "buildValidationCommit": "46c9ee0",
+  "capturedOn": "2026-10-03",
+  "method": "3 cold contexts + 3 warm reloads per browser locale/distribution; 3 x 4s real-app canvas playback per distribution; owned dist snapshots and sequential runs",
+  "notes": [
+    "Offline gzip estimate; HTTP test server sends uncompressed bytes.",
+    "UI commit time excludes Playwright click scheduling.",
+    "Hardware-decoder use and physical screen scanout are unverified.",
+    "3126002 and 46c9ee0 have identical player source digests; the latter repairs build validation only.",
+    "Headless Chromium mixed-media failures are retained, not counted as passing cases."
+  ],
+  "cases": [
+    {
+      "id": "chromium-headed",
+      "headless": false,
+      "mediaMode": "mixed",
+      "device": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M5",
+        "node": "v24.15.0"
+      },
+      "budgets": {
+        "startupGzipIncreaseBytes": 32768,
+        "startupExtraRequests": 3,
+        "englishStartupGzipIncreaseBytes": 49152,
+        "englishStartupExtraRequests": 4,
+        "startupMedianIncreaseMs": 100,
+        "startupMedianMultiplier": 1.3,
+        "coldLocaleMs": 250,
+        "cachedLocaleMs": 100,
+        "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+      },
+      "results": [
+        {
+          "name": "baseline",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-66-g83de4b0",
+            "builtAt": "2026-10-03T09:11:10.515Z",
+            "sourceDigest": "df99336d874c7a300df2a375a1e49932cc0b57b2575ccd739ecd325fc64194a7",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 80.011,
+              "readySamplesMs": [
+                87.683,
+                79.811,
+                80.011
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 45.862,
+              "readySamplesMs": [
+                45.862,
+                47.867,
+                45.372
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 74.836,
+              "readySamplesMs": [
+                76.76,
+                74.702,
+                74.836
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 46.338,
+              "readySamplesMs": [
+                43.614,
+                47.095,
+                46.338
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            }
+          ],
+          "localeSwitches": [],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.0099999904632568,
+              "pauseMs": 2.3999998569488525,
+              "measurements": {
+                "wallMs": 4003.515000104904,
+                "mediaUs": 4003190,
+                "waitingMs": 1.8825530979427185e-05,
+                "speed": 0.9999188213095503,
+                "maxFrameLagUs": 12706,
+                "maxFrameSkewUs": 138,
+                "tracks": {
+                  "A": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.94732128984437,
+                    "maxGapMs": 18.72000002861023,
+                    "p95GapMs": 18.115000009536743
+                  },
+                  "B": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.94732128984437,
+                    "maxGapMs": 18.77999997138977,
+                    "p95GapMs": 18.09999990463257
+                  }
+                }
+              },
+              "taskDurationMs": 636.1980000000001,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.109999895095825,
+              "pauseMs": 1.875,
+              "measurements": {
+                "wallMs": 4040.3099999427795,
+                "mediaUs": 4037130,
+                "waitingMs": 3.0650194549560297,
+                "speed": 0.9992129316951361,
+                "maxFrameLagUs": 14404,
+                "maxFrameSkewUs": 139,
+                "tracks": {
+                  "A": {
+                    "drawn": 242,
+                    "dropped": 0,
+                    "fps": 59.89639408942069,
+                    "maxGapMs": 23.34500002861023,
+                    "p95GapMs": 17.87000012397766
+                  },
+                  "B": {
+                    "drawn": 242,
+                    "dropped": 0,
+                    "fps": 59.89639408942069,
+                    "maxGapMs": 23.389999866485596,
+                    "p95GapMs": 17.87999987602234
+                  }
+                }
+              },
+              "taskDurationMs": 660.136,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.069999933242798,
+              "pauseMs": 2.5949997901916504,
+              "measurements": {
+                "wallMs": 4004.649999856949,
+                "mediaUs": 4001430,
+                "waitingMs": 3.0450187397002986,
+                "speed": 0.9991959347615738,
+                "maxFrameLagUs": 16647,
+                "maxFrameSkewUs": 16590,
+                "tracks": {
+                  "A": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.93033099236465,
+                    "maxGapMs": 26.210000038146973,
+                    "p95GapMs": 25.09500002861023
+                  },
+                  "B": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.93033099236465,
+                    "maxGapMs": 26.239999771118164,
+                    "p95GapMs": 25.075000047683716
+                  }
+                }
+              },
+              "taskDurationMs": 868.4089999999998,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "feature",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-69-g46c9ee0-dirty",
+            "builtAt": "2026-10-03T09:52:29.788Z",
+            "sourceDigest": "b9e1a23d30c3e5bc5cd768250d9fe64e38ff116125aa0eea12746fc0a1430eee",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 86.236,
+              "readySamplesMs": [
+                86.554,
+                83.352,
+                86.236
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 45.954,
+              "readySamplesMs": [
+                45.954,
+                46.499,
+                45.068
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 80.641,
+              "readySamplesMs": [
+                78.46,
+                80.641,
+                81.328
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 49.302,
+              "readySamplesMs": [
+                51.007,
+                48.887,
+                49.302
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            }
+          ],
+          "localeSwitches": [
+            {
+              "locale": "en",
+              "cache": "cold",
+              "clickToReadyMs": 54.50500011444092,
+              "commitMs": 16.40999984741211
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 39.34999990463257,
+              "commitMs": 5.789999961853027
+            },
+            {
+              "locale": "en",
+              "cache": "warm",
+              "clickToReadyMs": 40.110000133514404,
+              "commitMs": 5.9700000286102295
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 41.71500015258789,
+              "commitMs": 6.570000171661377
+            }
+          ],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1,
+              "pauseMs": 1.7649998664855957,
+              "measurements": {
+                "wallMs": 4039.4900000095367,
+                "mediaUs": 4039350,
+                "waitingMs": 1.7070770243599043e-05,
+                "speed": 0.9999653421571693,
+                "maxFrameLagUs": 14838,
+                "maxFrameSkewUs": 139,
+                "tracks": {
+                  "A": {
+                    "drawn": 242,
+                    "dropped": 0,
+                    "fps": 59.90855281221854,
+                    "maxGapMs": 21.109999895095825,
+                    "p95GapMs": 18.119999885559082
+                  },
+                  "B": {
+                    "drawn": 242,
+                    "dropped": 0,
+                    "fps": 59.90855281221854,
+                    "maxGapMs": 21.09999990463257,
+                    "p95GapMs": 18.12000012397766
+                  }
+                }
+              },
+              "taskDurationMs": 746.8929999999999,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.375,
+              "pauseMs": 2.055000066757202,
+              "measurements": {
+                "wallMs": 4020.5750000476837,
+                "mediaUs": 4017250,
+                "waitingMs": 3.135019693374625,
+                "speed": 0.9991730038495379,
+                "maxFrameLagUs": 16659,
+                "maxFrameSkewUs": 16567,
+                "tracks": {
+                  "A": {
+                    "drawn": 241,
+                    "dropped": 0,
+                    "fps": 59.94167500846067,
+                    "maxGapMs": 25.84999990463257,
+                    "p95GapMs": 24.835000038146973
+                  },
+                  "B": {
+                    "drawn": 241,
+                    "dropped": 0,
+                    "fps": 59.94167500846067,
+                    "maxGapMs": 25.84999990463257,
+                    "p95GapMs": 24.78499984741211
+                  }
+                }
+              },
+              "taskDurationMs": 1015.3989999999999,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.2200000286102295,
+              "pauseMs": 2.005000114440918,
+              "measurements": {
+                "wallMs": 3996.0199999809265,
+                "mediaUs": 3996005,
+                "waitingMs": 1.9559860213291813e-05,
+                "speed": 0.9999962462698068,
+                "maxFrameLagUs": 14803,
+                "maxFrameSkewUs": 137,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.80951046319608,
+                    "maxGapMs": 20.02999997138977,
+                    "p95GapMs": 17.87000012397766
+                  },
+                  "B": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.80951046319608,
+                    "maxGapMs": 20.06499981880188,
+                    "p95GapMs": 17.889999866485596
+                  }
+                }
+              },
+              "taskDurationMs": 750.529,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "allPlaybackPassed": true
+    },
+    {
+      "id": "webkit",
+      "headless": true,
+      "mediaMode": "mixed",
+      "device": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M5",
+        "node": "v24.15.0"
+      },
+      "budgets": {
+        "startupGzipIncreaseBytes": 32768,
+        "startupExtraRequests": 3,
+        "englishStartupGzipIncreaseBytes": 49152,
+        "englishStartupExtraRequests": 4,
+        "startupMedianIncreaseMs": 100,
+        "startupMedianMultiplier": 1.3,
+        "coldLocaleMs": 250,
+        "cachedLocaleMs": 100,
+        "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+      },
+      "results": [
+        {
+          "name": "baseline",
+          "browserVersion": "26.6",
+          "build": {
+            "revision": "v0.4.0-66-g83de4b0",
+            "builtAt": "2026-10-03T09:11:10.515Z",
+            "sourceDigest": "df99336d874c7a300df2a375a1e49932cc0b57b2575ccd739ecd325fc64194a7",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 190.885,
+              "readySamplesMs": [
+                205.738,
+                190.885,
+                183.281
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 69.555,
+              "readySamplesMs": [
+                69.555,
+                70.919,
+                68.818
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                131652,
+                131652,
+                131652
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 191.024,
+              "readySamplesMs": [
+                191.024,
+                185.359,
+                193.176
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 71.525,
+              "readySamplesMs": [
+                79.407,
+                71.14,
+                71.525
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                131652,
+                131652,
+                131652
+              ]
+            }
+          ],
+          "localeSwitches": [],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.759999999999991,
+              "pauseMs": 2.1799999999993815,
+              "measurements": {
+                "wallMs": 4023.1000000000004,
+                "mediaUs": 4019140,
+                "waitingMs": 2.7400000000200446,
+                "speed": 0.9990156844224601,
+                "maxFrameLagUs": 5026,
+                "maxFrameSkewUs": 138,
+                "tracks": {
+                  "A": {
+                    "drawn": 241,
+                    "dropped": 0,
+                    "fps": 59.90405408764385,
+                    "maxGapMs": 20.460000000000036,
+                    "p95GapMs": 17.960000000000036
+                  },
+                  "B": {
+                    "drawn": 241,
+                    "dropped": 0,
+                    "fps": 59.90405408764385,
+                    "maxGapMs": 20.519999999999982,
+                    "p95GapMs": 17.960000000000036
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.9600000000000364,
+              "pauseMs": 1.7399999999997817,
+              "measurements": {
+                "wallMs": 4002.8600000000006,
+                "mediaUs": 4000320,
+                "waitingMs": 2.4000000000512838,
+                "speed": 0.9993654537006039,
+                "maxFrameLagUs": 16664,
+                "maxFrameSkewUs": 16627,
+                "tracks": {
+                  "A": {
+                    "drawn": 205,
+                    "dropped": 35,
+                    "fps": 51.21338243156143,
+                    "maxGapMs": 33.45999999999913,
+                    "p95GapMs": 32.9399999999996
+                  },
+                  "B": {
+                    "drawn": 205,
+                    "dropped": 35,
+                    "fps": 51.21338243156143,
+                    "maxGapMs": 33.400000000000546,
+                    "p95GapMs": 32.9399999999996
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.0799999999999272,
+              "pauseMs": 2.460000000000946,
+              "measurements": {
+                "wallMs": 4006.1000000000004,
+                "mediaUs": 4003260,
+                "waitingMs": 2.5200000000800733,
+                "speed": 0.9992910811013204,
+                "maxFrameLagUs": 6046,
+                "maxFrameSkewUs": 138,
+                "tracks": {
+                  "A": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.90863932502933,
+                    "maxGapMs": 21.55999999999949,
+                    "p95GapMs": 17.920000000000073
+                  },
+                  "B": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.90863932502933,
+                    "maxGapMs": 21.600000000000364,
+                    "p95GapMs": 17.94000000000051
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "feature",
+          "browserVersion": "26.6",
+          "build": {
+            "revision": "v0.4.0-68-g3126002-dirty",
+            "builtAt": "2026-10-03T09:48:56.542Z",
+            "sourceDigest": "b9e1a23d30c3e5bc5cd768250d9fe64e38ff116125aa0eea12746fc0a1430eee",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 194.385,
+              "readySamplesMs": [
+                201.01,
+                186.765,
+                194.385
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315496,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 72.079,
+              "readySamplesMs": [
+                71.357,
+                72.156,
+                72.079
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315496,
+              "requests": 30,
+              "transferredBytes": [
+                135158,
+                135158,
+                135158
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 182.554,
+              "readySamplesMs": [
+                182.554,
+                183.586,
+                182.137
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327147,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 66.601,
+              "readySamplesMs": [
+                66.574,
+                66.601,
+                66.802
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327147,
+              "requests": 31,
+              "transferredBytes": [
+                135158,
+                135158,
+                135158
+              ]
+            }
+          ],
+          "localeSwitches": [
+            {
+              "locale": "en",
+              "cache": "cold",
+              "clickToReadyMs": 83.17999999999995,
+              "commitMs": 21.32000000000005
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 71.7600000000001,
+              "commitMs": 12.699999999999932
+            },
+            {
+              "locale": "en",
+              "cache": "warm",
+              "clickToReadyMs": 83.5,
+              "commitMs": 13.300000000000068
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 83.77999999999997,
+              "commitMs": 13.960000000000036
+            }
+          ],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.9600000000000364,
+              "pauseMs": 2,
+              "measurements": {
+                "wallMs": 4001.28,
+                "mediaUs": 3998600,
+                "waitingMs": 2.540000000022925,
+                "speed": 0.999330214331414,
+                "maxFrameLagUs": 16648,
+                "maxFrameSkewUs": 137,
+                "tracks": {
+                  "A": {
+                    "drawn": 235,
+                    "dropped": 4,
+                    "fps": 58.73120601407549,
+                    "maxGapMs": 33.159999999999854,
+                    "p95GapMs": 18.300000000000182
+                  },
+                  "B": {
+                    "drawn": 235,
+                    "dropped": 4,
+                    "fps": 58.73120601407549,
+                    "maxGapMs": 33.22000000000003,
+                    "p95GapMs": 18.319999999999936
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.980000000000473,
+              "pauseMs": 2.0799999999999272,
+              "measurements": {
+                "wallMs": 4006.040000000001,
+                "mediaUs": 4003180,
+                "waitingMs": 2.700000000049206,
+                "speed": 0.9992860780221863,
+                "maxFrameLagUs": 6026,
+                "maxFrameSkewUs": 138,
+                "tracks": {
+                  "A": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.90953659973439,
+                    "maxGapMs": 21.3799999999992,
+                    "p95GapMs": 18.220000000000255
+                  },
+                  "B": {
+                    "drawn": 240,
+                    "dropped": 0,
+                    "fps": 59.90953659973439,
+                    "maxGapMs": 21.4399999999996,
+                    "p95GapMs": 18.24000000000069
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 2.2000000000007276,
+              "pauseMs": 1.9400000000005093,
+              "measurements": {
+                "wallMs": 3995.0600000000013,
+                "mediaUs": 3992120,
+                "waitingMs": 2.800000000070142,
+                "speed": 0.9992640911525731,
+                "maxFrameLagUs": 10816,
+                "maxFrameSkewUs": 137,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.82388249488116,
+                    "maxGapMs": 28.020000000000437,
+                    "p95GapMs": 18.039999999999054
+                  },
+                  "B": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.82388249488116,
+                    "maxGapMs": 28.05999999999949,
+                    "p95GapMs": 18.040000000000873
+                  }
+                }
+              },
+              "taskDurationMs": null,
+              "longTasks": null,
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "allPlaybackPassed": true
+    },
+    {
+      "id": "chromium-webcodecs",
+      "headless": true,
+      "mediaMode": "webcodecs",
+      "device": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M5",
+        "node": "v24.15.0"
+      },
+      "budgets": {
+        "startupGzipIncreaseBytes": 32768,
+        "startupExtraRequests": 3,
+        "englishStartupGzipIncreaseBytes": 49152,
+        "englishStartupExtraRequests": 4,
+        "startupMedianIncreaseMs": 100,
+        "startupMedianMultiplier": 1.3,
+        "coldLocaleMs": 250,
+        "cachedLocaleMs": 100,
+        "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+      },
+      "results": [
+        {
+          "name": "baseline",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-66-g83de4b0",
+            "builtAt": "2026-10-03T09:11:10.515Z",
+            "sourceDigest": "df99336d874c7a300df2a375a1e49932cc0b57b2575ccd739ecd325fc64194a7",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 78.424,
+              "readySamplesMs": [
+                91.437,
+                77.088,
+                78.424
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 49.597,
+              "readySamplesMs": [
+                49.597,
+                48.983,
+                49.794
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 75.779,
+              "readySamplesMs": [
+                77.122,
+                75.779,
+                75.369
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 48.811,
+              "readySamplesMs": [
+                43.075,
+                48.811,
+                49.094
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            }
+          ],
+          "localeSwitches": [],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.8350000381469727,
+              "pauseMs": 0.7699999809265137,
+              "measurements": {
+                "wallMs": 3996.375,
+                "mediaUs": 3991635,
+                "waitingMs": 1.0850100612640485,
+                "speed": 0.9988139251196396,
+                "maxFrameLagUs": 26117,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.804197554033344,
+                    "maxGapMs": 30.115000009536743,
+                    "p95GapMs": 18.319999933242798
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.776985393012417,
+                    "maxGapMs": 46.78499984741211,
+                    "p95GapMs": 34.72499990463257
+                  }
+                }
+              },
+              "taskDurationMs": 2085.6620000000003,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.8949999809265137,
+              "pauseMs": 0.8349997997283936,
+              "measurements": {
+                "wallMs": 3991.2000000476837,
+                "mediaUs": 3987625,
+                "waitingMs": 8.268356325835668e-06,
+                "speed": 0.9991042794027759,
+                "maxFrameLagUs": 23152,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.881739826905346,
+                    "maxGapMs": 26.049999952316284,
+                    "p95GapMs": 18.41000008583069
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.815594307120236,
+                    "maxGapMs": 42.8199999332428,
+                    "p95GapMs": 34.91499996185303
+                  }
+                }
+              },
+              "taskDurationMs": 2026.9109999999996,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.2100000381469727,
+              "pauseMs": 0.8949999809265137,
+              "measurements": {
+                "wallMs": 4001.375,
+                "mediaUs": 3996725,
+                "waitingMs": 0.9900104236602978,
+                "speed": 0.9988378994720565,
+                "maxFrameLagUs": 30557,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.72946799537659,
+                    "maxGapMs": 34.63499999046326,
+                    "p95GapMs": 18.444999933242798
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.739776951672862,
+                    "maxGapMs": 51.549999952316284,
+                    "p95GapMs": 35.07499980926514
+                  }
+                }
+              },
+              "taskDurationMs": 2019.704,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "feature",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-68-g3126002-dirty",
+            "builtAt": "2026-10-03T09:49:41.204Z",
+            "sourceDigest": "b9e1a23d30c3e5bc5cd768250d9fe64e38ff116125aa0eea12746fc0a1430eee",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 84.838,
+              "readySamplesMs": [
+                85.453,
+                84.209,
+                84.838
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 48.657,
+              "readySamplesMs": [
+                50.073,
+                48.657,
+                47.581
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 80.34,
+              "readySamplesMs": [
+                80.171,
+                80.351,
+                80.34
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 49.057,
+              "readySamplesMs": [
+                47.888,
+                49.252,
+                49.057
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            }
+          ],
+          "localeSwitches": [
+            {
+              "locale": "en",
+              "cache": "cold",
+              "clickToReadyMs": 94.08999991416931,
+              "commitMs": 24.980000019073486
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 73.23499989509583,
+              "commitMs": 6.090000152587891
+            },
+            {
+              "locale": "en",
+              "cache": "warm",
+              "clickToReadyMs": 66.22499990463257,
+              "commitMs": 6.4649999141693115
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 65.59999990463257,
+              "commitMs": 5.8999998569488525
+            }
+          ],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.8899998664855957,
+              "pauseMs": 0.9149999618530273,
+              "measurements": {
+                "wallMs": 3992.954999923706,
+                "mediaUs": 3989390,
+                "waitingMs": 9.67979431720778e-06,
+                "speed": 0.9991071775354908,
+                "maxFrameLagUs": 23527,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 239,
+                    "dropped": 0,
+                    "fps": 59.855420360251145,
+                    "maxGapMs": 25.789999961853027,
+                    "p95GapMs": 17.134999990463257
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.802489635438853,
+                    "maxGapMs": 42.580000162124634,
+                    "p95GapMs": 33.77999997138977
+                  }
+                }
+              },
+              "taskDurationMs": 2045.6129999999998,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.9449999332427979,
+              "pauseMs": 0.7100000381469727,
+              "measurements": {
+                "wallMs": 4049.619999885559,
+                "mediaUs": 4044750,
+                "waitingMs": 1.1850095272064287,
+                "speed": 0.9987974180575716,
+                "maxFrameLagUs": 28468,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 242,
+                    "dropped": 0,
+                    "fps": 59.758693409959164,
+                    "maxGapMs": 32.625,
+                    "p95GapMs": 17.119999885559082
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.385473205723724,
+                    "maxGapMs": 49.40000009536743,
+                    "p95GapMs": 33.83999991416931
+                  }
+                }
+              },
+              "taskDurationMs": 2075.834,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.119999885559082,
+              "pauseMs": 0.8799998760223389,
+              "measurements": {
+                "wallMs": 4030.7699999809265,
+                "mediaUs": 4027000,
+                "waitingMs": 9.346008315702647e-06,
+                "speed": 0.9990646948397095,
+                "maxFrameLagUs": 27508,
+                "maxFrameSkewUs": 16656,
+                "tracks": {
+                  "A": {
+                    "drawn": 241,
+                    "dropped": 0,
+                    "fps": 59.790064925843055,
+                    "maxGapMs": 30.360000133514404,
+                    "p95GapMs": 17.079999923706055
+                  },
+                  "B": {
+                    "drawn": 119,
+                    "dropped": 0,
+                    "fps": 29.522895129358186,
+                    "maxGapMs": 47.15500020980835,
+                    "p95GapMs": 33.71499991416931
+                  }
+                }
+              },
+              "taskDurationMs": 2081.5540000000005,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "ci_h264_smoke.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "allPlaybackPassed": true
+    },
+    {
+      "id": "chromium",
+      "headless": true,
+      "mediaMode": "mixed",
+      "device": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "cpu": "Apple M5",
+        "node": "v24.15.0"
+      },
+      "budgets": {
+        "startupGzipIncreaseBytes": 32768,
+        "startupExtraRequests": 3,
+        "englishStartupGzipIncreaseBytes": 49152,
+        "englishStartupExtraRequests": 4,
+        "startupMedianIncreaseMs": 100,
+        "startupMedianMultiplier": 1.3,
+        "coldLocaleMs": 250,
+        "cachedLocaleMs": 100,
+        "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+      },
+      "results": [
+        {
+          "name": "baseline",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-66-g83de4b0",
+            "builtAt": "2026-10-03T09:11:10.515Z",
+            "sourceDigest": "df99336d874c7a300df2a375a1e49932cc0b57b2575ccd739ecd325fc64194a7",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 77.476,
+              "readySamplesMs": [
+                94.143,
+                77.476,
+                76.962
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 49.814,
+              "readySamplesMs": [
+                50.651,
+                49.814,
+                49.274
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 77.731,
+              "readySamplesMs": [
+                77.768,
+                77.731,
+                76.331
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 48.503,
+              "readySamplesMs": [
+                48.503,
+                51.166,
+                46.888
+              ],
+              "rawBytes": 1005275,
+              "gzipBytes": 299469,
+              "requests": 28,
+              "transferredBytes": [
+                1013675,
+                1013675,
+                1013675
+              ]
+            }
+          ],
+          "localeSwitches": [],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.9600000381469727,
+              "pauseMs": 0.8550000190734863,
+              "measurements": {
+                "wallMs": 4055.899999856949,
+                "mediaUs": 2733322,
+                "waitingMs": 1318.4630000190737,
+                "speed": 0.6739125718327384,
+                "maxFrameLagUs": 16665,
+                "maxFrameSkewUs": 16665,
+                "tracks": {
+                  "A": {
+                    "drawn": 162,
+                    "dropped": 2,
+                    "fps": 39.94181316248273,
+                    "maxGapMs": 30.359999895095825,
+                    "p95GapMs": 27.83999991416931
+                  },
+                  "B": {
+                    "drawn": 162,
+                    "dropped": 2,
+                    "fps": 39.94181316248273,
+                    "maxGapMs": 30.539999961853027,
+                    "p95GapMs": 27.84999990463257
+                  }
+                }
+              },
+              "taskDurationMs": 4551.431,
+              "longTasks": {
+                "count": 1,
+                "totalMs": 389
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.2149999141693115,
+              "pauseMs": 0.8550000190734863,
+              "measurements": {
+                "wallMs": 4050.2200000286102,
+                "mediaUs": 2716558,
+                "waitingMs": 1329.4120000858297,
+                "speed": 0.6707186276253662,
+                "maxFrameLagUs": 16666,
+                "maxFrameSkewUs": 16666,
+                "tracks": {
+                  "A": {
+                    "drawn": 161,
+                    "dropped": 1,
+                    "fps": 39.750927109851496,
+                    "maxGapMs": 46.99500012397766,
+                    "p95GapMs": 27.265000104904175
+                  },
+                  "B": {
+                    "drawn": 162,
+                    "dropped": 1,
+                    "fps": 39.99782727823566,
+                    "maxGapMs": 30.15499997138977,
+                    "p95GapMs": 27.240000009536743
+                  }
+                }
+              },
+              "taskDurationMs": 4318.32,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 0.9900000095367432,
+              "pauseMs": 0.8949999809265137,
+              "measurements": {
+                "wallMs": 3983.4199998378754,
+                "mediaUs": 2666560,
+                "waitingMs": 1312.6450000476827,
+                "speed": 0.669414724058354,
+                "maxFrameLagUs": 16666,
+                "maxFrameSkewUs": 16666,
+                "tracks": {
+                  "A": {
+                    "drawn": 158,
+                    "dropped": 1,
+                    "fps": 39.664408976816546,
+                    "maxGapMs": 47.480000019073486,
+                    "p95GapMs": 27.394999980926514
+                  },
+                  "B": {
+                    "drawn": 159,
+                    "dropped": 1,
+                    "fps": 39.91544953996096,
+                    "maxGapMs": 30.490000009536743,
+                    "p95GapMs": 27.320000171661377
+                  }
+                }
+              },
+              "taskDurationMs": 4249.041,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "feature",
+          "browserVersion": "153.0.8010.12",
+          "build": {
+            "revision": "v0.4.0-69-g46c9ee0-dirty",
+            "builtAt": "2026-10-03T09:53:11.870Z",
+            "sourceDigest": "b9e1a23d30c3e5bc5cd768250d9fe64e38ff116125aa0eea12746fc0a1430eee",
+            "wasmDigests": {
+              "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+              "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+            }
+          },
+          "startup": [
+            {
+              "locale": "zh-CN",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 83.911,
+              "readySamplesMs": [
+                83.415,
+                83.911,
+                85.039
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 47.698,
+              "readySamplesMs": [
+                48.173,
+                47.698,
+                47.571
+              ],
+              "rawBytes": 1072179,
+              "gzipBytes": 315495,
+              "requests": 30,
+              "transferredBytes": [
+                1081179,
+                1081179,
+                1081179
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "cold",
+              "repetitions": 3,
+              "readyMedianMs": 80.895,
+              "readySamplesMs": [
+                80.764,
+                80.895,
+                81.54
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            },
+            {
+              "locale": "en-US",
+              "cache": "warm",
+              "repetitions": 3,
+              "readyMedianMs": 48.376,
+              "readySamplesMs": [
+                47.79,
+                49.96,
+                48.376
+              ],
+              "rawBytes": 1110843,
+              "gzipBytes": 327146,
+              "requests": 31,
+              "transferredBytes": [
+                1120143,
+                1120143,
+                1120143
+              ]
+            }
+          ],
+          "localeSwitches": [
+            {
+              "locale": "en",
+              "cache": "cold",
+              "clickToReadyMs": 94.58500003814697,
+              "commitMs": 25.96499991416931
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 73.64499998092651,
+              "commitMs": 7.409999847412109
+            },
+            {
+              "locale": "en",
+              "cache": "warm",
+              "clickToReadyMs": 67.50499987602234,
+              "commitMs": 7.585000038146973
+            },
+            {
+              "locale": "zh-CN",
+              "cache": "warm",
+              "clickToReadyMs": 65.68499994277954,
+              "commitMs": 7.004999876022339
+            }
+          ],
+          "playback": [
+            {
+              "repeat": 0,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.0099999904632568,
+              "pauseMs": 0.9399998188018799,
+              "measurements": {
+                "wallMs": 4018.680000066757,
+                "mediaUs": 2716558,
+                "waitingMs": 1298.1270002956378,
+                "speed": 0.6759826609620256,
+                "maxFrameLagUs": 16666,
+                "maxFrameSkewUs": 16666,
+                "tracks": {
+                  "A": {
+                    "drawn": 159,
+                    "dropped": 3,
+                    "fps": 39.56523037349546,
+                    "maxGapMs": 44.6800000667572,
+                    "p95GapMs": 27.490000009536743
+                  },
+                  "B": {
+                    "drawn": 159,
+                    "dropped": 4,
+                    "fps": 39.56523037349546,
+                    "maxGapMs": 53.19500017166138,
+                    "p95GapMs": 27.55999994277954
+                  }
+                }
+              },
+              "taskDurationMs": 4479.107,
+              "longTasks": {
+                "count": 1,
+                "totalMs": 393
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            },
+            {
+              "repeat": 1,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.0450000762939453,
+              "pauseMs": 0.75,
+              "measurements": {
+                "wallMs": 4002.2300000190735,
+                "mediaUs": 2683226,
+                "waitingMs": 1314.8490002002707,
+                "speed": 0.6704327337477388,
+                "maxFrameLagUs": 16666,
+                "maxFrameSkewUs": 16666,
+                "tracks": {
+                  "A": {
+                    "drawn": 157,
+                    "dropped": 3,
+                    "fps": 39.22813031716113,
+                    "maxGapMs": 45.34999990463257,
+                    "p95GapMs": 27.994999885559082
+                  },
+                  "B": {
+                    "drawn": 158,
+                    "dropped": 3,
+                    "fps": 39.477991019818205,
+                    "maxGapMs": 33.91499996185303,
+                    "p95GapMs": 27.805000066757202
+                  }
+                }
+              },
+              "taskDurationMs": 4272.597,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            },
+            {
+              "repeat": 2,
+              "passed": false,
+              "failures": [
+                "below-realtime"
+              ],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "startupMs": 1.0449998378753662,
+              "pauseMs": 0.8450000286102295,
+              "measurements": {
+                "wallMs": 4024.3099999427795,
+                "mediaUs": 2649989,
+                "waitingMs": 1370.2010002384193,
+                "speed": 0.6584952451569783,
+                "maxFrameLagUs": 16665,
+                "maxFrameSkewUs": 16665,
+                "tracks": {
+                  "A": {
+                    "drawn": 157,
+                    "dropped": 2,
+                    "fps": 39.012899106239914,
+                    "maxGapMs": 30.62999987602234,
+                    "p95GapMs": 28.049999952316284
+                  },
+                  "B": {
+                    "drawn": 157,
+                    "dropped": 2,
+                    "fps": 39.012899106239914,
+                    "maxGapMs": 30.66000008583069,
+                    "p95GapMs": 27.954999923706055
+                  }
+                }
+              },
+              "taskDurationMs": 4319.158000000001,
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "decoders": [
+                {
+                  "slot": "A",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "no-preference"
+                },
+                {
+                  "slot": "B",
+                  "name": "h265_10s_1920x1080.mp4",
+                  "codec": "hevc",
+                  "decoder": "ffmpeg-wasm",
+                  "hardwareAcceleration": null
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "allPlaybackPassed": false
+    }
+  ]
+}
