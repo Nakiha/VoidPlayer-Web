@@ -1,0 +1,568 @@
+{
+  "method": "CDP main-thread Profiler over the three full playback repetitions plus their setup intervals. timeDeltas attributed to sample IDs; inclusive stacks follow node children. URL line/column refer to captured production builds.",
+  "limitation": "Sampling misses short calls, contains native/program and idle intervals, and affects execution. It is not a zero-cost proof or a strict TaskDuration decomposition.",
+  "profiles": {
+    "baseline": {
+      "durationMs": 13429.157,
+      "sampleCount": 9046,
+      "rawSha256": "279b29aaa6750baa8b66421db6b097c31116ff293d4acd9baf47c3d718d994f9",
+      "sampledTranslationSelfMs": 0,
+      "translationFrames": [],
+      "topSelf": [
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 11068.383
+        },
+        {
+          "function": "(program)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 1677.458
+        },
+        {
+          "function": "Mm",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 249,
+          "column": 6850,
+          "sampleMs": 45.596
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 41.962
+        },
+        {
+          "function": "Qe",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 8501,
+          "sampleMs": 38.808
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52349/assets/ffmpeg-media-SwnbjAYw.js",
+          "line": 2,
+          "column": 18136,
+          "sampleMs": 24.077
+        },
+        {
+          "function": "e",
+          "url": "http://127.0.0.1:52349/assets/sample-BD7uDbjL.js",
+          "line": 0,
+          "column": 12077,
+          "sampleMs": 20.973
+        },
+        {
+          "function": "importExternalTexture",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 19.332
+        },
+        {
+          "function": "Qm",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 249,
+          "column": 9669,
+          "sampleMs": 18.092
+        },
+        {
+          "function": "querySelectorAll",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 16.291
+        },
+        {
+          "function": "playbackLoop",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 122754,
+          "sampleMs": 13.405
+        },
+        {
+          "function": "p",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 79155,
+          "sampleMs": 12.82
+        },
+        {
+          "function": "I",
+          "url": "http://127.0.0.1:52349/assets/webgpu-presenter-DeXBHsFj.js",
+          "line": 82,
+          "column": 11224,
+          "sampleMs": 11.906
+        },
+        {
+          "function": "getCurrentTexture",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 10.82
+        },
+        {
+          "function": "writeBuffer",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 10.816
+        },
+        {
+          "function": "setProperty",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 10.37
+        },
+        {
+          "function": "beginRenderPass",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 9.276
+        },
+        {
+          "function": "getState",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 101703,
+          "sampleMs": 9.165
+        },
+        {
+          "function": "postMessage",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 7.668
+        },
+        {
+          "function": "getState",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 101703,
+          "sampleMs": 7.572
+        }
+      ],
+      "topAppInclusive": [
+        {
+          "function": "playbackLoop",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 122754,
+          "sampleMs": 382.275
+        },
+        {
+          "function": "emit",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 100323,
+          "sampleMs": 183.526
+        },
+        {
+          "function": "pe",
+          "url": "http://127.0.0.1:52349/assets/offer-CeZoAMlw.js",
+          "line": 58,
+          "column": 8810,
+          "sampleMs": 96.557
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 249,
+          "column": 4371,
+          "sampleMs": 96.557
+        },
+        {
+          "function": "I",
+          "url": "http://127.0.0.1:52349/assets/webgpu-presenter-DeXBHsFj.js",
+          "line": 82,
+          "column": 11224,
+          "sampleMs": 95.521
+        },
+        {
+          "function": "present",
+          "url": "http://127.0.0.1:52349/assets/webgpu-presenter-DeXBHsFj.js",
+          "line": 82,
+          "column": 2057,
+          "sampleMs": 74.304
+        },
+        {
+          "function": "Mm",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 249,
+          "column": 6850,
+          "sampleMs": 69.553
+        },
+        {
+          "function": "emitProgress",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 100219,
+          "sampleMs": 69.553
+        },
+        {
+          "function": "presentRetained",
+          "url": "http://127.0.0.1:52349/assets/webgpu-presenter-DeXBHsFj.js",
+          "line": 82,
+          "column": 1663,
+          "sampleMs": 66.69
+        },
+        {
+          "function": "It",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 29608,
+          "sampleMs": 56.637
+        },
+        {
+          "function": "V",
+          "url": "http://127.0.0.1:52349/assets/webgpu-presenter-DeXBHsFj.js",
+          "line": 82,
+          "column": 516,
+          "sampleMs": 55.87
+        },
+        {
+          "function": "Qm",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 249,
+          "column": 9669,
+          "sampleMs": 55.289
+        },
+        {
+          "function": "_",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 243,
+          "column": 80487,
+          "sampleMs": 51.926
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52349/assets/main-f4DZixJe.js",
+          "line": 100,
+          "column": 3085,
+          "sampleMs": 51.926
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52349/assets/packet-media-BipxXSQb.js",
+          "line": 1,
+          "column": 5424,
+          "sampleMs": 48.474
+        }
+      ]
+    },
+    "feature": {
+      "durationMs": 13435.137,
+      "sampleCount": 9047,
+      "rawSha256": "fd589ffd4741bf82da1132ebab4c93c719ffbb0eb665f9978881f82ec06ddfb9",
+      "sampledTranslationSelfMs": 6.034,
+      "translationFrames": [
+        {
+          "function": "_",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 4,
+          "column": 7795,
+          "sampleMs": 0.0
+        },
+        {
+          "function": "player.frames",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 2,
+          "column": 5614,
+          "sampleMs": 1.512
+        },
+        {
+          "function": "_",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 4,
+          "column": 7795,
+          "sampleMs": 0.0
+        },
+        {
+          "function": "analysis.frameTitleBase",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 1,
+          "column": 2013,
+          "sampleMs": 1.506
+        },
+        {
+          "function": "message",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 4,
+          "column": 6580,
+          "sampleMs": 0.0
+        },
+        {
+          "function": "analysis.editTrackFrameNumber",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 1,
+          "column": 1346,
+          "sampleMs": 1.511
+        },
+        {
+          "function": "analysis.frameTitleSourcePts",
+          "url": "http://127.0.0.1:52470/assets/i18n-CPoMqOlt.js",
+          "line": 1,
+          "column": 2491,
+          "sampleMs": 1.505
+        }
+      ],
+      "topSelf": [
+        {
+          "function": "(idle)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 11111.094
+        },
+        {
+          "function": "(program)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 1688.533
+        },
+        {
+          "function": "(garbage collector)",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 54.206
+        },
+        {
+          "function": "nt",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 10305,
+          "sampleMs": 35.938
+        },
+        {
+          "function": "Zm",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 253,
+          "column": 7466,
+          "sampleMs": 25.668
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/ffmpeg-media-Cf1qER0V.js",
+          "line": 2,
+          "column": 18136,
+          "sampleMs": 24.273
+        },
+        {
+          "function": "I",
+          "url": "http://127.0.0.1:52470/assets/webgpu-presenter-B5UTaIsN.js",
+          "line": 82,
+          "column": 11224,
+          "sampleMs": 18.08
+        },
+        {
+          "function": "_p",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 35804,
+          "sampleMs": 13.431
+        },
+        {
+          "function": "_h",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 253,
+          "column": 10517,
+          "sampleMs": 11.966
+        },
+        {
+          "function": "setProperty",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 11.941
+        },
+        {
+          "function": "querySelectorAll",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 10.543
+        },
+        {
+          "function": "getCurrentTexture",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 10.421
+        },
+        {
+          "function": "playbackLoop",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 133066,
+          "sampleMs": 10.027
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 104,
+          "column": 7173,
+          "sampleMs": 9.055
+        },
+        {
+          "function": "writeBuffer",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 9.024
+        },
+        {
+          "function": "e",
+          "url": "http://127.0.0.1:52470/assets/sample-2jlXr25-.js",
+          "line": 0,
+          "column": 12077,
+          "sampleMs": 8.905
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 104562,
+          "sampleMs": 8.87
+        },
+        {
+          "function": "getState",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 111877,
+          "sampleMs": 8.452
+        },
+        {
+          "function": "getState",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 111877,
+          "sampleMs": 7.481
+        },
+        {
+          "function": "importExternalTexture",
+          "url": "",
+          "line": -1,
+          "column": -1,
+          "sampleMs": 7.335
+        }
+      ],
+      "topAppInclusive": [
+        {
+          "function": "playbackLoop",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 133066,
+          "sampleMs": 331.367
+        },
+        {
+          "function": "emit",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 110497,
+          "sampleMs": 160.713
+        },
+        {
+          "function": "pe",
+          "url": "http://127.0.0.1:52470/assets/offer-BGMeInc0.js",
+          "line": 58,
+          "column": 8810,
+          "sampleMs": 74.829
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 253,
+          "column": 4849,
+          "sampleMs": 74.829
+        },
+        {
+          "function": "I",
+          "url": "http://127.0.0.1:52470/assets/webgpu-presenter-B5UTaIsN.js",
+          "line": 82,
+          "column": 11224,
+          "sampleMs": 71.84
+        },
+        {
+          "function": "Bt",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 31836,
+          "sampleMs": 60.083
+        },
+        {
+          "function": "p",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 90557,
+          "sampleMs": 55.39
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 104,
+          "column": 3222,
+          "sampleMs": 55.39
+        },
+        {
+          "function": "emitProgress",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 110393,
+          "sampleMs": 54.001
+        },
+        {
+          "function": "Zm",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 253,
+          "column": 7466,
+          "sampleMs": 51.04
+        },
+        {
+          "function": "present",
+          "url": "http://127.0.0.1:52470/assets/webgpu-presenter-B5UTaIsN.js",
+          "line": 82,
+          "column": 2057,
+          "sampleMs": 43.102
+        },
+        {
+          "function": "",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 106,
+          "column": 15028,
+          "sampleMs": 42.244
+        },
+        {
+          "function": "presentRetained",
+          "url": "http://127.0.0.1:52470/assets/webgpu-presenter-B5UTaIsN.js",
+          "line": 82,
+          "column": 1663,
+          "sampleMs": 41.593
+        },
+        {
+          "function": "ot",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 18799,
+          "sampleMs": 37.441
+        },
+        {
+          "function": "st",
+          "url": "http://127.0.0.1:52470/assets/main-amQcReAC.js",
+          "line": 247,
+          "column": 18946,
+          "sampleMs": 37.441
+        }
+      ]
+    }
+  }
+}

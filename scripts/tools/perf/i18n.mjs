@@ -6,6 +6,8 @@ import {createMediaServer} from '../../../server/app.ts';import {MediaLibraryInd
 const feature=path.resolve(import.meta.dirname,'../../..'),baseline=process.env.I18N_BASELINE_ROOT;
 if(!baseline)throw new Error('I18N_BASELINE_ROOT must point to the separately built baseline checkout');
 const engine=process.argv[2]??'chromium', headless=process.env.I18N_HEADFUL!=='1',mediaMode=process.env.I18N_MEDIA_MODE??'mixed';const results=[];
+const order=process.env.I18N_ORDER??'baseline-first',profileCpu=process.env.I18N_CPU_PROFILE==='1',reportSuffix=process.env.I18N_REPORT_SUFFIX??'';
+if(!['baseline-first','feature-first'].includes(order)||!/^[a-z0-9-]*$/.test(reportSuffix))throw new Error('Invalid performance order/report suffix');
 if(!['mixed','webcodecs'].includes(mediaMode))throw new Error('I18N_MEDIA_MODE must be mixed or webcodecs');
 const budgets={startupGzipIncreaseBytes:32768,startupExtraRequests:3,englishStartupGzipIncreaseBytes:49152,englishStartupExtraRequests:4,startupMedianIncreaseMs:100,startupMedianMultiplier:1.3,coldLocaleMs:250,cachedLocaleMs:100,existingPlaybackThresholds:'unchanged benchmark_review defaults'};
 async function measure(name,root){
@@ -27,32 +29,43 @@ async function measure(name,root){
   }
   await page.goto(url);await page.waitForFunction(()=>window.voidPlayer?.tools);await page.bringToFront();
   await page.evaluate(async mediaMode=>{const tools=window.voidPlayer.tools,lib=await tools.find(t=>t.name==='list_library').execute({});for(const [slot,file]of [['A','h264_9s_1920x1080.mp4'],['B',mediaMode==='webcodecs'?'ci_h264_smoke.mp4':'h265_10s_1920x1080.mp4']]){const entry=lib.entries.find(e=>e.name===file);if(!entry)throw new Error('Missing benchmark media '+file);await tools.find(t=>t.name==='load_library_item').execute({slot,id:entry.id});}},mediaMode);
+  // Both distributions enter/leave the same settings pane before playback.
+  await page.locator('#settings-open').click();
+  await page.locator('#settings-tab-appearance').click();
   if(name==='feature'){
     await page.evaluate(()=>{
       document.addEventListener('click',e=>{if(e.target.closest('#language-choice-menu [data-value]')){window.__localeStart=performance.now();window.__localeCommit=undefined;}},true);
       new MutationObserver(()=>{if(window.__localeStart!==undefined)window.__localeCommit=performance.now()-window.__localeStart;}).observe(document.documentElement,{attributes:true,attributeFilter:['lang']});
     });
-    await page.locator('#settings-open').click();for(const locale of ['en','zh-CN','en','zh-CN']){const before=await page.evaluate(()=>performance.now());await page.locator('#language-choice').click();await page.locator(`#language-choice-menu [data-value="${locale}"]`).click();await page.waitForFunction(locale=>document.documentElement.lang===locale,locale);const ms=await page.evaluate(before=>performance.now()-before,before);switches.push({locale,cache:switches.length?'warm':'cold',clickToReadyMs:ms,commitMs:await page.evaluate(()=>window.__localeCommit)});}await page.locator('#settings-close').click();
+    for(const locale of ['en','zh-CN','en','zh-CN']){const before=await page.evaluate(()=>performance.now());await page.locator('#language-choice').click();await page.locator(`#language-choice-menu [data-value="${locale}"]`).click();await page.waitForFunction(locale=>document.documentElement.lang===locale,locale);const ms=await page.evaluate(before=>performance.now()-before,before);switches.push({locale,cache:switches.length?'warm':'cold',clickToReadyMs:ms,commitMs:await page.evaluate(()=>window.__localeCommit)});}
+
   }
+  await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open);
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  const preparation=await page.evaluate(()=>({dialogOpen:document.querySelector('#settings').open,activeId:document.activeElement?.id,tooltipVisible:document.querySelector('#control-tooltip').matches(':popover-open'),locale:document.documentElement.lang,canvas:document.querySelector('#canvas-A').getBoundingClientRect().toJSON()}));
+  if(profileCpu&&cdp){await cdp.send('Profiler.enable');await cdp.send('Profiler.start');}
   for(let repeat=0;repeat<3;repeat++){
     const before=cdp?(await cdp.send('Performance.getMetrics')).metrics:null;
     const report=await page.evaluate(async()=>await window.voidPlayer.tools.find(t=>t.name==='benchmark_review').execute({durationMs:4000}));
     const after=cdp?(await cdp.send('Performance.getMetrics')).metrics:null;
     const taskDurationMs=before?(after.find(m=>m.name==='TaskDuration').value-before.find(m=>m.name==='TaskDuration').value)*1000:null;
-    playback.push({...report,repeat,taskDurationMs});
+    const cpuMetrics=before?Object.fromEntries(['TaskDuration','ScriptDuration','LayoutDuration','RecalcStyleDuration','LayoutCount','RecalcStyleCount'].map(name=>[name,(after.find(m=>m.name===name).value-before.find(m=>m.name===name).value)*(name.endsWith('Duration')?1000:1)])):null;
+    playback.push({...report,repeat,taskDurationMs,cpuMetrics});
   }
-  const result={name,engine,browserVersion:browser.version(),starts,switches,playback};results.push(result);await writeFile(artifact(name+'-report.json'),JSON.stringify(result,null,2));
+  if(profileCpu&&cdp){const cpu=await cdp.send('Profiler.stop');await writeFile(artifact(name+'-cpu.json'),JSON.stringify(cpu));}
+  const result={preparation,name,engine,browserVersion:browser.version(),starts,switches,playback};results.push(result);await writeFile(artifact(name+'-report.json'),JSON.stringify(result,null,2));
  });
 }
-await measure('baseline',path.resolve(baseline));await measure('feature',feature);
-const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];const b=results[0],f=results[1];
+for(const name of order==='baseline-first'?['baseline','feature']:['feature','baseline'])await measure(name,name==='baseline'?path.resolve(baseline):feature);
+const median=values=>[...values].sort((a,b)=>a-b)[Math.floor(values.length/2)];const b=results.find(r=>r.name==='baseline'),f=results.find(r=>r.name==='feature');
 // UI automation timing includes two clicks and scheduler waits; report it separately from catalog commit timing.
-await mkdir(path.join(feature,'.run/i18n-performance'),{recursive:true});const report={headless,mediaMode,device:{platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version},baseline:baseline,budgets,notes:['gzip sizes are offline gzip estimates; the local static server sends uncompressed content','UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling','same-engine same-media paired runs; do not infer hardware decoder usage'],results};
-await writeFile(path.join(feature,`.run/i18n-performance/${engine}${headless?'':'-headed'}${mediaMode==='webcodecs'?'-webcodecs':''}.json`),JSON.stringify(report,null,2));for(const browserLocale of ['zh-CN','en-US'])for(const cache of ['cold','warm']){
+await mkdir(path.join(feature,'.run/i18n-performance'),{recursive:true});const report={order,profileCpu,preparation:'same appearance settings open/close and two animation frames in both distributions',headless,mediaMode,device:{platform:process.platform,arch:process.arch,cpu:os.cpus()[0].model,node:process.version},baseline:baseline,budgets,notes:['gzip sizes are offline gzip estimates; the local static server sends uncompressed content','UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling','same-engine same-media paired runs; do not infer hardware decoder usage'],results};
+const reportFile=path.join(feature,`.run/i18n-performance/${engine}${headless?'':'-headed'}${mediaMode==='webcodecs'?'-webcodecs':''}${reportSuffix}.json`);
+await writeFile(reportFile,JSON.stringify(report,null,2));for(const browserLocale of ['zh-CN','en-US'])for(const cache of ['cold','warm']){
  const bs=b.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale),fs=f.starts.filter(s=>s.cache===cache&&s.browserLocale===browserLocale);assert.ok(median(fs.map(x=>x.gzipBytes))-median(bs.map(x=>x.gzipBytes))<=(browserLocale==='en-US'?budgets.englishStartupGzipIncreaseBytes:budgets.startupGzipIncreaseBytes));assert.ok(median(fs.map(x=>x.requests))-median(bs.map(x=>x.requests))<=(browserLocale==='en-US'?budgets.englishStartupExtraRequests:budgets.startupExtraRequests));
  assert.ok(median(fs.map(x=>x.readyMs))<=median(bs.map(x=>x.readyMs))*budgets.startupMedianMultiplier+budgets.startupMedianIncreaseMs);
 }
 for(const result of results)for(const report of result.playback)assert.equal(report.passed,true,`${result.name}/${engine}/${report.repeat}: original playback thresholds`);
 for(const sample of f.switches)assert.ok(sample.commitMs <= (sample.cache==='cold'?budgets.coldLocaleMs:budgets.cachedLocaleMs),JSON.stringify(sample));
 
-console.log(`PASS ${engine}: paired startup budgets and six unchanged playback benchmark runs; report .run/i18n-performance/${engine}.json`);
+console.log(`PASS ${engine}: paired startup budgets and six unchanged playback benchmark runs; report ${reportFile}`);

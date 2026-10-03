@@ -46,19 +46,46 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  }
  await checkHoveredTooltip('en',/format|metadata|bitstream|container/i);
  await checkHoveredTooltip('zh-CN',/格式|来源/);
+ // Capture the event sequence in CI as well as successful local runs.
+ await page.evaluate(()=>{
+  window.__tooltipEvents=[];
+  window.__recordTooltip=label=>{const a=document.querySelector('#track-properties dd[data-tooltip]'),p=document.querySelector('#control-tooltip');window.__tooltipEvents.push({at:performance.now(),label,lang:document.documentElement.lang,focused:document.activeElement===a,documentFocus:document.hasFocus(),anchor:a.getBoundingClientRect().toJSON(),popup:{hidden:p.hidden,text:p.textContent}});};
+  window.__tooltipEventsAbort=new AbortController();
+  for(const type of ['focusin','focusout','pointerout','scroll','blur'])window.addEventListener(type,e=>window.__recordTooltip({type,target:e.target?.id||e.target?.nodeName,related:e.relatedTarget?.id||e.relatedTarget?.nodeName,scrollTop:e.target?.scrollTop}),{capture:true,signal:window.__tooltipEventsAbort.signal});
+  const hide=HTMLElement.prototype.hidePopover;window.__tooltipOriginalHide=hide;
+  HTMLElement.prototype.hidePopover=function(...args){if(this.id==='control-tooltip')window.__recordTooltip({hidePopover:true,stack:new Error().stack});return hide.apply(this,args);};
+  const timeout=window.setTimeout;window.__tooltipOriginalTimeout=timeout;
+  window.setTimeout=(cb,delay,...args)=>{if(typeof cb!=='function')return timeout(cb,delay,...args);const traced=[0,120,350].includes(delay);if(traced)window.__recordTooltip({timer:'schedule',delay,callback:cb.toString().slice(0,160)});return timeout(()=>{if(traced)window.__recordTooltip({timer:'fire',delay,callback:cb.toString().slice(0,160)});cb.apply(window,args);},delay);};
+  window.__tooltipOriginalMaxHeight=document.querySelector('#track-properties').style.maxHeight;
+ });
  // Keyboard focus remains on the original value despite translated layout.
  // This specifically verifies MutationObserver refresh without another hover
  // or focus event, so stale translations cannot pass by reopening the popup.
  await page.mouse.move(700,400);await page.keyboard.press('Tab');await tooltip.focus();
  await tooltipPopup.waitFor({state:'visible'});
  await tooltip.evaluate(e=>{window.__tooltipAnchor=e;window.__tooltipPopup=document.querySelector('#control-tooltip');});
+ for(const scenario of ['original','queued-scroll']){
+ if(scenario==='queued-scroll')await page.evaluate(()=>{document.querySelector('#track-properties').style.maxHeight='410px';});
  for(const [locale,pattern] of [['en',/format|metadata|bitstream|container/i],['zh-CN',/格式|来源/],['en',/format|metadata|bitstream|container/i]]){
+  await page.evaluate(({locale,scenario})=>{window.__recordTooltip({phase:'before-focused-switch',scenario});if(scenario==='queued-scroll'){const port=document.querySelector('#track-properties');if(port.scrollHeight<=port.clientHeight)throw new Error('Required inspector scroll fixture');port.scrollTop=locale==='en'?1:0;}},{locale,scenario});
   await switchLanguage(locale);await settleLayout();
+  await page.evaluate(()=>window.__recordTooltip('after-focused-switch'));
+  await writeFile(artifact('tooltip-events.json'),JSON.stringify(await page.evaluate(()=>window.__tooltipEvents),null,2));
   assert.equal(await tooltipPopup.isVisible(),true,'focused tooltip stays visible through locale commit and layout');
   assert.match(await tooltipPopup.innerText(),pattern);
   assert.deepEqual(await page.evaluate(()=>({anchor:window.__tooltipAnchor===document.querySelector('#track-properties dd[data-tooltip]'),popup:window.__tooltipPopup===document.querySelector('#control-tooltip'),focus:document.activeElement===window.__tooltipAnchor,described:window.__tooltipAnchor.getAttribute('aria-describedby')})),{anchor:true,popup:true,focus:true,described:'control-tooltip'});
-  tooltipEvidence.push(await tooltip.evaluate(e=>({kind:'focus',lang:document.documentElement.lang,rect:e.getBoundingClientRect().toJSON(),text:document.querySelector('#control-tooltip').textContent})));
+  tooltipEvidence.push(await tooltip.evaluate((e,scenario)=>({kind:'focus',scenario,lang:document.documentElement.lang,rect:e.getBoundingClientRect().toJSON(),text:document.querySelector('#control-tooltip').textContent}),scenario));
+  if(locale==='zh-CN'&&scenario==='original')await page.screenshot({path:artifact('focused-tooltip-zh.png')});
  }
+ }
+ // Focus help survives unrelated/stale events, but leaves the viewport safely.
+ await page.evaluate(()=>{document.querySelector('.track-offset').dispatchEvent(new FocusEvent('focusout',{bubbles:true,relatedTarget:window.__tooltipAnchor}));document.querySelector('#subtrack-list').dispatchEvent(new Event('scroll'));});
+ assert.equal(await tooltipPopup.isVisible(),true);
+ await page.evaluate(()=>{const port=document.querySelector('#track-properties');port.style.maxHeight='100px';port.scrollTop=port.scrollHeight;});await settleLayout();
+ assert.equal(await tooltip.evaluate(e=>e.getBoundingClientRect().bottom<=e.closest('#track-properties').getBoundingClientRect().top),true,'negative fixture moves focused value outside its scrollport');
+ assert.equal(await tooltipPopup.isVisible(),false,'offscreen focused help is hidden');
+ assert.equal(await tooltip.evaluate(e=>document.activeElement===e),true,'scroll does not move keyboard focus');
+ await page.evaluate(()=>{window.__tooltipEventsAbort.abort();HTMLElement.prototype.hidePopover=window.__tooltipOriginalHide;window.setTimeout=window.__tooltipOriginalTimeout;const port=document.querySelector('#track-properties');port.style.maxHeight=window.__tooltipOriginalMaxHeight;port.scrollTop=0;});
  await writeFile(artifact('tooltip-report.json'),JSON.stringify(tooltipEvidence,null,2));
  await page.evaluate(()=>window.voidPlayer.addMark({slot:'A',text:'',drawings:[{id:'empty-preview',tool:'rect',color:'#ff3b30',strokeWidth:4,points:[{x:.2,y:.2},{x:.4,y:.4}]}]}));
  await page.locator('#toggle-marks').click();
