@@ -1,3 +1,4 @@
+import { t, onLanguageChange, msg } from '../i18n.ts';
 import { ACCENTS, customAccent } from './appearance.ts';
 type ThemePreference = 'system' | 'light' | 'dark';
 const KEY = 'voidplayer.theme';
@@ -52,7 +53,7 @@ export function installThemeControls() {
     applyRoot(preference, accent, custom);
     const customButton = document.querySelector<HTMLElement>('[data-accent-choice=custom]')!;
     customButton.style.setProperty('--swatch-light', custom.light); customButton.style.setProperty('--swatch-dark', custom.dark);
-    document.getElementById('accent-current')!.textContent = accent === 'custom' ? `自定义 · ${custom.color.toUpperCase()}` : ACCENTS.find(c => c.id === accent)!.name;
+    document.getElementById('accent-current')!.textContent = accent === 'custom' ? t(msg("theme.custom", "自定义 · {p0}"), { p0: custom.color.toUpperCase() }) : ACCENTS.find(c => c.id === accent)!.name;
     for (const button of accents) { const selected = button.dataset.accentChoice === accent; button.setAttribute('aria-checked', String(selected)); button.tabIndex = selected ? 0 : -1; }
     for (const button of buttons) button.setAttribute('aria-checked', String(button.dataset.themeChoice === preference));
   }
@@ -82,7 +83,7 @@ export function installThemeControls() {
   }, { signal: life.signal });
   const commitHex = () => {
     if (updateCustom(hex.value)) syncInputs();
-    else { hex.setAttribute('aria-invalid', 'true'); hint.textContent = '请输入有效的 HEX 颜色，例如 #3478F6。'; }
+    else { hex.setAttribute('aria-invalid', 'true'); hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6。")); }
   };
   hex.addEventListener('change', commitHex, { signal: life.signal });
   hex.addEventListener('keydown', event => {
@@ -94,6 +95,7 @@ export function installThemeControls() {
   window.addEventListener('storage', event => {
     if (event.key === KEY || event.key === ACCENT_KEY || event.key === CUSTOM_KEY || event.key === null) { preference = readPreference(); accent = readAccent(); custom = readCustom(); syncInputs(); apply(); }
   }, { signal: life.signal });
+  onLanguageChange(() => { apply(); if (hex.hasAttribute('aria-invalid')) hint.textContent = t(msg("theme.enterAValidHexColorSuchAs", "请输入有效的 HEX 颜色，例如 #3478F6。")); }, life.signal);
   apply();
   return () => life.abort();
 }

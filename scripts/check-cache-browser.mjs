@@ -20,7 +20,7 @@ try {
  const base=`http://127.0.0.1:${service.server.address().port}`,entry=service.library.browse().entries[0];
  const reader=new FlvReader({file:new Blob([flv])}),index=serializeFlvIndex(await demuxFlv(reader),flv.length);reader.close();
  service.library.frameIndexes.put(entry.id,entry.version,entry.size,index,0);
- browser=await(name==='chromium'?chromium:webkit).launch({headless:true});const context=await browser.newContext({viewport:{width:1512,height:850},colorScheme:'dark'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ browser=await(name==='chromium'?chromium:webkit).launch({headless:true});const context=await browser.newContext({locale:'zh-CN', viewport:{width:1512,height:850},colorScheme:'dark'}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
  const jpeg=await page.screenshot({type:'jpeg',quality:50});
  annotations=new AnnotationStore(path.join(config.dataDir,'annotations.sqlite'));
  for(let i=0;i<53;i++){

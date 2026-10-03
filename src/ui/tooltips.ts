@@ -34,13 +34,13 @@ export function installTooltips() {
     popup.hidden = true;
   }
   const menuOpen = () => !!document.querySelector('.popup-menu:popover-open, .header-actions[popover]:popover-open');
-  function show() {
+  function show(reposition = false) {
     if (menuOpen() || !anchor?.isConnected || !anchor.getClientRects().length || document.body.classList.contains('sorting-tracks')) { hide(); return; }
     // Visible content is not an instruction. Never echo filenames, field values,
     // or complete accessible names of data rows into a generic tooltip.
     const text = anchor.dataset.tooltip || (!anchor.textContent?.trim() ? anchor.getAttribute('aria-label') : null);
     if (!text) { hide(); return; }
-    if (popup.matches(':popover-open') && popup.textContent === text) return;
+    if (!reposition && popup.matches(':popover-open') && popup.textContent === text) return;
     if (popup.textContent !== text) popup.textContent = text;
     popup.hidden = false;
     if (popup.showPopover && !popup.matches(':popover-open')) popup.showPopover();
@@ -81,13 +81,16 @@ export function installTooltips() {
   document.addEventListener('focusin', enter, options);
   document.addEventListener('pointerout', event => {
     if (dismissed?.contains(event.target as Node) && !dismissed.contains(event.relatedTarget as Node)) dismissed = null;
-    if (anchor?.contains(event.target as Node) && !anchor.contains(event.relatedTarget as Node) && !popup.contains(event.relatedTarget as Node)) {
+    if (anchor?.contains(event.target as Node) && document.activeElement !== anchor && !anchor.contains(event.relatedTarget as Node) && !popup.contains(event.relatedTarget as Node)) {
       leaving = setTimeout(hide, 120);
     }
   }, options);
   popup.addEventListener('pointerenter', () => clearTimeout(leaving));
-  popup.addEventListener('pointerleave', hide);
-  document.addEventListener('focusout', hide, options);
+  popup.addEventListener('pointerleave', () => { if (document.activeElement !== anchor) hide(); });
+  document.addEventListener('focusout', event => {
+    // A delayed blur from another control must not dismiss newly focused help.
+    if (anchor?.contains(event.target as Node) && document.activeElement !== anchor && !anchor.contains(event.relatedTarget as Node)) hide();
+  }, options);
   document.addEventListener('pointerdown', event => {
     pointerFocus = true;
     dismissed = event.target instanceof Element ? event.target.closest<HTMLElement>(selector) : null;
@@ -101,7 +104,17 @@ export function installTooltips() {
       hide();
     }
   }, options);
-  document.addEventListener('scroll', hide, options);
+  document.addEventListener('scroll', event => {
+    // Focus scrolling and translated layout can dispatch scroll after focusin.
+    // Keep keyboard help anchored while its value is still in the scrollport.
+    if (anchor && document.activeElement === anchor && !popup.hidden && event.target instanceof Node) {
+      if (!event.target.contains(anchor)) return;
+      const rect = anchor.getBoundingClientRect();
+      const port = event.target instanceof Element ? event.target.getBoundingClientRect() : { top: 0, left: 0, bottom: innerHeight, right: innerWidth };
+      if (rect.bottom > port.top && rect.top < port.bottom && rect.right > port.left && rect.left < port.right) { show(true); return; }
+    }
+    hide();
+  }, options);
   window.addEventListener('resize', hide, { signal: lifecycle.signal });
   window.addEventListener('blur', hide, { signal: lifecycle.signal });
   return () => { hide(); observer.disconnect(); lifecycle.abort(); popup.remove(); };

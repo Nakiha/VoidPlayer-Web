@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "node scripts/dev.ts",
-    "build": "tsc --noEmit && vite build",
+    "build": "npm run i18n:check && tsc --noEmit && vite build",
     "icons:generate": "node scripts/make-icons.mjs",
     "preview": "vite preview --host 127.0.0.1",
     "test": "node --experimental-strip-types --test --test-concurrency=4 test/*.test.ts test/*.test.mjs",
@@ -74,19 +74,26 @@
     "test:perf": "node scripts/run-tests.mjs perf",
     "test:suite": "node scripts/run-tests.mjs",
     "test:browser:all": "node scripts/run-tests.mjs browser",
-    "test:manifest": "node scripts/run-tests.mjs --check"
+    "test:manifest": "node scripts/run-tests.mjs --check",
+    "i18n:extract": "node scripts/i18n.mjs extract",
+    "i18n:check": "node scripts/i18n.mjs check",
+    "i18n:compile": "node scripts/i18n.mjs compile"
   },
   "dependencies": {
+    "@messageformat/runtime": "3.0.2",
     "@peculiar/x509": "2.1.0",
     "@phosphor-icons/core": "2.1.1",
     "mediabunny": "1.55.7",
     "reflect-metadata": "0.2.2"
   },
   "devDependencies": {
+    "@messageformat/core": "3.4.0",
+    "@messageformat/parser": "5.1.1",
     "@types/node": "26.4.1",
     "fake-indexeddb": "6.2.4",
     "playwright": "^1.63.0",
     "typescript": "7.0.2",
+    "typescript-ast": "npm:typescript@5.9.3",
     "vite": "8.2.2"
   },
   "description": "VoidPlayer web: local-file and library video review in the browser (WebCodecs + trimmed FFmpeg WASM fallback)",

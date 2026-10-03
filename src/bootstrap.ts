@@ -1,3 +1,4 @@
+import { initializeLanguage, t, msg } from './i18n.ts';
 export {};
 function revealApp() {
   const app = document.getElementById('app')!;
@@ -10,6 +11,7 @@ function revealApp() {
 // heavier warmup (GPU, library) finishes after reveal without blocking it.
 try {
   if (!globalThis.isSecureContext || location.pathname === '/connection') {
+    await initializeLanguage().catch(() => {});
     const { showConnectionGuide } = await import('./connection-guide.ts');
     const ready = showConnectionGuide({ automatic: location.pathname !== '/connection' });
     revealApp(); // The guide is usable while its connection probe is still pending.
@@ -21,6 +23,7 @@ try {
     let shellReady!: () => void;
     const shell = new Promise<void>(resolve => { shellReady = resolve; });
     window.addEventListener('voidplayer:shell-ready', () => shellReady(), { once: true });
+    await initializeLanguage();
     const loaded = import('./main.ts');
     await Promise.race([shell, loaded]);
     revealApp();
@@ -30,4 +33,8 @@ try {
   console.error('播放器初始化失败。', error);
   const app = document.getElementById('app')!;
   app.innerHTML = '<div class="startup-error" role="alert"><p>页面未能加载，请刷新重试。</p><a href="">重新加载</a></div>';
+  try {
+    app.querySelector('p')!.textContent = t(msg("bootstrap.startupFailed", "页面未能加载，请刷新重试。"));
+    app.querySelector('a')!.textContent = t(msg("bootstrap.reload", "重新加载"));
+  } catch { /* Keep the built-in Chinese fallback. */ }
 } finally { revealApp(); }

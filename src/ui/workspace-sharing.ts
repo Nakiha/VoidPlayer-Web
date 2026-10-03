@@ -1,3 +1,5 @@
+import { mountLocalizedShell } from './localized-shell.ts';
+import { t, msg, th, onLanguageChange, formatDate } from '../i18n.ts';
 import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { prepareSharedWorkspace } from '../shared-workspace.ts';
@@ -22,7 +24,8 @@ export function installWorkspaceSharing(options: {
   const dialog = document.createElement('dialog');
   dialog.id = 'workspace-share-link'; dialog.className = 'workspace-share-link glass';
   dialog.setAttribute('aria-labelledby', 'workspace-share-title');
-  dialog.innerHTML = `<header class="dialog-heading"><h2 id="workspace-share-title">工作区链接</h2><button class="icon-button" aria-label="关闭分享">${icon('close')}</button></header><p>打开链接可还原并编辑这个工作区。</p><label>链接<input readonly aria-label="工作区链接"></label>`;
+  const shareShell = () => `<header class="dialog-heading"><h2 id="workspace-share-title">${th(msg('sharing.title', '工作区链接'))}</h2><button class="icon-button" aria-label="${th(msg('sharing.close', '关闭分享'))}">${icon('close')}</button></header><p>${th(msg('sharing.editableLink', '打开链接可还原并编辑这个工作区。'))}</p><label>${th(msg('sharing.link', '链接'))}<input readonly aria-label="${th(msg('sharing.title', '工作区链接'))}"></label>`;
+  mountLocalizedShell(dialog, shareShell, options.signal);
   document.body.append(dialog);
   const input = dialog.querySelector<HTMLInputElement>('input')!;
   let epoch = 0, busy = false, renderedBusy: boolean | undefined, focus: HTMLElement | null = null;
@@ -34,12 +37,13 @@ export function installWorkspaceSharing(options: {
       renderedBusy = busy;
       for (const button of buttons) {
         const copyButton = button.id === 'saved-workspace-share';
-        button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon(copyButton ? 'copy' : 'export')}<span>${busy ? '正在保存' : copyButton ? '复制链接' : '分享'}</span>`;
+        button.innerHTML = `${busy ? icon('refresh', 'share-spinner') : icon(copyButton ? 'copy' : 'export')}<span>${busy ? t(msg("sharing.saving", "正在保存")) : copyButton ? t(msg("sharing.copyLink", "复制链接")) : t(msg("shell.share", "分享"))}</span>`;
       }
     }
   }
+  onLanguageChange(() => { renderedBusy = undefined; update(); }, options.signal);
   async function copy(url: string) {
-    try { await navigator.clipboard.writeText(url); options.toasts.show('工作区链接已复制，接收者可编辑和保存'); }
+    try { await navigator.clipboard.writeText(url); options.toasts.show(() => t(msg('sharing.editableCopied', '工作区链接已复制，接收者可编辑和保存'))); }
     catch {
       await options.closeSettings();
       if (options.signal.aborted) return;
@@ -47,16 +51,16 @@ export function installWorkspaceSharing(options: {
     }
   }
   async function create(trigger?: HTMLElement) {
-    if (busy) throw new Error('工作区正在保存，请稍后再分享。');
+    if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
     focus = trigger ?? buttons[0];
     // A retry retains the same request and ID if the server response was lost.
     const previous = options.binding();
     pending ??= { id: previous?.id ?? randomUUID(), document: structuredClone(options.snapshot()), previous, pinned: false, attached: !!previous?.space && options.scope() === previous.space };
     const request = pending, stamp = epoch;
-    const ensureCurrent = () => { if(stamp !== epoch) throw new Error('当前工作区已切换，请在新工作区重新分享。'); };
+    const ensureCurrent = () => { if(stamp !== epoch) throw new Error(t(msg("workspace.changed", "当前工作区已切换，请在新工作区重新分享。"))); };
     busy = true; update();
     try {
-      if (!options.canShare()) throw new Error('请先添加视频再分享。');
+      if (!options.canShare()) throw new Error(t(msg("sharing.addVideo", "请先添加视频再分享。")));
       if (!request.pinned) { request.document = await prepareSharedWorkspace(request.document); request.pinned = true; }
       ensureCurrent();
       const record = await options.save(request.document, request.id, request.previous);

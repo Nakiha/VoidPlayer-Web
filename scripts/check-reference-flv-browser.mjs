@@ -44,7 +44,7 @@ try {
   browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(engine === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}) });
   async function run({ codec = 'h264', local = false, fault, software = false } = {}) {
-    const context = await browser.newContext(), page = await context.newPage();
+    const context = await browser.newContext({locale:'zh-CN'}), page = await context.newPage();
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     await page.addInitScript(software => {
       localStorage.setItem('voidplayer.color-mode', 'reference');

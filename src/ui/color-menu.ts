@@ -1,11 +1,12 @@
 import { DEFAULT_ANNOTATION_COLOR } from '../annotation.ts';
+import { onLanguageChange, t, msg } from '../i18n.ts';
 import { installMenu } from './menu.ts';
 
-const common = [
-  [DEFAULT_ANNOTATION_COLOR, '红色'], ['#ff9500', '橙色'], ['#ffcc00', '黄色'],
-  ['#34c759', '绿色'], ['#5ac8fa', '青色'], ['#007aff', '蓝色'],
-  ['#e93eff', '品红色'], ['#af52de', '紫色'], ['#a2845e', '棕色'],
-  ['#ffffff', '白色'], ['#8e8e93', '灰色'], ['#000000', '黑色'],
+const common: [color: string, label: () => string][] = [
+  [DEFAULT_ANNOTATION_COLOR, () => t(msg("marks.colorRed", "红色"))], ['#ff9500', () => t(msg("marks.colorOrange", "橙色"))], ['#ffcc00', () => t(msg("marks.colorYellow", "黄色"))],
+  ['#34c759', () => t(msg("marks.colorGreen", "绿色"))], ['#5ac8fa', () => t(msg("marks.colorCyan", "青色"))], ['#007aff', () => t(msg("marks.colorBlue", "蓝色"))],
+  ['#e93eff', () => t(msg("marks.colorMagenta", "品红色"))], ['#af52de', () => t(msg("marks.colorPurple", "紫色"))], ['#a2845e', () => t(msg("marks.colorBrown", "棕色"))],
+  ['#ffffff', () => t(msg("marks.colorWhite", "白色"))], ['#8e8e93', () => t(msg("marks.colorGray", "灰色"))], ['#000000', () => t(msg("marks.colorBlack", "黑色"))],
 ];
 const hex = (value: number) => Math.round(value).toString(16).padStart(2, '0');
 function tone(hue: number, lightness: number) {
@@ -17,7 +18,7 @@ function tone(hue: number, lightness: number) {
 const spectrum = [
   ...[255, 235, 215, 195, 175, 155, 135, 115, 95, 65, 35, 0].map(v => `#${hex(v).repeat(3)}`),
   ...[.14, .23, .32, .41, .5, .62, .73, .84, .93].flatMap(l => [195, 220, 255, 285, 320, 5, 25, 40, 55, 75, 100, 135].map(h => tone(h, l))),
-].map(color => [color, '颜色']);
+].map(color => [color, () => t(msg("marks.colorGeneric", "颜色"))] as [string, () => string]);
 const valid = (value: unknown): value is string => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
 
 /** Stateless fixed palette. Choosing a color uses the editor's normal style path. */
@@ -28,12 +29,12 @@ export function installColorMenu(id: string, choose: (value: string) => void) {
   let value = DEFAULT_ANNOTATION_COLOR;
   // Remove the previous implementation's preference; never read or record color history.
   try { localStorage.removeItem('voidplayer.annotation.recent-colors'); } catch { /* Storage is optional. */ }
-  function section(title: string, colors: string[][]) {
-    const group = document.createElement('section'); group.setAttribute('role', 'group'); group.setAttribute('aria-label', title);
+  function section(title: () => string, colors: [string, () => string][]) {
+    const group = document.createElement('section'); group.setAttribute('role', 'group'); group.setAttribute('aria-label', title());
     const grid = document.createElement('div'); grid.className = 'palette-grid';
-    for (const [color, name] of colors) {
+    for (const [color, label] of colors) {
       const item = document.createElement('button'); item.type = 'button'; item.dataset.color = color;
-      item.setAttribute('role', 'menuitemradio'); item.setAttribute('aria-label', `${name} ${color}`);
+      item.setAttribute('role', 'menuitemradio'); item.setAttribute('aria-label', `${label()} ${color}`);
       item.setAttribute('aria-checked', String(color === value));
       const ink = document.createElement('span'); ink.className = 'color-swatch'; ink.style.backgroundColor = color; ink.setAttribute('aria-hidden', 'true'); item.append(ink);
       item.onclick = () => choose(color);
@@ -41,7 +42,8 @@ export function installColorMenu(id: string, choose: (value: string) => void) {
     }
     group.append(grid); return group;
   }
-  menu.append(section('常用色', common), section('色盘', spectrum));
+  const buildSections = () => menu.replaceChildren(section(() => t(msg("marks.commonColors", "常用色")), common), section(() => t(msg("marks.palette", "色盘")), spectrum));
+  buildSections();
   function render() {
     swatch.style.backgroundColor = value;
     for (const item of menu.querySelectorAll<HTMLButtonElement>('[data-color]')) item.setAttribute('aria-checked', String(item.dataset.color === value));
@@ -51,11 +53,12 @@ export function installColorMenu(id: string, choose: (value: string) => void) {
     selected: () => menu.querySelector<HTMLButtonElement>('[aria-checked=true]') ?? undefined,
     bounds: () => button.closest('.annotation-toolbar')?.parentElement?.getBoundingClientRect(),
   });
+  const stopLanguage = onLanguageChange(() => { controller.close(); buildSections(); render(); });
   return {
     sync(next: string, _text: string, enabled: boolean) {
       if (valid(next)) value = next.toLowerCase();
       button.disabled = !enabled; if (!enabled) controller.close(); render();
     },
-    dispose() { controller.dispose(); menu.remove(); },
+    dispose() { stopLanguage(); controller.dispose(); menu.remove(); },
   };
 }

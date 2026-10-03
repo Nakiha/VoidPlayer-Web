@@ -34,7 +34,7 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,...(browserName==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}) });
 
   async function check(name, run, options = {}) {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
+    const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
     page.setDefaultTimeout(15000);
     const errors = [];
     // ResizeObserver errors are failures too; never mask the regression being tested.

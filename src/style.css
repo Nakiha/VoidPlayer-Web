@@ -853,3 +853,7 @@ button.icon-button[aria-pressed=true] {
 .workspace-share-link :focus-visible { outline:2px solid var(--accent);outline-offset:2px; }
 /* Compact toolbars scroll as intact groups instead of overlapping share controls. */
 .topbar-primary-actions, .topbar-utility-actions, .view-controls { flex-shrink:0; }
+/* English property names wrap while technical values retain readable tokens. */
+.track-properties dl { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.track-properties dt { overflow-wrap: anywhere; }
+.track-properties dd { overflow-wrap: normal; word-break: normal; }

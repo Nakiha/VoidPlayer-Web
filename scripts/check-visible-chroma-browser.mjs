@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 const browser=await chromium.launch({headless:true,...(process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}),args:['--enable-unsafe-webgpu','--use-angle=swiftshader','--enable-features=Vulkan','--use-vulkan=swiftshader']});
 try {
-  const page=await browser.newPage();page.on('console',m=>console.error(m.text()));page.on('pageerror',e=>console.error(e));await page.goto(process.env.BASE_URL??'http://127.0.0.1:5199');
+  const page=await browser.newPage({locale:'zh-CN'});page.on('console',m=>console.error(m.text()));page.on('pageerror',e=>console.error(e));await page.goto(process.env.BASE_URL??'http://127.0.0.1:5199');
   const result=await page.evaluate(async()=>{
     const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
     const {yuvToRgba}=await import('/src/yuv-color.ts');

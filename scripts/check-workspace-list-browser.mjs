@@ -13,7 +13,7 @@ try {
   const config = await loadConfig(['--folder', path.join(root, 'media'), '--data-dir', root], 'production'); config.port = 0; config.logsDir = null;
   service = await startService(config);
   browser = await webkit.launch();
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
+  const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, colorScheme: 'dark' });
   const errors = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(`http://127.0.0.1:${service.server.address().port}`);
   await page.locator('#identity-welcome input').fill('小明'); await page.locator('#identity-welcome .welcome-enter').click();

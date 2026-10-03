@@ -1,0 +1,570 @@
+[
+  {
+    "at": 1094.22,
+    "label": {
+      "type": "pointerout",
+      "target": "DD",
+      "related": "image-A",
+      "scrollTop": 0
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1094.28,
+    "label": {
+      "timer": "schedule",
+      "delay": 120,
+      "callback": "function d(){if(clearTimeout(s),clearTimeout(c),i){let e=(i.getAttribute(`aria-describedby`)??``).split(/\\s+/).filter(e=>e&&e!==r.id);e.length?i.setAttribute(`a"
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1094.4,
+    "label": {
+      "hidePopover": true,
+      "stack": "@\nd@http://127.0.0.1:51050/assets/main-BUkAmMD7.js:105:5822\nm@http://127.0.0.1:51050/assets/main-BUkAmMD7.js:105:6987"
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1108.9,
+    "label": {
+      "type": "blur",
+      "target": "INPUT",
+      "scrollTop": 0
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1109.78,
+    "label": {
+      "type": "focusout",
+      "target": "INPUT",
+      "scrollTop": 0
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1109.9,
+    "label": {
+      "type": "blur"
+    },
+    "lang": "zh-CN",
+    "focused": false,
+    "documentFocus": false,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1112.42,
+    "label": {
+      "type": "focusin",
+      "target": "DD",
+      "scrollTop": 0
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1112.52,
+    "label": {
+      "timer": "schedule",
+      "delay": 0,
+      "callback": "function p(e=!1){if(f()||!i?.isConnected||!i.getClientRects().length||document.body.classList.contains(`sorting-tracks`)){d();return}let t=i.dataset.tooltip||(i"
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1112.6,
+    "label": {
+      "timer": "fire",
+      "delay": 0,
+      "callback": "function p(e=!1){if(f()||!i?.isConnected||!i.getClientRects().length||document.body.classList.contains(`sorting-tracks`)){d();return}let t=i.dataset.tooltip||(i"
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": true,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1116.82,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "original"
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1154.38,
+    "label": "after-focused-switch",
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 364.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 364.765625,
+      "right": 191,
+      "bottom": 389.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1160.6,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "original"
+    },
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 364.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 364.765625,
+      "right": 191,
+      "bottom": 389.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1204.44,
+    "label": "after-focused-switch",
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1249.78,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "original"
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1287.72,
+    "label": "after-focused-switch",
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 364.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 364.765625,
+      "right": 191,
+      "bottom": 389.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1293.72,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "queued-scroll"
+    },
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 364.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 364.765625,
+      "right": 191,
+      "bottom": 389.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1302.8,
+    "label": {
+      "type": "scroll",
+      "target": "track-properties",
+      "scrollTop": 1
+    },
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 363.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 363.765625,
+      "right": 191,
+      "bottom": 388.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1321,
+    "label": "after-focused-switch",
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 363.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 363.765625,
+      "right": 191,
+      "bottom": 388.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1327.3,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "queued-scroll"
+    },
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 363.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 363.765625,
+      "right": 191,
+      "bottom": 388.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1339.86,
+    "label": {
+      "type": "scroll",
+      "target": "track-properties",
+      "scrollTop": 0
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1370.94,
+    "label": "after-focused-switch",
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1376.96,
+    "label": {
+      "phase": "before-focused-switch",
+      "scenario": "queued-scroll"
+    },
+    "lang": "zh-CN",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 347.96875,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 347.96875,
+      "right": 191,
+      "bottom": 372.765625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "浏览器解码输出的内存格式，可能与源视频的像素格式不同"
+    }
+  },
+  {
+    "at": 1390.74,
+    "label": {
+      "type": "scroll",
+      "target": "track-properties",
+      "scrollTop": 1
+    },
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 363.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 363.765625,
+      "right": 191,
+      "bottom": 388.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  },
+  {
+    "at": 1421.14,
+    "label": "after-focused-switch",
+    "lang": "en",
+    "focused": true,
+    "documentFocus": true,
+    "anchor": {
+      "x": 99.5,
+      "y": 363.765625,
+      "width": 91.5,
+      "height": 24.796875,
+      "top": 363.765625,
+      "right": 191,
+      "bottom": 388.5625,
+      "left": 99.5
+    },
+    "popup": {
+      "hidden": false,
+      "text": "Browser decoder memory format; may differ from the source pixel format"
+    }
+  }
+]

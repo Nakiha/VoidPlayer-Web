@@ -12,14 +12,24 @@ import { mapSharedWorkspace } from '../shared-workspace.ts';
 import { SavedWorkspaceClient } from '../saved-workspaces.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 import { pinLibraryReference } from '../media-reference.ts';
-import { describeMediaMismatch, matchMediaIdentity, mediaMtimeWarning } from '../media-identity.ts';
+import { matchMediaIdentity } from '../media-identity.ts';
+import type { MediaIdentityMismatch } from '../media-identity.ts';
 import { icon } from './icons.ts';
 import { installSavedWorkspaces } from './saved-workspaces.ts';
+import { onLanguageChange, t, th, msg } from '../i18n.ts';
+
+function relinkMtimeWarning(name: string) {
+  return t(msg('transfer.mtimeWarning','「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。'),{name});
+}
+function relinkMismatch(name: string, mismatches: MediaIdentityMismatch[]) {
+  const details=mismatches.map(mismatch=>t(mismatch.field==='name'?msg('transfer.nameMismatch','文件名 {expected} → {actual}'):msg('transfer.sizeMismatch','大小 {expected} → {actual}'),{expected:mismatch.expected,actual:mismatch.actual})).join(t(msg('transfer.detailSeparator','、')));
+  return t(msg('transfer.identityMismatch','片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。'),{name,details});
+}
 
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal) {
   const files = new Map<string, File>();
   const accept = (info: MediaInfo, file: File) => {
     const match = matchMediaIdentity(info, file);
@@ -32,25 +42,42 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
   for (const info of media) if (!files.has(info.id)) {
     try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) continue; } catch {}
   }
+  if (signal?.aborted) return null;
   if (!prompt) return files;
   const missing = media.filter(info => !files.has(info.id));
   if (!missing.length) return files;
-  const dialog = document.createElement('dialog'); dialog.className = 'workspace-relink'; dialog.setAttribute('aria-label', '重新连接本地视频');
-  dialog.innerHTML = `<header class="dialog-heading"><h2>重新连接本地视频</h2><button class="icon-button" aria-label="取消导入">${icon('close')}</button></header><p>工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。</p><div class="relink-files"></div><p role="alert"></p><button class="relink-later">稍后关联</button><button class="relink-continue" disabled>打开工作区</button>`;
+  const dialog = document.createElement('dialog'); dialog.className = 'workspace-relink'; dialog.setAttribute('aria-label', t(msg("transfer.relinkTitle", "重新连接本地视频")));
+  dialog.innerHTML = `<header class="dialog-heading"><h2>${th(msg("transfer.relinkTitle", "重新连接本地视频"))}</h2><button class="icon-button" aria-label="${th(msg("transfer.cancelImport", "取消导入"))}">${icon('close')}</button></header><p>${th(msg("transfer.relinkBody", "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。"))}</p><div class="relink-files"></div><p role="alert"></p><button class="relink-later">${th(msg("transfer.later", "稍后关联"))}</button><button class="relink-continue" disabled>${th(msg("transfer.openWorkspace", "打开工作区"))}</button>`;
+  const lifetime = new AbortController();
+  const inputs: { info: MediaInfo; input: HTMLInputElement }[] = [];
+  let warning: (() => string) | undefined;
   const proceed = dialog.querySelector<HTMLButtonElement>('.relink-continue')!;
+  function localize() {
+    const title = t(msg("transfer.relinkTitle", "重新连接本地视频"));
+    dialog.setAttribute('aria-label', title); dialog.querySelector('h2')!.textContent = title;
+    dialog.querySelector('header button')!.setAttribute('aria-label', t(msg("transfer.cancelImport", "取消导入")));
+    dialog.querySelector(':scope > p')!.textContent = t(msg("transfer.relinkBody", "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。"));
+    dialog.querySelector('.relink-later')!.textContent = t(msg("transfer.later", "稍后关联"));
+    proceed.textContent = t(msg("transfer.openWorkspace", "打开工作区"));
+    dialog.querySelector('[role=alert]')!.textContent = warning?.() ?? '';
+    for (const {info,input} of inputs) input.setAttribute('aria-label', t(msg("sources.reselectName", "重新选择 {name}"), {name:info.name}));
+  }
+  onLanguageChange(localize, lifetime.signal);
   for (const info of missing) {
     const label = document.createElement('label'); label.className = 'relink-file';
     const name = document.createElement('span'); name.textContent = info.name;
-    const input = document.createElement('input'); input.type = 'file'; input.accept = 'video/*,.mkv,.ts,.flv,.avi'; input.setAttribute('aria-label', `重新选择 ${info.name}`);
+    const input = document.createElement('input'); input.type = 'file'; input.accept = 'video/*,.mkv,.ts,.flv,.avi'; input.setAttribute('aria-label', t(msg("sources.reselectName", "重新选择 {name}"), { name: info.name }));
     input.onchange = () => {
       const file = input.files?.[0]; files.delete(info.id);
       const match = file ? matchMediaIdentity(info, file) : undefined;
-      dialog.querySelector('[role=alert]')!.textContent = !match ? '' : !match.ok
-        ? describeMediaMismatch(info.name, match.mismatches)
-        : match.mtimeChanged ? mediaMtimeWarning(info.name) : '';
+      warning = !match ? undefined : !match.ok
+        ? () => relinkMismatch(info.name, match.mismatches)
+        : match.mtimeChanged ? () => relinkMtimeWarning(info.name) : undefined;
+      dialog.querySelector('[role=alert]')!.textContent = warning?.() ?? '';
       if (match?.ok && file) files.set(info.id, file);
       proceed.disabled = files.size !== media.length;
     };
+    inputs.push({info,input});
     label.append(name, input); dialog.querySelector('.relink-files')!.append(label);
   }
   document.body.append(dialog);
@@ -58,8 +85,11 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
     dialog.querySelector('header button')!.addEventListener('click', () => dialog.close());
     proceed.onclick = () => dialog.close('open');
     dialog.querySelector<HTMLButtonElement>('.relink-later')!.onclick = () => dialog.close('open');
-    dialog.addEventListener('close', () => { const result = dialog.returnValue === 'open' ? files : null; dialog.remove(); resolve(result); }, { once: true });
+    const abort = () => dialog.close();
+    signal?.addEventListener('abort', abort, {once:true});
+    dialog.addEventListener('close', () => { const result = dialog.returnValue === 'open' ? files : null; lifetime.abort(); signal?.removeEventListener('abort', abort); dialog.remove(); resolve(result); }, { once: true });
     dialog.showModal();
+    if (signal?.aborted) abort();
   });
 }
 
@@ -79,23 +109,23 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   let saved: ReturnType<typeof installSavedWorkspaces> | undefined;
   let sharing: ReturnType<typeof installWorkspaceSharing> | undefined;
   function exportWorkspace() {
-    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? '未命名工作区' };
+    const document = { ...session.exportWorkspace(new URL('/', location.href).href), ...options.capture(), name: saved?.name() ?? t(msg("savedWorkspaces.untitledWorkspace", "未命名工作区")) };
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
   async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false) {
-    if (importing) throw new Error('工作区正在导入，请等待完成。');
+    if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
     importing = true;
     try {
       const document = parseWorkspace(value, location.href);
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
-      const warnMtime = (name: string) => options.toasts.show(mediaMtimeWarning(name));
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime);
+      const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, lifetime.signal);
       if (!files) return false;
       const rollback=options.beforeRestore();
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
-        if (!info.source) { const file = files.get(info.id); if (!file) throw new Error('本地文件尚未授权，请重新选择。'); return openMedia(file, undefined, progress, signal); }
+        if (!info.source) { const file = files.get(info.id); if (!file) throw new Error(t(msg("transfer.notAuthorized", "本地文件尚未授权，请重新选择。"))); return openMedia(file, undefined, progress, signal); }
         const pinned = await pinLibraryReference(info, location.href, fetch, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
@@ -107,7 +137,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       await options.restore(document, fromShare);
       if (!fromShare) { sharing?.detach(); const url=new URL(location.href);url.searchParams.delete('workspace');url.searchParams.delete('share');url.searchParams.delete('review');history.replaceState(null,'',url); }
       saved?.detach(document.name);
-      if (!document.comparison) options.toasts.show('旧工作区未记录比较条件，已沿用当前色彩和解码设置。');
+      if (!document.comparison) options.toasts.show(() => t(msg("transfer.legacyConditions", "旧工作区未记录比较条件，已沿用当前色彩和解码设置。")));
       return true;
     } finally { importing = false; }
   }
@@ -120,8 +150,8 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const warnMtime = (name: string) => options.toasts.show(mediaMtimeWarning(name));
-    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime);
+    const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
+    const files = await resolveLocalFiles(pending.filter(t => !t.source), [], true, warnMtime, lifetime.signal);
     if (!files) return;
     for (const info of pending) {
       if (!info.source && !files.has(info.id)) continue;
@@ -140,8 +170,8 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     const signature = pending.map(t => `${t.slot}:${t.id}`).join('|');
     if (signature === missingSignature) return;
     missingSignature = signature; dismissMissing?.();
-    if (pending.length) dismissMissing = options.toasts.show(`${pending.length} 个片源待重新关联；轨道、偏移和标注已保留。`, { durationMs: 0,
-      action: { label: '重新关联', onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
+    if (pending.length) dismissMissing = options.toasts.show(() => t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length }), { durationMs: 0,
+      action: { label: () => t(msg("transfer.relinkNow", "重新关联")), onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
   }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });
   const unsubscribe = session.subscribe(() => { saved?.update(); sharing?.update(); updateMissing(); });

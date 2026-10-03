@@ -1,3 +1,4 @@
+import { t, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
 
 /** UI-only visibility: never resize stages, change playback or discard panel state. */
@@ -12,8 +13,8 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     }
     button.innerHTML = icon('focus');
     button.setAttribute('aria-pressed', String(focused));
-    button.setAttribute('aria-label', '专注模式');
-    button.dataset.tooltip = '专注模式';
+    button.setAttribute('aria-label', t(msg("shell.focusMode", "专注模式")));
+    button.dataset.tooltip = t(msg("shell.focusMode", "专注模式"));
   }
   button.onclick = () => setFocused(!focused);
   return {

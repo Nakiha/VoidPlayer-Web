@@ -16,7 +16,7 @@ try{
  browser=await(name==='webkit'?webkit:chromium).launch({headless:true,...(name==='chromium'?{args:['--no-proxy-server']}:{})});
  async function pageFor(accepted){
   // HTTPS acceptance is scoped to this disposable browser context, never the user's trust store.
-  const context=await browser.newContext({ignoreHTTPSErrors:accepted,viewport:{width:1512,height:800},colorScheme:'dark'}),page=await context.newPage();
+  const context=await browser.newContext({locale:'zh-CN', ignoreHTTPSErrors:accepted,viewport:{width:1512,height:800},colorScheme:'dark'}),page=await context.newPage();
 
   return {context,page};
  }

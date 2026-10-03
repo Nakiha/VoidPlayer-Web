@@ -19,7 +19,7 @@ await server.listen();
 let browser;
 try {
   browser = await (engine === 'webkit' ? webkit : chromium).launch({ headless: true });
-  const page = await browser.newPage(), errors = [], ranges = [];
+  const page = await browser.newPage({locale:'zh-CN'}), errors = [], ranges = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('request', request => { if (request.url().includes('dolby_hlg_1080p30.mp4')) ranges.push(request.headers().range); });
   await page.route('**/hlg-test', route => route.fulfill({ contentType: 'text/html', body: '<body></body>' }));

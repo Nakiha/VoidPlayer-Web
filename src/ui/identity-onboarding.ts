@@ -1,4 +1,5 @@
 import { chooseIdentity, currentActor, identityHealth } from '../identity.ts';
+import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
 
 type User = { id: string; name: string };
@@ -18,13 +19,13 @@ async function choose(signal: AbortSignal) {
   const welcome = document.createElement('dialog');
   welcome.id = 'identity-welcome'; welcome.className = 'identity-welcome';
   welcome.setAttribute('aria-labelledby', 'identity-welcome-title');
-  welcome.innerHTML = `<p id="identity-welcome-title">怎么称呼你？</p>
+  welcome.innerHTML = `<p id="identity-welcome-title">${th(msg("identity.welcomeTitle", "怎么称呼你？"))}</p>
     <form><div class="welcome-picker"><div class="welcome-field">
-      <input maxlength="128" autocomplete="off" placeholder="名字（选填）" aria-label="名字（选填）" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="welcome-users" aria-describedby="welcome-kind" spellcheck="false">
+      <input maxlength="128" autocomplete="off" placeholder="${th(msg("identity.nameOptional", "名字（选填）"))}" aria-label="${th(msg("identity.nameOptional", "名字（选填）"))}" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="welcome-users" aria-describedby="welcome-kind" spellcheck="false">
       <span id="welcome-kind" class="welcome-kind" role="status"></span>
-      <button type="button" class="welcome-toggle" aria-label="选择已有用户" aria-expanded="false" aria-controls="welcome-users">${icon('down')}</button>
-    </div><div class="welcome-dropdown" inert><div id="welcome-users" class="welcome-user-list" role="listbox" aria-label="已有用户"></div><p class="welcome-empty" role="status"></p></div></div>
-    <p role="alert"></p><button type="submit" class="primary welcome-enter" autofocus><span>以访客身份继续</span></button></form>`;
+      <button type="button" class="welcome-toggle" aria-label="${th(msg("identity.chooseExisting", "选择已有用户"))}" aria-expanded="false" aria-controls="welcome-users">${icon('down')}</button>
+    </div><div class="welcome-dropdown" inert><div id="welcome-users" class="welcome-user-list" role="listbox" aria-label="${th(msg("identitySettings.existingUser", "已有用户"))}"></div><p class="welcome-empty" role="status"></p></div></div>
+    <p role="alert"></p><button type="submit" class="primary welcome-enter" autofocus><span>${th(msg("identity.continueAsGuest", "以访客身份继续"))}</span></button></form>`;
   document.body.append(welcome);
   const input = welcome.querySelector('input')!;
   const enterButton = welcome.querySelector<HTMLButtonElement>('.welcome-enter')!;
@@ -47,10 +48,10 @@ async function choose(signal: AbortSignal) {
   }
   function sync() {
     const value = name(), existing = matched();
-    changeText(kind, !value ? '' : existing ? '已有用户' : listState === 'ready' ? '新用户' : '待确认');
+    changeText(kind, !value ? '' : existing ? t(msg("identitySettings.existingUser", "已有用户")) : listState === 'ready' ? t(msg("identitySettings.newUser", "新用户")) : t(msg("identitySettings.unconfirmed", "待确认")));
     kind.dataset.kind = !value ? 'guest' : existing ? 'existing' : listState === 'ready' ? 'new' : 'pending';
-    kind.title = kind.dataset.kind === 'pending' ? '用户列表尚未确认，继续时会按名字匹配或创建用户' : '';
-    changeText(label, busy ? '正在进入…' : value ? `以「${value}」的身份继续` : '以访客身份继续');
+    kind.title = kind.dataset.kind === 'pending' ? t(msg("identity.unconfirmedHint", "用户列表尚未确认，继续时会按名字匹配或创建用户")) : '';
+    changeText(label, busy ? t(msg("identity.entering", "正在进入…")) : value ? t(msg("identitySettings.continueAs", "以「{p0}」的身份继续"), { p0: value }) : t(msg("identity.continueAsGuest", "以访客身份继续")));
     enterButton.title = label.textContent!;
     // Guest is a state of the same primary action.
     enterButton.toggleAttribute('data-guest', !value);
@@ -86,7 +87,22 @@ async function choose(signal: AbortSignal) {
     if (busy || closing) return;
     input.value = user.name; alert.textContent = ''; sync(); renderList(); setExpanded(false); input.focus();
   }
+  let showAllUsers = false;
+  function localizeEmpty() {
+    empty.textContent = listState === 'loading' ? t(msg("identity.loadingUsers", "正在读取用户…")) : listState === 'error' ? t(msg("identity.usersLoadFailed", "暂时无法读取用户，可直接输入名字继续。")) : filtered.length ? '' : t(msg("identity.noMatchingUsers", "没有匹配的用户"));
+    empty.hidden = !empty.textContent;
+  }
+  function localize() {
+    welcome.querySelector('#identity-welcome-title')!.textContent = t(msg("identity.welcomeTitle", "怎么称呼你？"));
+    input.placeholder = t(msg("identity.nameOptional", "名字（选填）"));
+    input.setAttribute('aria-label', input.placeholder);
+    toggle.setAttribute('aria-label', t(msg("identity.chooseExisting", "选择已有用户")));
+    list.setAttribute('aria-label', t(msg("identitySettings.existingUser", "已有用户")));
+    // Names, filter mode, options and keyboard selection are user state.
+    sync(); localizeEmpty(); positionDropdown();
+  }
   function renderList(showAll = false) {
+    showAllUsers = showAll;
     filtered = showAll ? users : users.filter(user => user.name.toLocaleLowerCase().includes(name().toLocaleLowerCase()));
     list.replaceChildren(...filtered.map((user, index) => {
       const row = document.createElement('div'); row.id = `welcome-user-${index}`; row.className = 'welcome-user';
@@ -96,8 +112,7 @@ async function choose(signal: AbortSignal) {
       row.addEventListener('click', () => select(user));
       return row;
     }));
-    empty.textContent = listState === 'loading' ? '正在读取用户…' : listState === 'error' ? '暂时无法读取用户，可直接输入名字继续。' : filtered.length ? '' : '没有匹配的用户';
-    empty.hidden = !empty.textContent;
+    localizeEmpty();
     setActive(-1);
   }
   input.addEventListener('input', () => { alert.textContent = ''; sync(); renderList(); });
@@ -146,17 +161,18 @@ async function choose(signal: AbortSignal) {
   window.visualViewport?.addEventListener('resize', positionDropdown);
   window.visualViewport?.addEventListener('scroll', positionDropdown);
   signal.addEventListener('abort', abort, { once: true });
+  onLanguageChange(() => { if (!closing) localize(); }, controller.signal);
   sync(); renderList(); welcome.showModal();
   // Listing never delays guest entry or steals focus after the user starts typing.
   void (async () => {
     try {
       const response = await fetch('/api/users', { cache: 'no-store', signal: AbortSignal.any([signal, controller.signal, AbortSignal.timeout(4000)]) });
       const result = await response.json();
-      if (!response.ok) throw new Error(result.error ?? '无法读取用户列表。');
+      if (!response.ok) throw new Error(result.error ?? t(msg("identitySettings.unableToReadUserList", "无法读取用户列表。")));
       users = result.users; listState = 'ready';
     } catch { listState = 'error'; }
     if (closing) return;
-    sync(); renderList();
+    sync(); renderList(showAllUsers);
     if (toggle.hidden) setExpanded(false);
   })();
   if (signal.aborted) abort();

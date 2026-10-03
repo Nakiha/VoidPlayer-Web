@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { annotationThumbnails } from './annotation-thumbnails.ts';
 
 export type MarkPreview = { url: string; width: number; height: number; signature?: string };
@@ -14,7 +15,7 @@ export function publishMarkPreview(id: string, preview: MarkPreview) {
   for (const thumbnail of document.querySelectorAll<HTMLElement>('[data-mark-thumbnail]')) {
     if (thumbnail.dataset.markThumbnail !== id) continue;
     let image = thumbnail.querySelector('img');
-    if (!image) { image = document.createElement('img'); image.alt = '标注画面'; thumbnail.replaceChildren(image); }
+    if (!image) { image = document.createElement('img'); image.alt = t(msg('annotation.framePreview', '标注画面')); thumbnail.replaceChildren(image); }
     image.width = preview.width; image.height = preview.height; image.src = preview.url;
   }
 }

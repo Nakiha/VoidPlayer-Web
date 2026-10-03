@@ -23,7 +23,7 @@ try {
   const uploaded = await fetch(base + '/api/logs', { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'log', 'content-type': 'application/json' }, body: JSON.stringify({ schema: 'voidplayer-web-log', sessionId: 'admin-browser', events: [{ type: 'test', text: '<script>alert(1)</script>' }] }) });
   const log = await uploaded.json(); assert.equal(uploaded.status, 201);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
-  const context = await browser.newContext({ viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
+  const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
   const player = await context.newPage(); const errors = [];
   player.on('pageerror', e => errors.push(e.message));
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');

@@ -1,0 +1,13 @@
+{
+  "engine": "chromium",
+  "assertions": [
+    "onboarding-text/aria",
+    "onboarding-filter/active-option/node/focus/selection",
+    "folder-meta/node/focus",
+    "stalled-load-stage/cancel-node/focus",
+    "relink-text/aria",
+    "relink-file/dialog/node/focus",
+    "relink-cancel-preserves-session"
+  ],
+  "errors": []
+}

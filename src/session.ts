@@ -1,3 +1,5 @@
+import { mediaDiagnostic } from './media-errors.ts';
+import type { MediaDiagnostic } from './media-errors.ts';
 import { unavailableSource } from './session/unavailable-source.ts';
 import { getPresentationChannel, setPresentationChannel } from './presentation-channel.ts';
 import { SessionResources } from './session/resources.ts';
@@ -115,7 +117,7 @@ export class ReviewSession {
         setColorMode(previous);setReferenceDecode(previousDecode);
         const rollbackErrors: Error[] = [];
         const isolate = (slot: Slot, track: Track, phase: 'source' | 'presentation' | 'redraw', cause: unknown) => {
-          const failure = new Error(`色彩模式回滚失败（${phase}）：${errorText(cause)}`);
+          const failure = new Error(`色彩模式回滚失败（${phase}）：${errorText(cause)}`, {cause});
           rollbackErrors.push(failure);
           log.warn('session', '色彩模式回滚失败', { slot, mediaId: track.source.info.id, phase,
             colorMode: previous, referenceDecode: previousDecode, error: errorText(cause), originalError: errorText(error) });
@@ -217,6 +219,8 @@ export class ReviewSession {
   private playing = false;
   private positionUs = 0;
   private error: string | null = null;
+  private errorDiagnostic: MediaDiagnostic | undefined;
+  getErrorDiagnostic() { return this.errorDiagnostic; }
   private decodeMs = 0;
   private listeners = new Set<() => void>();
   private progressListeners = new Set<(positionUs: number, durationUs: number) => void>();
@@ -578,7 +582,7 @@ export class ReviewSession {
       this.cancelLoad(); this.pause();
       const revision = this.revision;
       this.busy = true;
-      this.error = null;
+      this.error = null; this.errorDiagnostic = undefined;
       this.emit();
       const current = () => revision === this.revision;
       // 本操作的解码信号：新操作进入（pause）即中止旧信号，旧等待快速失败并让出队列；
@@ -593,7 +597,7 @@ export class ReviewSession {
           if (!current() || signal.aborted) throw new DOMException('操作已被更新的请求取代。', 'AbortError');
           return result;
         } catch (e) {
-          if (current()) { this.error = e instanceof Error ? e.message : String(e); if (!(e instanceof Error && e.name === 'AbortError')) this.captureDiagnostics('operation-error', e); }
+          if (current()) { this.error = e instanceof Error ? e.message : String(e); this.errorDiagnostic = mediaDiagnostic(e); if (!(e instanceof Error && e.name === 'AbortError')) this.captureDiagnostics('operation-error', e); }
           throw e;
         } finally {
           if (current()) { this.busy = false; withLogContext(context, () => this.emit()); }
@@ -624,7 +628,7 @@ export class ReviewSession {
     const check = () => { if (!current()) throw controller.signal.reason ?? new DOMException('载入已被取代。', 'AbortError'); };
     const progress: MediaOpenProgress = stage => { if (current() && status.state === 'loading') { status.stage = stage; this.emit(); } };
     this.abortIncoming = abort;
-    this.mediaLoad = status; this.error = null; this.emit();
+    this.mediaLoad = status; this.error = null; this.errorDiagnostic = undefined; this.emit();
     try {
       await traceOperation('session', 'load', { slot, replacing, targetPtsUs: status.targetPtsUs }, async () => {
         // Keep the queued milestone observable and never call a superseded opener.
@@ -682,7 +686,7 @@ export class ReviewSession {
     } catch (error) {
       if (current()) {
         status.state = 'error'; status.error = errorText(error); status.finishedAt = Date.now();
-        this.error = errorText(error); this.captureDiagnostics('load-error', error);
+        this.error = errorText(error); this.errorDiagnostic = mediaDiagnostic(error); this.captureDiagnostics('load-error', error);
       }
       scoped[controller.signal.aborted ? 'info' : 'warn']('session', `载入轨道 ${slot} 失败`, { replacing, targetPtsUs: status.targetPtsUs, error: errorText(error) });
       throw controller.signal.aborted ? controller.signal.reason : error;
@@ -990,7 +994,7 @@ export class ReviewSession {
       if (revision !== this.revision) return this.getState();
     }
     if (this.playableEntries().some(([, t]) => !t.frame)) throw new Error('请先完成画面定位。');
-    this.error = null;
+    this.error = null; this.errorDiagnostic = undefined;
     ++this.revision;
     this.playing = true;
     scoped.info('session', '开始播放', { positionUs: this.positionUs });
@@ -1095,7 +1099,7 @@ export class ReviewSession {
       if (active()) {
         this.captureDiagnostics('playback-error', error);
         this.playing = false;
-        this.error = errorText(error);
+        this.error = errorText(error); this.errorDiagnostic = mediaDiagnostic(error);
         scoped.warn('session', '播放中断', { positionUs: this.positionUs, error: this.error });
       }
     } finally {

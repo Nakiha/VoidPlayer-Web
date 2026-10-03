@@ -463,7 +463,7 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
   .color-flow-step { display: block; }
   .color-flow-unit { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; row-gap: 3px; text-align: left; }
   .color-flow-unit > .icon { grid-row: 1 / span 2; width: 28px; height: 28px; justify-self: center; margin: 0; }
-  .color-flow-link { display: flex; gap: 10px; height: 16px; margin: 8px 0 8px 8px; }
+  .color-flow-link { display: flex; gap: 10px; min-height: 16px; height: auto; margin: 8px 0 8px 8px; }
   .color-flow-link span { position: static; transform: none; }
   .color-flow-connector-horizontal { display: none; }
   .color-flow-connector-vertical { display: block; width: 16px; height: 16px; order: -1; }
@@ -483,3 +483,54 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .color-benchmark-result > p { margin: 0 0 var(--settings-heading-gap); }
 
 .color-mode-options button { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
+
+/* Long localized labels wrap; the language picker fits the same narrow pane. */
+.language-settings-card { padding: 14px 16px; }
+#language-choice { width: 100%; max-width: 100%; }
+.settings-content .settings-action-row { flex-wrap: wrap; }
+.settings-content .settings-action-row > button { max-width: 100%; white-space: normal; }
+.settings-content button { overflow-wrap: anywhere; }
+
+@media (max-width: 640px) {
+  html[lang=en] .workspace-current-row { flex-wrap: wrap; }
+  html[lang=en] .workspace-current-row input { flex-basis: 100%; width: 100%; }
+  html[lang=en] .workspace-current-actions { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+  html[lang=en] .workspace-current-actions button { max-width: 100%; white-space: normal; }
+}
+#settings-pane-logs :is(.log-detail-actions, .log-preview-navigation) { max-width: 100%; min-width: 0; flex-wrap: wrap; }
+#settings-pane-logs .log-report-toolbar button,
+.settings-content :is(.settings-file-actions, .identity-actions, .log-submit-row) > button { max-width: 100%; white-space: normal; }
+.settings-content :is(p, h4, strong, span) { overflow-wrap: anywhere; }
+.color-decode-controls, #hardware-depth-row { flex-wrap: wrap; min-width: 0; }
+.color-segmented { max-width: 100%; min-width: 0; }
+.color-segmented button { height: auto; white-space: normal; }
+html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text-align: center; overflow-wrap: anywhere; }
+@container (max-width: 460px) {
+  html[lang=en] .color-flow-link span { max-width: none; text-align: left; }
+}
+
+.accent-custom-row, .accent-custom-inputs { flex-wrap: wrap; min-width: 0; max-width: 100%; }
+.accent-custom-choice { max-width: 100%; white-space: normal; }
+.identity-input-row { flex-wrap: wrap; min-width: 0; }
+#settings-pane-identity .identity-input-row > button { max-width: 100%; white-space: normal; }
+.settings-navigation [role=tab] { height: auto; min-height: 34px; white-space: normal; }
+.settings-floating-header h2 { min-width: 0; overflow-wrap: anywhere; }
+#identity-save { max-width: 100%; white-space: normal; }
+@media (max-width: 640px) {
+  .identity-compact #identity-form { grid-template-columns: minmax(0, 1fr); }
+}
+#settings-pane-logs .log-send-footer { min-width: 0; flex-wrap: wrap; }
+#settings-pane-logs .log-submit-row { min-width: 0; max-width: 100%; }
+@media (max-width: 640px) {
+  #settings-pane-logs .log-send-footer { flex-direction: column; align-items: stretch; }
+  #settings-pane-logs .log-submit-row { width: 100%; }
+}
+/* Very long localized edge labels use the same readable vertical steps. */
+.color-flow[data-long-labels] .color-flow-nodes { display: flex; flex-direction: column; width: fit-content; max-width: 100%; margin-inline: auto; }
+.color-flow[data-long-labels] .color-flow-step { display: block; }
+.color-flow[data-long-labels] .color-flow-unit { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; row-gap: 3px; text-align: left; }
+.color-flow[data-long-labels] .color-flow-unit > .icon { grid-row: 1 / span 2; width: 28px; height: 28px; justify-self: center; margin: 0; }
+.color-flow[data-long-labels] .color-flow-link { display: flex; gap: 10px; min-height: 16px; height: auto; margin: 8px 0 8px 8px; }
+.color-flow[data-long-labels] .color-flow-link span { position: static; transform: none; max-width: none; text-align: left; }
+.color-flow[data-long-labels] .color-flow-connector-horizontal { display: none; }
+.color-flow[data-long-labels] .color-flow-connector-vertical { display: block; width: 16px; height: 16px; order: -1; flex: none; }

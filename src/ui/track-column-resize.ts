@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { installResizeGesture } from './resize-gesture.ts';
 
 /** Header and every row share one column width; resizing does not rebuild tracks. */
@@ -19,7 +20,7 @@ export function installTrackColumnResize(container: HTMLElement, handle: HTMLEle
     handle.setAttribute('aria-valuemin', String(Math.round(min)));
     handle.setAttribute('aria-valuemax', String(Math.round(max)));
     handle.setAttribute('aria-valuenow', String(Math.round(width)));
-    handle.setAttribute('aria-valuetext', `${Math.round(width)} 像素`);
+    handle.setAttribute('aria-valuetext', t(msg('ui.pixelWidth','{width} 像素'),{width:Math.round(width)}));
   }
   installResizeGesture(handle, {
     axis: 'x', direction: 1, size: () => token('--track-label-size'), bounds,
@@ -28,6 +29,7 @@ export function installTrackColumnResize(container: HTMLElement, handle: HTMLEle
   }, signal);
   const observer = new ResizeObserver(refresh); observer.observe(container);
   window.addEventListener('resize', refresh, { signal });
+  onLanguageChange(refresh, signal);
   signal.addEventListener('abort', () => observer.disconnect(), { once: true });
   refresh();
   return { width: () => Math.round(token('--track-label-size')), resize(value: number) { preferred = value; refresh(); } };

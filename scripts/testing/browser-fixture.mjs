@@ -10,6 +10,7 @@ import { repositoryRoot } from './manifest.mjs';
 export async function withBrowserFixture({ caseName, engine = 'webkit', pageOptions = {}, launchOptions = {}, timeoutMs = 300000,
   phaseTimeoutMs = 30000, cleanupTimeoutMs = 10000, signal, directory = process.env.VOIDPLAYER_TEST_ARTIFACTS ?? path.join(repositoryRoot, '.run/browser-fixtures', `${caseName}-${engine}`),
   dependencies = {}, roots = [path.join(repositoryRoot, 'fixtures/video')],
+  staticDir = path.join(repositoryRoot, 'dist'),
 }, body) {
   if (!['chromium', 'webkit'].includes(engine)) throw new Error(`Unknown browser engine: ${engine}`);
   await mkdir(directory, { recursive: true });
@@ -73,7 +74,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     const startService = dependencies.startService ?? (async () => {
       const [{ createMediaServer }, { MediaLibraryIndex }] = await Promise.all([import('../../server/app.ts'), import('../../server/library.ts')]);
       const library = new MediaLibraryIndex(roots, { database: path.join(temp, 'library.sqlite'), watch: false });
-      const server = createMediaServer({ roots, library, staticDir: path.join(repositoryRoot, 'dist'), onLog() {} });
+      const server = createMediaServer({ roots, library, staticDir, onLog() {} });
       let closed = false;
       const close = async () => {
         if (closed) return; closed = true;
@@ -95,14 +96,14 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
       return (await import('playwright'))[engine].launch({ headless: true,
         handleSIGINT: false, handleSIGTERM: false, handleSIGHUP: false, ...launchOptions });
     }, value => value.close());
-    context = await acquire('browser-context', () => browser.newContext(pageOptions), value => value.close());
+    context = await acquire('browser-context', () => browser.newContext({ locale: 'zh-CN', ...pageOptions }), value => value.close());
     page = await acquire('page-create', () => context.newPage(), value => value.close());
     evidence = recordBrowserEvidence(page);
     let extraContexts = 0;
     const fixture = { page, browser, context, server: service.server, url: service.url, temp, directory, artifact,
       newContext: async options => {
         const previousPhase = phase;
-        const value = await acquire(`extra-context-${++extraContexts}`, () => browser.newContext(options), value => value.close());
+        const value = await acquire(`extra-context-${++extraContexts}`, () => browser.newContext({ locale: 'zh-CN', ...options }), value => value.close());
         phase = previousPhase;
         return value;
       },

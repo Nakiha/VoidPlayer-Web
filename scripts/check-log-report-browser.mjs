@@ -9,7 +9,7 @@ const server=createMediaServer({roots:[],staticDir:path.resolve('dist'),logsDir,
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await(name==='webkit'?webkit:chromium).launch({headless:true});
 try{
- const page=await browser.newPage({viewport:{width:1512,height:982},colorScheme:'dark'}),errors=[];let uploads=0;
+ const page=await browser.newPage({locale:'zh-CN', viewport:{width:1512,height:982},colorScheme:'dark'}),errors=[];let uploads=0;
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/logs'))uploads++;});
  const origin=`http://127.0.0.1:${server.address().port}`;
  await page.route('**/log-migration-seed',route=>route.fulfill({contentType:'text/html',body:'<!doctype html>'}));

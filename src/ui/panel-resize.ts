@@ -1,3 +1,4 @@
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import { animatePanelLayout } from './panel-motion.ts';
 /** Bound panel widths while reserving room for the comparison surface. */
 export function panelWidthBounds(workspaceWidth: number, otherWidth: number, overlay: boolean, min = 160, max = 480, comparisonMin = 360) {
@@ -35,7 +36,7 @@ export function installPanelResize(workspace: HTMLElement, signal: AbortSignal, 
     handle.setAttribute('aria-valuemin', String(Math.ceil(bounds.min)));
     handle.setAttribute('aria-valuemax', String(Math.floor(bounds.max)));
     handle.setAttribute('aria-valuenow', String(width));
-    handle.setAttribute('aria-valuetext', `${width} 像素`);
+    handle.setAttribute('aria-valuetext', t(msg('ui.pixelWidth','{width} 像素'),{width}));
     return { width, ...bounds };
   };
   for (const panel of panels) {
@@ -64,7 +65,7 @@ export function installPanelResize(workspace: HTMLElement, signal: AbortSignal, 
       panelEl.style.setProperty('--panel-veil-opacity', String(Math.min(1, overshoot / readToken('--panel-collapse-distance'))));
       handle.classList.toggle('collapse-ready', intent.collapse);
       update(panel);
-      if (intent.collapse) handle.setAttribute('aria-valuetext', '松开收起面板');
+      if (intent.collapse) handle.setAttribute('aria-valuetext', t(msg('ui.releaseCollapse','松开收起面板')));
     }, { signal });
     const finish = (cancel: boolean) => {
       if (!drag) return;
@@ -97,6 +98,7 @@ export function installPanelResize(workspace: HTMLElement, signal: AbortSignal, 
   }
   const refresh = () => panels.forEach(update);
   window.addEventListener('resize', refresh, { signal });
+  onLanguageChange(refresh, signal);
   refresh();
   return { refresh };
 }

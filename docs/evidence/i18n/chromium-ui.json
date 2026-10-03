@@ -1,0 +1,25 @@
+{
+  "engine": "chromium",
+  "switchMs": 20.21745800000008,
+  "assertions": [
+    "playing-switch",
+    "no-session-operations",
+    "stable-workers/source/canvas",
+    "cached-inspector",
+    "offset-selection",
+    "workspace-draft",
+    "report-draft",
+    "open-settings",
+    "open-menu-focus",
+    "flow-nodes",
+    "user-marks",
+    "rapid-switch",
+    "reload-preference",
+    "cold-chunk-failure/retry",
+    "complete-settings",
+    "cold-stale-response",
+    "system-locale-normalization",
+    "stored-preference-precedence"
+  ],
+  "errors": []
+}

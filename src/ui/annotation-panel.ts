@@ -5,6 +5,7 @@ import { createIconButton } from './controls.ts';
 import { icon } from './icons.ts';
 import { markSymbol, identifyMark, bindMarkHover } from './mark-symbol.ts';
 import type { ReviewSession } from '../session.ts';
+import { onLanguageChange, t, msg , th } from '../i18n.ts';
 
 type AnnotationEntry = { mark: Mark; slot: Slot; offsetUs: number };
 
@@ -26,12 +27,12 @@ function markContent(mark: Mark, slot: Slot, actions?: HTMLElement, session?: Re
   const thumbnail = document.createElement('span'); thumbnail.className = 'mark-thumbnail'; thumbnail.dataset.markThumbnail = mark.id;
   const preview = annotationThumbnails.get(mark.id);
   if (preview) {
-    const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = '标注画面'; image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
-  } else { thumbnail.textContent = mark.text || '暂无预览'; }
+    const image = document.createElement('img'); image.src = preview.url; image.width = preview.width; image.height = preview.height; image.alt = t(msg("marks.previewImage", "标注画面")); image.loading = 'lazy'; image.onerror = () => { image.hidden=true; }; thumbnail.append(image);
+  } else { thumbnail.textContent = mark.text || t(msg("marks.noPreview", "暂无预览")); }
   content.append(thumbnail);
   const footer = document.createElement('span'); footer.className = 'mark-footer';
   const note = document.createElement('span'); note.className = 'mark-note'; note.textContent = mark.text; note.title = mark.text;
-  const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || '未署名';
+  const author = document.createElement('span'); author.className = 'mark-author'; author.textContent = mark.author?.name || t(msg("marks.anonymous", "未署名"));
   footer.append(note, author); content.append(footer); return content;
 }
 
@@ -47,9 +48,12 @@ export function installAnnotationPanel(
   const toggle = document.getElementById('toggle-marks')!;
   const preview = document.createElement('div');
   preview.id = 'annotation-preview'; preview.className = 'annotation-preview';
-  preview.role = 'dialog'; preview.setAttribute('aria-label', '标注'); preview.hidden = true; document.body.append(preview);
+  preview.role = 'dialog'; preview.setAttribute('aria-label', t(msg("marks.previewDialog", "标注"))); preview.hidden = true; document.body.append(preview);
   const lifecycle = new AbortController();
+  // Re-render rows on language change; the closure only runs after install.
+  const stopLanguage = onLanguageChange(() => localize(), lifecycle.signal);
   let expanded = false;
+  let lastEntries: AnnotationEntry[] = [];
   let anchor: HTMLElement | null = null;
   let dismiss: ReturnType<typeof setTimeout> | undefined;
   const cancelDismiss = () => { clearTimeout(dismiss); };
@@ -60,13 +64,13 @@ export function installAnnotationPanel(
     if (!preview.contains(document.activeElement)) hidePreview();
   }, 150); };
   function actions(mark: Mark, _slot: Slot, container: HTMLElement) {    const actions = document.createElement('div'); actions.className = 'annotation-card-actions';
-    const removeButton = createIconButton({ glyph: 'trash', className: 'annotation-remove', label: `删除标注 ${mark.text || formatTime(mark.frame.ptsUs)}`, tooltip: '删除标注' });
+    const removeButton = createIconButton({ glyph: 'trash', className: 'annotation-remove', label: t(msg("marks.deleteMarkName", "删除标注 {label}"), { label: mark.text || formatTime(mark.frame.ptsUs) }), tooltip: t(msg("marks.deleteMark", "删除标注")) });
     removeButton.onclick = e => {
       e.stopPropagation();
       const confirmation = document.createElement('div'); confirmation.className = 'annotation-confirm';
-      const label = document.createElement('span'); label.textContent = '删除这条标注？';
-      const cancel = document.createElement('button'); cancel.textContent = '取消';
-      const accept = document.createElement('button'); accept.textContent = '删除'; accept.className = 'annotation-delete-confirm';
+      const label = document.createElement('span'); label.textContent = t(msg("marks.deleteConfirm", "删除这条标注？"));
+      const cancel = document.createElement('button'); cancel.textContent = t(msg("marks.cancel", "取消"));
+      const accept = document.createElement('button'); accept.textContent = t(msg("marks.delete", "删除")); accept.className = 'annotation-delete-confirm';
       cancel.onclick = () => { confirmation.remove(); removeButton.focus(); };
       accept.onclick = () => { hidePreview(); remove(mark.id); toggle.focus(); };
       confirmation.append(label, cancel, accept); container.append(confirmation); cancel.focus();
@@ -98,7 +102,7 @@ export function installAnnotationPanel(
     list.querySelectorAll('.annotation-confirm').forEach(confirmation => confirmation.remove());
     dock.classList.toggle('marks-collapsed', !expanded);
     toggle.setAttribute('aria-expanded', String(expanded));
-    const label = expanded ? '显示标注符号' : '显示标注卡片';
+    const label = t(expanded ? msg("marks.showSymbols", "显示标注符号") : msg("marks.showCards", "显示标注卡片"));
     toggle.setAttribute('aria-label', label); toggle.title = label;
     toggle.innerHTML = icon(expanded ? 'marker' : 'grid');
     for (const button of list.querySelectorAll('.mark-entry')) button.setAttribute('aria-haspopup', expanded ? 'false' : 'dialog');
@@ -119,18 +123,19 @@ export function installAnnotationPanel(
     }
   }, { capture: true, signal: lifecycle.signal });
   function renderEntries(entries: AnnotationEntry[]) {
+    lastEntries = entries;
       const scrollLeft = list.scrollLeft;
       dock.classList.toggle('annotations-empty', !entries.length);
       hidePreview(); list.replaceChildren();
       if (!entries.length) {
         const empty = document.createElement('span'); empty.className = 'marks-empty';
-        const hint = document.createElement('span'); hint.className = 'marks-empty-hint'; hint.textContent = '点击 + 添加';
-        empty.append('暂无标注', hint); list.append(empty);
+        const hint = document.createElement('span'); hint.className = 'marks-empty-hint'; hint.textContent = t(msg("marks.addHint", "点击 + 添加"));
+        empty.append(t(msg("admin.noMarksAdmin", "暂无标注")), hint); list.append(empty);
       }
       for (const { mark: savedMark, slot, offsetUs } of entries) {
         const mark = { ...savedMark, frame: { ...savedMark.frame, ptsUs: savedMark.frame.ptsUs + offsetUs } };
         const { row, entry: button } = markRow(mark, slot);
-        button.setAttribute('aria-label', `轨道 ${slot} 标注 ${formatTime(mark.frame.ptsUs)} ${mark.text}`);
+        button.setAttribute('aria-label', t(msg("marks.entryLabel", "轨道 {slot} 标注 {time} {text}"), { slot, time: formatTime(mark.frame.ptsUs), text: mark.text }));
         button.setAttribute('aria-haspopup', expanded ? 'false' : 'dialog');
         button.setAttribute('aria-controls', preview.id);
         button.onclick = () => { if (mark.frame.ptsUs >= 0) seek(mark.frame.ptsUs); };
@@ -144,8 +149,31 @@ export function installAnnotationPanel(
       }
       list.scrollLeft = scrollLeft;
   }
+  function localize() {
+    for(const image of document.querySelectorAll<HTMLImageElement>('[data-mark-thumbnail] img, .seek-preview-thumbnail'))image.alt=t(msg('annotation.framePreview', '标注画面'));
+    const toggleLabel=t(expanded?msg('marks.showSymbols','显示标注符号'):msg('marks.showCards','显示标注卡片'));
+    toggle.setAttribute('aria-label',toggleLabel);toggle.title=toggleLabel;
+    preview.setAttribute('aria-label',t(msg('marks.previewDialog','标注')));
+    const empty=list.querySelector('.marks-empty');if(empty){empty.firstChild!.textContent=t(msg('admin.noMarksAdmin','暂无标注'));empty.querySelector('.marks-empty-hint')!.textContent=t(msg('marks.addHint','点击 + 添加'));}
+    for(const root of [list,preview]) {
+      for(const row of root.querySelectorAll<HTMLElement>('.annotation-row')) {
+        const saved=lastEntries.find(entry=>entry.mark.id===row.dataset.markId);if(!saved)continue;
+        const mark=saved.mark;
+        const thumbnail=row.querySelector('.mark-thumbnail');
+        if(thumbnail&&!thumbnail.querySelector('img'))thumbnail.textContent=mark.text||t(msg('marks.noPreview','暂无预览'));
+        const author=row.querySelector('.mark-author');if(author&&!mark.author?.name)author.textContent=t(msg('marks.anonymous','未署名'));
+        const remove=row.querySelector<HTMLElement>('.annotation-remove');if(remove){remove.setAttribute('aria-label',t(msg('marks.deleteMarkName','删除标注 {label}'),{label:mark.text||formatTime(mark.frame.ptsUs)}));remove.dataset.tooltip=t(msg('marks.deleteMark','删除标注'));}
+        for(const confirm of row.querySelectorAll('.annotation-confirm')){confirm.querySelector('span')!.textContent=t(msg('marks.deleteConfirm','删除这条标注？'));const buttons=confirm.querySelectorAll('button');buttons[0].textContent=t(msg('marks.cancel','取消'));buttons[1].textContent=t(msg('marks.delete','删除'));}
+      }
+    }
+    for (const button of list.querySelectorAll<HTMLElement>('.mark-entry')) {
+      const entry = lastEntries.find(entry => entry.mark.id === button.dataset.markId);
+      if(entry) button.setAttribute('aria-label', t(msg('marks.entryLabel', '轨道 {slot} 标注 {time} {text}'), {slot:entry.slot,time:formatTime(entry.mark.frame.ptsUs+entry.offsetUs),text:entry.mark.text}));
+    }
+  }
   return {
     expanded: () => expanded, setExpanded, hidePreview, render: renderEntries,
-    dispose() { hidePreview(); lifecycle.abort(); preview.remove(); toggle.onclick = null; },
+    dispose() { stopLanguage(); hidePreview(); lifecycle.abort(); preview.remove(); toggle.onclick = null; },
   };
+
 }
