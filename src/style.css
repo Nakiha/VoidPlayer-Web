@@ -771,13 +771,6 @@ button.icon-button[aria-pressed=true] {
 @keyframes source-activity-pulse { from { transform: translateX(0); } to { transform: translateX(180%); } }
 @media (prefers-reduced-motion: reduce) { .source-activity-meter span { animation: none; width: 100%; opacity: .55; } }
 
-.annotation-sync-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-#annotation-recovery { display: flex; flex-direction: column; gap: 12px; }
-#annotation-recovery[hidden], #annotation-recovery [hidden] { display: none; }
-.annotation-conflict { padding: 12px 0; }
-.annotation-conflict > button { margin-right: 8px; }
-
-
 .track-failure { position: absolute; inset: auto 12px 12px; z-index: 6; padding: 10px 12px; background: var(--warning-fill); color: var(--warning-text); border-radius: 6px; max-height: 40%; overflow: auto; font-size: var(--text-sm); overflow-wrap: anywhere; }
 
 .log-preview-navigation { display:flex; align-items:center; gap:8px; padding:8px; font-size:12px; }

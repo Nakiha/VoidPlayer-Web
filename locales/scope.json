@@ -60,6 +60,7 @@
     "src/ui/source-activity.ts",
     "src/ui/source-catalog.ts",
     "src/ui/source-scrollbar.ts",
+    "src/ui/filename.ts",
     "src/ui/start-panel-resize.ts",
     "src/ui/theme.ts",
     "src/ui/toast.ts",

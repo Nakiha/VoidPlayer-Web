@@ -1,5 +1,6 @@
 import { t, msg } from '../i18n.ts';
 import { icon } from './icons.ts';
+import { shortcutTooltip } from './shortcuts.ts';
 
 /** UI-only visibility: never resize stages, change playback or discard panel state. */
 export function installViewportChrome(root: HTMLElement, button: HTMLButtonElement) {
@@ -14,7 +15,7 @@ export function installViewportChrome(root: HTMLElement, button: HTMLButtonEleme
     button.innerHTML = icon('focus');
     button.setAttribute('aria-pressed', String(focused));
     button.setAttribute('aria-label', t(msg("shell.focusMode", "专注模式")));
-    button.dataset.tooltip = t(msg("shell.focusMode", "专注模式"));
+    button.dataset.tooltip = shortcutTooltip(t(msg("shell.focusMode", "专注模式")), 'focusMode');
   }
   button.onclick = () => setFocused(!focused);
   return {

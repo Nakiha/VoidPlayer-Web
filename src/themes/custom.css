@@ -1,0 +1,24 @@
+/* Generated base palette; geometry, drawing ink and media pixels remain unchanged. */
+:root[data-custom-theme] {
+  --surface: var(--custom-theme-surface); --surface-panel: var(--custom-theme-panel); --surface-table: var(--custom-theme-table);
+  --surface-group: var(--custom-theme-group); --surface-hover: var(--custom-theme-hover);
+  --surface-input: var(--custom-theme-input); --surface-input-solid: var(--custom-theme-input);
+  --surface-control: color-mix(in srgb, var(--text) 6%, transparent); --surface-stripe: color-mix(in srgb, var(--text) 3%, transparent);
+  --text: var(--custom-theme-text); --text-secondary: var(--custom-theme-secondary); --text-subtle: var(--custom-theme-subtle);
+  --preview-fill: var(--custom-theme-preview); --viewport-background: var(--custom-theme-viewport);
+  --viewport-text: var(--text); --viewport-muted: var(--text-secondary); --viewport-grid-label: var(--text-secondary);
+  --viewport-grid-line: color-mix(in srgb, var(--text-secondary) 12%, transparent);
+  --transport-muted: var(--text-secondary);
+  --timeline-track: var(--custom-theme-group); --track-fill: var(--custom-theme-group); --track-playhead: var(--text-secondary);
+  --segment-fill: var(--custom-theme-group); --segment-selected-fill: var(--custom-theme-hover); --segment-selected-solid: var(--custom-theme-hover);
+  --search-fill: var(--custom-theme-input); --search-solid: var(--custom-theme-input);
+  --contrast-text-secondary: var(--text); --contrast-text-subtle: var(--text);
+  --contrast-border: var(--text-secondary); --contrast-border-soft: var(--text-secondary);
+  --annotation-edit-outline: var(--accent);
+}
+:root[data-custom-theme][data-accent] {
+  --accent: var(--custom-theme-accent);
+  --accent-on: var(--surface);
+  --surface-selected: color-mix(in srgb, var(--accent) 15%, var(--surface-panel));
+  --track-active: var(--surface-selected);
+}

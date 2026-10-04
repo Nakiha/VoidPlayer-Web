@@ -1,6 +1,7 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
+import { installSourceScrollbar } from './source-scrollbar.ts';
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
 export function installSettings() {
@@ -9,6 +10,10 @@ export function installSettings() {
   const close = document.getElementById('settings-close') as HTMLButtonElement;
   const tabs = [...dialog.querySelectorAll<HTMLButtonElement>('[data-settings-pane]')];
   const life = new AbortController();
+  const scrollbar = installSourceScrollbar(document.getElementById('settings-pane-appearance')!, document.getElementById('settings-scrollbar')!, document.getElementById('settings-scrollbar-thumb')!, life.signal);
+  const contentChanges = new MutationObserver(scrollbar.update);
+  for (const pane of dialog.querySelectorAll('[role=tabpanel]')) contentChanges.observe(pane, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
+  life.signal.addEventListener('abort', () => contentChanges.disconnect(), { once: true });
   const narrow = matchMedia('(max-width: 600px)');
   const revealTab = () => {
     if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
@@ -29,6 +34,7 @@ export function installSettings() {
       tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
       document.getElementById(`settings-pane-${key}`)!.hidden = !active;
     }
+    scrollbar.setTarget(document.getElementById(`settings-pane-${id}`)!);
     revealTab();
     dialog.dispatchEvent(new CustomEvent('settings-pane-change', { detail: selected }));
   }

@@ -85,7 +85,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();
  await page.locator('#settings-open').click();
- assert.equal(await page.locator('.accent-choices [role=radio]').count(),12);
+ assert.equal(await page.locator('.accent-palette .accent-choices [role=radio]').count(),12);
  await page.locator('[data-accent-choice=sky]').click();assert.equal(await page.locator('html').getAttribute('data-accent'),'sky');
  const hex=page.locator('#accent-hex');await hex.fill('#E048B8');await hex.press('Enter');
  assert.equal(await page.locator('html').getAttribute('data-accent'),'custom');
@@ -117,6 +117,60 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await page.locator('#settings-open').click();await hex.fill('#ABC');await hex.press('Enter');
  await peer.waitForFunction(()=>document.querySelector('#accent-hex').value==='#AABBCC');
  await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open);
+ // Custom bases derive reading surfaces without changing review data or drawing ink.
+ for(const close of await page.locator('.toast-close').all()) await close.click();
+ await page.locator('#settings-open').click();
+ assert.equal(await page.locator('.theme-options [role=radio]').count(),4);
+ await page.locator('[data-theme-choice=custom]').click();
+ const baseHex=page.locator('#theme-base-hex');
+ const customBefore=await evidence(), accentPreference=await page.locator('html').getAttribute('data-accent');
+ const presets=page.locator('[data-base-choice]');
+ assert.equal(await presets.count(),12);
+ for(const button of await presets.all()) {
+  const color=await button.getAttribute('data-base-choice');await button.click();
+  assert.equal(await baseHex.inputValue(),color.toUpperCase());
+  assert.equal(await page.locator('[data-base-choice][aria-checked=true]').count(),1);
+  assert.equal(await button.getAttribute('aria-checked'),'true');
+  const swatch=await button.locator('.accent-swatch').evaluate(e=>getComputedStyle(e).backgroundColor);
+  assert.equal(swatch,`rgb(${[1,3,5].map(i=>parseInt(color.slice(i,i+2),16)).join(', ')})`,'preset circles retain their actual color in light and dark palettes');
+ }
+ await page.locator('[data-base-choice="#25272b"]').click();await page.keyboard.press('ArrowRight');
+ assert.equal(await baseHex.inputValue(),'#18304A');
+ await baseHex.fill('#445566');await baseHex.press('Enter');
+ assert.equal(await page.locator('[data-base-choice][aria-checked=true]').count(),0,'arbitrary base colors clear the preset selection');
+ for(const [color,mode] of [['#EEE7DE','light'],['#18304A','dark']]) {
+  await baseHex.fill(color);await baseHex.press('Enter');
+  assert.equal(await theme(),mode);assert.equal(await page.locator('html').getAttribute('data-custom-theme'),'');
+  assert.equal(await page.locator('html').getAttribute('data-accent'),accentPreference);
+  assert.equal(await page.locator('[data-theme-choice=custom]').getAttribute('aria-checked'),'true');
+  await peer.waitForFunction(color=>document.querySelector('#theme-base-hex').value===color,color);
+  assert.deepEqual(await evidence(),customBefore,'base edits preserve video pixels, marks and layout');
+  const colors=await page.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());});
+  const early=await context.newPage();await early.route('**/assets/*.js',route=>route.abort());await early.goto(base);
+  assert.equal(await early.locator('html').getAttribute('data-custom-theme'),'');
+  assert.deepEqual(await early.locator('html').evaluate(e=>{const style=getComputedStyle(e);return ['--surface','--surface-panel','--text','--accent'].map(token=>style.getPropertyValue(token).trim());}),colors,'custom palette matches before app modules load');await early.close();
+  await page.locator('#settings').screenshot({path:artifact(`voidplayer-custom-base-${mode}-${name}.png`)});
+  await page.setViewportSize({width:390,height:700});
+  assert.equal(await page.locator('#settings-pane-appearance').evaluate(e=>e.scrollWidth>e.clientWidth),false);
+  await page.locator('#settings').screenshot({path:artifact(`voidplayer-custom-base-mobile-${mode}-${name}.png`)});await page.setViewportSize({width:1280,height:900});
+  await page.waitForFunction(expected=>{const actual=document.querySelector('#stage-A').getBoundingClientRect();return actual.x===expected.x&&actual.y===expected.y&&actual.width===expected.width&&actual.height===expected.height;},customBefore.stage);
+ }
+ const cached=await page.evaluate(()=>localStorage.getItem('voidplayer.custom-theme'));
+ await baseHex.fill('#oops');await baseHex.press('Enter');assert.equal(await baseHex.getAttribute('aria-invalid'),'true');
+ assert.equal(await page.evaluate(()=>localStorage.getItem('voidplayer.custom-theme')),cached);
+ await baseHex.press('Escape');assert.equal(await baseHex.inputValue(),'#18304A');assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
+ await page.locator('[data-theme-choice=light]').click();assert.equal(await page.locator('#theme-base-controls').isVisible(),false);assert.equal(await page.locator('html').getAttribute('data-custom-theme'),null);
+ await page.locator('[data-theme-choice=custom]').click();assert.equal(await baseHex.inputValue(),'#18304A');
+ await page.locator('#theme-base-picker').evaluate(e=>{e.value='#204032';e.dispatchEvent(new Event('input',{bubbles:true}));});assert.equal(await baseHex.inputValue(),'#204032');
+ assert.equal(await page.locator('[data-base-choice][aria-checked=true]').count(),0);
+ await peer.waitForFunction(()=>document.querySelector('#theme-base-hex').value==='#204032');
+ await peer.reload();await peer.waitForFunction(()=>window.voidPlayer);assert.equal(await peer.locator('[data-theme-choice=custom]').getAttribute('aria-checked'),'true');assert.equal(await peer.locator('#theme-base-hex').inputValue(),'#204032');
+ const admin=await context.newPage();await admin.goto(new URL('/admin',base).href);await admin.waitForFunction(()=>document.documentElement.hasAttribute('data-custom-theme'));assert.equal(await admin.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--surface').trim()),await page.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--surface').trim()));await admin.close();
+ await page.emulateMedia({contrast:'more'});
+ const readable=await page.locator('.transport').evaluate(e=>({fill:getComputedStyle(e).backgroundColor,filter:getComputedStyle(e).backdropFilter||getComputedStyle(e).webkitBackdropFilter,solid:getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()}));
+ assert.equal(readable.filter,'none');assert.ok(readable.solid.startsWith('#'));
+ await page.emulateMedia({contrast:'no-preference'});await page.locator('[data-theme-choice=system]').click();
+ assert.equal(await page.locator('html').getAttribute('data-custom-theme'),null);await page.locator('#settings-close').click();
  await peer.close();assert.deepEqual(errors,[]);
  // Blocked storage still permits an in-memory explicit selection.
  const isolated=await newContext({colorScheme:'dark'});
@@ -125,5 +179,6 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await restricted.locator('#settings-open').click();await restricted.locator('[data-theme-choice=light]').click();assert.equal(await restricted.locator('html').getAttribute('data-theme'),'light');
  await restricted.locator('#accent-hex').fill('#246ABC');await restricted.locator('#accent-hex').press('Enter');
  assert.equal(await restricted.locator('html').getAttribute('data-accent'),'custom');
+ await restricted.locator('[data-theme-choice=custom]').click();await restricted.locator('#theme-base-hex').fill('#18304A');await restricted.locator('#theme-base-hex').press('Enter');assert.equal(await restricted.locator('html').getAttribute('data-custom-theme'),'');assert.equal(await restricted.locator('html').getAttribute('data-theme'),'dark');
  console.log(`PASS ${name}: system/manual/reload/early paint/storage sync, blocked storage, contrast, unchanged video/marks/layout, dark palette and high contrast`);
 });

@@ -3,7 +3,7 @@ import { colorSettingsShell } from './color-flow.ts';
 import { savedWorkspaceShell } from './saved-workspaces.ts';
 import { icon } from './icons.ts';
 import { buildInfo } from '../build-info.ts';
-import { ACCENTS } from './appearance.ts';
+import { ACCENTS, BASE_COLORS, customTheme } from './appearance.ts';
 import { shortcutLabel } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 export const settingsPanes = () => [
@@ -19,12 +19,13 @@ export function settingsShell() {
       <header class="settings-floating-header"><h2 id="settings-current-title">${th(msg("settingsShell.appearance", "外观"))}</h2><button id="settings-close" class="icon-button" aria-label="${th(msg("settingsShell.closeSettings", "关闭设置"))}">${icon('close')}</button></header>
       <section id="settings-pane-appearance" role="tabpanel" aria-labelledby="settings-tab-appearance" tabindex="0">
         ${paneTitle(t(msg("settingsShell.appearance", "外观")))}
-        <div class="settings-section"><h4 class="settings-section-title" id="language-label">${th(msg("language.label", "语言 / Language"))}</h4>
-          <div class="settings-group"><div class="settings-action-row language-settings"><p class="settings-caption">${th(msg("language.description", "仅更改本机界面语言，不影响视频与工作区内容。"))}</p><button id="language-choice" type="button" class="settings-choice" aria-label="${th(msg("language.label", "语言 / Language"))}"></button></div></div>
-          <p id="language-status" class="settings-caption" role="status"></p>
-        </div>
         <div class="settings-section"><h4 class="settings-section-title" id="theme-label">${th(msg("settingsShell.displayMode", "显示模式"))}</h4>
-        <div class="theme-options settings-card" role="radiogroup" aria-labelledby="theme-label">${[['system',t(msg("settingsShell.system", "跟随系统"))],['light',t(msg("settingsShell.light", "亮色"))],['dark',t(msg("settingsShell.dark", "暗色"))]].map(([id,label]) => `<button role="radio" data-theme-choice="${id}" aria-checked="false"><span class="appearance-sample sample-${id}" aria-hidden="true"><span class="sample-header"></span><span class="sample-sidebar"></span><span class="sample-content"></span></span><span>${label}</span></button>`).join('')}</div>
+        <div class="theme-options settings-card" role="radiogroup" aria-labelledby="theme-label">${[['system',t(msg("settingsShell.system", "跟随系统"))],['light',t(msg("settingsShell.light", "亮色"))],['dark',t(msg("settingsShell.dark", "暗色"))],['custom',t(msg("settingsShell.custom", "自定义"))]].map(([id,label]) => `<button role="radio" data-theme-choice="${id}" aria-checked="false"><span class="appearance-sample sample-${id}" aria-hidden="true"><span class="sample-header"></span><span class="sample-sidebar"></span><span class="sample-content"></span></span><span>${label}</span></button>`).join('')}</div>
+        <div id="theme-base-controls" class="theme-base-controls" hidden>
+          <div class="theme-base-row"><label id="theme-base-label" for="theme-base-picker">${th(msg("theme.baseColor", "基调色"))}</label><div class="theme-base-inputs"><input id="theme-base-picker" type="color" aria-label="${th(msg("theme.chooseBaseColor", "选择自定义基调色"))}"><label class="theme-base-hex-label"><span>HEX</span><input id="theme-base-hex" type="text" aria-label="${th(msg("theme.baseHex", "基调色 HEX"))}" maxlength="7" spellcheck="false" autocomplete="off" aria-describedby="theme-base-hint"></label></div></div>
+          <div class="accent-choices theme-base-choices" role="radiogroup" aria-labelledby="theme-base-label">${BASE_COLORS.map(c => `<button class="accent-choice" role="radio" data-base-choice="${c.color}" aria-checked="false" aria-label="${c.name}" data-tooltip="${c.name}" style="--base-swatch:${c.color};--base-check:${customTheme(c.color)!.dark ? '#f2f3f5' : '#16191e'}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
+        </div>
+        <p id="theme-base-hint" class="settings-caption" role="status"></p>
         </div><div class="settings-section"><div class="accent-heading"><h4 class="settings-section-title" id="accent-label">${th(msg("settingsShell.accentColor", "主题色"))}</h4><span id="accent-current"></span></div>
         <div role="radiogroup" aria-labelledby="accent-label" class="accent-palette settings-card">
           <div class="accent-choices">${ACCENTS.map(c => `<button class="accent-choice" role="radio" data-accent-choice="${c.id}" aria-label="${c.name}" data-tooltip="${c.name}" style="--swatch-light:${c.light};--swatch-dark:${c.dark}"><span class="accent-swatch">${icon('check')}</span></button>`).join('')}</div>
@@ -34,6 +35,10 @@ export function settingsShell() {
           </div>
         </div>
         <p class="settings-caption" id="accent-input-hint" role="status"></p></div>
+        <div class="settings-section"><h4 class="settings-section-title" id="language-label">${th(msg("language.label", "语言 / Language"))}</h4>
+          <div class="settings-group"><div class="settings-action-row language-settings"><button id="language-choice" type="button" class="settings-choice" aria-label="${th(msg("language.label", "语言 / Language"))}"></button></div></div>
+          <p id="language-status" class="settings-caption" role="status"></p>
+        </div>
 
       </section>
       <section id="settings-pane-workspace" role="tabpanel" aria-labelledby="settings-tab-workspace" tabindex="0" hidden>
@@ -51,7 +56,7 @@ export function settingsShell() {
       </section>
       <section id="settings-pane-shortcuts" role="tabpanel" aria-labelledby="settings-tab-shortcuts" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.shortcuts", "快捷键")))}
-        <div class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.playbackView", "播放与视图"))}</h4><div class="settings-group">${shortcutRows([[t(msg("shell.playPause", "播放 / 暂停")),['play']],[t(msg("settingsShell.previousNextFrame", "上一帧 / 下一帧")),['previous','next']],[t(msg("shell.toggleSideBySideSplit", "切换并排 / 分屏")),['layout']],[t(msg("shell.trackInfo", "轨道信息")),['panelInspector']],[t(msg("shell.bitstreamAnalysis", "码流分析")),['panelAnalysis']],[t(msg("shell.tracks", "子轨道")),['panelSubtracks']],[t(msg("shell.sources", "片源")),['panelSources']],[t(msg("shell.openSettings", "打开设置")),['settings']]])}</div>
+        <div class="settings-section"><h4 class="settings-section-title">${th(msg("settingsShell.playbackView", "播放与视图"))}</h4><div class="settings-group">${shortcutRows([[t(msg("shell.playPause", "播放 / 暂停")),['play']],[t(msg("settingsShell.previousNextFrame", "上一帧 / 下一帧")),['previous','next']],[t(msg("shell.toggleSideBySideSplit", "切换并排 / 分屏")),['layout']],[t(msg("shell.focusMode", "专注模式")),['focusMode']],[t(msg("shell.trackInfo", "轨道信息")),['panelInspector']],[t(msg("shell.bitstreamAnalysis", "码流分析")),['panelAnalysis']],[t(msg("shell.tracks", "子轨道")),['panelSubtracks']],[t(msg("shell.sources", "片源")),['panelSources']],[t(msg("shell.openSettings", "打开设置")),['settings']]])}</div>
         </div><div class="settings-section"><h4 class="settings-section-title">${th(msg("shell.annotations", "标注"))}</h4><div class="settings-group">${shortcutRows([[t(msg("settingsShell.startAnnotating", "开始标注")),['annotate']],[t(msg("settingsShell.selectPen", "选择 / 画笔")),['select','pen']],[t(msg("settingsShell.rectangleEllipse", "矩形 / 椭圆")),['rect','ellipse']],[t(msg("settingsShell.lineTextEraser", "线条 / 文字 / 橡皮擦")),['line','text','eraser']],[t(msg("shell.undo", "撤销")),['undo']],[t(msg("shell.redo", "重做")),['redo']],[t(msg("shell.deleteSelection", "删除选中对象")),['delete']],[t(msg("settingsShell.finishAnnotatingCloseWindow", "结束标注 / 关闭窗口")),['close']]])}</div>
         <p class="settings-caption">${th(msg("settingsShell.spaceAndArrowKeysRemainAvailableWhen", "输入文字时保留空格与方向键。滚轮或捏合缩放，右键拖动或双指滚动平移。"))}</p></div>
       </section>
@@ -81,6 +86,7 @@ export function settingsShell() {
         </div></section>
 
       </section>
+      <div id="settings-scrollbar" class="source-scrollbar settings-scrollbar" aria-hidden="true"><span id="settings-scrollbar-thumb"></span></div>
     </div></div>
   </dialog>`;
 }

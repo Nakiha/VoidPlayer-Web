@@ -23,10 +23,15 @@ dialog.settings-window { background: var(--surface-panel); border: 0; }
 .settings-navigation [role=tab] .icon { width: 17px; height: 17px; color: var(--text-secondary); }
 .settings-navigation [role=tab][aria-selected=true] { background: var(--surface-selected); color: var(--accent); }
 .settings-navigation [role=tab][aria-selected=true] .icon { color: inherit; }
-.settings-content { position: relative; min-width: 0; min-height: 0; }
-.settings-floating-header { --settings-header-height: 48px; position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; min-height: var(--settings-header-height); padding: 0 calc((var(--settings-header-height) - var(--button-size)) / 2) 0 40px; border: 0; background: var(--surface-panel); box-shadow: none; }
+.settings-content { --settings-header-height: 48px; position: relative; min-width: 0; min-height: 0; }
+.settings-floating-header { --settings-header-height: 48px; position: absolute; top: 0; left: 0; right: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; min-height: var(--settings-header-height); padding: 0 calc((var(--settings-header-height) - var(--button-size)) / 2) 0 40px; border: 0; background: var(--viewport-chrome-fill); -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: none; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .settings-floating-header { background: var(--surface-panel); }
+}
 .settings-floating-header h2 { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 600; }
-.settings-content > [role=tabpanel] { height: 100%; overflow: auto; padding: 58px 24px 22px; outline: none; }
+.settings-content > [role=tabpanel] { height: 100%; overflow: auto; padding: 58px 24px 22px; outline: none; scrollbar-width: none; }
+.settings-content > [role=tabpanel]::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.settings-scrollbar { top: var(--settings-header-height); bottom: 8px; right: 3px; z-index: 3; transition: none; }
 .settings-content .settings-page-title { display: none; }
 .settings-page-title {  padding-right: 28px; }
 .settings-page-title h3 { margin: 0; font-size: 20px; line-height: 1.3; font-weight: 600; }
@@ -42,7 +47,7 @@ dialog.settings-window { background: var(--surface-panel); border: 0; }
 .settings-action-row > div { min-width: 0; }
 .settings-content button:not([role=radio]):not(.icon-button) { font-size: 13px; }
 .settings-content button > .icon { width: 16px; height: 16px; }
-.theme-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.theme-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .theme-options button { border: 0; flex-direction: column; gap: 9px; padding: 10px; font-size: 12px; background: transparent; color: var(--text-secondary); }
 .theme-options button[aria-checked=true] { background: var(--surface-selected); color: var(--accent); }
 .appearance-sample { display: grid; grid-template-columns: 24% 1fr; grid-template-rows: 12px 1fr; width: 100%; height: 68px; border-radius: 5px; overflow: hidden; background: #f7f8fa; box-shadow: 0 1px 4px #0002; }
@@ -106,6 +111,7 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
   .settings-window { width: calc(100vw - 16px); height: calc(100dvh - 32px); }
   .settings-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: 48px 42px minmax(0, 1fr); }
   .settings-content { display: contents; }
+  .settings-scrollbar { top: calc(var(--settings-header-height) + 42px); }
   .settings-navigation { grid-row: 2; min-width: 0; padding: 0 16px; background: transparent; box-shadow: inset 0 -1px 0 var(--divider); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
   .settings-navigation::-webkit-scrollbar { display: none; }
   .settings-floating-header { grid-row: 1; position: static; --settings-header-height: 48px; padding-left: 16px; }
@@ -351,8 +357,8 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .identity-combo:focus-within { background: color-mix(in srgb, var(--settings-card-fill), var(--text) 8%); }
 #settings-pane-identity #identity-users { flex: 0 0 30px; }
 .settings-content #log-description { background: var(--surface-panel); border: 0; }
-.settings-content :is(#log-session, #hardware-buffer-depth) { border: 0; box-shadow: none; background: color-mix(in srgb, var(--settings-card-fill, var(--surface-panel)), var(--text) 6%); transition: none; }
-.settings-content :is(#log-session, #hardware-buffer-depth):is(:hover, [aria-expanded=true]):not(:disabled) { background: color-mix(in srgb, var(--settings-card-fill, var(--surface-panel)), var(--text) 8%); }
+.settings-content :is(#log-session, #hardware-buffer-depth, #language-choice) { border: 0; box-shadow: none; background: color-mix(in srgb, var(--settings-card-fill, var(--surface-panel)), var(--text) 6%); transition: none; }
+.settings-content :is(#log-session, #hardware-buffer-depth, #language-choice):is(:hover, [aria-expanded=true]):not(:disabled) { background: color-mix(in srgb, var(--settings-card-fill, var(--surface-panel)), var(--text) 8%); }
 .settings-content .workspace-current-section #saved-workspace-name { width: 100%; min-width: 0; background: color-mix(in srgb, var(--settings-card-fill), var(--text) 6%); border: 0; box-shadow: none; font-size: 13px; transition: none; }
 .settings-content .log-report { background: var(--settings-card-fill); border: 0; }
 .settings-content .log-report-toolbar button { flex: none; white-space: nowrap; }
@@ -469,7 +475,6 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
   .color-flow-connector-vertical { display: block; width: 16px; height: 16px; order: -1; }
 }
 .color-flow-note { font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0; padding: 0 0 6px; }
-.color-flow-footnote { font-size: 11px; line-height: 1.5; color: var(--text-secondary); margin: 0; padding: 0 0 12px; }
 .color-runtime-row { padding: 12px 14px; border-top: 1px solid var(--divider); }
 #color-runtime-tracks { white-space: pre-line; overflow-wrap: anywhere; font-size: 12px; line-height: 1.7; }
 .color-runtime-row .evidence { flex-direction: row; flex-wrap: wrap; gap: 4px 16px; margin: 6px 0 0; font-size: 11px; color: var(--text-secondary); }
@@ -534,3 +539,20 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 .color-flow[data-long-labels] .color-flow-link span { position: static; transform: none; max-width: none; text-align: left; }
 .color-flow[data-long-labels] .color-flow-connector-horizontal { display: none; }
 .color-flow[data-long-labels] .color-flow-connector-vertical { display: block; width: 16px; height: 16px; order: -1; flex: none; }
+
+/* Custom base colors use the same neutral, borderless input treatment. */
+.theme-base-controls { display: grid; gap: 12px; padding: 12px 14px; margin-top: 6px; background: var(--settings-card-fill); border-radius: 10px; font-size: 13px; }
+.theme-base-controls[hidden] { display: none; }
+.theme-base-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+:root .theme-base-choices .accent-swatch { background: var(--base-swatch); color: var(--base-check); }
+.theme-base-choices .accent-choice { transition: none; }
+.theme-base-inputs, .theme-base-hex-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.theme-base-hex-label > span { color: var(--text-secondary); font-size: 10px; }
+#theme-base-picker { width: 30px; height: 30px; min-width: 30px; padding: 3px; border: 0; background: var(--surface-control); border-radius: 6px; cursor: pointer; }
+.settings-content #theme-base-hex { width: 88px; min-width: 0; padding: 5px 6px; border: 0; box-shadow: none; background: var(--surface-control); font: 12px var(--font-mono); transition: none; }
+#theme-base-hex[aria-invalid=true] { color: var(--action-danger); }
+.sample-custom { background: var(--base-preview-surface); }
+.sample-custom .sample-header { background: var(--base-preview-group); }
+.sample-custom .sample-sidebar { background: var(--base-preview-panel); }
+.sample-custom .sample-content { background: var(--base-preview-accent); }
+@media (max-width: 600px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

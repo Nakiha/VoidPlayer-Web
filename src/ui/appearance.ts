@@ -15,6 +15,22 @@ export const ACCENTS = [
   { id: 'sky', get name() { return t(msg("appearance.sky", "天蓝")); }, light: '#087fa9', dark: '#7acded' },
 ] as const;
 
+/** Common reading palettes: muted light seeds followed by deeper, tinted seeds. */
+export const BASE_COLORS = [
+  { color: '#eee7de', get name() { return t(msg('appearance.baseIvory', '米白')); } },
+  { color: '#e9edf2', get name() { return t(msg('appearance.baseMist', '雾灰')); } },
+  { color: '#e4edf4', get name() { return t(msg('appearance.baseIce', '冰蓝')); } },
+  { color: '#e4ece4', get name() { return t(msg('appearance.baseSage', '浅鼠尾草')); } },
+  { color: '#ece7f1', get name() { return t(msg('appearance.baseLavender', '浅薰衣草')); } },
+  { color: '#f3e6e6', get name() { return t(msg('appearance.baseBlush', '浅玫瑰')); } },
+  { color: '#25272b', get name() { return t(msg('appearance.baseGraphite', '石墨')); } },
+  { color: '#18304a', get name() { return t(msg('appearance.baseNavy', '深海蓝')); } },
+  { color: '#24382e', get name() { return t(msg('appearance.baseForest', '森林绿')); } },
+  { color: '#352b41', get name() { return t(msg('appearance.basePlum', '暗紫')); } },
+  { color: '#3d3028', get name() { return t(msg('appearance.baseMocha', '摩卡')); } },
+  { color: '#28353a', get name() { return t(msg('appearance.baseSlate', '青灰')); } },
+] as const;
+
 export function normalizeAccent(value: string): string | null {
   const hex = value.trim().replace(/^#/, '');
   if (/^[\da-f]{3}$/i.test(hex)) return '#' + [...hex.toLowerCase()].map(c => c + c).join('');
@@ -40,4 +56,43 @@ export function customAccent(value: string) {
     return '#' + channels.map(c => c.toString(16).padStart(2, '0')).join('');
   };
   return { color, light: variant(false), dark: variant(true) };
+}
+
+const channels = (hex: string) => [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
+const asHex = (rgb: number[]) => '#' + rgb.map(c => Math.round(c).toString(16).padStart(2, '0')).join('');
+const mix = (a: string, b: string, amount: number) => asHex(channels(a).map((c, i) => c + (channels(b)[i] - c) * amount));
+const luminance = (hex: string) => channels(hex).reduce((sum, n, i) => {
+  const c = n / 255;
+  return sum + (c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4) * [.2126, .7152, .0722][i];
+}, 0);
+const contrast = (a: string, b: string) => (Math.max(luminance(a), luminance(b)) + .05) / (Math.min(luminance(a), luminance(b)) + .05);
+
+/** Generate reading surfaces from a seed, leaving room for distinct tonal layers. */
+export function customTheme(value: string) {
+  const color = normalizeAccent(value);
+  if (!color) return null;
+  const dark = luminance(color) < .35, endpoint = dark ? '#000000' : '#ffffff';
+  let surface = color;
+  for (let step = 0; step <= 100; step++) {
+    surface = mix(color, endpoint, step / 100);
+    if (dark ? luminance(surface) <= .07 : luminance(surface) >= .55) break;
+  }
+  const layer = (amount: number) => mix(surface, dark ? '#ffffff' : '#000000', amount);
+  const colors = {
+    surface, panel: layer(.025), table: layer(.01), group: layer(.065), hover: layer(.10),
+    input: mix(surface, dark ? '#000000' : '#ffffff', .08), preview: layer(.04), viewport: mix(surface, '#000000', dark ? .08 : .04),
+    text: dark ? '#f2f3f5' : '#16191e', secondary: '', subtle: '', accent: '',
+  };
+  const backgrounds = [colors.surface, colors.panel, colors.table, colors.group, colors.hover, colors.input, colors.preview, colors.viewport];
+  const readable = (seed: string, selected = false) => {
+    const end = dark ? '#ffffff' : '#000000';
+    for (let step = 0; step <= 100; step++) {
+      const fg = mix(seed, end, step / 100);
+      if (backgrounds.every(bg => contrast(fg, bg) >= 4.5) && (!selected || contrast(fg, mix(colors.panel, fg, .15)) >= 4.5)) return fg;
+    }
+    return end;
+  };
+  colors.secondary = readable(mix(surface, colors.text, .66));
+  colors.subtle = readable(mix(surface, colors.text, .55));
+  return { color, dark, colors, accent: (seed: string) => readable(seed, true) };
 }

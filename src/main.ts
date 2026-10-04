@@ -8,6 +8,7 @@ import { isHdrTransfer } from './presentation-color.ts';
 import { updateColorFlow } from './ui/color-flow.ts';
 import { initializeGpuPresentation } from './webgpu-presenter.ts';
 import { indexProgressLabel } from './ui/index-progress.ts';
+import { fileBasename } from './ui/filename.ts';
 import { AnnotationClient } from './annotation-client.ts';
 import { installAnnotationSync } from './ui/annotation-sync.ts';
 import { installIdentitySettings } from './ui/identity-settings.ts';
@@ -261,7 +262,10 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     const t = state.tracks.find(t => t.slot === slot);
     $(`empty-${slot}`).hidden = !!t;
     $(`image-${slot}`).hidden = !t || !!t.pendingRelink;
-    $(`name-${slot}`).textContent = t?.name ?? (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
+    const name = $(`name-${slot}`);
+    name.textContent = t ? fileBasename(t.name) : (slot === 'A' ? tr(msg("player.referenceVideo", "参考视频")) : tr(msg("player.comparisonVideo", "对比视频")));
+    if (t) name.parentElement!.dataset.tooltip = t.name;
+    else delete name.parentElement!.dataset.tooltip;
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 兜底显示）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
@@ -495,6 +499,15 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keydown', e => {
   if (e.repeat || e.isComposing || document.querySelector('dialog[open]') || drawingEditor.active()) return;
   if (e.target instanceof HTMLElement && (e.target.matches('input,textarea,select') || e.target.isContentEditable)) return;
+  if (matchesShortcut(e, 'focusMode')) {
+    const button = $<HTMLButtonElement>('toggle-chrome');
+    if (!button.hidden && !button.disabled) {
+      e.preventDefault();
+      inputTrigger = 'keyboard';
+      try { button.click(); } finally { inputTrigger = 'pointer'; }
+    }
+    return;
+  }
   const panel = (Object.keys(PANEL_SHORTCUTS) as (keyof typeof PANEL_SHORTCUTS)[])
     .find(id => matchesShortcut(e, PANEL_SHORTCUTS[id]));
   if (!panel) return;

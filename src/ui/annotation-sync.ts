@@ -1,10 +1,10 @@
-import { t, msg, th, onLanguageChange } from '../i18n.ts';
+import { t, msg, onLanguageChange } from '../i18n.ts';
 import type { ReviewSession } from '../session.ts';
 import { AnnotationStorage } from '../annotation-storage.ts';
 import type { AnnotationDraft } from '../annotation-storage.ts';
 import { AnnotationClient } from '../annotation-client.ts';
 import type { AnnotationDocument, AnnotationRecord } from '../annotation-record.ts';
-import { annotationMediaKey, annotationWorkspace } from '../annotation-record.ts';
+import { annotationMediaKey } from '../annotation-record.ts';
 import { currentActor, identityHealth } from '../identity.ts';
 import { randomUUID } from '../uuid.ts';
 import { AnnotationPendingQueue } from '../annotation-pending.ts';
@@ -27,36 +27,13 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   try { if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) owner = sessionStorage.getItem('voidplayer.annotation-window') || owner; sessionStorage.setItem('voidplayer.annotation-window', owner); if (performance.getEntriesByType('navigation').some(entry => (entry as PerformanceNavigationTiming).type === 'reload')) scope=sessionStorage.getItem('voidplayer.annotation-space')||'local'; } catch {}
   let actor = currentActor()?.id ?? 'local';
   try { actor=currentActor()?.id ?? JSON.parse(localStorage.getItem('voidplayer.identity') ?? 'null')?.id ?? 'local'; } catch {}
-  const pane = document.getElementById('settings-pane-workspace')!;
-  const $ = <T extends HTMLElement = HTMLElement>(id: string) => pane.querySelector<T>(`#${id}`)!;
   const currentDrafts = () => drafts.filter(draft=>draft.space===scope && draft.actor===actor && draft.key.startsWith(`${actor}/${scope}/${owner}/`));
-  let conflictSignature='', otherSignature='';
   function state() {
     const pending=currentDrafts(), conflicts=pending.filter(draft=>draft.conflict);
     const failure=localFailure || error;
     const message=(typeof failure === 'function' ? failure() : failure) || (saving ? t(msg("sync.savingLocal", "正在保存到本机…")) : conflicts.length ? t(msg("sync.pendingCount", "{n, plural, other {# 条标注需要处理}}"), { n: conflicts.length }) : pending.length ? available && scope!=='local' ? t(msg("sync.savedPendingSync", "已存本机 · 等待同步")) : t(msg("sync.savedLocal", "已存本机")) : available && scope!=='local' ? t(msg("sync.synced", "已同步")) : t(msg("sync.savedLocal", "已存本机")));
     const saveState=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
     window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: saveState } }));
-    const others=drafts.filter(draft=>draft.actor===actor && draft.space===scope && !draft.key.startsWith(`${actor}/${scope}/${owner}/`));
-    const trouble=!!(localFailure || error || conflicts.length || others.length);
-    $('annotation-recovery').hidden=!trouble;
-    $<HTMLButtonElement>('annotation-sync-now').disabled=working || saving>0;
-    $('annotation-drafts-export').hidden=!trouble || !(pending.some(draft=>draft.desired) || others.some(draft=>draft.desired) || pendingQueue.size);
-    $('annotation-drafts-section').hidden=!others.length;
-    const nextOthers=JSON.stringify(others);
-    if(nextOthers!==otherSignature){otherSignature=nextOthers;$('annotation-other-drafts').replaceChildren(...others.map(draft=>{
-      const row=document.createElement('div');row.className='annotation-conflict';const text=document.createElement('p');text.textContent=t(msg("sync.otherDrafts", "其他页面的草稿：{text}"), { text: draft.desired?.mark.text || t(msg("sync.frameMark", "画面标注")) });
-      const button=document.createElement('button');button.textContent=t(msg("sync.continueHere", "在这里继续"));button.onclick=()=>void(async()=>{try{await storage.claim(draft.key,`${actor}/${scope}/${owner}/${draft.id}`);await apply();void sync();}catch(e){error=(e as Error).message;state();}})();row.append(text,button);return row;
-    }));}
-    const nextConflicts=JSON.stringify(conflicts);$('annotation-conflicts-section').hidden=!conflicts.length;if(nextConflicts===conflictSignature)return;conflictSignature=nextConflicts;
-    const rows=conflicts.map(draft=>{
-      const row=document.createElement('div'); row.className='annotation-conflict';
-      const text=document.createElement('p');text.textContent=draft.desired?.mark.text || t(msg("sync.conflictChanged", "标注已被修改或删除"));
-      const message=document.createElement('p');message.className='muted';message.textContent=draft.conflict!;
-      const reload=document.createElement('button');reload.textContent=t(msg("sync.useServerVersion", "采用服务器版本")); reload.onclick=()=>void resolve(draft,false);
-      const copy=document.createElement('button');copy.textContent=t(msg("sync.saveDraftAsMark", "草稿另存为标注"));copy.disabled=!draft.desired;copy.onclick=()=>void resolve(draft,true);
-      row.append(text,message,reload,copy);return row;
-    }); $('annotation-conflicts').replaceChildren(...rows);
   }
   async function refreshDrafts() { try { drafts=await storage.drafts(); state(); } catch(e) {error=(e as Error).message;state();} }
   async function enqueue(id: string, document: AnnotationDocument | null, base = versions.get(id) ?? 0, destination={space:scope,actorId:actor}) {
@@ -179,26 +156,6 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const previous=[...managed];managed.clear();
     await syncIdle; await apply(previous); await sync();
   }
-  let resolving=false;
-  async function resolve(draft:AnnotationDraft,copy:boolean) {
-    if(resolving)return;
-    if(editing()){error=()=>t(msg("sync.finishEditingFirst", "请先结束当前标注编辑。"));state();return;}
-    resolving=true;
-    try {
-      const record=await client.read(draft.space,draft.id);await storage.remember([record]);
-      let replacement:AnnotationDraft|undefined;
-      if(copy && draft.desired){const document=structuredClone(draft.desired);document.mark.id=randomUUID();replacement={key:`${actor}/${scope}/${owner}/${document.mark.id}`,space:scope,actor,id:document.mark.id,base:0,desired:document,generation:1};}
-      await storage.resolve(draft,replacement);await apply();void sync();
-    } catch(e){error=(e as Error).message;state();}finally{resolving=false;}
-  }
-  $('annotation-sync-now').onclick=()=>void sync();
-  $('annotation-drafts-export').onclick=()=>void(async()=>{
-    try{
-      const drafts=(await storage.drafts().catch(()=>[])).filter(draft=>draft.actor===actor && draft.space===scope && draft.desired);
-      const payload=annotationWorkspace([...drafts.map(draft=>draft.desired!),...pendingQueue.snapshot().flatMap(([,value])=>value.actorId===actor && value.space===scope && value.document?[value.document]:[])],location.origin+'/');
-      const url=URL.createObjectURL(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download='VoidPlayer-annotation-drafts.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
-    }catch(e){error=(e as Error).message;state();}
-  })();
   let trackSignature='';
   const unsubscribe=session.subscribe(()=>{
     const state=session.getState(), signature=state.tracks.map(track=>annotationMediaKey(track)).join('|');
@@ -209,27 +166,11 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply();}}
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
   window.addEventListener('focus',()=>void sync(),{signal:life.signal});
-  document.getElementById('settings')!.addEventListener('settings-pane-change',event=>{
-    if((event as CustomEvent).detail==='workspace')void refreshDrafts();
-  },{signal:life.signal});
   window.addEventListener('voidplayer-identity-change',()=>{
     const next=currentActor()?.id ?? 'local';if(next===actor)return;
     generation++;actor=next;cursor=0;versions.clear();void apply();
   },{signal:life.signal});
-  onLanguageChange(() => {
-    for(const [index,row] of [...$('annotation-other-drafts').children].entries()) {
-      const draft=drafts.filter(d=>d.actor===actor && d.space===scope && !d.key.startsWith(`${actor}/${scope}/${owner}/`))[index];
-      if(!draft)continue;
-      row.querySelector('p')!.textContent=t(msg("sync.otherDrafts", "其他页面的草稿：{text}"), { text: draft.desired?.mark.text || t(msg("sync.frameMark", "画面标注")) });
-      row.querySelector('button')!.textContent=t(msg("sync.continueHere", "在这里继续"));
-    }
-    for(const row of $('annotation-conflicts').children) {
-      const buttons=row.querySelectorAll('button');
-      buttons[0].textContent=t(msg("sync.useServerVersion", "采用服务器版本"));
-      buttons[1].textContent=t(msg("sync.saveDraftAsMark", "草稿另存为标注"));
-    }
-    state();
-  }, life.signal);
+  onLanguageChange(state, life.signal);
   void connect();
   state();
   return {
@@ -257,7 +198,7 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
       await sync();
     },
-    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机草稿尚未保存，请先重试或导出。")));const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
+    snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成。")));const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
     dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();},
   };

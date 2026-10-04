@@ -16,6 +16,28 @@ async function checkConnectorPixels(page) {
  assert.deepEqual(columns[0],columns[1],'left and right line segments have identical rendered pixels');
  assert.ok(new Set(Array.from({length:columns[0].length/4},(_,row)=>columns[0].slice(row*4,row*4+4).join(','))).size>1,'pixel comparison includes the visible stroke');
 }
+async function checkSettingsScrollbar(page, width, artifact) {
+ await page.locator('#settings-tab-shortcuts').click();
+ const pane=page.locator('#settings-pane-shortcuts'), bar=page.locator('#settings-scrollbar'), thumb=page.locator('#settings-scrollbar-thumb');
+ await pane.evaluate(e=>{e.scrollTop=0;});
+ await page.waitForFunction(()=>!document.querySelector('#settings-scrollbar').hidden&&document.querySelector('#settings-scrollbar-thumb').clientHeight>0);
+ const rail=await bar.boundingBox(), handle=await thumb.boundingBox(), header=await page.locator('.settings-floating-header').boundingBox();
+ assert.ok(rail.y>=header.y+header.height,`${width}px scrollbar excludes the glass heading`);
+ if(width<600) {const nav=await page.locator('.settings-navigation').boundingBox();assert.ok(rail.y>=nav.y+nav.height,'portrait scrollbar excludes the category rail');}
+ await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();
+ await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2+rail.height-handle.height+2,{steps:6});await page.mouse.up();
+ const saved=await pane.evaluate(e=>({position:e.scrollTop,max:e.scrollHeight-e.clientHeight}));
+ assert.ok(saved.max>0&&saved.position>=saved.max-1,'dragging the shortened track reaches the end of its pane');
+ const end=await thumb.boundingBox();assert.ok(end.y>=rail.y-1&&end.y+end.height<=rail.y+rail.height+1,'thumb stays within the body track at the end');
+ await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-scrollbar-${width}.png`)});
+ await page.locator('#settings-tab-identity').click();
+ await page.waitForFunction(()=>document.querySelector('#settings-scrollbar').hidden);
+ await page.locator('#settings-tab-shortcuts').click();
+ assert.equal(await pane.evaluate(e=>e.scrollTop),saved.position,'switching panes retains their independent scroll positions');
+ const before=await pane.evaluate(e=>e.scrollTop), body=await pane.boundingBox();
+ await page.mouse.move(body.x+body.width/2,body.y+body.height/2);await page.mouse.wheel(0,-180);
+ await page.waitForFunction(before=>document.querySelector('#settings-pane-shortcuts').scrollTop<before,before);
+}
 await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { viewport: { width: 1280, height: 700 }, colorScheme: 'dark' } }, async ({ page, newContext, ready, artifact }) => {
  const errors=[];let uploads=0, originalSession='';
  page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST'&&r.url().endsWith('/api/logs'))uploads++;});
@@ -175,6 +197,8 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   }
   if(['appearance','workspace','identity','shortcuts','logs','performance','about'].includes(pane))await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-${pane}-${name}.png`)});
  }
+ await checkSettingsScrollbar(page,1280,artifact);
+ await page.locator('#settings-tab-about').click();
  await page.keyboard.press('Escape');await page.waitForFunction(()=>document.activeElement===document.querySelector('#settings-open'));
  await page.locator('#settings-open').click();assert.equal(await page.locator('#settings-tab-about').getAttribute('aria-selected'),'true','reopening remembers last pane');
  await page.keyboard.press('Home');assert.equal(await page.locator('#settings-tab-appearance').getAttribute('aria-selected'),'true');
@@ -183,6 +207,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  assert.equal(await page.locator('#settings').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(240, 241, 243)');
  await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-light-${name}.png`)});
  await page.setViewportSize({width:390,height:700});
+ await checkSettingsScrollbar(page,390,artifact);
  for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
   await page.locator(`#settings-tab-${pane}`).click();
   const overflow=await page.locator(`#settings-pane-${pane}`).evaluate(e=>({width:e.clientWidth,scroll:e.scrollWidth}));

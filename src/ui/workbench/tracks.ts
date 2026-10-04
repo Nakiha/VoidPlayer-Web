@@ -10,6 +10,7 @@ import { markSymbol, identifyMark, bindMarkHover } from '../mark-symbol.ts';
 import { seekTarget, showSeekPreview } from '../seek-preview.ts';
 import { icon } from '../icons.ts';
 import { createIconButton } from '../controls.ts';
+import { fileBasename } from '../filename.ts';
 import { trackTimelineRatio } from '../track-timeline.ts';
 import { marksForTrack, trackTiming } from '../workspace-state.ts';
 import type { ReviewTrack } from '../workspace-state.ts';
@@ -65,8 +66,8 @@ export function createTracksPane(shared: WorkbenchShared) {
         const button = document.createElement('button'); button.className = 'track-choice';
         button.setAttribute('aria-label', t(msg("tracks.selectTrack", "选择轨道 {p0}"), { p0: track.slot }));
         button.setAttribute('aria-pressed', String(track.slot === view.selected));
-        button.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', track.name, 'filename'));
-        button.dataset.tooltip = t(msg("tracks.viewTrackDetails", "查看轨道详情")); button.onclick = () => shared.select(track.slot); list.append(button);
+        button.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', fileBasename(track.name), 'filename'));
+        button.dataset.tooltip = track.name; button.onclick = () => shared.select(track.slot); list.append(button);
       }
       const properties = $('track-properties'); properties.replaceChildren();
       if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
@@ -117,7 +118,8 @@ export function createTracksPane(shared: WorkbenchShared) {
         const name = document.createElement('button'); name.className = 'subtrack-name track-identity'; name.dataset.dragSurface = track.slot;
         name.setAttribute('aria-label', t(msg("tracks.inspectSubtrack", "检视子轨道 {p0}"), { p0: track.slot }));
         name.setAttribute('aria-pressed', String(track.slot === view.selected));
-        name.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', track.name, 'filename'));
+        name.append(text('span', track.slot, `slot slot-${track.slot}`), text('span', fileBasename(track.name), 'filename'));
+        name.dataset.tooltip = track.name;
         name.onclick = () => shared.inspect(track.slot);
         const lane = document.createElement('div'); lane.className = 'track-lane';
         const seek = document.createElement('button'); seek.className = 'track-duration';
@@ -213,7 +215,6 @@ export function createTracksPane(shared: WorkbenchShared) {
     for(const button of $('track-selector').querySelectorAll<HTMLElement>('.track-choice')) {
       const slot = button.querySelector('.slot')!.textContent!;
       button.setAttribute('aria-label', t(msg('tracks.selectTrack', '选择轨道 {p0}'), {p0:slot}));
-      button.dataset.tooltip = t(msg('tracks.viewTrackDetails', '查看轨道详情'));
     }
     if(selected && $('track-properties').querySelector('dl')) {
       const rows = propertyRows(selected), properties = $('track-properties').querySelector('dl')!;

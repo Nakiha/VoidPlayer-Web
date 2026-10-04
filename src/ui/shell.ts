@@ -78,7 +78,7 @@ export function shell() {
             <button id="fullscreen" class="icon-button" aria-label="${th(msg("shell.fullscreen", "全屏"))}" title="${th(msg("shell.fullscreen", "全屏"))}">${icon('fit')}</button>
           </div><span id="status" class="sr-only" role="status"></span>
         </section>
-        ${iconButton({ glyph: 'focus', label: t(msg("shell.focusMode", "专注模式")), tooltip: t(msg("shell.focusMode", "专注模式")), className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
+        ${iconButton({ glyph: 'focus', label: t(msg("shell.focusMode", "专注模式")), tooltip: shortcutTooltip(t(msg("shell.focusMode", "专注模式")), 'focusMode'), className: 'viewport-eye', attributes: { id: 'toggle-chrome', 'aria-pressed': 'false', hidden: '' } })}
 
 <section id="annotation-toolbar" class="annotation-toolbar" aria-label="${th(msg("shell.annotationToolbar", "标注工具条"))}" hidden>
   <div class="drawing-tools" role="toolbar" aria-label="${th(msg("shell.annotationTools", "标注工具"))}">

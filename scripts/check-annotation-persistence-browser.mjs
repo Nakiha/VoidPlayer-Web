@@ -25,7 +25,10 @@ try {
  const b=await context.newPage();await b.goto(a.url());await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  assert.equal(await b.locator('#annotation-save-state, #settings-tab-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy sync controls are removed');
- assert.equal(await b.locator('#annotation-recovery').isVisible(),false,'normal workspace has no recovery controls');
+ const recoveryControls='#annotation-recovery, #annotation-sync-now, #annotation-drafts-export, #annotation-conflicts, #annotation-other-drafts';
+ const checkWorkspace=async page=>{assert.equal(await page.locator(recoveryControls).count(),0,'annotation recovery controls are removed entirely');assert.deepEqual(await page.locator('.workspace-current-section button:visible').allTextContents(),['保存','复制链接'],'annotation state adds no workspace actions');};
+ const readDrafts=page=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-annotations',2);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('drafts'),read=tx.objectStore('drafts').getAll();read.onsuccess=()=>resolve(read.result);read.onerror=()=>reject(read.error);tx.oncomplete=()=>db.close();};}));
+ await checkWorkspace(b);
  await b.locator('#settings-close').click();
  const mark=await call(a,'add_review_mark',{slot:'A',text:'持久化标注'});
  await b.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),mark.id);
@@ -41,29 +44,28 @@ try {
  const actor=(await a.request.get(base+'/api/health').then(r=>r.json())).actor;
  const del=await a.request.post(endpoint,{headers:{origin:base,'x-voidplayer-action':'annotation','x-voidplayer-actor':actor.id},data:{operationId:'delete-from-admin',id:mark.id,revision:1,action:'delete'}});assert.equal(del.status(),200);
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
- await b.locator('#annotation-recovery').waitFor();
- assert.equal(await b.locator('#annotation-drafts-export').isVisible(),true,'offline edits can be exported');
- const draftDownload=b.waitForEvent('download');await b.locator('#annotation-drafts-export').click();const draftExport=JSON.parse(await readFile(await (await draftDownload).path(),'utf8'));assert.ok(draftExport.marks.some(mark=>mark.text==='离线编辑草稿'));
+ await checkWorkspace(b);
  await b.locator('#settings-close').click();
+ // This page sees the other writer's local draft but offers no takeover tools.
+ await a.locator('#settings-open').click();await a.locator('#settings-tab-workspace').click();await checkWorkspace(a);await a.locator('#settings-close').click();
  await b.unroute(routePattern);
  await b.waitForFunction(()=>window.testAnnotationStatus?.state==='error');
  await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
- await b.locator('#settings-pane-workspace .annotation-conflict').waitFor();
+ await checkWorkspace(b);
  assert.ok((await call(b,'get_review_session')).marks.some(mark=>mark.text==='离线编辑草稿'),'conflicting draft survives remote deletion');
- await b.getByRole('button',{name:'草稿另存为标注',exact:true}).click();
- await b.locator('#settings-pane-workspace .annotation-conflict').waitFor({state:'hidden'});
- await b.locator('#annotation-recovery').waitFor({state:'hidden'});
+ assert.ok((await readDrafts(b)).some(draft=>draft.id===mark.id && draft.conflict && draft.desired?.mark.text==='离线编辑草稿'),'conflict remains safely stored without resurrecting the deleted server mark');
  await b.locator('#settings-close').click();
- await a.waitForFunction(()=>window.voidPlayer.getState().marks.some(mark=>mark.text==='离线编辑草稿'));
  const afterConflict=await a.request.get(endpoint).then(r=>r.json());
- assert.equal(afterConflict.entries.filter(entry=>!entry.deleted).length,1);
+ assert.equal(afterConflict.entries.filter(entry=>!entry.deleted).length,0);
  assert.equal(afterConflict.entries.find(entry=>entry.id===mark.id).deleted,true);
- const copy=afterConflict.entries.find(entry=>!entry.deleted);
+ // Ordinary new annotations still save while an older draft conflicts.
+ const copy=await call(b,'add_review_mark',{slot:'A',text:'正常新标注'});
+ await a.waitForFunction(id=>window.voidPlayer.getState().marks.some(mark=>mark.id===id),copy.id);
  // Data management uses the same versioned write path and cannot move playback.
  const position=(await call(a,'get_review_session')).positionUs;
  const admin=await context.newPage();await admin.goto(base+'/admin');await admin.locator('[data-pane=annotations]').click();await admin.locator('#admin-annotation-space').click();await admin.locator(`#admin-annotation-space-menu [data-value="${space}"]`).click();
  await admin.locator(`[data-annotation-id="${copy.id}"]`).click();
- assert.equal(await admin.locator('#admin-annotation-text').textContent(),'离线编辑草稿');
+ assert.equal(await admin.locator('#admin-annotation-text').textContent(),'正常新标注');
  await admin.locator('#admin-annotation-delete').click();await admin.locator('#admin-annotation-confirm-delete').click();
  await admin.locator('#admin-annotations-trash').click();await admin.locator(`[data-annotation-id="${copy.id}"]`).click();await admin.locator('#admin-annotation-restore').click();
  await admin.locator('#admin-annotations-active').click();await admin.locator(`[data-annotation-id="${copy.id}"]`).click();
@@ -80,7 +82,7 @@ try {
  const retry=await call(b,'add_review_mark',{slot:'A',text:'响应丢失重试'});
  await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===retry.id));
  await b.reload();await b.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1 && !window.voidPlayer.getState().busy);
- await b.waitForFunction(()=>window.testAnnotationStatus?.state==='saved');
+ await until(()=>readDrafts(b),drafts=>!drafts.some(draft=>draft.id===retry.id));
  const retried=await b.request.get(endpoint).then(r=>r.json());assert.equal(retried.entries.find(e=>e.id===retry.id).revision,1);await b.unroute(routePattern);
  // Generate a real thumbnail through the editor and verify it reaches the cache separately.
  await b.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await b.keyboard.press('n');await b.locator('[data-drawing-tool=rect]').click();
@@ -93,10 +95,12 @@ try {
  const link=await admin.locator('#admin-annotation-open').getAttribute('href');const opened=await context.newPage();await opened.goto(base+link);await opened.waitForFunction(id=>window.voidPlayer?.getState().marks.some(m=>m.id===id),preview.id);await opened.waitForFunction(()=>!!window.testAnnotationStatus);await opened.close();
  // A rejected local write must retain the in-memory draft and retry, never report success.
  await b.evaluate(()=>{const put=IDBObjectStore.prototype.put;window.rejectDraftWrites=true;IDBObjectStore.prototype.put=function(...args){if(this.name==='drafts' && window.rejectDraftWrites)throw new DOMException('Disk full','QuotaExceededError');return put.apply(this,args);};});
+ await b.locator('#settings-open').click();await b.locator('#settings-tab-workspace').click();
  const quota=await call(b,'add_review_mark',{slot:'A',text:'本机写入失败后恢复'});await b.waitForFunction(()=>window.testAnnotationStatus?.message?.includes('本机保存失败'));assert.ok((await call(b,'get_review_session')).marks.some(m=>m.id===quota.id));
+ await checkWorkspace(b);await b.locator('#settings-close').click();
  await b.evaluate(()=>{window.rejectDraftWrites=false;window.dispatchEvent(new Event('focus'));});await until(()=>b.request.get(endpoint).then(r=>r.json()),page=>page.entries.some(e=>e.id===quota.id));
  // Restart the actual service, keeping its data and address; confirmed revisions and JPEG survive.
  const port=service.server.address().port;await service.close();service=undefined;config.port=port;service=await startService(config);await service.library.refresh();
  const restored=await b.request.get(endpoint).then(r=>r.json());assert.ok(restored.entries.some(e=>e.id===retry.id));assert.equal((await b.request.get(base+preview.previewUrl)).status(),200);
- assert.deepEqual(errors,[]);console.log(`PASS ${name}: shared sync, reload, offline conflicting edit/delete, safe copy, admin restore, snapshot isolation, lost acknowledgement, editor preview, export and service restart`);
+ assert.deepEqual(errors,[]);console.log(`PASS ${name}: shared sync, reload, offline conflicting edit/delete without recovery UI, automatic retries, admin restore, snapshot isolation, lost acknowledgement, editor preview, export and service restart`);
 }finally{await browser?.close();await service?.close();await rm(temp,{recursive:true,force:true});}

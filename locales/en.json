@@ -1431,6 +1431,66 @@
     "source": "琥珀",
     "translation": "Amber"
   },
+  "appearance.baseBlush": {
+    "source": "浅玫瑰",
+    "translation": "Blush",
+    "needsReview": false
+  },
+  "appearance.baseForest": {
+    "source": "森林绿",
+    "translation": "Forest green",
+    "needsReview": false
+  },
+  "appearance.baseGraphite": {
+    "source": "石墨",
+    "translation": "Graphite",
+    "needsReview": false
+  },
+  "appearance.baseIce": {
+    "source": "冰蓝",
+    "translation": "Ice blue",
+    "needsReview": false
+  },
+  "appearance.baseIvory": {
+    "source": "米白",
+    "translation": "Ivory",
+    "needsReview": false
+  },
+  "appearance.baseLavender": {
+    "source": "浅薰衣草",
+    "translation": "Light lavender",
+    "needsReview": false
+  },
+  "appearance.baseMist": {
+    "source": "雾灰",
+    "translation": "Mist gray",
+    "needsReview": false
+  },
+  "appearance.baseMocha": {
+    "source": "摩卡",
+    "translation": "Mocha",
+    "needsReview": false
+  },
+  "appearance.baseNavy": {
+    "source": "深海蓝",
+    "translation": "Deep navy",
+    "needsReview": false
+  },
+  "appearance.basePlum": {
+    "source": "暗紫",
+    "translation": "Dark plum",
+    "needsReview": false
+  },
+  "appearance.baseSage": {
+    "source": "浅鼠尾草",
+    "translation": "Light sage",
+    "needsReview": false
+  },
+  "appearance.baseSlate": {
+    "source": "青灰",
+    "translation": "Slate",
+    "needsReview": false
+  },
   "appearance.blue": {
     "source": "蓝色",
     "translation": "Blue"
@@ -1546,10 +1606,6 @@
   "colorFlow.managedColor": {
     "source": "自有色彩",
     "translation": "Managed color"
-  },
-  "colorFlow.managedConversionSupportsCpuFallbackSwitchingPauses": {
-    "source": "自有转换支持 CPU 兜底。切换会暂停，保留进度与标注。",
-    "translation": "Managed conversion supports CPU fallback. Switching pauses playback and keeps position and annotations."
   },
   "colorFlow.memory": {
     "source": "内存",
@@ -1934,10 +1990,6 @@
   "index.progress": {
     "source": "{waiting, select, yes {等待索引数据} other {正在建立索引}} {percent}%{packets, select, none {} other { · {packets} 包}}",
     "translation": "{waiting, select, yes {Waiting for index data} other {Building index}} {percent}%{packets, select, none {} other { · {packets} packets}}"
-  },
-  "language.description": {
-    "source": "仅更改本机界面语言，不影响视频与工作区内容。",
-    "translation": "Changes this browser’s interface language; keeps videos and workspace content."
   },
   "language.label": {
     "source": "语言 / Language",
@@ -3543,25 +3595,13 @@
     "source": "写入中",
     "translation": "Writing"
   },
-  "sync.conflictChanged": {
-    "source": "标注已被修改或删除",
-    "translation": "The mark was changed or deleted"
-  },
-  "sync.continueHere": {
-    "source": "在这里继续",
-    "translation": "Continue here"
-  },
   "sync.disconnectedKeepDrafts": {
     "source": "连接中断 · 本机草稿保留",
     "translation": "Disconnected · local drafts kept"
   },
   "sync.draftsUnsaved": {
-    "source": "本机草稿尚未保存，请先重试或导出。",
-    "translation": "Local drafts are not saved yet. Retry or export first."
-  },
-  "sync.finishEditingFirst": {
-    "source": "请先结束当前标注编辑。",
-    "translation": "Finish the current mark edit first."
+    "source": "本机标注尚未保存，请等待自动保存完成。",
+    "translation": "Local annotations are not saved yet. Please wait for automatic saving to finish."
   },
   "sync.frameMark": {
     "source": "画面标注",
@@ -3571,17 +3611,9 @@
     "source": "本机保存失败：{error}",
     "translation": "Local save failed: {error}"
   },
-  "sync.otherDrafts": {
-    "source": "其他页面的草稿：{text}",
-    "translation": "Drafts from other pages: {text}"
-  },
   "sync.pendingCount": {
     "source": "{n, plural, other {# 条标注需要处理}}",
     "translation": "{n, plural, one {# mark needs attention} other {# marks need attention}}"
-  },
-  "sync.saveDraftAsMark": {
-    "source": "草稿另存为标注",
-    "translation": "Save the draft as a mark"
   },
   "sync.savedLocal": {
     "source": "已存本机",
@@ -3603,13 +3635,21 @@
     "source": "已同步",
     "translation": "Synced"
   },
-  "sync.useServerVersion": {
-    "source": "采用服务器版本",
-    "translation": "Use the server version"
-  },
   "sync.waitForDrafts": {
     "source": "请先结束标注并等待本机草稿保存完成。",
     "translation": "Finish annotating and wait for local drafts to save."
+  },
+  "theme.baseColor": {
+    "source": "基调色",
+    "translation": "Base color"
+  },
+  "theme.baseHex": {
+    "source": "基调色 HEX",
+    "translation": "Base color HEX"
+  },
+  "theme.chooseBaseColor": {
+    "source": "选择自定义基调色",
+    "translation": "Choose a custom base color"
   },
   "theme.custom": {
     "source": "自定义 · {p0}",
@@ -3618,6 +3658,10 @@
   "theme.enterAValidHexColorSuchAs": {
     "source": "请输入有效的 HEX 颜色，例如 #3478F6。",
     "translation": "Enter a valid HEX color, such as #3478F6."
+  },
+  "theme.invalidBase": {
+    "source": "请输入有效的 HEX 基调色，例如 #EEE7DE。",
+    "translation": "Enter a valid HEX base color, such as #EEE7DE."
   },
   "toast.dismissNotification": {
     "source": "关闭通知",
@@ -3815,10 +3859,6 @@
     "source": "传递特性",
     "translation": "Transfer function"
   },
-  "tracks.viewTrackDetails": {
-    "source": "查看轨道详情",
-    "translation": "View track details"
-  },
   "transfer.cancelImport": {
     "source": "取消导入",
     "translation": "Cancel import"
@@ -3922,14 +3962,6 @@
   "workspace.copyNamed": {
     "source": "复制工作区链接：{name}",
     "translation": "Copy workspace link: {name}"
-  },
-  "workspace.exportDrafts": {
-    "source": "导出未保存的批注",
-    "translation": "Export unsaved annotations"
-  },
-  "workspace.retry": {
-    "source": "重试保存",
-    "translation": "Retry saving"
   },
   "workspace.saving": {
     "source": "工作区正在保存，请稍后再分享。",

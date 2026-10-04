@@ -61,7 +61,6 @@ export function colorSettingsShell() {
       </div>
       <figure class="color-flow"><figcaption>${th(msg("colorFlow.frameDataFlow", "帧数据流"))} <span>${th(msg("colorFlow.pathOverview", "路径示意"))}</span></figcaption><div id="color-flow-diagram"></div></figure>
       <p id="color-mode-description" class="color-flow-note" role="status"></p>
-      <p class="color-flow-footnote">${th(msg("colorFlow.managedConversionSupportsCpuFallbackSwitchingPauses", "自有转换支持 CPU 兜底。切换会暂停，保留进度与标注。"))}</p>
     </div>
   </div>
   <div class="settings-section"><h4 class="settings-section-title">${th(msg("colorFlow.currentRuntime", "当前运行"))}</h4><div class="settings-group">

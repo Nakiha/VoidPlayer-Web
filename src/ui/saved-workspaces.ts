@@ -8,11 +8,6 @@ import { icon } from './icons.ts';
 export function savedWorkspaceShell() {
   return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("savedWorkspaces.currentWorkspace", "当前工作区"))}</h4><div class="workspace-current-section settings-card">
     <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="${th(msg("savedWorkspaces.workspaceName", "工作区名称"))}" placeholder="${th(msg("savedWorkspaces.untitledWorkspace", "未命名工作区"))}"><div class="workspace-current-actions"><button id="saved-workspace-save">${th(msg("identitySettings.save", "保存"))}</button><button id="saved-workspace-share">${icon('copy')}<span>${th(msg("sharing.copyLink", "复制链接"))}</span></button></div></div>
-    <div id="annotation-recovery" hidden>
-      <div class="annotation-sync-actions"><button id="annotation-sync-now">${th(msg("workspace.retry", "重试保存"))}</button><button id="annotation-drafts-export">${th(msg("workspace.exportDrafts", "导出未保存的批注"))}</button></div>
-      <div id="annotation-conflicts-section" hidden><div id="annotation-conflicts"></div></div>
-      <div id="annotation-drafts-section" hidden><div id="annotation-other-drafts"></div></div>
-    </div>
     <p id="saved-workspace-message" role="status" class="settings-caption" hidden></p>
     <div id="saved-workspace-conflict" class="saved-workspace-conflict" hidden><span>${th(msg("savedWorkspaces.updatedReopen", "工作区已被更新，请重新打开后继续。"))}</span><button id="saved-workspace-reload">${th(msg("savedWorkspaces.reopen", "重新打开"))}</button></div>
     </div>

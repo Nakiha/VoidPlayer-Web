@@ -7,6 +7,22 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.waitForFunction(() => window.voidPlayer);
   await page.evaluate(async()=>{const tool=n=>window.voidPlayer.tools.find(t=>t.name===n);const lib=await tool('list_library').execute({});await tool('load_library_item').execute({slot:'A',id:lib.entries.find(e=>e.name==='av1_10s_1920x1080.webm').id});});
   const playing=()=>page.evaluate(()=>window.voidPlayer.getState().playing);
+  const focused=()=>page.locator('#toggle-chrome').getAttribute('aria-pressed');
+  const beforeFocus=await page.locator('#stage-A').boundingBox();
+  const beforeView=await page.evaluate(()=>window.voidPlayer.getViewport());
+  await page.locator('#toggle-chrome').focus();
+  await page.keyboard.down('f');
+  assert.equal(await focused(),'true','F enters focus mode from a focused button');
+  await page.keyboard.down('f');
+  assert.equal(await focused(),'true','holding F does not toggle repeatedly');
+  await page.keyboard.up('f');await page.keyboard.press('f');
+  assert.equal(await focused(),'false','F exits focus mode while transport is inert');
+  assert.deepEqual(await page.locator('#stage-A').boundingBox(),beforeFocus);
+  assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getViewport()),beforeView);
+  assert.equal(await playing(),false,'focus mode preserves playback');
+  await page.locator('#toggle-chrome').dispatchEvent('keydown',{key:'f',code:'KeyF',isComposing:true});
+  await page.keyboard.press('Control+f');
+  assert.equal(await focused(),'false','IME and modified F do not toggle focus mode');
   // Real key down/up: Space must not generate a click on the focused action.
   for (const id of ['previous','next','fullscreen','toggle-chrome','timeline','play']) {
     await page.locator(`#${id}`).focus();
@@ -33,6 +49,8 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
   await page.keyboard.press('Escape');
   await page.locator('#settings-open').click();await page.locator('#settings-tab-shortcuts').click();
+  assert.equal(await page.locator('#settings-pane-shortcuts .shortcut-row').filter({hasText:'专注模式'}).locator('kbd').textContent(),'F');
+  await page.keyboard.press('f');assert.equal(await focused(),'false','F is inactive in dialogs');
   await page.locator('#settings-close').focus();
   await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
   assert.equal(await page.locator('#settings').evaluate(e=>e.open),true,'Space in dialog does not activate close');
@@ -42,12 +60,16 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await page.locator('#position').inputValue(),'00:01.000 ');assert.equal(await playing(),false);
   await page.keyboard.press('Escape');
   await page.locator('#toggle-sources').click();await page.locator('#sources-search-toggle').click();await page.locator('#source-search').fill('sample');
+  await page.keyboard.press('f');
+  assert.equal(await page.locator('#source-search').inputValue(),'samplef');assert.equal(await focused(),'false','typing F in search does not toggle focus mode');
+  await page.locator('#source-search').fill('sample');
   await page.keyboard.press('Space');assert.equal(await page.locator('#source-search').inputValue(),'sample ');assert.equal(await playing(),false);
   await page.locator('#toggle-sources').click();
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');
   // Wait for the selected tool on the drawing layer as well as its button.
   // A visible toolbar alone does not establish that the drawing surface is ready.
   await page.locator('#drawing-A').waitFor({state:'visible'});
+  await page.keyboard.press('f');assert.equal(await focused(),'false','F does not hide the annotation editor');
   await page.locator('[data-drawing-tool=text]').click();
   await page.waitForFunction(()=>document.querySelector('[data-drawing-tool=text]').getAttribute('aria-pressed')==='true'&&document.querySelector('#drawing-A').dataset.tool==='text');
   const drawing=page.locator('#drawing-A'), rect=await drawing.boundingBox();
@@ -60,5 +82,5 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
   assert.ok(await page.evaluate(()=>window.voidPlayer.getState().marks.some(m=>m.drawings.some(d=>d.text==='hello world'))),'annotation text is retained');
   assert.deepEqual(errors,[]);
-  console.log(`PASS ${name}: global Space, button/menu/dialog/range focus, no native activation, no repeat toggle, text/IME input preserved, annotation saved before play`);
+  console.log(`PASS ${name}: focus-mode F toggle and help, repeat/dialog/editor/input guards, global Space, no native activation, annotation saved before play`);
 });

@@ -6,6 +6,7 @@ export const SHORTCUTS = {
   previous: { code: 'ArrowLeft', label: '←' },
   next: { code: 'ArrowRight', label: '→' },
   layout: { code: 'KeyM', label: 'M' },
+  focusMode: { code: 'KeyF', label: 'F' },
   panelInspector: { code: 'Backquote', label: '·', ctrl: true },
   panelAnalysis: { code: 'Digit1', label: '1', ctrl: true },
   panelSubtracks: { code: 'Digit2', label: '2', ctrl: true },

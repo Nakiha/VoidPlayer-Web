@@ -26,6 +26,9 @@ try {
     await copyFile(path.join(fixtures, 'ci_h264_smoke.mp4'), file);
     await utimes(file, 1000, 1000);
   }
+  const nested = path.join(roots[0], 'review', 'shots');
+  await mkdir(nested, { recursive: true });
+  await copyFile(path.join(fixtures, 'ci_h264_smoke.mp4'), path.join(nested, 'path-tooltip.mp4'));
   library = new MediaLibraryIndex([fixtures, ...roots]);
   const listing = await library.list();
   server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
@@ -240,6 +243,37 @@ try {
     }
   });
 
+  await check('track filenames show basenames with full paths in shared tooltips', async page => {
+    const fullName = 'review/shots/path-tooltip.mp4';
+    const entry = listing.entries.find(item => item.name === fullName);
+    assert.ok(entry, 'nested library fixture exists');
+    await page.evaluate(async id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'A' }), entry.id);
+    await panels(page, true);
+    const controls = ['[data-inspect="A"]', '[data-track-drag="A"] .subtrack-name', '#track-selector .track-choice'];
+    for (const selector of controls) {
+      const control = page.locator(selector);
+      assert.equal(await control.locator('.filename').textContent(), 'path-tooltip.mp4');
+      assert.equal(await control.getAttribute('data-tooltip'), fullName);
+      assert.equal(await control.getAttribute('title'), null, 'no native tooltip');
+      await control.hover();
+      await page.waitForFunction(name => !document.querySelector('#control-tooltip').hidden && document.querySelector('#control-tooltip').textContent === name, fullName);
+      assert.equal(await page.locator('#control-tooltip').textContent(), fullName);
+      await page.mouse.move(0, 0);
+      await page.waitForFunction(() => document.querySelector('#control-tooltip').hidden);
+    }
+    await page.locator('#settings-open').click();
+    await page.locator('#settings-tab-appearance').click();
+    await page.locator('#language-choice').click();
+    await page.locator('#language-choice-menu [data-value=en]').click();
+    await page.waitForFunction(() => document.documentElement.lang === 'en');
+    await page.locator('#settings-close').click();
+    for (const selector of controls) assert.equal(await page.locator(selector).getAttribute('data-tooltip'), fullName, 'language changes preserve path tooltip');
+    assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].name, fullName, 'original source path is retained');
+    await page.locator('[data-inspect="A"]').hover();
+    await page.waitForFunction(() => !document.querySelector('#control-tooltip').hidden);
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-track-path-tooltip.png`) });
+  });
+
   await check('RGB control explains the required color pipeline before opening YUV choices', async page => {
     const entry = listing.entries.find(item => item.name === 'ci_h264_smoke.mp4');
     await page.evaluate(async id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({ id, slot: 'A' }), entry.id);
@@ -253,7 +287,7 @@ try {
     await page.locator('[data-color-mode=reference]').click();
     await page.waitForFunction(() => window.voidPlayer.getState().colorMode === 'reference');
     assert.equal(await page.locator('[data-color-mode=reference]').evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
-    assert.equal(await page.locator('.color-flow-note').evaluate(el => getComputedStyle(el).fontSize), await page.locator('.color-flow-footnote').evaluate(el => getComputedStyle(el).fontSize));
+    assert.equal(await page.locator('.color-flow-footnote').count(), 0, 'removed color-flow footnote stays absent');
     await page.locator('#settings-close').click();
     await page.locator('#settings').waitFor({ state: 'hidden' });
     await channel.click();
@@ -512,12 +546,12 @@ try {
     assert.deepEqual([pinchView.zoom, pinchView.offsetX, pinchView.offsetY], [1, 0, 0], 'pinching to zoom out also recenters at the minimum zoom');
     const beforeFocus = await page.locator('#stage-A').boundingBox();
     const focusButton = await page.locator('#toggle-chrome').boundingBox();
-    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式');
+    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
     await page.locator('#toggle-chrome').click(); await settle(page);
     assert.equal(await page.locator('.transport').evaluate(el => el.inert), true);
     assert.deepEqual(await page.locator('#stage-A').boundingBox(), beforeFocus);
     assert.deepEqual(await page.locator('#toggle-chrome').boundingBox(), focusButton, 'focus toggle stays in place');
-    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式');
+    assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
     await page.locator('#toggle-chrome').click();
     await page.locator('#remove-track-B').click();
     await page.waitForFunction(() => !window.voidPlayer.getState().tracks.some(track => track.slot === 'B'));
