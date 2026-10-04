@@ -111,6 +111,31 @@ try {
     } catch { return false; }
   }, { timeout: 180000 });
 
+  // Direct page/Agent calls cannot rely on a WebMCP host to validate the schema.
+  const toolContract = await page.evaluate(async () => {
+    const tools = window.voidPlayer.tools;
+    const query = tools.find(tool => tool.name === 'query_analysis');
+    const state = tools.find(tool => tool.name === 'get_review_session');
+    const logs = tools.find(tool => tool.name === 'get_review_logs');
+    const custom = await query.execute({ slot: 'A', axis: 'dts', startUs: -1, endUs: 1000000, pixelWidth: 32, bitrateWindowUs: 123 });
+    const defaults = await query.execute({ slot: 'A', startUs: 0, endUs: 1000000 });
+    const before = JSON.stringify(state.execute({})), logSeq = (await logs.execute({ limit: 1 })).lastSeq;
+    const invalid = [{ axis: 'other' }, { pixelWidth: 31 }, { pixelWidth: 4097 },
+      { bitrateWindowUs: 0 }, { bitrateWindowUs: 1.5 }, { bitrateWindowUs: '123' }, { extra: true }];
+    const rejected = invalid.map(extra => {
+      try { query.execute({ slot: 'A', startUs: 0, endUs: 1, ...extra }); return false; }
+      catch (error) { return /工具参数约定/.test(error.message); }
+    });
+    return { schema: query.inputSchema.properties.bitrateWindowUs, customAxis: custom.axis, defaultAxis: defaults.axis,
+      rejected, unchanged: before === JSON.stringify(state.execute({})), quiet: logSeq === (await logs.execute({ limit: 1 })).lastSeq };
+  });
+  assert.deepEqual(toolContract.schema, { type: 'integer', minimum: 1 });
+  assert.equal(toolContract.customAxis, 'dts'); assert.equal(toolContract.defaultAxis, 'pts');
+  assert.ok(toolContract.rejected.every(Boolean), 'Invalid direct tool calls must fail at the tool boundary');
+  assert.ok(toolContract.unchanged, 'Invalid queries must retain the review state');
+  assert.ok(toolContract.quiet, 'Read-only queries must not manufacture log events');
+  await saveDiagnostics(page, 'agent-tool-contract', { toolContract });
+
   const frameNumber = page.locator('#analysis-status-items .st-item').filter({ has: page.locator('.st-slot', { hasText: 'B' }) }).locator('.st-num');
   await frameNumber.waitFor();
   await page.waitForFunction(() => {
