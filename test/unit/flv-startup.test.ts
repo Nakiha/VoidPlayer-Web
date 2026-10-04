@@ -1,3 +1,4 @@
+import type { PacketCommands } from '../../src/worker-protocol.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { demuxFlv, scanFlv, FlvReader } from '../../src/flv-demux.ts';
@@ -26,12 +27,15 @@ test('index deadlines renew on actual progress; core deadlines remain absolute',
   t.mock.timers.enable({ apis: ['setTimeout'] });
   let receive!: (event: { data: unknown }) => void, terminated = 0;
   const worker = { addEventListener(type: string, fn: typeof receive) { if (type === 'message') receive = fn; }, postMessage() {}, terminate() { terminated++; } } as unknown as Worker;
-  const rpc = new WorkerRpc(worker);
-  const index = rpc.call<number>('prepare', {}, [], 60000, true);
+  const rpc = new WorkerRpc<PacketCommands>(worker);
+  const index = rpc.call('prepare', { input: { file: new Blob() } }, [], 60000, true);
   for (let i = 0; i < 3; i++) { t.mock.timers.tick(59000); receive({ data: { id: 1, type: 'progress', progress: 'index' } }); }
   assert.equal(terminated, 0);
-  receive({ data: { id: 1, ok: true, data: 12 } }); assert.equal(await index, 12);
-  const init = rpc.call('init', {}, [], 10000); const rejected = assert.rejects(init, /超时/);
+  const reader = new FlvReader({ file: new Blob([syntheticFlv()]) });
+  const prepared = { ...await scanFlv(reader, undefined, undefined, true), version: reader.version };
+  reader.close();
+  receive({ data: { id: 1, ok: true, data: prepared } }); assert.equal(await index, prepared);
+  const init = rpc.call('init', { input: { file: new Blob() }, glueURL: '' }, [], 10000); const rejected = assert.rejects(init, /超时/);
   t.mock.timers.tick(9000); receive({ data: { id: 2, type: 'progress', progress: 'decoder' } });
   t.mock.timers.tick(1000); await rejected; assert.equal(terminated, 1);
 });

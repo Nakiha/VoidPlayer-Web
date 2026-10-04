@@ -1,9 +1,10 @@
+import type { RangeReadRequest } from './worker-protocol.ts';
 import { MediaOpenError } from './media-errors.ts';
 
 /** Synchronous Blob AVIO adapter. Allocation size is independent of the fixed
  * transport window; only the decoder worker blocks on each bounded transfer. */
 export function rangeBlobReader(shared: SharedArrayBuffer, size: number,
-  request: (message: { type: string; offset: number; length: number }) => void) {
+  request: (message: RangeReadRequest) => void) {
   const control = new Int32Array(shared, 0, 4), data = new Uint8Array(shared, 16);
   const fail = (message: string): never => { throw new MediaOpenError('input', message); };
   return {

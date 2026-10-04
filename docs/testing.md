@@ -29,6 +29,23 @@ npm run test:suite -- ci-native-console --platform win32 --list
 
 清单中 `fixtures.*.prepare` 给出准备命令；suite 不隐式下载、更换参考结果或生成缺失媒体。CI 每个 job 只准备一次可复用媒体/core，并继续负责下载、系统依赖、浏览器和平台矩阵。只有内部断言专用的可写夹具仍由各 case 自行生成。
 
+### 解码 Worker 的消息契约
+
+`src/worker-protocol.ts` 定义 FFmpeg 与 packet Worker 的命令、请求、响应和渐进索引事件。
+`WorkerRpc` 位于 `src/worker-rpc.ts`；FFmpeg 的旧导出保留兼容。调用者只传命令和对应参数，
+响应从命令推导；Worker 用 `workerReply` 按请求命令检查回包。索引输入单独按 action 区分，
+不占用新的 RPC 或改变 ready/batch/complete/error 的确认顺序。
+
+`node-worker-rpc` 登记在 fast、unit、contract 和 ci-playback。它运行编译期负例
+（未知命令、缺字段、错误字段、任意结果类型及错误回包）与 Browser Worker 接口、真实
+Node worker_threads 的 transport 测试。负例位于 `test/helpers/worker-protocol-types.ts`，
+随 `tsc --noEmit` 和 build 编译；删除类型约束会导致未使用的 `@ts-expect-error` 报错。
+真实媒体仍由现有 FFmpeg、FLV 和 MP4 用例验证，播放性能阈值保持不变。
+
+消息格式仍为 `{ id, type, ...payload }` 和 `{ id, ok, data/error }`；结果依靠请求 ID
+对应 pending 请求，类型约束针对同版本内的 Worker，不在每帧路径增加序列化或结构校验。
+帧描述与缓冲范围继续由媒体适配器验证，取消后迟到的 VideoFrame 由 transport 关闭。
+
 ### 构建、隔离与报告
 
 普通套件运行会为需要构建的 case 构建一次。多个 CI 步骤复用同一个源码/配置的构建时使用：

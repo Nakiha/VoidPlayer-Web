@@ -1,3 +1,5 @@
+import { WorkerRpc } from './worker-rpc.ts';
+import type { PacketCommands, PacketInitResult } from './worker-protocol.ts';
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { validateDescription } from './frame-description.ts';
@@ -5,7 +7,7 @@ import { abortableWait, loadAborted, onLoadAbort } from './media-abort.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { VideoSample } from 'mediabunny';
-import { WorkerRpc, floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
+import { floorIndex, WASM_CORE_GLUE_PATH, WASM_CORE_GLUE_PATH_MT, reserveFallbackThreads } from './ffmpeg-media.ts';
 import type { FallbackDeps } from './ffmpeg-media.ts';
 import type { MediaMeta, MediaSource, DecodedFrame } from './media.ts';
 import type { FlvInput } from './flv-demux.ts';
@@ -25,19 +27,19 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
   let reservationHeld = true;
   const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(); reservationHeld = true; } };
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
-  let rpc: WorkerRpc | undefined;
+  let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
     const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
-    type Init = Pick<MediaInfo, 'timelineSource' | 'indexWarning' | 'indexSource' | 'indexState' | 'color' | 'colorSource' | 'pixelFormat' | 'decodedPixelFormat' | 'hardwareAcceleration'> & { codec: string; decoder: 'webcodecs' | 'ffmpeg-wasm'; width: number; height: number; firstPtsUs: number; durationUs: number; times: number[]; durations: number[] };
+    type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
     const createRpc = async () => {
       const worker = deps.workerFactory ? deps.workerFactory() : typeof Worker !== 'undefined'
         ? new Worker(new URL('./packet-worker.ts', import.meta.url), { type: 'module' })
         : new (await import('node:worker_threads')).Worker(new URL('./packet-worker.ts', import.meta.url)) as unknown as Worker;
-      return new WorkerRpc(worker, undefined, deps.onProgress);
+      return new WorkerRpc<PacketCommands>(worker, undefined, deps.onProgress);
     };
     // Read the startup packet outside every decoder deadline. Only actual index
     // progress renews the idle deadline; stalled IO and cancellation still stop.
@@ -47,8 +49,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const detachAbort = onLoadAbort(deps.signal, () => currentRpc.terminate(deps.signal!.reason));
       try {
         deps.onProgress?.('inspect');
-        prepared = await rpc.call<PreparedFlv>('prepare', { input }, [], 60000, true);
-        if (!deps.forceWasm) init = await rpc.call<Init | null>('native', {}, [], 60000);
+        prepared = await rpc.call('prepare', { input }, [], 60000, true);
+        if (!deps.forceWasm) init = await rpc.call('native', {}, [], 60000);
       } finally { detachAbort(); }
     }
     for (const glueURL of candidates) {
@@ -60,7 +62,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const detachAbort = onLoadAbort(deps.signal, () => currentRpc.terminate(deps.signal!.reason));
       try {
         if (container !== 'flv') deps.onProgress?.('inspect');
-        init = await rpc.call<Init>('init', { input, prepared: restore, glueURL, wasmBinary: deps.wasmBinary,
+        init = await rpc.call('init', { input, prepared: restore, glueURL, wasmBinary: deps.wasmBinary,
           forceWasm: container === 'flv' || !!deps.forceWasm, container, threads: reservation.threads }, [],
           container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000);
         selected = glueURL;
@@ -106,7 +108,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (indexing) return indexing;
       if (container !== 'flv') return Promise.resolve();
       if (info.indexState === 'error') return Promise.reject(new Error(info.indexError));
-      indexing = activeRpc.call<Pick<Init, 'indexWarning' | 'indexSource' | 'times' | 'durations' | 'firstPtsUs' | 'durationUs'>>('complete-index', {}, [], 60000, true).then(result => {
+      indexing = activeRpc.call('complete-index', {}, [], 60000, true).then(result => {
         if (disposed) return;
         contextLog().info('media', 'FLV 后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
           earliestRelativePtsUs: result.times[0], packets: result.times.length,
@@ -164,7 +166,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const task = serial.then(async () => {
         if (disposed) throw new Error('媒体已释放。');
         const recycle = spare; spare = undefined;
-        const frame = await activeRpc.call<FlvFrame|null>(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
+        const frame = await activeRpc.call(next?'next':'at', {pts:pts+info.firstPtsUs,recycle}, recycle ? [recycle] : [], 60000, true);
         if(!frame)return null;
         if (container === 'flv' && !indexing && backgroundTimer === undefined) backgroundTimer = setTimeout(() => { if (!disposed) void completeIndex().catch(() => {}); }, 0);
         return toDecodedFrame(frame);
@@ -174,9 +176,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     };
     const setDecoder = async (kind: 'software' | 'native') => {
       if (kind === 'software') holdReservation();
-      const result = await activeRpc.call<Partial<MediaInfo>>(kind === 'software' ? 'switch-software' : 'switch-native', {
-        ...(kind === 'software' ? { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads } : {}),
-      }, [], 60000);
+      const result = kind === 'software'
+        ? await activeRpc.call('switch-software', { glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads }, [], 60000)
+        : await activeRpc.call('switch-native', {}, [], 60000);
       Object.assign(info, result, { ...(kind === 'software' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' : 'single-thread' } : {}) });
       if (kind === 'native') delete info.coreVariant;
       return result;
@@ -195,7 +197,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (decode.decoder === 'hardware' && info.decoder === 'webcodecs') {
           let witness: DecodedFrame | undefined, candidate: MediaSource | undefined, probe: DecodedFrame | undefined;
           try {
-            const raw = await activeRpc.call<FlvFrame>('reference-witness', {
+            const raw = await activeRpc.call('reference-witness', {
               glueURL: selected, wasmBinary: deps.wasmBinary, threads: reservation.threads,
             }, [], 60000);
             witness = await toDecodedFrame(raw);
@@ -259,7 +261,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (disposed) throw new Error('媒体已释放。');
         if (query.signal?.aborted) throw query.signal.reason;
         const complete = (info.indexState ?? 'complete') === 'complete';
-        const call = activeRpc.call<AnalysisResult>('analysis', {
+        const call = activeRpc.call('analysis', {
           mediaId: info.id, axis: query.axis, startUs: query.startUs, endUs: query.endUs,
           pixelWidth: query.pixelWidth, bitrateWindowUs: query.bitrateWindowUs,
           maxSamples: query.maxSamples ?? 5000,
@@ -291,7 +293,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       async locateAnalysisSample(sampleId: string): Promise<AnalysisSample | null> {
         if (disposed) throw new Error('媒体已释放。');
         // 身份解析只在 mint 它的 adapter 层做（worker 内 O(1) 反查），主线程不猜格式。
-        return activeRpc.call<AnalysisSample | null>('analysis-locate', {
+        return activeRpc.call('analysis-locate', {
           mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId,
         }, [], 60000);
       },
@@ -299,14 +301,14 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (disposed) throw new Error('媒体已释放。');
         if (!Number.isFinite(tUs)) throw new Error('排名时间必须是有限微秒数。');
         // 与 queryAnalysis 同一包表、同一有序轴缓存；complete 以主线程索引状态为准。
-        const result = await activeRpc.call<{ rank: number; total: number; ordinal: number | null }>('analysis-rank', {
+        const result = await activeRpc.call('analysis-rank', {
           mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, tUs,
         }, [], 60000);
         return { ...result, complete: (info.indexState ?? 'complete') === 'complete' };
       },
       async analysisSampleAtNumber(number: number, axis: AnalysisAxis): Promise<{ ptsUs: number | null; complete: boolean }> {
         if (disposed) throw new Error('媒体已释放。');
-        const ptsUs = await activeRpc.call<number | null>('analysis-number', {
+        const ptsUs = await activeRpc.call('analysis-number', {
           mediaId: info.id, firstPtsUs: info.firstPtsUs, axis, number,
         }, [], 60000);
         return { ptsUs, complete: (info.indexState ?? 'complete') === 'complete' };

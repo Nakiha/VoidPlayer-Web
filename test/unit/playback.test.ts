@@ -64,14 +64,14 @@ function workerStub() {
 }
 test('a silently wedged worker times out and rejects all pending and future work', async () => {
   const w = workerStub();
-  const first = assert.rejects(w.rpc.call('extract', {}, [], 10), /超时/);
-  const second = assert.rejects(w.rpc.call('extract', {}, [], 1000), /超时/);
+  const first = assert.rejects(w.rpc.call('extract', { ctx: 1, index: 0 }, [], 10), /超时/);
+  const second = assert.rejects(w.rpc.call('extract', { ctx: 1, index: 0 }, [], 1000), /超时/);
   await Promise.all([first, second]);
   assert.equal(w.terminated, true);
-  await assert.rejects(w.rpc.call('extract', {}), /超时/);
+  await assert.rejects(w.rpc.call('extract', { ctx: 1, index: 0 }), /超时/);
 });
 test('disposing a worker settles outstanding extraction promises', async () => {
-  const w = workerStub(); const waiting = assert.rejects(w.rpc.call('extract', {}), /释放/);
+  const w = workerStub(); const waiting = assert.rejects(w.rpc.call('extract', { ctx: 1, index: 0 }), /释放/);
   w.rpc.terminate(); await waiting; assert.equal(w.terminated, true);
 });
 

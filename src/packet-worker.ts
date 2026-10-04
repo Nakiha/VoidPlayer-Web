@@ -1,8 +1,9 @@
+import { workerReply } from './worker-protocol.ts';
+import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
+
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
-import type { PreparedFlv } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
-import type { FlvInput } from './flv-demux.ts';
 import { createSourceQuerier, locateSampleById } from './analysis/adapters.ts';
 
 async function start() {
@@ -10,15 +11,15 @@ async function start() {
   // demux/decoder implementation with the real WASM binary.
   const parent = typeof process !== 'undefined' && process.versions?.node
     ? (await import('node:worker_threads')).parentPort : null;
-  const send = (value: unknown, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
+  const reply = workerReply<PacketCommands>();
+  const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | undefined;
   let chain = Promise.resolve();
   // 轴排序缓存：同一包表只付一次排序成本，hover/缩放只做区间二分与有界物化。
   // 首个大索引的同步排序仍会短暂占用本 worker 线程（与解码同线程），因此
   // 主线程只在视口需要时查询，且结果按像素宽度聚合，不逐帧全量索取。
   const querier = createSourceQuerier();
-  const receive = (message: { id: number; type: string; input: FlvInput; prepared?: PreparedFlv; glueURL: string; wasmBinary?: Uint8Array; forceWasm?: boolean; container?: 'flv' | 'mp4'; threads?: number; position: number; pts:number; recycle?: ArrayBuffer;
-    axis?: 'pts' | 'dts'; startUs?: number; endUs?: number; pixelWidth?: number; bitrateWindowUs?: number; maxSamples?: number; bucketsOnly?: boolean; bucketOriginUs?: number; curveStartUs?: number; curveEndUs?: number; curvePixelWidth?: number; firstPtsUs?: number; durationUs?: number; coverageUs?: { start: number; end: number } | null; mediaId?: string; sampleId?: string; tUs?: number; number?: number }) => {
+  const receive = (message: WorkerRequest<PacketCommands>) => {
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Incremental commits never await the extraction chain: an extract may
@@ -26,7 +27,7 @@ async function start() {
       chain = chain.then(() => {
       current.onIndexWaiting = waiting => send({ id, type: 'index-waiting', data: waiting });
       void current.completeIndex(progress => send({ id, type: 'progress', progress }), undefined, data => send({ id, type: 'index-progress', data }))
-        .then(data => send({ id, ok: true, data }), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
+        .then(data => send(reply(message, data)), error => send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'container' }));
       });
       return;
     }
@@ -35,34 +36,36 @@ async function start() {
       try {
         if (type === 'prepare') {
           engine?.close(); engine = new FlvEngine(message.input);
-          send({ id, ok: true, data: await engine.prepare(progress => send({ id, type: 'progress', progress })) });
+          send(reply(message, await engine.prepare(progress => send({ id, type: 'progress', progress }))));
         } else if (type === 'native' && engine instanceof FlvEngine) {
           const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
-          send({ id, ok: true, data, diagnostics: engine.nativeDiagnostics });
+          send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
           if (!(engine instanceof FlvEngine && message.container === 'flv')) {
             engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);
           }
-          send({ id, ok: true, data: await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress })) });
+          const data = await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress }));
+          if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
+          send(reply(message, data));
         } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
           const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
-          try { send({ id, ok: true, data: frame }, frame.frame ? [frame.frame] : [frame.pixels!]); }
+          try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }
           finally { frame.frame?.close(); }
         } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
-          send({ id, ok: true, data: await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads) });
+          send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads)));
         } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
-          send({ id, ok: true, data: await engine.switchToNative() });
+          send(reply(message, await engine.switchToNative()));
         } else if (type === 'dispose') {
-          engine?.close(); engine = undefined; send({ id, ok: true, data: null });
-        } else if (['extract','at','next'].includes(type) && engine) {          const result = type==='at'?await engine.at(message.pts,message.recycle):type==='next'?await engine.next(message.pts,message.recycle):await engine.extract(message.position, message.recycle);
-          if(!result){send({id,ok:true,data:null});return;}
+          engine?.close(); engine = undefined; send(reply(message, null));
+        } else if ((type === 'extract' || type === 'at' || type === 'next') && engine) {          const result = type==='at'?await engine.at(message.pts,message.recycle):type==='next'?await engine.next(message.pts,message.recycle):await engine.extract(message.position, message.recycle);
+          if(!result){send(reply(message, null));return;}
           if (engine instanceof FlvEngine) {
           const { index } = engine;
           let lo = 0, hi = index.order.length;
           while (lo < hi) { const mid = (lo + hi) >> 1; if (index.packets[index.order[mid]].pts <= result.pts) lo = mid + 1; else hi = mid; }
           result.durationUs = index.durations[Math.max(0, lo - 1)];
           }
-          try { send({ id, ok: true, data: result }, result.frame ? [result.frame] : [result.pixels!]); }
+          try { send(reply(message, result), result.frame ? [result.frame] : [result.pixels!]); }
           finally { result.frame?.close(); }
         } else if (type === 'analysis' && engine) {
           // 只读统计：复用当前 demux 包表，不启动第二套扫描、不转移底层缓冲。
@@ -91,13 +94,13 @@ async function start() {
             ...(message.curveEndUs !== undefined ? { curveEndUs: message.curveEndUs } : {}),
             ...(message.curvePixelWidth !== undefined ? { curvePixelWidth: message.curvePixelWidth } : {}),
           });
-          send({ id, ok: true, data });
+          send(reply(message, data));
         } else if (type === 'analysis-locate' && engine) {
           // 按样本身份的有界定位：O(1) 反查包表，不扫描、不新建索引。
           const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = locateSampleById(packets, message.mediaId ?? '', message.firstPtsUs ?? 0, message.sampleId ?? '');
-          send({ id, ok: true, data });
+          send(reply(message, data));
         } else if (type === 'analysis-rank' && engine) {
           // 展示序排名：与 analysis 分支共用同一份有序轴缓存，O(log N) 二分，
           // 不物化样本数组、不解码。complete 由主线程按索引状态判定。
@@ -107,12 +110,12 @@ async function start() {
           const tUs = Number(message.tUs);
           if (!Number.isFinite(tUs)) throw new MediaOpenError('input', '排名时间无效。');
           const data = querier.rank(packets, message.firstPtsUs ?? 0, axis, tUs);
-          send({ id, ok: true, data });
+          send(reply(message, data));
         } else if (type === 'analysis-number' && engine) {
           const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = querier.sampleAtNumber(packets, message.firstPtsUs ?? 0, message.axis === 'dts' ? 'dts' : 'pts', Number(message.number));
-          send({ id, ok: true, data });
+          send(reply(message, data));
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');
       } catch (error) {
         send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'decode' });
