@@ -75,14 +75,17 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
    const label=page.locator(`[data-track-drag=${slot}] .subtrack-name`);
    await label.click();await settle();
    assert.equal(await page.evaluate(()=>window.dockNodes.every(n=>n.isConnected)&&window.rulerNodes.every(n=>n.isConnected)),true,'track selection never replaces dock/ruler nodes');
-   assert.equal(await label.getAttribute('data-tooltip'),null);
+   const trackName=await page.evaluate(slot=>window.voidPlayer.getState().tracks.find(track=>track.slot===slot).name,slot);
+   assert.equal(await label.getAttribute('data-tooltip'),trackName,'filename tooltip retains the complete source path after selection');
    const selected=page.locator(`.subtrack-row[data-track-drag=${slot}]`);
    const duration=selected.locator('.track-duration');const color=await duration.evaluate(e=>getComputedStyle(e).backgroundColor);
    await duration.hover();assert.equal(await duration.evaluate(e=>getComputedStyle(e).backgroundColor),color,'hover preserves selected track color');
    const playhead=selected.locator('.track-playhead:not(.track-seek-preview)');assert.equal(await playhead.evaluate(e=>getComputedStyle(e).width),'2px');
    assert.equal(await playhead.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 122, 255)');
    assert.equal(await page.locator('.subtrack-row:not(.selected) .track-playhead:not(.track-seek-preview)').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(142, 142, 147)');
-   await label.hover();await page.waitForTimeout(400);assert.equal(await page.locator('#control-tooltip').isVisible(),false,'filename has no generic tooltip');
+   await page.mouse.move(5,5);await page.locator('#control-tooltip').waitFor({state:'hidden'});
+   await label.hover();await page.locator('#control-tooltip').waitFor({state:'visible'});
+   assert.equal(await page.locator('#control-tooltip').textContent(),trackName,'filename hover exposes the complete source path');
  }
  // Resize the shared header/row column without rebuilding tracks or stealing timeline space.
  const splitter=page.locator('#track-label-resize');

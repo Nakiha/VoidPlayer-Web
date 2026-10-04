@@ -20,7 +20,7 @@
 
 - [首版交付计划](roadmap.md)、[帧契约重构](frame-contract-roadmap.md)、[帧契约验收数据](frame-contract-acceptance.json)、[标注持久化交付](annotation-persistence-roadmap.md)。
 - [合成媒体库验收](generated-library-acceptance.md)、[FATE 审计](fate-audit.md)、[0.2.1 可靠性验收](reliability-0.2.1.md)、[0.3.0 验收](verification-0.3.0.md)、[2026-09-12 本地编码验证](local-codec-validation-2026-09-12.md)。
-- 发布说明按版本保留在 `releases/`，最近版本为 [0.4.0](releases/0.4.0.md)。使用者应结合对应版本阅读，当前测试数量查看实际报告。
+- 发布说明按版本保留在 `releases/`，最近版本为 [0.5.0](releases/0.5.0.md)。使用者应结合对应版本阅读，当前测试数量查看实际报告。
 
 ## 色彩研究与历史证据
 
