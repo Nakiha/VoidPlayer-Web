@@ -9,7 +9,7 @@ import type { AnnotationDocument } from './annotation-record.ts';import {recordP
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad, abortableWait } from './media-abort.ts';
 import { parseWorkspace, workspaceUrl } from './workspace-file.ts';
-import type { WorkspaceFile } from './workspace-file.ts';
+import type { ComparisonConditions, WorkspaceFile } from './workspace-file.ts';
 import { Viewport } from './viewport.ts';
 import { SLOTS } from './model.ts';
 import { applyMarkEdit, buildMark, mergeStoredMarks } from './session/marks.ts';
@@ -25,6 +25,7 @@ import type { DecodedFrame, MediaSource } from './media.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
+const currentColorEvidence = () => getColorMode() === 'reference' ? 'reference-sdr' : 'browser-match-approximate';
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
@@ -115,58 +116,66 @@ export class ReviewSession {
         try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
       }catch(error){
         setColorMode(previous);setReferenceDecode(previousDecode);
-        const rollbackErrors: Error[] = [];
-        const isolate = (slot: Slot, track: Track, phase: 'source' | 'presentation' | 'redraw', cause: unknown) => {
-          const failure = new Error(`色彩模式回滚失败（${phase}）：${errorText(cause)}`, {cause});
-          rollbackErrors.push(failure);
-          log.warn('session', '色彩模式回滚失败', { slot, mediaId: track.source.info.id, phase,
-            colorMode: previous, referenceDecode: previousDecode, error: errorText(cause), originalError: errorText(error) });
-          // A restored global preference is not evidence that this source is usable.
-          // Retain its identity/annotations, but never decode or present it again.
-          track.source.onInfoChange = undefined;
-          this.failTrack(slot, track, failure);
-        };
-        // A presenter rollback error must not prevent decoder restoration or hide
-        // the original preparation error. Its affected tracks cannot stay active.
-        let presentationError: unknown, presentationFailed = false;
-        try { await this.onColorModeChange?.(); }
-        catch (cause) { presentationError = cause; presentationFailed = true; }
-        for(const {slot,track} of reconfigured){
-          try { await track.source.reconfigureColorMode!(previous??'browser',previousDecode); }
-          catch (cause) { isolate(slot, track, 'source', cause); }
-        }
-        if (presentationFailed) {
-          for (const [slot, track] of entries) isolate(slot, track, 'presentation', presentationError);
-          // There may be no tracks, but a failed presentation rollback is still observable.
-          if (!entries.length) {
-            rollbackErrors.push(new Error(`色彩模式回滚失败（presentation）：${errorText(presentationError)}`));
-            log.warn('session', '色彩模式回滚失败', { phase: 'presentation', error: errorText(presentationError), originalError: errorText(error) });
-          }
-        } else for(const [slot,track] of entries){
-          if (!current() || signal.aborted) break;
-          if (track.failure) continue;
-          try {
-            const target = Math.max(0, Math.min(this.positionUs-track.offsetUs, track.source.info.durationUs-1));
-            const frame = await abortableLoad(track.source.frameAt(target), signal, late => late.close());
-            try {
-              if (!current() || signal.aborted) break;
-              this.draw(slot, frame);
-              recordPresentedFrame(track.source, frame);
-              track.frame = this.frameInfo(frame);
-            } finally { frame.close(); }
-          } catch (cause) {
-            // A newer transport intent owns presentation. Cancellation is not a
-            // broken source, and its late rollback frame is closed by abortableLoad.
-            if (!current() || signal.aborted) break;
-            isolate(slot, track, 'redraw', cause);
-          }
-        }
+        const rollbackErrors = await this.rollbackPresentation(entries, current, signal, error, '色彩模式', reconfigured);
         if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
           throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
         throw error;
       }
       finally{signal.removeEventListener('abort',onAbort);if(!committed)controller.abort();for(const p of prepared){p.frame.close();if(!committed&&!p.reusesSession)p.source.dispose();}}
     });return this.getState();}finally{this.changingColor=false;}
+  }
+  /** Restore presentation independently per retained track; cancellation never commits a late frame. */
+  private async rollbackPresentation(entries: [Slot, Track][], current: () => boolean, signal: AbortSignal,
+    error: unknown, label: string, restoreSources: { slot: Slot; track: Track }[] = []) {
+    const previous = getColorMode(), previousDecode = getReferenceDecode();
+    this.releaseReaders('rollback', entries.map(([, track]) => track.source));
+    const rollbackErrors: Error[] = [];
+    const isolate = (slot: Slot, track: Track, phase: 'source' | 'presentation' | 'redraw', cause: unknown) => {
+      const failure = new Error(`${label}回滚失败（${phase}）：${errorText(cause)}`, {cause});
+      rollbackErrors.push(failure);
+      log.warn('session', `${label}回滚失败`, { slot, mediaId: track.source.info.id, phase,
+        colorMode: previous, referenceDecode: previousDecode, error: errorText(cause), originalError: errorText(error) });
+      // A restored global preference is not evidence that this source is usable.
+      // Retain its identity/annotations, but never decode or present it again.
+      track.source.onInfoChange = undefined;
+      this.failTrack(slot, track, failure);
+    };
+    // A presenter rollback error must not prevent decoder restoration or hide
+    // the original preparation error. Its affected tracks cannot stay active.
+    let presentationError: unknown, presentationFailed = false;
+    try { await this.onColorModeChange?.(); }
+    catch (cause) { presentationError = cause; presentationFailed = true; }
+    for(const {slot,track} of restoreSources){
+      try { await track.source.reconfigureColorMode!(previous??'browser',previousDecode); }
+      catch (cause) { isolate(slot, track, 'source', cause); }
+    }
+    if (presentationFailed) {
+      for (const [slot, track] of entries) isolate(slot, track, 'presentation', presentationError);
+      // There may be no tracks, but a failed presentation rollback is still observable.
+      if (!entries.length) {
+        rollbackErrors.push(new Error(`${label}回滚失败（presentation）：${errorText(presentationError)}`, { cause: presentationError }));
+        log.warn('session', `${label}回滚失败`, { phase: 'presentation', error: errorText(presentationError), originalError: errorText(error) });
+      }
+    } else for(const [slot,track] of entries){
+      if (!current() || signal.aborted) break;
+      if (track.failure) continue;
+      try {
+        const target = Math.max(0, Math.min(this.positionUs-track.offsetUs, track.source.info.durationUs-1));
+        const frame = await abortableLoad(track.source.frameAt(target), signal, late => late.close());
+        try {
+          if (!current() || signal.aborted) break;
+          this.draw(slot, frame);
+          recordPresentedFrame(track.source, frame);
+          track.frame = this.frameInfo(frame);
+        } finally { frame.close(); }
+      } catch (cause) {
+        // A newer transport intent owns presentation. Cancellation is not a
+        // broken source, and its late rollback frame is closed by abortableLoad.
+        if (!current() || signal.aborted) break;
+        isolate(slot, track, 'redraw', cause);
+      }
+    }
+    return rollbackErrors;
   }
   private order: Slot[] = [...SLOTS];
   private tracks = new Map<Slot, Track>();
@@ -270,7 +279,7 @@ export class ReviewSession {
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       resources: this.resources.snapshot(),
-      frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: getColorMode()==='reference'?'reference-sdr':'browser-match-approximate',colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
+      frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
       marks: this.marks,
     });
@@ -1149,7 +1158,7 @@ export class ReviewSession {
     const media = [...this.catalog.values()].map(info => ({ ...info, ...(info.source ? { source: { ...info.source, url: workspaceUrl(info.source.url, serverUrl) } } : {}) }));
     return structuredClone({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: workspaceUrl(serverUrl), positionUs: this.positionUs,
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, mediaId: t.source.info.id, offsetUs: t.offsetUs, visible: t.visible !== false }] : []; }),
-      comparison: { version: 1, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(), presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' },
+      comparison: this.comparisonConditions(),
       media, marks: this.marks, viewport: new Viewport().snapshot() });
   }
   /** Prepare all sources and frames before swapping the active session. UI and agents share this transaction. */
@@ -1158,6 +1167,7 @@ export class ReviewSession {
     await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async (current, signal) => {
       const next = new Map<Slot, Track>(); let committed = false;
       const previousMode = getColorMode(), previousDecode = getReferenceDecode(), previousChannel = getPresentationChannel();
+      const retained = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
       const selected = new Map<Slot, DecodedFrame>();
       try {
         if (document.comparison) { setColorMode(document.comparison.colorMode); setReferenceDecode(document.comparison.referenceDecode); }
@@ -1195,15 +1205,15 @@ export class ReviewSession {
           }
           this.marks = document.marks; this.measurements = null; committed = true;
         }, selected, undefined, signal);
+      } catch (error) {
+        setColorMode(previousMode); setReferenceDecode(previousDecode); setPresentationChannel(previousChannel);
+        const rollbackErrors = await this.rollbackPresentation(retained, current, signal, error, '工作区');
+        if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
+          throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
+        throw error;
       } finally {
         for (const frame of selected.values()) frame.close();
-        if (!committed) {
-          for (const track of next.values()) track.source.dispose();
-          setColorMode(previousMode); setReferenceDecode(previousDecode); setPresentationChannel(previousChannel);
-          await this.onColorModeChange?.();
-          // Repaint the retained session after presentation resources were rebuilt.
-          if (current() && !signal.aborted) await this.drawAt(this.positionUs, current, this.tracks, undefined, undefined, undefined, signal).catch(() => {});
-        }
+        if (!committed) for (const track of next.values()) track.source.dispose();
       }
     });
     return this.getState();
@@ -1233,10 +1243,15 @@ export class ReviewSession {
     });
     return this.getState();
   }
+  private comparisonConditions(): ComparisonConditions {
+    return { version: 1, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(),
+      presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' };
+  }
   exportReview() {
     return structuredClone({ schema: 'voidplayer-web-review', version: 1, generatedAt: new Date().toISOString(),
       mediaIdentity: 'session-uuid-and-file-metadata-not-content-hash',
-      frameEvidence: 'decoded-and-drawn-to-canvas', color: 'browser-managed-unverified',
+      frameEvidence: 'decoded-and-drawn-to-canvas', color: currentColorEvidence(),
+      comparison: this.comparisonConditions(), comparisonScope: 'export-time', markComparisonConditions: 'not-recorded',
       alignment: [...this.tracks].map(([slot,t])=>({slot,mediaId:t.source.info.id,offsetUs:t.offsetUs})),
       timeMapping:'sessionUs = normalizedMediaUs + offsetUs; source PTS retained separately',
       media: [...this.catalog.values()], marks: this.marks });

@@ -17,6 +17,12 @@ HLG/PQ（包括带 Dolby Vision 元数据的 HLG 样片）在自有色彩模式�
 - Agent 工具 `set_review_color_mode` 接受 `reference` / `browser`；`set_reference_decode` 接受 decoder=hardware/software、depth=1/2/4/8，UI 共用 session.setReferenceDecode 的重载/失败回滚。状态返回 `colorMode`、`referenceDecode` 及实际轨道 decoder。配置成功后保存到本地，刷新恢复。首帧、播放、seek、截图使用同一选择。
 - 显式 `colorPipeline` URL 仍供底层诊断，启动时不读取用户模式；它不是第三个用户菜单选项。没有 WebGPU 时仍能用共同 WebGL/CPU 呈现正确 SDR，但浏览器拟合不作保证。
 
+工作区导入复用同一回滚策略：准备失败时恢复原模式、解码偏好和呈现通道，再重绘原健康轨道。原导入异常始终保留；presenter 或重绘回滚失败作为带 cause 的 AggregateError 子项和本地诊断报告，受影响轨道停用并释放，保留媒体身份和标注。取消仍返回 AbortError；新意图中止旧重绘，迟到资源仅释放。
+
+review 导出继续使用 `voidplayer-web-review` version 1，保留 media、marks、alignment、frameEvidence 等现有字段；新增可忽略的 `comparison`（version 1）与 workspace 共用快照，包含 colorMode、referenceDecode、presentation=`voidplayer-sdr-v1`、outputColorSpace=`srgb`。`color` 描述与当前 session 一致：reference 为 `reference-sdr`，browser 为 `browser-match-approximate`，均不是实际 GPU 使用或 HDR/色准认证。旧 browser 导出的 `browser-managed-unverified` 仍表示未认证的浏览器条件；消费者应优先读取 comparison，旧文件缺失时只能使用旧 color 描述，未知描述不能推定 reference。仅支持旧固定 color 字符串的消费者应保留为未知并继续读取原标注字段，无 schema/version 或标注形状迁移。
+
+`comparisonScope=export-time` 明确 comparison/color 是生成导出时的当前条件；`markComparisonConditions=not-recorded` 明确既有及新标注都没有逐条历史色彩条件。切换模式或导入旧工作区不会改写标注、不会把当前模式回填为创建时模式。导出依然是 detached snapshot，修改 JSON 不影响会话。UI 和 Agent 的 export_review 共用此行为。
+
 Windows 验证：`npm run test:color:modes`（需先运行本地服务，默认 5193）在 Chrome/Edge 上用真实 HEVC 完成 reference → browser → reference、UI 再切换、刷新记忆；检查实际 decoder、时间、ID 和标注。session 单测验证偏移/标注保持及失败回滚。两浏览器两模式 4K 双轨基准均通过：reference 约 57–58 fps、browser 约 59 fps，短片结果不是长期性能保证。匹配模式只保证被选择和执行，未将之前失败的跨路径像素验收改成通过。
 
 2026-09-11 解码设置补测：上述 reference 57–58 fps 指软件路径。新增硬件选项在 Chrome/Edge 上通过深度 1/2/4/8、反复 seek、实际 NV12 输出、WebCodecs 不可用时回退、UI 与刷新保存检查；原片首帧全平面核对通过。相关 66 项单测（含真实 core）及 Chromium UI 回归、构建通过。全量 npm test 为 348 通过、30 失败、1 跳过：28 项缺少本机回归样片，2 项 Windows SIGTERM 退出码断言失败，不能宣称全量通过。

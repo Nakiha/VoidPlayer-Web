@@ -38,9 +38,20 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  // Restored openers must also support settings that rebuild decoders.
  await restored.evaluate(async () => {
    const tools = window.voidPlayer.tools;
+   const checkExport = () => {
+     const review = window.voidPlayer.exportReview(), state = window.voidPlayer.getState();
+     if (review.color !== state.color || review.comparison.colorMode !== state.colorMode ||
+       JSON.stringify(review.comparison.referenceDecode) !== JSON.stringify(state.referenceDecode) ||
+       review.comparisonScope !== 'export-time' || review.markComparisonConditions !== 'not-recorded')
+       throw new Error('Review export comparison conditions drifted from the current session');
+   };
+   checkExport();
    await tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'reference' });
+   checkExport();
    await tools.find(t => t.name === 'set_reference_decode').execute({ decoder: 'software', depth: 4 });
+   checkExport();
    await tools.find(t => t.name === 'set_review_color_mode').execute({ mode: 'browser' });
+   checkExport();
  });
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().marks), saved.marks);
  assert.deepEqual(await restored.evaluate(() => window.voidPlayer.getState().tracks.map(t => t.id)), saved.tracks.map(t => t.mediaId));
