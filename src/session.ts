@@ -156,24 +156,29 @@ export class ReviewSession {
         rollbackErrors.push(new Error(`${label}回滚失败（presentation）：${errorText(presentationError)}`, { cause: presentationError }));
         log.warn('session', `${label}回滚失败`, { phase: 'presentation', error: errorText(presentationError), originalError: errorText(error) });
       }
-    } else for(const [slot,track] of entries){
-      if (!current() || signal.aborted) break;
-      if (track.failure) continue;
-      try {
-        const target = Math.max(0, Math.min(this.positionUs-track.offsetUs, track.source.info.durationUs-1));
-        const frame = await abortableLoad(track.source.frameAt(target), signal, late => late.close());
-        try {
-          if (!current() || signal.aborted) break;
-          this.draw(slot, frame);
-          recordPresentedFrame(track.source, frame);
-          track.frame = this.frameInfo(frame);
-        } finally { frame.close(); }
-      } catch (cause) {
-        // A newer transport intent owns presentation. Cancellation is not a
-        // broken source, and its late rollback frame is closed by abortableLoad.
+    } else {
+      const started = performance.now();
+      for(const [slot,track] of entries){
         if (!current() || signal.aborted) break;
-        isolate(slot, track, 'redraw', cause);
+        if (track.failure) continue;
+        try {
+          const target = Math.max(0, Math.min(this.positionUs-track.offsetUs, track.source.info.durationUs-1));
+          const frame = await abortableLoad(track.source.frameAt(target), signal, late => late.close());
+          try {
+            if (!current() || signal.aborted) break;
+            this.draw(slot, frame);
+            recordPresentedFrame(track.source, frame);
+            track.frame = this.frameInfo(frame);
+            track.syncState = undefined;
+          } finally { frame.close(); }
+        } catch (cause) {
+          // A newer transport intent owns presentation. Cancellation is not a
+          // broken source, and its late rollback frame is closed by abortableLoad.
+          if (!current() || signal.aborted) break;
+          isolate(slot, track, 'redraw', cause);
+        }
       }
+      if (current() && !signal.aborted) this.decodeMs = Math.round(performance.now() - started);
     }
     return rollbackErrors;
   }

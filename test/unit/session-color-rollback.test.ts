@@ -431,3 +431,36 @@ test('workspace rollback releases old playback readers before repainting the ret
     await session.seek(120000); assert.equal(session.getState().tracks[0].frame?.ptsUs, 120000);
   });
 });
+
+for (const waiting of [true, false]) test(`workspace rollback resynchronizes a retained ${waiting ? 'index-wait' : 'catching-up'} track before immediate annotation`, async () => {
+  await sessionTest(async session => {
+    const healthy = fixture('sync-ready'), delayed = fixture('sync-delayed'), gate = deferred<void>();
+    delayed.source.info.indexState = 'building'; delayed.source.info.indexWaiting = true;
+    delayed.source.framesFrom = async function* (ptsUs) { await gate.promise; yield delayed.frame(ptsUs); };
+    try {
+      await session.load('A', async () => healthy.source); await session.load('B', async () => delayed.source);
+      await session.play(); await new Promise(resolve => setTimeout(resolve, 70));
+      if (!waiting) {
+        assert.equal(session.getState().tracks[1].syncState, 'index-wait');
+        delayed.source.info.indexWaiting = false; await new Promise(resolve => setTimeout(resolve, 40));
+      }
+      session.pause();
+      const before = session.getState(), workspace = session.exportWorkspace('http://localhost/');
+      assert.equal(before.tracks[1].syncState, waiting ? 'index-wait' : 'catching-up');
+      assert.throws(() => session.addMark({ slot: 'B', text: 'old stale frame' }), /尚未同步/);
+      await assert.rejects(session.restoreWorkspace(workspace, async () => { throw new Error('restore preparation failed'); }), /restore preparation failed/);
+      const after = session.getState();
+      assert.equal(after.positionUs, before.positionUs); assert.equal(after.tracks[1].id, before.tracks[1].id);
+      assert.equal(after.tracks[1].failure, undefined); assert.equal(after.tracks[1].syncState, undefined);
+      assert.equal(after.tracks[1].frame?.ptsUs, before.positionUs, 'rollback has drawn the current session position');
+      const mark = session.addMark({ slot: 'B', text: 'immediate annotation after rollback' });
+      assert.equal(mark.frame.ptsUs, before.positionUs);
+      session.updateMark(mark.id, { text: 'immediate edit after rollback' });
+      assert.equal(session.getState().marks[0].text, 'immediate edit after rollback');
+      assert.equal(session.getState().resources.frames, 0);
+      gate.resolve(); await turn();
+      assert.equal(delayed.closed, 3, 'load, rollback and late old reader frames each close once');
+      assert.equal(session.getState().resources.totalBytes, 0);
+    } finally { gate.resolve(); }
+  });
+});
