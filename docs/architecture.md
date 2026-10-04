@@ -49,7 +49,7 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 ## Agent 与服务
 
-`src/agent.ts` 定义工具清单、参数校验和执行入口；`src/main.ts` 暴露 `window.voidPlayer`。工具包括会话与轨道操作、定位与步进、播放与基准、标注编辑与导出、媒体库及日志读取。以实际导出的工具 schema 为准，不在文档复制一份易过时的签名。
+`src/agent.ts` 定义工具清单、参数校验和执行入口；`src/main.ts` 暴露 `window.voidPlayer`。工具包括会话与轨道操作、定位与步进、播放与基准、标注编辑与导出、媒体库及日志读取。以实际导出的工具 schema 为准，不在文档复制一份易过时的签名。工具入口用 `tool-input.ts` 校验这份 schema 声明的字段类型、枚举与边界；宿主未做预校验时也执行，状态和领域约束仍由同一 session facade 负责。`query_analysis` 的滑窗支持任意正整数微秒，与 UI/session 一致；面板下拉项只是常用预设，不是接口允许值全集。
 
 支持 WebMCP 的浏览器会注册同一组工具；不支持时普通 UI 仍可用。浏览器文件必须由用户选择或提供已有 File 对象，不能通过页面任意读取本机路径。
 

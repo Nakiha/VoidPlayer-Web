@@ -6,25 +6,27 @@ import type { ReviewSession } from './session.ts';
 import { slotValue, timeUs } from './model.ts';
 import { getLogSessions, readLogs, traceOperation } from './log.ts';
 import { fetchLibraryPage, fetchLibraryItem, openLibraryItem } from './library.ts';
+import { validateToolInput, type ToolInputSchema } from './tool-input.ts';
 
 type Tool = { name: string; description: string; inputSchema: object; annotations: { readOnlyHint: boolean; untrustedContentHint: boolean }; execute: (input: unknown) => unknown };
 type Registry = { registerTool: (tool: Tool, options: { signal: AbortSignal }) => unknown };
 type WorkspaceActions = { exportWorkspace(): unknown; shareWorkspace?(): Promise<unknown>; importWorkspace(value: unknown): Promise<unknown> };
 export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions): Tool[] {
-  const tool = (name: string, description: string, properties: object, required: string[], readOnly: boolean, action: (p: Record<string, unknown>) => unknown): Tool => ({
-    name, description, inputSchema: { type: 'object', properties, required, additionalProperties: false },
-    annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
-    execute(input) {
-      const execute = () => {
-        if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('参数必须是对象。');
-        const p = input as Record<string, unknown>;
-        if (Object.keys(p).some(key => !Object.hasOwn(properties, key)) || required.some(key => !Object.hasOwn(p, key))) throw new Error('参数缺失或包含未知字段。');
-        return action(p);
-      };
-      // Successful polling must not manufacture events or evict useful history.
-      return readOnly ? execute() : traceOperation('agent', name, input, execute);
-    },
-  });
+  const tool = (name: string, description: string, properties: Record<string, ToolInputSchema>, required: string[], readOnly: boolean, action: (p: Record<string, unknown>) => unknown): Tool => {
+    const inputSchema: ToolInputSchema = { type: 'object', properties, required, additionalProperties: false };
+    return {
+      name, description, inputSchema,
+      annotations: { readOnlyHint: readOnly, untrustedContentHint: true },
+      execute(input) {
+        const execute = () => {
+          validateToolInput(inputSchema, input);
+          return action(input as Record<string, unknown>);
+        };
+        // Successful polling must not manufacture events or evict useful history.
+        return readOnly ? execute() : traceOperation('agent', name, input, execute);
+      },
+    };
+  };
   return [
     ...frameIndexTools(),
     ...(workspace ? [
@@ -39,14 +41,11 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
       slot: { enum: SLOTS }, axis: { enum: ['pts', 'dts'] },
       startUs: { type: 'integer' }, endUs: { type: 'integer' },
       pixelWidth: { type: 'integer', minimum: 32, maximum: 4096 },
-      bitrateWindowUs: { type: 'integer', enum: [250000, 500000, 1000000, 2000000, 5000000] },
+      bitrateWindowUs: { type: 'integer', minimum: 1 },
     }, ['slot', 'startUs', 'endUs'], true, p => {
       const startUs = p.startUs as number, endUs = p.endUs as number;
       const pixelWidth = (p.pixelWidth as number | undefined) ?? 320;
       const bitrateWindowUs = (p.bitrateWindowUs as number | undefined) ?? 1000000;
-      if (!Number.isInteger(startUs) || !Number.isInteger(endUs)) throw new Error('查询区间必须是整数微秒（DTS 轴允许负时间）。');
-      if (!Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096) throw new Error('像素宽度超出范围。');
-      if (!Number.isInteger(bitrateWindowUs) || bitrateWindowUs <= 0) throw new Error('码率滑窗必须为正整数微秒。');
       return session.queryAnalysis(slotValue(p.slot), {
         axis: (p.axis ?? 'pts') as 'pts' | 'dts',
         startUs, endUs, pixelWidth, bitrateWindowUs,
