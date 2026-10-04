@@ -54,13 +54,13 @@ for (const variant of ['valid', 'oversized'] as const) test(`real FFmpeg Range A
   const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
   const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
   try {
-    const info = await rpc.call<{ ctx: number; ticks: number[] }>('init', {
+    const info = await rpc.call('init', { name: 'test',
       glueURL: new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href,
       wasmBinary: await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)), range: { shared: bridge.shared, size: bytes.length },
     });
     assert.equal(info.ticks.length, 20);
     for (const index of [0, 15, 19, 0]) {
-      const frame = await rpc.call<{ pixels: ArrayBuffer }>('extract', { ctx: info.ctx, index });
+      const frame = await rpc.call('extract', { ctx: info.ctx, index });
       assert.equal(frame.pixels.byteLength, 160 * 96 * 1.5);
     }
     assert.ok(requests > 0);

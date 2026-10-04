@@ -1,3 +1,6 @@
+import { workerReply } from './worker-protocol.ts';
+import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from './worker-protocol.ts';
+
 import { rangeBlobReader } from './range-bridge-reader.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -17,22 +20,27 @@ import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex } from
 // Dual environment: web worker (browser) and node:worker_threads (tests).
 // Messages queue until the initial script evaluation completes in both
 // environments, so wiring the listener from a microtask is race-free.
-const port: any = (() => {
-  const scope = globalThis as any;
-  if (!scope.process?.versions?.node) return scope;
-  const shim: { onmessage: null | ((event: { data: any }) => void) } = { onmessage: null };
-  let parent: any = null;
+type Request = WorkerRequest<FfmpegCommands> | IndexInput;
+type Port = {
+  onmessage: null | ((event: { data: Request }) => void);
+  postMessage(message: WorkerMessage<FfmpegCommands>, transfer?: Transferable[]): void;
+};
+const port: Port = (() => {
+  if (typeof process === 'undefined' || !process.versions?.node) return globalThis as unknown as Port;
+  const shim: Pick<Port, 'onmessage'> = { onmessage: null };
+  let parent: import('node:worker_threads').MessagePort | null = null;
   void import('node:worker_threads').then(({ parentPort }) => {
     if (!parentPort) throw new Error('worker_threads parentPort 不可用');
     parent = parentPort;
-    parentPort.on('message', (data: any) => shim.onmessage?.({ data }));
+    parentPort.on('message', (data: Request) => shim.onmessage?.({ data }));
   });
   return {
     get onmessage() { return shim.onmessage; },
     set onmessage(fn) { shim.onmessage = fn; },
-    postMessage: (message: any, transfer?: any[]) => parent?.postMessage(message, transfer),
+    postMessage: (message, transfer) => parent?.postMessage(message, transfer as ArrayBuffer[]),
   };
 })();
+const reply = workerReply<FfmpegCommands>();
 
 let core: any = null;
 let heap: () => Uint8Array;
@@ -40,14 +48,14 @@ let indexRequestId: number | undefined;
 type FfmpegIndexSink = {
   manifest(manifest: MediaIndexRecordManifest, trace: MediaIndexTrace): void;
   batch(batch: MediaIndexRecordBatch, trace: MediaIndexTrace): void;
-  complete(manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexTrace): unknown;
-  legacy(index: unknown, trace: MediaIndexTrace): unknown;
-  fallback(): unknown;
+  complete(manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexTrace): FfmpegInitResult | undefined;
+  legacy(index: unknown, trace: MediaIndexTrace): FfmpegInitResult | undefined;
+  fallback(): FfmpegInitResult | undefined;
 };
 type DecodeContext = { ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink };
 const contexts = new Map<number, DecodeContext>();
 
-async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; externalIndexSession?: boolean; mediaSize?: number }, onProgress: MediaOpenProgress, onReady?: (data: any) => void) {
+async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void): Promise<FfmpegInitResult> {
   onProgress('decoder');
   ({ core, heap } = await loadCore(payload.glueURL, payload.wasmBinary ? new Uint8Array(payload.wasmBinary) : undefined));
   requireFrameAbi(core);
@@ -64,7 +72,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
     // no whole-file copy ever enters WASM memory. Node workers lack
     // FileReaderSync and buffer the bytes once (capped) into MEMFS.
     onProgress('inspect');
-    let ioMode = 'memfs';
+    let ioMode: FfmpegInitResult['ioMode'] = 'memfs';
     if (payload.range) {
       ioMode = 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
@@ -174,7 +182,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
       const lastDuration = Number(core.ccall('vp_index_duration', 'i64', ['number', 'number'], [ctx, streamedCount - 1]));
       const durationCoverageUs = lastDuration > 0 ? Math.max(1, toUs(lastDuration)) : 1;
       const stableCoverageUs = Math.max(1, toUs(Number(safeTick) - firstPresentation.pts) + durationCoverageUs);
-      port.postMessage({ id: indexRequestId, type: 'index-batch', data: { ctx, ticks: newTicks, durations: newDurations,
+      port.postMessage({ id: indexRequestId!, type: 'index-batch', data: { ctx, ticks: newTicks, durations: newDurations,
         stableCoverageUs, seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]), buildId: streamedBuildId,
         indexIdentity, indexTrace: { ...externalIndexTrace, recordImportMs } } });
     };
@@ -185,7 +193,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
         [ctx, 0, 0, streamedLastSeq + 1, streamedSafeTick, 1]) as number;
       if (result !== 0) throw new MediaOpenError('resource', 'FFmpeg 无法完成服务端索引导入。');
     };
-    const makeIndexResult = (count: number, indexSource: 'server' | 'client', localIndexBuildCalls: number) => {
+    const makeIndexResult = (count: number, indexSource: 'server' | 'client', localIndexBuildCalls: number): FfmpegInitResult => {
       if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
       const ticks: number[] = new Array(count), durations: number[] = new Array(count);
       for (let i = 0; i < count; i++) {
@@ -272,7 +280,7 @@ async function init(payload: { glueURL: string; wasmBinary: ArrayBuffer; name: s
         fallback: () => makeIndexResult(core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number, 'client', 1),
       };
       contexts.set(ctx, { ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
-      const ready = {
+      const ready: FfmpegInitResult = {
         ctx, path, ticks: [firstTicks], durations: [firstPresentation.duration],
         firstPts: firstTicks, firstFrame: firstPresentation, indexMs: 0,
         indexSource: 'server', localIndexBuildCalls: 0, ioMode, indexPending: true,
@@ -320,55 +328,56 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
     } : undefined };
 }
 
-port.onmessage = async (event: { data: any }) => {
-  const { id, type, ...payload } = event.data;
+port.onmessage = async (event: { data: Request }) => {
+  const message = event.data;
+  const { id, type } = message;
   if (type === 'init') indexRequestId = id;
   let readyContext: number | undefined;
   try {
     if (type === 'init') {
-      const result = await init(payload, progress => port.postMessage({ id, type: 'progress', progress }), data => {
+      const result = await init(message, progress => port.postMessage({ id, type: 'progress', progress }), data => {
         readyContext = data.ctx;
-        port.postMessage({ id, type: 'ready', data }, [data.firstFrame.pixels]);
+        port.postMessage({ id, type: 'ready', data }, [data.firstFrame!.pixels]);
       });
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
-      } else port.postMessage({ id, ok: true, data: result });
+      } else port.postMessage(reply(message, result));
     } else if (type === 'index-input') {
-      const ctx = payload.ctx as number;
+      const ctx = message.ctx;
       const sink = contexts.get(ctx)?.indexSink;
       if (!sink) throw new Error('FFmpeg 索引尚未绑定到媒体容器上下文。');
-      let result: unknown;
-      if (payload.action === 'manifest') sink.manifest(payload.manifest, payload.trace);
-      else if (payload.action === 'batch') sink.batch(payload.batch, payload.trace);
-      else if (payload.action === 'complete') result = sink.complete(payload.manifest, payload.frames, payload.trace);
-      else if (payload.action === 'legacy') result = sink.legacy(payload.index, payload.trace);
-      else if (payload.action === 'fallback') result = sink.fallback();
-      else throw new Error(`未知索引输入: ${payload.action}`);
-      if (result) port.postMessage({ id: indexRequestId, type: 'index-complete', data: result });
+      let result: FfmpegInitResult | undefined;
+      if (message.action === 'manifest') sink.manifest(message.manifest, message.trace);
+      else if (message.action === 'batch') sink.batch(message.batch, message.trace);
+      else if (message.action === 'complete') result = sink.complete(message.manifest, message.frames, message.trace);
+      else if (message.action === 'legacy') result = sink.legacy(message.index, message.trace);
+      else if (message.action === 'fallback') result = sink.fallback();
+      else throw new Error('未知索引输入');
+      if (result) port.postMessage({ id: indexRequestId!, type: 'index-complete', data: result });
     } else if (type === 'extract') {
-      const frame = extract(payload.ctx, payload.index, payload.recycle);
-      port.postMessage({ id, ok: true, data: frame }, [frame.pixels]);
+      const frame = extract(message.ctx, message.index, message.recycle);
+      port.postMessage(reply(message, frame), [frame.pixels]);
     } else if (type === 'dispose') {
-      const ctx = payload.ctx;
+      const ctx = message.ctx;
       const entry = contexts.get(ctx);
       if (contexts.delete(ctx)) {
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
-        try { core.FS.unlink(payload.path); } catch { /* already gone */ }
+        try { core.FS.unlink(message.path); } catch { /* already gone */ }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
       }
-      port.postMessage({ id, ok: true, data: null });
+      port.postMessage(reply(message, null));
     } else {
       throw new Error(`未知消息类型: ${type}`);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const stage = error instanceof MediaOpenError ? error.stage : undefined;
     if (type === 'init' && readyContext !== undefined) {
-      port.postMessage({ id, type: 'index-error', data: { ctx: readyContext, error: message, stage } });
+      port.postMessage({ id, type: 'index-error', data: { ctx: readyContext, error: errorMessage, stage } });
     } else if (type === 'index-input') {
-      port.postMessage({ id: indexRequestId, type: 'index-error', data: { ctx: payload.ctx, error: message, stage } });
+      port.postMessage({ id: indexRequestId!, type: 'index-error', data: { ctx: message.ctx, error: errorMessage, stage } });
     } else {
-      port.postMessage({ id, ok: false, error: message, stage });
+      port.postMessage({ id, ok: false, error: errorMessage, stage });
     }
   }
 };

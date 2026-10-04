@@ -1,6 +1,9 @@
+import { WorkerRpc } from './worker-rpc.ts';
+export { WorkerRpc } from './worker-rpc.ts';
+import type { FfmpegInitResult as InitResult, FfmpegCommands } from './worker-protocol.ts';
 import type { WasmFrameOutput } from './wasm-frame.ts';
 import { validateDescription } from './frame-description.ts';
-import type { MediaOpenProgress, MediaLoadStage } from './media-progress.ts';
+import type { MediaOpenProgress } from './media-progress.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { createRangeBridge } from './range-bridge.ts';
 import { randomUUID } from './uuid.ts';
@@ -15,7 +18,7 @@ import { ffmpegColorInfo } from './media-metadata.ts';
 import { isHdrTransfer } from './presentation-color.ts';
 import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
-import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
+import type { MediaIndexClientTrace } from './media-index-types.ts';
 import { FfmpegContainerSession, FfmpegMediaIndexSession } from './media-index-session.ts';
 import type { FfmpegIndexRecordSink } from './media-index-session.ts';
 
@@ -70,33 +73,6 @@ export interface FallbackDeps {
   workerFactory?: () => Worker;
 }
 
-interface InitResult {
-  ctx: number;
-  firstPts?: number;
-  firstFrame?: WasmFrameOutput;
-  path: string;
-  ticks: number[];
-  durations: number[];
-  tbNum: number;
-  tbDen: number;
-  width: number;
-  height: number;
-  codec: string;
-  indexMs?: number;
-  indexSource?: 'server' | 'client';
-  localIndexBuildCalls?: number;
-  seekAnchorCount?: number;
-  ioMode?: 'blob' | 'memfs' | 'http-range';
-  colorPrimaries?: number;
-  colorTransfer?: number;
-  colorSpace?: number;
-  colorRange?: number;
-  pixelFormat?: string | null;
-  indexIdentity?: MediaIndexIdentity;
-  indexTrace?: MediaIndexClientTrace;
-  indexPending?: boolean;
-}
-
 // Player-side thread budget: fallback decoders share the host's cores, each
 // live fallback track getting an equal share of (cores − 2), capped by the
 // pthread pool the mt core was built with.
@@ -120,188 +96,6 @@ async function createWorker(): Promise<Worker> {
   return new NodeWorker(new URL('./ffmpeg-worker.ts', import.meta.url), { type: 'module' } as object) as unknown as Worker;
 }
 
-export class WorkerRpc {
-  onIndexWaiting?: (waiting: boolean) => void;
-  onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
-  private indexHandlers?: { batch?: (data: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => void; complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void };
-  private queuedIndexEvents: { type: 'index-batch' | 'index-complete' | 'index-error'; data: any }[] = [];
-  private indexProgressHandler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void;
-  private queuedIndexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
-  private indexRequestId?: number;
-  private indexReady = false;
-  private indexBuildId?: string;
-  private indexTerminal = false;
-  private workerId=randomUUID();
-  private requests:{id:number;type:string;pts?:unknown;index?:unknown}[]=[];
-  private worker: Worker;
-  private nextId = 1;
-  private failure: Error | null = null;
-  private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; refresh?: () => void }>();
-  private onTerminate: () => void;
-  constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
-    this.onTerminate = onTerminate;
-    this.worker = worker;
-    const onMessage = (data: { id: number; ok: boolean; data: any; error?: string; stack?: string; stage?: OpenStage; type?: string; progress?: MediaLoadStage; diagnostics?: Record<string, unknown>[] }) => {
-      if (data.type === 'ready') {
-        const entry = this.pending.get(data.id);
-        if (!entry) return;
-        if (data.id === this.indexRequestId) this.indexReady = true;
-        clearTimeout(entry.timer); this.pending.delete(data.id); entry.resolve(data.data);
-        return;
-      }
-      if (data.type === 'index-complete' || data.type === 'index-error') {
-        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal) return;
-        this.indexTerminal = true;
-        this.queuedIndexProgress = undefined;
-        if (this.indexHandlers) {
-          if (data.type === 'index-complete') this.indexHandlers.complete?.(data.data);
-          else this.indexHandlers.error?.(data.data);
-        } else this.queuedIndexEvents.push({ type: data.type, data: data.data });
-        return;
-      }
-      if (data.type === 'index-batch') {
-        if (this.failure || data.id !== this.indexRequestId || this.indexTerminal
-          || (this.indexBuildId !== undefined && data.data.buildId !== this.indexBuildId)) return;
-        if (this.indexHandlers) this.indexHandlers.batch?.(data.data);
-        else this.queuedIndexEvents.push({ type: 'index-batch', data: data.data });
-        return;
-      }
-      if (data.type === 'index-waiting') { if (!this.failure) this.onIndexWaiting?.(data.data === true); return; }
-      if (data.type === 'index-progress') {
-        if (!this.failure && (data.id === this.indexRequestId || this.pending.has(data.id)) && !this.indexTerminal) {
-          // Real scan advances keep waiting extraction RPCs alive, too.
-          for (const entry of this.pending.values()) entry.refresh?.();
-          const rawProgress = data.data as { durationUs?: number; scannedBytes: number; totalBytes: number; packets: number };
-          if (typeof rawProgress.durationUs === 'number') this.onIndexProgress?.({
-            durationUs: rawProgress.durationUs, scannedBytes: rawProgress.scannedBytes,
-            totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
-          });
-          const progress = {
-            scannedBytes: rawProgress.scannedBytes, totalBytes: rawProgress.totalBytes, packets: rawProgress.packets,
-          };
-          if (this.indexProgressHandler) this.indexProgressHandler(progress);
-          else if (data.id === this.indexRequestId) this.queuedIndexProgress = progress;
-        }
-        return;
-      }
-      if (data.type === 'progress') {
-        const entry = this.pending.get(data.id);
-        if (!this.failure && entry && data.progress) { entry.refresh?.(); onProgress?.(data.progress); }
-        return;
-      }
-      const { id, ok, data: payload, error } = data;
-      const entry = this.pending.get(id);
-      if (!entry) {
-        // A transferable VideoFrame may arrive after cancellation.
-        (payload as { frame?: VideoFrame } | null)?.frame?.close();
-        return;
-      }
-      if (data.diagnostics?.length) contextLog().info('media', '原生解码路径探测', { workerId: this.workerId, requestId: id, decisions: data.diagnostics });
-      clearTimeout(entry.timer);
-      this.pending.delete(id);
-      if (ok) entry.resolve(payload);
-      else {
-        const failure = data.stage ? new MediaOpenError(data.stage, error ?? '解码器错误') : new Error(error ?? 'WASM 解码器错误');
-        if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
-        contextLog().warn('media', '解码 worker 请求失败', {workerId:this.workerId,requestId:id,recentRequests:this.requests,error:failure});
-        entry.reject(failure);
-      }
-    };
-    const fail = (message: string) => this.terminate(new Error(`WASM 解码 worker 异常：${message}`));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const anyWorker = worker as any;
-    if (typeof anyWorker.addEventListener === 'function') {
-      anyWorker.addEventListener('message', (e: { data: unknown }) => onMessage(e.data as never));
-      anyWorker.addEventListener('error', (e: { message?: string }) => fail(e.message ?? 'unknown'));
-    } else {
-      anyWorker.on('message', onMessage);
-      anyWorker.on('error', (e: unknown) => fail(e instanceof Error ? e.message : String(e)));
-      anyWorker.on('exit', (code: number) => fail(`exit ${code}`));
-    }
-  }
-  setIndexHandlers(handlers?: { batch?: (data: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => void; complete?: (data: InitResult) => void; error?: (data: { error: string; stage?: OpenStage }) => void }) {
-    this.indexHandlers = handlers;
-    if (!handlers) return;
-    const queued = this.queuedIndexEvents.splice(0);
-    for (const event of queued) {
-      if (event.type === 'index-batch') handlers.batch?.(event.data);
-      else if (event.type === 'index-complete') handlers.complete?.(event.data);
-      else handlers.error?.(event.data);
-    }
-  }
-  setIndexProgressHandler(handler?: (data: { scannedBytes: number; totalBytes: number; packets: number }) => void) {
-    this.indexProgressHandler = handler;
-    if (handler && this.queuedIndexProgress) {
-      const progress = this.queuedIndexProgress;
-      this.queuedIndexProgress = undefined;
-      handler(progress);
-    }
-  }
-  sendIndexManifest(ctx: number, manifest: MediaIndexRecordManifest, trace: MediaIndexClientTrace) {
-    this.indexBuildId = manifest.buildId;
-    this.pushIndexInput('manifest', ctx, { manifest, trace });
-  }
-  sendIndexBatch(ctx: number, batch: MediaIndexRecordBatch, trace: MediaIndexClientTrace) {
-    const records = batch.records.slice();
-    this.pushIndexInput('batch', ctx, { batch: { ...batch, records }, trace }, [records.buffer]);
-  }
-  sendIndexComplete(ctx: number, manifest: MediaIndexRecordManifest, frames: number, trace: MediaIndexClientTrace) {
-    this.pushIndexInput('complete', ctx, { manifest, frames, trace });
-  }
-  sendLegacyIndex(ctx: number, index: unknown, trace: MediaIndexClientTrace) {
-    this.indexBuildId = '';
-    this.pushIndexInput('legacy', ctx, { index, trace });
-  }
-  startLocalIndex(ctx: number) {
-    // A reset/failed transport can race an acknowledgement already in flight.
-    // The replacement local build must establish its own usable timeline.
-    this.indexBuildId = '';
-    this.pushIndexInput('fallback', ctx);
-  }
-  reportIndexError(error: string, stage: OpenStage = 'resource') {
-    if (this.failure || this.indexTerminal) return;
-    this.indexTerminal = true;
-    this.queuedIndexProgress = undefined;
-    const data = { error, stage };
-    if (this.indexHandlers) this.indexHandlers.error?.(data);
-    else this.queuedIndexEvents.push({ type: 'index-error', data });
-  }
-  private pushIndexInput(action: string, ctx: number, data: Record<string, unknown> = {}, transfer: Transferable[] = []) {
-    if (this.failure || this.indexTerminal || this.indexRequestId === undefined) return;
-    try { this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', action, ctx, ...data }, transfer); }
-    catch (error) { this.reportIndexError(error instanceof Error ? error.message : String(error)); }
-  }
-  call<T>(type: string, payload: Record<string, unknown>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<T> {
-    if (this.failure) return Promise.reject(this.failure);
-    const id = this.nextId++;
-    if (type === 'init') this.indexRequestId = id;
-    this.requests.push({id,type,pts:payload.pts,index:payload.index});if(this.requests.length>16)this.requests.shift();
-    return new Promise<T>((resolve, reject) => {
-      const expire = () => this.terminate(new Error(`WASM ${type} 超时（${timeoutMs} ms）`));
-      const entry = { resolve: resolve as (v: unknown) => void, reject, timer: setTimeout(expire, timeoutMs),
-        refresh: idleTimeout ? () => { clearTimeout(entry.timer); entry.timer = setTimeout(expire, timeoutMs); } : undefined };
-      this.pending.set(id, entry);
-      try { this.worker.postMessage({ id, type, ...payload }, transfer); }
-      catch (error) { this.terminate(error instanceof Error ? error : new Error(String(error))); }
-    });
-  }
-  terminate(error = new Error('WASM worker 已释放。'), reportIndexFailure = true) {
-    if (this.failure) return;
-    const notifyIndex = reportIndexFailure && this.indexReady && !this.indexTerminal;
-    this.failure = error;
-    if (notifyIndex) {
-      this.indexTerminal = true;
-      this.queuedIndexProgress = undefined;
-      const indexError = { error: error.message, stage: 'resource' as const };
-      if (this.indexHandlers) this.indexHandlers.error?.(indexError);
-      else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
-    }
-    this.onTerminate();
-    for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
-    this.pending.clear();
-    this.worker.terminate();
-  }
-}
 
 type FallbackInput = File | (MediaMeta & { url: string });
 
@@ -379,7 +173,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     const activeRpc = rpc;
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
-      const payload: Record<string, unknown> = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
+      const payload: FfmpegCommands['init']['request'] = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
         ...('url' in file ? { range: { shared: bridge!.shared, size: file.size } } : { blob: file }) };
       const transfer: Transferable[] = [];
       if (deps.wasmBinary) {
@@ -392,7 +186,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // A legacy core may still build its local index during init. Keep a wide
       // safety cap here; supported cores return after first-frame priming and
       // stream their index through the main-thread session below.
-      init = await rpc.call<InitResult>('init', payload, transfer, 24 * 60 * 60 * 1000);
+      init = await rpc.call('init', payload, transfer, 24 * 60 * 60 * 1000);
       coreVariant = glueURL.includes('core-mt.') ? 'multi-thread' : 'single-thread';
       scoped.info('media', 'WASM core 已就绪', {
         coreVariant, crossOriginIsolated: !!globalThis.crossOriginIsolated,
@@ -568,10 +362,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       // recycled into the worker.
       output = { ...firstFrame, pixels: firstFrame.pixels.slice(0), seek: { decodedFrames: 0, restarts: 0 } };
     } else {
-      const payload: Record<string, unknown> = { ctx: init.ctx, index };
+      const payload: FfmpegCommands['extract']['request'] = { ctx: init.ctx, index };
       const transfer: Transferable[] = [];
       if (spare) { payload.recycle = spare; transfer.push(spare); spare = null; }
-      try { output = await rpc.call<typeof output>('extract', payload, transfer); }
+      try { output = await rpc.call('extract', payload, transfer); }
       catch (error) {
         scoped.warn('media', 'WASM 帧定位失败', { index, targetPtsUs: relUs[index], indexState: info.indexState, indexKind: info.indexKind, seekStrategy: info.seekStrategy, seekAnchorCount: info.seekAnchorCount, elapsedMs: Math.round(performance.now() - started), error: String(error) });
         throw error;

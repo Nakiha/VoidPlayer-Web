@@ -46,12 +46,12 @@ test('Synchronous FFmpeg AVIO requests bounded chunks through the async bridge a
     const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
     const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
     try {
-      const pending = rpc.call<{ ctx: number; ticks: number[]; ioMode: string }>('init', {
+      const pending = rpc.call('init', { name: 'test',
         glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)), range: { size: bytes.length, shared: bridge.shared },
       });
       if (failing) { await assert.rejects(pending, /503/); continue; }
       const init = await pending; assert.equal(init.ioMode, 'http-range'); assert.ok(init.ticks.length > 1);
-      const frame = await rpc.call<import('../../src/wasm-frame.ts').WasmFrameOutput>('extract', { ctx: init.ctx, index: 1 });
+      const frame = await rpc.call('extract', { ctx: init.ctx, index: 1 });
       assert.equal(frame.pixels.byteLength, 320 * 180 * 2); assert.ok(new Set(new Uint8Array(frame.pixels).subarray(0, 4096)).size > 2);
     } finally { rpc.terminate(); }
   }
