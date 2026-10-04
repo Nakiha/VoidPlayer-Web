@@ -216,3 +216,36 @@
   .cache-row time,.cache-list-heading > :nth-child(3) { display:none; }
   .cache-thumbnail { display:none; }
 }
+
+.admin-language { display:flex; justify-content:flex-end; align-items:center; gap:12px; width:100%; max-width:1100px; margin:0 auto 16px; }
+.admin-language #language-status { font-size:12px; overflow-wrap:anywhere; }
+.admin-content button:not(.icon-button), .admin-inline-confirm { white-space:normal; overflow-wrap:anywhere; }
+.admin-navigation button { height:auto; min-height:36px; white-space:normal; text-align:left; }
+.admin-navigation button .icon { flex:none; }
+@media(max-width:600px) {
+  .admin-layout { grid-template-columns:minmax(0,1fr); height:auto; min-height:100%; }
+  .admin-navigation { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .admin-navigation .admin-brand, .admin-navigation .admin-nav-caption, .admin-navigation .admin-back { grid-column:1 / -1; }
+  .admin-content { padding:18px 12px; overflow:visible; }
+  .admin-root-row { grid-template-columns:minmax(0,1fr) 32px; }
+  .admin-root-row > label { grid-column:1 / -1; }
+  .admin-root-row > button { margin-top:0; grid-column:2; grid-row:3; }
+  .admin-root-state { grid-column:1; grid-row:3; }
+  .admin-section-heading, .admin-measure-search, .admin-workspace-title { flex-wrap:wrap; }
+  .admin-measure-search label { width:100%; }
+  .admin-measure-options { grid-template-columns:minmax(0,1fr); }
+  .admin-properties > div { grid-template-columns:minmax(80px,.7fr) minmax(0,1fr); gap:10px; }
+  .admin-metrics strong { font-size:18px; overflow-wrap:anywhere; }
+  .admin-properties dt { overflow-wrap:anywhere; }
+}
+
+/* Locale expansion must fit the existing controls, including QA pseudo text. */
+.admin-content :is(button,a.admin-link-button) { max-width:100%; min-width:0; }
+.admin-content button:not(.icon-button) { flex-shrink:1; }
+.admin-heading > div, .admin-section-heading h2, .admin-button-group { min-width:0; max-width:100%; }
+.admin-heading h1, .admin-section-heading h2 { overflow-wrap:anywhere; }
+.admin-section-heading { flex-wrap:wrap; }
+.admin-log-tabs { max-width:100%; flex-wrap:wrap; }
+.admin-log-tabs button { white-space:normal; overflow-wrap:anywhere; }
+.admin-log-tabs { width:fit-content; }
+.admin-button-group { flex-wrap:wrap; }

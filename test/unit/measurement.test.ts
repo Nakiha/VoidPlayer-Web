@@ -41,7 +41,8 @@ test('measurement is idle until explicitly started and allows all users while re
   assert.equal(admin.measurements.status().job, null);
   const response = await call(endpoint, 'POST', settings, 'viewer'); assert.equal(response.status, 202);
   const { job } = await response.json();
-  assert.equal((await call(endpoint, 'POST', settings)).status, 409);
+  const busy = await call(endpoint, 'POST', settings); assert.equal(busy.status,409);
+  const busyBody = await busy.json(); assert.equal(busyBody.code,'measurement-busy'); assert.equal(busyBody.error,'已有测速任务，请等待完成或由发起者取消。');
   const transfer = await call(`${endpoint}/${job.id}/transfer`, 'POST', undefined, 'other'); assert.equal(transfer.status, 200); await transfer.arrayBuffer();
   assert.equal((await call(`${endpoint}/${job.id}`, 'DELETE', undefined, 'other')).status, 200);
   assert.equal(admin.measurements.status().job?.state, 'cancelled');

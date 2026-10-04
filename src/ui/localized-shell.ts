@@ -1,6 +1,6 @@
 import { onLanguageChange } from '../i18n.ts';
 
-const attributes = ['aria-label', 'title', 'placeholder', 'data-tooltip'];
+const attributes = ['aria-label', 'title', 'placeholder', 'data-tooltip', 'alt'];
 type Binding = { node: Node; index: number; attribute?: string; previous: string };
 function nodes(root: Node) {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT);
@@ -15,7 +15,7 @@ function nodes(root: Node) {
  * their own labels; changed/replaced nodes are deliberately left to those owners.
  * Shell structure must not depend on the locale. There is no observer or frame work.
  */
-export function mountLocalizedShell(root: HTMLElement, shell: () => string, signal?: AbortSignal) {
+export function createLocalizedFragment(root: HTMLElement, shell: () => string) {
   root.innerHTML = shell();
   const bindings: Binding[] = [];
   nodes(root).forEach((node, index) => {
@@ -25,7 +25,7 @@ export function mountLocalizedShell(root: HTMLElement, shell: () => string, sign
       if (value) bindings.push({ node, index, attribute, previous: value });
     }
   });
-  return onLanguageChange(() => {
+  return () => {
     const template = document.createElement('template'); template.innerHTML = shell();
     const translated = nodes(template.content);
     for (const binding of bindings) {
@@ -39,5 +39,9 @@ export function mountLocalizedShell(root: HTMLElement, shell: () => string, sign
       }
       binding.previous = next ?? previous;
     }
-  }, signal);
+  };
+}
+
+export function mountLocalizedShell(root: HTMLElement, shell: () => string, signal?: AbortSignal) {
+  return onLanguageChange(createLocalizedFragment(root, shell), signal);
 }

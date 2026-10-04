@@ -113,3 +113,24 @@
 }
 @media (prefers-reduced-motion: reduce) { .connection-guide * { transition: none !important; } }
 @media (prefers-contrast: more) { .connection-card, .connection-button.secondary, .connection-os { border: 1px solid var(--border); } }
+
+.connection-language { display:flex; justify-content:flex-end; align-items:center; gap:12px; margin-bottom:12px; }
+.connection-page .choice-trigger { display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border:0; border-radius:var(--radius-control); background:var(--surface-selected); color:var(--text); font:inherit; }
+.connection-page .choice-trigger .icon { width:14px; height:14px; }
+.connection-page .popup-menu { position:fixed; inset:auto; margin:0; padding:4px; min-width:160px; max-width:calc(100vw - 8px); border:0; border-radius:var(--radius-control); background:var(--preview-fill); color:var(--text); box-shadow:var(--popover-shadow); }
+.connection-page .popup-menu:popover-open { display:flex; flex-direction:column; gap:4px; }
+.connection-page .popup-menu button { border:0; border-radius:var(--radius-control); background:transparent; color:inherit; text-align:left; padding:8px 12px; font:inherit; }
+.connection-page .popup-menu button[aria-checked=true] { color:var(--accent); background:var(--surface-selected); }
+.connection-page :is(button,a,summary):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.connection-page #language-status { overflow-wrap:anywhere; font-size:12px; }
+
+.connection-guide .connection-button, .connection-guide .connection-retry { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.connection-header h1 { min-width:0; white-space:normal; flex-wrap:wrap; }
+.connection-header h1 > span { overflow-wrap:anywhere; }
+.connection-about { min-width:0; max-width:100%; }
+.connection-certificate > div { min-width:0; overflow-wrap:anywhere; }
+@media(max-width:600px) {
+  .connection-header { height:auto; min-height:68px; flex-wrap:wrap; }
+  .connection-about { flex:initial; }
+  .connection-enter > div { min-width:0; }
+}

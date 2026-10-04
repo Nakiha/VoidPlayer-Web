@@ -42,6 +42,7 @@ async function atomicWrite(file: string, text: string) {
 }
 const logName = (name: string) => /^voidplayer-log-[A-Za-z0-9_.-]{1,180}\.json$/.test(name);
 
+export type RootReasonCode = 'external-change' | 'cli-override' | 'no-source' | 'not-writable';
 export class AdminController {
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
@@ -69,7 +70,7 @@ export class AdminController {
     const origin = this.config.origin;
     const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
     const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
-    return { roots: this.library.definitions.map(({ id, path, name }) => ({ id, path, name })), revision: origin?.revision ?? null, writable: !!origin && !origin.rootsFromCli && !changed && writeAccess, changedExternally: changed, configFile: origin?.file ?? null, reason: changed ? '配置文件已被外部修改，请重启服务以重新载入。' : origin?.rootsFromCli ? '当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。' : !origin ? '此服务未提供可写配置来源。' : !writeAccess ? '配置所在目录不可写，请调整数据目录权限。' : null };
+    return { roots: this.library.definitions.map(({ id, path, name }) => ({ id, path, name })), revision: origin?.revision ?? null, writable: !!origin && !origin.rootsFromCli && !changed && writeAccess, changedExternally: changed, configFile: origin?.file ?? null, reasonCode: (changed ? 'external-change' : origin?.rootsFromCli ? 'cli-override' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null, reason: changed ? '配置文件已被外部修改，请重启服务以重新载入。' : origin?.rootsFromCli ? '当前根目录由 --folder 覆盖，请修改启动参数或改用配置文件。' : !origin ? '此服务未提供可写配置来源。' : !writeAccess ? '配置所在目录不可写，请调整数据目录权限。' : null };
   }
   saveRoots(document: unknown) {
     if (this.mutation) throw new AdminError(409, '另一项配置修改正在保存，请稍后重试。');

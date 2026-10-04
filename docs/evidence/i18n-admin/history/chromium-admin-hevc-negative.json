@@ -1,0 +1,5800 @@
+{
+  "order": "baseline-first",
+  "profileCpu": false,
+  "preparation": "same appearance settings open, en/zh/en/zh locale switches, close and two animation frames in both distributions",
+  "headless": true,
+  "mediaMode": "mixed",
+  "device": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M5",
+    "node": "v24.15.0"
+  },
+  "baseline": "/Users/zhuhongwei/Documents/Codex/2026-10-03/task/voidplayer-i18n-admin-baseline",
+  "budgets": {
+    "startupGzipIncreaseBytes": 32768,
+    "startupExtraRequests": 3,
+    "englishStartupGzipIncreaseBytes": 49152,
+    "englishStartupExtraRequests": 4,
+    "startupMedianIncreaseMs": 100,
+    "startupMedianMultiplier": 1.3,
+    "coldLocaleMs": 250,
+    "cachedLocaleMs": 100,
+    "existingPlaybackThresholds": "unchanged benchmark_review defaults"
+  },
+  "notes": [
+    "gzip sizes are offline gzip estimates; the local static server sends uncompressed content",
+    "UI click-to-ready timings include Playwright scheduling; commit timing spans click handler to lang mutation delivery after synchronous relabeling",
+    "same-engine same-media paired runs; do not infer hardware decoder usage"
+  ],
+  "results": [
+    {
+      "distribution": {
+        "root": "/Users/zhuhongwei/Documents/Codex/2026-10-03/task/voidplayer-i18n-admin-baseline",
+        "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5"
+      },
+      "preparation": {
+        "dialogOpen": false,
+        "activeId": "settings-open",
+        "tooltipVisible": false,
+        "locale": "zh-CN",
+        "canvas": {
+          "x": 0,
+          "y": 238,
+          "width": 640,
+          "height": 360,
+          "top": 238,
+          "right": 640,
+          "bottom": 598,
+          "left": 0
+        }
+      },
+      "name": "baseline",
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "starts": [
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 0,
+          "cache": "cold",
+          "readyMs": 104.08458300000001,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 5.119999885559082
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 5.745000123977661
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.7149999141693115
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.93999981880188
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 7.539999961853027
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 8.705000162124634
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 7.865000009536743
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 8.295000076293945
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 9.77999997138977
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.2249999046325684
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.1549999713897705
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 4.069999933242798
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.6600000858306885
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.694999933242798
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.775000095367432
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.230000019073486
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 7.7200000286102295
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 7.454999923706055
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 10.265000104904175
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.5
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.740000009536743
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 11.174999952316284
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.09500002861023
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 12.175000190734863
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.744999885559082
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 13.069999933242798
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 13.190000057220459
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 13.299999952316284
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 5.2149999141693115
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.119999885559082
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 0,
+          "cache": "warm",
+          "readyMs": 54.51266700000008,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 3.134999990463257
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 3.8450000286102295
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 4.644999980926514
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 5.400000095367432
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4.835000038146973
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 5.2799999713897705
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 6.044999837875366
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.474999904632568
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 10.664999961853027
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 4.129999876022339
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 4.699999809265137
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 5.210000038146973
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 3.484999895095825
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.96999979019165
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.6600000858306885
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 7.7149999141693115
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 8.160000085830688
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 8.389999866485596
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 12.634999990463257
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 12.040000200271606
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 13.120000123977661
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 13.254999876022339
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 12.940000057220459
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 13.700000047683716
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 14.204999923706055
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 14.75
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 14.990000009536743
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 15.224999904632568
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.960000038146973
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.9500000476837158
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 1,
+          "cache": "cold",
+          "readyMs": 107.71424999999999,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 5.240000009536743
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 6.375
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.75
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 5.389999866485596
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.809999942779541
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 7.619999885559082
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 6.539999961853027
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 7.144999980926514
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 8.015000104904175
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.555000066757202
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.0999999046325684
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.7950000762939453
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.640000104904175
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.944999933242798
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.804999828338623
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.430000066757202
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.81499981880188
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 5.955000162124634
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.930000066757202
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.225000143051147
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.490000009536743
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.774999856948853
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.125
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 11.745000123977661
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.480000019073486
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 12.734999895095825
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 13.31499981880188
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 13.134999990463257
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.884999990463257
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.4600000381469727
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 1,
+          "cache": "warm",
+          "readyMs": 55.42845800000009,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 3.200000047683716
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 3.700000047683716
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 4.054999828338623
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 4.2200000286102295
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4.495000123977661
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 4.759999990463257
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 6.264999866485596
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.934999942779541
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 9.615000009536743
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 4.360000133514404
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 4.9100000858306885
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 5.444999933242798
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 3.569999933242798
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 5.289999961853027
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 9.125
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 7.984999895095825
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 9.525000095367432
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 9.704999923706055
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 12.319999933242798
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 12.579999923706055
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 13.21500015258789
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 13.84499979019165
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 13.580000162124634
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 13.424999952316284
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 16.31000018119812
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 16.52500009536743
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 16.919999837875366
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 17.125
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.990000009536743
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.7649998664855957
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 2,
+          "cache": "cold",
+          "readyMs": 111.97312499999998,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 5.1600000858306885
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 6.664999961853027
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 5.555000066757202
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.9049999713897705
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 7.120000123977661
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 8.980000019073486
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 7.825000047683716
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 8.315000057220459
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 10.959999799728394
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.8600001335144043
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.049999952316284
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.609999895095825
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.184999942779541
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.190000057220459
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 8.694999933242798
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 9.22000002861023
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 8.90499997138977
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 10.164999961853027
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 12.339999914169312
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 12.485000133514404
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 12.860000133514404
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 13.025000095367432
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 13.325000047683716
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 14.180000066757202
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 15.039999961853027
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 14.684999942779541
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 15.384999990463257
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 15.610000133514404
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 8.210000038146973
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.2799999713897705
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 2,
+          "cache": "warm",
+          "readyMs": 53.45416699999987,
+          "requests": 30,
+          "rawBytes": 1072670,
+          "gzipBytes": 315649,
+          "transferredBytes": 1081670,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.7899999618530273
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 3.1549999713897705
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.9800000190734863
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 4.490000009536743
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4.265000104904175
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 4.679999828338623
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.194999933242798
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.4750001430511475
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 7.954999923706055
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.81000018119812
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.375
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.1050000190734863
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.7750000953674316
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.180000066757202
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.889999866485596
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.490000009536743
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.994999885559082
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.504999876022339
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.309999942779541
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 9.43999981880188
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.059999942779541
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.809999942779541
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.175000190734863
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 11.160000085830688
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.959999799728394
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.730000019073486
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 12.079999923706055
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 12.315000057220459
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.914999961853027
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.4850001335144043
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 0,
+          "cache": "cold",
+          "readyMs": 109.98862499999996,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.794999837875366
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 6.1549999713897705
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.954999923706055
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 7.2149999141693115
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 7.445000171661377
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 8.504999876022339
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.650000095367432
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 8.055000066757202
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 1.7750000953674316
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 11.110000133514404
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.6650002002716064
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.7699999809265137
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 4.039999961853027
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.869999885559082
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.420000076293945
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.909999847412109
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 9.15999984741211
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 8.629999876022339
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 9.555000066757202
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 11.84500002861023
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 11.59499979019165
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 12.22000002861023
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 12.350000143051147
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.875
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 12.460000038146973
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 13.884999990463257
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 13.710000038146973
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 14.315000057220459
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 13.34500002861023
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 7.129999876022339
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.3250000476837158
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 0,
+          "cache": "warm",
+          "readyMs": 58.43591599999991,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.7149999141693115
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 3.5249998569488525
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 4.069999933242798
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 4.414999961853027
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4.5899999141693115
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 4.954999923706055
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.629999876022339
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.275000095367432
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 3.3899998664855957
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 10.944999933242798
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.8949999809265137
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 4.1549999713897705
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 4.619999885559082
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 3.0249998569488525
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 7.380000114440918
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 9.584999799728394
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 9.745000123977661
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 9.865000009536743
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 11.105000019073486
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 12.21500015258789
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 12.434999942779541
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 12.819999933242798
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 13.31499981880188
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 14.039999961853027
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 14.630000114440918
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 15.085000038146973
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 15.519999980926514
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 15.634999990463257
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 15.65999984741211
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 8.329999923706055
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.6150000095367432
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 1,
+          "cache": "cold",
+          "readyMs": 101.29716599999983,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.634999990463257
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 5.605000019073486
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.295000076293945
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.395000219345093
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.795000076293945
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 7.325000047683716
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.684999942779541
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.920000076293945
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 1.3900001049041748
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 7.375
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.3550000190734863
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.625
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 4.6000001430511475
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.6600000858306885
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.144999980926514
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.230000019073486
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.710000038146973
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 8.440000057220459
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 8.555000066757202
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.995000123977661
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.200000047683716
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.600000143051147
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.40999984741211
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.335000038146973
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 11.52999997138977
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.199999809265137
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 12.329999923706055
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 12.710000038146973
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 12.975000143051147
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.130000114440918
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.2799999713897705
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 1,
+          "cache": "warm",
+          "readyMs": 55.435333000000355,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 3.174999952316284
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 3.180000066757202
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.6600000858306885
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 4.070000171661377
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 3.8249998092651367
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 4.490000009536743
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.2799999713897705
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.144999980926514
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 2.205000162124634
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 8.255000114440918
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.0900001525878906
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.4649999141693115
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.809999942779541
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.754999876022339
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.0299999713897705
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.120000123977661
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.2799999713897705
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.754999876022339
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 7.319999933242798
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.72000002861023
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 9.785000085830688
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.275000095367432
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.319999933242798
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.824999809265137
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 11.325000047683716
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.575000047683716
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 12.815000057220459
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.919999837875366
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 12.294999837875366
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 5.7200000286102295
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.5299999713897705
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 2,
+          "cache": "cold",
+          "readyMs": 100.35099999999966,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.365000009536743
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 5.865000009536743
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.239999771118164
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 5.980000019073486
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.394999980926514
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 7.200000047683716
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.355000019073486
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.7200000286102295
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 1.434999942779541
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 8.22000002861023
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.3600001335144043
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 4.255000114440918
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.509999990463257
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.740000009536743
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.039999961853027
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 6.325000047683716
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.9100000858306885
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.9700000286102295
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 7.319999933242798
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.005000114440918
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 9.170000076293945
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.319999933242798
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.704999923706055
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.56499981880188
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.349999904632568
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.100000143051147
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.569999933242798
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.235000133514404
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.799999952316284
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.235000133514404
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 0.9600000381469727
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 2,
+          "cache": "warm",
+          "readyMs": 47.40404200000012,
+          "requests": 31,
+          "rawBytes": 1111334,
+          "gzipBytes": 327300,
+          "transferredBytes": 1120634,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.4200000762939453
+            },
+            {
+              "path": "/assets/player-pYdD8Wms.js",
+              "transferSize": 2489,
+              "duration": 2.759999990463257
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.1599998474121094
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 3.5900001525878906
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 3.2699999809265137
+            },
+            {
+              "path": "/assets/i18n-CPoMqOlt.js",
+              "transferSize": 41016,
+              "duration": 3.8550000190734863
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 4.53000020980835
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 4.919999837875366
+            },
+            {
+              "path": "/assets/en-CpwGhf_q.js",
+              "transferSize": 38964,
+              "duration": 1.8700001239776611
+            },
+            {
+              "path": "/assets/main-CkY3DKjA.js",
+              "transferSize": 716862,
+              "duration": 5.3999998569488525
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.0299999713897705
+            },
+            {
+              "path": "/assets/saved-workspaces-Ds5k7o7h.js",
+              "transferSize": 59675,
+              "duration": 3.75
+            },
+            {
+              "path": "/assets/theme-DdZaNhTP.js",
+              "transferSize": 6274,
+              "duration": 3.309999942779541
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.7699999809265137
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.634999990463257
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 6.329999923706055
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.980000019073486
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.559999942779541
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 7.125
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.025000095367432
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.349999904632568
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.214999914169312
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.71999979019165
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.009999990463257
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 9.84500002861023
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 10.734999895095825
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.265000104904175
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.329999923706055
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 5.934999942779541
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.4149999618530273
+            }
+          ]
+        }
+      ],
+      "switches": [
+        {
+          "locale": "en",
+          "cache": "cold",
+          "clickToReadyMs": 95.06500005722046,
+          "commitMs": 26.359999895095825
+        },
+        {
+          "locale": "zh-CN",
+          "cache": "warm",
+          "clickToReadyMs": 75.05999994277954,
+          "commitMs": 7.444999933242798
+        },
+        {
+          "locale": "en",
+          "cache": "warm",
+          "clickToReadyMs": 66.15499997138977,
+          "commitMs": 7.6000001430511475
+        },
+        {
+          "locale": "zh-CN",
+          "cache": "warm",
+          "clickToReadyMs": 66.66499996185303,
+          "commitMs": 7.8450000286102295
+        }
+      ],
+      "playback": [
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a",
+              "builtAt": "2026-10-03T14:36:21.547Z",
+              "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63067/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 1.1549999713897705,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 0.8600001335144043,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 4044.9649999141693,
+            "mediaUs": 2633228,
+            "waitingMs": 1407.7670004768368,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.6509890691404931,
+            "maxFrameLagUs": 16666,
+            "maxFrameSkewUs": 16666,
+            "tracks": {
+              "A": {
+                "drawn": 152,
+                "dropped": 5,
+                "fps": 37.57758101818565,
+                "maxGapMs": 43.67500019073486,
+                "p95GapMs": 29.295000076293945
+              },
+              "B": {
+                "drawn": 152,
+                "dropped": 6,
+                "fps": 37.57758101818565,
+                "maxGapMs": 57.66499996185303,
+                "p95GapMs": 29.295000076293945
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "09dfc44e-8d2c-4378-8492-2dc2ddafd4fc",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2616656,
+                "sourcePtsUs": 2616656,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "aa8cd33e-e979-4495-a2bd-37fabda9c6f7",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2633228,
+                "sourcePtsUs": 2583228,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 1,
+            "totalMs": 401
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 0,
+          "taskDurationMs": 4485.995999999999,
+          "cpuMetrics": {
+            "TaskDuration": 4485.995999999999,
+            "ScriptDuration": 25.804999999999996,
+            "LayoutDuration": 17.497,
+            "RecalcStyleDuration": 35.72,
+            "LayoutCount": 208,
+            "RecalcStyleCount": 497
+          }
+        },
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a",
+              "builtAt": "2026-10-03T14:36:21.547Z",
+              "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63067/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 1.065000057220459,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 0.880000114440918,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 4044,
+            "mediaUs": 2566656,
+            "waitingMs": 1472.6240001525894,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 3,
+                "peakBytes": 9331200,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.6346824925816024,
+            "maxFrameLagUs": 16665,
+            "maxFrameSkewUs": 16665,
+            "tracks": {
+              "A": {
+                "drawn": 152,
+                "dropped": 2,
+                "fps": 37.58654797230465,
+                "maxGapMs": 31.354999780654907,
+                "p95GapMs": 29.294999837875366
+              },
+              "B": {
+                "drawn": 152,
+                "dropped": 2,
+                "fps": 37.58654797230465,
+                "maxGapMs": 31.305000066757202,
+                "p95GapMs": 29.274999856948853
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "09dfc44e-8d2c-4378-8492-2dc2ddafd4fc",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2566656,
+                "sourcePtsUs": 2566656,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "aa8cd33e-e979-4495-a2bd-37fabda9c6f7",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2566564,
+                "sourcePtsUs": 2516564,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 1,
+          "taskDurationMs": 4327.436000000001,
+          "cpuMetrics": {
+            "TaskDuration": 4327.436000000001,
+            "ScriptDuration": 24.493000000000002,
+            "LayoutDuration": 17.778000000000002,
+            "RecalcStyleDuration": 37.041999999999994,
+            "LayoutCount": 216,
+            "RecalcStyleCount": 511
+          }
+        },
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a",
+              "builtAt": "2026-10-03T14:36:21.547Z",
+              "sourceDigest": "a64d2afdb99607f5ac437b0b5d32bd77e519d4bff9f3877cb2b4847169bb48e5",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63067/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 1.0649998188018799,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 0.8550000190734863,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 4049.7249999046326,
+            "mediaUs": 2533232,
+            "waitingMs": 1511.833000591278,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.6255318571161388,
+            "maxFrameLagUs": 16666,
+            "maxFrameSkewUs": 16666,
+            "tracks": {
+              "A": {
+                "drawn": 146,
+                "dropped": 5,
+                "fps": 36.05183068070997,
+                "maxGapMs": 53.450000047683716,
+                "p95GapMs": 31.12000012397766
+              },
+              "B": {
+                "drawn": 146,
+                "dropped": 6,
+                "fps": 36.05183068070997,
+                "maxGapMs": 53.53500008583069,
+                "p95GapMs": 31.05999994277954
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "09dfc44e-8d2c-4378-8492-2dc2ddafd4fc",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2516656,
+                "sourcePtsUs": 2516656,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "aa8cd33e-e979-4495-a2bd-37fabda9c6f7",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2533232,
+                "sourcePtsUs": 2483232,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 1,
+            "totalMs": 52
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 2,
+          "taskDurationMs": 4327.1990000000005,
+          "cpuMetrics": {
+            "TaskDuration": 4327.1990000000005,
+            "ScriptDuration": 26.456999999999994,
+            "LayoutDuration": 18.02499999999999,
+            "RecalcStyleDuration": 37.11200000000001,
+            "LayoutCount": 211,
+            "RecalcStyleCount": 499
+          }
+        }
+      ]
+    },
+    {
+      "distribution": {
+        "root": "/Users/zhuhongwei/Documents/Codex/2026-10-03/task/voidplayer-i18n",
+        "sourceDigest": "33ae72a49e0855e5748b245ab47d7eeeef8ce882e1d65f028cb9c03e030ee0f4"
+      },
+      "preparation": {
+        "dialogOpen": false,
+        "activeId": "settings-open",
+        "tooltipVisible": false,
+        "locale": "zh-CN",
+        "canvas": {
+          "x": 0,
+          "y": 238,
+          "width": 640,
+          "height": 360,
+          "top": 238,
+          "right": 640,
+          "bottom": 598,
+          "left": 0
+        }
+      },
+      "name": "feature",
+      "engine": "chromium",
+      "browserVersion": "153.0.8010.12",
+      "starts": [
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 0,
+          "cache": "cold",
+          "readyMs": 98.82991699999911,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.174999952316284
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 5.829999923706055
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.855000019073486
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 7.059999942779541
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 7.520000219345093
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 8.099999904632568
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.184999942779541
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.484999895095825
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 6.294999837875366
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.880000114440918
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.184999942779541
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 4.015000104904175
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.319999933242798
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.700000047683716
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.9100000858306885
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.309999942779541
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.315000057220459
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.859999895095825
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.025000095367432
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.745000123977661
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.150000095367432
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.555000066757202
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.40500020980835
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 9.929999828338623
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.964999914169312
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.305000066757202
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.785000085830688
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.615000009536743
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 5.319999933242798
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.065000057220459
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 0,
+          "cache": "warm",
+          "readyMs": 49.7233750000014,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.490000009536743
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 2.9650001525878906
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.5899999141693115
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 3.740000009536743
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 4.265000104904175
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 4.695000171661377
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 4.995000123977661
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 6.849999904632568
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.6050000190734863
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.940000057220459
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.194999933242798
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 3.054999828338623
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.085000038146973
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.325000047683716
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.7749998569488525
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.840000152587891
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.599999904632568
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.274999856948853
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 9.684999942779541
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 8.919999837875366
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.894999980926514
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.200000047683716
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.65499997138977
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.274999856948853
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.454999923706055
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 12.115000009536743
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.829999923706055
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 5.265000104904175
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.3250000476837158
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 1,
+          "cache": "cold",
+          "readyMs": 101.12016700000095,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.534999847412109
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 5.394999980926514
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 5.43999981880188
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.555000066757202
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.444999933242798
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 7.370000123977661
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.134999990463257
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 7.059999942779541
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 7.414999961853027
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.5250000953674316
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.5350000858306885
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.2849998474121094
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.004999876022339
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.009999990463257
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 4.375
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 4.865000009536743
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.659999847412109
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 5.7799999713897705
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.960000038146973
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.644999980926514
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.115000009536743
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.379999876022339
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.52999997138977
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 12.02999997138977
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.96999979019165
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 13.134999990463257
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 13.59500002861023
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 13.805000066757202
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.335000038146973
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.2299997806549072
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 1,
+          "cache": "warm",
+          "readyMs": 48.55791699999827,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.5399999618530273
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 2.7200000286102295
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.0350000858306885
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 3.2749998569488525
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 3.875
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 4.005000114440918
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 4.544999837875366
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 4.740000009536743
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 6.869999885559082
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.0899999141693115
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.4699997901916504
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 2.765000104904175
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.4049999713897705
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.509999990463257
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 4.965000152587891
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.200000047683716
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.5899999141693115
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 5.919999837875366
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.669999837875366
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.355000019073486
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.184999942779541
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.370000123977661
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.460000038146973
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.34500002861023
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.450000047683716
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.03499984741211
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.78499984741211
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.309999942779541
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.549999952316284
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.5699999332427979
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 2,
+          "cache": "cold",
+          "readyMs": 100.60433299999931,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 3.819999933242798
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 4.930000066757202
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 5.544999837875366
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.134999990463257
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.605000019073486
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 7.0899999141693115
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.8399999141693115
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.190000057220459
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 6.40500020980835
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.490000009536743
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.740000009536743
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.3399999141693115
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 1.9649999141693115
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 3.7250001430511475
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 4.795000076293945
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 5.0299999713897705
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.605000019073486
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.7850000858306885
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.339999914169312
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 7.994999885559082
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 8.09500002861023
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.359999895095825
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.96999979019165
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.22000002861023
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 10.774999856948853
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 10.665000200271606
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 10.815000057220459
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.390000104904175
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.674999952316284
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.3550000190734863
+            }
+          ]
+        },
+        {
+          "browserLocale": "zh-CN",
+          "repeat": 2,
+          "cache": "warm",
+          "readyMs": 48.190332999998645,
+          "requests": 30,
+          "rawBytes": 1091562,
+          "gzipBytes": 321717,
+          "transferredBytes": 1100562,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 3.7049999237060547
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 3.0799999237060547
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.8000001907348633
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 4.039999961853027
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 4.545000076293945
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 4.640000104904175
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 6.370000123977661
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.5249998569488525
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 9.620000123977661
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.705000162124634
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.049999952316284
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.0899999141693115
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.0849997997283936
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 2.8999998569488525
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.389999866485596
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.724999904632568
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 6.819999933242798
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.9100000858306885
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.829999923706055
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.524999856948853
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.914999961853027
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.164999961853027
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 10.599999904632568
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 11.06000018119812
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.299999952316284
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.459999799728394
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.805000066757202
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.615000009536743
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.230000019073486
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 0.8550000190734863
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 0,
+          "cache": "cold",
+          "readyMs": 104.26404199999888,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.625
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 5.0899999141693115
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 6.085000038146973
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 5.264999866485596
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 5.809999942779541
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 7.289999961853027
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 6.440000057220459
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 7
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 2.119999885559082
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 7.065000057220459
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.0999999046325684
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.765000104904175
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.5500001907348633
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.4600000381469727
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.019999980926514
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.2749998569488525
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.070000171661377
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 7.944999933242798
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 8.18999981880188
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 9.424999952316284
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 9.559999942779541
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 10.21999979019165
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 10.565000057220459
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.079999923706055
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.859999895095825
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 11.569999933242798
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.815000057220459
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 12.359999895095825
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 12.190000057220459
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.055000066757202
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.3449997901916504
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 0,
+          "cache": "warm",
+          "readyMs": 49.48137499999939,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 1.9300000667572021
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 2.2850000858306885
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 2.1500000953674316
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 2.0149998664855957
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 2.384999990463257
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 2.5
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 2.934999942779541
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 3.044999837875366
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 1.6850001811981201
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 8.299999952316284
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.379999876022339
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.944999933242798
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.674999952316284
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.6000001430511475
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 4.1549999713897705
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 7.009999990463257
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.690000057220459
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 7.059999942779541
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 7.505000114440918
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.605000019073486
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.930000066757202
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.004999876022339
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.289999961853027
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.34000015258789
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 9.740000009536743
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 10.769999980926514
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.099999904632568
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.484999895095825
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 11.869999885559082
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 6.134999990463257
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.4249999523162842
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 1,
+          "cache": "cold",
+          "readyMs": 101.74658400000044,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.734999895095825
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 5.879999876022339
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 5.639999866485596
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 5.909999847412109
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.309999942779541
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 7.054999828338623
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.3450000286102295
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 6.740000009536743
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 1.6600000858306885
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 7.914999961853027
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.2649998664855957
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.619999885559082
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.305000066757202
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 1.9700000286102295
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 2.690000057220459
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 5.640000104904175
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 6.244999885559082
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.809999942779541
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 6.71999979019165
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.100000143051147
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.575000047683716
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 8.605000019073486
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 8.110000133514404
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 8.894999980926514
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 9.399999856948853
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 9.664999961853027
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 9.819999933242798
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 9.940000057220459
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 10.134999990463257
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.954999923706055
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.0800001621246338
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 1,
+          "cache": "warm",
+          "readyMs": 52.924957999999606,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.4700000286102295
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 2.884999990463257
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.2749998569488525
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 3.745000123977661
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 3.7750000953674316
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 3.450000047683716
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 4.549999952316284
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 4.7250001430511475
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 2.755000114440918
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 10.02999997138977
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 3.319999933242798
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 3.5450000762939453
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.6649999618530273
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.6649999618530273
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 7.090000152587891
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 8.900000095367432
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 8.315000057220459
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 8.890000104904175
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 9.289999961853027
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 10.305000066757202
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 10.600000143051147
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 11.089999914169312
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 11.555000066757202
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 11.875
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 12.475000143051147
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.855000019073486
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 13.005000114440918
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 13.25
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 13.484999895095825
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 8.160000085830688
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.5699999332427979
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 2,
+          "cache": "cold",
+          "readyMs": 102.25633400000152,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 4.634999990463257
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 5.710000038146973
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 5.830000162124634
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 6.145000219345093
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 6.585000038146973
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 7.120000123977661
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 5.25
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 5.330000162124634
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 1.940000057220459
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 5.369999885559082
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.234999895095825
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.555000066757202
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 2.799999952316284
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 1.9099998474121094
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 2.9750001430511475
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 4.5899999141693115
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 3.950000047683716
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.375
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 5.759999990463257
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 7.265000104904175
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 7.330000162124634
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 7.545000076293945
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 8.09000015258789
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 7.960000038146973
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 8.355000019073486
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 9.264999866485596
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 9.115000009536743
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 9.954999923706055
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 9.740000009536743
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 3.549999952316284
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.190000057220459
+            }
+          ]
+        },
+        {
+          "browserLocale": "en-US",
+          "repeat": 2,
+          "cache": "warm",
+          "readyMs": 52.45579100000032,
+          "requests": 31,
+          "rawBytes": 1149358,
+          "gzipBytes": 338862,
+          "transferredBytes": 1158658,
+          "resources": [
+            {
+              "path": "/theme-init.js",
+              "transferSize": 1384,
+              "duration": 2.4599997997283936
+            },
+            {
+              "path": "/assets/player-DUyqSo3J.js",
+              "transferSize": 2588,
+              "duration": 2.75
+            },
+            {
+              "path": "/assets/accents-CrjNzTE-.js",
+              "transferSize": 970,
+              "duration": 3.325000047683716
+            },
+            {
+              "path": "/assets/cardinals-SuxRHUqr.js",
+              "transferSize": 714,
+              "duration": 3.5199999809265137
+            },
+            {
+              "path": "/assets/preload-helper-Czpn1I53.js",
+              "transferSize": 1496,
+              "duration": 3.640000104904175
+            },
+            {
+              "path": "/assets/i18n-BaDFJSiP.js",
+              "transferSize": 59441,
+              "duration": 3.745000123977661
+            },
+            {
+              "path": "/assets/accents-BAH3RJ5K.css",
+              "transferSize": 10177,
+              "duration": 4.164999961853027
+            },
+            {
+              "path": "/assets/player-DBPRFrW9.css",
+              "transferSize": 708,
+              "duration": 4.420000076293945
+            },
+            {
+              "path": "/assets/en-D1yARir-.js",
+              "transferSize": 58096,
+              "duration": 1.5950000286102295
+            },
+            {
+              "path": "/assets/main-ClszK6Wx.js",
+              "transferSize": 715470,
+              "duration": 7.039999961853027
+            },
+            {
+              "path": "/assets/rolldown-runtime-CbXtAM7H.js",
+              "transferSize": 889,
+              "duration": 2.4750001430511475
+            },
+            {
+              "path": "/assets/saved-workspaces--LX8rrpG.js",
+              "transferSize": 32924,
+              "duration": 2.6700000762939453
+            },
+            {
+              "path": "/assets/theme-CgH3h40W.js",
+              "transferSize": 34785,
+              "duration": 3.4549999237060547
+            },
+            {
+              "path": "/assets/theme-CvDRJZ3s.css",
+              "transferSize": 1040,
+              "duration": 2.0199999809265137
+            },
+            {
+              "path": "/assets/model-BqcvQWtd.js",
+              "transferSize": 1989,
+              "duration": 2.809999942779541
+            },
+            {
+              "path": "/assets/uuid-Dew5tT4T.js",
+              "transferSize": 565,
+              "duration": 4.289999961853027
+            },
+            {
+              "path": "/assets/saved-workspaces-DPGErA5E.css",
+              "transferSize": 75186,
+              "duration": 4.710000038146973
+            },
+            {
+              "path": "/assets/color-mode-9Oyl95UE.js",
+              "transferSize": 660,
+              "duration": 5.234999895095825
+            },
+            {
+              "path": "/assets/yuv-color-D-yTf1Gd.js",
+              "transferSize": 4374,
+              "duration": 5.985000133514404
+            },
+            {
+              "path": "/assets/media-errors-B-p6nedB.js",
+              "transferSize": 661,
+              "duration": 8.319999933242798
+            },
+            {
+              "path": "/assets/presentation-color-ChaLCao_.js",
+              "transferSize": 2542,
+              "duration": 8.68999981880188
+            },
+            {
+              "path": "/assets/range-reader-B1UK6ZHj.js",
+              "transferSize": 4634,
+              "duration": 9.015000104904175
+            },
+            {
+              "path": "/assets/log-CEvdRhGT.js",
+              "transferSize": 6493,
+              "duration": 9.240000009536743
+            },
+            {
+              "path": "/assets/media-metadata-Bl7HFq40.js",
+              "transferSize": 2606,
+              "duration": 9.744999885559082
+            },
+            {
+              "path": "/assets/webgpu-presenter-B5UTaIsN.js",
+              "transferSize": 20409,
+              "duration": 10.349999904632568
+            },
+            {
+              "path": "/assets/sample-2jlXr25-.js",
+              "transferSize": 40537,
+              "duration": 12.240000009536743
+            },
+            {
+              "path": "/assets/__vite-browser-external-uP5PEmmg.js",
+              "transferSize": 394,
+              "duration": 11.429999828338623
+            },
+            {
+              "path": "/assets/offer-BGMeInc0.js",
+              "transferSize": 29793,
+              "duration": 11.669999837875366
+            },
+            {
+              "path": "/assets/software-media-CaSmA5py.js",
+              "transferSize": 2557,
+              "duration": 12.050000190734863
+            },
+            {
+              "path": "/assets/main-CzAnBpxn.css",
+              "transferSize": 44174,
+              "duration": 4.849999904632568
+            },
+            {
+              "path": "/assets/color-mode-Bzx7u2_O.js",
+              "transferSize": 402,
+              "duration": 1.494999885559082
+            }
+          ]
+        }
+      ],
+      "switches": [
+        {
+          "locale": "en",
+          "cache": "cold",
+          "clickToReadyMs": 94.29999995231628,
+          "commitMs": 26.75
+        },
+        {
+          "locale": "zh-CN",
+          "cache": "warm",
+          "clickToReadyMs": 74.86999988555908,
+          "commitMs": 7.674999952316284
+        },
+        {
+          "locale": "en",
+          "cache": "warm",
+          "clickToReadyMs": 65.50500011444092,
+          "commitMs": 7.255000114440918
+        },
+        {
+          "locale": "zh-CN",
+          "cache": "warm",
+          "clickToReadyMs": 67.43499994277954,
+          "commitMs": 8.069999933242798
+        }
+      ],
+      "playback": [
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a-dirty",
+              "builtAt": "2026-10-03T15:47:35.141Z",
+              "sourceDigest": "33ae72a49e0855e5748b245ab47d7eeeef8ce882e1d65f028cb9c03e030ee0f4",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63214/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 1.0850000381469727,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 0.9600000381469727,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 3988.9500000476837,
+            "mediaUs": 2433236,
+            "waitingMs": 1550.494000305176,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.6099941087180619,
+            "maxFrameLagUs": 16665,
+            "maxFrameSkewUs": 16665,
+            "tracks": {
+              "A": {
+                "drawn": 141,
+                "dropped": 4,
+                "fps": 35.34764787683839,
+                "maxGapMs": 60.049999952316284,
+                "p95GapMs": 30.875
+              },
+              "B": {
+                "drawn": 141,
+                "dropped": 5,
+                "fps": 35.34764787683839,
+                "maxGapMs": 60.02499985694885,
+                "p95GapMs": 30.81500005722046
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "677a72c3-b218-410e-b206-7e9ab9e7efc8",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2416656,
+                "sourcePtsUs": 2416656,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "7f2d94fd-7b9a-44dd-ab57-39af8f0a8198",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2433236,
+                "sourcePtsUs": 2383236,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 1,
+            "totalMs": 421
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 0,
+          "taskDurationMs": 4452.641,
+          "cpuMetrics": {
+            "TaskDuration": 4452.641,
+            "ScriptDuration": 26.046,
+            "LayoutDuration": 18.431,
+            "RecalcStyleDuration": 36.258,
+            "LayoutCount": 195,
+            "RecalcStyleCount": 466
+          }
+        },
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a-dirty",
+              "builtAt": "2026-10-03T15:47:35.141Z",
+              "sourceDigest": "33ae72a49e0855e5748b245ab47d7eeeef8ce882e1d65f028cb9c03e030ee0f4",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63214/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 1.059999942779541,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 1.0250000953674316,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 4034.4800000190735,
+            "mediaUs": 2366656,
+            "waitingMs": 1662.6090001049065,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 3,
+                "peakBytes": 9331200,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 4,
+                "peakBytes": 12441600,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.5866074438313764,
+            "maxFrameLagUs": 16665,
+            "maxFrameSkewUs": 16665,
+            "tracks": {
+              "A": {
+                "drawn": 140,
+                "dropped": 2,
+                "fps": 34.70087842778701,
+                "maxGapMs": 33.485000133514404,
+                "p95GapMs": 31.850000143051147
+              },
+              "B": {
+                "drawn": 140,
+                "dropped": 2,
+                "fps": 34.70087842778701,
+                "maxGapMs": 33.454999923706055,
+                "p95GapMs": 31.80999994277954
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "677a72c3-b218-410e-b206-7e9ab9e7efc8",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2366656,
+                "sourcePtsUs": 2366656,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "7f2d94fd-7b9a-44dd-ab57-39af8f0a8198",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2366572,
+                "sourcePtsUs": 2316572,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 0,
+            "totalMs": 0
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 1,
+          "taskDurationMs": 4319.169,
+          "cpuMetrics": {
+            "TaskDuration": 4319.169,
+            "ScriptDuration": 28.851000000000003,
+            "LayoutDuration": 18.284000000000002,
+            "RecalcStyleDuration": 37.129,
+            "LayoutCount": 197,
+            "RecalcStyleCount": 472
+          }
+        },
+        {
+          "schema": "voidplayer-playback-benchmark",
+          "version": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "environment": {
+            "build": {
+              "revision": "v0.4.0-73-g92e4d0a-dirty",
+              "builtAt": "2026-10-03T15:47:35.141Z",
+              "sourceDigest": "33ae72a49e0855e5748b245ab47d7eeeef8ce882e1d65f028cb9c03e030ee0f4",
+              "wasmDigests": {
+                "voidplayer-core.wasm": "50d94fd82e191326d98e44abf3c81e2d567f540c4ae23c92a3d46044f86bd9b0",
+                "voidplayer-core-mt.wasm": "44036725c7db982bb9c9aa7b53d6e80303d0211b8026acac7994fc3598f61561"
+              }
+            },
+            "page": "http://127.0.0.1:63214/",
+            "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+            "crossOriginIsolated": true,
+            "secureContext": true,
+            "webCodecsAvailable": true,
+            "hardwareUseVerified": false,
+            "sharedArrayBuffer": true,
+            "visibility": "visible",
+            "viewport": {
+              "width": 1280,
+              "height": 800,
+              "devicePixelRatio": 1
+            }
+          },
+          "startupMs": 0.9649999141693115,
+          "requestedWallMs": 4000,
+          "reachedEnd": false,
+          "error": null,
+          "pauseMs": 2.6399998664855957,
+          "staleAfterPause": false,
+          "measurements": {
+            "wallMs": 3959.3300001621246,
+            "mediaUs": 2299908,
+            "waitingMs": 1655.2769999427805,
+            "buffers": {
+              "A": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 2,
+                "bytes": 6220800,
+                "peakFrames": 2,
+                "peakBytes": 6220800,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              },
+              "B": {
+                "ended": false,
+                "suspended": false,
+                "stopped": false,
+                "error": null,
+                "frames": 1,
+                "bytes": 3110400,
+                "peakFrames": 2,
+                "peakBytes": 6220800,
+                "capacity": 4,
+                "budgetBytes": 67108864,
+                "effectiveBudgetBytes": 67108864
+              }
+            },
+            "speed": 0.580883129192521,
+            "maxFrameLagUs": 16666,
+            "maxFrameSkewUs": 16666,
+            "tracks": {
+              "A": {
+                "drawn": 136,
+                "dropped": 1,
+                "fps": 34.349245956874306,
+                "maxGapMs": 54.980000019073486,
+                "p95GapMs": 31.96499991416931
+              },
+              "B": {
+                "drawn": 137,
+                "dropped": 1,
+                "fps": 34.60181394185132,
+                "maxGapMs": 34.56499981880188,
+                "p95GapMs": 31.855000019073486
+              }
+            }
+          },
+          "tracks": [
+            {
+              "slot": "A",
+              "id": "677a72c3-b218-410e-b206-7e9ab9e7efc8",
+              "name": "h264_9s_1920x1080.mp4",
+              "size": 19334432,
+              "lastModified": 1788613262817,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "h264",
+              "decoder": "webcodecs",
+              "hardwareAcceleration": "no-preference",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "container",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "firstPtsUs": 0,
+              "durationUs": 9999956,
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "2e4310c0c4a2a709d27b4448",
+                "url": "/api/media/2e4310c0c4a2a709d27b4448?v=141ac8df8970c33fa4b25de5"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1090,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "byteLengthEstimated": false,
+                "format": "I420",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                }
+              },
+              "decodedPixelFormat": "I420",
+              "frame": {
+                "ptsUs": 2283322,
+                "sourcePtsUs": 2283322,
+                "durationUs": 16667
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 1
+            },
+            {
+              "slot": "B",
+              "id": "7f2d94fd-7b9a-44dd-ab57-39af8f0a8198",
+              "name": "h265_10s_1920x1080.mp4",
+              "size": 10179949,
+              "lastModified": 1788613262827,
+              "indexSource": "client",
+              "indexState": "complete",
+              "indexKind": "packet-offsets",
+              "seekStrategy": "packet-anchor",
+              "codec": "hevc",
+              "decoder": "ffmpeg-wasm",
+              "width": 1920,
+              "height": 1080,
+              "colorSource": "decoder",
+              "pixelFormat": "yuv420p",
+              "color": {
+                "primaries": null,
+                "transfer": null,
+                "matrix": null,
+                "fullRange": false
+              },
+              "timelineSource": "hevc-poc",
+              "indexWarning": "容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。",
+              "firstPtsUs": -50000,
+              "durationUs": 9999600,
+              "coreVariant": "multi-thread",
+              "container": "isobmff",
+              "source": {
+                "kind": "library",
+                "id": "31e37ab42a7f8ba11e4aedd4",
+                "url": "/api/media/31e37ab42a7f8ba11e4aedd4?v=4d9df17db084b68b9f60b4dd"
+              },
+              "metadataRevision": 2,
+              "output": {
+                "revision": 1,
+                "width": 1920,
+                "height": 1080,
+                "codedWidth": 1920,
+                "codedHeight": 1080,
+                "visibleRect": {
+                  "x": 0,
+                  "y": 0,
+                  "width": 1920,
+                  "height": 1080
+                },
+                "displayWidth": 1920,
+                "displayHeight": 1080,
+                "stride": null,
+                "byteLength": 3110400,
+                "format": "YUV",
+                "color": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourceColor": {
+                  "primaries": null,
+                  "transfer": null,
+                  "matrix": null,
+                  "fullRange": false
+                },
+                "sourcePixelFormat": "yuv420p",
+                "yuv": {
+                  "bitDepth": 8,
+                  "bitShift": 0,
+                  "subsampleX": 1,
+                  "subsampleY": 1,
+                  "chromaLocation": 1,
+                  "semiplanar": false,
+                  "planes": [
+                    {
+                      "offset": 0,
+                      "stride": 1920,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    {
+                      "offset": 2073600,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    },
+                    {
+                      "offset": 2592000,
+                      "stride": 960,
+                      "width": 960,
+                      "height": 540
+                    }
+                  ]
+                }
+              },
+              "decodedPixelFormat": "YUV",
+              "frame": {
+                "ptsUs": 2299908,
+                "sourcePtsUs": 2249908,
+                "durationUs": 16666
+              },
+              "visible": true,
+              "offsetUs": 0,
+              "sourceGen": 2
+            }
+          ],
+          "longTasks": {
+            "count": 1,
+            "totalMs": 52
+          },
+          "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified",
+          "repeat": 2,
+          "taskDurationMs": 4264.049,
+          "cpuMetrics": {
+            "TaskDuration": 4264.049,
+            "ScriptDuration": 26.792999999999985,
+            "LayoutDuration": 17.706000000000007,
+            "RecalcStyleDuration": 36.132,
+            "LayoutCount": 195,
+            "RecalcStyleCount": 463
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -50,6 +50,8 @@ test('preview browsing is bounded, revision-aware and cannot undo cache clearing
   for(let i=0;i<52;i++){const id=`p-${i}`;store.mutate('default',{operationId:id,id,revision:0,action:'put',document:document(id)},alice);store.putPreview('default',id,1,jpeg);}
   const page=store.previewList();assert.equal(page.entries.length,50);assert.equal(page.nextOffset,50);assert.equal(page.bytes,52*jpeg.byteLength);assert.equal(store.previewList(50).entries.length,2);assert.equal(store.previewList(0,'no such name').entries.length,0);
   assert.ok(page.entries.every(entry=>!('document' in entry) && !('data' in entry)));
+  assert.deepEqual(page.entries[0].detailData,{kind:'annotation',space:'共享评审',text:'original'});
+  assert.equal(page.entries[0].name,'a.mp4');assert.equal(page.entries[0].detail,'共享评审 · original');
   const epoch=store.previewEpoch;store.mutate('default',{operationId:'edit-p',id:'p-0',revision:1,action:'put',document:document('p-0')},bob);store.putPreview('default','p-0',2,jpeg);
   assert.throws(()=>store.removePreview('default','p-0',1),/已更新/);assert.ok(store.preview('default','p-0',2));
   assert.equal(store.clearPreviews().removed,52);assert.equal(store.list('default').count,52);assert.throws(()=>store.putPreview('default','p-0',2,jpeg,epoch),/已被清理/);assert.equal(store.previewList().bytes,0);

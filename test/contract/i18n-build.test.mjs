@@ -63,3 +63,23 @@ test('translation dependencies do not enter media/worker/presenter graphs or pro
   assert.doesNotMatch(body,/\b(?:t|tr|th|msg|formatDate|formatNumber)\(/,file);
  }
 });
+
+test('static certificate emphasis preserves safe shell topology in English and pseudo locales',()=>{
+ const source='打开<strong>钥匙串访问</strong>，导入证书。';
+ const messages={step:{source,params:{}}};
+ const catalog=translation=>({step:{source,translation}});
+ validate(messages,catalog('Open <strong>Keychain Access</strong> and import the certificate.'));
+ for(const text of ['Open <em>Keychain Access</em>.','<strong onclick="alert(1)">Open</strong>.','Open <strong>Keychain Access</strong><img src=x>.'])assert.throws(()=>validate(messages,catalog(text)),/Invalid static rich/);
+ const expanded=pseudo('Open <strong>Keychain Access</strong> and import the certificate.');
+ assert.deepEqual(expanded.match(/<[^>]*>/g),['<strong>','</strong>']);assert.ok(expanded.includes('O~p~e~n~'));
+});
+
+test('administration scope includes actual recursive modules and connection guide',()=>{
+ const scope=JSON.parse(readFileSync(join(root,'locales/scope.json'),'utf8'));
+ assert.ok(scope.files.includes('src/connection-guide.ts'));
+ for(const file of readdirSync(join(root,'src/admin')).filter(f=>f.endsWith('.ts')))assert.ok(scope.files.includes('src/admin/'+file),file);
+ assert.ok(!scope.notCovered.some(e=>e.files?.includes('src/admin.ts')));
+ const tree=ts.createSourceFile('measurement.ts',readFileSync(join(root,'src/admin/measurement.ts'),'utf8'),ts.ScriptTarget.Latest,true);
+ let body;function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='runTransfers')body=n.body.getText(tree);ts.forEachChild(n,visit)}visit(tree);
+ assert.ok(body);assert.doesNotMatch(body,/\b(?:t|th|msg|formatDate|formatNumber)\(/,'timed transfer path has no translation work');
+});

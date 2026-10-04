@@ -1,0 +1,41 @@
+{
+  "head": "346cbcc088a902fb23520c476163f254c1d5b0ee",
+  "mergeRevision": "081d5fa220fc2c40c82afdf420dd80126162ebdf",
+  "workflow": 37150851591,
+  "job": 111284366210,
+  "artifact": 11284072481,
+  "configurationValid": true,
+  "sampleCount": 16,
+  "failedSamples": 8,
+  "pairs": [
+    {
+      "order": "AB",
+      "scenario": "https-1080p-solo",
+      "baselineMedian": 0.9992752130332938,
+      "featureMedian": 0.9993738211918374,
+      "featureDeltaPercent": 0.009867968028975938
+    },
+    {
+      "order": "AB",
+      "scenario": "https-1080p-dual",
+      "baselineMedian": 0.8012002694609002,
+      "featureMedian": 0.790953974689164,
+      "featureDeltaPercent": -1.278868113540521
+    },
+    {
+      "order": "BA",
+      "scenario": "https-1080p-solo",
+      "baselineMedian": 0.9993941414629046,
+      "featureMedian": 0.9989008835087467,
+      "featureDeltaPercent": -0.04935569798676376
+    },
+    {
+      "order": "BA",
+      "scenario": "https-1080p-dual",
+      "baselineMedian": 0.8004126339290971,
+      "featureMedian": 0.7876008228392174,
+      "featureDeltaPercent": -1.6006507827079908
+    }
+  ],
+  "limitation": "All eight dual samples remain below realtime; both feature medians are lower. Small CI difference requires replication and is not a no-regression or equivalence finding."
+}

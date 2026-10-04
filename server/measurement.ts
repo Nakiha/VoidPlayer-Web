@@ -13,7 +13,7 @@ export type MeasurementResult = {
   state: 'preparing' | 'running' | 'stopping' | 'completed' | 'cancelled' | 'failed';
   seconds: number; limitBytes: number; concurrency: number; startedAt: string;
   bytes: number; requests: number; errors: number; elapsedMs: number; activeRequests: number;
-  reason?: 'duration' | 'limit' | 'user' | 'client' | 'error' | 'shutdown'; error?: string;
+  errorCode?: 'measurement-failed'; reason?: 'duration' | 'limit' | 'user' | 'client' | 'error' | 'shutdown'; error?: string;
   media?: { id: string; name: string; root: string; size: number; version: string };
   client?: { bytes: number; requests: number; elapsedMs: number };
 };
@@ -34,12 +34,12 @@ export class Measurements {
   }
   start(input: unknown, owner: string) {
     if (this.closed) throw new AdminError(503, '服务正在关闭。');
-    if (this.job && measurementActive(this.job.result)) throw new AdminError(409, '已有测速任务，请等待完成或由发起者取消。');
+    if (this.job && measurementActive(this.job.result)) throw new AdminError(409, '已有测速任务，请等待完成或由发起者取消。', 'measurement-busy');
     const value = input as { kind?: MeasurementKind; seconds?: number; limitMiB?: number; mediaId?: string; version?: string } | null;
     if (!value || !['download', 'upload', 'storage', 'concurrent'].includes(value.kind!) || ![5, 10, 15].includes(value.seconds!) || ![64, 256, 1024].includes(value.limitMiB!)) throw new AdminError(400, '请选择测速类型、5/10/15 秒时长与 64/256/1024 MiB 上限。');
     const kind = value.kind!;
     const media = ['storage', 'concurrent'].includes(kind) ? this.library.metadata(value.mediaId ?? '') : null;
-    if (['storage', 'concurrent'].includes(kind) && (!media || media.state !== 'ready' || media.size <= 0 || !media.version || media.version !== value.version)) throw new AdminError(409, '请选择当前可读的非空媒体，文件版本改变后需要重新选择。');
+    if (['storage', 'concurrent'].includes(kind) && (!media || media.state !== 'ready' || media.size <= 0 || !media.version || media.version !== value.version)) throw new AdminError(409, '请选择当前可读的非空媒体，文件版本改变后需要重新选择。', 'measurement-media-changed');
     let resolve!: () => void;
     const done = new Promise<void>(r => { resolve = r; });
     const job: Job = {
@@ -73,7 +73,7 @@ export class Measurements {
   }
   private stop(job: Job, reason: MeasurementResult['reason'], error?: string, abort = true) {
     if (!measurementActive(job.result)) return;
-    if (!job.result.reason) { if (reason === 'error') job.result.errors++; job.result.reason = reason; job.result.error = error; job.result.state = 'stopping'; }
+    if (!job.result.reason) { if (reason === 'error') job.result.errors++; job.result.reason = reason; job.result.error = error; job.result.errorCode = error ? 'measurement-failed' : undefined; job.result.state = 'stopping'; }
     if (abort) job.controller.abort();
     this.settle(job);
   }
@@ -86,7 +86,7 @@ export class Measurements {
     const job = this.task(id), value = input as MeasurementResult['client'];
     if (job.result.kind === 'storage') throw new AdminError(400, '存储任务由服务器完成。');
     if (!value || !Number.isSafeInteger(value.bytes) || value.bytes < 0 || value.bytes > job.reserved || !Number.isSafeInteger(value.requests) || value.requests < 0 || value.requests > job.result.requests || !Number.isFinite(value.elapsedMs) || value.elapsedMs <= 0 || value.elapsedMs > (job.result.seconds + 30) * 1000) throw new AdminError(400, '浏览器测量结果无效。');
-    if (job.result.activeRequests) throw new AdminError(409, '仍有读取正在结束，请稍后完成。');
+    if (job.result.activeRequests) throw new AdminError(409, '仍有读取正在结束，请稍后完成。', 'measurement-finish-pending');
     job.result.client = { bytes: value.bytes, requests: value.requests, elapsedMs: value.elapsedMs };
     this.stop(job, 'client'); return this.status();
   }

@@ -1,0 +1,657 @@
+{
+  "complete": true,
+  "expectedCount": 130,
+  "passed": true,
+  "cases": [
+    {
+      "id": "node-admin-localization",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-admin",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-adapters",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-canvas",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-contracts",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-geometry",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-grouping",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-incremental",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-inspection",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-projection",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-round2",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-selection",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-statistics",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-analysis-view-cache",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-annotation-pending",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-annotation",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-annotations-store",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-appearance",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-avc-geometry",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-browser-regression-harness",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-chroma-reconstruction",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-clean",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-color-evidence",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-config",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-connection-guide",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-connection-routing",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-decoder-policy",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-fate-oracle",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-ffmpeg-index-cache",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-ffmpeg-media-progressive",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-ffmpeg-media",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-file-drop",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-file-handles",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-background",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-duplicate-pts",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-index-diagnostics",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-open-gop",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-recovery",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-resolution",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-server-index",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-startup-frame",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv-startup",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-flv",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-description",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-build-policy",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-cache",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-profile",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-scan-modes",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-stream",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-index-worker",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-frame-task",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-gpu-presentation-guard",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-hevc-geometry",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-hevc-timeline",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-hlg-pixel-signature",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-identity-browser-lifecycle",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-identity",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-index-stream-transport",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-library-incremental",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-library-index",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-library-link",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-library-storage",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-log-preview",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-log",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-measurement",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-abort",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-diagnostics",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-identity",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-index-client",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-index-identity",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-index-session",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-loading",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-metadata",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-policy",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-reference",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-state",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media-thumbnail-store",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-media",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-mp4-boundary",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-mp4-packets",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-native-yuv-source",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-packet-timeline",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-panel-motion",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-pixel-grid",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-playback",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-preroll",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-presentation-tick",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-protocol-server",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-range-bridge-large",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-range-media",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-range-reader",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-reference-source",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-release-pipeline",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-resize-gesture",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-resource-budget",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-saved-workspaces-ui",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-saved-workspaces",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-seek-preview",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-server",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-session-catalog",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-session-color-rollback",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-session-decode-cancel",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-session-failure-diagnostics",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-session",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-shared-workspaces",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-startup",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-stream-tail",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-thumbnail-offer",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-thumbnail-session",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-thumbnails-contract",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-time-input",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-tls",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-uuid",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-view-recovery",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-viewport-gestures",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-viewport",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-vite-routing",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-wasm-memory",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-workspace-file",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-workspace-storage",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-workspace",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-yuv-channel",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-yuv-color",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-yuv-core",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-yuv-frame",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-test-manifest",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-test-runner",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-browser-fixture",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-i18n",
+      "status": "passed",
+      "exitCode": 0
+    },
+    {
+      "id": "node-i18n-build",
+      "status": "passed",
+      "exitCode": 0
+    }
+  ]
+}
