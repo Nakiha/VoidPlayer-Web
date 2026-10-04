@@ -276,7 +276,7 @@ textarea { resize: vertical; min-height: 56px; max-height: 220px; padding: var(-
 }
 @media(max-width: 765px) {
   .brand { display: none; }
-  .side-panel { position: absolute; grid-row: 1 / 2; top: 0; bottom: 0; z-index: 6; width: min(var(--sources-width), 75vw); box-shadow: var(--popover-shadow); }
+  .side-panel { position: absolute; grid-row: 1 / 2; top: 0; bottom: 0; z-index: 6; width: min(var(--sources-width), 75vw); }
   .inspector-panel { left: 0; } .sources-panel { right: 0; }
   .duration { display: none; }
   .subtrack-scroll { --track-label-width: 140px; }
