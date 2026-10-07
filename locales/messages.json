@@ -6599,15 +6599,15 @@
     "source": "当前身份 · ",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:623"
+      "src/ui/workbench/sources.ts:625"
     ]
   },
   "sources.emptyDirectory": {
     "source": "当前目录没有片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:524",
-      "src/ui/workbench/sources.ts:676"
+      "src/ui/workbench/sources.ts:525",
+      "src/ui/workbench/sources.ts:678"
     ]
   },
   "sources.folderMetaLibrary": {
@@ -6616,8 +6616,8 @@
       "root": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:518",
-      "src/ui/workbench/sources.ts:683"
+      "src/ui/workbench/sources.ts:519",
+      "src/ui/workbench/sources.ts:685"
     ]
   },
   "sources.guest": {
@@ -6626,7 +6626,7 @@
     "locations": [
       "src/ui/saved-workspaces.ts:61",
       "src/ui/saved-workspaces.ts:80",
-      "src/ui/workbench/sources.ts:621"
+      "src/ui/workbench/sources.ts:623"
     ]
   },
   "sources.identityAria": {
@@ -6635,7 +6635,7 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:626"
+      "src/ui/workbench/sources.ts:628"
     ]
   },
   "sources.identityTitle": {
@@ -6644,7 +6644,7 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:625"
+      "src/ui/workbench/sources.ts:627"
     ]
   },
   "sources.inLibrary": {
@@ -6697,7 +6697,7 @@
     "source": "本地文件",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:530"
+      "src/ui/workbench/sources.ts:531"
     ]
   },
   "sources.localFilesCount": {
@@ -6706,7 +6706,7 @@
       "n": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:530"
+      "src/ui/workbench/sources.ts:531"
     ]
   },
   "sources.localNoUpload": {
@@ -6721,16 +6721,16 @@
     "source": "没有匹配的片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:524",
-      "src/ui/workbench/sources.ts:676"
+      "src/ui/workbench/sources.ts:525",
+      "src/ui/workbench/sources.ts:678"
     ]
   },
   "sources.noRecentShort": {
     "source": "暂无最近片源",
     "params": {},
     "locations": [
-      "src/ui/workbench/sources.ts:524",
-      "src/ui/workbench/sources.ts:676"
+      "src/ui/workbench/sources.ts:525",
+      "src/ui/workbench/sources.ts:678"
     ]
   },
   "sources.noRecentVideos": {
@@ -6738,7 +6738,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/sources.ts:466",
-      "src/ui/workbench/sources.ts:678"
+      "src/ui/workbench/sources.ts:680"
     ]
   },
   "sources.openFolder": {
@@ -6747,8 +6747,8 @@
       "name": "string | number"
     },
     "locations": [
-      "src/ui/workbench/sources.ts:520",
-      "src/ui/workbench/sources.ts:681"
+      "src/ui/workbench/sources.ts:521",
+      "src/ui/workbench/sources.ts:683"
     ]
   },
   "sources.openName": {
@@ -6781,7 +6781,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/sources.ts:313",
-      "src/ui/workbench/sources.ts:685"
+      "src/ui/workbench/sources.ts:687"
     ]
   },
   "sources.reselectInSourcesName": {

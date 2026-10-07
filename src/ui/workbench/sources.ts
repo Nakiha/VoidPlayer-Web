@@ -466,6 +466,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       const label = document.createElement('span'); label.textContent = t(msg("sources.noRecentVideos", "还没有最近打开的视频")); empty.append(label);
       list.append(empty);
     }
+    startScrollbar.update();
   }
 
   function renderSources() {
@@ -612,6 +613,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
   }
 
   const scrollbar = installSourceScrollbar($('source-list'), $('source-scrollbar'), $('source-scrollbar-thumb'), lifecyle.signal);
+  const startScrollbar = installSourceScrollbar($('start-library-list'), $('start-scrollbar'), $('start-scrollbar-thumb'), lifecyle.signal);
   let refreshIdentity: () => void = () => {};
   function wireSourceControls() {
     const more = $('start-library-more');
