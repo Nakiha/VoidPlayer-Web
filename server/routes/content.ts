@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
-import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES } from '../../src/ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../../src/ffmpeg-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
@@ -127,6 +127,7 @@ async function sendFfmpegRecordStream(
   let sentManifest = false;
   let sentReset = false;
   let sentScanProgress = -1;
+  let lastKnownTick: bigint | undefined;
   try {
     for (;;) {
       if (res.destroyed) return;
@@ -140,6 +141,7 @@ async function sendFfmpegRecordStream(
           await writeMediaIndexEvent(res, { type: 'reset', protocol: 2, buildId: manifest.buildId });
           sentReset = true;
           seq = -1;
+          lastKnownTick = undefined;
         }
         if (seq > manifest.lastSeq) throw new AdminError(416, '索引流续传序号超过当前 build。');
         if (!sentManifest) {
@@ -162,10 +164,19 @@ async function sendFfmpegRecordStream(
           if (row.seq !== seq + 1) throw new AdminError(500, '服务端索引 batch 序号不连续。');
           const records = Buffer.from(row.payload, 'base64');
           if (!row.frames || records.byteLength !== row.frames * FFMPEG_INDEX_RECORD_BYTES) throw new AdminError(500, '服务端索引 batch 长度无效。');
-          const lastPts = records.readBigInt64LE(records.byteLength - FFMPEG_INDEX_RECORD_BYTES);
+          let lastPts = lastFfmpegPts(records, lastKnownTick);
+          // Resume may begin inside an untimed tail: recover its finite frontier.
+          if (lastPts === FFMPEG_NO_TIMESTAMP && lastKnownTick === undefined) {
+            for (let previousSeq = seq; previousSeq >= 0 && lastPts === FFMPEG_NO_TIMESTAMP; previousSeq--) {
+              const previous = await library.indexJobs.call('stream-batches', { id, version, identity, after: previousSeq - 1, limit: 1 }) as { seq: number; payload: string }[];
+              if (previous[0]?.seq !== previousSeq) throw new AdminError(500, '服务端索引续传缺少前序 batch。');
+              lastPts = lastFfmpegPts(Buffer.from(previous[0].payload, 'base64'));
+            }
+          }
+          lastKnownTick = lastPts;
           const firstPts = BigInt(String(manifest.metadata.firstPts ?? '0'));
           const timeBaseNum = Number(manifest.metadata.timeBaseNum), timeBaseDen = Number(manifest.metadata.timeBaseDen);
-          const safePresentationUs = Math.max(0, ticksToUs(lastPts - firstPts, timeBaseNum, timeBaseDen));
+          const safePresentationUs = lastPts === FFMPEG_NO_TIMESTAMP ? 0 : Math.max(0, ticksToUs(lastPts - firstPts, timeBaseNum, timeBaseDen));
           await writeMediaIndexEvent(res, { type: 'batch', buildId: manifest.buildId, seq: row.seq,
             count: row.frames, safePresentationUs, data: row.payload });
           seq = row.seq;

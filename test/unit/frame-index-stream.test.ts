@@ -12,7 +12,7 @@ import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
 import { syntheticFlv } from '.././flv-fixture.ts';
 
 const indexerBuild = 'a'.repeat(40);
-const identity: MediaIndexIdentity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild };
+const identity: MediaIndexIdentity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild };
 
 function records(pts: number[]) {
   const bytes = new Uint8Array(pts.length * FFMPEG_INDEX_RECORD_BYTES);
@@ -22,6 +22,7 @@ function records(pts: number[]) {
     view.setBigInt64(offset, BigInt(pts[i]), true);
     view.setBigInt64(offset + 8, BigInt(pts[i] - 3_000), true);
     view.setBigInt64(offset + 16, 3_000n, true);
+    view.setBigUint64(offset + 40, BigInt(i), true);
     view.setBigInt64(offset + 24, BigInt(i * 188), true);
     view.setInt32(offset + 32, 188, true);
     view.setUint32(offset + 36, i === 0 ? 3 : 1, true);
@@ -42,7 +43,7 @@ test('FFmpeg record batches persist by identity and stream as NDJSON with build 
     width: 1920, height: 1080, streamIndex: 0, indexerBuild, firstPts: '90000', originVerified: true }, recordBytes);
   const epoch = library.frameIndexes.epoch;
   const buildId = '11111111-1111-4111-8111-111111111111';
-  const metadata = { schema: 2, kind: 'ffmpeg-container', size: bytes.length, codec: 'mpeg2video', timeBaseNum: 1,
+  const metadata = { schema: 3, kind: 'ffmpeg-container', size: bytes.length, codec: 'mpeg2video', timeBaseNum: 1,
     timeBaseDen: 90_000, width: 1920, height: 1080, recordBytes: FFMPEG_INDEX_RECORD_BYTES, streamIndex: 0,
     indexerBuild, firstPts: '90000', originVerified: true };
   library.frameIndexes.beginBuild(entry.id, entry.version!, identity, epoch, buildId, metadata);
@@ -69,19 +70,28 @@ test('FFmpeg record batches persist by identity and stream as NDJSON with build 
   library.frameIndexes.beginBuild(entry.id, entry.version!, identity, epoch, completedBuildId, metadata);
   library.frameIndexes.appendBuildBatch(entry.id, entry.version!, identity, epoch, completedBuildId, 0,
     Buffer.from(manyRecords).toString('base64'), 128, 4096, 4_233_333);
-  library.frameIndexes.finishBuild(entry.id, entry.version!, identity, epoch, completedBuildId, bytes.length, 4_233_333, 128);
+  const untimed = records([0, 0]), untimedView = new DataView(untimed.buffer);
+  for (let i = 0; i < 2; i++) {
+    untimedView.setBigInt64(i * 48, -9223372036854775808n, true);
+    untimedView.setBigInt64(i * 48 + 8, -9223372036854775808n, true);
+    untimedView.setUint32(i * 48 + 36, 0, true);
+    untimedView.setBigUint64(i * 48 + 40, BigInt(128 + i), true);
+    library.frameIndexes.appendBuildBatch(entry.id, entry.version!, identity, epoch, completedBuildId, i + 1,
+      Buffer.from(untimed.subarray(i * 48, (i + 1) * 48)).toString('base64'), 1, bytes.length, 4_233_333);
+  }
+  library.frameIndexes.finishBuild(entry.id, entry.version!, identity, epoch, completedBuildId, bytes.length, 4_233_333, 130);
   const reconstructed = JSON.parse(library.frameIndexes.getJson(entry.id, entry.version!, 'ffmpeg', identity));
-  assert.deepEqual(Buffer.from(reconstructed.index.records, 'base64'), Buffer.from(manyRecords), 'batch base64 padding is reassembled safely');
+  assert.deepEqual(Buffer.from(reconstructed.index.records, 'base64'), Buffer.concat([manyRecords, untimed]), 'batch base64 padding is reassembled safely');
 
   const admin = new AdminController(config, library);
   const server = createMediaServer({ roots: [media], library, admin, onLog() {} }); await new Promise<void>(r => server.listen(0, '127.0.0.1', r));
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
-  const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}&kind=ffmpeg&stream=video%3A0&schema=2&indexer=${indexerBuild}`;
+  const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}&kind=ffmpeg&stream=video%3A0&schema=3&indexer=${indexerBuild}`;
   try {
     const response = await fetch(endpoint, { headers: { accept: 'application/x-ndjson' } });
     assert.equal(response.status, 200);
     const events = (await response.text()).trim().split('\n').map(line => JSON.parse(line));
-    assert.deepEqual(events.map(event => event.type), ['manifest', 'batch', 'complete']);
+    assert.deepEqual(events.map(event => event.type), ['manifest', 'batch', 'batch', 'batch', 'complete']);
     assert.equal(events[0].protocol, 2);
     assert.equal(events[0].encoding, 'ffmpeg-records-base64');
     assert.equal(events[0].buildId, completedBuildId);
@@ -89,15 +99,20 @@ test('FFmpeg record batches persist by identity and stream as NDJSON with build 
     assert.equal(events[1].count, 128);
     assert.equal(events[1].safePresentationUs, 4_233_333);
     assert.equal(Buffer.from(events[1].data, 'base64').byteLength, 128 * FFMPEG_INDEX_RECORD_BYTES);
-    assert.equal(events[2].frames, 128);
+    assert.equal(events.at(-1).frames, 130);
+    assert.equal(events[2].safePresentationUs, 4_233_333);
+    assert.equal(events[3].safePresentationUs, 4_233_333);
 
     const resumed = await fetch(endpoint + `&buildId=${completedBuildId}&after=0`, { headers: { accept: 'application/x-ndjson' } });
     const resumedEvents = (await resumed.text()).trim().split('\n').map(line => JSON.parse(line));
-    assert.deepEqual(resumedEvents.map(event => event.type), ['manifest', 'complete']);
+    assert.deepEqual(resumedEvents.map(event => event.type), ['manifest', 'batch', 'batch', 'complete']);
 
+    const tailResume = await fetch(endpoint + `&buildId=${completedBuildId}&after=1`, { headers: { accept: 'application/x-ndjson' } });
+    const tailEvents = (await tailResume.text()).trim().split('\n').map(line => JSON.parse(line));
+    assert.equal(tailEvents[1].safePresentationUs, 4_233_333, 'resume inside an untimed tail recovers finite watermark');
     const reset = await fetch(endpoint + '&buildId=22222222-2222-4222-8222-222222222222&after=0', { headers: { accept: 'application/x-ndjson' } });
     const resetEvents = (await reset.text()).trim().split('\n').map(line => JSON.parse(line));
-    assert.deepEqual(resetEvents.map(event => event.type), ['reset', 'manifest', 'batch', 'complete']);
+    assert.deepEqual(resetEvents.map(event => event.type), ['reset', 'manifest', 'batch', 'batch', 'batch', 'complete']);
   } finally {
     server.closeAllConnections(); await new Promise<void>(r => server.close(() => r()));
     await admin.close(); await library.close(); await rm(root, { recursive: true, force: true });

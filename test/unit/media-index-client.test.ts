@@ -56,7 +56,7 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
     return ndjsonResponse(events(Number(after)));
   }) as typeof fetch;
 
-  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) }, progress => scanProgress.push(progress));
+  const client = new MediaIndexClient('http://localhost/api/media/' + ID + '?v=1', 'ffmpeg', 200_000, 5000, false, { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) }, progress => scanProgress.push(progress));
   try {
     assert.deepEqual(await client.read(), expected);
     assert.deepEqual(cursors, ['-1', '0']);
@@ -73,8 +73,8 @@ test('NDJSON index transfer resumes after the last received sequence', async () 
 
 test('FFmpeg record batches are incrementally validated and delivered before stream completion', async () => {
   const originalFetch = globalThis.fetch;
-  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
-  const metadata = { schema: 2, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
+  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
+  const metadata = { schema: 3, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
     width: 1920, height: 1080, recordBytes: FFMPEG_INDEX_RECORD_BYTES, streamIndex: 0, indexerBuild: identity.indexerBuild,
     firstPts: '90000', originVerified: true };
   const records = new Uint8Array(FFMPEG_INDEX_RECORD_BYTES * 2);
@@ -84,6 +84,7 @@ test('FFmpeg record batches are incrementally validated and delivered before str
     view.setBigInt64(offset, BigInt(90_000 + i * 3_000), true);
     view.setBigInt64(offset + 8, BigInt(87_000 + i * 3_000), true);
     view.setBigInt64(offset + 16, 3_000n, true);
+    view.setBigUint64(offset + 40, BigInt(i), true);
     view.setBigInt64(offset + 24, BigInt(i * 188), true);
     view.setInt32(offset + 32, 188, true);
     view.setUint32(offset + 36, i === 0 ? 3 : 1, true);
@@ -124,14 +125,15 @@ test('FFmpeg record batches are incrementally validated and delivered before str
 
 test('FFmpeg record streams resume the same build after the last accepted batch', async () => {
   const originalFetch = globalThis.fetch;
-  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
-  const metadata = { schema: 2, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
+  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
+  const metadata = { schema: 3, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
     width: 1920, height: 1080, recordBytes: FFMPEG_INDEX_RECORD_BYTES, streamIndex: 0, indexerBuild: identity.indexerBuild,
     firstPts: '90000', originVerified: true };
   const buildId = '22222222-2222-4222-8222-222222222222';
   const batch = (pts: number) => {
     const bytes = new Uint8Array(FFMPEG_INDEX_RECORD_BYTES);
     const view = new DataView(bytes.buffer);
+    view.setBigUint64(40, BigInt((pts - 90_000) / 3_000), true);
     view.setBigInt64(0, BigInt(pts), true);
     view.setBigInt64(8, BigInt(pts - 3_000), true);
     view.setBigInt64(16, 3_000n, true);
@@ -179,8 +181,8 @@ test('FFmpeg record streams resume the same build after the last accepted batch'
 
 test('active index streams may outlast the per-request idle timeout', async () => {
   const originalFetch = globalThis.fetch;
-  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
-  const metadata = { schema: 2, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
+  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
+  const metadata = { schema: 3, kind: 'ffmpeg-container', size: 4096, codec: 'mpeg2video', timeBaseNum: 1, timeBaseDen: 90_000,
     width: 1920, height: 1080, recordBytes: FFMPEG_INDEX_RECORD_BYTES, streamIndex: 0, indexerBuild: identity.indexerBuild,
     firstPts: '90000', originVerified: true, count: 1 };
   const buildId = '33333333-3333-4333-8333-333333333333';

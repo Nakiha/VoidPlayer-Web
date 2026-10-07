@@ -1,4 +1,4 @@
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex, FFMPEG_INDEX_SCHEMA, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
 import type { IndexStreamCursor, IndexStreamEventResult } from './index-stream-transport.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
@@ -21,6 +21,9 @@ export class FfmpegIndexConsumer {
   private recordFrames = 0;
   private recordBytesTotal = 0;
   private previousSafeUs = -1;
+  private lastKnownPts = FFMPEG_NO_TIMESTAMP;
+  private untimedTail = false;
+  private ordinals = new Set<bigint>();
   private lastSeq = -1;
   private buildId?: string;
   private recordStream = false;
@@ -68,6 +71,7 @@ export class FfmpegIndexConsumer {
       this.recordManifest = undefined;
       this.recordStream = false;
       this.previousSafeUs = -1;
+      this.lastKnownPts = FFMPEG_NO_TIMESTAMP; this.untimedTail = false; this.ordinals.clear();
       return 'continue';
     }
     if (event?.type === 'batch' && this.recordStream) {
@@ -102,7 +106,7 @@ export class FfmpegIndexConsumer {
       || !Number.isSafeInteger(event.epoch) || event.epoch < 0 || typeof event.buildId !== 'string'
       || !/^[0-9a-f-]{36}$/i.test(event.buildId) || event.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
       || !identity || identity.kind !== 'ffmpeg' || identity.streamKey !== `video:${metadata?.streamIndex}`
-      || !metadata || metadata.schema !== 2 || metadata.kind !== 'ffmpeg-container' || metadata.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
+      || !metadata || metadata.schema !== FFMPEG_INDEX_SCHEMA || metadata.kind !== 'ffmpeg-container' || metadata.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
       || !Number.isSafeInteger(metadata.size) || Number(metadata.size) <= 0 || typeof metadata.codec !== 'string'
       || !Number.isSafeInteger(metadata.timeBaseNum) || Number(metadata.timeBaseNum) <= 0
       || !Number.isSafeInteger(metadata.timeBaseDen) || Number(metadata.timeBaseDen) <= 0
@@ -150,12 +154,22 @@ export class FfmpegIndexConsumer {
     const parsed = parseFfmpegIndex({ ...this.recordManifest.metadata, count: event.count, records: event.data }, Number(this.recordManifest.metadata.size));
     if (!parsed) throw new Error('FFmpeg 索引记录 batch 内容无效。');
     const view = new DataView(parsed.records.buffer, parsed.records.byteOffset, parsed.records.byteLength);
-    const safeTick = view.getBigInt64(parsed.records.byteLength - FFMPEG_INDEX_RECORD_BYTES, true);
+    const safeTick = lastFfmpegPts(parsed.records, this.lastKnownPts);
+    const nextOrdinals: bigint[] = [];
+    let untimedTail = this.untimedTail;
+    for (let offset = 0; offset < parsed.records.byteLength; offset += FFMPEG_INDEX_RECORD_BYTES) {
+      const pts = view.getBigInt64(offset, true), ordinal = view.getBigUint64(offset + 40, true);
+      if (this.ordinals.has(ordinal) || (pts !== FFMPEG_NO_TIMESTAMP && (untimedTail || (this.lastKnownPts !== FFMPEG_NO_TIMESTAMP && pts < this.lastKnownPts)))) throw new Error('FFmpeg 索引包身份重复或跨批时间顺序无效。');
+      if (pts === FFMPEG_NO_TIMESTAMP) untimedTail = true;
+      nextOrdinals.push(ordinal);
+    }
     const firstPts = BigInt(String(this.recordManifest.metadata.firstPts));
     const expectedSafeUs = Math.max(0, Math.floor(Number(safeTick - firstPts) * 1_000_000
       * Number(this.recordManifest.metadata.timeBaseNum) / Number(this.recordManifest.metadata.timeBaseDen)));
     if (expectedSafeUs !== event.safePresentationUs) throw new Error('FFmpeg 索引 watermark 与记录末帧不匹配。');
     if (this.trace.firstIndexBatchMs === undefined) this.trace.firstIndexBatchMs = performance.now() - this.options.startedAt;
+    for (const ordinal of nextOrdinals) this.ordinals.add(ordinal);
+    this.untimedTail = untimedTail; this.lastKnownPts = safeTick;
     this.options.onRecordBatch?.({ buildId: this.recordManifest.buildId, seq: event.seq, records: parsed.records,
       count: event.count, safePresentationUs: event.safePresentationUs });
     this.recordFrames += event.count;
@@ -165,6 +179,7 @@ export class FfmpegIndexConsumer {
   }
 
   private acceptComplete(event: any) {
+    for (let i = 0; i < this.recordFrames; i++) if (!this.ordinals.has(BigInt(i))) throw new Error('FFmpeg 完整包索引序号不连续。');
     if (!this.recordManifest || event.buildId !== this.buildId || event.lastSeq !== this.lastSeq
       || event.frames !== this.recordFrames || !Number.isSafeInteger(event.stablePresentationUs)
       || event.stablePresentationUs !== this.previousSafeUs

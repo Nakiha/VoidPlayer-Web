@@ -30,7 +30,7 @@ try {
   if (!entry?.version) throw new Error('The media file is not available in the library index.');
   const resolved = await library.resolve(entry.id, entry.version);
   if (!resolved) throw new Error('The media file changed during benchmark setup.');
-  const identity = { kind: 'ffmpeg', streamKey: `video:${streamIndex}`, schemaVersion: 2, indexerBuild };
+  const identity = { kind: 'ffmpeg', streamKey: `video:${streamIndex}`, schemaVersion: 3, indexerBuild };
   const coldStartedAt = performance.now();
   const build = library.indexJobs.startBuild({
     id: entry.id, version: entry.version, size: entry.size, filePath: resolved,

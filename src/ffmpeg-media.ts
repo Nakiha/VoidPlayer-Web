@@ -1,3 +1,6 @@
+import { abortableWait } from './media-abort.ts';
+import type { AnalysisAxis, AnalysisQuery } from './analysis/types.ts';
+import type { FfmpegAnalysisSummary } from './analysis/ffmpeg-adapter.ts';
 import { WorkerRpc } from './worker-rpc.ts';
 export { WorkerRpc } from './worker-rpc.ts';
 import type { FfmpegInitResult as InitResult, FfmpegCommands } from './worker-protocol.ts';
@@ -255,11 +258,13 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
   const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
   let source: MediaSource;
+  let analysisSummary = init.analysis;
   const activeRpc = rpc;
   let containerSession: FfmpegContainerSession | undefined;
   let firstIndexBatchLogged = false;
-  const applyIndexBatch = (result: { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => {
+  const applyIndexBatch = (result: { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace }) => {
     if (disposed || result.ctx !== init!.ctx) return;
+    analysisSummary = result.analysis ?? analysisSummary;
     if (!firstIndexBatchLogged) {
       firstIndexBatchLogged = true;
       contextLog().info('media', '媒体管线追踪', {
@@ -296,6 +301,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   };
   const applyIndexComplete = (result: InitResult) => {
     if (disposed) return;
+    analysisSummary = result.analysis ?? analysisSummary;
     if (!result.ticks.length || result.ticks[0] !== firstTick) {
       applyIndexError({ error: '完整索引改变了首帧时间轴起点。' });
       return;
@@ -400,6 +406,33 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
 
   source = {
     info, ensureIndexed,
+    getAnalysisCapability: () => ({ hasSize: true, hasDts: analysisSummary?.hasDts ?? false, keySource: 'container',
+      pictureType: 'key-only', qp: 'unsupported', indexState: info.indexState ?? 'complete',
+      ...(info.indexError ? { indexError: info.indexError } : {}),
+    }),
+    async queryAnalysis(query: AnalysisQuery & { requestId: number }) {
+      if (disposed) throw new Error('媒体已释放。');
+      if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+      const { signal, ...request } = query;
+      if (signal?.aborted) throw signal.reason;
+      const promise = activeRpc.call('analysis', { ...request, ctx: init!.ctx,
+        mediaId: info.id, firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
+        coverageUs: info.indexState === 'complete' ? { start: 0, end: info.durationUs } : null,
+      });
+      const result = await (signal ? abortableWait(promise, signal) : promise);
+      return { ...result, requestId: query.requestId };
+    },
+    async locateAnalysisSample(sampleId: string) {
+      return activeRpc.call('analysis-locate', { ctx: init!.ctx, mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId });
+    },
+    async rankAnalysisTime(tUs: number, axis: AnalysisAxis) {
+      const rank = await activeRpc.call('analysis-rank', { ctx: init!.ctx, firstPtsUs: info.firstPtsUs, axis, tUs });
+      return { ...rank, complete: info.indexState === 'complete' };
+    },
+    async analysisSampleAtNumber(number: number, axis: AnalysisAxis) {
+      const ptsUs = await activeRpc.call('analysis-number', { ctx: init!.ctx, firstPtsUs: info.firstPtsUs, axis, number });
+      return { ptsUs, complete: info.indexState === 'complete' };
+    },
     async reconfigureColorMode(mode) {
       const previous = referencePresentation;
       referencePresentation = mode === 'reference';

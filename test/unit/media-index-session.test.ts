@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { FfmpegMediaIndexSession } from '../../src/media-index-session.ts';
 
-const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
+const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
 const sink = (overrides: Record<string, (...args: any[]) => void> = {}) => ({
   manifest() {}, batch() {}, complete() {}, legacy() {}, fallback() {}, progress() {}, error() {}, ...overrides,
 });

@@ -115,6 +115,8 @@ export interface BitratePoint {
 }
 
 export interface AnalysisResult {
+  /** Packets lacking the requested axis: their bytes remain in the shared index. */
+  untimed?: { sampleCount: number; totalBytes: number };
   requestId: number;
   /** 媒体/流版本 + 索引修订，旧异步结果不得覆盖新图。 */
   sourceVersion: string;

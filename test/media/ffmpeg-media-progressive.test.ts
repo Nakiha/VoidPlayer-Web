@@ -38,7 +38,7 @@ class DelayedIndexWorker {
           ctx: 1, path: '/fake.ts', ticks: [originTicks], durations: [this.firstDuration],
           firstPts: originTicks, firstFrame: frame(originTicks, this.firstDuration), tbNum: 1, tbDen: 90_000,
           width: 1, height: 1, codec: 'mpeg2video', indexSource: 'server', indexPending: true,
-          indexIdentity: { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) },
+          indexIdentity: { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) },
         },
       }));
     } else if (message.type === 'extract') {
@@ -271,24 +271,25 @@ for (const method of ['framesAfter', 'framesFrom'] as const) {
 
 const streamBuildId = '11111111-1111-4111-8111-111111111111';
 function indexStreamEvents() {
-  const identity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
-  const records = new Uint8Array(120);
+  const identity = { kind: 'ffmpeg', streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
+  const records = new Uint8Array(144);
   const view = new DataView(records.buffer);
   for (let i = 0; i < 3; i++) {
-    const offset = i * 40;
+    const offset = i * 48;
     view.setBigInt64(offset, BigInt(originTicks + i * 3_600), true);
     view.setBigInt64(offset + 8, BigInt(originTicks + i * 3_600), true);
     view.setBigInt64(offset + 16, 3_600n, true);
+    view.setBigUint64(offset + 40, BigInt(i), true);
     view.setBigInt64(offset + 24, BigInt(i * 188), true);
     view.setInt32(offset + 32, 188, true);
     view.setUint32(offset + 36, i === 0 ? 3 : 1, true);
   }
   return [
     { type: 'manifest', protocol: 2, epoch: 1, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64',
-      state: 'streaming', buildId: streamBuildId, identity, recordBytes: 40, lastSeq: -1,
-      metadata: { schema: 2, kind: 'ffmpeg-container', size: 1000, codec: 'mpeg2video', timeBaseNum: 1,
+      state: 'streaming', buildId: streamBuildId, identity, recordBytes: 48, lastSeq: -1,
+      metadata: { schema: 3, kind: 'ffmpeg-container', size: 1000, codec: 'mpeg2video', timeBaseNum: 1,
         timeBaseDen: 90_000, width: 1, height: 1, streamIndex: 0, indexerBuild: identity.indexerBuild,
-        firstPts: String(originTicks), originVerified: true, recordBytes: 40 } },
+        firstPts: String(originTicks), originVerified: true, recordBytes: 48 } },
     { type: 'batch', buildId: streamBuildId, seq: 0, count: 3, safePresentationUs: 80_000,
       data: Buffer.from(records).toString('base64') },
   ];

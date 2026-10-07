@@ -12,7 +12,9 @@ import type {
 
 /** 查询所需的最小包视图；offset 等解码定位字段不在这里。 */
 export interface PacketView {
-  pts: number;
+  pts: number | null;
+  /** Stable demux ordinal when storage is ordered for presentation/transport. */
+  ordinal?: number;
   dts: number | null;
   size: number;
   key: boolean;
@@ -63,13 +65,13 @@ export interface SortedAxis {
 }
 
 /** 物化单个包的样本视图：executeSortedQuery 与按身份定位共用同一字段口径。 */
-function toSample(packets: ArrayLike<PacketView>, ctx: SourceQueryContext, pos: number): AnalysisSample {
+export function toSample(packets: ArrayLike<PacketView>, ctx: Pick<SourceQueryContext, 'mediaId' | 'firstPtsUs'>, pos: number): AnalysisSample {
   const p = packets[pos];
   return {
-    sampleId: `${ctx.mediaId}:v:${pos}`,
-    decodeOrdinal: pos,
+    sampleId: `${ctx.mediaId}:v:${p.ordinal ?? pos}`,
+    decodeOrdinal: p.ordinal ?? pos,
     containerPtsUs: p.originalPts ?? p.pts,
-    effectivePtsUs: p.pts - ctx.firstPtsUs,
+    effectivePtsUs: p.pts == null ? null : p.pts - ctx.firstPtsUs,
     dtsUs: p.dts == null ? null : p.dts - ctx.firstPtsUs,
     sizeBytes: p.size,
     randomAccess: p.key ? 'yes' : 'no',
@@ -93,9 +95,9 @@ export function locateSampleById(
   const p = packets[pos];
   return {
     sampleId: `${mediaId}:v:${pos}`,
-    decodeOrdinal: pos,
+    decodeOrdinal: p.ordinal ?? pos,
     containerPtsUs: p.originalPts ?? p.pts,
-    effectivePtsUs: p.pts - firstPtsUs,
+    effectivePtsUs: p.pts == null ? null : p.pts - firstPtsUs,
     dtsUs: p.dts == null ? null : p.dts - firstPtsUs,
     sizeBytes: p.size,
     randomAccess: p.key ? 'yes' : 'no',
@@ -166,7 +168,7 @@ export function executeSortedQuery(
     const key = packets[pos].key;
     bucket.count++;
     bucket.sumBytes += size;
-    if (size > bucket.maxBytes) { bucket.maxBytes = size; bucket.maxSampleId = `${ctx.mediaId}:v:${pos}`; }
+    if (size > bucket.maxBytes) { bucket.maxBytes = size; bucket.maxSampleId = `${ctx.mediaId}:v:${packets[pos].ordinal ?? pos}`; }
     if (key === true) bucket.keyCount++;
     else if (key === false) bucket.deltaCount++;
     else bucket.unknownCount++;
@@ -323,13 +325,13 @@ export function createSourceQuerier(): SourceQuerier {
     // 包时间戳与查询点都是整数微秒，可精确比较；命中 lowerBound 首位即
     // (t,pos) 稳定序下该时间的首个样本，其包表下标就是解码顺序号。
     const lo = lowerBound(sorted.times, tUs);
-    return { rank: lo, total: sorted.times.length, ordinal: sorted.times[lo] === tUs ? sorted.order[lo] : null };
+    return { rank: lo, total: sorted.times.length, ordinal: sorted.times[lo] === tUs ? (packets[sorted.order[lo]].ordinal ?? sorted.order[lo]) : null };
   };
   querier.sampleAtNumber = (packets, firstPtsUs, axis, number) => {
     if (!Number.isSafeInteger(number) || number < 0 || axis !== 'pts' && axis !== 'dts') return null;
-    if (axis === 'dts') return number < packets.length ? packets[number].pts - firstPtsUs : null;
+    if (axis === 'dts') { const pts = number < packets.length ? packets[number].pts : null; return pts == null ? null : pts - firstPtsUs; }
     const sorted = sortedFor(packets, firstPtsUs, 'pts');
-    return number < sorted.times.length ? packets[sorted.order[number]].pts - firstPtsUs : null;
+    return number < sorted.times.length ? (packets[sorted.order[number]].pts as number) - firstPtsUs : null;
   };
   return querier;
 }

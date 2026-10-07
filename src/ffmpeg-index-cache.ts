@@ -1,9 +1,9 @@
-export const FFMPEG_INDEX_SCHEMA = 2;
+export const FFMPEG_INDEX_SCHEMA = 3;
 export const FFMPEG_INDEX_KIND = 'ffmpeg-container';
-export const FFMPEG_INDEX_RECORD_BYTES = 40;
+export const FFMPEG_INDEX_RECORD_BYTES = 48;
 export const FFMPEG_INDEX_RECORD_LIMIT = 2_000_000;
-// Base64 for two million 40-byte records is about 107 MiB.
-export const FFMPEG_INDEX_BYTES = 128 * 1024 * 1024;
+// Base64 for two million 48-byte records is about 128 MiB.
+export const FFMPEG_INDEX_BYTES = 160 * 1024 * 1024;
 
 export interface FfmpegIndexDocument {
   schema: number;
@@ -88,7 +88,9 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
   for (let i = 0; i < binary.length; i++) records[i] = binary.charCodeAt(i);
   if (records.byteLength !== doc.count * FFMPEG_INDEX_RECORD_BYTES || records.byteLength > FFMPEG_INDEX_BYTES) return null;
   const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
-  let previous = 0n;
+  let previous: bigint | undefined;
+  let unknownPts = false;
+  const ordinals = new Set<bigint>();
   const noTimestamp = -9223372036854775808n;
   for (let i = 0; i < doc.count; i++) {
     const offset = i * FFMPEG_INDEX_RECORD_BYTES;
@@ -97,12 +99,37 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     const pos = view.getBigInt64(offset + 24, true);
     const packetSize = view.getInt32(offset + 32, true);
     const flags = view.getUint32(offset + 36, true);
+    const ordinal = view.getBigUint64(offset + 40, true);
     const key = (flags & 1) !== 0;
     const seekAnchor = (flags & 2) !== 0;
     if (packetSize < 0 || pos < -1n || (flags & ~3) !== 0
-      || (seekAnchor && (!key || pos < 0n || dts === noTimestamp))
-      || (i > 0 && pts < previous)) return null;
-    previous = pts;
+      || ordinal >= BigInt(FFMPEG_INDEX_RECORD_LIMIT) || ordinals.has(ordinal)
+      || (seekAnchor && (!key || pos < 0n || pts === noTimestamp || dts === noTimestamp))
+      || (pts !== noTimestamp && (unknownPts || (previous !== undefined && pts < previous)))) return null;
+    ordinals.add(ordinal);
+    if (pts === noTimestamp) unknownPts = true; else previous = pts;
   }
   return { document: doc, records };
+}
+
+/** Signed timestamp sentinel is kept out of arithmetic and playback views. */
+export const FFMPEG_NO_TIMESTAMP = -9223372036854775808n;
+export function ffmpegTicksToUs(ticks: bigint, num: number, den: number): number {
+  const numerator = ticks * BigInt(num) * 1_000_000n, divisor = BigInt(den);
+  let rounded = numerator / divisor;
+  const remainder = numerator % divisor;
+  if (remainder * 2n >= divisor) rounded++;
+  else if (remainder * 2n < -divisor) rounded--;
+  const value = Number(rounded);
+  if (!Number.isSafeInteger(value)) throw new Error('FFmpeg 时间戳超出安全范围。');
+  return value;
+}
+/** The frontier ignores untimed records at the tail of the shared packet index. */
+export function lastFfmpegPts(records: Uint8Array, previous: bigint = FFMPEG_NO_TIMESTAMP): bigint {
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
+  for (let offset = 0; offset < records.byteLength; offset += FFMPEG_INDEX_RECORD_BYTES) {
+    const pts = view.getBigInt64(offset, true);
+    if (pts !== FFMPEG_NO_TIMESTAMP) previous = pts;
+  }
+  return previous;
 }

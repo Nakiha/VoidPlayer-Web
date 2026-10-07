@@ -1,3 +1,4 @@
+import { FFMPEG_INDEX_SCHEMA } from './ffmpeg-index-cache.ts';
 export type MediaIndexKind = 'flv' | 'ffmpeg';
 
 export interface MediaIndexIdentity {
@@ -30,6 +31,6 @@ export function parseMediaIndexIdentity(kind: string, params: URLSearchParams): 
   if (kind === 'flv' && (streamKey !== FLV_MEDIA_INDEX_IDENTITY.streamKey
     || schemaVersion !== FLV_MEDIA_INDEX_IDENTITY.schemaVersion
     || indexerBuild !== FLV_MEDIA_INDEX_IDENTITY.indexerBuild)) throw new Error('FLV 索引版本不受支持。');
-  if (kind === 'ffmpeg' && (schemaVersion !== 2 || !/^[a-f0-9]{40}$/.test(indexerBuild))) throw new Error('FFmpeg 索引版本不受支持。');
+  if (kind === 'ffmpeg' && (schemaVersion !== FFMPEG_INDEX_SCHEMA || !/^[a-f0-9]{40}$/.test(indexerBuild))) throw new Error('FFmpeg 索引版本不受支持。');
   return { kind, streamKey, schemaVersion, indexerBuild };
 }

@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
-import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex } from '../src/ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../src/media-index-identity.ts';
 
@@ -152,9 +152,8 @@ export class FrameIndexStore {
       if (scannedBytes > Number(metadata.size)) throw new AdminError(400, 'FFmpeg 索引扫描进度超过媒体长度。');
       const parsed = parseFfmpegIndex({ ...metadata, count: frames, records: payload }, Number(metadata.size));
       if (!parsed) throw new AdminError(400, 'FFmpeg 索引 batch 记录无效。');
-      const lastPts = new DataView(parsed.records.buffer, parsed.records.byteOffset, parsed.records.byteLength)
-        .getBigInt64(parsed.records.byteLength - FFMPEG_INDEX_RECORD_BYTES, true);
-      const expectedSafeUs = Math.max(0, Math.floor(Number(lastPts - BigInt(String(metadata.firstPts))) * 1_000_000
+      const lastPts = lastFfmpegPts(parsed.records);
+      const expectedSafeUs = lastPts === FFMPEG_NO_TIMESTAMP ? Number(row.stable_presentation_us) : Math.max(0, Math.floor(Number(lastPts - BigInt(String(metadata.firstPts))) * 1_000_000
         * Number(metadata.timeBaseNum) / Number(metadata.timeBaseDen)));
       if (expectedSafeUs !== stablePresentationUs) throw new AdminError(400, 'FFmpeg 索引 watermark 与 batch 记录不匹配。');
       const bytes = Buffer.byteLength(payload);

@@ -168,3 +168,50 @@ test('展示序排名：重排包表的 PTS 秩与二分一致，重复 PTS 共�
   assert.deepEqual(querier.rank(mixed, 0, 'pts', 80000), { rank: 3, total: 6, ordinal: 4 });
   assert.throws(() => querier.rank(mixed, 0, 'pts' as never, NaN), /有限/);
 });
+
+import { FfmpegPacketIndex } from '../../src/analysis/ffmpeg-adapter.ts';
+import { FFMPEG_NO_TIMESTAMP, ffmpegTicksToUs } from '../../src/ffmpeg-index-cache.ts';
+
+function ffmpegRecords(packets: { pts: bigint; dts: bigint; ordinal: number; size: number }[]) {
+  const bytes = new Uint8Array(packets.length * 48), view = new DataView(bytes.buffer);
+  packets.forEach((packet, i) => {
+    const offset = i * 48;
+    view.setBigInt64(offset, packet.pts, true); view.setBigInt64(offset + 8, packet.dts, true);
+    view.setBigInt64(offset + 24, -1n, true); view.setInt32(offset + 32, packet.size, true);
+    view.setUint32(offset + 36, packet.ordinal === 0 ? 1 : 0, true);
+    view.setBigUint64(offset + 40, BigInt(packet.ordinal), true);
+  });
+  return bytes;
+}
+
+test('shared FFmpeg packet index keeps original identity across PTS/DTS, batches and bucket lookup', () => {
+  const index = new FfmpegPacketIndex();
+  index.append(ffmpegRecords([{ pts: 0n, dts: 100n, ordinal: 1, size: 100 }, { pts: 100n, dts: 0n, ordinal: 0, size: 200 }]), 1, 1000);
+  const query = { requestId: 9, axis: 'pts' as const, startUs: 0, endUs: 1_000_000, pixelWidth: 20, bitrateWindowUs: 1_000_000 };
+  const pts = index.query(ctx, query), dts = index.query(ctx, { ...query, axis: 'dts' });
+  assert.deepEqual(pts.samples.map(s => s.sampleId), ['m1:v:1', 'm1:v:0']);
+  assert.deepEqual(dts.samples.map(s => s.sampleId), ['m1:v:0', 'm1:v:1']);
+  assert.equal(index.locate('m1', 0, 'm1:v:0')?.sizeBytes, 200);
+  assert.equal(index.rank(0, 'pts', 100_000).ordinal, 0);
+  assert.equal(index.sampleAtNumber(0, 'dts', 0), 100_000);
+  assert.equal(index.sampleAtNumber(0, 'pts', 0), 0);
+  assert.ok(pts.buckets?.some(b => b.maxSampleId === 'm1:v:0'));
+  assert.throws(() => index.append(ffmpegRecords([{ pts: 200n, dts: 200n, ordinal: 0, size: 20 }]), 1, 1000), /重复/);
+  index.append(ffmpegRecords([{ pts: 200n, dts: 200n, ordinal: 2, size: 50 }]), 1, 1000);
+  assert.equal(index.query(ctx, query).samples.length, 3);
+});
+
+test('untimed FFmpeg packets remain addressable without inventing bitrate or timestamps', () => {
+  const index = new FfmpegPacketIndex();
+  index.append(ffmpegRecords([{ pts: 0n, dts: 0n, ordinal: 0, size: 100 }, { pts: FFMPEG_NO_TIMESTAMP, dts: FFMPEG_NO_TIMESTAMP, ordinal: 1, size: 300 }]), 1, 90000);
+  const result = index.query({ ...ctx, capability: { ...ctx.capability, hasDts: false } }, { requestId: 1, axis: 'pts', startUs: 0, endUs: 1_000_000, pixelWidth: 20, bitrateWindowUs: 1_000_000 });
+  assert.deepEqual(result.untimed, { sampleCount: 1, totalBytes: 300 });
+  assert.equal(result.samples.length, 1);
+  assert.equal(result.coverageUs, null);
+  assert.ok(result.bitrate?.every(p => p.mbps === null));
+  assert.equal(index.locate('m1', 0, 'm1:v:1')?.effectivePtsUs, null);
+  assert.equal(index.locate('m1', 0, 'm1:v:1')?.sizeBytes, 300);
+  assert.equal(index.summary.hasDts, false);
+  assert.equal(ffmpegTicksToUs(-1n, 1, 2_000_000), 0);
+  assert.equal(ffmpegTicksToUs(9_000_000_001n, 1, 90000), 100_000_000_011);
+});

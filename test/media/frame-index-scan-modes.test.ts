@@ -61,6 +61,8 @@ test('demux-only MPEG-TS scan matches decoder-backed records and seek pixels acr
 
         assert.equal(report.comparison.sameRecordBytes, true, 'all PTS/DTS/duration/position/size/flag records match byte-for-byte');
         assert.equal(report.comparison.sameCount, true);
+        assert.equal(report.demuxOnly.scanDecodedPackets, 0);
+        assert.ok(report.progressive.scanDecodedPackets > 0);
         assert.equal(report.comparison.sameSeekAnchors, true);
         assert.equal(report.comparison.sameFirstPts, true);
         assert.equal(report.comparison.sameDuration, true);

@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { instantiateCore } from '../src/wasm-core.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA } from '../src/ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
 import type { FfmpegIndexMetadata } from '../src/ffmpeg-index-cache.ts';
 import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
 
@@ -42,6 +42,7 @@ export interface FfmpegIndexBuildBatch {
 
 export interface FfmpegIndexBuildProfile {
   scanMode: 'demux-only';
+  scanDecodedPackets: number;
   totalBuildWallMs: number;
   cpuUserMs: number;
   cpuSystemMs: number;
@@ -89,7 +90,7 @@ export async function buildFfmpegIndexDocument(
   const buildStarted = performance.now();
   const cpuStarted = process.cpuUsage();
   const profile: FfmpegIndexBuildProfile = {
-    scanMode: 'demux-only',
+    scanMode: 'demux-only', scanDecodedPackets: 0,
     totalBuildWallMs: 0, cpuUserMs: 0, cpuSystemMs: 0,
     vpOpenBlobMs: 0, vpPrimeFirstPresentableMs: 0, vpIndexScanStepMs: 0,
     scanStepCalls: 0, scannedBytes: 0, packets: 0,
@@ -115,9 +116,9 @@ export async function buildFfmpegIndexDocument(
   let ctx = 0;
   try {
     core.vpBlobs = new Map();
-    if (core.ccall('vp_index_abi_version', 'number', [], []) !== 2
+    if (core.ccall('vp_index_abi_version', 'number', [], []) !== FFMPEG_INDEX_SCHEMA
       || core.ccall('vp_index_record_bytes', 'number', [], []) !== FFMPEG_INDEX_RECORD_BYTES
-      || core.ccall('vp_index_stream_abi_version', 'number', [], []) !== 1) {
+      || core.ccall('vp_index_stream_abi_version', 'number', [], []) !== 2) {
       throw new Error('服务端 FFmpeg core 索引 ABI 不匹配。');
     }
     ctx = core.ccall('vp_create', 'number', [], []);
@@ -215,7 +216,7 @@ export async function buildFfmpegIndexDocument(
         // browser hides timestamps before its immutable first-frame origin.
         batch.set(bytes.subarray(sourceOffset, sourceOffset + FFMPEG_INDEX_RECORD_BYTES), batchCount * FFMPEG_INDEX_RECORD_BYTES);
         batchCount++;
-        lastPublishedTick = pts;
+        if (pts !== FFMPEG_NO_TIMESTAMP) lastPublishedTick = pts;
         if (batchCount === RECORDS_PER_BATCH) publish(batchCount, scannedBytes);
       }
     };
@@ -232,6 +233,8 @@ export async function buildFfmpegIndexDocument(
       onProgress?.({ phase: 'scan', packets, scannedBytes, totalBytes: fileSize });
       await new Promise<void>(resolve => setImmediate(resolve));
     }
+    profile.scanDecodedPackets = Number(core.ccall('vp_index_scan_decoded_packets', 'number', ['number'], [ctx]));
+    if (profile.scanDecodedPackets !== 0) throw new Error('包索引扫描意外进入解码路径。');
     profile.scanCompleteMs = performance.now() - buildStarted;
     const count = core.ccall('vp_index_count', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('服务端 FFmpeg 无法建立媒体帧索引。');

@@ -361,6 +361,7 @@ export default {
   "analysis.trackHasNoFrame": (d) => "［T~r~a~c~k~ " + d.slot + ": n~o~ o~n~-s~c~r~e~e~n~ f~r~a~m~e~ ········］",
   "analysis.trackUnsupported": (d) => "［T~r~a~c~k~ " + d.slot + ": t~h~e~ c~u~r~r~e~n~t~ m~e~d~i~a~ p~a~t~h~ d~o~e~s~ n~o~t~ s~u~p~p~o~r~t~ b~i~t~s~t~r~e~a~m~ a~n~a~l~y~s~i~s~. ········］",
   "analysis.unknownError": () => "［U~n~k~n~o~w~n~ e~r~r~o~r~ ········］",
+  "analysis.untimedPackets": (d) => "［T~r~a~c~k~ " + d.slot + ": " + d.count + " p~a~c~k~e~t~s~ h~a~v~e~ n~o~ t~i~m~e~s~t~a~m~p~ (" + d.bytes + " b~y~t~e~s~) a~n~d~ c~a~n~n~o~t~ b~e~ i~n~c~l~u~d~e~d~ i~n~ t~i~m~e~l~i~n~e~ b~i~t~r~a~t~e~. ········］",
   "annotation.framePreview": () => "［A~n~n~o~t~a~t~e~d~ f~r~a~m~e~ ········］",
   "appearance.amber": () => "［A~m~b~e~r~ ········］",
   "appearance.baseBlush": () => "［B~l~u~s~h~ ········］",

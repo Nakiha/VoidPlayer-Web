@@ -361,6 +361,7 @@ export default {
   "analysis.trackHasNoFrame": (d) => "轨道 " + d.slot + "：暂无上屏帧",
   "analysis.trackUnsupported": (d) => "轨道 " + d.slot + "：当前片源路径暂不支持码流分析。",
   "analysis.unknownError": () => "未知错误",
+  "analysis.untimedPackets": (d) => "轨道 " + d.slot + "：" + d.count + " 个包缺少时间戳（" + d.bytes + " 字节），无法计入时间轴码率。",
   "annotation.framePreview": () => "标注画面",
   "appearance.amber": () => "琥珀",
   "appearance.baseBlush": () => "浅玫瑰",

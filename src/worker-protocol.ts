@@ -1,3 +1,4 @@
+import type { FfmpegAnalysisSummary } from './analysis/ffmpeg-adapter.ts';
 import type { WasmFrameOutput } from './wasm-frame.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
@@ -14,6 +15,7 @@ import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from
 // No result type is selected by the caller. Engine imports above are type-only.
 type Command<Request extends object, Response> = { request: Request; response: Response };
 export interface FfmpegInitResult {
+  analysis?: FfmpegAnalysisSummary;
   ctx: number;
   firstPts?: number;
   firstFrame?: WasmFrameOutput;
@@ -41,6 +43,10 @@ export interface FfmpegInitResult {
 }
 
 export interface FfmpegCommands {
+  analysis: Command<{ ctx: number } & AnalysisOrigin & Omit<AnalysisQuery, 'signal'> & { durationUs: number; coverageUs: { start: number; end: number } | null }, AnalysisResult>;
+  'analysis-locate': Command<{ ctx: number } & AnalysisOrigin & { sampleId: string }, AnalysisSample | null>;
+  'analysis-rank': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; tUs: number }, Omit<AnalysisRank, 'complete'>>;
+  'analysis-number': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; number: number }, number | null>;
   init: Command<{ glueURL: string; wasmBinary?: ArrayBuffer | Uint8Array; name: string; file?: ArrayBuffer; blob?: Blob; range?: { shared: SharedArrayBuffer; size: number }; threads?: number; externalIndexSession?: boolean; mediaSize?: number }, FfmpegInitResult>;
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
@@ -74,7 +80,7 @@ export type WorkerSuccess<C extends CommandsShape<C>, K extends keyof C = keyof 
   [P in K]: { id: number; ok: true; data: C[P]['response']; diagnostics?: Record<string, unknown>[] };
 }[K];
 export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage };
-export type IndexBatch = { ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
+export type IndexBatch = { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
 export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };

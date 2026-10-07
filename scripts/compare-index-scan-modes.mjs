@@ -35,9 +35,9 @@ const wasm = new Uint8Array(readFileSync(wasmPath));
 const { core, heap } = await instantiateCore(glue.default, wasm);
 core.vpBlobs = new Map();
 const coreBuildId = core.ccall('vp_core_build_id', 'string', [], []);
-assert.equal(core.ccall('vp_index_abi_version', 'number', [], []), 2);
-assert.equal(core.ccall('vp_index_record_bytes', 'number', [], []), 40);
-assert.equal(core.ccall('vp_index_stream_abi_version', 'number', [], []), 1);
+assert.equal(core.ccall('vp_index_abi_version', 'number', [], []), 3);
+assert.equal(core.ccall('vp_index_record_bytes', 'number', [], []), 48);
+assert.equal(core.ccall('vp_index_stream_abi_version', 'number', [], []), 2);
 
 function digest(bytes) { return createHash('sha256').update(bytes).digest('hex'); }
 
@@ -123,7 +123,7 @@ async function runMode(mode) {
     const recordCount = Number(core.ccall('vp_index_count', 'number', ['number'], [ctx]));
     if (recordCount <= 0) throw new Error('index is empty');
     const recordBytes = Number(core.ccall('vp_index_export_bytes', 'number', ['number'], [ctx]));
-    if (recordBytes !== recordCount * 40) throw new Error(`unexpected record byte size: ${recordBytes}`);
+    if (recordBytes !== recordCount * 48) throw new Error(`unexpected record byte size: ${recordBytes}`);
     const recordPtr = core._malloc(recordBytes);
     if (!recordPtr) throw new Error('index export allocation failed');
     let records;
@@ -177,6 +177,7 @@ async function runMode(mode) {
       realtimeFactor: Number((mediaDurationSeconds / (scanWallMs / 1000)).toFixed(3)),
       indexedVideoPacketsPerSecond: Number((recordCount / (scanWallMs / 1000)).toFixed(1)),
       demuxPackets: demuxPacketCount, recordCount, recordHash: digest(records),
+      scanDecodedPackets: core.ccall('vp_index_scan_decoded_packets', 'number', ['number'], [ctx]),
       firstPts: firstPts.toString(), lastPts: lastPts.toString(), seekAnchorCount: core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]),
       progressiveSupported: core.ccall('vp_index_scan_progressive_supported', 'number', ['number'], [ctx]) === 1,
       firstStableBatchMs: firstStableBatchMs === undefined ? null : Number(firstStableBatchMs.toFixed(2)),

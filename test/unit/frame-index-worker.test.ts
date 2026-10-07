@@ -53,17 +53,18 @@ test('manifest identity keeps FLV and FFmpeg payloads separate for one media ver
   try {
     await library.refresh();
     const entry = library.browse().entries[0];
-    const records = Buffer.alloc(80);
+    const records = Buffer.alloc(96);
     records.writeBigInt64LE(10n, 0); records.writeBigInt64LE(9n, 8); records.writeBigInt64LE(3000n, 16);
     records.writeBigInt64LE(0n, 24); records.writeInt32LE(100, 32); records.writeUInt32LE(3, 36);
-    records.writeBigInt64LE(20n, 40); records.writeBigInt64LE(19n, 48); records.writeBigInt64LE(3000n, 56);
-    records.writeBigInt64LE(-1n, 64); records.writeInt32LE(50, 72); records.writeUInt32LE(0, 76);
-    const ffmpegIdentity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 2, indexerBuild: 'a'.repeat(40) };
+    records.writeBigInt64LE(20n, 48); records.writeBigInt64LE(19n, 56); records.writeBigInt64LE(3000n, 64);
+    records.writeBigInt64LE(-1n, 72); records.writeInt32LE(50, 80); records.writeUInt32LE(0, 84);
+    records.writeBigUInt64LE(0n, 40); records.writeBigUInt64LE(1n, 88);
+    const ffmpegIdentity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: 'a'.repeat(40) };
     const ffmpegDocument = {
-      schema: 2, kind: 'ffmpeg-container', size: entry.size, codec: 'mpeg2video',
+      schema: 3, kind: 'ffmpeg-container', size: entry.size, codec: 'mpeg2video',
       timeBaseNum: 1, timeBaseDen: 90000, width: 1280, height: 720,
       streamIndex: 0, indexerBuild: ffmpegIdentity.indexerBuild,
-      recordBytes: 40, count: 2, firstPts: '10', originVerified: false, records: records.toString('base64'),
+      recordBytes: 48, count: 2, firstPts: '10', originVerified: false, records: records.toString('base64'),
     };
     const flvReader = new FlvReader({ file: new Blob([media]) });
     const flvDocument = serializeFlvIndex(await demuxFlv(flvReader), media.length); flvReader.close();

@@ -2217,7 +2217,7 @@
     "source": "码率 · Mbps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1247"
+      "src/ui/analysis-panel.ts:1249"
     ]
   },
   "analysis.bitrateTitle": {
@@ -2296,21 +2296,21 @@
     "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:997"
+      "src/ui/analysis-panel.ts:999"
     ]
   },
   "analysis.emptyNoVideo": {
     "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:996"
+      "src/ui/analysis-panel.ts:998"
     ]
   },
   "analysis.emptyQuerying": {
     "source": "正在查询统计…",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:998"
+      "src/ui/analysis-panel.ts:1000"
     ]
   },
   "analysis.enterFrameNumber": {
@@ -2367,8 +2367,8 @@
     "source": "帧率 · fps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1248",
-      "src/ui/analysis-panel.ts:1294"
+      "src/ui/analysis-panel.ts:1250",
+      "src/ui/analysis-panel.ts:1296"
     ]
   },
   "analysis.frameSize": {
@@ -2383,7 +2383,7 @@
     "source": "帧大小 · KiB",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1249"
+      "src/ui/analysis-panel.ts:1251"
     ]
   },
   "analysis.frameSizeTitle": {
@@ -2551,7 +2551,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1581"
+      "src/ui/analysis-panel.ts:1583"
     ]
   },
   "analysis.noSampleAtTime": {
@@ -2560,7 +2560,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1711"
+      "src/ui/analysis-panel.ts:1713"
     ]
   },
   "analysis.noVideoYet": {
@@ -2576,14 +2576,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1601"
+      "src/ui/analysis-panel.ts:1603"
     ]
   },
   "analysis.pinnedSuffix": {
     "source": " · 已固定",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1292"
+      "src/ui/analysis-panel.ts:1294"
     ]
   },
   "analysis.provisional": {
@@ -2614,7 +2614,7 @@
     "source": "样本率 /s",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1294"
+      "src/ui/analysis-panel.ts:1296"
     ]
   },
   "analysis.seekReason": {
@@ -2624,9 +2624,9 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1573",
-      "src/ui/analysis-panel.ts:1590",
-      "src/ui/analysis-panel.ts:1608"
+      "src/ui/analysis-panel.ts:1575",
+      "src/ui/analysis-panel.ts:1592",
+      "src/ui/analysis-panel.ts:1610"
     ]
   },
   "analysis.showTrack": {
@@ -2643,21 +2643,21 @@
     "source": "索引错",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1166"
+      "src/ui/analysis-panel.ts:1168"
     ]
   },
   "analysis.statePending": {
     "source": "统计中",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1163"
+      "src/ui/analysis-panel.ts:1165"
     ]
   },
   "analysis.stateUnsupported": {
     "source": "不可用",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1164"
+      "src/ui/analysis-panel.ts:1166"
     ]
   },
   "analysis.statusLabel": {
@@ -2700,7 +2700,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1697"
+      "src/ui/analysis-panel.ts:1699"
     ]
   },
   "analysis.trackFocusWithContext": {
@@ -2710,7 +2710,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1695"
+      "src/ui/analysis-panel.ts:1697"
     ]
   },
   "analysis.trackFrameNumber": {
@@ -2746,6 +2746,17 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:980"
+    ]
+  },
+  "analysis.untimedPackets": {
+    "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。",
+    "params": {
+      "bytes": "string | number",
+      "count": "string | number",
+      "slot": "string | number"
+    },
+    "locations": [
+      "src/ui/analysis-panel.ts:986"
     ]
   },
   "annotation.framePreview": {

@@ -981,7 +981,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       })];
       if (cap?.hasSize === false) return [t(msg("analysis.trackUnsupported", "轨道 {slot}：当前片源路径暂不支持码流分析。"), { slot: track.slot })];
       const error = queryErrors.get(track.slot);
-      return error === undefined ? [] : [t(msg("analysis.queryFailed", "轨道 {slot} 查询失败：{error}"), { slot: track.slot, error })];
+      if (error !== undefined) return [t(msg("analysis.queryFailed", "轨道 {slot} 查询失败：{error}"), { slot: track.slot, error })];
+      const untimed = results.get(track.slot)?.untimed;
+      return untimed?.sampleCount ? [t(msg("analysis.untimedPackets", "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。"), { slot: track.slot, count: untimed.sampleCount, bytes: untimed.totalBytes })] : [];
     }).join('\n');
     // Keep failures visible beside any healthy tracks, or in the empty state.
     // The screen-reader output is also used by hover and cannot own error state.

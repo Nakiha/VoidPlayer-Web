@@ -82,7 +82,7 @@ try {
     const tools = window.voidPlayer.tools;
     const list = tools.find(t => t.name === 'list_library');
     const found = {};
-    for (const name of ['ci_h264_smoke.mp4', 'h264_9s_1920x1080.mp4', 'av1_10s_1920x1080.webm']) {
+    for (const name of ['ci_h264_smoke.mp4', 'h264_9s_1920x1080.mp4', 'av1_10s_1920x1080.webm', 'mpeg2_10s_1280x720.ts', 'ffv1_yuv422p_8bit.mkv']) {
       const page1 = await list.execute({ search: name, limit: 10 });
       const entry = (page1.entries ?? []).find(e => e.name === name);
       found[name] = entry?.id;
@@ -92,25 +92,39 @@ try {
   assert.ok(ids['ci_h264_smoke.mp4'], 'Missing fixture: ci_h264_smoke.mp4');
   assert.ok(ids['h264_9s_1920x1080.mp4'], 'Missing fixture: h264_9s_1920x1080.mp4');
   assert.ok(ids['av1_10s_1920x1080.webm'], 'Missing fixture: av1_10s_1920x1080.webm');
-  // Unsupported paths must settle visibly without issuing doomed queries.
-  await page.evaluate(async ids => {
-    await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id: ids['av1_10s_1920x1080.webm'], slot: 'A' });
-  }, ids);
-  await page.locator('#toggle-analysis').click();
-  await page.waitForFunction(() => document.querySelector('.analysis-empty')?.textContent.includes('暂不支持码流分析'));
-  assert.equal(await page.locator('.analysis-empty').isVisible(), true);
-  assert.match(await page.locator('.analysis-empty').textContent(), /轨道 A/);
-  assert.equal(await page.locator('#analysis-canvas').getAttribute('data-analysis-queries'), null);
-  await page.locator('#analysis-tracks button').click();
-  assert.match(await page.locator('.analysis-empty').textContent(), /已全部隐藏/);
-  await page.locator('#analysis-tracks button').click();
-  await page.evaluate(async ids => {
-    await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id: ids['ci_h264_smoke.mp4'], slot: 'B' });
-  }, ids);
-  await page.waitForFunction(() => !document.getElementById('analysis-canvas').hidden);
-  assert.equal(await page.locator('.analysis-notice').isVisible(), true, 'unsupported track stays visible beside a healthy chart');
-  assert.match(await page.locator('.analysis-notice').textContent(), /轨道 A.*暂不支持码流分析/);
-  await saveDiagnostics(page, 'unsupported-track');
+  // Container playback and analysis share the exact same cached packet index.
+  for (const name of ['av1_10s_1920x1080.webm', 'mpeg2_10s_1280x720.ts', 'ffv1_yuv422p_8bit.mkv']) {
+    assert.ok(ids[name], `Missing fixture: ${name}`);
+    let baseline;
+    for (const mode of ['cold', 'warm', 'local']) {
+    if (mode === 'local') {
+      await page.locator('#file-A').setInputFiles(join(root, 'fixtures/video', name));
+      await page.waitForTimeout(300);
+    } else {
+      await page.evaluate(async id => {
+        await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' });
+      }, ids[name]);
+    }
+    if (await page.locator('#toggle-analysis').getAttribute('aria-expanded') === 'false') await page.locator('#toggle-analysis').click();
+    const packets = await page.evaluate(async () => {
+      const deadline = performance.now() + 30000;
+      while (performance.now() < deadline) {
+        const r = await window.voidPlayer.tools.find(t => t.name === 'query_analysis').execute({ slot: 'A', axis: 'pts', startUs: 0, endUs: 20_000_000, pixelWidth: 2000 });
+        if (r.capability.indexState === 'complete' && r.samples.length) return r;
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      throw new Error('shared packet index did not complete');
+    });
+    assert.ok(packets.samples.length > 0, `compressed packet samples are available: ${JSON.stringify({name, cap:packets.capability, sampleCount:packets.samples.length, buckets:packets.buckets?.length, revision:packets.indexRevision,version:packets.sourceVersion, range:packets.coverageUs,truncated:packets.truncated})}`);
+    assert.ok(packets.samples.every(p => p.sizeBytes >= 0 && p.decodeOrdinal >= 0));
+    assert.equal(await page.locator('.analysis-empty').isVisible(), false);
+    assert.equal(await page.locator('.analysis-notice').isVisible(), false);
+    const identity = packets.samples.map(p => [p.decodeOrdinal, p.containerPtsUs, p.dtsUs, p.sizeBytes]);
+    if (baseline) assert.deepEqual(identity, baseline, 'warm cache and local files reuse the same packet semantics');
+    else baseline = identity;
+    await saveDiagnostics(page, `shared-index-${mode}-${name}`);
+    }
+  }
   await page.evaluate(async () => {
     const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
     await remove.execute({ slot: 'A' }); await remove.execute({ slot: 'B' });

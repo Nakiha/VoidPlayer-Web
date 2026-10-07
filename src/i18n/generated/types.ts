@@ -359,6 +359,7 @@ export interface Sources {
   "analysis.trackHasNoFrame": "轨道 {slot}：暂无上屏帧";
   "analysis.trackUnsupported": "轨道 {slot}：当前片源路径暂不支持码流分析。";
   "analysis.unknownError": "未知错误";
+  "analysis.untimedPackets": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。";
   "annotation.framePreview": "标注画面";
   "appearance.amber": "琥珀";
   "appearance.baseBlush": "浅玫瑰";
@@ -1350,6 +1351,7 @@ export interface MessageParameters {
   "analysis.trackHasNoFrame": { "slot": string | number };
   "analysis.trackUnsupported": { "slot": string | number };
   "analysis.unknownError": {  };
+  "analysis.untimedPackets": { "bytes": string | number; "count": string | number; "slot": string | number };
   "annotation.framePreview": {  };
   "appearance.amber": {  };
   "appearance.baseBlush": {  };

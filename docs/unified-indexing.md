@@ -12,7 +12,7 @@ The shared contract unifies index identity, lifecycle, progress, persistence, tr
 
 ## Shared contract
 
-The media index identity is `(media ID, media version, kind, stream key, schema version, indexer build)`. SQLite stores identity-keyed manifests and sequence-keyed batches. FFmpeg metadata includes source size, stream index, codec, time base, dimensions, and core build SHA. Release checks require index ABI v2, stream ABI v1, 40-byte records, the scan/export/import symbols, and a core build ID matching the pinned revision.
+The media index identity is `(media ID, media version, kind, stream key, schema version, indexer build)`. SQLite stores identity-keyed manifests and sequence-keyed batches. FFmpeg metadata includes source size, stream index, codec, time base, dimensions, and core build SHA. Release checks require index ABI v3, stream ABI v2, 48-byte records, the scan/export/import symbols, and a core build ID matching the pinned revision.
 
 The lifecycle keeps four facts separate:
 
@@ -52,7 +52,7 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 ## Rollout and remaining work
 
 1. Preserve the software reference source after failed native first-frame verification.
-2. Pin and check FFmpeg index ABI v2 and stable-prefix/append-import ABI v1.
+2. Pin and check FFmpeg index ABI v3 and stable-prefix/append-import ABI v2.
 3. Add identity-keyed server persistence, bounded build coordination, and first-frame readiness.
 4. Stream and append FFmpeg record batches; publish the complete MPEG-TS record set after the demux scan reaches EOF, and use stable-prefix publication only for producers that can prove it.
 5. Move FFmpeg HTTP ownership into a main-thread `ContainerSession`/`MediaIndexSession`; keep worker messages limited to import, append, and decode.
@@ -125,3 +125,11 @@ The server now uses `vp_index_scan_begin()` and sends the completed index after 
 `test/frame-index-scan-modes.test.ts` runs the decoder-backed scan and demux-only scan against H.264 TS, MPEG-2 TS, and a generated HEVC TS containing B-frames and CRA pictures from open GOPs. It compares exported record bytes (including PTS/DTS, duration, packet position/size, and flags), record count/hash, seek-anchor count, first PTS, duration, first-frame pixels, and five distributed random-seek pixel hashes. The test no longer requires the old progressive scan API to expose stable coverage for every codec; it proves the two complete indexes and their seek outputs are equivalent.
 
 `scripts/check-container-browser.mjs` verifies the server stream lifecycle separately: a first frame is available before index finality, scan progress events precede every record batch, the batch sequence is contiguous under one build ID, safe coverage is monotonic while the full index imports, all records arrive before `complete`, and a warm reopen reuses the server index. It does not interpret `indexState: building` as proof that the server is still scanning.
+
+## Shared packet views
+
+FFmpeg-backed WebM, Matroska, TS, PS and AVI use one scan and one persisted packet table for playback and analysis. Each 48-byte record contains PTS, DTS, duration, byte position, compressed payload size, key/seek flags and its original selected-video demux ordinal. Storage is sorted by PTS (ties by original ordinal), with missing PTS records at the end. Playback derives a timed presentation view; analysis derives PTS and DTS views without decoding. IDs and decode ordinals always use the original ordinal, including bucket maxima and lookup.
+
+Missing timestamps remain null. Their bytes and identities remain queryable, but the affected axis has unknown bitrate coverage and the panel reports excluded packet counts and bytes. Key flags are container flags, not I/P/B or QP classification. Sample payload bytes exclude container overhead and other streams.
+
+The server scans with demux-only mode; `scanDecodedPackets` must be zero. Opening still probes the codec and primes the first presentable frame, and seeking still decodes the necessary GOP. Analysis queries perform neither media reads nor decode. Local files build the same records in the decoder Worker. Streamed and warm-cache records feed the same analysis adapter. ABI v2 caches cannot provide original ordinals and are rebuilt under the new identity.

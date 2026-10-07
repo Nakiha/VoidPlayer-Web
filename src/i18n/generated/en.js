@@ -361,6 +361,7 @@ export default {
   "analysis.trackHasNoFrame": (d) => "Track " + d.slot + ": no on-screen frame",
   "analysis.trackUnsupported": (d) => "Track " + d.slot + ": the current media path does not support bitstream analysis.",
   "analysis.unknownError": () => "Unknown error",
+  "analysis.untimedPackets": (d) => "Track " + d.slot + ": " + d.count + " packets have no timestamp (" + d.bytes + " bytes) and cannot be included in timeline bitrate.",
   "annotation.framePreview": () => "Annotated frame",
   "appearance.amber": () => "Amber",
   "appearance.baseBlush": () => "Blush",
