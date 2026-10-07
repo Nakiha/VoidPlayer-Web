@@ -10,6 +10,12 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
  const theme=()=>page.locator('html').getAttribute('data-theme');
  const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
+ const settleAppearance=()=>page.evaluate(async () => {
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+  const transitions=document.getAnimations().filter(animation=>Number.isFinite(animation.effect?.getComputedTiming().endTime));
+  await Promise.all(transitions.map(animation=>animation.finished.catch(()=>{})));
+  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+ });
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  assert.equal(await theme(),'light');
  await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
@@ -37,11 +43,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  const before=await evidence();
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');
- await page.evaluate(async () => {
-  const transitions = document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime));
-  await Promise.all(transitions.map(animation => animation.finished.catch(() => {})));
- });
- await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+ await settleAppearance();
  // Only the continuous backing blurs the list; navigation has a thin tint.
  const surfaces=await page.evaluate(()=>{
   const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
@@ -78,7 +80,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  assert.equal(await page.locator('#drawing-color-choice-menu').evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'blur(8px)');
  await page.keyboard.press('Escape');await page.locator('#mark-close').click();
  await page.emulateMedia({contrast:'more'});
- await page.waitForTimeout(280);
+ await settleAppearance();
  const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
  // prefers-contrast: more pins --viewport-chrome-fill to --surface and drops the blur
  // (themes/accessibility.css), so the transport paints the opaque dark surface:
@@ -88,6 +90,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
  assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(33, 33, 33)');
  await page.emulateMedia({contrast:'no-preference'});
+ await settleAppearance();
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();
  await page.locator('#settings-open').click();
