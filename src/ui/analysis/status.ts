@@ -22,6 +22,7 @@ export function installAnalysisStatus(options: {
   const framesBySlot = new Map<Slot, { ptsUs: number; sourcePtsUs: number } | null>();
   const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
   const rankSeq = new Map<Slot, number>();
+  const statusItems = new Map<Slot, { wrap: HTMLSpanElement; dot: HTMLSpanElement; num: HTMLButtonElement }>();
   // Keep the source's reserved width while each new frame awaits its rank.
   // Pending placeholders and index invalidation must not shrink the toolbar.
   const numberWidths = new Map<Slot, { mediaId: string; sourceGen: number; chars: number }>();
@@ -48,7 +49,9 @@ export function installAnalysisStatus(options: {
     const sessionPts = f ? f.ptsUs + offsetUs : null;
     const cached = rankCache.get(slot);
     const hit = sessionPts != null && cached?.pts === sessionPts ? cached : undefined;
-    return { frame: f ?? null, sessionPts, hit };
+    // Keep the last confirmed number until the current frame's lookup returns.
+    // Invalidation clears the cache, so a replacement source cannot inherit it.
+    return { frame: f ?? null, sessionPts, hit, displayed: f ? hit ?? cached : undefined };
   }
   /** 同步渲染：只显示主题色点 + 槽位 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
   function renderStatus() {
@@ -60,46 +63,54 @@ export function installAnalysisStatus(options: {
     })].join('|');
     if (sig === lastStatusSig) return;
     lastStatusSig = sig;
-    itemsEl.replaceChildren();
     const axisLabel = prefs.numAxis === 'pts' ? t(msg("analysis.ptsOrder", "PTS序")) : t(msg("analysis.dtsOrder", "DTS序"));
     if (!options.tracks().length) {
+      statusItems.clear();
       const empty = document.createElement('span');
       empty.className = 'st-empty';
       empty.textContent = '—';
       empty.title = t(msg("analysis.noVideoYet", "尚未载入视频"));
-      itemsEl.append(empty);
+      itemsEl.replaceChildren(empty);
       statusEl.setAttribute('aria-label', t(msg("analysis.currentFrameNumbersEmpty", "当前上屏帧号：尚未载入视频")));
       return;
     }
     const summary: string[] = [];
+    const items: HTMLSpanElement[] = [];
     for (const entry of options.tracks()) {
-      const { frame: f, sessionPts, hit } = statusEntry(entry.slot, entry.offsetUs);
-      const wrap = document.createElement('span');
-      wrap.className = 'st-item';
-      const dot = document.createElement('span');
-      dot.className = 'dot';
+      const { frame: f, sessionPts, hit, displayed } = statusEntry(entry.slot, entry.offsetUs);
+      let item = statusItems.get(entry.slot);
+      if (!item) {
+        const wrap = document.createElement('span');
+        wrap.className = 'st-item';
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        const label = document.createElement('span');
+        label.className = 'st-slot';
+        label.textContent = entry.slot;
+        const num = document.createElement('button');
+        num.type = 'button';
+        num.className = 'st-num';
+        wrap.append(dot, label, num);
+        item = { wrap, dot, num };
+        statusItems.set(entry.slot, item);
+      }
+      const { wrap, dot, num } = item;
       dot.style.background = options.colors().get(entry.slot) ?? '#888';
-      const label = document.createElement('span');
-      label.className = 'st-slot';
-      label.textContent = entry.slot;
-      const num = document.createElement('button');
-      num.type = 'button';
-      num.className = 'st-num';
-      const value = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      const value = displayed ? (prefs.numAxis === 'pts' ? displayed.rank : displayed.ordinal) : undefined;
       const previousWidth = numberWidths.get(entry.slot);
       const sameSource = previousWidth?.mediaId === entry.mediaId && previousWidth.sourceGen === entry.sourceGen;
       const maxFrame = Math.max(value ?? 0, (hit?.total ?? 1) - 1);
       const chars = Math.max(sameSource ? previousWidth.chars : 4, String(maxFrame).length + 2);
       numberWidths.set(entry.slot, { mediaId: entry.mediaId, sourceGen: entry.sourceGen, chars });
       wrap.style.setProperty('--frame-number-width', `${chars}ch`);
-      if (hit == null) num.textContent = '…';
-      else if (value == null) num.textContent = '—';
-      else num.textContent = `#${value}${hit.complete ? '' : '~'}`;
-      num.disabled = value == null || !hit?.complete;
+      const text = displayed == null ? '…' : value == null ? '—' : `#${value}${displayed.complete ? '' : '~'}`;
+      if (num.textContent !== text) num.textContent = text;
+      num.setAttribute('aria-busy', String(sessionPts != null && !hit));
+      num.disabled = value == null || !displayed?.complete;
       num.title = num.disabled ? t(msg("analysis.indexNotReady", "帧索引尚未就绪")) : t(msg("analysis.enterFrameNumber", "输入轨道 {slot} 的{axis}帧号后按回车跳转"), { slot: entry.slot, axis: axisLabel });
       num.setAttribute('aria-label', t(msg("analysis.editTrackFrameNumber", "轨道 {slot} {axis}帧号，点击编辑"), { slot: entry.slot, axis: axisLabel }));
       num.onclick = () => {
-        if (value == null || !hit?.complete) return;
+        if (value == null || !displayed?.complete) return;
         const axis = prefs.numAxis;
         editingNumber = true;
         const input = document.createElement('input');
@@ -111,6 +122,7 @@ export function installAnalysisStatus(options: {
         const finish = (commit: boolean) => {
           if (finished) return; finished = true;
           const raw = input.value.trim().replace(/^#/, '');
+          input.replaceWith(num);
           editingNumber = false; lastStatusSig = ''; renderStatus();
           if (!commit) return;
           if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
@@ -128,7 +140,6 @@ export function installAnalysisStatus(options: {
         };
         input.onblur = () => finish(true);
       };
-      wrap.append(dot, label, num);
       if (sessionPts == null) {
         wrap.title = t(msg("analysis.trackHasNoFrame", "轨道 {slot}：暂无上屏帧"), { slot: entry.slot });
       } else if (hit?.rank != null) {
@@ -143,10 +154,14 @@ export function installAnalysisStatus(options: {
           + (f != null ? t(msg("analysis.frameTitleSourcePts", " · 源 PTS {sourcePtsUs} µs"), { sourcePtsUs: f.sourcePtsUs }) : '')
           + (hit?.note ? t(msg("analysis.frameTitleRankPending", " · 帧号 —（{note}）"), { note: hit.note }) : t(msg("analysis.frameTitleQuerying", " · 帧号查询中")));
       }
-      itemsEl.append(wrap);
+      items.push(wrap);
       summary.push(sessionPts == null || value == null ? `${entry.slot} —` : `${entry.slot} #${value}`);
       if (sessionPts != null && !hit) fetchRank(entry.slot, sessionPts);
     }
+    // Retain the buttons across frame updates: replacing them restarts hover
+    // transitions and loses focus. Only reconcile DOM when tracks change.
+    if (itemsEl.children.length !== items.length || items.some((item, i) => itemsEl.children[i] !== item)) itemsEl.replaceChildren(...items);
+    for (const slot of statusItems.keys()) if (!options.tracks().some(track => track.slot === slot)) statusItems.delete(slot);
     statusEl.setAttribute('aria-label', t(msg("analysis.statusLabel", "当前上屏帧号（{axis}）：{summary}"), { axis: axisLabel, summary: summary.join(getLocale() === 'en' ? '; ' : '；') }));
   }
   function updateStatus() {

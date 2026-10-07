@@ -496,12 +496,14 @@ try {
   await page.setViewportSize({width:wrapWidth, height:800});
   await page.evaluate(() => {
     window.frameNumberLayouts = [];
+    window.frameNumberButtons = [...document.querySelectorAll('#analysis-status-items .st-num')];
     const sample = () => window.frameNumberLayouts.push({
       header:document.querySelector('.analysis-head').getBoundingClientRect().height,
-      items:[...document.querySelectorAll('#analysis-status-items .st-num')].map(button => ({text:button.textContent, width:button.getBoundingClientRect().width})),
+      items:[...document.querySelectorAll('#analysis-status-items .st-num')].map((button, i) => ({text:button.textContent, width:button.getBoundingClientRect().width,
+        pending:button.getAttribute('aria-busy') === 'true', disabled:button.disabled, retained:button === window.frameNumberButtons[i]})),
     });
     window.frameNumberObserver = new MutationObserver(sample);
-    window.frameNumberObserver.observe(document.querySelector('#analysis-status-items'), {childList:true, subtree:true, characterData:true});
+    window.frameNumberObserver.observe(document.querySelector('#analysis-status-items'), {childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:['aria-busy']});
     sample();
   });
   // 播放共存：面板打开时播放推进且无错误。
@@ -514,7 +516,21 @@ try {
   });
   await saveDiagnostics(page, 'frame-number-playback-layout', {wrapWidth, inlineWidth, frameNumberLayouts});
   const spread = values => Math.max(...values) - Math.min(...values);
-  assert.ok(frameNumberLayouts.some(layout => layout.items.some(item => item.text === '…')), 'observe ranks while asynchronous lookup is pending');
+  assert.ok(frameNumberLayouts.some(layout => layout.items.some(item => item.pending)), 'observe ranks while asynchronous lookup is pending');
+  assert.ok(frameNumberLayouts.every(layout => layout.items.every(item => /^#\d+$/.test(item.text) && !item.disabled)), 'playback retains confirmed numbers while waiting for ranks');
+  assert.ok(frameNumberLayouts.every(layout => layout.items.every(item => item.retained)), 'frame updates retain number buttons and their focus/hover state');
+  await page.waitForFunction(() => [...document.querySelectorAll('#analysis-status-items .st-num')].every(button => button.getAttribute('aria-busy') === 'false'));
+  const pausedNumbers = await page.locator('#analysis-status-items .st-num').allTextContents();
+  const pausedRanks = await page.evaluate(async () => {
+    const api = window.voidPlayer;
+    const query = api.tools.find(t => t.name === 'query_analysis');
+    const state = api.tools.find(t => t.name === 'get_review_session').execute({});
+    return Promise.all(state.tracks.map(async track => {
+      const result = await query.execute({slot:track.slot, startUs:0, endUs:10000000, pixelWidth:2000});
+      return '#' + result.samples.filter(sample => sample.effectivePtsUs < track.frame.ptsUs + track.offsetUs).length;
+    }));
+  });
+  assert.deepEqual(pausedNumbers, pausedRanks, 'paused frame numbers converge to the currently presented frames');
   for (const index of [0, 1]) assert.ok(spread(frameNumberLayouts.map(layout => layout.items[index].width)) < 1, `track ${index} frame-number width stays stable during playback`);
   assert.ok(spread(frameNumberLayouts.map(layout => layout.header)) < 1, 'frame-number updates do not change the number of header rows');
 

@@ -2272,14 +2272,14 @@
     "source": "当前上屏帧号：尚未载入视频",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:71"
+      "src/ui/analysis/status.ts:74"
     ]
   },
   "analysis.dtsOrder": {
     "source": "DTS序",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:64"
+      "src/ui/analysis/status.ts:66"
     ]
   },
   "analysis.editTrackFrameNumber": {
@@ -2289,7 +2289,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:100"
+      "src/ui/analysis/status.ts:111"
     ]
   },
   "analysis.emptyAllHidden": {
@@ -2320,7 +2320,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:99"
+      "src/ui/analysis/status.ts:110"
     ]
   },
   "analysis.followOff": {
@@ -2352,7 +2352,7 @@
     "source": "帧号必须是非负整数。",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:117"
+      "src/ui/analysis/status.ts:129"
     ]
   },
   "analysis.frameNumberOrder": {
@@ -2402,15 +2402,15 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:135",
-      "src/ui/analysis/status.ts:142"
+      "src/ui/analysis/status.ts:146",
+      "src/ui/analysis/status.ts:153"
     ]
   },
   "analysis.frameTitleDtsMissing": {
     "source": " · DTS序 —（解码 PTS 不在包表内，不猜测）",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:139"
+      "src/ui/analysis/status.ts:150"
     ]
   },
   "analysis.frameTitleDtsOrdinal": {
@@ -2419,14 +2419,14 @@
       "ordinal": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:139"
+      "src/ui/analysis/status.ts:150"
     ]
   },
   "analysis.frameTitleProvisional": {
     "source": "（索引构建中，暂定）",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:140"
+      "src/ui/analysis/status.ts:151"
     ]
   },
   "analysis.frameTitlePtsRank": {
@@ -2435,7 +2435,7 @@
       "rank": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:137"
+      "src/ui/analysis/status.ts:148"
     ]
   },
   "analysis.frameTitlePtsTotal": {
@@ -2444,14 +2444,14 @@
       "total": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:138"
+      "src/ui/analysis/status.ts:149"
     ]
   },
   "analysis.frameTitleQuerying": {
     "source": " · 帧号查询中",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:144"
+      "src/ui/analysis/status.ts:155"
     ]
   },
   "analysis.frameTitleRankPending": {
@@ -2460,7 +2460,7 @@
       "note": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:144"
+      "src/ui/analysis/status.ts:155"
     ]
   },
   "analysis.frameTitleSourcePts": {
@@ -2469,8 +2469,8 @@
       "sourcePtsUs": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:136",
-      "src/ui/analysis/status.ts:143"
+      "src/ui/analysis/status.ts:147",
+      "src/ui/analysis/status.ts:154"
     ]
   },
   "analysis.fullRange": {
@@ -2512,7 +2512,7 @@
     "source": "帧索引尚未就绪",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:99"
+      "src/ui/analysis/status.ts:110"
     ]
   },
   "analysis.layoutMerged": {
@@ -2567,7 +2567,7 @@
     "source": "尚未载入视频",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:69"
+      "src/ui/analysis/status.ts:72"
     ]
   },
   "analysis.peakSeekFailed": {
@@ -2597,7 +2597,7 @@
     "source": "PTS序",
     "params": {},
     "locations": [
-      "src/ui/analysis/status.ts:64"
+      "src/ui/analysis/status.ts:66"
     ]
   },
   "analysis.queryFailed": {
@@ -2667,7 +2667,7 @@
       "summary": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:150"
+      "src/ui/analysis/status.ts:165"
     ]
   },
   "analysis.timeBase": {
@@ -2720,7 +2720,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:108"
+      "src/ui/analysis/status.ts:119"
     ]
   },
   "analysis.trackHasNoFrame": {
@@ -2729,7 +2729,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis/status.ts:133"
+      "src/ui/analysis/status.ts:144"
     ]
   },
   "analysis.trackUnsupported": {
