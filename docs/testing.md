@@ -105,6 +105,7 @@ npm run test:range:browser
 
 | 改动 | 补充验证 |
 | --- | --- |
+| 页面启动、模块载入与失败提示 | `npm run test:startup:browser`、`node --test test/startup.test.ts` |
 | 标注交互、采样与图层 | `npm run test:annotations:browser`、`npm run test:annotations:rendering` |
 | 设置窗口、分类导航、焦点、日志及窄屏布局 | `npm run test:settings:browser` |
 | 工作区导入导出、失败回滚、外观设置及进度回跳 | `npm run test:workspace:browser` |
@@ -118,6 +119,8 @@ npm run test:range:browser
 | FLV 文件路径 | `npm run test:flv:browser` |
 
 修改播放或解码路径后还必须跑播放基准。修改视图尺寸调度、轨道操作或片源 UI 后跑 `test:browser`。
+
+启动回归在 Chromium / WebKit 验证开发页面和打包页面的真实界面。它模拟入口、静态依赖、动态模块及 Vite 预构建依赖的 504，检查错误提示与重新加载；请求持续无响应超过 15 秒时显示重试，迟到的成功启动可以恢复界面，正常启动后停止超时监测。Node 开发服务测试还检查启动模块及 MessageFormat 运行时的 HTTP 状态与 JavaScript 类型，避免仅凭首页返回 200 判定可用。
 
 ## 播放基准
 

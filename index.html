@@ -17,6 +17,8 @@
   </head>
   <body>
     <div id="app" data-initializing aria-busy="true" inert></div>
-    <script type="module" src="/src/bootstrap.ts"></script>
+    <div id="startup-fallback" class="startup-error" role="alert" hidden><p>页面未能加载，请刷新重试。</p><a href="">重新加载</a></div>
+    <script src="/startup-guard.js"></script>
+    <script data-startup-entry type="module" src="/src/bootstrap.ts"></script>
   </body>
 </html>

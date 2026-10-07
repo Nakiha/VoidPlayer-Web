@@ -5,6 +5,9 @@ function revealApp() {
   app.removeAttribute('data-initializing');
   app.removeAttribute('aria-busy');
   app.removeAttribute('inert');
+  app.hidden = false;
+  document.getElementById('startup-fallback')!.hidden = true;
+  window.dispatchEvent(new Event('voidplayer:startup-ready'));
 }
 // Theme styles are render-blocking HTML links, so the shell never flashes
 // unstyled; main.ts signals shell-ready once its first frame is rendered, and
@@ -33,11 +36,14 @@ try {
 } catch (error) {
   console.error('播放器初始化失败。', error);
   const app = document.getElementById('app')!;
-  app.innerHTML = '<div class="startup-error" role="alert"><p>页面未能加载，请刷新重试。</p><a href="">重新加载</a></div>';
+  const fallback = document.getElementById('startup-fallback')!;
+  app.hidden = true;
+  fallback.hidden = false;
+  window.dispatchEvent(new Event('voidplayer:startup-failed'));
   try {
-    app.querySelector('p')!.textContent = t(msg("bootstrap.startupFailed", "页面未能加载，请刷新重试。"));
-    app.querySelector('a')!.textContent = t(msg("bootstrap.reload", "重新加载"));
+    fallback.querySelector('p')!.textContent = t(msg("bootstrap.startupFailed", "页面未能加载，请刷新重试。"));
+    fallback.querySelector('a')!.textContent = t(msg("bootstrap.reload", "重新加载"));
   } catch { /* Keep the built-in Chinese fallback. */ }
-} finally { revealApp(); }
+}
 
 window.addEventListener('pagehide', () => disposeLanguage(), {once:true});

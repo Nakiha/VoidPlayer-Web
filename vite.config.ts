@@ -28,7 +28,7 @@ function buildInfo() {
     }
   }
   hashSources(sourceDir);
-  for (const file of ['package-lock.json', 'index.html', 'admin/index.html', 'public/theme-init.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
+  for (const file of ['package-lock.json', 'index.html', 'admin/index.html', 'public/theme-init.js', 'public/startup-guard.js']) hash.update(file).update(readFileSync(resolve(import.meta.dirname, file)));
   const wasmDigests = Object.fromEntries(['voidplayer-core.wasm', 'voidplayer-core-mt.wasm'].map(name => {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
     catch { return [name, null]; }

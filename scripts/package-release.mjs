@@ -14,7 +14,7 @@ const bun = process.env.BUN_BIN || 'bun';
 const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
 const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).trim();
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
-const required = ['index.html', 'admin/index.html', 'theme-init.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING'];
+const required = ['index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
 const { revision, dirty, version, tag } = await readReleaseIdentity(root);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -44,7 +44,7 @@ await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
 await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, adminUsers: [] }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
-const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js']);
+const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js', 'public/startup-guard.js']);
 const files = execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { cwd: root, encoding: 'utf8' }).split('\0').filter(Boolean);
 const sourceFiles = [...new Set(files)].filter(f => rootFiles.has(f) || /^(src|server|admin|scripts|test|docs|locales|public\/licenses|\.github)\//.test(f) || /^deploy\/(README\.md|standalone\.md|operations\.md|admin\.md|licenses\/[^/]+)$/.test(f));
 const sourceDir = path.join(out, '.source');

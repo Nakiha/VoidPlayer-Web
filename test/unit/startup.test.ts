@@ -27,7 +27,24 @@ test('one dev process starts both listeners, proxies API and closes both on SIGT
   const exited = new Promise<number | null>(resolve => child.once('exit', resolve));
   try {
     await until(async () => fetch(`http://127.0.0.1:${port}/api/ready`).then(r => r.ok).catch(() => false), () => output);
-    assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
+    const base = `http://127.0.0.1:${port}`;
+    const html = await (await fetch(base)).text();
+    assert.match(html, /data-startup-entry/);
+    const moduleText = async (url: string) => {
+      const response = await fetch(new URL(url, base));
+      assert.equal(response.status, 200, `startup module ${url}`);
+      assert.match(response.headers.get('content-type') ?? '', /javascript/, `startup module MIME ${url}`);
+      return response.text();
+    };
+    await moduleText('/startup-guard.js');
+    await moduleText('/src/bootstrap.ts');
+    await moduleText('/src/i18n.ts');
+    // Exercise the optimized runtime imports that returned 504 while HTML
+    // still returned 200. An SPA fallback is not a valid module response.
+    const catalog = await moduleText('/src/i18n/generated/zh-CN.js');
+    const dependencies = [...catalog.matchAll(/from "([^"]+)"/g)].map(match => match[1]);
+    assert.ok(dependencies.some(url => url.includes('node_modules')));
+    for (const dependency of dependencies) await moduleText(dependency);
     assert.equal((await fetch(`http://127.0.0.1:${apiPort}/api/health`)).status, 200);
     child.kill('SIGTERM');
     assert.equal(await exited, 0);

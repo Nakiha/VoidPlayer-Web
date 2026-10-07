@@ -2940,14 +2940,14 @@
     "source": "重新加载",
     "params": {},
     "locations": [
-      "src/bootstrap.ts:39"
+      "src/bootstrap.ts:45"
     ]
   },
   "bootstrap.startupFailed": {
     "source": "页面未能加载，请刷新重试。",
     "params": {},
     "locations": [
-      "src/bootstrap.ts:38"
+      "src/bootstrap.ts:44"
     ]
   },
   "colorFlow.approximateBrowserColors": {
