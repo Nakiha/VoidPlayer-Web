@@ -159,6 +159,9 @@ jobs:
         engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -201,6 +204,9 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -260,6 +266,9 @@ jobs:
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -383,6 +392,9 @@ jobs:
         engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -455,6 +467,9 @@ jobs:
         input: [local, remote]
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
@@ -501,6 +516,9 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
       - uses: actions/setup-node@v4
         with:
           node-version: '24.15.0'
