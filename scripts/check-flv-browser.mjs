@@ -4,6 +4,7 @@ import path from 'node:path';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { webkit, chromium } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
+import { blockingFlvBenchmarkFailures } from './testing/flv-benchmark-policy.mjs';
 // The native-decode policy (prefer WebCodecs when the platform accepts the
 // config) can only be observed where the platform accepts it. When the
 // browser's own probe refuses the AVC config, the WASM fallback is correct:
@@ -91,7 +92,10 @@ try {
       assert.equal(result.states[2].tracks[0].frame.sourcePtsUs, reference.times[0]);
       assert.equal(result.states[3].tracks[0].frame.sourcePtsUs, reference.times.at(-1));
       assert.equal(result.states[4].tracks[0].frame.sourcePtsUs, reference.times[1]);
-      assert.equal(result.benchmark.passed, true, JSON.stringify({error: result.benchmark.error, failures: result.benchmark.failures, measurements: result.benchmark.measurements, tracks: result.benchmark.tracks.map(t => ({decoder:t.decoder,coreVariant:t.coreVariant,hardwareAcceleration:t.hardwareAcceleration,width:t.width,height:t.height})), probeDecisions:result.probeDecisions}));
+      const blocking = blockingFlvBenchmarkFailures(result.benchmark, { softwareRunner: process.env.GITHUB_ACTIONS === 'true' && process.env.VOIDPLAYER_FLV_SOFTWARE_PERF === 'report', engine: browserName, renderer: result.renderer });
+      assert.equal(result.benchmark.passed, result.benchmark.failures.length === 0);
+      assert.deepEqual(blocking, [], JSON.stringify({error: result.benchmark.error, failures: result.benchmark.failures, measurements: result.benchmark.measurements, tracks: result.benchmark.tracks.map(t => ({decoder:t.decoder,coreVariant:t.coreVariant,hardwareAcceleration:t.hardwareAcceleration,width:t.width,height:t.height})), probeDecisions:result.probeDecisions}));
+      if (!result.benchmark.passed) console.warn(`PERFORMANCE NOT PASSED ${browserName} ${name}: ${result.benchmark.failures.join(', ')}; speed ${result.benchmark.measurements?.speed}; virtual software-renderer timing is informational; full result: ${path.join(reports, `${name}.json`)}`);
       if (name === 'standard-h264') {
         await page.locator('#file-A').setInputFiles({ name: 'renamed.bin', mimeType: 'application/octet-stream', buffer: await readFile(path.join(root, 'fixtures/flv', name + '.flv')) });
         await page.waitForFunction(() => { const t = window.voidPlayer.tools.find(t => t.name === 'get_review_session'); return Promise.resolve(t.execute({})).then(s => !s.busy && s.tracks[0]?.name === 'renamed.bin' && s.tracks[0]?.frame?.ptsUs === 0); });

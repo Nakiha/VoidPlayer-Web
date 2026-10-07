@@ -413,6 +413,23 @@ jobs:
       - name: Verify regressions that no other job runs
         # The runner records every exit status and fails only after all cases ran.
         run: node scripts/run-tests.mjs uncovered --prepared --engine ${{ matrix.engine }}
+        env:
+          # Only WASM + SwiftShader throughput/gaps are informational. Raw
+          # negative verdicts remain in reports; all functional failures gate.
+          VOIDPLAYER_FLV_SOFTWARE_PERF: report
+      - name: Report virtual FLV playback timing
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import { readdir, readFile, appendFile } from 'node:fs/promises';
+          const directory = '.run/playback-reports/flv/${{ matrix.engine }}';
+          const rows = [];
+          for (const name of await readdir(directory).catch(() => [])) {
+            const report = JSON.parse(await readFile(`${directory}/${name}`, 'utf8'));
+            if (!report.benchmark.passed) rows.push(`- ${report.name}: **performance NOT PASSED**, speed ${report.benchmark.measurements?.speed}, failures ${report.benchmark.failures.join(', ')}`);
+          }
+          if (rows.length) await appendFile(process.env.GITHUB_STEP_SUMMARY, `### Virtual FLV performance\n${rows.join('\n')}\nNegative timing verdicts are retained in uncovered-browser-reports. Functional failures still block release.\n`);
+          JS
       - name: Verify language switching and expanded layouts
         run: node scripts/run-tests.mjs ci-i18n --prepared --engine ${{ matrix.engine }}
       - uses: actions/upload-artifact@v4

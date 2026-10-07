@@ -522,7 +522,7 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 #settings-pane-identity .identity-input-row > button { max-width: 100%; white-space: normal; }
 .settings-navigation [role=tab] { height: auto; min-height: 34px; white-space: normal; }
 .settings-floating-header h2 { min-width: 0; overflow-wrap: anywhere; }
-#identity-save { max-width: 100%; white-space: nowrap; }
+#identity-save { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 #settings-pane-logs .log-send-footer { min-width: 0; flex-wrap: wrap; }
 #settings-pane-logs .log-submit-row { min-width: 0; max-width: 100%; }
 @media (max-width: 640px) {

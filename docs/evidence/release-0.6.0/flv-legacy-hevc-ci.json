@@ -1,0 +1,947 @@
+{
+  "browserName": "chromium",
+  "name": "legacy-hevc",
+  "states": [
+    {
+      "version": 1,
+      "busy": false,
+      "playing": false,
+      "positionUs": 0,
+      "durationUs": 4016000,
+      "error": null,
+      "lastDecodeMs": 163,
+      "mediaLoad": {
+        "name": "legacy-hevc.flv",
+        "slot": "A",
+        "stage": "first-frame",
+        "state": "complete",
+        "startedAt": 1791402926804,
+        "targetPtsUs": 0,
+        "indexedDurationUs": 40000,
+        "finishedAt": 1791402928670
+      },
+      "playback": null,
+      "resources": {
+        "budgetBytes": 268435456,
+        "totalBytes": 3110400,
+        "peakBytes": 6220800,
+        "pressure": false,
+        "overBudgetBytes": 0,
+        "frames": 0,
+        "decodeReservations": 0,
+        "readback": 0,
+        "derived": 3110400,
+        "scope": "application-owned; excludes decoder internals, WASM heaps and GPU allocations"
+      },
+      "frameEvidence": "decoded-and-drawn-to-canvas",
+      "audio": "muted",
+      "color": "browser-match-approximate",
+      "colorMode": "browser",
+      "referenceDecode": {
+        "decoder": "software",
+        "depth": 2
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+          "name": "legacy-hevc.flv",
+          "size": 6722601,
+          "lastModified": 1791402676978,
+          "indexSource": "server",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "hevc",
+          "decoder": "ffmpeg-wasm",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "decoder",
+          "pixelFormat": "yuv420p",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "decodedPixelFormat": "YUV",
+          "firstPtsUs": 2000000,
+          "durationUs": 4016000,
+          "coreVariant": "multi-thread",
+          "container": "flv",
+          "source": {
+            "kind": "library",
+            "id": "39ceb97a0a7877c19ab34c91",
+            "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+          },
+          "metadataRevision": 4,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1080,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "format": "YUV",
+            "color": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourceColor": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourcePixelFormat": "yuv420p",
+            "yuv": {
+              "bitDepth": 8,
+              "bitShift": 0,
+              "subsampleX": 1,
+              "subsampleY": 1,
+              "chromaLocation": 1,
+              "semiplanar": false,
+              "planes": [
+                {
+                  "offset": 0,
+                  "stride": 1920,
+                  "width": 1920,
+                  "height": 1080
+                },
+                {
+                  "offset": 2073600,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                },
+                {
+                  "offset": 2592000,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                }
+              ]
+            }
+          },
+          "indexProgress": {
+            "scannedBytes": 6722601,
+            "totalBytes": 6722601,
+            "packets": 239
+          },
+          "frame": {
+            "ptsUs": 0,
+            "sourcePtsUs": 2000000,
+            "durationUs": 17000
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "marks": []
+    },
+    {
+      "version": 1,
+      "busy": false,
+      "playing": false,
+      "positionUs": 500000,
+      "durationUs": 4016000,
+      "error": null,
+      "lastDecodeMs": 792,
+      "mediaLoad": {
+        "name": "legacy-hevc.flv",
+        "slot": "A",
+        "stage": "first-frame",
+        "state": "complete",
+        "startedAt": 1791402926804,
+        "targetPtsUs": 0,
+        "indexedDurationUs": 40000,
+        "finishedAt": 1791402928670
+      },
+      "playback": null,
+      "resources": {
+        "budgetBytes": 268435456,
+        "totalBytes": 0,
+        "peakBytes": 6220800,
+        "pressure": false,
+        "overBudgetBytes": 0,
+        "frames": 0,
+        "decodeReservations": 0,
+        "readback": 0,
+        "derived": 0,
+        "scope": "application-owned; excludes decoder internals, WASM heaps and GPU allocations"
+      },
+      "frameEvidence": "decoded-and-drawn-to-canvas",
+      "audio": "muted",
+      "color": "browser-match-approximate",
+      "colorMode": "browser",
+      "referenceDecode": {
+        "decoder": "software",
+        "depth": 2
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+          "name": "legacy-hevc.flv",
+          "size": 6722601,
+          "lastModified": 1791402676978,
+          "indexSource": "server",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "hevc",
+          "decoder": "ffmpeg-wasm",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "decoder",
+          "pixelFormat": "yuv420p",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "decodedPixelFormat": "YUV",
+          "firstPtsUs": 2000000,
+          "durationUs": 4016000,
+          "coreVariant": "multi-thread",
+          "container": "flv",
+          "source": {
+            "kind": "library",
+            "id": "39ceb97a0a7877c19ab34c91",
+            "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+          },
+          "metadataRevision": 4,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1080,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "format": "YUV",
+            "color": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourceColor": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourcePixelFormat": "yuv420p",
+            "yuv": {
+              "bitDepth": 8,
+              "bitShift": 0,
+              "subsampleX": 1,
+              "subsampleY": 1,
+              "chromaLocation": 1,
+              "semiplanar": false,
+              "planes": [
+                {
+                  "offset": 0,
+                  "stride": 1920,
+                  "width": 1920,
+                  "height": 1080
+                },
+                {
+                  "offset": 2073600,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                },
+                {
+                  "offset": 2592000,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                }
+              ]
+            }
+          },
+          "indexProgress": {
+            "scannedBytes": 6722601,
+            "totalBytes": 6722601,
+            "packets": 239
+          },
+          "frame": {
+            "ptsUs": 500000,
+            "sourcePtsUs": 2500000,
+            "durationUs": 9000
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "marks": []
+    },
+    {
+      "version": 1,
+      "busy": false,
+      "playing": false,
+      "positionUs": 0,
+      "durationUs": 4016000,
+      "error": null,
+      "lastDecodeMs": 153,
+      "mediaLoad": {
+        "name": "legacy-hevc.flv",
+        "slot": "A",
+        "stage": "first-frame",
+        "state": "complete",
+        "startedAt": 1791402926804,
+        "targetPtsUs": 0,
+        "indexedDurationUs": 40000,
+        "finishedAt": 1791402928670
+      },
+      "playback": null,
+      "resources": {
+        "budgetBytes": 268435456,
+        "totalBytes": 0,
+        "peakBytes": 6220800,
+        "pressure": false,
+        "overBudgetBytes": 0,
+        "frames": 0,
+        "decodeReservations": 0,
+        "readback": 0,
+        "derived": 0,
+        "scope": "application-owned; excludes decoder internals, WASM heaps and GPU allocations"
+      },
+      "frameEvidence": "decoded-and-drawn-to-canvas",
+      "audio": "muted",
+      "color": "browser-match-approximate",
+      "colorMode": "browser",
+      "referenceDecode": {
+        "decoder": "software",
+        "depth": 2
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+          "name": "legacy-hevc.flv",
+          "size": 6722601,
+          "lastModified": 1791402676978,
+          "indexSource": "server",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "hevc",
+          "decoder": "ffmpeg-wasm",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "decoder",
+          "pixelFormat": "yuv420p",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "decodedPixelFormat": "YUV",
+          "firstPtsUs": 2000000,
+          "durationUs": 4016000,
+          "coreVariant": "multi-thread",
+          "container": "flv",
+          "source": {
+            "kind": "library",
+            "id": "39ceb97a0a7877c19ab34c91",
+            "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+          },
+          "metadataRevision": 4,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1080,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "format": "YUV",
+            "color": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourceColor": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourcePixelFormat": "yuv420p",
+            "yuv": {
+              "bitDepth": 8,
+              "bitShift": 0,
+              "subsampleX": 1,
+              "subsampleY": 1,
+              "chromaLocation": 1,
+              "semiplanar": false,
+              "planes": [
+                {
+                  "offset": 0,
+                  "stride": 1920,
+                  "width": 1920,
+                  "height": 1080
+                },
+                {
+                  "offset": 2073600,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                },
+                {
+                  "offset": 2592000,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                }
+              ]
+            }
+          },
+          "indexProgress": {
+            "scannedBytes": 6722601,
+            "totalBytes": 6722601,
+            "packets": 239
+          },
+          "frame": {
+            "ptsUs": 0,
+            "sourcePtsUs": 2000000,
+            "durationUs": 17000
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "marks": []
+    },
+    {
+      "version": 1,
+      "busy": false,
+      "playing": false,
+      "positionUs": 4000000,
+      "durationUs": 4016000,
+      "error": null,
+      "lastDecodeMs": 2059,
+      "mediaLoad": {
+        "name": "legacy-hevc.flv",
+        "slot": "A",
+        "stage": "first-frame",
+        "state": "complete",
+        "startedAt": 1791402926804,
+        "targetPtsUs": 0,
+        "indexedDurationUs": 40000,
+        "finishedAt": 1791402928670
+      },
+      "playback": null,
+      "resources": {
+        "budgetBytes": 268435456,
+        "totalBytes": 0,
+        "peakBytes": 6220800,
+        "pressure": false,
+        "overBudgetBytes": 0,
+        "frames": 0,
+        "decodeReservations": 0,
+        "readback": 0,
+        "derived": 0,
+        "scope": "application-owned; excludes decoder internals, WASM heaps and GPU allocations"
+      },
+      "frameEvidence": "decoded-and-drawn-to-canvas",
+      "audio": "muted",
+      "color": "browser-match-approximate",
+      "colorMode": "browser",
+      "referenceDecode": {
+        "decoder": "software",
+        "depth": 2
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+          "name": "legacy-hevc.flv",
+          "size": 6722601,
+          "lastModified": 1791402676978,
+          "indexSource": "server",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "hevc",
+          "decoder": "ffmpeg-wasm",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "decoder",
+          "pixelFormat": "yuv420p",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "decodedPixelFormat": "YUV",
+          "firstPtsUs": 2000000,
+          "durationUs": 4016000,
+          "coreVariant": "multi-thread",
+          "container": "flv",
+          "source": {
+            "kind": "library",
+            "id": "39ceb97a0a7877c19ab34c91",
+            "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+          },
+          "metadataRevision": 4,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1080,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "format": "YUV",
+            "color": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourceColor": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourcePixelFormat": "yuv420p",
+            "yuv": {
+              "bitDepth": 8,
+              "bitShift": 0,
+              "subsampleX": 1,
+              "subsampleY": 1,
+              "chromaLocation": 1,
+              "semiplanar": false,
+              "planes": [
+                {
+                  "offset": 0,
+                  "stride": 1920,
+                  "width": 1920,
+                  "height": 1080
+                },
+                {
+                  "offset": 2073600,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                },
+                {
+                  "offset": 2592000,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                }
+              ]
+            }
+          },
+          "indexProgress": {
+            "scannedBytes": 6722601,
+            "totalBytes": 6722601,
+            "packets": 239
+          },
+          "frame": {
+            "ptsUs": 4000000,
+            "sourcePtsUs": 6000000,
+            "durationUs": 16000
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "marks": []
+    },
+    {
+      "version": 1,
+      "busy": false,
+      "playing": false,
+      "positionUs": 17000,
+      "durationUs": 4016000,
+      "error": null,
+      "lastDecodeMs": 0,
+      "mediaLoad": {
+        "name": "legacy-hevc.flv",
+        "slot": "A",
+        "stage": "first-frame",
+        "state": "complete",
+        "startedAt": 1791402926804,
+        "targetPtsUs": 0,
+        "indexedDurationUs": 40000,
+        "finishedAt": 1791402928670
+      },
+      "playback": null,
+      "resources": {
+        "budgetBytes": 268435456,
+        "totalBytes": 0,
+        "peakBytes": 6220800,
+        "pressure": false,
+        "overBudgetBytes": 0,
+        "frames": 0,
+        "decodeReservations": 0,
+        "readback": 0,
+        "derived": 0,
+        "scope": "application-owned; excludes decoder internals, WASM heaps and GPU allocations"
+      },
+      "frameEvidence": "decoded-and-drawn-to-canvas",
+      "audio": "muted",
+      "color": "browser-match-approximate",
+      "colorMode": "browser",
+      "referenceDecode": {
+        "decoder": "software",
+        "depth": 2
+      },
+      "tracks": [
+        {
+          "slot": "A",
+          "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+          "name": "legacy-hevc.flv",
+          "size": 6722601,
+          "lastModified": 1791402676978,
+          "indexSource": "server",
+          "indexState": "complete",
+          "indexKind": "packet-offsets",
+          "seekStrategy": "packet-anchor",
+          "codec": "hevc",
+          "decoder": "ffmpeg-wasm",
+          "width": 1920,
+          "height": 1080,
+          "colorSource": "decoder",
+          "pixelFormat": "yuv420p",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "decodedPixelFormat": "YUV",
+          "firstPtsUs": 2000000,
+          "durationUs": 4016000,
+          "coreVariant": "multi-thread",
+          "container": "flv",
+          "source": {
+            "kind": "library",
+            "id": "39ceb97a0a7877c19ab34c91",
+            "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+          },
+          "metadataRevision": 4,
+          "output": {
+            "revision": 1,
+            "width": 1920,
+            "height": 1080,
+            "codedWidth": 1920,
+            "codedHeight": 1080,
+            "visibleRect": {
+              "x": 0,
+              "y": 0,
+              "width": 1920,
+              "height": 1080
+            },
+            "displayWidth": 1920,
+            "displayHeight": 1080,
+            "stride": null,
+            "byteLength": 3110400,
+            "format": "YUV",
+            "color": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourceColor": {
+              "primaries": "bt709",
+              "transfer": "bt709",
+              "matrix": null,
+              "fullRange": false
+            },
+            "sourcePixelFormat": "yuv420p",
+            "yuv": {
+              "bitDepth": 8,
+              "bitShift": 0,
+              "subsampleX": 1,
+              "subsampleY": 1,
+              "chromaLocation": 1,
+              "semiplanar": false,
+              "planes": [
+                {
+                  "offset": 0,
+                  "stride": 1920,
+                  "width": 1920,
+                  "height": 1080
+                },
+                {
+                  "offset": 2073600,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                },
+                {
+                  "offset": 2592000,
+                  "stride": 960,
+                  "width": 960,
+                  "height": 540
+                }
+              ]
+            }
+          },
+          "indexProgress": {
+            "scannedBytes": 6722601,
+            "totalBytes": 6722601,
+            "packets": 239
+          },
+          "frame": {
+            "ptsUs": 17000,
+            "sourcePtsUs": 2017000,
+            "durationUs": 17000
+          },
+          "visible": true,
+          "offsetUs": 0,
+          "sourceGen": 2
+        }
+      ],
+      "marks": []
+    }
+  ],
+  "benchmark": {
+    "schema": "voidplayer-playback-benchmark",
+    "version": 1,
+    "passed": false,
+    "failures": [
+      "below-realtime",
+      "A:presentation-stall"
+    ],
+    "limits": {
+      "minWallMs": 1000,
+      "minSpeed": 0.9,
+      "maxFrameLagUs": 100000,
+      "maxFrameSkewUs": 100000,
+      "maxP95GapMs": 75,
+      "maxGapMs": 250,
+      "maxPauseMs": 100
+    },
+    "environment": {
+      "build": {
+        "revision": "ac265b1",
+        "builtAt": "2026-10-07T19:53:49.973Z",
+        "sourceDigest": "9833ef1e0735d8b621e5c398f0b49cb3bf9cfc5e6d4d275df197aa8bf908b2cc",
+        "wasmDigests": {
+          "voidplayer-core.wasm": "6e6bc73f2d32b683049777948e5d75db1f9821d1bef14f5ce76ccefd1a0ef812",
+          "voidplayer-core-mt.wasm": "d20cf9abb2a0b5be157c3a0812fb99abcfcdc76da46a95d838db77c504be14d4"
+        }
+      },
+      "page": "http://127.0.0.1:41951/",
+      "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+      "crossOriginIsolated": true,
+      "secureContext": true,
+      "webCodecsAvailable": true,
+      "hardwareUseVerified": false,
+      "sharedArrayBuffer": true,
+      "visibility": "visible",
+      "viewport": {
+        "width": 640,
+        "height": 480,
+        "devicePixelRatio": 1
+      }
+    },
+    "startupMs": 2.9949999999953434,
+    "requestedWallMs": 2400,
+    "reachedEnd": false,
+    "error": null,
+    "pauseMs": 5.090000000025611,
+    "staleAfterPause": false,
+    "measurements": {
+      "wallMs": 2545.5999999999767,
+      "mediaUs": 930920,
+      "waitingMs": 1433.9400000001583,
+      "buffers": {
+        "A": {
+          "ended": false,
+          "suspended": false,
+          "stopped": false,
+          "error": null,
+          "frames": 2,
+          "bytes": 6220800,
+          "peakFrames": 3,
+          "peakBytes": 9331200,
+          "capacity": 4,
+          "budgetBytes": 67108864,
+          "effectiveBudgetBytes": 67108864
+        }
+      },
+      "speed": 0.365697674418608,
+      "maxFrameLagUs": 24395,
+      "maxFrameSkewUs": 0,
+      "tracks": {
+        "A": {
+          "drawn": 44,
+          "dropped": 11,
+          "fps": 17.284726587052326,
+          "maxGapMs": 233.5,
+          "p95GapMs": 156.8400000000256
+        }
+      }
+    },
+    "tracks": [
+      {
+        "slot": "A",
+        "id": "3cad5d3e-2d1a-4448-b4ab-7d13a803cda6",
+        "name": "legacy-hevc.flv",
+        "size": 6722601,
+        "lastModified": 1791402676978,
+        "indexSource": "server",
+        "indexState": "complete",
+        "indexKind": "packet-offsets",
+        "seekStrategy": "packet-anchor",
+        "codec": "hevc",
+        "decoder": "ffmpeg-wasm",
+        "width": 1920,
+        "height": 1080,
+        "colorSource": "decoder",
+        "pixelFormat": "yuv420p",
+        "color": {
+          "primaries": "bt709",
+          "transfer": "bt709",
+          "matrix": null,
+          "fullRange": false
+        },
+        "decodedPixelFormat": "YUV",
+        "firstPtsUs": 2000000,
+        "durationUs": 4016000,
+        "coreVariant": "multi-thread",
+        "container": "flv",
+        "source": {
+          "kind": "library",
+          "id": "39ceb97a0a7877c19ab34c91",
+          "url": "/api/media/39ceb97a0a7877c19ab34c91?v=e6005dc8cd2d94e139067e6b"
+        },
+        "metadataRevision": 4,
+        "output": {
+          "revision": 1,
+          "width": 1920,
+          "height": 1080,
+          "codedWidth": 1920,
+          "codedHeight": 1080,
+          "visibleRect": {
+            "x": 0,
+            "y": 0,
+            "width": 1920,
+            "height": 1080
+          },
+          "displayWidth": 1920,
+          "displayHeight": 1080,
+          "stride": null,
+          "byteLength": 3110400,
+          "format": "YUV",
+          "color": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "sourceColor": {
+            "primaries": "bt709",
+            "transfer": "bt709",
+            "matrix": null,
+            "fullRange": false
+          },
+          "sourcePixelFormat": "yuv420p",
+          "yuv": {
+            "bitDepth": 8,
+            "bitShift": 0,
+            "subsampleX": 1,
+            "subsampleY": 1,
+            "chromaLocation": 1,
+            "semiplanar": false,
+            "planes": [
+              {
+                "offset": 0,
+                "stride": 1920,
+                "width": 1920,
+                "height": 1080
+              },
+              {
+                "offset": 2073600,
+                "stride": 960,
+                "width": 960,
+                "height": 540
+              },
+              {
+                "offset": 2592000,
+                "stride": 960,
+                "width": 960,
+                "height": 540
+              }
+            ]
+          }
+        },
+        "indexProgress": {
+          "scannedBytes": 6722601,
+          "totalBytes": 6722601,
+          "packets": 239
+        },
+        "frame": {
+          "ptsUs": 917000,
+          "sourcePtsUs": 2917000,
+          "durationUs": 17000
+        },
+        "visible": true,
+        "offsetUs": 0,
+        "sourceGen": 2
+      }
+    ],
+    "longTasks": {
+      "count": 11,
+      "totalMs": 1290
+    },
+    "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+  },
+  "referenceDecoder": "ffmpeg-wasm",
+  "probeDecisions": [],
+  "renderer": "webgl-yuv"
+}

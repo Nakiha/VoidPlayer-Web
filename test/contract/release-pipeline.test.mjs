@@ -7,6 +7,23 @@ import path from 'node:path';
 import { releaseVersion, readReleaseIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease } from '../../scripts/stage-release.mjs';
+import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
+
+test('virtual FLV timing reports retain negative verdicts and never waive functional failures', () => {
+  const benchmark = { passed: false, tracks: [{ decoder: 'ffmpeg-wasm' }], failures: ['below-realtime', 'A:presentation-stall'] };
+  const context = { softwareRunner: true, engine: 'chromium', renderer: 'webgl-yuv' };
+  assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, context), []);
+  assert.equal(benchmark.passed, false);
+  assert.deepEqual(benchmark.failures, ['below-realtime', 'A:presentation-stall']);
+  for (const patch of [{ softwareRunner: false }, { engine: 'webkit' }, { renderer: 'cpu-yuv' }, { renderer: 'browser-managed' }]) {
+    assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, { ...context, ...patch }), benchmark.failures);
+  }
+  for (const failure of ['insufficient-sample', 'no-frames', 'A:no-frames', 'frame-lag', 'track-skew', 'pause-latency', 'stale-frame-after-pause', 'playback-error', 'interrupted', 'premature-end', 'media-changed', 'page-not-visible', 'unknown']) {
+    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, failures: [...benchmark.failures, failure] }, context), [failure]);
+  }
+  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'webcodecs' }] }, context), benchmark.failures);
+  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [] }, context), benchmark.failures);
+});
 
 // These structural contracts run in the identity job before npm ci. Keep them
 // dependency-free and fail closed if the workflow's job/needs syntax changes.

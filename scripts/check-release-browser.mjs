@@ -69,6 +69,20 @@ try {
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
   const page = await context.newPage(); await page.goto(base);await chooseTestGuest(page);
   const call = (p, name, args = {}) => p.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
+  // Decoded tracks commit before asynchronous annotation/layout restoration.
+  const waitForWorkspace = async (p, expected) => {
+   try { await p.waitForFunction(expected => {
+    const actual = window.voidPlayer?.exportWorkspace();
+    const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object'
+      ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
+    return actual && ['marks', 'tracks', 'positionUs', 'viewport', 'layout'].every(key => JSON.stringify(canonical(actual[key])) === JSON.stringify(canonical(expected[key])));
+   }, expected); }
+   catch (error) {
+    const actual = await call(p, 'export_workspace');
+    for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(actual[key], expected[key], `restore ${key}`);
+    throw error;
+   }
+  };
   await page.waitForFunction(() => window.voidPlayer);
   if (generated) {
     await page.locator('#toggle-sources').click();
@@ -101,21 +115,23 @@ try {
   assert.equal(saved.marks.length, 1); assert.equal(saved.viewport.mode, 'split');
   assert.equal(saved.viewport.zoom, 1.5); assert.ok(saved.layout);
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('#export').click()]);
-  const document = await readFile(await download.path()); assert.deepEqual(JSON.parse(gunzipSync(document)).marks, saved.marks);
   await page.locator('#saved-workspace-name').fill('Native release'); await page.locator('#saved-workspace-save').click();
-  await page.locator('#saved-workspace-message').filter({ hasText: '已保存到服务器' }).waitFor();
+  await page.locator('.saved-workspace-open').filter({ hasText: 'Native release' }).waitFor();
+  await page.waitForFunction(() => !document.querySelector('#saved-workspace-name').disabled);
   const stored = (await (await context.request.get(base + '/api/workspaces')).json()).entries[0];
   assert.ok(stored, 'saved workspace belongs to the browser identity'); assert.equal(stored.revision, 1);
-  const restored = await context.newPage(); await restored.goto(base);
-  await restored.locator('#workspace-file').setInputFiles({ name: 'review.voidplayer', mimeType: 'application/gzip', buffer: document });
-  await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
-  const imported = await call(restored, 'export_workspace');
-  for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(imported[key], saved[key], key);
   const admin = await context.newPage(); await admin.goto(base + '/admin');
   await admin.getByRole('button', { name: '工作区', exact: true }).click();
   await admin.locator('#admin-workspaces-list button').filter({ hasText: 'Native release' }).click();
   await admin.waitForFunction(() => document.querySelector('#admin-workspace-json').value.includes('Native release round trip'));
+  const [download] = await Promise.all([admin.waitForEvent('download'), admin.locator('#admin-workspace-download').click()]);
+  const document = await readFile(await download.path()); assert.deepEqual(JSON.parse(gunzipSync(document)).marks, saved.marks);
+  const restored = await context.newPage(); await restored.goto(base);
+  await restored.locator('#workspace-file').setInputFiles({ name: 'review.voidplayer', mimeType: 'application/gzip', buffer: document });
+  await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
+  await waitForWorkspace(restored, saved);
+  const imported = await call(restored, 'export_workspace');
+  for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(imported[key], saved[key], key);
   await context.close();
   await generated?.disconnect();
   await stop(); await start();
@@ -126,7 +142,9 @@ try {
   }
   const restarted = await browser.newPage({locale:'zh-CN'}); restarted.on('pageerror', e => errors.push(e.message));
   await restarted.goto(base + '/?workspace=' + stored.id);
+  await chooseTestGuest(restarted);
   await restarted.waitForFunction(() => window.voidPlayer?.getState().tracks.length === 2 && window.voidPlayer.getState().marks.length === 1 && !window.voidPlayer.getState().busy);
+  await waitForWorkspace(restarted, saved);
   const reopened = await call(restarted, 'export_workspace');
   for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(reopened[key], saved[key], `restart ${key}`);
   assert.deepEqual(errors, []);
