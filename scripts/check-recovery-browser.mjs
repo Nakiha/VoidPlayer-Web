@@ -40,7 +40,9 @@ try {
     if (!saved) await new Promise(resolve => setTimeout(resolve, 250));
   }
   assert.ok(saved, 'checkpoint transaction committed before reload');
+  const checkpointIdentity = await page.evaluate(() => sessionStorage.getItem('voidplayer.checkpoint'));
   await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+  assert.equal(await page.evaluate(() => sessionStorage.getItem('voidplayer.checkpoint')), checkpointIdentity, 'reload retains its own checkpoint identity');
   assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0, 'restoration is offered, not automatic');
   const card = page.locator('#start-workspace-card');
   await card.waitFor();
@@ -72,6 +74,40 @@ try {
   let restored = await page.evaluate(() => window.voidPlayer.exportWorkspace());
   assert.deepEqual(restored.tracks, snapshot.tracks); assert.deepEqual(restored.marks, snapshot.marks);
   assert.deepEqual(restored.comparison, snapshot.comparison); assert.equal(restored.positionUs, snapshot.positionUs);
+  // Old user work is explicitly managed rather than silently evicted as cache.
+  await page.evaluate(snapshot => new Promise((resolve, reject) => {
+    const request = indexedDB.open('voidplayer-workspace-checkpoints');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result, tx = db.transaction('checkpoints', 'readwrite'), store = tx.objectStore('checkpoints');
+      const rows = store.getAll(); rows.onsuccess = () => {
+        if (rows.result.length !== 1) { reject(new Error('reload created duplicate checkpoint records')); return; }
+        store.put({ id: 'history-old', actor: rows.result[0].actor, updatedAt: 1, document: { ...snapshot, name: '历史备份' } });
+      };
+      tx.oncomplete = () => { db.close(); resolve(); }; tx.onabort = () => { db.close(); reject(tx.error); };
+    };
+  }), snapshot);
+  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
+  const historical = page.locator('.checkpoint-history-row[data-checkpoint-id="history-old"]');
+  await historical.waitFor(); assert.match(await historical.textContent(), /历史备份/);
+  const current = page.locator('.checkpoint-history-row').filter({ hasNotText: '历史备份' });
+  assert.equal(await current.getByRole('button', { name: '删除', exact: true }).isDisabled(), true, 'active auto-save record is protected');
+  const downloadPromise = page.waitForEvent('download');
+  await historical.getByRole('button', { name: '导出备份', exact: true }).click();
+  const download = await downloadPromise;
+  const exported = JSON.parse(await (await import('node:fs/promises')).readFile(await download.path(), 'utf8'));
+  assert.deepEqual(exported.marks, snapshot.marks); assert.equal(exported.name, '历史备份');
+  await historical.getByRole('button', { name: '恢复工作区', exact: true }).click();
+  await page.waitForFunction(() => !window.voidPlayer.getState().busy && !document.querySelector('#settings').open);
+  assert.deepEqual(await page.evaluate(() => window.voidPlayer.exportWorkspace().marks), snapshot.marks);
+  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
+  await historical.getByRole('button', { name: '删除', exact: true }).click();
+  await historical.locator('.annotation-confirm').getByRole('button', { name: '取消', exact: true }).click();
+  await historical.waitFor();
+  await historical.getByRole('button', { name: '删除', exact: true }).click();
+  await historical.locator('.annotation-confirm').getByRole('button', { name: '删除', exact: true }).click();
+  await historical.waitFor({ state: 'detached' });
+  await page.locator('#settings-close').click();
   // Make the remote source temporarily unavailable and repeat a user-directed restore.
   await rename(clip, clip + '.offline');
   await page.evaluate(document => window.voidPlayer.importWorkspace(document), snapshot);
@@ -88,5 +124,5 @@ try {
   assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].pendingRelink, true);
   assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().marks), snapshot.marks);
   assert.deepEqual(errors, []);
-  console.log(`PASS ${engine}: checkpoint commit/reload, explicit recovery, comparison restoration, missing source/marks/offset retention, deferred local relink`);
+  console.log(`PASS ${engine}: stable checkpoint reload, history restore/export/confirmed deletion, explicit recovery, comparison restoration, missing source/marks/offset retention, deferred local relink`);
 } finally { await browser.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true }); }

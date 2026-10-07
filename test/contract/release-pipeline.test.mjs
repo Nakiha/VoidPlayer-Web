@@ -24,7 +24,7 @@ function workflowJobs(source) {
 test('release workflow gates verified artifacts and draft staging on every verification job', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
-  const required = ['native-release', 'playback', 'analysis-logic', 'analysis-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
     assert.ok(jobs[need], `unknown dependency ${need}`);

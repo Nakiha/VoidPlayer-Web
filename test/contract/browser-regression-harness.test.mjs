@@ -17,7 +17,7 @@ test('failed timeline still runs every later HLG/annotation engine and fails the
     const entries = browserRegressionSuites.uncovered.map(entry => ({ ...entry, args: ['-e', `console.log(${JSON.stringify(entry.name)}); process.exit(${entry.name === 'check-timeline-browser-chromium' ? 7 : 0})`] }));
     const result = await runBrowserRegressions(entries, { directory, output: silent });
     assert.equal(result.passed, false);
-    assert.equal(result.results.length, 20);
+    assert.equal(result.results.length, entries.length);
     assert.equal(result.results.find(row => row.name === 'check-timeline-browser-chromium').exitCode, 7);
     for (const script of ['check-annotation-browser', 'check-annotation-rendering', 'check-hlg-browser']) for (const engine of ['chromium', 'webkit']) {
       const row = result.results.find(row => row.name === `${script}-${engine}`);

@@ -7,6 +7,7 @@
 | 入口 | 范围与准备 | CI 对应 |
 | --- | --- | --- |
 | `npm run test:fast` | 明确登记的轻量 Node 逻辑与测试基础设施契约；不需要媒体、core 或浏览器 | 本地快速反馈；完整 Node 检查由 playback job 运行 |
+| `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 独立 `source-logic` job，不等待解码器构建 |
 | `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | playback job 的 `unit` |
 | `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
@@ -66,7 +67,9 @@ node scripts/run-tests.mjs uncovered --prepared
 
 ### 迁移覆盖对照与兼容期
 
-`test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。原来 `uncovered` 的 20 格、FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。原来多次运行同一 Node 文件的步骤由 `unit` 的一次完整覆盖替代；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。
+`test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。`uncovered` 保留原有 20 格，并补齐此前遗漏的 16 格；CI 按 Chromium/WebKit 拆分执行。FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。完整 Node 验证仍由 `unit` 运行；`source` 提前独立验证无需媒体的逻辑；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。
+
+契约测试解析发布与身份工作流中的 suite/case 选择和引擎/输入矩阵，要求每个 required 浏览器组合都被实际选择；移除 job、漏掉矩阵引擎或新用例未接入 CI 会失败。
 
 CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
 
@@ -198,6 +201,14 @@ WASM 堆增长：通过 Emscripten 公开的 instantiateWasm 回调取得 core �
 
 后台索引时长：子轨道 dock 的刷新签名纳入 durationUs/indexState。FLV 启动浏览器回归在阻塞尾部时记录临时时长，解除阻塞后验证子轨道时长文字和标尺更新到完整索引时长，不靠切换轨道/修改标记触发刷新。
 
+
+### 码流分析与按需面板
+
+原生 Mediabunny 分析通过独立 metadata Worker 持有包表、排序缓存和统计，主线程每批最多发送 2,000 条 PTS/大小/关键包元数据，并等待追加确认。查询取消立即结束调用方等待并移除 Worker 排队请求；已开始的同步统计由 Worker 完成，释放片源会终止 Worker。解码帧与播放缓冲不跨此通道。分析面板按首次展开加载，纯绘图模型与偏好迁移分别位于 `src/ui/analysis/model.ts` 和 `preferences.ts`；关闭/销毁期间完成的 import 不会重新打开面板，工作区快照仍保存尚未加载面板的状态。
+
+`src/ui/analysis/queries.ts` 独立持有每轨查询、覆盖缓存、100ms 手势节流和取消生命周期，所有请求仍调用 `session.queryAnalysis`。覆盖记录使用请求发出时的窗口与偏移；换片、实例重建、关闭或销毁时取消并作废在途请求，即使后端忽略取消也不会发布旧结果或旧错误。`test/unit/analysis-view-cache.test.ts` 覆盖这些竞态、节流尾查、构建中索引不可建立覆盖，以及放大时样本邻域和曲线网格的独立密度。
+
+时间轴选中颜色回归通过 Web Animations API 等待当前 CSS 过渡完成，再分别核对选中与悬停状态的 `--track-active` 最终颜色；两个动画帧仅用于布局稳定，不代表 240ms 颜色动画已经结束。
 
 ## 帧契约与 FATE 门禁
 

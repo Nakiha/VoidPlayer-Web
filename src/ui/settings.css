@@ -553,3 +553,7 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 .sample-custom .sample-sidebar { background: var(--base-preview-panel); }
 .sample-custom .sample-content { background: var(--base-preview-accent); }
 @media (max-width: 600px) { .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.checkpoint-history-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px 16px; }
+.checkpoint-history-row + .checkpoint-history-row { border-top: 1px solid var(--border); }
+.checkpoint-history-row > .saved-workspace-info { flex: 1 1 200px; }
+.checkpoint-history-row .annotation-confirm { flex-basis: 100%; }

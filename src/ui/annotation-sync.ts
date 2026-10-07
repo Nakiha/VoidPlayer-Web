@@ -35,7 +35,11 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     const saveState=localFailure || error || conflicts.length?'error':saving || (pending.length && scope!=='local')?'pending':'saved';
     window.dispatchEvent(new CustomEvent('voidplayer-annotation-status', { detail: { space: scope, message, state: saveState } }));
   }
-  async function refreshDrafts() { try { drafts=await storage.drafts(); state(); } catch(e) {error=(e as Error).message;state();} }
+  async function refreshDrafts() {
+    const captured = generation;
+    try { const next = await storage.drafts(scope, actor); if (captured === generation) { drafts = next; state(); } }
+    catch(e) { if (captured === generation) { error=(e as Error).message;state(); } }
+  }
   async function enqueue(id: string, document: AnnotationDocument | null, base = versions.get(id) ?? 0, destination={space:scope,actorId:actor}) {
     if(document)document={mark:structuredClone(document.mark),media:document.media.map(media=>({...media,...(media.source?{source:{...media.source,url:new URL(media.source.url,location.href).href}}:{})}))};
     const {space,actorId}=destination,key=`${actorId}/${space}/${owner}/${id}`;
@@ -75,8 +79,9 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
       }
     }
     for(const draft of pending){managed.add(draft.id);if(draft.desired)documents.push(draft.desired);}
-    for(const document of documents){const preview=await storage.preview(scope,document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))publishMarkPreview(document.mark.id,preview);}
+    const previews = await storage.previews(scope, documents.map(document => document.mark.id));
     if(captured!==generation || edited!==editGeneration || editing() || saving || pendingQueue.size)return;
+    for(const document of documents){const preview=previews.get(document.mark.id);if(preview?.signature===thumbnailSignature(document.mark))publishMarkPreview(document.mark.id,preview);}
     // Identical shared library versions remap to this window's ephemeral media IDs.
     // Stale ids are removed only with a completed load: dropping live marks
     // before the replacement is readable leaves a window where failed imports
@@ -158,17 +163,17 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
   }
   let trackSignature='';
   const unsubscribe=session.subscribe(()=>{
-    const state=session.getState(), signature=state.tracks.map(track=>annotationMediaKey(track)).join('|');
-    if(signature!==trackSignature){trackSignature=signature;void apply();}
+    const snapshot=session.getState(), signature=snapshot.tracks.map(track=>annotationMediaKey(track)).join('|');
+    if(signature!==trackSignature){trackSignature=signature;void apply().catch(e => { error=(e as Error).message;state(); });}
   });
   window.addEventListener('beforeunload',event=>{if(saving || pendingQueue.size || localFailure){event.preventDefault();event.returnValue='';}},{signal:life.signal});
   const interval=setInterval(()=>{if(!document.hidden)void sync();},3000);
-  async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply();}}
+  async function connect(){try{const health=await identityHealth();actor=health.actor?.id??actor;available=!!health.capabilities?.annotations;await apply();void sync();}catch{void apply().catch(e => { error=(e as Error).message;state(); });}}
   window.addEventListener('online',()=>void connect(),{signal:life.signal});
   window.addEventListener('focus',()=>void sync(),{signal:life.signal});
   window.addEventListener('voidplayer-identity-change',()=>{
     const next=currentActor()?.id ?? 'local';if(next===actor)return;
-    generation++;actor=next;cursor=0;versions.clear();void apply();
+    generation++;actor=next;cursor=0;versions.clear();void apply().catch(e => { error=(e as Error).message;state(); });
   },{signal:life.signal});
   onLanguageChange(state, life.signal);
   void connect();
@@ -200,6 +205,6 @@ export function installAnnotationSync(session: ReviewSession, editing: () => boo
     },
     snapshotMode(){if(pendingQueue.size)throw new Error(t(msg("sync.draftsUnsaved", "本机标注尚未保存，请等待自动保存完成。")));const previous=scope;generation++;scope='local';try{sessionStorage.setItem('voidplayer.annotation-space',scope);}catch{}cursor=0;versions.clear();managed.clear();state();return ()=>switchSpace(previous);},
     async captureSnapshot(){const snapshot=session.exportWorkspace(location.origin+'/');for(const mark of snapshot.marks){const ids=new Set([mark.mediaId,...mark.comparison.map(item=>item.mediaId)]);await enqueue(mark.id,{mark,media:snapshot.media.filter(media=>ids.has(media.id))},0);}},
-    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();},
+    dispose(){life.abort();clearInterval(interval);unsubscribe();unsubscribeMarks();storage.close();},
   };
 }

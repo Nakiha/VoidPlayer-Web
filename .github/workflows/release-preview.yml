@@ -115,6 +115,25 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  source-logic:
+    name: Verify all source-only Node logic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - run: npm ci
+      - run: node scripts/run-tests.mjs source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: source-logic-reports
+          path: .run/test-suites/source/
+          if-no-files-found: error
+
   analysis-logic:
     name: Verify analysis contracts (R1/R2/R3 unit)
     runs-on: ubuntu-24.04
@@ -357,7 +376,11 @@ jobs:
     name: Verify browser regressions no other job runs
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -389,13 +412,13 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - name: Verify regressions that no other job runs
         # The runner records every exit status and fails only after all cases ran.
-        run: node scripts/run-tests.mjs uncovered --prepared
+        run: node scripts/run-tests.mjs uncovered --prepared --engine ${{ matrix.engine }}
       - name: Verify language switching and expanded layouts
-        run: node scripts/run-tests.mjs ci-i18n --prepared
+        run: node scripts/run-tests.mjs ci-i18n --prepared --engine ${{ matrix.engine }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: uncovered-browser-reports
+          name: uncovered-browser-reports-${{ matrix.engine }}
           path: |
             .run/test-suites/uncovered/
             .run/test-suites/ci-i18n/
@@ -525,7 +548,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, playback, analysis-logic, analysis-browser, hevc-browser, uncovered-regressions]
+    needs: [native-release, playback, source-logic, analysis-logic, analysis-browser, hevc-browser, uncovered-regressions]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

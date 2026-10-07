@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { testManifest, validateManifest, selectCases } from '../../scripts/testing/manifest.mjs';
+import { testManifest, validateManifest, selectCases, validateCiBrowserCoverage } from '../../scripts/testing/manifest.mjs';
 
 const clone = () => structuredClone(testManifest);
 test('every existing test and check has an explicit registration or explained tool classification', () => assert.equal(validateManifest(), true));
@@ -63,7 +63,7 @@ test('coverage floor retains original commands, required cells and CI membership
 });
 test('local and CI select the same applicable matrix; filters cannot fake engine/input support', () => {
   const linux = selectCases({ suite: 'uncovered', platform: 'linux' }).selected;
-  assert.equal(linux.length, 20);
+  assert.equal(linux.length, 36);
   assert.deepEqual(linux.map(row => row.id), selectCases({ suite: 'uncovered', platform: 'darwin' }).selected.map(row => row.id));
   assert.equal(selectCases({ suite: 'browser', engine: 'webkit', input: 'local' }).selected.filter(row => row.id.startsWith('hevc-timeline')).length, 1);
   const windows = selectCases({ suite: 'ci-native-console', platform: 'darwin' });
@@ -111,4 +111,26 @@ test('identity source checks require no downloaded core, media or browser build'
     assert.equal(row.build, false);
     assert.deepEqual(row.engines, ['node']);
   }
+});
+
+
+test('every required browser cell is selected by an actual CI suite or expanded engine/input matrix', () => {
+  const workflows = ['release-preview.yml', 'identity.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
+  assert.equal(validateCiBrowserCoverage(workflows), true);
+  const missing = clone(); missing.cases.find(row => row.id === 'browser-library-webkit').suites = ['browser'];
+  assert.throws(() => validateCiBrowserCoverage(workflows, missing), /browser-library-webkit/);
+  const lostMatrix = workflows.map(source => source.replace('engine: [chromium, webkit]\n        input: [local, remote]', 'engine: [chromium]\n        input: [local, remote]'));
+  assert.throws(() => validateCiBrowserCoverage(lostMatrix), /hevc-timeline-webkit/);
+  const lostInput = workflows.map(source => source.replace('input: [local, remote]', 'input: [remote]'));
+  assert.throws(() => validateCiBrowserCoverage(lostInput), /hevc-timeline-.*-local/);
+});
+test('all source-only Node checks run before media dependencies are prepared', () => {
+  const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
+  const job = workflow.split('  source-logic:\n')[1].split('\n  analysis-logic:')[0];
+  assert.doesNotMatch(job, /needs:|playwright install|sync-samples|download-artifact/);
+  assert.match(job, /run-tests\.mjs source/);
+  const eligible = testManifest.cases.filter(row => row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node');
+  assert.deepEqual(selectCases({ suite: 'source' }).selected.map(row => row.id), eligible.map(row => row.id));
+  const missing = clone(); missing.cases.find(row => row.id === 'node-workspace-storage').suites = ['unit'];
+  assert.throws(() => validateManifest(missing), /missing from source suite/);
 });

@@ -68,6 +68,7 @@
     "bench:index": "node scripts/bench-frame-index.mjs",
     "bench:index:modes": "node scripts/compare-index-scan-modes.mjs",
     "test:media-open-matrix": "npm run build && node scripts/check-media-open-matrix.mjs",
+    "test:source": "node scripts/run-tests.mjs source",
     "test:fast": "node scripts/run-tests.mjs fast",
     "test:contract": "node scripts/run-tests.mjs contract",
     "test:media": "node scripts/run-tests.mjs media",

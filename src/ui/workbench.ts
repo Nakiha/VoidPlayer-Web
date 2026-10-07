@@ -8,7 +8,7 @@ import { installPanelResize } from './panel-resize.ts';
 import type { ReviewSession } from '../session.ts';
 import type { Slot } from '../model.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
-import { installAnalysisPanel } from './analysis-panel.ts';
+import { installLazyAnalysisPanel } from './analysis/lazy-panel.ts';
 import { WorkspaceState } from './workspace-state.ts';
 import type { Panel } from './workspace-state.ts';
 import { SourceCatalog } from './source-catalog.ts';
@@ -55,7 +55,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const tracks = createTracksPane(shared);
   const sources = createSourcesPane(shared);
   sources.wireSourceControls();
-  const analysis = installAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis });
+  const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis });
 
   function select(slot: Slot) {
     view.selected = slot;
@@ -193,6 +193,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       tracks.resetSignatures();
       syncPanels(); panelResize.refresh(); render(session.getState());
       await sources.finishRestore(browsing);
+      await analysis.ready();
     },
     dispose() { sources.markDisposed(); annotations.dispose(); lifecyle.abort(); },
   };

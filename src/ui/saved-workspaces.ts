@@ -5,6 +5,7 @@ import type { SavedWorkspace } from '../saved-workspaces.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 import { prepareSharedWorkspace } from '../shared-workspace.ts';
 import { icon } from './icons.ts';
+import { checkpointHistoryShell } from './checkpoint-history.ts';
 export function savedWorkspaceShell() {
   return `<div class="settings-section"><h4 class="settings-section-title">${th(msg("savedWorkspaces.currentWorkspace", "当前工作区"))}</h4><div class="workspace-current-section settings-card">
     <div class="workspace-current-row"><input id="saved-workspace-name" maxlength="200" aria-label="${th(msg("savedWorkspaces.workspaceName", "工作区名称"))}" placeholder="${th(msg("savedWorkspaces.untitledWorkspace", "未命名工作区"))}"><div class="workspace-current-actions"><button id="saved-workspace-save">${th(msg("identitySettings.save", "保存"))}</button><button id="saved-workspace-share">${icon('copy')}<span>${th(msg("sharing.copyLink", "复制链接"))}</span></button></div></div>
@@ -14,7 +15,7 @@ export function savedWorkspaceShell() {
     </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">${th(msg("savedWorkspaces.savedWorkspaces", "已保存的工作区"))}</h4></div>
     <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" placeholder="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="${th(msg("savedWorkspaces.clearSearch", "清除搜索"))}" hidden>${icon('close')}</button></div>
     <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>${th(msg("workspace.columns", "名称 / 用户 · 最近更新 ↓"))}</span><span>${th(msg("sharing.link", "链接"))}</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
-    <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>`;
+    <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>${checkpointHistoryShell()}`;
 }
 
 export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void }) {

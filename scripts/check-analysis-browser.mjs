@@ -3,7 +3,7 @@
 // 诊断与临时输入分离：截图/状态写入 .run/analysis-reports/<engine>/（CI 上传），
 // 临时目录仅放可删除的中间文件；失败时尽力保留现场后重抛。
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import path from 'node:path';
@@ -66,6 +66,8 @@ try {
     if (/^\[libdav1d @ 0x[0-9a-f]+\] Frame size limit reduced from 2147483647 to 67108864\.$/.test(text)) decoderNotices.push(text);
     else errors.push(text);
   });
+  const panelRequests = [];
+  page.on('request', request => { if (/\/analysis-panel-[^/]+\.js/.test(request.url())) panelRequests.push(request.url()); });
   await page.goto(base);
   await page.waitForFunction(() => window.voidPlayer);
   if (await page.locator('#identity-welcome').isVisible().catch(() => false)) {
@@ -76,6 +78,33 @@ try {
   await page.locator('#analysis-panel').waitFor({ state: 'attached' });
   assert.equal(await page.locator('#toggle-analysis').getAttribute('aria-expanded'), 'false');
   assert.equal(await page.locator('#toggle-analysis').isDisabled(), true);
+
+  assert.equal(panelRequests.length, 0, 'closed analysis panel does not load its optional implementation');
+  // Exercise the actual bundled metadata worker even when these containers use
+  // the shared MP4/FFmpeg packet path instead of Mediabunny's fallback adapter.
+  const workerAsset = (await readdir(join(root, 'dist/assets'))).find(name => /^native-worker-.*\.js$/.test(name));
+  assert.ok(workerAsset, 'native metadata worker is bundled');
+  const workerResult = await page.evaluate(async url => {
+    const worker = new Worker(url, { type: 'module' });
+    try {
+      const call = (id, type, input, transfer = []) => new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { cleanup(); reject(new Error('metadata Worker timed out')); }, 10000);
+        const receive = event => { if (event.data.id === id) { cleanup(); event.data.ok ? resolve(event.data.data) : reject(new Error(event.data.error)); } };
+        const error = event => { cleanup(); reject(new Error(event.message)); };
+        const cleanup = () => { clearTimeout(timer); worker.removeEventListener('message', receive); worker.removeEventListener('error', error); };
+        worker.addEventListener('message', receive); worker.addEventListener('error', error); worker.postMessage({ id, type, input }, transfer);
+      });
+      const records = new Float64Array([80000,300,0,0,100,1,40000,200,0]);
+      const count = await call(1, 'append', { records }, [records.buffer]);
+      const rank = await call(2, 'rank', { firstPtsUs: 0, axis: 'pts', tUs: 40000 });
+      const sample = await call(3, 'locate', { mediaId: 'native', firstPtsUs: 0, sampleId: 'native:v:0' });
+      return { count, detached: records.byteLength === 0, rank, sample };
+    } finally { worker.terminate(); }
+  }, base + '/assets/' + workerAsset);
+  assert.equal(workerResult.count, 3); assert.equal(workerResult.detached, true);
+  assert.deepEqual(workerResult.rank, { rank: 1, total: 3, ordinal: 2 });
+  assert.equal(workerResult.sample.effectivePtsUs, 80000);
+
 
   // 经由 Agent 同一入口载入两轨（与 UI 共用会话行为）。
   const ids = await page.evaluate(async () => {
@@ -106,6 +135,8 @@ try {
       }, ids[name]);
     }
     if (await page.locator('#toggle-analysis').getAttribute('aria-expanded') === 'false') await page.locator('#toggle-analysis').click();
+    await page.waitForFunction(() => document.querySelector('#analysis-canvas')?.dataset.analysisQueries != null);
+    assert.equal(panelRequests.length, 1, 'analysis implementation is loaded once on first open');
     const packets = await page.evaluate(async () => {
       const deadline = performance.now() + 30000;
       while (performance.now() < deadline) {

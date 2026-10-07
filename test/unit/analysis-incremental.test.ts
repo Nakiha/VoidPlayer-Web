@@ -99,3 +99,39 @@ test('REVIEW-04: 大包表渐进查询有界（样本/桶/曲线封顶，不抛�
   // 增量复查不应比首个全量更慢一个数量级（ CI 抖动下仍应显著更快或相当）
   assert.ok(ms2 <= Math.max(1000, ms * 1.2), `first=${ms.toFixed(1)}ms second=${ms2.toFixed(1)}ms`);
 });
+
+
+test('native metadata worker matches the shared statistics and owns transferred batches', async () => {
+  const { NativeAnalysisClient } = await import('../../src/analysis/native-client.ts');
+  const client = new NativeAnalysisClient();
+  try {
+    const batch = new Float64Array([80_000, 300, 0, 0, 100, 1, 40_000, 200, 0]);
+    assert.equal(await client.call('append', { records: batch }, undefined, [batch.buffer]), 3);
+    assert.equal(batch.byteLength, 0);
+    const context = { ...ctxFor('native'), durationUs: 120_000, capability: { ...ctxFor().capability, hasDts: false }, coverageUs: { start: 0, end: 120_000 } };
+    const query = { requestId: 4, axis: 'pts' as const, startUs: 0, endUs: 120_000, pixelWidth: 32, bitrateWindowUs: 250_000 };
+    const result = await client.call('query', { context, query });
+    assert.deepEqual(result.samples.map(sample => [sample.decodeOrdinal, sample.effectivePtsUs, sample.sizeBytes]), [[1,0,100],[2,40_000,200],[0,80_000,300]]);
+    assert.equal(result.indexRevision, 3); assert.equal(result.sourceVersion, 'native@3');
+    assert.equal((await client.call('locate', { mediaId: 'native', firstPtsUs: 0, sampleId: 'native:v:0' }))?.effectivePtsUs, 80_000);
+    assert.deepEqual(await client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 40_000 }), { rank: 1, total: 3, ordinal: 2 });
+    assert.equal(await client.call('number', { firstPtsUs: 0, axis: 'dts', number: 0 }), 80_000);
+  } finally { client.close(); }
+});
+
+test('native analysis cancellation and disposal settle callers while keeping metadata available', async () => {
+  const { NativeAnalysisClient } = await import('../../src/analysis/native-client.ts');
+  const client = new NativeAnalysisClient(), count = 100_000;
+  const batch = new Float64Array(count * 3);
+  for (let i = 0; i < count; i++) { batch[i*3] = i*40_000; batch[i*3+1] = 1000; batch[i*3+2] = i%50===0 ? 1 : 0; }
+  await client.call('append', { records: batch }, undefined, [batch.buffer]);
+  const context = { ...ctxFor('cancel'), durationUs: count*40_000 };
+  const query = { requestId: 1, axis: 'pts' as const, startUs: 0, endUs: count*40_000, pixelWidth: 1000, bitrateWindowUs: 1_000_000 };
+  const abort = new AbortController();
+  const cancelled = client.call('query', { context, query }, abort.signal); abort.abort();
+  await assert.rejects(cancelled, { name: 'AbortError' });
+  assert.equal((await client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 0 })).total, count);
+  const pending = client.call('query', { context, query }); client.close();
+  await assert.rejects(pending, /disposed/);
+  await assert.rejects(client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 0 }), /disposed/);
+});

@@ -41,3 +41,51 @@ test('工作区还原基准：还原时已知身份不被后续同集合事件�
   assert.deepEqual(r.selected, ['A']);
   assert.equal(r.changed, false);
 });
+
+import { installLazyAnalysisPanel } from '../../src/ui/analysis/lazy-panel.ts';
+import type { ReviewSession } from '../../src/session.ts';
+import type { AnalysisViewState } from '../../src/workspace-file.ts';
+
+function deferred<T>() {
+  let resolve!: (value: T) => void, reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+function lazyFixture() {
+  const lifetime = new AbortController(), errors: unknown[] = [], mounts: AnalysisViewState[] = [];
+  let loads = 0, mountedState: AnalysisViewState | undefined;
+  const entries = [entry('A'), entry('B')];
+  const session = { getAnalysisCapabilities: () => entries } as unknown as ReviewSession;
+  const module = { installAnalysisPanel: () => ({ setOpen() {}, getAnalysisState: () => structuredClone(mountedState!),
+    restoreAnalysisState: (state: AnalysisViewState) => { mountedState = structuredClone(state); mounts.push(mountedState); } }) };
+  const pending = deferred<typeof module>();
+  const lazy = installLazyAnalysisPanel(session, async action => { try { await action(); } catch (error) { errors.push(error); } },
+    { signal: lifetime.signal, isOpen: () => false }, () => { loads++; return pending.promise; });
+  return { lazy, pending, module, lifetime, mounts, errors, entries, loads: () => loads };
+}
+
+test('unloaded analysis preserves workspace preferences and applies the latest restore during import', async () => {
+  const f = lazyFixture();
+  const snapshot = f.lazy.getAnalysisState();
+  assert.deepEqual(snapshot.selected, ['A', 'B']); assert.equal(f.loads(), 0);
+  snapshot.selected = ['A']; snapshot.view = { start: 10, end: 20 };
+  f.lazy.restoreAnalysisState(snapshot); snapshot.selected.push('B');
+  assert.deepEqual(f.lazy.getAnalysisState().selected, ['A'], 'caller mutation does not change restored selection');
+  f.lazy.setOpen(true); assert.equal(f.loads(), 1);
+  const newer = f.lazy.getAnalysisState(); newer.view = { start: 30, end: 40 };
+  f.lazy.restoreAnalysisState(newer);
+  f.pending.resolve(f.module); await f.lazy.ready();
+  assert.equal(f.mounts.length, 1); assert.deepEqual(f.mounts[0].view, { start: 30, end: 40 });
+  assert.deepEqual(f.mounts[0].selected, ['A']);
+});
+
+test('closing or disposing during analysis import does not mount stale UI and a later open retries', async () => {
+  const f = lazyFixture(); f.lazy.setOpen(true); const ready = f.lazy.ready(); f.lazy.setOpen(false);
+  f.pending.resolve(f.module); await ready;
+  assert.equal(f.mounts.length, 0);
+  f.lazy.setOpen(true); await f.lazy.ready(); assert.equal(f.mounts.length, 1);
+  const disposed = lazyFixture(); disposed.lazy.setOpen(true); disposed.lifetime.abort();
+  disposed.pending.resolve(disposed.module); await disposed.lazy.ready(); assert.equal(disposed.mounts.length, 0);
+  const failed = lazyFixture(); failed.lazy.setOpen(true); failed.pending.reject(new Error('chunk failed'));
+  await assert.rejects(failed.lazy.ready(), /chunk failed/); assert.equal(failed.errors.length, 1);
+});

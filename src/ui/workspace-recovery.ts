@@ -1,5 +1,6 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { WorkspaceCheckpoints } from '../workspace-checkpoint.ts';
+import { WorkspaceCheckpoints, checkpointTabId } from '../workspace-checkpoint.ts';
+import { installCheckpointHistory } from './checkpoint-history.ts';
 import { currentActor } from '../identity.ts';
 import type { ReviewSession } from '../session.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
@@ -61,14 +62,19 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
 export function installWorkspaceRecovery(session: ReviewSession, options: {
   snapshot(): WorkspaceFile; restore(document: WorkspaceFile): Promise<boolean>; ready: Promise<void>; toasts: ToastStack;
 }) {
-  const store = new WorkspaceCheckpoints(), id = crypto.randomUUID();
+  const store = new WorkspaceCheckpoints();
+  let id: string = crypto.randomUUID();
   let previousId = '', actor = '', active = false, initialized = false, disposed = false;
   let last = '', timer: ReturnType<typeof setTimeout> | undefined, writing = false, again = false, warned = false;
   let generation = 0;
   const recovery = document.getElementById('start-workspace-recovery')!;
   let cardLife = new AbortController();
   const clearRecovery = () => { cardLife.abort(); cardLife = new AbortController(); recovery.replaceChildren(); recovery.hidden = true; };
-  try { previousId = sessionStorage.getItem('voidplayer.checkpoint') ?? ''; sessionStorage.setItem('voidplayer.checkpoint', id); } catch {}
+  try {
+    previousId = sessionStorage.getItem('voidplayer.checkpoint') ?? '';
+    id = checkpointTabId(previousId, (performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined)?.type ?? '', id);
+    sessionStorage.setItem('voidplayer.checkpoint', id);
+  } catch {}
   async function flush() {
     if (!initialized || disposed) return;
     if (writing) { again = true; return; }
@@ -96,6 +102,10 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
   // which needs a full session event. At most one write + one coalesced update.
   const interval = setInterval(() => void flush(), 5000);
   const lifetime = new AbortController();
+  installCheckpointHistory(store, {
+    signal: lifetime.signal, currentId: () => `${id}:${actor}`, restore: options.restore,
+    report: error => options.toasts.show(error.message, { kind: 'error' }),
+  });
   window.addEventListener('pagehide', () => void flush(), { signal: lifetime.signal });
   document.addEventListener('visibilitychange', () => { if (document.hidden) void flush(); }, { signal: lifetime.signal });
   async function initialize() {

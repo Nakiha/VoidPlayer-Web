@@ -1,8 +1,11 @@
 import 'fake-indexeddb/auto';
 import { test } from 'node:test';
+import { IDBFactory } from 'fake-indexeddb';
+import { AnnotationStorage } from '../../src/annotation-storage.ts';
+import { LocalDatabase } from '../../src/local-database.ts';
 import assert from 'node:assert/strict';
 import { getLocalThumbnail, putLocalThumbnail, closeThumbnailDatabase, LOCAL_THUMB_BYTES, LOCAL_THUMB_COUNT } from '../../src/thumbnails/local-store.ts';
-import { WorkspaceCheckpoints } from '../../src/workspace-checkpoint.ts';
+import { WorkspaceCheckpoints, checkpointTabId } from '../../src/workspace-checkpoint.ts';
 import { Viewport } from '../../src/viewport.ts';
 import type { WorkspaceFile } from '../../src/workspace-file.ts';
 const workspace = (): WorkspaceFile => ({ schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: 'http://localhost/', positionUs: 0, tracks: [], media: [], marks: [], viewport: new Viewport().snapshot() });
@@ -43,4 +46,90 @@ test('checkpoints separate actor/tab records, prefer this tab and preserve compa
   assert.equal(await checkpoint.read('unknown', 'a'), undefined);
   assert.deepEqual((await checkpoint.read('one', 'a'))?.document.comparison, doc.comparison);
   checkpoint.close();
+});
+
+
+test('blocked database opens recover after the old tab closes, without orphan connections', async () => {
+  const name = 'vp-blocked-recovery';
+  const old = await open(name, 1);
+  const connection = new LocalDatabase(name, 2, () => {}, 'blocked');
+  await assert.rejects(connection.open(), /blocked/);
+  old.close();
+  const recovered = await connection.open();
+  assert.equal(recovered.version, 2);
+  connection.close();
+  // Any orphan from the first request would block this upgrade.
+  const next = await open(name, 3); next.close();
+});
+
+test('version changes invalidate cached connections and closing an in-flight open settles waiters', async () => {
+  const connection = new LocalDatabase('vp-version-recovery', 1, db => db.createObjectStore('rows'), 'blocked');
+  const first = await connection.open();
+  const upgraded = await open('vp-version-recovery', 2); upgraded.close();
+  await assert.rejects(connection.open(), { name: 'VersionError' });
+  connection.close();
+  const old = await open('vp-close-pending', 1);
+  const pending = new LocalDatabase('vp-close-pending', 2, () => {}, 'blocked');
+  const request = pending.open(); pending.close();
+  await assert.rejects(request, { name: 'AbortError' }); old.close();
+  const reopened = await pending.open(); assert.equal(reopened.version, 2); pending.close();
+  assert.throws(() => first.transaction('rows'), { name: 'InvalidStateError' });
+});
+
+test('annotation migration indexes existing records and scopes draft reads; previews share one transaction', async t => {
+  const previous = globalThis.indexedDB;
+  globalThis.indexedDB = new IDBFactory(); t.after(() => { globalThis.indexedDB = previous; });
+  const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('voidplayer-annotations', 2);
+    request.onupgradeneeded = () => { for (const name of ['drafts', 'records', 'previews']) request.result.createObjectStore(name, { keyPath: 'key' }); };
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  const tx = legacy.transaction(['records', 'drafts', 'previews'], 'readwrite');
+  for (const space of ['current', 'other']) {
+    tx.objectStore('records').put({ key: `${space}/m`, space, id: 'm', revision: 1 });
+    for (const actor of ['alice', 'bob']) tx.objectStore('drafts').put({ key: `${actor}/${space}/tab/m`, actor, space, id: 'm' });
+  }
+  await complete(tx); legacy.close();
+  const storage = new AnnotationStorage(); t.after(() => storage.close());
+  assert.deepEqual((await storage.records('current')).map(r => r.space), ['current']);
+  assert.deepEqual((await storage.drafts('current', 'alice')).map(r => [r.space, r.actor]), [['current', 'alice']]);
+  await storage.savePreview('current', 'm', { url: 'jpeg', width: 2, height: 2 });
+  await storage.savePreview('other', 'm', { url: 'other', width: 2, height: 2 });
+  const previews = await storage.previews('current', ['m', 'missing', 'm']);
+  assert.equal(previews.size, 1); assert.equal(previews.get('m')?.url, 'jpeg');
+  // Closed connections can be reopened by the same storage instance.
+  storage.close(); assert.equal((await storage.records('current')).length, 1);
+});
+
+
+test('reloads reuse their own checkpoint while inherited new-tab storage gets a fresh identity', async () => {
+  const previous = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', fresh = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
+  assert.equal(checkpointTabId(previous, 'reload', fresh), previous);
+  assert.equal(checkpointTabId(previous, 'back_forward', fresh), previous);
+  assert.equal(checkpointTabId(previous, 'navigate', fresh), fresh);
+  assert.equal(checkpointTabId('invalid', 'reload', fresh), fresh);
+  const store = new WorkspaceCheckpoints();
+  try {
+    for (let i = 0; i < 20; i++) await store.save({ id: previous + ':reload-user', actor: 'reload-user', updatedAt: i, document: workspace() });
+    assert.equal((await store.list('reload-user')).entries.length, 1);
+  } finally { store.close(); }
+});
+
+test('checkpoint history pages tied timestamps, isolates users, and refuses stale deletions', async () => {
+  const store = new WorkspaceCheckpoints(), document = workspace();
+  try {
+    for (const id of ['a', 'b', 'c', 'd', 'e']) await store.save({ id, actor: 'history', updatedAt: 100, document });
+    await store.save({ id: 'other-actor', actor: 'other-history', updatedAt: 200, document });
+    const first = await store.list('history', undefined, 2);
+    const second = await store.list('history', first.entries.at(-1), 2);
+    const last = await store.list('history', second.entries.at(-1), 2);
+    assert.deepEqual([...first.entries, ...second.entries, ...last.entries].map(row => row.id), ['e','d','c','b','a']);
+    assert.equal(first.more, true); assert.equal(last.more, false);
+    assert.equal(await store.exact('history', 'other-actor'), undefined);
+    assert.equal(await store.remove('history', 'other-actor', 200), false);
+    await store.save({ id: 'e', actor: 'history', updatedAt: 101, document });
+    assert.equal(await store.remove('history', 'e', 100), false);
+    assert.equal(await store.remove('history', 'e', 101), true);
+    assert.equal(await store.exact('history', 'e'), undefined);
+  } finally { store.close(); }
 });

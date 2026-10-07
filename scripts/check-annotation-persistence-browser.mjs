@@ -27,7 +27,7 @@ try {
  assert.equal(await b.locator('#annotation-save-state, #settings-tab-annotations, #annotation-space-choice, #annotation-space-create, #annotation-publish').count(),0,'legacy sync controls are removed');
  const recoveryControls='#annotation-recovery, #annotation-sync-now, #annotation-drafts-export, #annotation-conflicts, #annotation-other-drafts';
  const checkWorkspace=async page=>{assert.equal(await page.locator(recoveryControls).count(),0,'annotation recovery controls are removed entirely');assert.deepEqual(await page.locator('.workspace-current-section button:visible').allTextContents(),['保存','复制链接'],'annotation state adds no workspace actions');};
- const readDrafts=page=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-annotations',2);request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('drafts'),read=tx.objectStore('drafts').getAll();read.onsuccess=()=>resolve(read.result);read.onerror=()=>reject(read.error);tx.oncomplete=()=>db.close();};}));
+ const readDrafts=page=>page.evaluate(()=>new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-annotations');request.onerror=()=>reject(request.error);request.onsuccess=()=>{const db=request.result,tx=db.transaction('drafts'),read=tx.objectStore('drafts').getAll();read.onsuccess=()=>resolve(read.result);read.onerror=()=>reject(read.error);tx.oncomplete=()=>db.close();};}));
  await checkWorkspace(b);
  await b.locator('#settings-close').click();
  const mark=await call(a,'add_review_mark',{slot:'A',text:'持久化标注'});

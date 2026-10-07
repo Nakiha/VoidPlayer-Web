@@ -32,7 +32,8 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if (!row.inputs.length || !row.artifacts.length || !(row.timeoutMs > 0) || typeof row.build !== 'boolean') fail(`${row.id}: missing execution metadata`);
     if (!Array.isArray(row.command) || row.command.length < 2 || !row.command.includes(row.script) && !row.command.includes('./' + row.script)) fail(`${row.id}: command does not execute its script`);
     for (const fixture of row.fixtures) if (!manifest.fixtures[fixture]) fail(`${row.id}: unknown fixture ${fixture}`);
-    if (row.suites.includes('fast') && (row.fixtures.length || row.tools.length || row.build || row.engines.join() !== 'node')) fail(`${row.id}: fast requires source-only Node checks`);
+    if (row.suites.some(suite => ['fast', 'source'].includes(suite)) && (row.fixtures.length || row.tools.length || row.build || row.engines.join() !== 'node')) fail(`${row.id}: source/fast requires source-only Node checks`);
+    if (row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node' && !row.suites.includes('source')) fail(`${row.id}: source-only Node check missing from source suite`);
   }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
@@ -46,6 +47,41 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
   }
   for (const category of ['test', 'scripts']) inspect(category, category);
   if (failures.length) throw new AggregateError(failures.map(message => new Error(message)), failures.join('\n'));
+  return true;
+}
+
+/** Expand the checked-in workflow's explicit suite and case matrices. Fail
+ * closed on unsupported interpolation instead of treating it as a wildcard. */
+export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
+  const covered = new Set();
+  for (const source of workflows) {
+    const jobs = source.slice(source.indexOf('\njobs:\n') + 7);
+    for (const [, body] of jobs.matchAll(/^  [\w-]+:\n([\s\S]*?)(?=^  [\w-]+:\n|$(?![\s\S]))/gm)) {
+      for (const [, command] of body.matchAll(/run-tests\.mjs ([^\n]+)/g)) {
+        if (command.startsWith('--prepare') || command.startsWith('--check')) continue;
+        let expanded = [command];
+        for (const variable of new Set([...command.matchAll(/\$\{\{ matrix\.(\w+) \}\}/g)].map(match => match[1]))) {
+          const list = new RegExp(`^\\s+${variable}: \\[([^\\]]+)\\]`, 'm').exec(body);
+          if (!list) throw new Error(`Unsupported CI matrix ${variable}`);
+          const values = list[1].split(',').map(value => value.trim());
+          expanded = expanded.flatMap(text => values.map(value => text.replaceAll('${{ matrix.' + variable + ' }}', value)));
+        }
+        for (const text of expanded) {
+          if (text.includes('${{')) throw new Error(`Unsupported CI command: ${text}`);
+          const args = text.trim().split(/\s+/);
+          const suite = args[0].startsWith('--') ? undefined : args[0];
+          const engine = args.includes('--engine') ? args[args.indexOf('--engine') + 1] : undefined;
+          const input = args.includes('--input') ? args[args.indexOf('--input') + 1] : undefined;
+          const caseIds = args.includes('--case') ? args[args.indexOf('--case') + 1].split(',') : [];
+          for (const platform of ['linux', 'darwin', 'win32']) {
+            for (const row of selectCases({ suite, engine, input, caseIds, platform }, manifest).selected) covered.add(row.id);
+          }
+        }
+      }
+    }
+  }
+  const missing = manifest.cases.filter(row => row.required && row.kind === 'regression' && row.suites.includes('browser') && !covered.has(row.id));
+  if (missing.length) throw new Error(`Required browser cells missing from CI: ${missing.map(row => row.id).join(', ')}`);
   return true;
 }
 

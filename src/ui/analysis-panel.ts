@@ -7,25 +7,27 @@
 import { SLOTS } from '../model.ts';
 import type { Slot } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
-import type { AnalysisCapability, AnalysisResult } from '../analysis/types.ts';
-import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US, niceCeiling, shouldBucketize } from '../analysis/statistics.ts';
+import type { AnalysisCapability } from '../analysis/types.ts';
+import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../analysis/statistics.ts';
 import { panTimeRange, zoomTimeRange } from '../analysis/projection.ts';
-import { groupSamples } from '../analysis/grouping.ts';
-import type { GroupSampleRef, TimeGroup } from '../analysis/grouping.ts';
-import { bucketWidthFor, canSatisfy, clampPixelWidth } from '../analysis/view-cache.ts';
-import type { ViewCacheEntry } from '../analysis/view-cache.ts';
-import { buildInspection, coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth, LOCAL_RATE_WINDOW_US } from '../analysis/inspection.ts';
+import type { TimeGroup } from '../analysis/grouping.ts';
+import { buildInspection } from '../analysis/inspection.ts';
 import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
-import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, pickGlyph } from './analysis-geometry.ts';
+import { pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { getLocale, onLanguageChange, t, th, msg } from '../i18n.ts';
 import { reconcileTrackSelection } from './track-selection.ts';
 import type { AnalysisViewState } from '../workspace-file.ts';
 import {
-  computeLayout, desiredHeight, drawAnalysis, formatAxis, plotGeometry, tOf, xOf,
+  computeLayout, drawAnalysis, formatAxis, plotGeometry, tOf, xOf,
 } from './analysis-canvas.ts';
-import type { CanvasColors, CanvasModel, CanvasTrack } from './analysis-canvas.ts';
+import type { CanvasColors, CanvasModel } from './analysis-canvas.ts';
+import { loadAnalysisPreferences as loadPrefs, PREF_KEY } from './analysis/preferences.ts';
+import type { AnalysisPreferences as Prefs } from './analysis/preferences.ts';
+import { buildAnalysisModel } from './analysis/model.ts';
+import { createAnalysisQueries } from './analysis/queries.ts';
+import type { AnalysisQueryTrack } from './analysis/queries.ts';
 import './analysis-panel.css';
 
 type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
@@ -35,10 +37,6 @@ export interface AnalysisHooks {
   isOpen: () => boolean;
 }
 
-const PREF_KEY = 'voidplayer.analysis.v2';
-const LEGACY_PREF_KEY = 'voidplayer.analysis.v1';
-const GROUP_TOLERANCE_US = 2000;
-const MAX_SAMPLES = 5000;
 const MIN_SPAN_US = 10_000;
 
 const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
@@ -47,60 +45,8 @@ const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
 // 合并为默认：同一基线按时间交错，不以严格配对为前提；分轨只作主动选择。
 const layoutLabel = (mode: 'merged' | 'rows') => t(mode === 'merged' ? msg("analysis.layoutMerged", "合并") : msg("analysis.layoutRows", "分轨"));
 
-interface Prefs {
-  showBitrate: boolean; showSize: boolean;
-  axis: 'pts' | 'dts'; windowUs: number; layoutMode: 'merged' | 'rows';
-  /** 状态区帧号顺序（PTS序/解码序），与图表时间基准独立。 */
-  numAxis: 'pts' | 'dts';
-  follow: boolean; selected: Slot[];
-}
 
-function migrateLayoutMode(raw: unknown): Prefs['layoutMode'] {
-  // 旧偏好 auto/paired 一律迁到 merged，rows 保留。
-  if (raw === 'rows') return 'rows';
-  return 'merged';
-}
-
-function sanitizePrefs(p: Partial<Prefs> & { layoutMode?: unknown }, fallback: Prefs): Prefs {
-  return {
-    ...fallback,
-    showBitrate: typeof p.showBitrate === 'boolean' ? p.showBitrate : fallback.showBitrate,
-    showSize: typeof p.showSize === 'boolean' ? p.showSize : fallback.showSize,
-    follow: typeof p.follow === 'boolean' ? p.follow : fallback.follow,
-    axis: p.axis === 'dts' ? 'dts' : 'pts',
-    numAxis: p.numAxis === 'dts' ? 'dts' : 'pts',
-    windowUs: BITRATE_WINDOW_OPTIONS_US.includes(p.windowUs!) ? p.windowUs! : DEFAULT_BITRATE_WINDOW_US,
-    layoutMode: migrateLayoutMode(p.layoutMode),
-    selected: Array.isArray(p.selected) ? p.selected.filter((s): s is Slot => SLOTS.includes(s as Slot)) : [],
-  };
-}
-
-function loadPrefs(): Prefs {
-  const fallback: Prefs = {
-    // 多轨主体色恒为轨道色（与曲线对应），关键用顶端菱形/K 标记，不再按类型填色。
-    showBitrate: true, showSize: true,
-    axis: 'pts', windowUs: DEFAULT_BITRATE_WINDOW_US, layoutMode: 'merged',
-    numAxis: 'pts',
-    follow: true, selected: [],
-  };
-  // v2 优先；无 v2 时从 v1 迁移可保留项，colorByType 一律丢弃（旧版本无法区分
-  // 用户显式选择，新默认恒为轨道主体色）。只迁移一次，不反复覆盖 v2。
-  try {
-    const raw = localStorage.getItem(PREF_KEY);
-    if (raw) return sanitizePrefs(JSON.parse(raw) as Partial<Prefs>, fallback);
-  } catch { /* 损坏的 v2 视为无偏好，走迁移。 */ }
-  try {
-    const legacy = localStorage.getItem(LEGACY_PREF_KEY);
-    if (legacy) {
-      const next = sanitizePrefs(JSON.parse(legacy) as Partial<Prefs>, fallback);
-      try { localStorage.setItem(PREF_KEY, JSON.stringify(next)); } catch { /* 偏好不影响播放。 */ }
-      return next;
-    }
-  } catch { /* 损坏的 v1 视为无偏好。 */ }
-  return fallback;
-}
-
-interface TrackEntry { slot: Slot; mediaId: string; offsetUs: number; durationUs: number; name: string; sourceGen: number }
+interface TrackEntry extends AnalysisQueryTrack { name: string }
 
 export function installAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks): {
   setOpen(open: boolean): void;
@@ -182,17 +128,24 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   let tracks: TrackEntry[] = [];
   let caps = new Map<Slot, AnalysisCapability>();
-  let results = new Map<Slot, AnalysisResult>();
-  const queryErrors = new Map<Slot, string>();
-  let seqBySlot = new Map<Slot, number>();
-  let abortBySlot = new Map<Slot, AbortController>();
-  let panelSeq = 0;
+  const queries = createAnalysisQueries({
+    signal,
+    snapshot: () => ({ open, tracks, selected: selectedTracks(), capabilities: caps,
+      axis: prefs.axis, windowUs: prefs.windowUs, range: viewRange(), domain: domainBounds(),
+      pixelWidth: Math.max(1, plotWidthCss() - 46) }),
+    query: (slot, query) => session.queryAnalysis(slot, query),
+    onChange: () => render(),
+    onResult: () => updateStatus(),
+    onQueryStart: () => { canvas.dataset.analysisQueries = String((Number(canvas.dataset.analysisQueries ?? 0) || 0) + 1); },
+    onQueryComplete: ms => { canvas.dataset.analysisQueryMs = ms.toFixed(1); },
+  });
+  const results = queries.results;
+  const queryErrors = queries.errors;
   let view: { start: number; end: number } | null = null;
   let hoverUs: number | null = null;
   let rubber: { a: number; b: number } | null = null;
   let positionUs = 0;
   let durationUs = 0;
-  let queryTimer = 0;
   let buildingTimer = 0;
   let lastGeom: { gutter: number; plotW: number; width: number } | null = null;
   let lastModel: CanvasModel | null = null;
@@ -553,418 +506,15 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     render();
   }
 
-  // ---- 查询 ----
-  // 离散动作（点击/菜单/框选）用 immediate=true：数据 2~30ms 就到；
-  // 高频手势（滚轮/捏合）走节流：缓存 miss 时最多 100ms 发一次查询（abort 旧查），
-  // 命中只重绘缓存；trailing 保证停下后补齐最后一帧。
-  const QUERY_THROTTLE_MS = 100;
-  const CURVE_MARGIN_RATIO = 0.25;
-  let lastQueryMs = 0;
-  function scheduleQuery(immediate = false) {
-    if (!open) return;
-    if (immediate) {
-      window.clearTimeout(queryTimer);
-      lastQueryMs = performance.now();
-      void refresh();
-      return;
-    }
-    const now = performance.now();
-    const elapsed = now - lastQueryMs;
-    if (elapsed >= QUERY_THROTTLE_MS) {
-      window.clearTimeout(queryTimer);
-      lastQueryMs = now;
-      void refresh();
-      return;
-    }
-    window.clearTimeout(queryTimer);
-    queryTimer = window.setTimeout(() => {
-      lastQueryMs = performance.now();
-      void refresh();
-    }, QUERY_THROTTLE_MS - elapsed);
-  }
-
-  /**
-   * 每轨已查询覆盖（会话时间）+ 分辨率/细节级别：区间覆盖只是必要条件，
-   * 粗桶不可满足更细请求；预取半屏不改变可见区的目标 LOD。
-   */
-  const queriedBySlot = new Map<Slot, ViewCacheEntry>();
-
-  /** 估计新区间内的样本数（用已缓存的 raw 精确计数或桶 count 求和）。 */
-  function estimateSamplesIn(slot: Slot, startUs: number, endUs: number): number | null {
-    const r = results.get(slot);
-    if (!r) return null;
-    if (!r.truncated && r.samples.length) {
-      let n = 0;
-      for (const s of r.samples) {
-        const t = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-        if (t != null && t >= startUs && t < endUs) n++;
-      }
-      return n;
-    }
-    if (r.buckets) {
-      let n = 0;
-      for (const b of r.buckets) {
-        if (b.endUs <= startUs || b.startUs >= endUs || !b.count) continue;
-        n += b.count;
-      }
-      return n;
-    }
-    return null;
-  }
-
   /** 绘图区真实宽度：查询/x 换算/命中统一用它。 */
   const plotWidthCss = () => Math.max(1, Math.floor(plot.clientWidth || body.clientWidth));
-
-  async function refresh() {
-    if (!open || signal.aborted) return;
-    const range = viewRange();
-    const pixelWidth = clampPixelWidth(Math.max(1, plotWidthCss() - 46));
-    const span = Math.max(1, range.end - range.start);
-    const db = domainBounds();
-    // 预取 margin：连续滚动落入缓存只重绘，不发查询；可见区密度与预取数量不混淆。
-    // margin 至少覆盖局部帧率的半个统计窗口：深度放大后视口不足 1s，
-    // 否则检查器拿到的样本覆盖不了自己的 1s 邻域（口径随缩放漂移）。
-    // 样本/桶走 halo 区间（qStart/qEnd/qPix），码率曲线走小 margin 预载区间
-    // （cStart/cEnd/cPix，可视 ±0.25span，按比例放大像素数保证 usPerPixel 不变）；
-    // 绘制层统一按可视裁剪，缓存层分别比较覆盖与密度。
-    const full = span >= db.end - db.start;
-    const margin = Math.max(span * 0.5, LOCAL_RATE_WINDOW_US / 2);
-    const qStart = full ? range.start : Math.max(db.start, Math.floor(range.start - margin));
-    const qEnd = full ? range.end : Math.min(db.end, Math.ceil(range.end + margin));
-    // 大 CSS 宽度 + 预取 margin 不得产生 pixelWidth>4096 的查询异常。
-    const qPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (qEnd - qStart) / span));
-    const curveMargin = full ? 0 : span * CURVE_MARGIN_RATIO;
-    const cStart = full ? Math.floor(range.start) : Math.max(db.start, Math.floor(range.start - curveMargin));
-    const cEnd = full ? Math.ceil(range.end) : Math.min(db.end, Math.ceil(range.end + curveMargin));
-    const cPix = clampPixelWidth(full ? pixelWidth : Math.round(pixelWidth * (cEnd - cStart) / span));
-    const visibleBucketW = bucketWidthFor(range.start, range.end, pixelWidth);
-    for (const track of selectedTracks()) {
-      const cap = caps.get(track.slot);
-      // Unsupported paths and failed indexes are terminal states, not pending queries.
-      if (cap?.hasSize === false || cap?.indexState === 'error') continue;
-      const cover = queriedBySlot.get(track.slot);
-      const cached = results.get(track.slot);
-      if (!queryErrors.has(track.slot) && cap?.indexState === 'complete' && cover && cached
-        && cached.indexRevision === cover.indexRevision
-        && cached.sourceVersion === cover.sourceVersion) {
-        // 可见区是否需要逐样本：用缓存估计密度，不只看点数。
-        const estimated = estimateSamplesIn(track.slot, range.start, range.end);
-        const needRaw = estimated == null ? false : !shouldBucketize(estimated, pixelWidth, 2);
-        const ok = canSatisfy(cover, {
-          startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
-          axis: prefs.axis, windowUs: prefs.windowUs, offsetUs: track.offsetUs,
-          pixelWidth: qPix, needRaw, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
-          curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
-        });
-        // 可见区 LOD 也要满足：粗桶覆盖预取区不代表可见区够细。
-        const visibleOk = !needRaw || cover.detailMode === 'raw';
-        const densityOk = cover.detailMode === 'raw' || cover.bucketWidthUs <= visibleBucketW + 1;
-        if (ok && visibleOk && densityOk) continue; // 已覆盖：只重绘，不发查询
-      }
-      abortBySlot.get(track.slot)?.abort();
-      const controller = new AbortController();
-      abortBySlot.set(track.slot, controller);
-      const mySeq = ++panelSeq;
-      seqBySlot.set(track.slot, mySeq);
-      const mediaId = track.mediaId;
-      const queryStart = performance.now();
-      canvas.dataset.analysisQueries = String((Number(canvas.dataset.analysisQueries ?? 0) || 0) + 1);
-      session.queryAnalysis(track.slot, {
-        startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
-        axis: prefs.axis, pixelWidth: qPix, bitrateWindowUs: prefs.windowUs, maxSamples: MAX_SAMPLES,
-        bucketOriginUs: 0,
-        curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
-        signal: controller.signal,
-      }).then(result => {
-        if (abortBySlot.get(track.slot) === controller) abortBySlot.delete(track.slot);
-        if (signal.aborted || seqBySlot.get(track.slot) !== mySeq) return; // 旧结果不覆盖新图
-        const current = tracks.find(e => e.slot === track.slot);
-        if (!current || current.mediaId !== mediaId) return; // 换片后旧结果丢弃
-        // 实例隔离：source 重建（色彩模式切换等）后 mediaId 不变，必须按
-        // session 盖章的 generation 校验；内层 mediaId 由 adapter 在打开时
-        // 铸造，可能早于身份钉定（updateMediaInfo），不得参与比较。
-        if (!result.sourceVersion.startsWith(`${current.sourceGen}#`)) return;
-        queryErrors.delete(track.slot);
-        results.set(track.slot, result);
-        // 索引进展可能使暂定排名转正，按当前帧重估状态区。
-        updateStatus();
-        // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
-        // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
-        if (result.capability?.indexState === 'complete') {
-          const detailMode = !result.truncated && result.samples.length > 0 ? 'raw' : 'buckets';
-          queriedBySlot.set(track.slot, {
-            slot: track.slot, sourceVersion: result.sourceVersion, indexRevision: result.indexRevision,
-            axis: result.axis, windowUs: prefs.windowUs,
-            startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
-            pixelWidth: qPix, offsetUs: track.offsetUs,
-            detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
-            truncated: result.truncated, sampleCount: result.samples.length,
-            curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
-          });
-          // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
-        } else {
-          queriedBySlot.delete(track.slot);
-        }
-        canvas.dataset.analysisQueryMs = (performance.now() - queryStart).toFixed(1);
-        render();
-      }).catch(error => {
-        if (abortBySlot.get(track.slot) === controller) abortBySlot.delete(track.slot);
-        if (signal.aborted || seqBySlot.get(track.slot) !== mySeq) return;
-        if (error instanceof Error && error.name === 'AbortError') return;
-        queryErrors.set(track.slot, error instanceof Error ? error.message : String(error));
-        render();
-      });
-    }
-    render();
-  }
+  const scheduleQuery = (immediate = false) => queries.schedule(immediate);
 
   // ---- 绘制：时间分组 → 统一几何 → 绘图与命中共用 ----
 
-  function buildModel(): (CanvasModel & { glyphs: AnalysisGlyph[]; groups: TimeGroup[] }) | null {
-    const sel = selectedTracks();
-    if (!sel.length) return null;
-    const range = viewRange();
-    const inView = (t: number) => t >= range.start && t <= range.end;
-    // 图宽来自绘图区实际宽度（画布全宽）；x 换算、查询、命中统一用它。
-    const width = plotWidthCss();
-    const merged = prefs.layoutMode === 'merged';
-    const plotW = Math.max(1, width - 46);
-    // LOD：每个样本至少容纳 1px 柱 + 1px 间隔；柱宽按时间轴比例连续计算。
-    // 逐样本可用当且仅当全部选中轨都有完整 raw；否则用共享桶，仍保持合并。
-    // 计数只看视口内（查询含预取 margin，视口外不参与），放大后可从桶切回 raw。
-    let totalRawInView = 0;
-    let allRaw = true;
-    for (const t of sel) {
-      const r = results.get(t.slot);
-      if (!r || r.truncated || !r.samples.length) { allRaw = false; break; }
-      let n = 0;
-      for (const s of r.samples) {
-        const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-        if (axisT != null && axisT >= range.start && axisT <= range.end) n++;
-      }
-      totalRawInView += n;
-    }
-    // 分组先行：容量复核需要真实组锚点，不能只看平均密度。
-    // 分组只取视口 + 容差 halo，避免视口裁切改变边缘组组成，也避免长片全量分组。
-    const groupInputs: { slot: Slot; samples: GroupSampleRef[] }[] = [];
-    if (allRaw && totalRawInView > 0) {
-      const halo = GROUP_TOLERANCE_US + 1000;
-      for (const t of sel) {
-        const r = results.get(t.slot)!;
-        const refs: GroupSampleRef[] = [];
-        for (const s of r.samples) {
-          const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-          if (axisT == null || !Number.isFinite(axisT)) continue;
-          if (axisT < range.start - halo || axisT > range.end + halo) continue;
-          refs.push({
-            sampleId: s.sampleId, axisUs: axisT, sessionPtsUs: s.effectivePtsUs,
-            sizeBytes: s.sizeBytes,
-            key: s.randomAccess === 'yes' ? true : s.randomAccess === 'no' ? false : null,
-            decodeOrdinal: s.decodeOrdinal, mediaId: t.mediaId,
-            sourceVersion: r.sourceVersion, indexRevision: r.indexRevision,
-          });
-        }
-        groupInputs.push({ slot: t.slot, samples: refs });
-      }
-    }
-    const preGroups: TimeGroup[] = groupInputs.length ? groupSamples(groupInputs, GROUP_TOLERANCE_US) : [];
-    // 视口内无样本时不断言 raw 可用，走桶/空态，避免 0 样本误判为稀疏。
-    // 平均密度通过后仍复核局部密集组，绘图与容量判断使用相同的连续柱宽。
-    const lanesForCap = Math.max(1, merged ? sel.length : 1);
-    const useRaw = allRaw && totalRawInView > 0
-      && !shouldBucketize(totalRawInView, plotW, 2)
-      && canLayoutRaw(preGroups, range.start, Math.max(range.start + 1, range.end), 46, plotW, lanesForCap);
-    const canvasTracks: CanvasTrack[] = [];
-    // 纵轴按视口内数据取最大（查询含预取 margin，视口外峰值不参与），
-    // 同一指标跨轨共用零起点和纵轴范围。
-    let yMaxBitrate = 0, yMaxSize = 0;
-    for (const t of sel) {
-      const r = results.get(t.slot);
-      if (!r) continue;
-      const canvasSamples = (useRaw && !r.truncated && r.samples.length)
-        ? r.samples.map(s => {
-          const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-          return {
-            t: axisT ?? Number.NaN,
-            size: s.sizeBytes ?? 0,
-            key: s.randomAccess === 'yes' ? true : s.randomAccess === 'no' ? false : null,
-          };
-        }).filter(s => Number.isFinite(s.t)) : null;
-      if (canvasSamples) for (const s of canvasSamples) if (inView(s.t)) yMaxSize = Math.max(yMaxSize, s.size);
-      for (const b of r.buckets ?? []) {
-        if (b.endUs <= range.start || b.startUs >= range.end || !b.count) continue;
-        // raw 可用时纵轴仍以视口内 raw 为主，桶仅作兜底；桶模式下用峰值。
-        if (!useRaw) yMaxSize = Math.max(yMaxSize, b.maxBytes);
-        else if (!canvasSamples) yMaxSize = Math.max(yMaxSize, b.maxBytes);
-      }
-      if (useRaw && canvasSamples) {
-        // raw 模式下桶不参与纵轴，避免预取桶的视口外峰值抬高轴。
-      } else if (!useRaw) {
-        // 桶模式已在上面统计。
-      }
-      for (const p of r.bitrate ?? []) {
-        if (p.mbps != null && p.tUs >= range.start && p.tUs <= range.end) yMaxBitrate = Math.max(yMaxBitrate, p.mbps);
-      }
-      canvasTracks.push({
-        slot: t.slot,
-        color: slotColors.get(t.slot) ?? '#888',
-        bitrate: (r.bitrate ?? []).map(p => ({ t: p.tUs, mbps: p.mbps })),
-        provisional: r.capability.indexState !== 'complete',
-      });
-    }
-    if (!canvasTracks.length) return null;
-    const groups: TimeGroup[] = useRaw ? preGroups : [];
-    const rows = prefs.showSize ? (merged ? 1 : canvasTracks.length) : 0;
-    const need = desiredHeight(prefs.showBitrate, rows);
-    const height = Math.max(body.clientHeight || 220, need);
-    const viewEnd = Math.max(range.start + 1, range.end);
-    // 统一几何：组宽来自公共时间组，缺席留空；绘图与命中共用。
-    // 行高与绘制共用 computeLayout，不复制公式；先算布局，再按行生成 glyph。
-    const layoutProbe: CanvasModel = {
-      width, height, viewStart: range.start, viewEnd,
-      showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,
-      tracks: canvasTracks, merged,
-      yMaxBitrate: 0, yMaxSize: 0, colors, rubber,
-    };
-    const layout = computeLayout(layoutProbe);
-    const bitrateH = layout.bitrate?.h ?? 0;
-    const perRow = layout.sizeRows[0]?.h ?? 0;
-    const yMaxSizeNice = niceCeiling(yMaxSize);
-    let sampleGlyphs: SampleGlyph[] = [];
-    let bucketGlyphs: BucketGlyph[] = [];
-    const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>(
-      sel.map(t => {
-        const r = results.get(t.slot);
-        return [t.slot, {
-          mediaId: t.mediaId,
-          sourceVersion: r?.sourceVersion ?? `${t.mediaId}@0`,
-          indexRevision: r?.indexRevision ?? 0,
-        }] as const;
-      }),
-    );
-    if (prefs.showSize && rows) {
-      if (merged) {
-        const rowY = bitrateH, rowH = perRow;
-        if (useRaw) {
-          sampleGlyphs = layoutMergedSamples(groups, {
-            trackOrder: sel.map(t => t.slot),
-            viewStart: range.start, viewEnd,
-            gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice, mediaBySlot,
-            scale: 'linear',
-          });
-        } else {
-          // 多轨密集时选更粗的桶，保证每组仍有位置画不同轨道，不压成同一像素。
-          // 按公共粗时间下标聚合（会话域原点 0），不按非空位置分批；空桶不绘制，
-          // 但不先从时间格删除，不同稀疏度的轨道仍落到同一套边界。
-          // R3/B1：公共网格由规划器一次决定、不可变下发。各轨独立查询/缓存，
-          // 基础网格未必相同。优先用结果自带的 bucketGrid，缺失时回退到估计；
-          // 仅当全部轨道都与公共粗网格兼容时才合并，否则整体回退到原始桶
-          // （不逐轨各自舍入、不把不同边界并排冒充同一时间组；未知覆盖由
-          // coarsenBucketsShared 向上传播为 complete=false）。
-          const lanes = Math.max(1, sel.length);
-          const span = Math.max(1, viewEnd - range.start);
-          const baseBySlot = new Map<Slot, number>();
-          for (const t of sel) {
-            const r = results.get(t.slot);
-            const gridW = r?.bucketGrid?.widthUs;
-            const w = (typeof gridW === 'number' && gridW > 0)
-              ? gridW
-              : estimateBaseBucketWidth(r?.buckets);
-            if (w != null && w > 0) baseBySlot.set(t.slot, w);
-          }
-          const bases = [...baseBySlot.values()];
-          const baseMin = bases.length ? Math.min(...bases) : null;
-          const timePerPx = span / Math.max(1, plotW);
-          const needed = timePerPx * 2 * lanes;
-          // 公共目标只定一次：找同时是所有 base 整数倍、>= needed 的最小宽度
-          //（有界，避免 10ms/11ms 之类组合爆出巨桶）。找不到则整体回退。
-          const coarseWidth = bases.length && baseMin != null && needed > baseMin
-            ? planSharedCoarseWidth(bases, needed, span)
-            : null;
-          const bucketsBySlot = new Map<Slot, { slot: Slot; bucketIndex: number; startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
-          const toOriginal = (slot: Slot, list: { startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]) => {
-            const nonEmpty = list.filter(b => b.count > 0);
-            bucketsBySlot.set(slot, nonEmpty.map((b, i) => ({
-              slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
-              count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-              keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-              complete: b.complete, maxSampleId: b.maxSampleId,
-            })));
-          };
-          const inViewBySlot = new Map<Slot, { startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
-          for (const t of sel) {
-            const r = results.get(t.slot);
-            inViewBySlot.set(t.slot, (r?.buckets ?? []).filter(b => b.endUs > range.start && b.startUs < viewEnd));
-          }
-          // 全轨一致判定：任一轨不兼容则整体回退，不逐轨混用不同边界。
-          const allCompatible = coarseWidth != null && baseMin != null && coarseWidth > baseMin
-            && sel.every(t => {
-              const trackBase = baseBySlot.get(t.slot) ?? baseMin!;
-              return isBucketGridCompatible(inViewBySlot.get(t.slot) ?? [], trackBase, coarseWidth, 0);
-            });
-          sel.forEach(t => {
-            const inView = inViewBySlot.get(t.slot) ?? [];
-            if (!allCompatible || coarseWidth == null || baseMin == null) {
-              toOriginal(t.slot, inView);
-            } else {
-              const trackBase = baseBySlot.get(t.slot) ?? baseMin!;
-              const coarse = coarsenBucketsShared(inView, trackBase, coarseWidth, 0);
-              bucketsBySlot.set(t.slot, coarse.map(b => ({
-                slot: t.slot, bucketIndex: b.coarseIndex, startUs: b.startUs, endUs: b.endUs,
-                count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-                keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-                complete: b.complete, maxSampleId: b.maxSampleId,
-              })));
-            }
-          });
-          bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
-            trackOrder: sel.map(t => t.slot),
-            viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-            scale: 'linear',
-          });
-        }
-      } else {
-        // 分轨：同一套时间分组，各轨在各自行里，x 仍共享时间轴。
-        sel.forEach((t, i) => {
-          const rowY = bitrateH + i * perRow, rowH = perRow;
-          if (useRaw) {
-            // 分轨仍用公共时间组锚点计算单元，保证跨轨 x 对齐，各轨只取自己的成员。
-            sampleGlyphs.push(...layoutMergedSamples(groups.filter(gr => gr.membersByTrack.has(t.slot)), {
-              trackOrder: [t.slot],
-              viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-              mediaBySlot: new Map([[t.slot, mediaBySlot.get(t.slot)!]]),
-              scale: 'linear',
-            }));
-          } else {
-            const r = results.get(t.slot);
-            const bucketsBySlot = new Map<Slot, { slot: Slot; bucketIndex: number; startUs: number; endUs: number; count: number; maxBytes: number; sumBytes: number; keyCount: number; deltaCount: number; unknownCount: number; complete: boolean; maxSampleId: string | null }[]>();
-            bucketsBySlot.set(t.slot, (r?.buckets ?? []).map((b, i) => ({
-              slot: t.slot, bucketIndex: i, startUs: b.startUs, endUs: b.endUs,
-              count: b.count, maxBytes: b.maxBytes, sumBytes: b.sumBytes,
-              keyCount: b.keyCount, deltaCount: b.deltaCount, unknownCount: b.unknownCount,
-              complete: b.complete, maxSampleId: b.maxSampleId,
-            })));
-            bucketGlyphs.push(...layoutMergedBuckets(bucketsBySlot, {
-              trackOrder: [t.slot],
-              viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-              scale: 'linear',
-            }));
-          }
-        });
-      }
-    }
-    return {
-      width, height,
-      viewStart: range.start, viewEnd,
-      // 多轨主体色恒为轨道色（与曲线/表头一致），关键只用顶端菱形/K 标记。
-      showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,
-      tracks: canvasTracks, merged,
-      yMaxBitrate: niceCeiling(yMaxBitrate), yMaxSize: yMaxSizeNice,
-      colors, rubber,
-      sampleGlyphs, bucketGlyphs,
-      glyphs: [...sampleGlyphs, ...bucketGlyphs] as AnalysisGlyph[],
-      groups,
-    };
+  function buildModel() {
+    return buildAnalysisModel({ sel: selectedTracks(), results, prefs, range: viewRange(), width: plotWidthCss(),
+      availableHeight: body.clientHeight, slotColors, colors, rubber });
   }
 
   function render() {
@@ -1058,7 +608,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 索引构建中渐进重查（仅面板打开时）；完成后自动停止。
     if (selectedTracks().some(t => caps.get(t.slot)?.indexState === 'building' && !queryErrors.has(t.slot))) {
       buildingTimer = window.setTimeout(() => {
-        if (open && !signal.aborted) void refresh();
+        if (open && !signal.aborted) queries.refresh();
       }, 1000);
     }
   }
@@ -1743,8 +1293,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
       cardEl.hidden = true;
-      for (const c of abortBySlot.values()) c.abort();
-      abortBySlot.clear();
+      queries.suspend();
       window.clearTimeout(buildingTimer);
     }
   }
@@ -1824,31 +1373,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     if (sig !== trackSig) {
       trackSig = sig;
-      for (const slot of queryErrors.keys()) {
-        const previous = tracks.find(t => t.slot === slot);
-        const current = entries.find(t => t.slot === slot);
-        if (!current || current.mediaId !== previous?.mediaId || current.sourceGen !== previous.sourceGen) queryErrors.delete(slot);
+      for (const slot of queries.reconcile(tracks, entries)) {
+        rankCache.delete(slot);
+        rankSeq.set(slot, (rankSeq.get(slot) ?? 0) + 1);
       }
       tracks = entries;
-      // Invalidate in-flight results even if the last query never produced data.
-      for (const [slot, controller] of abortBySlot) {
-        controller.abort();
-        seqBySlot.set(slot, ++panelSeq);
-      }
-      abortBySlot.clear();
-      for (const slot of [...results.keys()]) {
-        const entry = entries.find(e => e.slot === slot);
-        // 结果携带 generation 盖章：同媒体重建实例的旧结果一并失效。
-        // 只比 generation（实例身份）；内层 mediaId 可能早于身份钉定。
-        const resultGen = Number(results.get(slot)?.sourceVersion.split('#')[0]);
-        if (!entry || !Number.isInteger(resultGen) || resultGen !== entry.sourceGen) {
-          results.delete(slot);
-          queriedBySlot.delete(slot);
-          // 排名缓存随结果失效，并作废该槽位的在途查询，避免旧片排名污染状态区。
-          rankCache.delete(slot);
-          rankSeq.set(slot, (rankSeq.get(slot) ?? 0) + 1);
-        }
-      }
       caps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
       if (prefs.axis === 'dts' && !allHaveDts()) prefs.axis = 'pts';
       // 换片/清轨后旧检查与冻结快照失效，不拿旧 sampleId 定位新片源。
@@ -1921,7 +1450,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   render();
 
   signal.addEventListener('abort', () => {
-    window.clearTimeout(queryTimer);
+    queries.dispose();
     window.clearTimeout(buildingTimer);
     if (hoverRaf) cancelAnimationFrame(hoverRaf);
     if (viewRaf) cancelAnimationFrame(viewRaf);
@@ -1933,7 +1462,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     wrapObs.disconnect();
     themeChanges.disconnect();
     floatLayer.remove();
-    for (const c of abortBySlot.values()) c.abort();
     axisMenu.dispose();
     windowMenu.dispose();
     layoutMenu.dispose();

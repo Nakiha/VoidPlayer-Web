@@ -665,6 +665,13 @@ export interface Sources {
   "progress.inspect": "正在读取视频信息";
   "progress.queued": "正在准备载入";
   "progress.synchronize": "正在定位到当前播放位置";
+  "recovery.deleteHistory": "删除这份本机恢复记录？";
+  "recovery.export": "导出备份";
+  "recovery.history": "本机恢复记录";
+  "recovery.historyChanged": "恢复记录已改变，请刷新列表后重试。";
+  "recovery.historyCounts": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}";
+  "recovery.historyHelp": "记录仅存于此浏览器。可导出备份或删除不再需要的历史记录，当前页面的记录会继续自动保存。";
+  "recovery.noHistory": "暂无本机恢复记录";
   "recovery.readFailed": "无法读取本机工作区恢复记录，请检查浏览器存储。";
   "recovery.restore": "恢复工作区";
   "recovery.restored": "工作区已恢复。";
@@ -1657,6 +1664,13 @@ export interface MessageParameters {
   "progress.inspect": {  };
   "progress.queued": {  };
   "progress.synchronize": {  };
+  "recovery.deleteHistory": {  };
+  "recovery.export": {  };
+  "recovery.history": {  };
+  "recovery.historyChanged": {  };
+  "recovery.historyCounts": { "marks": number; "tracks": number };
+  "recovery.historyHelp": {  };
+  "recovery.noHistory": {  };
   "recovery.readFailed": {  };
   "recovery.restore": {  };
   "recovery.restored": {  };

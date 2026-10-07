@@ -1,22 +1,23 @@
 import { parseWorkspace } from './workspace-file.ts';
 import type { WorkspaceFile } from './workspace-file.ts';
+import { LocalDatabase } from './local-database.ts';
 export type WorkspaceCheckpoint = { id: string; actor: string; updatedAt: number; document: WorkspaceFile };
+export type CheckpointSummary = Pick<WorkspaceCheckpoint, 'id' | 'updatedAt'> & { name: string; tracks: number; marks: number };
+/** New tabs can inherit sessionStorage from their opener; only an actual
+ * reload/back-forward navigation can reuse the previous tab's identity. */
+export function checkpointTabId(previous: string, navigationType: string, fresh: string) {
+  return ['reload', 'back_forward'].includes(navigationType) && /^[a-f0-9-]{36}$/i.test(previous) ? previous : fresh;
+}
 const DB_NAME = 'voidplayer-workspace-checkpoints';
 /** Checkpoints are user work, never part of derived-cache cleanup. Per-tab
  * records prevent competing tabs from overwriting each other's workspace. */
 export class WorkspaceCheckpoints {
-  private database?: Promise<IDBDatabase>;
-  private db() {
-    return this.database ??= new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, 1);
-      request.onupgradeneeded = () => { const store = request.result.createObjectStore('checkpoints', { keyPath: 'id' }); store.createIndex('actor-time', ['actor', 'updatedAt']); };
-      request.onerror = () => reject(request.error);
-      request.onblocked = () => reject(new Error('工作区恢复存储被阻塞。'));
-      request.onsuccess = () => { request.result.onversionchange = () => request.result.close(); resolve(request.result); };
-    });
-  }
+  private database = new LocalDatabase(DB_NAME, 1, db => {
+    const store = db.createObjectStore('checkpoints', { keyPath: 'id' });
+    store.createIndex('actor-time', ['actor', 'updatedAt']);
+  }, '工作区恢复存储被阻塞。');
   async read(actor: string, id: string): Promise<WorkspaceCheckpoint | undefined> {
-    const db = await this.db();
+    const db = await this.database.open();
     return new Promise<WorkspaceCheckpoint | undefined>((resolve, reject) => {
       const store = db.transaction('checkpoints').objectStore('checkpoints');
       const request = store.get(id);
@@ -39,12 +40,58 @@ export class WorkspaceCheckpoints {
   }
 
   async save(record: WorkspaceCheckpoint): Promise<void> {
-    const db = await this.db();
+    const db = await this.database.open();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction('checkpoints', 'readwrite');
       tx.objectStore('checkpoints').put(record);
       tx.oncomplete = () => resolve(); tx.onabort = () => reject(tx.error ?? new Error('本机工作区检查点保存失败。'));
     });
   }
-  close() { void this.database?.then(db => db.close()); }
+  async list(actor: string, before?: { updatedAt: number; id: string }, limit = 20): Promise<{ entries: CheckpointSummary[]; more: boolean }> {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('Invalid checkpoint page size.');
+    const db = await this.database.open();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('checkpoints').objectStore('checkpoints').index('actor-time')
+        .openCursor(IDBKeyRange.bound([actor, 0], [actor, before?.updatedAt ?? Number.MAX_SAFE_INTEGER]), 'prev');
+      const entries: CheckpointSummary[] = [];
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) { resolve({ entries, more: false }); return; }
+        const record = cursor.value as WorkspaceCheckpoint;
+        if (before && record.updatedAt === before.updatedAt && record.id >= before.id) { cursor.continue(); return; }
+        if (entries.length >= limit) { resolve({ entries, more: true }); return; }
+        try {
+          const document = record.document;
+          entries.push({ id: record.id, updatedAt: record.updatedAt, name: document.name ?? document.media[0]?.name ?? '', tracks: document.tracks.length, marks: document.marks.length });
+        } catch (error) { reject(error); return; }
+        cursor.continue();
+      };
+    });
+  }
+  async exact(actor: string, id: string): Promise<WorkspaceCheckpoint | undefined> {
+    const db = await this.database.open();
+    return new Promise((resolve, reject) => {
+      const request = db.transaction('checkpoints').objectStore('checkpoints').get(id);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        try { const record = request.result as WorkspaceCheckpoint | undefined; resolve(record?.actor === actor ? { ...record, document: parseWorkspace(record.document) } : undefined); }
+        catch (error) { reject(error); }
+      };
+    });
+  }
+  async remove(actor: string, id: string, updatedAt: number): Promise<boolean> {
+    const db = await this.database.open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction('checkpoints', 'readwrite'), store = tx.objectStore('checkpoints');
+      let removed = false;
+      const request = store.get(id);
+      request.onsuccess = () => {
+        const record = request.result as WorkspaceCheckpoint | undefined;
+        if (record?.actor === actor && record.updatedAt === updatedAt) { store.delete(id); removed = true; }
+      };
+      tx.oncomplete = () => resolve(removed); tx.onabort = () => reject(tx.error);
+    });
+  }
+  close() { this.database.close(); }
 }

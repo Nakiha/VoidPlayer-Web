@@ -3,25 +3,25 @@
 // 关键标记来自容器（未做位流验证），与 metadataOnly 不得混为一次廉价操作
 // 的是后续阶段 B 的 verified 标记。Mediabunny 包没有 DTS，本路径 hasDts
 // 为 false，不得用 PTS 或平均帧率伪造。
-// 枚举按块让出主线程；与播放共用同一 track 的独立游标，不改解码路径选择。
+// 主线程只枚举有界元数据批次；包表、排序和统计由独立 Worker 持有。
+// 与播放共用同一 track 的独立游标，不改解码路径选择。
 
 import { EncodedPacketSink } from 'mediabunny';
 import type { InputVideoTrack } from 'mediabunny';
-import { createSourceQuerier, locateSampleById } from './adapters.ts';
-import { abortableWait } from '../media-abort.ts';
-import type { PacketView, SourceQueryContext } from './adapters.ts';
+import { NativeAnalysisClient } from './native-client.ts';
+import type { SourceQueryContext } from './adapters.ts';
 import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
 
 const MAX_PACKETS = 2_000_000;
 const YIELD_EVERY = 2000;
 
 export class NativeAnalysisAdapter {
-  private packets: PacketView[] = [];
+  private packetCount = 0;
   private building: Promise<void> | undefined;
   private buildError: unknown;
   private done = false;
   private closed = false;
-  private querier = createSourceQuerier();
+  private client = new NativeAnalysisClient();
   private track: InputVideoTrack;
   private mediaId: string;
   private firstPtsUs: number;
@@ -40,22 +40,24 @@ export class NativeAnalysisAdapter {
     if (this.building) return;
     this.building = (async () => {
       const sink = new EncodedPacketSink(this.track);
-      let count = 0;
+      let batch = new Float64Array(YIELD_EVERY * 3), count = 0;
+      const flush = async () => {
+        if (!count) return;
+        const records = batch.subarray(0, count * 3);
+        this.packetCount = await this.client.call('append', { records }, undefined, [records.buffer]);
+        batch = new Float64Array(YIELD_EVERY * 3); count = 0;
+        if (!this.closed) this.onAdvance?.();
+      };
       try {
         for await (const packet of sink.packets(undefined, undefined, { metadataOnly: true })) {
           if (this.closed) break;
-          if (this.packets.length >= MAX_PACKETS) throw new Error('原生包索引超过上限。');
-          this.packets.push({
-            pts: Math.round(packet.timestamp * 1e6),
-            dts: null,
-            size: packet.byteLength,
-            key: packet.type === 'key',
-          });
-          if (++count % YIELD_EVERY === 0) {
-            this.onAdvance?.();
-            await new Promise<void>(resolve => setTimeout(resolve, 0));
-          }
+          if (this.packetCount + count >= MAX_PACKETS) throw new Error('原生包索引超过上限。');
+          batch[count * 3] = Math.round(packet.timestamp * 1e6);
+          batch[count * 3 + 1] = packet.byteLength;
+          batch[count * 3 + 2] = packet.type === 'key' ? 1 : 0;
+          if (++count === YIELD_EVERY) await flush();
         }
+        if (!this.closed) await flush();
         if (!this.closed) this.done = true;
       } catch (error) {
         if (!this.closed) this.buildError = error;
@@ -76,7 +78,7 @@ export class NativeAnalysisAdapter {
   }
 
   get revision(): number {
-    return this.packets.length;
+    return this.packetCount;
   }
 
   async query(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult> {
@@ -88,27 +90,19 @@ export class NativeAnalysisAdapter {
       mediaId: this.mediaId,
       firstPtsUs: this.firstPtsUs,
       durationUs: this.durationUs,
-      sourceVersion: `${this.mediaId}@${this.packets.length}`,
-      indexRevision: this.packets.length,
+      sourceVersion: `${this.mediaId}@${this.packetCount}`,
+      indexRevision: this.packetCount,
       capability: this.getCapability(),
       coverageUs: this.done ? { start: 0, end: this.durationUs } : null,
     };
-    const run = async () => this.querier(this.packets, ctx, query);
-    // REVIEW-04：querier 已对同引用尾部追加做增量合并，渐进枚举不再每次全量重排；
-    // 但首个大索引与新轴/新原点仍是主线程同步任务，signal 仅表示调用方不再等待
-    // （旧查询不覆盖新图），不撤销已开始的排序/聚合。只传包元数据
-    // （pts/dts/size/key），不转移播放缓冲。完整 Worker 化（增量索引、
-    // 查询合并与分片取消）仍是后续专项，见 test/analysis-incremental.test.ts 的
-    // 有界与增量回归；面板关闭只停止自己的刷新与排队查询，不取消播放器需要的容器索引。
-    // B3：共用 abortableWait，settled 后清理监听器。
-    if (!query.signal) return run();
-    return abortableWait(run(), query.signal);
+    const { signal, ...request } = query;
+    return this.client.call('query', { context: ctx, query: request }, signal);
   }
 
   /** 按样本身份有界定位：O(1) 反查包表；索引尚未覆盖时返回 null。 */
   locate(sampleId: string): Promise<AnalysisSample | null> {
     if (this.closed) return Promise.resolve(null);
-    return Promise.resolve(locateSampleById(this.packets, this.mediaId, this.firstPtsUs, sampleId));
+    return this.client.call('locate', { mediaId: this.mediaId, firstPtsUs: this.firstPtsUs, sampleId });
   }
 
   /**
@@ -116,24 +110,26 @@ export class NativeAnalysisAdapter {
    * 精确命中的解码顺序号。与区间查询共用同一份有序轴缓存；索引构建中
    * 返回已确认部分的暂定排名（complete=false），调用方不得当精确值展示。
    */
-  rank(tUs: number, axis: 'pts' | 'dts'): { rank: number; total: number; ordinal: number | null; complete: boolean } {
+  async rank(tUs: number, axis: 'pts' | 'dts'): Promise<{ rank: number; total: number; ordinal: number | null; complete: boolean }> {
     if (this.closed) throw new Error('媒体已释放。');
     if (axis === 'dts') throw new Error('该片源没有可用的 DTS 时间，无法按解码时间查看。');
     this.ensureStarted();
     if (this.buildError) throw this.buildError;
-    const { rank, total, ordinal } = this.querier.rank(this.packets, this.firstPtsUs, axis, tUs);
-    return { rank, total, ordinal, complete: this.done };
+    const complete = this.done;
+    const result = await this.client.call('rank', { firstPtsUs: this.firstPtsUs, axis, tUs });
+    return { ...result, complete };
   }
 
-  sampleAtNumber(number: number, axis: 'pts' | 'dts'): { ptsUs: number | null; complete: boolean } {
+  async sampleAtNumber(number: number, axis: 'pts' | 'dts'): Promise<{ ptsUs: number | null; complete: boolean }> {
     if (this.closed) throw new Error('媒体已释放。');
     // The DTS status displays a packet ordinal even without DTS timestamps.
     this.ensureStarted();
     if (this.buildError) throw this.buildError;
-    return { ptsUs: this.querier.sampleAtNumber(this.packets, this.firstPtsUs, axis, number), complete: this.done };
+    const complete = this.done;
+    return { ptsUs: await this.client.call('number', { firstPtsUs: this.firstPtsUs, axis, number }), complete };
   }
 
   close(): void {
-    this.closed = true;
+    this.closed = true; this.client.close();
   }
 }

@@ -2671,6 +2671,34 @@
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
   },
+  "recovery.deleteHistory": {
+    "source": "删除这份本机恢复记录？",
+    "translation": "Delete this local recovery record?"
+  },
+  "recovery.export": {
+    "source": "导出备份",
+    "translation": "Export backup"
+  },
+  "recovery.history": {
+    "source": "本机恢复记录",
+    "translation": "Local recovery records"
+  },
+  "recovery.historyChanged": {
+    "source": "恢复记录已改变，请刷新列表后重试。",
+    "translation": "The recovery record changed. Refresh the list and try again."
+  },
+  "recovery.historyCounts": {
+    "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}",
+    "translation": "{tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# annotation} other {# annotations}}"
+  },
+  "recovery.historyHelp": {
+    "source": "记录仅存于此浏览器。可导出备份或删除不再需要的历史记录，当前页面的记录会继续自动保存。",
+    "translation": "Records are stored only in this browser. Export backups or delete history you no longer need. This page continues to save automatically."
+  },
+  "recovery.noHistory": {
+    "source": "暂无本机恢复记录",
+    "translation": "No local recovery records"
+  },
   "recovery.readFailed": {
     "source": "无法读取本机工作区恢复记录，请检查浏览器存储。",
     "translation": "Cannot read local workspace recovery. Check browser storage."
