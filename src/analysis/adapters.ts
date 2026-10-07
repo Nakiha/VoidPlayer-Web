@@ -1,5 +1,5 @@
 // 各媒体路径的只读分析查询：同一套纯查询逻辑同时跑在 packet worker
-// （FLV/MP4 压缩包路径）与主线程（原生 Mediabunny 路径）里。
+// （FLV/MP4 压缩包路径）与原生元数据 Worker 里。
 // 口径：视频样本负载（demux sample/packet 源长度，保留编码头与长度前缀）；
 // 文件级配置头、容器头不分摊。sample/packet 不保证对应一张输出画面时，
 // UI 称「样本大小」。
@@ -130,6 +130,18 @@ export function executeSortedQuery(
   maxSamples: number,
   sorted: SortedAxis,
 ): AnalysisResult {
+  return finishAnalysisSteps(executeSortedQuerySteps(packets, ctx, query, startUs, endUs, maxSamples, sorted));
+}
+
+export function* executeSortedQuerySteps(
+  packets: ArrayLike<PacketView>,
+  ctx: SourceQueryContext,
+  query: AnalysisQuery & { requestId: number },
+  startUs: number,
+  endUs: number,
+  maxSamples: number,
+  sorted: SortedAxis,
+): Generator<void, AnalysisResult> {
   const { order, times, prefix } = sorted;
   const lo = lowerBound(times, startUs);
   const hi = lowerBound(times, endUs);
@@ -138,7 +150,10 @@ export function executeSortedQuery(
   const truncated = bucketsOnly ? inRange > 0 : inRange > maxSamples;
   const samples: AnalysisSample[] = [];
   if (!truncated) {
-    for (let k = lo; k < hi; k++) samples.push(toSample(packets, ctx, order[k]));
+    for (let k = lo; k < hi; k++) {
+      if ((k - lo) % 4096 === 0) yield;
+      samples.push(toSample(packets, ctx, order[k]));
+    }
   }
   const pixelWidth = Math.max(1, Math.floor(query.pixelWidth) || 1);
   // 共享桶原点：会话层按轨填入归一化原点（会话原点 - offset），多轨在会话域对齐；
@@ -150,6 +165,7 @@ export function executeSortedQuery(
   const lastIndex = Math.ceil((endUs - originUs) / bucketWidth);
   const rawBuckets: BucketResult[] = [];
   for (let i = firstIndex; i < lastIndex; i++) {
+    if ((i - firstIndex) % 4096 === 0) yield;
     rawBuckets.push({
       startUs: originUs + i * bucketWidth,
       endUs: originUs + (i + 1) * bucketWidth,
@@ -158,6 +174,7 @@ export function executeSortedQuery(
     });
   }
   for (let k = lo; k < hi; k++) {
+    if ((k - lo) % 4096 === 0) yield;
     const t = times[k];
     if (!(t >= startUs && t < endUs)) continue;
     const idx = Math.floor((t - originUs) / bucketWidth) - firstIndex;
@@ -189,12 +206,15 @@ export function executeSortedQuery(
       end: Math.max(coverage[0].end, times[times.length - 1]),
     }];
   }
-  const buckets: AnalysisBucket[] = rawBuckets.map(b => {
+  const buckets: AnalysisBucket[] = [];
+  for (let i = 0; i < rawBuckets.length; i++) {
+    if (i % 4096 === 0) yield;
+    const b = rawBuckets[i];
     const insideCoverage = coverage ? b.startUs >= coverage[0].start && b.endUs <= coverage[0].end : false;
     // 查询两端只统计了桶的一部分时标暂定，不冒充完整桶。
     const insideQuery = b.startUs >= startUs && b.endUs <= endUs;
-    return { ...b, complete: insideCoverage && insideQuery };
-  });
+    buckets.push({ ...b, complete: insideCoverage && insideQuery });
+  }
   // 曲线采样与统计样本解耦：码率点只在 curve 区间按其像素密度生成，
   // 缺省复用样本查询区间（Agent/旧调用）。面板深度缩放时 curve=可视区间、
   // 样本=halo 区间，避免 halo + 4096 封顶摊薄可视曲线的密度。
@@ -207,6 +227,7 @@ export function executeSortedQuery(
   const curveSpan = curveEnd - curveStart;
   const step = curveSpan > 0 ? curveSpan / curvePixels : (endUs - startUs) / pixelWidth;
   for (let i = 0; i < curvePixels; i++) {
+    if (i % 256 === 0) yield;
     const t = curveStart + (i + 0.5) * step;
     if (!(t < curveEnd)) break;
     // 没有可信覆盖水位线时不输出码率值（不断言偏低的 0），只标暂定。
@@ -381,4 +402,11 @@ export function unsupportedCapability(note: string): AnalysisCapability {
     hasSize: false, hasDts: false, keySource: 'unavailable',
     pictureType: 'unavailable', qp: 'unsupported', indexState: 'complete', note,
   };
+}
+
+/** Synchronous backends consume the same bounded work steps without yielding. */
+export function finishAnalysisSteps<T>(steps: Generator<void, T>): T {
+  let next = steps.next();
+  while (!next.done) next = steps.next();
+  return next.value;
 }

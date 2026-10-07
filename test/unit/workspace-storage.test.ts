@@ -115,7 +115,8 @@ test('reloads reuse their own checkpoint while inherited new-tab storage gets a 
   } finally { store.close(); }
 });
 
-test('checkpoint history pages tied timestamps, isolates users, and refuses stale deletions', async () => {
+test('checkpoint history pages tied timestamps, isolates users, and refuses stale deletions', async t => {
+  const previous = globalThis.indexedDB; globalThis.indexedDB = new IDBFactory(); t.after(() => { globalThis.indexedDB = previous; });
   const store = new WorkspaceCheckpoints(), document = workspace();
   try {
     for (const id of ['a', 'b', 'c', 'd', 'e']) await store.save({ id, actor: 'history', updatedAt: 100, document });
@@ -132,4 +133,60 @@ test('checkpoint history pages tied timestamps, isolates users, and refuses stal
     assert.equal(await store.remove('history', 'e', 101), true);
     assert.equal(await store.exact('history', 'e'), undefined);
   } finally { store.close(); }
+});
+
+function isolatedCheckpoints(t: { after(fn: () => void): void }, limits = { count: 100, bytes: 64 * 1024 * 1024 }) {
+  const previous = globalThis.indexedDB; globalThis.indexedDB = new IDBFactory();
+  const store = new WorkspaceCheckpoints(limits);
+  t.after(() => { store.close(); globalThis.indexedDB = previous; }); return store;
+}
+test('checkpoint count budget serializes competing tabs and never evicts user work', async t => {
+  const store = isolatedCheckpoints(t, { count: 2, bytes: 1_000_000 }), document = workspace();
+  const saves = await Promise.allSettled(['one','two','three'].map(id => store.save({ id, actor: 'owner', updatedAt: 1, document })));
+  assert.equal(saves.filter(result => result.status === 'fulfilled').length, 2);
+  const failed = saves.find(result => result.status === 'rejected') as PromiseRejectedResult;
+  assert.equal(failed.reason.name, 'CheckpointCapacityError');
+  assert.equal((await store.usage('owner')).count, 2);
+  const first = (await store.list('owner')).entries[0];
+  await store.save({ id: first.id, actor: 'owner', updatedAt: 2, document: { ...document, positionUs: 42 } });
+  assert.equal((await store.exact('owner', first.id))?.document.positionUs, 42);
+  await store.save({ id: 'separate', actor: 'other', updatedAt: 1, document });
+  assert.equal((await store.usage('other')).count, 1);
+  await assert.rejects(store.save({ id: 'separate', actor: 'owner', updatedAt: 1, document }), /another actor/);
+  assert.equal(await store.remove('owner', first.id, 1), false, 'stale deletion cannot free budget');
+  assert.equal(await store.remove('owner', first.id, 2), true);
+  await store.save({ id: 'resumed', actor: 'owner', updatedAt: 3, document });
+  assert.equal((await store.usage('owner')).count, 2);
+});
+test('checkpoint byte budget counts UTF-8, rolls back oversized replacements, and resumes after deletion', async t => {
+  const store = isolatedCheckpoints(t, { count: 100, bytes: 1000 }), document = workspace();
+  await store.save({ id: 'small', actor: 'owner', updatedAt: 1, document });
+  const before = await store.usage('owner');
+  const record = { id: 'small', actor: 'owner', updatedAt: 1, document };
+  assert.equal(before.bytes, new TextEncoder().encode(JSON.stringify(record)).byteLength);
+  await assert.rejects(store.save({ ...record, updatedAt: 2, document: { ...document, name: '备份'.repeat(500) } }), { name: 'CheckpointCapacityError' });
+  assert.equal((await store.exact('owner', 'small'))?.updatedAt, 1);
+  assert.equal((await store.usage('owner')).bytes, before.bytes);
+  assert.equal(await store.remove('owner', 'small', 1), true);
+  assert.equal((await store.usage('owner')).bytes, 0);
+  await store.save({ ...record, document: { ...document, name: '恢复' } });
+});
+test('v1 checkpoint migration keeps oversized histories and permits shrink-only updates', async t => {
+  const store = isolatedCheckpoints(t, { count: 1, bytes: 100 }), document = workspace();
+  const legacy = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('voidplayer-workspace-checkpoints', 1);
+    request.onupgradeneeded = () => { const rows = request.result.createObjectStore('checkpoints', { keyPath: 'id' }); rows.createIndex('actor-time', ['actor','updatedAt']); };
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+  });
+  const tx = legacy.transaction('checkpoints', 'readwrite');
+  for (const id of ['old-a','old-b']) tx.objectStore('checkpoints').put({ id, actor: 'owner', updatedAt: 1, document: { ...document, name: 'legacy-long-name' } });
+  await complete(tx); legacy.close();
+  const before = await store.usage('owner'); assert.equal(before.count, 2); assert.ok(before.bytes > 100);
+  assert.equal((await store.list('owner')).entries.length, 2);
+  assert.equal((await store.exact('owner', 'old-a'))?.document.name, 'legacy-long-name');
+  await assert.rejects(store.save({ id: 'new', actor: 'owner', updatedAt: 1, document }), { name: 'CheckpointCapacityError' });
+  await store.save({ id: 'old-a', actor: 'owner', updatedAt: 1, document });
+  assert.ok((await store.usage('owner')).bytes < before.bytes);
+  await assert.rejects(store.save({ id: 'old-a', actor: 'owner', updatedAt: 2, document: { ...document, name: 'longer'.repeat(100) } }), { name: 'CheckpointCapacityError' });
+  assert.equal((await store.list('owner')).entries.length, 2);
 });

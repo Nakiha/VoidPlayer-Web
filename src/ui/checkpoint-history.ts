@@ -6,15 +6,17 @@ import type { WorkspaceFile } from '../workspace-file.ts';
 export function checkpointHistoryShell() {
   return `<div class="settings-section"><h4 class="settings-section-title">${th(msg('recovery.history', '本机恢复记录'))}</h4>
     <p class="settings-caption">${th(msg('recovery.historyHelp', '记录仅存于此浏览器。可导出备份或删除不再需要的历史记录，当前页面的记录会继续自动保存。'))}</p>
+    <p id="checkpoint-history-usage" class="settings-caption" role="status"></p>
     <div id="checkpoint-history-list" class="settings-card"></div>
     <p id="checkpoint-history-message" class="settings-caption" role="status" hidden></p>
-    <div class="saved-workspace-pages"><button id="checkpoint-history-first">${th(msg('savedWorkspaces.backToLatest', '返回最新'))}</button><button id="checkpoint-history-next">${th(msg('savedWorkspaces.nextPage', '下一页'))}</button></div></div>`;
+    <div class="checkpoint-history-pages"><button id="checkpoint-history-first">${th(msg('savedWorkspaces.backToLatest', '返回最新'))}</button><button id="checkpoint-history-next">${th(msg('savedWorkspaces.nextPage', '下一页'))}</button></div></div>`;
 }
 
 export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   signal: AbortSignal; currentId(): string; restore(document: WorkspaceFile): Promise<boolean>; report(error: Error): void;
 }) {
   const list = document.getElementById('checkpoint-history-list')!;
+  const usage = document.getElementById('checkpoint-history-usage')!;
   const message = document.getElementById('checkpoint-history-message')!;
   const first = document.getElementById('checkpoint-history-first') as HTMLButtonElement;
   const next = document.getElementById('checkpoint-history-next') as HTMLButtonElement;
@@ -28,8 +30,10 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   async function refresh() {
     const owner = actor(), request = ++sequence;
     try {
-      const result = await store.list(owner, before);
+      const [result, budget] = await Promise.all([store.list(owner, before), store.usage(owner)]);
       if (!current(owner) || sequence !== request) return;
+      usage.textContent = t(msg('recovery.capacity', '已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。'),
+        { count: budget.count, limit: budget.limits.count, used: (budget.bytes / 1048576).toFixed(1), budget: (budget.limits.bytes / 1048576).toFixed(0) });
       page = result.entries; more = result.more; message.hidden = true;
       list.replaceChildren();
       if (!page.length) {

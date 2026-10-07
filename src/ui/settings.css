@@ -131,7 +131,7 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
   .shortcut-keys { flex-wrap: wrap; justify-content: flex-end; }
 }
 
-.saved-workspace-editor, .saved-workspace-search, .saved-workspace-pages { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
+.saved-workspace-editor, .saved-workspace-search, .saved-workspace-pages, .checkpoint-history-pages { display: flex; align-items: center; gap: 8px; margin: 12px 0; }
 .saved-workspace-editor { align-items: flex-end; flex-wrap: wrap; }
 .saved-workspace-editor label { display: flex; flex-direction: column; gap: 8px; flex: 1 1 180px; min-width: 0; font-size: var(--text-sm); color: var(--text-secondary); }
 .saved-workspace-editor input, .saved-workspace-search input { min-width: 0; flex: 1; border: 0; background: var(--search-fill); }
@@ -417,7 +417,7 @@ kbd { background: var(--surface-input); border-radius: 4px; padding: 2px 6px; fo
 .settings-section { display: flex; flex-direction: column; gap: var(--settings-heading-gap); margin: 0; padding: 0; }
 .settings-section > :is(.settings-section-title, .settings-section-heading, .accent-heading) { padding-inline: 16px; }
 .settings-section + .settings-section { margin-top: var(--settings-section-gap); }
-.settings-section > :is(.settings-section-title, .settings-section-heading, .accent-heading, .settings-detail-body, .settings-caption, .log-report, .saved-workspace-search, .saved-workspace-pages, .log-feedback, .settings-group) { margin: 0; }
+.settings-section > :is(.settings-section-title, .settings-section-heading, .accent-heading, .settings-detail-body, .settings-caption, .log-report, .saved-workspace-search, .saved-workspace-pages, .checkpoint-history-pages, .log-feedback, .settings-group) { margin: 0; }
 .settings-section > .settings-detail-body { padding: 0; }
 .settings-section > :is(.settings-section-heading, .accent-heading) > .settings-section-title { margin: 0; }
 .settings-section-heading > button { margin: 0; }

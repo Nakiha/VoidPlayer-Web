@@ -18,11 +18,12 @@ export function savedWorkspaceShell() {
     <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>${checkpointHistoryShell()}`;
 }
 
-export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void }) {
+export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void; changed?(): void }) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`saved-workspace-${id}`) as T;
   const client = new SavedWorkspaceClient(options.signal);
   let binding: SavedWorkspace | undefined, busy = false, available = false, before = '', next: string | null = null, search = '', sequence = 0;
   let refreshAfterBusy = false, bindingEpoch = 0;
+  let opening = false;
   let idle: Promise<void> = Promise.resolve();
   const captureRequest = () => ({ binding, owner: currentActor()?.id, epoch: bindingEpoch });
   const isCurrent = (request: ReturnType<typeof captureRequest>) => !options.signal.aborted && request.epoch === bindingEpoch && request.owner === currentActor()?.id;
@@ -36,6 +37,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     $('first').toggleAttribute('disabled', busy || !before); $('next').toggleAttribute('disabled', busy || !next);
     $('list').querySelectorAll<HTMLButtonElement>('.saved-workspace-open').forEach(button => { const selected = button.dataset.workspaceId === binding?.id; button.setAttribute('aria-pressed', String(selected)); button.closest<HTMLElement>('.saved-workspace-row')!.dataset.selected = String(selected); button.disabled = busy; });
     document.querySelector<HTMLElement>('.saved-workspace-pages')!.hidden = !available || (!before && !next);
+    options.changed?.();
   }
   async function act<T>(work: () => Promise<T>, propagate = false, request?: ReturnType<typeof captureRequest>): Promise<T | undefined> {
     if (busy) return; busy = true; let release!: () => void; idle = new Promise(resolve => { release = resolve; }); controls();
@@ -81,13 +83,16 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     const empty=$('list').querySelector('p'); if(empty)empty.textContent=search?t(msg('savedWorkspaces.noMatchingWorkspaces','没有匹配的工作区')):t(msg('savedWorkspaces.noWorkspacesYet','暂无工作区'));
   },options.signal);
   async function load(id: string) {
-    const owner = (await identityHealth()).actor?.id;
-    const record = await client.read(id);
-    if (owner !== currentActor()?.id) return;
-    if (!await options.open(record.document, record.space ?? undefined)) return;
-    if (owner !== currentActor()?.id) return;
-    binding = record; delete $('reload').dataset.unavailable; $<HTMLInputElement>('name').value = record.name; $('conflict').hidden = true; message(''); controls();
-    const url = new URL(location.href); url.searchParams.delete('share'); url.searchParams.delete('review'); url.searchParams.set('workspace', record.id); history.replaceState(null, '', url);
+    opening = true; controls();
+    try {
+      const owner = (await identityHealth()).actor?.id;
+      const record = await client.read(id);
+      if (owner !== currentActor()?.id) return;
+      if (!await options.open(record.document, record.space ?? undefined)) return;
+      if (owner !== currentActor()?.id) return;
+      binding = record; delete $('reload').dataset.unavailable; $<HTMLInputElement>('name').value = record.name; $('conflict').hidden = true; message(''); controls();
+      const url = new URL(location.href); url.searchParams.delete('share'); url.searchParams.delete('review'); url.searchParams.set('workspace', record.id); history.replaceState(null, '', url);
+    } finally { opening = false; controls(); }
   }
   async function persist(document = options.snapshot(), request = captureRequest()) {
     // Keep the target and document from before any preparation/network await.
@@ -166,7 +171,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     })().catch(error => { if (isCurrent(context)) { message((error as Error).message, true); options.report(error as Error); } });
   }, { signal: options.signal });
   controls();
-  return { name: title, binding: () => binding,
+  return { name: title, binding: () => binding, isOpening: () => opening,
     async share(document: WorkspaceFile, id: string, previous?: SavedWorkspace) {
       const request = captureRequest(), snapshot = structuredClone(document), name = document.name || title();
       const ensureCurrent = () => {

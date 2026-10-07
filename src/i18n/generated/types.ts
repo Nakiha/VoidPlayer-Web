@@ -665,6 +665,8 @@ export interface Sources {
   "progress.inspect": "正在读取视频信息";
   "progress.queued": "正在准备载入";
   "progress.synchronize": "正在定位到当前播放位置";
+  "recovery.capacity": "已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。";
+  "recovery.capacityReached": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。";
   "recovery.deleteHistory": "删除这份本机恢复记录？";
   "recovery.export": "导出备份";
   "recovery.history": "本机恢复记录";
@@ -1664,6 +1666,8 @@ export interface MessageParameters {
   "progress.inspect": {  };
   "progress.queued": {  };
   "progress.synchronize": {  };
+  "recovery.capacity": { "budget": string | number; "count": string | number; "limit": string | number; "used": string | number };
+  "recovery.capacityReached": {  };
   "recovery.deleteHistory": {  };
   "recovery.export": {  };
   "recovery.history": {  };

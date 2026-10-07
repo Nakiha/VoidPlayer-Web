@@ -16,6 +16,7 @@ export function installWorkspaceSharing(options: {
   openSpace(space: string, seededIds: string[]): Promise<void>;
   scope(): string;
   canShare(): boolean;
+  isOpening(): boolean;
   closeSettings(): void | Promise<void>;
   toasts: ToastStack;
   report(error: unknown): void;
@@ -52,6 +53,7 @@ export function installWorkspaceSharing(options: {
   }
   async function create(trigger?: HTMLElement) {
     if (busy) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
+    if (options.isOpening()) throw new Error(t(msg("workspace.saving", "工作区正在保存，请稍后再分享。")));
     focus = trigger ?? buttons[0];
     // A retry retains the same request and ID if the server response was lost.
     const previous = options.binding();

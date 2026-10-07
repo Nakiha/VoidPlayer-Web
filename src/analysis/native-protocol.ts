@@ -9,4 +9,4 @@ export interface NativeAnalysisCommands {
   number: { input: { firstPtsUs: number; axis: 'pts' | 'dts'; number: number }; output: number | null };
 }
 export type NativeAnalysisRequest = { [K in keyof NativeAnalysisCommands]: { id: number; type: K; input: NativeAnalysisCommands[K]['input'] } }[keyof NativeAnalysisCommands];
-export type NativeAnalysisReply = { id: number; ok: true; data: NativeAnalysisCommands[keyof NativeAnalysisCommands]['output'] } | { id: number; ok: false; error: string };
+export type NativeAnalysisReply = { id: number; event: 'started' | 'yielded' } | { id: number; ok: true; data: NativeAnalysisCommands[keyof NativeAnalysisCommands]['output'] } | { id: number; ok: false; error: string; name?: string };

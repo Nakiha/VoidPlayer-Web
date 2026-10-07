@@ -9,18 +9,16 @@ import type { Slot } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { AnalysisCapability } from '../analysis/types.ts';
 import { BITRATE_WINDOW_OPTIONS_US, DEFAULT_BITRATE_WINDOW_US } from '../analysis/statistics.ts';
-import { panTimeRange, zoomTimeRange } from '../analysis/projection.ts';
 import type { TimeGroup } from '../analysis/grouping.ts';
-import { buildInspection } from '../analysis/inspection.ts';
-import type { DirectTarget, InspectionState, TrackInspection } from '../analysis/inspection.ts';
+import type { DirectTarget, InspectionState } from '../analysis/inspection.ts';
 import { pickGlyph } from './analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from './analysis-geometry.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { getLocale, onLanguageChange, t, th, msg } from '../i18n.ts';
+import { onLanguageChange, t, th, msg } from '../i18n.ts';
 import { reconcileTrackSelection } from './track-selection.ts';
 import type { AnalysisViewState } from '../workspace-file.ts';
 import {
-  computeLayout, drawAnalysis, formatAxis, plotGeometry, tOf, xOf,
+  computeLayout, drawAnalysis, formatAxis, plotGeometry, tOf,
 } from './analysis-canvas.ts';
 import type { CanvasColors, CanvasModel } from './analysis-canvas.ts';
 import { loadAnalysisPreferences as loadPrefs, PREF_KEY } from './analysis/preferences.ts';
@@ -28,16 +26,21 @@ import type { AnalysisPreferences as Prefs } from './analysis/preferences.ts';
 import { buildAnalysisModel } from './analysis/model.ts';
 import { createAnalysisQueries } from './analysis/queries.ts';
 import type { AnalysisQueryTrack } from './analysis/queries.ts';
+import { installAnalysisStatus } from './analysis/status.ts';
+import { installAnalysisCard } from './analysis/card.ts';
+import { createInspectionController } from './analysis/inspection-state.ts';
+import { drawAnalysisOverlay } from './analysis/overlay.ts';
+import { installAnalysisGestures } from './analysis/gestures.ts';
 import './analysis-panel.css';
 
-type Action = (action: () => unknown | Promise<unknown>, name?: string, data?: unknown) => Promise<void>;
+import type { AnalysisAction as Action } from './analysis/shared.ts';
 
 export interface AnalysisHooks {
   signal: AbortSignal;
   isOpen: () => boolean;
 }
 
-const MIN_SPAN_US = 10_000;
+import { MIN_ANALYSIS_SPAN_US as MIN_SPAN_US } from './analysis/shared.ts';
 
 const WINDOW_LABELS: Record<number, string> = Object.fromEntries(
   BITRATE_WINDOW_OPTIONS_US.map(w => [w, w >= 1_000_000 ? `${w / 1_000_000}s` : `${w / 1000}ms`]),
@@ -113,18 +116,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const noticeEl = $<HTMLElement>('.analysis-notice');
   // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
   // abort 时移除，平时 pointer-events:none 不拦截输入。
-  const floatLayer = document.createElement('div');
-  floatLayer.className = 'analysis-float-layer';
-  floatLayer.setAttribute('aria-hidden', 'true');
-  const cardEl = document.createElement('div');
-  cardEl.className = 'analysis-card';
-  cardEl.hidden = true;
-  floatLayer.append(cardEl);
-  document.body.append(floatLayer);
+  const card = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null });
+  const cardEl = card.element;
+  const renderFloat = (snapshot: InspectionState | null, x: number | null) => card.render(snapshot, x);
+  const positionFloat = (x: number) => card.position(x);
   const live = $<HTMLElement>('output');
-  let lastInspection: InspectionState | null = null;
-  /** 冻结的检查快照（Shift+单击 / I 切换，Escape 解除）；换片/清轨时失效。 */
-  let pinned: InspectionState | null = null;
+  // 查询与检查状态分别由独立模块持有。
 
   let tracks: TrackEntry[] = [];
   let caps = new Map<Slot, AnalysisCapability>();
@@ -142,7 +139,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const results = queries.results;
   const queryErrors = queries.errors;
   let view: { start: number; end: number } | null = null;
-  let hoverUs: number | null = null;
   let rubber: { a: number; b: number } | null = null;
   let positionUs = 0;
   let durationUs = 0;
@@ -155,11 +151,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   // 选择集只随轨道身份（slot+mediaId）对账：新增身份默认加入，移除即遗忘；
   // 时长/偏移等元数据更新不得触碰用户的显隐选择。
   const knownTrackIds = new Set<string>();
-  let hoverRaf = 0;
-  let pendingHover: { x: number; y: number; t: number } | null = null;
-  let lastClient: { x: number; y: number } | null = null;
-  let kbInspect = false;
-  let kbTrack: Slot | null = null;
   let lastViewSig = '';
   let lastGlyphs: AnalysisGlyph[] = [];
   let lastGroups: TimeGroup[] = [];
@@ -244,155 +235,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return sel.length > 0 && sel.every(t => caps.get(t.slot)?.hasDts);
   };
 
-  // ---- 右侧状态区：当前上屏帧 PTS + 双帧号（展示序 / 解码序） ----
-  // PTS 取会话真实上屏帧（frame.ptsUs + offsetUs），与各视口 canvas 一致；
-  // PTS序是展示序排名（PTS 严格小于该帧的样本数，0-based），DTS序是解码
-  // 顺序号（包表下标）。两者经 session.rankAnalysisFrame 一次只读查询返回，
-  // 复用各后端包表的有序轴缓存，O(log N)，不解码、不物化样本。重复 PTS
-  // 共享展示排名；无精确 PTS 匹配时 DTS序显示 —；索引构建中为暂定值（~）。
-  const framesBySlot = new Map<Slot, { ptsUs: number; sourcePtsUs: number } | null>();
-  const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
-  const rankSeq = new Map<Slot, number>();
-  let lastStatusSig = '';
-  let editingNumber = false;
-  /** 展示序排名按（slot，会话 PTS）缓存；换片/重建时由调用方清理。 */
-  function fetchRank(slot: Slot, sessionPts: number) {
-    const seq = (rankSeq.get(slot) ?? 0) + 1;
-    rankSeq.set(slot, seq);
-    void session.rankAnalysisFrame(slot, sessionPts, 'pts').then(res => {
-      if (signal.aborted || rankSeq.get(slot) !== seq) return;
-      const entry = tracks.find(t => t.slot === slot);
-      const f = framesBySlot.get(slot);
-      // 只接受仍是当前上屏帧的结果，旧帧的迟到回答直接丢弃。
-      if (!entry || !f || f.ptsUs + entry.offsetUs !== sessionPts) return;
-      rankCache.set(slot, 'rank' in res
-        ? { pts: sessionPts, rank: res.rank, total: res.total, ordinal: res.ordinal, complete: res.complete }
-        : { pts: sessionPts, rank: null, total: null, ordinal: null, complete: false, note: res.reason });
-      renderStatus();
-    }).catch(() => { /* RPC 异常不覆盖显示，保留占位，下次帧变化再试。 */ });
-  }
-  function statusEntry(slot: Slot, offsetUs: number) {
-    const f = framesBySlot.get(slot);
-    const sessionPts = f ? f.ptsUs + offsetUs : null;
-    const cached = rankCache.get(slot);
-    const hit = sessionPts != null && cached?.pts === sessionPts ? cached : undefined;
-    return { frame: f ?? null, sessionPts, hit };
-  }
-  /** 同步渲染：只显示主题色点 + 槽位 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
-  function renderStatus() {
-    if (editingNumber) return;
-    const sig = [prefs.numAxis, ...tracks.map(t => {
-      const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
-      const num = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
-      return `${t.slot}:${sessionPts ?? 'x'}:${num ?? (hit ? 'x' : '-')}${hit && !hit.complete ? '~' : ''}`;
-    })].join('|');
-    if (sig === lastStatusSig) return;
-    lastStatusSig = sig;
-    itemsEl.replaceChildren();
-    const axisLabel = prefs.numAxis === 'pts' ? t(msg("analysis.ptsOrder", "PTS序")) : t(msg("analysis.dtsOrder", "DTS序"));
-    if (!tracks.length) {
-      const empty = document.createElement('span');
-      empty.className = 'st-empty';
-      empty.textContent = '—';
-      empty.title = t(msg("analysis.noVideoYet", "尚未载入视频"));
-      itemsEl.append(empty);
-      statusEl.setAttribute('aria-label', t(msg("analysis.currentFrameNumbersEmpty", "当前上屏帧号：尚未载入视频")));
-      return;
-    }
-    const summary: string[] = [];
-    for (const entry of tracks) {
-      const { frame: f, sessionPts, hit } = statusEntry(entry.slot, entry.offsetUs);
-      const wrap = document.createElement('span');
-      wrap.className = 'st-item';
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = slotColors.get(entry.slot) ?? '#888';
-      const label = document.createElement('span');
-      label.className = 'st-slot';
-      label.textContent = entry.slot;
-      const num = document.createElement('button');
-      num.type = 'button';
-      num.className = 'st-num';
-      const value = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
-      const maxFrame = Math.max(value ?? 0, (hit?.total ?? 1) - 1);
-      wrap.style.setProperty('--frame-number-width', `${Math.max(4, String(maxFrame).length + 2)}ch`);
-      if (hit == null) num.textContent = '…';
-      else if (value == null) num.textContent = '—';
-      else num.textContent = `#${value}${hit.complete ? '' : '~'}`;
-      num.disabled = value == null || !hit?.complete;
-      num.title = num.disabled ? t(msg("analysis.indexNotReady", "帧索引尚未就绪")) : t(msg("analysis.enterFrameNumber", "输入轨道 {slot} 的{axis}帧号后按回车跳转"), { slot: entry.slot, axis: axisLabel });
-      num.setAttribute('aria-label', t(msg("analysis.editTrackFrameNumber", "轨道 {slot} {axis}帧号，点击编辑"), { slot: entry.slot, axis: axisLabel }));
-      num.onclick = () => {
-        if (value == null || !hit?.complete) return;
-        const axis = prefs.numAxis;
-        editingNumber = true;
-        const input = document.createElement('input');
-        input.className = 'st-num-input'; input.type = 'text'; input.inputMode = 'numeric';
-        input.autocomplete = 'off'; input.spellcheck = false; input.value = String(value);
-        input.setAttribute('aria-label', t(msg("analysis.trackFrameNumber", "轨道 {slot} {axis}帧号"), { slot: entry.slot, axis: axisLabel }));
-        num.replaceWith(input); input.focus(); input.select();
-        let finished = false;
-        const finish = (commit: boolean) => {
-          if (finished) return; finished = true;
-          const raw = input.value.trim().replace(/^#/, '');
-          editingNumber = false; lastStatusSig = ''; renderStatus();
-          if (!commit) return;
-          if (!/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-            live.textContent = t(msg("analysis.frameNumberMustBeNonNegativeInteger", "帧号必须是非负整数。")); return;
-          }
-          const number = Number(raw);
-          void act(async () => {
-            const result = await session.seekAnalysisFrameNumber(entry.slot, number, axis);
-            if ('reason' in result) throw new Error(result.reason);
-          }, 'analysis.seek-frame-number', { slot: entry.slot, number, axis });
-        };
-        input.onkeydown = event => {
-          if (event.key === 'Enter') { event.preventDefault(); finish(true); }
-          else if (event.key === 'Escape') { event.preventDefault(); finish(false); }
-        };
-        input.onblur = () => finish(true);
-      };
-      wrap.append(dot, label, num);
-      if (sessionPts == null) {
-        wrap.title = t(msg("analysis.trackHasNoFrame", "轨道 {slot}：暂无上屏帧"), { slot: entry.slot });
-      } else if (hit?.rank != null) {
-        wrap.title = t(msg("analysis.frameTitleBase", "轨道 {slot} 上屏帧：会话 PTS {pts}（{ptsUs} µs）"), { slot: entry.slot, pts: formatAxis(sessionPts), ptsUs: sessionPts })
-          + (f != null ? t(msg("analysis.frameTitleSourcePts", " · 源 PTS {sourcePtsUs} µs"), { sourcePtsUs: f.sourcePtsUs }) : '')
-          + t(msg("analysis.frameTitlePtsRank", " · PTS序 #{rank}"), { rank: hit.rank })
-          + (hit.total != null ? t(msg("analysis.frameTitlePtsTotal", " / 共 {total} 帧"), { total: hit.total }) : '')
-          + (hit.ordinal == null ? t(msg("analysis.frameTitleDtsMissing", " · DTS序 —（解码 PTS 不在包表内，不猜测）")) : t(msg("analysis.frameTitleDtsOrdinal", " · DTS序 #{ordinal}（解码顺序号）"), { ordinal: hit.ordinal }))
-          + (hit.complete ? '' : t(msg("analysis.frameTitleProvisional", "（索引构建中，暂定）")));
-      } else {
-        wrap.title = t(msg("analysis.frameTitleBase", "轨道 {slot} 上屏帧：会话 PTS {pts}（{ptsUs} µs）"), { slot: entry.slot, pts: formatAxis(sessionPts), ptsUs: sessionPts })
-          + (f != null ? t(msg("analysis.frameTitleSourcePts", " · 源 PTS {sourcePtsUs} µs"), { sourcePtsUs: f.sourcePtsUs }) : '')
-          + (hit?.note ? t(msg("analysis.frameTitleRankPending", " · 帧号 —（{note}）"), { note: hit.note }) : t(msg("analysis.frameTitleQuerying", " · 帧号查询中")));
-      }
-      itemsEl.append(wrap);
-      summary.push(sessionPts == null || value == null ? `${entry.slot} —` : `${entry.slot} #${value}`);
-      if (sessionPts != null && !hit) fetchRank(entry.slot, sessionPts);
-    }
-    statusEl.setAttribute('aria-label', t(msg("analysis.statusLabel", "当前上屏帧号（{axis}）：{summary}"), { axis: axisLabel, summary: summary.join(getLocale() === 'en' ? '; ' : '；') }));
-  }
-  function updateStatus() {
-    // 暂定排名在索引完成后自动转正：仍是当前帧但缓存未完成时重查一次。
-    for (const t of tracks) {
-      const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
-      if (sessionPts != null && hit?.rank != null && !hit.complete) fetchRank(t.slot, sessionPts);
-    }
-    renderStatus();
-  }
-
-  // ---- 帧号顺序切换（PTS序/解码序）：复用全局 .segmented 样式 ----
-  const numAxisButtons = [...numAxisEl.querySelectorAll<HTMLButtonElement>('[data-num-axis]')];
-  function refreshNumAxis() {
-    for (const b of numAxisButtons) b.setAttribute('aria-pressed', String(b.dataset.numAxis === prefs.numAxis));
-  }
-  for (const b of numAxisButtons) b.onclick = () => {
-    const v = b.dataset.numAxis as 'pts' | 'dts';
-    if (prefs.numAxis === v) return;
-    prefs.numAxis = v;
-    save(); refreshNumAxis(); renderStatus();
-  };
+  const status = installAnalysisStatus({ session, act, signal, prefs, statusEl, numAxisEl, itemsEl, live,
+    tracks: () => tracks, colors: () => slotColors, save });
+  const updateStatus = () => status.update();
+  const refreshNumAxis = () => status.refreshAxis();
 
   // ---- 工具条：静态控件一次装配，动态部分（轨道、菜单标签）按需刷新 ----
   const segButtons = new Map<string, HTMLButtonElement>();
@@ -497,8 +343,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   function localize() {
-    toolsSig = ''; lastDtsOk = null; lastStatusSig = '';
-    flOrder = [];
+    toolsSig = ''; lastDtsOk = null; status.invalidate();
+    card.reset();
     localizeChrome();
     refreshTools();
     refreshNumAxis();
@@ -555,7 +401,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       lastGlyphs = [];
       lastGroups = [];
       lastViewSig = '';
-      lastInspection = null;
+      inspection.state.lastInspection = null;
       renderFloat(null, null);
       publishTestHook();
       return;
@@ -589,22 +435,22 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 视图变化后把检查点重锚到光标（滚轮/捏合只动视图，不产生 pointermove），
     // 不展示过期内容；键盘检查中不抢夺焦点位置。
     const viewSig = `${drawn.viewStart}:${drawn.viewEnd}`;
-    if (!kbInspect && hoverUs != null && lastClient) {
+    if (!inspection.state.kbInspect && inspection.state.hoverUs != null && inspection.state.lastClient) {
       if (viewSig !== lastViewSig) {
-        hoverUs = Math.round(tOf(drawn, geom, lastClient.x - canvas.getBoundingClientRect().left));
+        inspection.state.hoverUs = Math.round(tOf(drawn, geom, inspection.state.lastClient.x - canvas.getBoundingClientRect().left));
         const range = viewRange();
-        if (hoverUs < range.start || hoverUs > range.end) {
-          hoverUs = null;
+        if (inspection.state.hoverUs < range.start || inspection.state.hoverUs > range.end) {
+          inspection.state.hoverUs = null;
           hoverEl.hidden = true;
         }
       }
-      if (hoverUs != null) { positionHover(); updateInspection(lastClient.x, lastClient.y); }
+      if (inspection.state.hoverUs != null) { positionHover(); updateInspection(inspection.state.lastClient.x, inspection.state.lastClient.y); }
     }
     lastViewSig = viewSig;
     publishTestHook();
     refreshOverlay();
     // 底图重绘后卡片按最后光标重新限位（仍在坞内横向滑动，不跟随翻边）。
-    if (hoverUs != null && lastClient && !pinned) positionFloat(lastClient.x);
+    if (inspection.state.hoverUs != null && inspection.state.lastClient && !inspection.state.pinned) positionFloat(inspection.state.lastClient.x);
     // 索引构建中渐进重查（仅面板打开时）；完成后自动停止。
     if (selectedTracks().some(t => caps.get(t.slot)?.indexState === 'building' && !queryErrors.has(t.slot))) {
       buildingTimer = window.setTimeout(() => {
@@ -635,12 +481,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   function positionHover() {
-    if (hoverUs == null || hoverUs < viewRange().start || hoverUs > viewRange().end) {
+    if (inspection.state.hoverUs == null || inspection.state.hoverUs < viewRange().start || inspection.state.hoverUs > viewRange().end) {
       hoverEl.hidden = true;
       return;
     }
     hoverEl.hidden = false;
-    hoverEl.style.left = `${fracToPx(hoverUs)}px`;
+    hoverEl.style.left = `${fracToPx(inspection.state.hoverUs)}px`;
   }
 
   // ---- 悬停/固定检查：绘图与命中共用统一几何 ----
@@ -661,217 +507,26 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return span / Math.max(1, plotW);
   }
 
-  function directTargetFromGlyph(g: AnalysisGlyph | null): DirectTarget | null {
-    if (!g) return null;
-    if (g.kind === 'sample') {
-      // 聚合标记（含跨组局部聚合）：按区间检查，不冒充单帧。
-      if (g.stackedCount > 1 && g.clusterStartUs != null && g.clusterEndUs != null) {
-        return { kind: 'bucket', slot: g.slot, bucketStartUs: g.clusterStartUs, bucketEndUs: g.clusterEndUs };
-      }
-      if (g.stackedCount > 1) return null;
-      return { kind: 'sample', slot: g.slot, sampleId: g.sampleId };
-    }
-    return { kind: 'bucket', slot: g.slot, bucketStartUs: g.startUs, bucketEndUs: g.endUs };
-  }
-
-  /** 直接命中的样本及其真实轴时间（吸附用）。 */
-  function resolveDirectSample(direct: DirectTarget | null): { axisUs: number; sampleId: string } | null {
-    if (!direct || direct.kind !== 'sample' || !direct.sampleId) return null;
-    const r = results.get(direct.slot);
-    const s = r?.samples.find(v => v.sampleId === direct.sampleId);
-    if (!s) return null;
-    const axisT = prefs.axis === 'pts' ? s.effectivePtsUs : s.dtsUs;
-    if (axisT == null || !Number.isFinite(axisT)) return null;
-    return { axisUs: Math.round(axisT), sampleId: s.sampleId };
-  }
-
-  /**
-   * 统一检查状态：曲线/空白用公共 T；真正命中单样本柱时整次检查吸附到该样本
-   * 的真实轴时间，表头、检查线、码率圆点、参考样本一起更新，被命中轨道强制
-   * 使用该柱的准确 sampleId（相同 PTS 下不另选）。吸附只改变检查锚点。
-   */
-  function inspectAt(tUs: number, direct: DirectTarget | null): InspectionState {
-    const sel = selectedTracks();
-    let t = Math.round(tUs);
-    const hit = resolveDirectSample(direct);
-    if (hit) t = hit.axisUs;
-    const insp = buildInspection({
-      axis: prefs.axis, inspectionTimeUs: t, windowUs: prefs.windowUs,
-      stepUs: viewStepUs(), order: sel.map(t => t.slot),
-      results, caps, domain: domainBounds(), directTarget: direct,
-    });
-    if (hit && direct?.kind === 'sample') {
-      const r = results.get(direct.slot);
-      const s = r?.samples.find(v => v.sampleId === hit.sampleId);
-      const ti = insp.tracks.find(tr => tr.slot === direct.slot);
-      if (s && ti && ti.coverageState === 'known') {
-        ti.reference = { sample: s, axisUs: hit.axisUs, dtUs: 0, relation: 'exact' };
-      }
-    }
-    return insp;
-  }
-
-  function stateText(s: string): string {
-    switch (s) {
-      case 'pending': return t(msg("analysis.statePending", "统计中"));
-      case 'unsupported': return t(msg("analysis.stateUnsupported", "不可用"));
-      case 'outside': return '—';
-      case 'error': return t(msg("analysis.stateError", "索引错"));
-      default: return '—';
-    }
-  }
-
-  /** 码率固定两位小数；极小非零不写成误导的 0.00；无近似后缀。 */
-  function fmtBitrate(v: number | null): string {
-    if (v == null || !Number.isFinite(v)) return '—';
-    if (v > 0 && v < 0.005) return '<0.01';
-    return v.toFixed(2);
-  }
-
-  /** 帧率固定两位小数（保留 29.97 可读性）；无近似后缀。 */
-  function fmtFps(v: number | null): string {
-    if (v == null || !Number.isFinite(v)) return '—';
-    return v.toFixed(2);
-  }
-
-  /** 帧大小固定一位小数 KiB；极小非零不写成误导的 0.0；字节数本身是真实值。 */
-  function fmtSize(bytes: number | null | undefined): string {
-    if (bytes == null || !Number.isFinite(bytes)) return '—';
-    if (bytes <= 0) return '0.0';
-    const kib = bytes / 1024;
-    if (kib < 0.05) return '<0.1';
-    return kib.toFixed(1);
-  }
-
-  /** 三行读数文本（固定表与悬浮窗共用同一口径与格式，无近似后缀）。 */
-  function formatCells(t: TrackInspection): [bitrate: string, rate: string, size: string] {
-    const b = t.coverageState !== 'known' && t.bitrate.value == null
-      ? stateText(t.coverageState) : fmtBitrate(t.bitrate.value);
-    const f = t.coverageState !== 'known' && t.localRate.value == null
-      ? stateText(t.coverageState) : fmtFps(t.localRate.value);
-    const s = t.coverageState !== 'known' ? stateText(t.coverageState)
-      : !t.reference ? '—' : fmtSize(t.reference.sample.sizeBytes);
-    return [b, f, s];
-  }
-
-  function sameOrder(a: readonly Slot[], b: readonly Slot[]): boolean {
-    return a.length === b.length && a.every((s, i) => s === b[i]);
-  }
-
-  // ---- 横轴下方卡片坞：竖排三行（单位常驻），玻璃背板 ----
-  // 与标注工具条同一毛玻璃材质；坞高恒定预留（画布扣除等量高度），
-  // 卡片在坞内横向以鼠标为中心滑动，不翻边、不盖数据区、不挡轴数字。
-  let flOrder: Slot[] = [];
-  let flTime: HTMLElement | null = null;
-  let flRateLabel: HTMLElement | null = null;
-  let flDots = new Map<Slot, HTMLElement>();
-  let flCells = new Map<string, HTMLElement>();
-
-  function ensureFloatStructure(order: readonly Slot[]) {
-    if (flTime && sameOrder(order, flOrder)) return;
-    flOrder = [...order];
-    flDots = new Map();
-    flCells = new Map();
-    cardEl.replaceChildren();
-    const table = document.createElement('table');
-    table.className = 'fl-grid';
-    const thead = document.createElement('thead');
-    // 表头与时间同一行：时间 + 各轨标记，不再独占一行。
-    const head = document.createElement('tr');
-    const time = document.createElement('th');
-    time.className = 'fl-time';
-    time.textContent = '—';
-    head.append(time);
-    flTime = time;
-    for (const slot of order) {
-      const th = document.createElement('th');
-      th.scope = 'col';
-      const dot = document.createElement('span');
-      dot.className = 'dot';
-      dot.style.background = slotColors.get(slot) ?? '#888';
-      th.append(dot, document.createTextNode(slot));
-      head.append(th);
-      flDots.set(slot, dot);
-    }
-    thead.append(head);
-    table.append(thead);
-    const tbody = document.createElement('tbody');
-    const rows = [
-      { key: 'bitrate', label: t(msg("analysis.bitrateMbps", "码率 · Mbps")) },
-      { key: 'rate', label: t(msg("analysis.frameRateFps", "帧率 · fps")) },
-      { key: 'size', label: t(msg("analysis.frameSizeKib", "帧大小 · KiB")) },
-    ] as const;
-    for (const { key, label } of rows) {
-      const tr = document.createElement('tr');
-      const th = document.createElement('th');
-      th.scope = 'row';
-      th.textContent = label;
-      if (key === 'rate') flRateLabel = th;
-      tr.append(th);
-      for (const slot of order) {
-        const td = document.createElement('td');
-        td.className = 'metric-value';
-        td.textContent = '—';
-        tr.append(td);
-        flCells.set(`${key}:${slot}`, td);
-      }
-      tbody.append(tr);
-    }
-    table.append(tbody);
-    cardEl.append(table);
-  }
-
-  /**
-   * 卡片定位（视口坐标，顶层绘制）：横向以鼠标为中心并限位在图表内，
-   * 纵向落在横轴下方（画布底边之下），不盖数据区、不挡轴数字。
-   */
-  function positionFloat(clientX: number) {
-    if (cardEl.hidden) return;
-    const canvasRect = canvas.getBoundingClientRect();
-    const w = cardEl.offsetWidth || 0;
-    if (!w) return;
-    const maxX = Math.max(canvasRect.left, canvasRect.right - w - 4);
-    const x = Math.min(Math.max(canvasRect.left + 4, clientX - w / 2), maxX);
-    cardEl.style.left = `${Math.round(x)}px`;
-    cardEl.style.top = `${Math.round(canvasRect.bottom + 6)}px`;
-  }
-
-  /** 卡片内容：同一检查快照；顶层绘制，闲时隐藏，不占面板布局。 */
-  function renderFloat(insp: InspectionState | null, clientX: number | null) {
-    if (!insp) { cardEl.hidden = true; return; }
-    ensureFloatStructure(insp.tracks.map(t => t.slot));
-    cardEl.hidden = false;
-    if (flTime) {
-      flTime.textContent = `${formatAxis(insp.inspectionTimeUs)}${pinned ? t(msg("analysis.pinnedSuffix", " · 已固定")) : ''}`;
-    }
-    if (flRateLabel) flRateLabel.textContent = t(insp.axis === 'dts' ? msg("analysis.sampleRate", "样本率 /s") : msg("analysis.frameRateFps", "帧率 · fps"));
-    for (const [slot, dot] of flDots) dot.style.background = slotColors.get(slot) ?? '#888';
-    for (const tr of insp.tracks) {
-      const [b, f, s] = formatCells(tr);
-      const vals: Record<string, string> = { bitrate: b, rate: f, size: s };
-      for (const [m, text] of Object.entries(vals)) {
-        const el = flCells.get(`${m}:${tr.slot}`);
-        if (el) el.textContent = text;
-      }
-    }
-    if (clientX != null) positionFloat(clientX);
-  }
+  const inspection = createInspectionController(() => ({ axis: prefs.axis, windowUs: prefs.windowUs,
+    stepUs: viewStepUs(), selected: selectedTracks(), results, caps, domain: domainBounds() }));
+  const inspectAt = (time: number, target: DirectTarget | null) => inspection.inspectAt(time, target);
+  const directTargetFromGlyph = (glyph: AnalysisGlyph | null) => inspection.directTargetFromGlyph(glyph);
 
   /** 检查更新：冻结期间不跟随；命中单样本时吸附锚点并同步检查线与悬浮条。 */
   function updateInspection(clientX: number, clientY: number) {
-    if (hoverUs == null) { lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
+    if (inspection.state.hoverUs == null) { inspection.state.lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
     const sel = selectedTracks();
-    if (!sel.length) { lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
-    if (pinned) return;
+    if (!sel.length) { inspection.state.lastInspection = null; renderFloat(null, null); refreshOverlay(); publishTestHook(); return; }
+    if (inspection.state.pinned) return;
     const direct = directTargetFromGlyph(pickAt(clientX, clientY));
-    const insp = inspectAt(hoverUs, direct);
+    const insp = inspectAt(inspection.state.hoverUs, direct);
     // 吸附后的真实检查时间同步到检查线与悬浮条，不保留另一时刻的过期读数。
-    hoverUs = insp.inspectionTimeUs;
-    lastInspection = insp;
+    inspection.state.hoverUs = insp.inspectionTimeUs;
+    inspection.state.lastInspection = insp;
     positionHover();
     renderFloat(insp, clientX);
     // 辅助技术播报只在键盘步进/固定时更新，不每个鼠标帧推送整段文本。
-    if (kbInspect) live.textContent = cardEl.textContent ?? '';
+    if (inspection.state.kbInspect) live.textContent = cardEl.textContent ?? '';
     refreshOverlay();
     publishTestHook();
   }
@@ -881,70 +536,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
    * 不重绘基础图层（hover 扫描不增加底图绘制次数）。
    */
   function refreshOverlay() {
-    if (!lastModel || !overlayCtx || !lastGeom) return;
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    overlayCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    overlayCtx.clearRect(0, 0, lastModel.width, lastModel.height);
-    const active = pinned ?? lastInspection;
-    if (hoverUs == null || !active) return;
-    const model = lastModel;
-    const geom = computeLayout(model);
-    const ctx = overlayCtx;
-    const span = model.viewEnd - model.viewStart || 1;
-    const xOfT = geom.gutter + ((active.inspectionTimeUs - model.viewStart) / span) * geom.plotW;
-    // 码率曲线圆点（轨道色），只在码率行可见时绘制，与表内值同一评价规则。
-    if (geom.bitrate && model.showBitrate && model.yMaxBitrate > 0) {
-      for (const t of active.tracks) {
-        if (t.bitrate.value == null) continue;
-        const track = model.tracks.find(m => m.slot === t.slot);
-        if (!track) continue;
-        const { y, h } = geom.bitrate;
-        const yy = y + h - 4 - (Math.min(t.bitrate.value, model.yMaxBitrate) / (model.yMaxBitrate || 1)) * (h - 8);
-        ctx.beginPath();
-        ctx.arc(Math.min(Math.max(xOfT, geom.gutter), geom.gutter + geom.plotW), yy, 3.5, 0, Math.PI * 2);
-        ctx.fillStyle = track.color;
-        ctx.fill();
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = '#fff';
-        ctx.stroke();
-        ctx.lineWidth = 1;
-      }
-    }
-    // 参考样本轮廓高亮，直接命中更明显。
-    for (const t of active.tracks) {
-      const refId = t.reference?.sample.sampleId;
-      if (refId) {
-        const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === refId) as SampleGlyph | undefined;
-        if (g) {
-          ctx.lineWidth = 1.5;
-          ctx.strokeStyle = slotColors.get(t.slot) ?? '#888';
-          ctx.strokeRect(g.rect.x - 0.5, g.rect.y - 0.5, g.rect.width + 1, g.rect.height + 1);
-          ctx.lineWidth = 1;
-        } else if (t.reference) {
-          const bg = lastGlyphs.find(v => v.kind === 'bucket' && v.slot === t.slot
-            && (v as BucketGlyph).startUs <= t.reference!.axisUs && t.reference!.axisUs < (v as BucketGlyph).endUs);
-          if (bg) {
-            ctx.lineWidth = 1.5;
-            ctx.strokeStyle = slotColors.get(t.slot) ?? '#888';
-            ctx.strokeRect(bg.rect.x - 0.5, bg.rect.y - 0.5, bg.rect.width + 1, bg.rect.height + 1);
-            ctx.lineWidth = 1;
-          }
-        }
-      }
-    }
-    const d = active.directTarget;
-    if (d?.kind === 'sample') {
-      const g = lastGlyphs.find(v => v.kind === 'sample' && (v as SampleGlyph).sampleId === d.sampleId) as SampleGlyph | undefined;
-      if (g) {
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = '#fff';
-        ctx.strokeRect(g.rect.x - 1.5, g.rect.y - 1.5, g.rect.width + 3, g.rect.height + 3);
-        ctx.lineWidth = 1.5;
-        ctx.strokeStyle = slotColors.get(g.slot) ?? '#888';
-        ctx.strokeRect(g.rect.x - 0.5, g.rect.y - 0.5, g.rect.width + 1, g.rect.height + 1);
-        ctx.lineWidth = 1;
-      }
-    }
+    drawAnalysisOverlay(overlayCtx, lastModel, lastGlyphs, inspection.state.pinned ?? inspection.state.lastInspection,
+      inspection.state.hoverUs, slotColors, window.devicePixelRatio || 1);
   }
 
   /** 只读测试快照：布局 glyph 身份与当前检查状态，供浏览器回归精确断言。
@@ -953,13 +546,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     try {
       const w = window as unknown as { __vpAnalysis?: unknown; __vpAnalysisQA?: boolean };
       if (!w.__vpAnalysisQA) return;
-      const active = pinned ?? lastInspection;
+      const active = inspection.state.pinned ?? inspection.state.lastInspection;
       const plotRect = plot.getBoundingClientRect();
       const flRect = cardEl.hidden ? null : cardEl.getBoundingClientRect();
       w.__vpAnalysis = {
         view: viewRange(),
         axis: prefs.axis,
-        pinned: pinned != null,
+        pinned: inspection.state.pinned != null,
         plot: { x: plotRect.x, y: plotRect.y, width: plotRect.width, height: plotRect.height },
         float: flRect ? { x: flRect.x, y: flRect.y, width: flRect.width, height: flRect.height } : null,
         inspection: active ? {
@@ -1000,12 +593,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
    * 悬浮条停在快照上，不跟随后续 hover；换片/清轨即失效。
    */
   function pinInspection(direct: DirectTarget | null) {
-    if (pinned) { unpinInspection(); return; }
-    if (hoverUs == null) return;
-    const insp = inspectAt(hoverUs, direct);
-    pinned = insp;
-    lastInspection = insp;
-    renderFloat(insp, lastClient?.x ?? null);
+    if (inspection.state.pinned) { unpinInspection(); return; }
+    if (inspection.state.hoverUs == null) return;
+    inspection.pin(direct);
+    renderFloat(inspection.state.pinned, inspection.state.lastClient?.x ?? null);
     refreshOverlay();
     publishTestHook();
     // 固定状态做节制播报；普通 hover 不推送整段文本。
@@ -1013,70 +604,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   function unpinInspection(focusCanvas = false) {
-    if (!pinned) return;
-    pinned = null;
-    renderFloat(lastInspection, lastClient?.x ?? null);
+    if (!inspection.state.pinned) return;
+    inspection.unpin();
+    renderFloat(inspection.state.lastInspection, inspection.state.lastClient?.x ?? null);
     refreshOverlay();
     publishTestHook();
     if (focusCanvas) canvas.focus();
   }
-
-  // ---- 指针交互 ----
-  let pressX: number | null = null;
-  let pressT = 0;
-  let selecting = false;
-
-  const canvasT = (clientX: number) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    if (lastGeom && lastModel) {
-      return tOf({ ...lastModel, width: lastGeom.width } as CanvasModel, {
-        gutter: lastGeom.gutter, plotW: lastGeom.plotW,
-      } as never, x);
-    }
-    // 首帧数据到达前用纯视图几何定位，手势不依赖数据。
-    const g = plotGeometry(plotWidthCss());
-    const range = viewRange();
-    const span = Math.max(1, range.end - range.start);
-    return range.start + ((x - g.gutter) / g.plotW) * span;
-  };
-
-  canvas.addEventListener('pointerdown', event => {
-    if (event.button !== 0 || !open || !selectedTracks().length) return;
-    canvas.focus();
-    pressX = event.clientX;
-    pressT = canvasT(event.clientX);
-    selecting = false;
-    canvas.setPointerCapture(event.pointerId);
-  }, { signal });
-
-  canvas.addEventListener('pointermove', event => {
-    if (!open || !selectedTracks().length) return;
-    if (pressX != null) {
-      if (!selecting && Math.abs(event.clientX - pressX) > 4) selecting = true;
-      if (selecting) {
-        rubber = { a: pressT, b: canvasT(event.clientX) };
-        renderRubber();
-        return;
-      }
-    }
-    // rAF 合并取本帧最新坐标，不保留首个事件丢弃后续；冻结期间不跟随。
-    if (pinned) return;
-    pendingHover = { x: event.clientX, y: event.clientY, t: canvasT(event.clientX) };
-    if (hoverRaf) return;
-    hoverRaf = requestAnimationFrame(() => {
-      hoverRaf = 0;
-      if (signal.aborted) return;
-      const p = pendingHover;
-      pendingHover = null;
-      if (!p) return;
-      hoverUs = Math.round(p.t);
-      kbInspect = false;
-      lastClient = { x: p.x, y: p.y };
-      positionHover();
-      updateInspection(p.x, p.y);
-    });
-  }, { signal });
 
   function renderRubber() {
     if (!lastModel || !ctx) return;
@@ -1085,205 +619,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     drawAnalysis(ctx, { ...lastModel, height: lastModel.height, rubber });
   }
 
-  canvas.addEventListener('pointerup', event => {
-    if (pressX == null) return;
-    const wasSelecting = selecting;
-    selecting = false;
-    pressX = null;
-    if (wasSelecting && rubber) {
-      const a = Math.min(rubber.a, rubber.b), b = Math.max(rubber.a, rubber.b);
-      rubber = null;
-      if (b - a > MIN_SPAN_US) setView(Math.floor(a), Math.ceil(b), false);
-      else render();
-      // 框选拖拽藏起了悬浮条；冻结中恢复快照显示。
-      if (pinned) renderFloat(pinned, lastClient?.x ?? null);
-      return;
-    }
-    rubber = null;
-    const picked = pickAt(event.clientX, event.clientY);
-    // Shift+单击冻结/解冻当前检查，不改变播放状态：已冻结时只解冻，
-    // 不在点击位置重新冻结（再次 Shift+单击必须可逆）。
-    if (event.shiftKey) {
-      if (pinned) { unpinInspection(); return; }
-      hoverUs = Math.round(canvasT(event.clientX));
-      lastClient = { x: event.clientX, y: event.clientY };
-      positionHover();
-      updateInspection(event.clientX, event.clientY);
-      pinInspection(directTargetFromGlyph(picked));
-      return;
-    }
-    // 单击只定位到展示 PTS，不改变视图范围（缩放走框选/滚轮/双击）；
-    // 样本与区间桶都按其主样本定位（桶峰值走 session 有界定位）；空白不定位。
-    if (picked && picked.kind === 'sample') {
-      const g = picked as SampleGlyph;
-      const r = results.get(g.slot);
-      const s = r?.samples.find(v => v.sampleId === g.sampleId);
-      const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: s?.effectivePtsUs ?? g.sessionPtsUs });
-      if ('sessionPtsUs' in resolved) {
-        kbTrack = g.slot;
-        void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
-      } else {
-        live.textContent = t(msg("analysis.seekReason", "轨道 {slot}：{reason}"), { slot: g.slot, reason: resolved.reason });
-      }
-    } else if (picked && picked.kind === 'bucket') {
-      const g = picked as BucketGlyph;
-      // 区间桶一律按峰值样本定位到展示帧，不改变视图。峰值身份经 session 有界
-      // 定位解析：不依赖本次查询是否恰好返回 raw 样本，也不从 id 字符串猜时间。
-      const peakId = g.maxSampleId;
-      if (!peakId) {
-        live.textContent = t(msg("analysis.noLocatablePeak", "轨道 {slot}：该区间没有可定位的峰值样本。"), { slot: g.slot });
-      } else {
-        const inView = results.get(g.slot)?.samples.find(v => v.sampleId === peakId);
-        if (inView) {
-          const resolved = session.resolveAnalysisSeek(g.slot, { effectivePtsUs: inView.effectivePtsUs });
-          if ('sessionPtsUs' in resolved) {
-            kbTrack = g.slot;
-            void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', { slot: g.slot, ptsUs: resolved.sessionPtsUs });
-          } else {
-            live.textContent = t(msg("analysis.seekReason", "轨道 {slot}：{reason}"), { slot: g.slot, reason: resolved.reason });
-          }
-        } else {
-          // 慢路径：样本不在当前视口结果中，走 session 统一动作入口
-          // （反查 → 校验实例/offset/最新意图 → seek）。旧定位结果不得
-          // 覆盖新点击/拖动/换片/改 offset 之后的用户意图； stale 结果静默丢弃。
-          void act(async () => {
-            let res: { sessionPtsUs: number } | { reason: string };
-            try {
-              res = await session.seekAnalysisSample(g.slot, peakId, { signal });
-            } catch {
-              if (!signal.aborted) live.textContent = t(msg("analysis.peakSeekFailed", "轨道 {slot}：峰值样本定位失败。"), { slot: g.slot });
-              return;
-            }
-            if (signal.aborted) return;
-            if ('sessionPtsUs' in res) {
-              kbTrack = g.slot;
-            } else if (res.reason !== '定位已被更新的请求取代。') {
-              live.textContent = t(msg("analysis.seekReason", "轨道 {slot}：{reason}"), { slot: g.slot, reason: res.reason });
-            }
-          }, 'analysis.seek', { slot: g.slot, sampleId: peakId });
-        }
-      }
-    }
-    // 单击不重绘底图；高亮随 hover 已在覆盖层更新。
-    refreshOverlay();
-  }, { signal });
-
-  canvas.addEventListener('pointerleave', () => {
-    if (pressX != null) return;
-    if (pinned) {
-      // 冻结快照不随指针移出消失：卡片与检查线保持，只藏 hover 悬浮条。
-      // 否则 pinned 保留而卡片隐藏后，pointermove 的 pinned 提前返回会形成死状态。
-      pendingHover = null;
-      hoverEl.hidden = true;
-      return;
-    }
-    // 移出隐藏顶层卡片，只隐藏检查线并清空覆盖层，不重绘底图。
-    hoverUs = null;
-    kbInspect = false;
-    pendingHover = null;
-    hoverEl.hidden = true;
-    renderFloat(null, null);
-    refreshOverlay();
-    publishTestHook();
-  }, { signal });
-
-  // 滚轮左右平移；Ctrl+滚轮（触摸板捏合）以 hover 点为中心缩放坐标轴。
-  // 触摸板双指滑动直接产生带 deltaX/Y 的 wheel 事件，走同一条平移路径。
-  canvas.addEventListener('wheel', event => {
-    if (!open || !selectedTracks().length) return;
-    event.preventDefault();
-    const range = viewRange();
-    const span = Math.max(1, range.end - range.start);
-    const db = domainBounds();
-    // Firefox 行/页模式换算为像素当量；页模式一页约 1/4 视图。
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? span / 4 : 1;
-    if (event.ctrlKey) {
-      const factor = Math.exp((event.deltaY * unit) / 280);
-      const center = canvasT(event.clientX);
-      const z = zoomTimeRange(range.start, range.end, center, factor, MIN_SPAN_US, db);
-      setView(z.start, z.end, false);
-    } else {
-      const px = (lastGeom && lastGeom.plotW > 0 ? lastGeom.plotW : plotGeometry(plotWidthCss()).plotW) || 1;
-      const shift = Math.round((event.deltaX * unit + event.deltaY * unit) * (span / px));
-      if (!shift) return;
-      const p = panTimeRange(range.start, range.end, shift, db);
-      setView(p.start, p.end, false);
-    }
-  }, { signal, passive: false });
-
-  canvas.addEventListener('dblclick', () => setView(null, undefined, true), { signal });
-
-  canvas.addEventListener('keydown', event => {
-    if (!lastModel) return;
-    const range = viewRange();
-    const sel = selectedTracks();
-    if (!sel.length) return;
-    if (!kbTrack || !sel.some(t => t.slot === kbTrack)) kbTrack = sel[0].slot;
-    const step = Math.max(1, Math.floor((range.end - range.start) / 100));
-    if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      if (pinned) return;
-      const base = hoverUs ?? positionUs;
-      hoverUs = Math.round(base + (event.key === 'ArrowRight' ? step : -step));
-      kbInspect = true;
-      positionHover();
-      const rect = canvas.getBoundingClientRect();
-      updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
-        gutter: lastGeom.gutter, plotW: lastGeom.plotW,
-      } as never, hoverUs) : 0), rect.top + 20);
-    } else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-      // 键盘轨道焦点：上下切换，不总是第一轨。
-      event.preventDefault();
-      const idx = sel.findIndex(t => t.slot === kbTrack);
-      const next = event.key === 'ArrowDown'
-        ? sel[(idx + 1) % sel.length].slot
-        : sel[(idx - 1 + sel.length) % sel.length].slot;
-      kbTrack = next;
-      kbInspect = true;
-      if (hoverUs != null) {
-        const rect = canvas.getBoundingClientRect();
-        updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
-          gutter: lastGeom.gutter, plotW: lastGeom.plotW,
-        } as never, hoverUs) : 0), rect.top + 20);
-        live.textContent = t(msg("analysis.trackFocusWithContext", "轨道焦点 {slot}。{rest}"), { slot: kbTrack, rest: live.textContent ?? '' });
-      } else {
-        live.textContent = t(msg("analysis.trackFocus", "轨道焦点 {slot}"), { slot: kbTrack });
-      }
-    } else if (event.key === 'Enter' && hoverUs != null) {
-      event.preventDefault();
-      // 键盘 Enter 定位当前焦点轨道在检查点的参考样本（与鼠标统一口径），不总是第一轨。
-      const focus = kbTrack ?? sel[0].slot;
-      const insp = inspectAt(hoverUs, lastInspection?.directTarget ?? null);
-      const ref = insp.tracks.find(t => t.slot === focus)?.reference;
-      if (ref) {
-        const resolved = session.resolveAnalysisSeek(focus, { effectivePtsUs: ref.sample.effectivePtsUs });
-        if ('sessionPtsUs' in resolved) void act(() => session.seek(resolved.sessionPtsUs), 'analysis.seek', {});
-        else { live.textContent = resolved.reason; }
-        return;
-      }
-      live.textContent = t(msg("analysis.noSampleAtTime", "轨道 {slot} 在该时间无可定位样本。"), { slot: focus });
-    } else if (event.key === 'i' || event.key === 'I') {
-      // 冻结/解冻当前检查，不改变播放。
-      event.preventDefault();
-      kbInspect = true;
-      if (pinned) unpinInspection();
-      else if (hoverUs != null) {
-        const rect = canvas.getBoundingClientRect();
-        updateInspection(rect.left + (lastGeom ? xOf(lastModel, {
-          gutter: lastGeom.gutter, plotW: lastGeom.plotW,
-        } as never, hoverUs) : 0), rect.top + 20);
-        pinInspection(lastInspection?.directTarget ?? null);
-      }
-    } else if (event.key === 'Escape') {
-      if (pinned) { unpinInspection(true); return; }
-      hoverUs = null; rubber = null; kbInspect = false;
-      lastInspection = null;
-      hoverEl.hidden = true;
-      renderFloat(null, null);
-      refreshOverlay();
-      publishTestHook();
-    }
-  }, { signal });
+  const gestures = installAnalysisGestures({ signal, canvas, session, act, live, hoverEl, inspection,
+    scene: { get open() { return open; }, get lastModel() { return lastModel; }, get lastGeom() { return lastGeom; },
+      get positionUs() { return positionUs; }, results,
+      get rubber() { return rubber; }, set rubber(value) { rubber = value; },
+      selectedTracks, viewRange, domainBounds, plotWidthCss },
+    setView, render, renderRubber, positionHover, updateInspection, renderFloat, refreshOverlay, publishTestHook,
+    pickAt, pinInspection, unpinInspection });
 
   // ---- 会话联动（开关与高度由 workbench 统一管理） ----
   function setOpen(next: boolean) {
@@ -1293,6 +635,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (open) { refreshTools(); scheduleQuery(true); }
     else {
       cardEl.hidden = true;
+      gestures.cancel();
       queries.suspend();
       window.clearTimeout(buildingTimer);
     }
@@ -1343,16 +686,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const state = session.getState();
     positionUs = state.positionUs;
     durationUs = state.durationUs;
-    for (const t of state.tracks) {
-      const frame = (t as { frame?: { ptsUs: number; sourcePtsUs: number } | null }).frame;
-      framesBySlot.set(t.slot as Slot, frame ? { ptsUs: frame.ptsUs, sourcePtsUs: frame.sourcePtsUs } : null);
-    }
-    for (const slot of [...framesBySlot.keys()]) {
-      if (!state.tracks.some(t => (t.slot as Slot) === slot)) {
-        framesBySlot.delete(slot);
-        rankCache.delete(slot);
-      }
-    }
+    status.syncFrames(state.tracks);
     const entries: TrackEntry[] = state.tracks.map(t => ({
       slot: t.slot as Slot, mediaId: t.id as string, offsetUs: t.offsetUs as number,
       durationUs: t.durationUs as number, name: (t.name as string) ?? '',
@@ -1373,16 +707,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     if (sig !== trackSig) {
       trackSig = sig;
-      for (const slot of queries.reconcile(tracks, entries)) {
-        rankCache.delete(slot);
-        rankSeq.set(slot, (rankSeq.get(slot) ?? 0) + 1);
+      for (const previous of tracks) {
+        const current = entries.find(t => t.slot === previous.slot);
+        if (!current || current.mediaId !== previous.mediaId || current.sourceGen !== previous.sourceGen || current.offsetUs !== previous.offsetUs) status.invalidate(previous.slot);
       }
+      queries.reconcile(tracks, entries);
       tracks = entries;
       caps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
       if (prefs.axis === 'dts' && !allHaveDts()) prefs.axis = 'pts';
       // 换片/清轨后旧检查与冻结快照失效，不拿旧 sampleId 定位新片源。
-      lastInspection = null;
-      pinned = null;
+      inspection.invalidate();
       renderFloat(null, null);
       save();
       refreshTools();
@@ -1440,7 +774,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   wrapObs.observe(tools);
   wrapObs.observe(statusEl);
 
-  const themeChanges = new MutationObserver(() => { readColors(); lastStatusSig = ''; updateStatus(); render(); });
+  const themeChanges = new MutationObserver(() => { readColors(); status.invalidate(); updateStatus(); render(); });
   themeChanges.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] });
   const stopLanguage = onLanguageChange(() => { if (!signal.aborted) localize(); }, signal);
 
@@ -1452,7 +786,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   signal.addEventListener('abort', () => {
     queries.dispose();
     window.clearTimeout(buildingTimer);
-    if (hoverRaf) cancelAnimationFrame(hoverRaf);
     if (viewRaf) cancelAnimationFrame(viewRaf);
     if (resizeRaf) cancelAnimationFrame(resizeRaf);
     offSession();
@@ -1461,7 +794,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     resizer_obs.disconnect();
     wrapObs.disconnect();
     themeChanges.disconnect();
-    floatLayer.remove();
     axisMenu.dispose();
     windowMenu.dispose();
     layoutMenu.dispose();

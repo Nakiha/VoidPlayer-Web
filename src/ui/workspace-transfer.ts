@@ -142,11 +142,11 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     } finally { importing = false; }
   }
   async function importFile(file: File, supplied: File[] = []) { await importWorkspace(await readWorkspaceFile(file, location.href), supplied); }
-  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, copyLink: (id, trigger) => sharing!.copySaved(id, trigger), canSave: () => session.getState().tracks.length > 0, report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
+  saved = installSavedWorkspaces({ signal: lifetime.signal, snapshot: exportWorkspace, open: async (value, space) => { const opened=await importWorkspace(space ? mapSharedWorkspace(value,location.origin) : value, [], false, !!space); if(opened && space)await options.openSharedSpace(space); return opened; }, copyLink: (id, trigger) => sharing!.copySaved(id, trigger), canSave: () => session.getState().tracks.length > 0, changed: () => sharing?.update(), report: error => { if (!document.querySelector<HTMLDialogElement>('#settings')!.open) void options.act(() => { throw error; }, 'workspace.server'); } });
   // A seek keeps the last committed workspace snapshot valid. Sharing is
-  // available whenever there is a loaded track; the snapshot is captured
+  // available once loaded tracks and their workspace binding are ready; the snapshot is captured
   // synchronously before any network work begins.
-  sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, closeSettings:options.closeSettings, openSpace:options.openSharedSpace, scope:options.annotationScope, canShare:()=>session.getState().tracks.length>0, report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
+  sharing = installWorkspaceSharing({ signal:lifetime.signal, snapshot:exportWorkspace, binding:saved.binding, save:saved.share, toasts:options.toasts, closeSettings:options.closeSettings, openSpace:options.openSharedSpace, scope:options.annotationScope, isOpening:saved.isOpening, canShare:()=>session.getState().tracks.length>0&&!saved!.isOpening(), report:error=>void options.act(()=>{throw error;}, 'workspace.share') });
   let missingSignature = '', dismissMissing: (() => void) | undefined;
   async function relinkMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);

@@ -2671,6 +2671,14 @@
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
   },
+  "recovery.capacity": {
+    "source": "已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。",
+    "translation": "Saved {count}/{limit} records · Estimated {used} / {budget} MiB. At capacity, export and delete old records first. Existing records are never removed automatically."
+  },
+  "recovery.capacityReached": {
+    "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
+    "translation": "Local recovery storage has reached its limit. Export and delete old records in Settings → Workspace. You can export the current workspace or save it to the server."
+  },
   "recovery.deleteHistory": {
     "source": "删除这份本机恢复记录？",
     "translation": "Delete this local recovery record?"

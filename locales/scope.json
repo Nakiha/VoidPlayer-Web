@@ -16,10 +16,16 @@
     "src/ui/analysis-canvas.ts",
     "src/ui/analysis-geometry.ts",
     "src/ui/analysis-panel.ts",
+    "src/ui/analysis/card.ts",
+    "src/ui/analysis/gestures.ts",
+    "src/ui/analysis/inspection-state.ts",
     "src/ui/analysis/lazy-panel.ts",
     "src/ui/analysis/model.ts",
+    "src/ui/analysis/overlay.ts",
     "src/ui/analysis/preferences.ts",
     "src/ui/analysis/queries.ts",
+    "src/ui/analysis/shared.ts",
+    "src/ui/analysis/status.ts",
     "src/ui/annotation-panel.ts",
     "src/ui/annotation-svg.ts",
     "src/ui/annotation-sync.ts",
@@ -96,7 +102,7 @@
       "reason": "Stable persisted fallback workspace title; never localized user data."
     },
     {
-      "file": "src/ui/analysis-panel.ts",
+      "file": "src/ui/analysis/gestures.ts",
       "literal": "定位已被更新的请求取代。",
       "reason": "AbortError diagnostic, not displayed as UI copy."
     },

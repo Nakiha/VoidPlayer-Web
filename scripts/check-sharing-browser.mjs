@@ -59,7 +59,18 @@ try{
   assert.equal((await call(page,'get_review_session')).positionUs,200000,'another save does not move the current playback view');
   // Concurrent changes remain explicit instead of silently overwriting.
   await settings(page);await page.locator('#saved-workspace-save').click();await page.locator('#saved-workspace-conflict').waitFor({state:'visible'});assert.equal((await page.request.get(base+'/api/workspaces/'+id).then(r=>r.json())).revision,2);
-  await page.locator('#saved-workspace-reload').click();await page.waitForFunction(()=>window.voidPlayer.getState().positionUs===400000 && !window.voidPlayer.getState().busy);assert.equal((await call(page,'get_review_session')).tracks.length,1);
+  // The session can finish restoring before the annotation-space request and
+  // saved-record binding settle. Sharing in that gap must not create a copy.
+  let releaseRestore;
+  const restoreGate=new Promise(resolve=>releaseRestore=resolve);
+  const spaceUrl=`**/api/annotations/spaces/${record.space}?*`;
+  await page.route(spaceUrl,async route=>{await restoreGate;await route.continue();});
+  const restoreReached=page.waitForRequest(request=>new URL(request.url()).pathname===`/api/annotations/spaces/${record.space}`&&request.method()==='GET');
+  await page.locator('#saved-workspace-reload').click();await restoreReached;await page.waitForFunction(()=>window.voidPlayer.getState().positionUs===400000 && !window.voidPlayer.getState().busy);assert.equal((await call(page,'get_review_session')).tracks.length,1);
+  assert.equal(await page.locator('#workspace-share').isDisabled(),true,'share waits for the restored server binding');
+  await assert.rejects(page.evaluate(()=>window.voidPlayer.shareWorkspace()),/工作区正在保存/);
+  releaseRestore();await page.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);await page.unroute(spaceUrl);
+  assert.equal(await page.locator('#workspace-share').isEnabled(),true);
   await page.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),mark.id);
   await page.evaluate(id=>window.voidPlayer.deleteMark(id),mark.id);await other.waitForFunction(id=>!window.voidPlayer.getState().marks.some(m=>m.id===id),mark.id);
   await other.locator('#settings-close').click();await other.reload();await other.waitForFunction(()=>window.voidPlayer?.getState().tracks.length===1&&!window.voidPlayer.getState().busy);await other.waitForFunction(id=>window.voidPlayer.getState().marks.some(m=>m.id===id),later.id);

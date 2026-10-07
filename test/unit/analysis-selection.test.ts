@@ -89,3 +89,37 @@ test('closing or disposing during analysis import does not mount stale UI and a 
   const failed = lazyFixture(); failed.lazy.setOpen(true); failed.pending.reject(new Error('chunk failed'));
   await assert.rejects(failed.lazy.ready(), /chunk failed/); assert.equal(failed.errors.length, 1);
 });
+
+import { installAnalysisGestures } from '../../src/ui/analysis/gestures.ts';
+import { createInspectionController } from '../../src/ui/analysis/inspection-state.ts';
+import type { AnalysisGestureScene } from '../../src/ui/analysis/gestures.ts';
+
+test('analysis gestures cancel queued hover and selection capture on closure/cancellation/disposal', t => {
+  const previousRaf = globalThis.requestAnimationFrame, previousCancel = globalThis.cancelAnimationFrame;
+  const frames = new Map<number, FrameRequestCallback>(); let next = 0;
+  globalThis.requestAnimationFrame = callback => { frames.set(++next,callback); return next; };
+  globalThis.cancelAnimationFrame = id => { frames.delete(id); };
+  t.after(() => { globalThis.requestAnimationFrame = previousRaf; globalThis.cancelAnimationFrame = previousCancel; });
+  const canvas = Object.assign(new EventTarget(), { focus() {}, setPointerCapture() {}, getBoundingClientRect: () => ({left:0,top:0,width:100,height:100}) }) as unknown as HTMLCanvasElement;
+  const scene: AnalysisGestureScene = { open:true,lastModel:null,lastGeom:null,positionUs:0,results:new Map(),rubber:null,
+    selectedTracks:()=>[{slot:'A'}],viewRange:()=>({start:0,end:100000}),domainBounds:()=>({start:0,end:100000}),plotWidthCss:()=>100 };
+  const inspection = createInspectionController(() => ({axis:'pts',windowUs:250000,stepUs:1,selected:[],results:new Map(),caps:new Map(),domain:{start:0,end:100000}}));
+  const signal = new AbortController(); t.after(()=>signal.abort());
+  let updates=0, redraws=0;
+  const noop=()=>{};
+  const gestures = installAnalysisGestures({signal:signal.signal,canvas,scene,inspection,
+    session:{} as ReviewSession,act:async()=>{},live:{} as HTMLElement,hoverEl:{} as HTMLElement,
+    setView:noop,render:()=>redraws++,renderRubber:noop,positionHover:noop,updateInspection:()=>updates++,renderFloat:noop,
+    refreshOverlay:noop,publishTestHook:noop,pickAt:()=>null,pinInspection:noop,unpinInspection:noop});
+  const pointer=(type:string,x:number)=>canvas.dispatchEvent(Object.assign(new Event(type),{button:0,pointerId:1,clientX:x,clientY:50}));
+  pointer('pointermove',60); assert.equal(frames.size,1);
+  gestures.cancel(); assert.equal(frames.size,0); assert.equal(updates,0);
+  pointer('pointerdown',50); pointer('pointermove',80); assert.ok(scene.rubber);
+  pointer('pointercancel',80); assert.equal(scene.rubber,null); assert.equal(redraws,1);
+  pointer('pointermove',70); const pending=[...frames.values()][0];
+  // Closing between pointermove and its animation frame must not republish hover.
+  frames.clear(); Object.assign(scene,{open:false}); pending(0); assert.equal(updates,0);
+  Object.assign(scene,{open:true}); pointer('pointermove',70);
+  signal.abort(); assert.equal(frames.size,0);
+  pointer('pointermove',90); assert.equal(frames.size,0); assert.equal(updates,0);
+});

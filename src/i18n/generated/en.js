@@ -667,6 +667,8 @@ export default {
   "progress.inspect": () => "Reading video information",
   "progress.queued": () => "Preparing to load",
   "progress.synchronize": () => "Seeking to the current position",
+  "recovery.capacity": (d) => "Saved " + d.count + "/" + d.limit + " records · Estimated " + d.used + " / " + d.budget + " MiB. At capacity, export and delete old records first. Existing records are never removed automatically.",
+  "recovery.capacityReached": () => "Local recovery storage has reached its limit. Export and delete old records in Settings → Workspace. You can export the current workspace or save it to the server.",
   "recovery.deleteHistory": () => "Delete this local recovery record?",
   "recovery.export": () => "Export backup",
   "recovery.history": () => "Local recovery records",

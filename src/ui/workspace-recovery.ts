@@ -1,5 +1,5 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
-import { WorkspaceCheckpoints, checkpointTabId } from '../workspace-checkpoint.ts';
+import { WorkspaceCheckpoints, checkpointTabId, CheckpointCapacityError } from '../workspace-checkpoint.ts';
 import { installCheckpointHistory } from './checkpoint-history.ts';
 import { currentActor } from '../identity.ts';
 import type { ReviewSession } from '../session.ts';
@@ -92,8 +92,10 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
     try {
       await store.save({ id: `${id}:${savingActor}`, actor: savingActor, updatedAt: Date.now(), document: snapshot }); if (actor === savingActor) last = signature;
       if (warned) { warned = false; options.toasts.show(() => t(msg('recovery.savingResumed', '工作区本机自动恢复已恢复保存。'))); }
-    } catch {
-      if (!warned) { warned = true; options.toasts.show(() => t(msg('recovery.saveFailed', '工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。')), { kind: 'error' }); }
+    } catch (error) {
+      if (!warned) { warned = true; options.toasts.show(() => error instanceof CheckpointCapacityError
+        ? t(msg('recovery.capacityReached', '本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。'))
+        : t(msg('recovery.saveFailed', '工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。')), { kind: 'error' }); }
     } finally { writing = false; if (again) { again = false; void flush(); } }
   }
   const schedule = () => { clearTimeout(timer); timer = setTimeout(() => void flush(), 500); };

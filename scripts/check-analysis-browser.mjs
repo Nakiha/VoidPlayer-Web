@@ -89,7 +89,7 @@ try {
     try {
       const call = (id, type, input, transfer = []) => new Promise((resolve, reject) => {
         const timer = setTimeout(() => { cleanup(); reject(new Error('metadata Worker timed out')); }, 10000);
-        const receive = event => { if (event.data.id === id) { cleanup(); event.data.ok ? resolve(event.data.data) : reject(new Error(event.data.error)); } };
+        const receive = event => { if (event.data.id === id && !event.data.event) { cleanup(); event.data.ok ? resolve(event.data.data) : reject(new Error(event.data.error)); } };
         const error = event => { cleanup(); reject(new Error(event.message)); };
         const cleanup = () => { clearTimeout(timer); worker.removeEventListener('message', receive); worker.removeEventListener('error', error); };
         worker.addEventListener('message', receive); worker.addEventListener('error', error); worker.postMessage({ id, type, input }, transfer);

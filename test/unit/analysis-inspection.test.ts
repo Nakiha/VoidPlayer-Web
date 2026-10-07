@@ -183,3 +183,24 @@ test('estimateBaseBucketWidth 含空桶仍稳定', () => {
   const buckets = [0, 1, 2, 3].map(i => ({ startUs: i * 10_000, endUs: (i + 1) * 10_000 }));
   assert.equal(estimateBaseBucketWidth(buckets), 10_000);
 });
+
+import { createInspectionController } from '../../src/ui/analysis/inspection-state.ts';
+test('inspection controller preserves a directly hit duplicate timestamp and frozen identity until invalidated', () => {
+  const result = makeResult([{ t: 100_000, size: 10 }, { t: 100_000, size: 20 }, { t: 200_000, size: 30 }]);
+  const results = new Map<Slot, AnalysisResult>([['A',result]]);
+  const controller = createInspectionController(() => ({ axis: 'pts', windowUs: 250_000, stepUs: 100,
+    selected: [{slot:'A'}], results, caps: new Map([['A',result.capability]]), domain: { start:0,end:2_000_000 } }));
+  const target = { kind:'sample' as const,slot:'A' as const,sampleId:'m:v:1' };
+  const inspection = controller.inspectAt(150_000,target);
+  assert.equal(inspection.inspectionTimeUs,100_000);
+  assert.equal(inspection.tracks[0].reference?.sample.sampleId,'m:v:1');
+  controller.state.hoverUs = 150_000; controller.pin(target);
+  const frozen = controller.state.pinned;
+  results.set('A',makeResult([{t:300_000,size:40}]));
+  assert.equal(controller.state.pinned,frozen); assert.equal(frozen?.tracks[0].reference?.sample.sampleId,'m:v:1');
+  controller.unpin(); assert.equal(controller.state.pinned,null);
+  controller.state.kbTrack = 'A'; controller.state.lastClient = {x:10,y:20}; controller.state.kbInspect = true;
+  controller.invalidate();
+  assert.equal(controller.state.hoverUs,null); assert.equal(controller.state.lastInspection,null);
+  assert.equal(controller.state.lastClient,null); assert.equal(controller.state.kbTrack,null); assert.equal(controller.state.kbInspect,false);
+});

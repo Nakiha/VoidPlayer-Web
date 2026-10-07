@@ -135,3 +135,66 @@ test('native analysis cancellation and disposal settle callers while keeping met
   await assert.rejects(pending, /disposed/);
   await assert.rejects(client.call('rank', { firstPtsUs: 0, axis: 'pts', tUs: 0 }), /disposed/);
 });
+
+import { createCooperativeQuerier, driveAnalysis } from '../../src/analysis/cooperative.ts';
+import { finishAnalysisSteps } from '../../src/analysis/adapters.ts';
+
+test('cooperative full and appended queries preserve the shared statistics including DTS and duplicate timestamps', () => {
+  const cooperative = createCooperativeQuerier(), synchronous = createSourceQuerier(), context = ctxFor();
+  const table = packets(7000, 1000);
+  table[4].pts = table[3].pts;
+  const growing = table.slice(0, 4000);
+  for (const axis of ['pts','dts'] as const) {
+    for (const count of [4000,7000]) {
+      growing.splice(0, growing.length, ...table.slice(0,count));
+      const query = { requestId: count, axis, startUs: -100_000, endUs: 7000*40000, pixelWidth: 1000, bitrateWindowUs: 250_000, maxSamples: 5000 };
+      assert.deepEqual(finishAnalysisSteps(cooperative.query(growing, context, query)), synchronous(growing, context, query));
+      assert.deepEqual(finishAnalysisSteps(cooperative.rank(growing, 0, axis, 80000)), synchronous.rank(growing,0,axis,80000));
+      assert.equal(finishAnalysisSteps(cooperative.number(growing,0,axis,24)), synchronous.sampleAtNumber(growing,0,axis,24));
+    }
+  }
+});
+test('abandoning partial index work preserves the prior cache and a later append can be queried', async () => {
+  const cooperative = createCooperativeQuerier(), table = packets(10000), context = ctxFor();
+  const query = { requestId: 1, axis: 'pts' as const, startUs: 0, endUs: 500_000_000, pixelWidth: 1000, bitrateWindowUs: 250_000 };
+  const steps = cooperative.query(table, context, query);
+  assert.equal(steps.next().done, false); assert.equal(steps.next().done, false); steps.return(undefined as never);
+  assert.deepEqual(await driveAnalysis(cooperative.query(table,context,query),()=>false), createSourceQuerier()(table,context,query));
+  table.push({ pts: 0, dts: table.length*40000, size: 17, key: false });
+  const cancelled = cooperative.query(table,context,query);
+  await assert.rejects(driveAnalysis(cancelled,()=>true), { name: 'AbortError' });
+  assert.deepEqual(finishAnalysisSteps(cooperative.query(table,context,query)), createSourceQuerier()(table,context,query));
+});
+test('real worker cancellation stops an executing sort and executing statistics, retaining metadata for the next request', async t => {
+  const { Worker } = await import('node:worker_threads');
+  const worker = new Worker(new URL('../../src/analysis/native-worker.ts', import.meta.url));
+  t.after(async () => { await worker.terminate(); });
+  const messages: any[] = [];
+  worker.on('message', message => messages.push(message));
+  function wait(id: number, predicate: (message: any) => boolean) {
+    return new Promise<any>((resolve, reject) => {
+      const found = messages.find(message => message.id === id && predicate(message)); if (found) { resolve(found); return; }
+      const timer = setTimeout(() => { cleanup(); reject(new Error(`Worker response ${id} timed out`)); }, 10000);
+      const receive = (message: any) => { if (message.id === id && predicate(message)) { cleanup(); resolve(message); } };
+      const error = (error: Error) => { cleanup(); reject(error); };
+      const cleanup = () => { clearTimeout(timer); worker.off('message', receive); worker.off('error', error); };
+      worker.on('message', receive); worker.on('error', error);
+    });
+  }
+  const count = 400_000, batch = new Float64Array(count*3);
+  for (let i=0;i<count;i++) { batch[i*3] = (count-i)*40000; batch[i*3+1] = 1000; batch[i*3+2] = i%50===0 ? 1 : 0; }
+  worker.postMessage({ id: 1, type: 'append', input: { records: batch } }, [batch.buffer]);
+  assert.equal((await wait(1,m=>'ok' in m)).data, count);
+  const context = { ...ctxFor('executing'), durationUs: (count+1)*40000, capability: { ...ctxFor().capability, hasDts: false } };
+  const query = { requestId: 2, axis: 'pts', startUs: 0, endUs: (count+1)*40000, pixelWidth: 4096, bitrateWindowUs: 1_000_000 };
+  for (const id of [2,4]) {
+    worker.postMessage({ id, type: 'query', input: { context, query: { ...query, requestId: id } } });
+    await wait(id,m=>m.event==='yielded'); // At least one real computation batch already ran.
+    worker.postMessage({ id, type: 'cancel' });
+    const cancelled = await wait(id,m=>'ok' in m);
+    assert.equal(cancelled.ok,false); assert.equal(cancelled.name,'AbortError');
+    worker.postMessage({ id: id+1, type:'rank', input:{ firstPtsUs:0,axis:'pts',tUs:40000 } });
+    assert.deepEqual((await wait(id+1,m=>'ok' in m)).data,{rank:0,total:count,ordinal:count-1});
+  }
+  assert.equal(messages.some(message => [2,4].includes(message.id) && message.ok), false, 'cancelled work never publishes partial/final results');
+});

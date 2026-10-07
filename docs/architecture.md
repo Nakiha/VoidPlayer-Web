@@ -47,6 +47,12 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 
 导出格式为 `voidplayer-web-review`，version 1，包含媒体信息、帧锚点、轨道对齐和标注。ID 不是文件内容哈希；替换片源保留原标注的来源关系。格式不保证兼容桌面播放器的导入器。
 
+## 按需分析面板
+
+`ui/analysis-panel.ts` 负责装配工具条、会话订阅和视图更新。独立模块分别拥有偏好迁移（`analysis/preferences.ts`）、查询与缓存生命周期（`queries.ts`）、纯图表模型（`model.ts`）、悬停/冻结检查状态（`inspection-state.ts`）、指针与键盘生命周期（`gestures.ts`）、帧号查询和编辑（`status.ts`）、悬浮卡片 DOM（`card.ts`）以及独立覆盖层绘制（`overlay.ts`）。面板按首次打开加载；输入、帧号编辑和样本定位仍共用 session facade，不形成第二套会话行为。
+
+原生分析 Worker 在有界计算批次之间处理取消消息；同步包查询与协作式查询共用桶、滑窗与覆盖计算口径。取消只丢弃该请求的半成品，元数据包表和此前完整索引仍可供下一次查询使用。
+
 ## Agent 与服务
 
 `src/agent.ts` 定义工具清单、参数校验和执行入口；`src/main.ts` 暴露 `window.voidPlayer`。工具包括会话与轨道操作、定位与步进、播放与基准、标注编辑与导出、媒体库及日志读取。以实际导出的工具 schema 为准，不在文档复制一份易过时的签名。工具入口用 `tool-input.ts` 校验这份 schema 声明的字段类型、枚举与边界；宿主未做预校验时也执行，状态和领域约束仍由同一 session facade 负责。`query_analysis` 的滑窗支持任意正整数微秒，与 UI/session 一致；面板下拉项只是常用预设，不是接口允许值全集。

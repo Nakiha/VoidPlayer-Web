@@ -667,6 +667,8 @@ export default {
   "progress.inspect": () => "［R~e~a~d~i~n~g~ v~i~d~e~o~ i~n~f~o~r~m~a~t~i~o~n~ ········］",
   "progress.queued": () => "［P~r~e~p~a~r~i~n~g~ t~o~ l~o~a~d~ ········］",
   "progress.synchronize": () => "［S~e~e~k~i~n~g~ t~o~ t~h~e~ c~u~r~r~e~n~t~ p~o~s~i~t~i~o~n~ ········］",
+  "recovery.capacity": (d) => "［S~a~v~e~d~ " + d.count + "/" + d.limit + " r~e~c~o~r~d~s~ · E~s~t~i~m~a~t~e~d~ " + d.used + " / " + d.budget + " M~i~B~. A~t~ c~a~p~a~c~i~t~y~, e~x~p~o~r~t~ a~n~d~ d~e~l~e~t~e~ o~l~d~ r~e~c~o~r~d~s~ f~i~r~s~t~. E~x~i~s~t~i~n~g~ r~e~c~o~r~d~s~ a~r~e~ n~e~v~e~r~ r~e~m~o~v~e~d~ a~u~t~o~m~a~t~i~c~a~l~l~y~. ········］",
+  "recovery.capacityReached": () => "［L~o~c~a~l~ r~e~c~o~v~e~r~y~ s~t~o~r~a~g~e~ h~a~s~ r~e~a~c~h~e~d~ i~t~s~ l~i~m~i~t~. E~x~p~o~r~t~ a~n~d~ d~e~l~e~t~e~ o~l~d~ r~e~c~o~r~d~s~ i~n~ S~e~t~t~i~n~g~s~ → W~o~r~k~s~p~a~c~e~. Y~o~u~ c~a~n~ e~x~p~o~r~t~ t~h~e~ c~u~r~r~e~n~t~ w~o~r~k~s~p~a~c~e~ o~r~ s~a~v~e~ i~t~ t~o~ t~h~e~ s~e~r~v~e~r~. ········］",
   "recovery.deleteHistory": () => "［D~e~l~e~t~e~ t~h~i~s~ l~o~c~a~l~ r~e~c~o~v~e~r~y~ r~e~c~o~r~d~? ········］",
   "recovery.export": () => "［E~x~p~o~r~t~ b~a~c~k~u~p~ ········］",
   "recovery.history": () => "［L~o~c~a~l~ r~e~c~o~v~e~r~y~ r~e~c~o~r~d~s~ ········］",

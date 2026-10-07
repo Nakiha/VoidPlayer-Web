@@ -1,7 +1,7 @@
 import type { NativeAnalysisCommands, NativeAnalysisReply } from './native-protocol.ts';
 
 /** Dedicated metadata worker: no decoded frames or playback buffers cross
- * this channel. Cancellation drops queued work and immediately settles callers. */
+ * this channel. Cancellation immediately settles callers and stops queued or executing work at the next bounded worker turn. */
 export class NativeAnalysisClient {
   private worker?: Worker;
   private opening?: Promise<Worker>;
@@ -17,9 +17,10 @@ export class NativeAnalysisClient {
       if (this.failure) { void worker.terminate(); throw this.failure; }
       this.worker = worker;
       const receive = (reply: NativeAnalysisReply) => {
+        if ('event' in reply) return;
         const request = this.pending.get(reply.id); if (!request) return;
         this.pending.delete(reply.id); request.cleanup();
-        if (reply.ok) request.resolve(reply.data); else request.reject(new Error(reply.error));
+        if (reply.ok) request.resolve(reply.data); else { const error = new Error(reply.error); error.name = reply.name ?? 'Error'; request.reject(error); }
       };
       if (typeof worker.addEventListener === 'function') {
         worker.addEventListener('message', event => receive(event.data));
