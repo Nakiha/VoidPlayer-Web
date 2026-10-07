@@ -1,4 +1,6 @@
 /* Admin screens share the player's materials, with one form and spacing system. */
+:where(.admin-content, .admin-log-sidebar, #requests-view, .admin-choice-menu,
+  .admin-navigation) { overscroll-behavior: contain; }
 #admin-app { height: 100%; }
 .admin-layout { display: grid; grid-template-columns: 184px minmax(0, 1fr); height: 100%; }
 .admin-navigation { display: flex; flex-direction: column; gap: 4px; padding: 20px 10px; background: var(--surface); }

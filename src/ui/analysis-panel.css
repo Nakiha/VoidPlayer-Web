@@ -1,6 +1,8 @@
 /* 顶部码流分析面板内容：工具条 + Canvas + 覆盖层。面板定位、高度预留、
    进出动效与高度手柄由 style.css 与 workbench 统一管理（与子轨道同契约）。
    颜色全部走主题 token。 */
+:where(.analysis-tools, .analysis-status, .analysis-status .st-items,
+  .analysis-body, .analysis-notice) { overscroll-behavior: contain; }
 :root {
   --analysis-key: #b45309;
   --analysis-delta: #2563eb;

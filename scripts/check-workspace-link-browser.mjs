@@ -26,7 +26,7 @@ try{
     let sharing;
     const saved=installSavedWorkspaces({signal:life.signal,snapshot,open:async()=>{window.openCount=(window.openCount??0)+1;return true;},copyLink:(id,trigger)=>sharing.copySaved(id,trigger),canSave:()=>true,report:e=>{throw e;}});
     Object.defineProperty(navigator.clipboard,'writeText',{configurable:true,value:async value=>{window.copied=value;}});
-    let scope='local';sharing=installWorkspaceSharing({signal:life.signal,snapshot,binding:saved.binding,save:saved.share,toasts:installToasts(life.signal),closeSettings:async()=>{},openSpace:async space=>{scope=space;},scope:()=>scope,canShare:()=>true,report:e=>{throw e;}});
+    let scope='local';sharing=installWorkspaceSharing({signal:life.signal,snapshot,binding:saved.binding,save:saved.share,toasts:installToasts(life.signal),closeSettings:async()=>{},openSpace:async space=>{scope=space;},scope:()=>scope,isOpening:saved.isOpening,canShare:()=>true,report:e=>{throw e;}});
   });
   await page.locator('#saved-workspace-name').fill('初次评审');await page.locator('#saved-workspace-save').click();await page.locator('.saved-workspace-open strong').filter({hasText:'初次评审'}).waitFor();
   let release;const gate=new Promise(resolve=>release=resolve);await page.route('**/api/workspaces/share',async route=>{if(route.request().method()==='POST')await gate;await route.continue();});

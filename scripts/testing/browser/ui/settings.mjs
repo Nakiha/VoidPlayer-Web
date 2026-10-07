@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
+import { checkScrollBoundary } from '../../scroll-boundary.mjs';
 const name=process.argv[2]??'webkit';
 // Check the rendered stroke, not just matching CSS values: CSS fills and SVG
 // strokes can rasterize differently even at the same nominal thickness.
@@ -18,6 +19,7 @@ async function checkConnectorPixels(page) {
 }
 async function checkSettingsScrollbar(page, width, artifact) {
  await page.locator('#settings-tab-shortcuts').click();
+ await checkScrollBoundary(page, '#settings-pane-shortcuts');
  const pane=page.locator('#settings-pane-shortcuts'), bar=page.locator('#settings-scrollbar'), thumb=page.locator('#settings-scrollbar-thumb');
  await pane.evaluate(e=>{e.scrollTop=0;});
  await page.waitForFunction(()=>{

@@ -7,6 +7,7 @@ import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
+import { checkScrollBoundary } from './testing/scroll-boundary.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'webkit';
@@ -237,6 +238,7 @@ try {
     const panel = page.locator('#start-panel'), list = page.locator('#start-library-list');
     const left = page.locator('#start-resize-left'), right = page.locator('#start-resize-right');
     await page.waitForFunction(() => document.querySelectorAll('.start-recent-row').length === 40);
+    await checkScrollBoundary(page, '#start-library-list');
     const rail = page.locator('#start-scrollbar'), thumb = page.locator('#start-scrollbar-thumb');
     await rail.waitFor({ state: 'visible' });
     const listBox = await list.boundingBox(), railBox = await rail.boundingBox();
@@ -753,6 +755,7 @@ try {
       await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));
       await page.setViewportSize({ width: 600, height: 800 });
       await settle(page);
+      await checkScrollBoundary(page, '#source-list');
       await page.locator('#source-list').evaluate(element => { element.scrollTop = element.scrollHeight; });
       const panelBox = await page.locator('#sources-panel').boundingBox();
       const footBox = await page.locator('#source-foot').boundingBox();

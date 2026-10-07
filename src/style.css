@@ -4,7 +4,15 @@
    Keep standard backdrop-filter after its prefix so minification preserves it. */
 :root { font: var(--text-ui)/1.4 var(--font-ui); color: var(--text); background: var(--surface); }
 * { box-sizing: border-box; }
-body { margin: 0; height: 100dvh; overflow: hidden; }
+/* Each UI scroller owns its edges. With auto, an edge gesture can escape to
+   the locked page instead of rubber-banding the list in WebKit. Contain keeps
+   the browser's native edge feedback without changing clipping or layers. */
+:where(.topbar, .tracks-hidden, .track-properties, .local-sources, .source-list,
+  .subtrack-scroll, .selected-marks, dialog, .marks, #start-library-list, #empty-A,
+  .annotation-preview, .annotation-preview .mark-note, .popup-menu,
+  #source-activity-hint, .workspace-share-link) { overscroll-behavior: contain; }
+/* Clip the app bounds without creating another scrolling ancestor. */
+body { margin: 0; height: 100dvh; overflow: clip; }
 #app, main { display: flex; flex-direction: column; min-height: 0; }
 #app { height: 100%; } main { flex: 1; }
 button, input, textarea, select { font: inherit; color: inherit; }
