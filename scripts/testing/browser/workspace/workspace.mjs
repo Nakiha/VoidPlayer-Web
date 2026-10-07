@@ -59,10 +59,17 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  const bad=structuredClone(saved);bad.media.find(m=>m.id===bad.tracks[1].mediaId).source.url=base+'api/media/not-found';
  const failure=await restored.evaluate(async value=>{try{await window.voidPlayer.importWorkspace(value);return '';}catch(e){return e.message;}},bad);
  assert.equal(failure,'');assert.equal(await restored.evaluate(()=>window.voidPlayer.getState().tracks[1].pendingRelink),true);assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);
+ const relinkToast=restored.locator('.toast').filter({hasText:'个片源待重新关联'});
+ await relinkToast.waitFor({state:'visible'});
+ assert.equal(await relinkToast.count(),1,'missing sources have one shared relink notice');
+ assert.equal(await relinkToast.locator('.toast-action').textContent(),'重新关联');
+ assert.equal(await restored.locator('.track-failure,[id^="failure-"]').count(),0,'track notices no longer overlay the picture');
+ assert.equal(await restored.locator('.toast-warning').filter({hasText:'已停用'}).count(),0,'missing sources do not also emit runtime-failure warnings');
  assert.deepEqual(await restored.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.id)),saved.tracks.map(t=>t.mediaId));
  // Plain JSON drop uses the same transaction.
  await restored.evaluate(value=>{const data=new DataTransfer();data.items.add(new File([JSON.stringify(value)],'workspace.json',{type:'application/json'}));document.body.dispatchEvent(new DragEvent('drop',{dataTransfer:data,bubbles:true,cancelable:true}));},saved);
  await restored.waitForFunction(()=>!window.voidPlayer.getState().busy&&!window.voidPlayer.getState().error);
+ await relinkToast.waitFor({state:'hidden'});
  // Native range clicks must not be overwritten by pre-seek state emissions.
  await page.evaluate(()=>{
   const range=document.querySelector('#timeline'),descriptor=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value');window.rangeWrites=[];
@@ -78,6 +85,8 @@ await withBrowserFixture({ caseName: 'workspace', engine: name, pageOptions: {"v
  const openSettings=async()=>{await page.locator('#settings-open').click();await page.locator('#settings-tab-appearance').click();};
  await openSettings();await page.locator('[data-theme-choice=dark]').click();await page.locator('[data-accent-choice=purple]').click();
  assert.equal(await page.locator('html').getAttribute('data-accent'),'purple');
+ // Theme colors transition; assert the final color after the animation settles.
+ await page.waitForFunction(()=>getComputedStyle(document.querySelector('#play')).color==='rgb(236, 238, 242)');
  assert.equal(await page.locator('#play').evaluate(e=>getComputedStyle(e).color),'rgb(236, 238, 242)');
  assert.equal(await page.locator('#timeline').evaluate(e=>getComputedStyle(e).getPropertyValue('--accent').trim()),'#bd9aff');
  assert.deepEqual(await page.evaluate(()=>window.voidPlayer.getState().marks),saved.marks);

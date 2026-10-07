@@ -5,8 +5,12 @@ presentation failure. ReviewSession owns that runtime state for both UI and Agen
 
 - Capture local diagnostics before releasing the reader, then set the track's
   failure message and session position. Dispose its source once.
-- Keep the last visible image with an explicit stopped-image overlay. It is not
-  evidence that the failed track is synchronized. Expose failure in getState().
+- Keep the last visible image and show a track-specific warning in the shared
+  top toast stack, with a logs action. It is not evidence that the failed track
+  is synchronized. Expose failure in getState(). The notice is dismissible,
+  stays until closed, and clears when the track is removed or replaced; it is
+  not repeated on unrelated session updates. Missing-source workspaces use the
+  existing relink toast instead of also reporting a runtime track failure.
 - Exclude failed tracks from clock coverage, active duration, seek, frame-step
   planning and new annotation comparison anchors. Other tracks continue.
 - Failed tracks require reload/replacement; play does not repeatedly retry a

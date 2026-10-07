@@ -41,8 +41,9 @@ remove scanning cost. The final duration is only known after scanning finishes.
 
 Buffered indexed content still participates in normal synchronized playback.
 Only an exhausted producer explicitly waiting for index data leaves the clock
-coverage calculation. Its last image is labeled unsynchronized. Other tracks
-continue; when more frames arrive it catches up sequentially and rejoins clock
+coverage calculation. A track-specific toast labels its last image unsynchronized,
+updates when it starts catching up, and clears when synchronization recovers.
+Other tracks continue; when more frames arrive it catches up sequentially and rejoins clock
 coverage once it covers the current position. Merely being `building` is not a
 reason to skip synchronization.
 

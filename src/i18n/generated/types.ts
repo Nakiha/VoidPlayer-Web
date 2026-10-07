@@ -629,7 +629,6 @@ export interface Sources {
   "player.preservesOriginalFramePrecisionWithConsistentConversion": "保留原始帧精度，按统一规则转换；仅支持 SDR。";
   "player.rawPlanes": "原始平面";
   "player.referenceVideo": "参考视频";
-  "player.relinkSource": "重新关联片源";
   "player.sampleTooShort": "样本时长不足";
   "player.showAllTracksSeparately": "独立显示所有轨道";
   "player.slowPauseResponse": "暂停响应慢";
@@ -638,10 +637,8 @@ export interface Sources {
   "player.switchToHorizontalLayout": "切换为横向布局";
   "player.switchToManagedColorInColorDecoding": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。";
   "player.thisAnnotationIsInTheRecycleBin": "这条标注已在回收站。";
-  "player.trackDisabled": "轨道 {p0} 已停用：{p1}";
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。";
   "player.trackFrameNotSynchronizedOtherTracksContinue": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。";
-  "player.trackNeedsRelinkingTrackOffsetAndAnnotations": "轨道 {p0} 待重新关联 · 轨道、偏移和标注已保留。";
   "player.trackStalled": "{p0} 轨画面卡顿";
   "player.tracks": "{p0, plural, other {# 条轨道}}";
   "player.tracksOutOfSync": "双轨不同步";
@@ -1623,7 +1620,6 @@ export interface MessageParameters {
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {  };
   "player.rawPlanes": {  };
   "player.referenceVideo": {  };
-  "player.relinkSource": {  };
   "player.sampleTooShort": {  };
   "player.showAllTracksSeparately": {  };
   "player.slowPauseResponse": {  };
@@ -1632,10 +1628,8 @@ export interface MessageParameters {
   "player.switchToHorizontalLayout": {  };
   "player.switchToManagedColorInColorDecoding": {  };
   "player.thisAnnotationIsInTheRecycleBin": {  };
-  "player.trackDisabled": { "p0": string | number; "p1": string | number };
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": { "p0": string | number; "p1": string | number };
   "player.trackFrameNotSynchronizedOtherTracksContinue": { "p0": string | number; "p1": string | number };
-  "player.trackNeedsRelinkingTrackOffsetAndAnnotations": { "p0": string | number };
   "player.trackStalled": { "p0": string | number };
   "player.tracks": { "p0": number };
   "player.tracksOutOfSync": {  };

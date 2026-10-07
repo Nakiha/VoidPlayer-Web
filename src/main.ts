@@ -23,6 +23,7 @@ import { installHeaderActions } from './ui/header-actions.ts';
 import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
+import { createTrackToasts } from './ui/track-toasts.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
 import { animatePlaybackIcon } from './ui/playback-icon.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
@@ -114,6 +115,7 @@ for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
 window.addEventListener('pagehide',event=>{if(!event.persisted){removeBrandEffects();disposePresentation();void session.dispose();}});
 const toasts = installToasts(uiEvents.signal);
+const renderTrackToasts = createTrackToasts(toasts, () => settings.openPane('logs', $<HTMLElement>('settings-open')), uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
 const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
@@ -271,15 +273,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
     const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 兜底显示）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
     $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? tr(msg("player.wasmSoftwareDecoding", "WASM 软件解码")) : t.hardwareAcceleration === 'prefer-hardware' ? tr(msg("player.webcodecsPreferHardware", "WebCodecs · 硬件优先")) : tr(msg("player.webcodecsBrowserDecoding", "WebCodecs · 浏览器解码"))}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexFrameNotSynchronized", " · 等待索引，画面暂未同步")) : tr(msg("player.catchingUpToPlayback", " · 正在追赶播放位置"))) : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? tr(msg("player.indexFailed", " · 索引失败")) : t.indexWarning ? tr(msg("player.incompleteTailPlayingCompletePortion", " · 尾部不完整，播放完整部分")) : ''}` : tr(msg("player.notLoaded", "尚未载入"));
-    $(`failure-${slot}`).hidden = !t?.failure && !t?.syncState;
-    $(`failure-${slot}`).textContent = t?.failure ? tr(msg("player.trackDisabledFrameUpdatesHaveStoppedPlease", "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。"), { p0: slot, p1: t.failure.message }) : t?.syncState ? tr(msg("player.trackFrameNotSynchronizedOtherTracksContinue", "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。"), { p0: slot, p1: t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexData", "等待索引数据")) : tr(msg("player.catchingUpToPlayback2", "正在追赶播放位置")) }) : '';
-    if (t?.pendingRelink) {
-      const failure = $(`failure-${slot}`);
-      failure.textContent = tr(msg("player.trackNeedsRelinkingTrackOffsetAndAnnotations", "轨道 {p0} 待重新关联 · 轨道、偏移和标注已保留。"), { p0: slot });
-      const reconnect = document.createElement('button'); reconnect.type = 'button'; reconnect.textContent = tr(msg("player.relinkSource", "重新关联片源"));
-      reconnect.onclick = () => { void act(() => workspaceTransfer.relinkMissing(), 'workspace.relink'); };
-      failure.append(reconnect);
-    }
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? tr(msg("player.sourceTimestampSFrameDurationS", "源时间戳 {p0} µs · 帧时长 {p1} µs"), { p0: t.frame.sourcePtsUs, p1: t.frame.durationUs }) : '';
   }
@@ -327,8 +320,8 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   $('duration').textContent = formatTime(state.durationUs);
   $('status').textContent = state.busy ? tr(msg("player.decoding", "正在解码…")) : state.playing ? tr(msg("player.playingMuted", "播放中 · 静音")) : loaded ? tr(msg("player.paused", "已暂停")) : tr(msg("player.waitingForVideo", "等待视频"));
   $('decode').textContent = state.playback && state.playback.wallMs > 500 ? tr(msg("player.actualSpeed", "实际速度 {p0}×"), { p0: state.playback.speed.toFixed(2) }) : loaded ? tr(msg("player.lastSeekMs", "最近定位 {p0} ms"), { p0: state.lastDecodeMs }) : '—';
-  const trackFailures = state.tracks.filter(t => t.failure).map(t => tr(msg("player.trackDisabled", "轨道 {p0} 已停用：{p1}"), { p0: t.slot, p1: t.failure!.message })).join('；');
-  const warning = state.error || trackFailures;
+  renderTrackToasts(state.tracks);
+  const warning = state.error;
   if (warning) showWarning(warning);
   else warningMessage = '';
   // 浏览器色彩下原生帧走浏览器转换、软件帧走近似转换，两者混合上屏时色彩

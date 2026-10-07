@@ -127,6 +127,7 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
  await page.locator('#file-B').setInputFiles({name:'broken.flv',mimeType:'video/x-flv',buffer:Buffer.from('not a media file')});
  await page.locator('.toast-warning').waitFor({state:'visible'});
  assert.equal(await page.locator('#notice').count(),0);
+ assert.equal(await page.locator('.track-failure,[id^="failure-"]').count(),0);
  assert.equal(await page.locator('.toast-warning').count(),1);
  await page.locator('.toast-warning .toast-action').click();
  assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);

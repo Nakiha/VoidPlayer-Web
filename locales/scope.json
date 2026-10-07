@@ -65,6 +65,7 @@
     "src/ui/start-panel-resize.ts",
     "src/ui/theme.ts",
     "src/ui/toast.ts",
+    "src/ui/track-toasts.ts",
     "src/ui/tooltips.ts",
     "src/ui/track-column-resize.ts",
     "src/ui/track-drag.ts",

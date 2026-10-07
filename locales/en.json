@@ -2527,10 +2527,6 @@
     "source": "参考视频",
     "translation": "Reference video"
   },
-  "player.relinkSource": {
-    "source": "重新关联片源",
-    "translation": "Relink source"
-  },
   "player.sampleTooShort": {
     "source": "样本时长不足",
     "translation": "Sample too short"
@@ -2563,10 +2559,6 @@
     "source": "这条标注已在回收站。",
     "translation": "This annotation is in the recycle bin."
   },
-  "player.trackDisabled": {
-    "source": "轨道 {p0} 已停用：{p1}",
-    "translation": "Track {p0} disabled: {p1}"
-  },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
     "source": "轨道 {p0} 已停用 · 画面已停止更新。{p1} 请重新载入此片源。",
     "translation": "Track {p0} disabled · Frame updates have stopped. {p1} Please reload this source."
@@ -2574,10 +2566,6 @@
   "player.trackFrameNotSynchronizedOtherTracksContinue": {
     "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。",
     "translation": "Track {p0}: {p1} · Frame not synchronized; other tracks continue playing."
-  },
-  "player.trackNeedsRelinkingTrackOffsetAndAnnotations": {
-    "source": "轨道 {p0} 待重新关联 · 轨道、偏移和标注已保留。",
-    "translation": "Track {p0} needs relinking · Track, offset and annotations are preserved."
   },
   "player.trackStalled": {
     "source": "{p0} 轨画面卡顿",
