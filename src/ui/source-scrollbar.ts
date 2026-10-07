@@ -1,8 +1,8 @@
 /** Shared overlay scrollbar for the library list and settings panes.
  *
  * The native bar is hidden (the full-bleed frosted tools/foot would cover it
- * on every platform, each in its own way). The library thumb floats above both;
- * settings use an inset track below their fixed heading. The thumb
+ * on every platform, each in its own way). Library and settings rails are inset
+ * around their fixed panels. The thumb
  * only handles dragging; all scrolling still happens on the list itself, so
  * keyboard, wheel, touch and infinite loading keep working untouched.
  */
@@ -44,9 +44,21 @@ export function installSourceScrollbar(initialList: HTMLElement, bar: HTMLElemen
     thumb.style.transform = `translateY(${y}px)`;
   }
   list.addEventListener('scroll', poke, { signal, passive: true });
-  const watcher = new ResizeObserver(update);
+  let resizeFrame = 0;
+  const watcher = new ResizeObserver(() => {
+    if (resizeFrame || signal.aborted) return;
+    // Revealing/hiding an observed rail changes its size. Apply those writes
+    // outside observer delivery to avoid WebKit's resize notification loop.
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = 0;
+      if (!signal.aborted) update();
+    });
+  });
   watcher.observe(list);
-  signal.addEventListener('abort', () => { clearTimeout(idleTimer); watcher.disconnect(); list.removeEventListener('scroll', poke); }, { once: true });
+  // Insets can resize the rail independently, e.g. when loading details expand
+  // the floating library footer. Recompute thumb size and drag range with it.
+  watcher.observe(bar);
+  signal.addEventListener('abort', () => { clearTimeout(idleTimer); cancelAnimationFrame(resizeFrame); watcher.disconnect(); list.removeEventListener('scroll', poke); }, { once: true });
   bar.addEventListener('pointerenter', () => { if (!bar.hidden) { bar.classList.add('is-active'); clearTimeout(idleTimer); } }, { signal });
   bar.addEventListener('pointerleave', () => { if (!dragging) scheduleHide(); }, { signal });
   thumb.addEventListener('pointerdown', event => {

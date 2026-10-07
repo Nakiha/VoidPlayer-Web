@@ -750,6 +750,32 @@ try {
       assert.ok(Math.abs(listPaddingTop - toolsHeight) <= 1, 'list top padding reserves exactly the floating tools height');
       assert.ok(searchToggle.y + searchToggle.height <= files.y + listPaddingTop + 1, 'floating tools stay within the list top padding');
       assert.equal(searchToggle.y, scopeTrigger.y);
+      // Only the custom rail is inset; the list still scrolls under both glass
+      // panels. Check dragging over the shorter rail, including a taller footer.
+      assert.ok(Math.abs(files.y - panelBox.y) <= 1 && Math.abs(files.height - panelBox.height) <= 1, 'list retains its full-height layer beneath the glass panels');
+      await page.locator('#source-scrollbar').waitFor({state:'visible'});
+      const rail = await page.locator('#source-scrollbar').boundingBox();
+      const toolbar = await page.locator('#source-tools').boundingBox();
+      assert.ok(Math.abs(rail.y - (toolbar.y + toolbar.height)) <= 1, 'scrollbar begins below the glass toolbar');
+      assert.ok(Math.abs(rail.y + rail.height - footBox.y) <= 1, 'scrollbar ends above the expanded glass footer');
+      const thumb = page.locator('#source-scrollbar-thumb');
+      let handle = await thumb.boundingBox();
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 - rail.height, {steps:6});
+      await page.mouse.up();
+      await page.waitForFunction(() => document.querySelector('#source-list').scrollTop <= 1);
+      await settle(page);
+      handle = await thumb.boundingBox();
+      assert.ok(handle.y >= rail.y - 1, 'thumb remains below the toolbar at the list start');
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+      await page.mouse.down();
+      await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2 + rail.height - handle.height + 2, {steps:6});
+      await page.mouse.up();
+      await page.waitForFunction(() => { const list = document.querySelector('#source-list'); return list.scrollTop >= list.scrollHeight - list.clientHeight - 1; });
+      await settle(page);
+      handle = await thumb.boundingBox();
+      assert.ok(handle.y + handle.height <= footBox.y + 1, 'thumb remains above the footer at the list end');
       await page.locator('#sources-search-toggle').click();
       assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true, 'search toggle focuses the input');
       await page.keyboard.press('Escape');

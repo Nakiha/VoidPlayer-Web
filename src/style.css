@@ -176,9 +176,10 @@ dd { text-align: right; overflow-wrap: anywhere; font-variant-numeric: tabular-n
 .search-field input::placeholder { color: var(--text-secondary); opacity: 1; }
 .source-list { flex: 1; min-height: 0; overflow: auto; scrollbar-width: none; padding-top: calc(var(--control-small-height) + var(--panel-padding-block) * 2); padding-bottom: var(--foot-h); }
 .source-list::-webkit-scrollbar { display: none; width: 0; height: 0; }
-/* Hand-rolled overlay thumb: native bars are hidden so the full-bleed glass
-   never covers them; this floats above both tools and foot instead. */
+/* The overlay rail occupies only the space between the floating glass panels;
+   rows continue scrolling behind their full-bleed backplates. */
 .source-scrollbar { position: absolute; top: 0; bottom: 0; right: 1px; width: 6px; z-index: 5; pointer-events: none; opacity: 0; transition: opacity 240ms ease; }
+#source-scrollbar { top: calc(var(--control-small-height) + var(--panel-padding-block) * 2); bottom: var(--foot-h); }
 .source-scrollbar.is-active { opacity: 1; }
 .source-scrollbar > span { display: block; width: 100%; border-radius: 3px; background: var(--text-subtle, var(--text-secondary)); opacity: .55; pointer-events: auto; touch-action: none; cursor: default; }
 .source-scrollbar > span:hover { opacity: .9; }
