@@ -479,11 +479,44 @@ try {
   await page.locator('#analysis-canvas').dblclick();
   await page.waitForTimeout(500);
 
+  // 帧号查询的占位与结果不得在临界宽度下反复触发表头换行。
+  await page.evaluate(() => window.voidPlayer.tools.find(t => t.name === 'seek_review').execute({ptsUs:800000}));
+  await page.waitForFunction(() => [...document.querySelectorAll('#analysis-status-items .st-num')].every(button => !button.disabled));
+  let wrapWidth = 600, inlineWidth = 1280;
+  while (inlineWidth - wrapWidth > 1) {
+    const width = Math.floor((wrapWidth + inlineWidth) / 2);
+    await page.setViewportSize({width, height:800});
+    const wrapped = await page.evaluate(async () => {
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return document.querySelector('#analysis-status').getBoundingClientRect().top
+        > document.querySelector('.analysis-tools').getBoundingClientRect().bottom + 2;
+    });
+    if (wrapped) wrapWidth = width; else inlineWidth = width;
+  }
+  await page.setViewportSize({width:wrapWidth, height:800});
+  await page.evaluate(() => {
+    window.frameNumberLayouts = [];
+    const sample = () => window.frameNumberLayouts.push({
+      header:document.querySelector('.analysis-head').getBoundingClientRect().height,
+      items:[...document.querySelectorAll('#analysis-status-items .st-num')].map(button => ({text:button.textContent, width:button.getBoundingClientRect().width})),
+    });
+    window.frameNumberObserver = new MutationObserver(sample);
+    window.frameNumberObserver.observe(document.querySelector('#analysis-status-items'), {childList:true, subtree:true, characterData:true});
+    sample();
+  });
   // 播放共存：面板打开时播放推进且无错误。
   await page.evaluate(() => window.voidPlayer.play());
-  await page.waitForFunction(() => document.getElementById('position').value !== '00:00.000', undefined, { timeout: 30000 });
-  await page.waitForTimeout(2000);
+  await page.waitForFunction(() => new Set(window.frameNumberLayouts.map(layout => layout.items.map(item => item.text).join('|'))).size > 20, undefined, {timeout:30000});
   await page.evaluate(() => window.voidPlayer.pause());
+  const frameNumberLayouts = await page.evaluate(() => {
+    window.frameNumberObserver.disconnect();
+    return window.frameNumberLayouts;
+  });
+  await saveDiagnostics(page, 'frame-number-playback-layout', {wrapWidth, inlineWidth, frameNumberLayouts});
+  const spread = values => Math.max(...values) - Math.min(...values);
+  assert.ok(frameNumberLayouts.some(layout => layout.items.some(item => item.text === '…')), 'observe ranks while asynchronous lookup is pending');
+  for (const index of [0, 1]) assert.ok(spread(frameNumberLayouts.map(layout => layout.items[index].width)) < 1, `track ${index} frame-number width stays stable during playback`);
+  assert.ok(spread(frameNumberLayouts.map(layout => layout.header)) < 1, 'frame-number updates do not change the number of header rows');
 
   // 窄屏下面板保持单行横滚，不撑出横向滚动条、不挤塌视频。
   await page.setViewportSize({ width: 600, height: 800 });

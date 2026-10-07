@@ -22,6 +22,9 @@ export function installAnalysisStatus(options: {
   const framesBySlot = new Map<Slot, { ptsUs: number; sourcePtsUs: number } | null>();
   const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
   const rankSeq = new Map<Slot, number>();
+  // Keep the source's reserved width while each new frame awaits its rank.
+  // Pending placeholders and index invalidation must not shrink the toolbar.
+  const numberWidths = new Map<Slot, { mediaId: string; sourceGen: number; chars: number }>();
   let lastStatusSig = '';
   let editingNumber = false;
   /** 展示序排名按（slot，会话 PTS）缓存；换片/重建时由调用方清理。 */
@@ -83,8 +86,12 @@ export function installAnalysisStatus(options: {
       num.type = 'button';
       num.className = 'st-num';
       const value = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      const previousWidth = numberWidths.get(entry.slot);
+      const sameSource = previousWidth?.mediaId === entry.mediaId && previousWidth.sourceGen === entry.sourceGen;
       const maxFrame = Math.max(value ?? 0, (hit?.total ?? 1) - 1);
-      wrap.style.setProperty('--frame-number-width', `${Math.max(4, String(maxFrame).length + 2)}ch`);
+      const chars = Math.max(sameSource ? previousWidth.chars : 4, String(maxFrame).length + 2);
+      numberWidths.set(entry.slot, { mediaId: entry.mediaId, sourceGen: entry.sourceGen, chars });
+      wrap.style.setProperty('--frame-number-width', `${chars}ch`);
       if (hit == null) num.textContent = '…';
       else if (value == null) num.textContent = '—';
       else num.textContent = `#${value}${hit.complete ? '' : '~'}`;
@@ -170,7 +177,7 @@ export function installAnalysisStatus(options: {
   }
   function syncFrames(frames: readonly { slot: string; frame?: { ptsUs: number; sourcePtsUs: number } | null }[]) {
     for (const track of frames) framesBySlot.set(track.slot as Slot, track.frame ?? null);
-    for (const slot of framesBySlot.keys()) if (!frames.some(track => track.slot === slot)) { framesBySlot.delete(slot); invalidate(slot); }
+    for (const slot of framesBySlot.keys()) if (!frames.some(track => track.slot === slot)) { framesBySlot.delete(slot); numberWidths.delete(slot); invalidate(slot); }
   }
   return { update: updateStatus, refreshAxis: refreshNumAxis, invalidate, syncFrames };
 }
