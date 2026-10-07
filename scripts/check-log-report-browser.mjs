@@ -56,6 +56,9 @@ try{
  assert.match(await page.locator('.log-preview-status').textContent(),/80/);
  assert.equal((await read()).events.length,2000,'schema 1 migration and bounded preview preserve the complete report');
  await page.locator('[data-page=previous]').click();assert.match(await page.locator('.log-preview-status').textContent(),/79\/80/);
+ await page.locator('#settings-tab-workspace').click();await page.locator('#settings-tab-logs').click();
+ assert.match(await page.locator('.log-preview-status').textContent(),/79\/80/,'returning to feedback preserves the preview page');
+ assert.equal(await page.locator('#log-description').isEnabled(),true,'background history refresh leaves the description enabled');
  await page.locator('#log-session').click();await page.locator(`#log-session-menu [data-value="${session}"]`).click();
  await page.waitForFunction(id=>document.querySelector('.log-json').dataset.sessionId===id&&document.querySelector('.log-panel').getAttribute('aria-busy')==='false',session);
  const description='定位到 00:05 后画面停止，声音仍继续。\n复现：打开视频 → 拖动进度 → 播放。<不应执行 HTML>';

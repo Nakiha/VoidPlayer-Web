@@ -33,6 +33,16 @@ try {
   const settings=async p=>{if(!await p.locator('#settings').evaluate(e=>e.open))await p.locator('#settings-open').click();await p.locator('#settings-tab-workspace').click();await p.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);};
   await settings(page);await page.locator('#saved-workspace-name').fill('镜头评审');await page.locator('#saved-workspace-save').click();
   await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).waitFor();
+  await page.waitForFunction(()=>!document.querySelector('#saved-workspace-name').disabled);
+  await page.locator('#settings-tab-appearance').click();
+  let releaseList;
+  const delayedList=new Promise(resolve=>{releaseList=resolve;});
+  await page.route('**/api/workspaces?*',async route=>{await delayedList;await route.continue();});
+  const pendingListRequest=page.waitForRequest('**/api/workspaces?*');
+  await page.locator('#settings-tab-workspace').click();await pendingListRequest;
+  assert.equal(await page.locator('#saved-workspace-name').isEnabled(),true,'background refresh keeps the workspace field enabled');
+  assert.equal(await page.locator('.saved-workspace-open').filter({hasText:'镜头评审'}).isEnabled(),true,'background refresh keeps the existing list usable');
+  const listed=page.waitForResponse('**/api/workspaces?*');releaseList();await listed;await page.unroute('**/api/workspaces?*');
   if(process.env.WORKSPACE_SCREENSHOTS) {
     for(const close of await page.locator('.toast-close').all()) await close.click();
     for(const theme of ['dark','light']) {

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
+const originalPath = name => readFileSync(new URL(`../../../../node_modules/@phosphor-icons/core/assets/regular/${name}.svg`, import.meta.url), 'utf8').match(/d="([^"]+)"/)[1];
 const name=process.argv[2]??'webkit';
 await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {viewport:{width:1280,height:800},deviceScaleFactor:2} }, async ({ page, ready }) => {
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -59,6 +61,8 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
  // node replacement, nor an empty icon frame may occur during seek -> play.
  await page.evaluate(()=>{
    window.playNodes=[...document.querySelectorAll('#play svg')];
+   window.playRestPaths=[...document.querySelectorAll('#play path')].map(path=>path.getAttribute('d'));
+   window.playRestBox=document.querySelector('#play svg').getBoundingClientRect().toJSON();
    window.transportNodes=[...document.querySelectorAll('.play-buttons button')];
    window.transportSamples=[];window.transportChildChanges=0;
    window.expectedTransportFocus=document.activeElement.id;
@@ -66,7 +70,7 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    const row=document.querySelector('.play-buttons');
    window.transportObserver=new MutationObserver(records=>{
      window.transportChildChanges+=records.filter(r=>r.type==='childList').length;
-     window.transportSamples.push({focus:document.activeElement.id,expectedFocus:window.expectedTransportFocus,buttons:[...row.querySelectorAll('button')].map(b=>({disabled:b.disabled,opacity:getComputedStyle(b).opacity})),visibleIcons:[...document.querySelectorAll('#play svg')].filter(e=>getComputedStyle(e).display!=='none').length});
+     window.transportSamples.push({focus:document.activeElement.id,expectedFocus:window.expectedTransportFocus,buttons:[...row.querySelectorAll('button')].map(b=>({disabled:b.disabled,opacity:getComputedStyle(b).opacity})),visibleIcons:[...document.querySelectorAll('#play svg')].filter(e=>getComputedStyle(e).display!=='none').length,paths:[...document.querySelectorAll('#play path')].map(path=>path.getAttribute('d')),iconBox:document.querySelector('#play svg').getBoundingClientRect().toJSON()});
    });
    window.transportObserver.observe(row,{subtree:true,childList:true,attributes:true});
  });
@@ -77,6 +81,20 @@ await withBrowserFixture({ caseName: 'feedback', engine: name, pageOptions: {vie
    await page.waitForTimeout(150);
    assert.equal(await tip.isVisible(),false,'playback tooltip stays dismissed during state changes');
  }
+ await page.waitForFunction(()=>[...document.querySelectorAll('#play path')].every((path,i)=>path.getAttribute('d')===window.playRestPaths[i]));
+ const morphed=await page.evaluate(()=>({rest:window.playRestPaths,box:window.playRestBox,samples:window.transportSamples}));
+ assert.deepEqual(morphed.rest,[originalPath('play')],'play retains the original rounded outline and stroke weight');
+ assert.equal(await page.locator('#play path').getAttribute('transform'),`translate(${-256/12} 0)`,'play retains its original optical centering');
+ assert.ok(new Set(morphed.samples.map(sample=>sample.paths.join('|'))).size>5,'play/pause has real intermediate shapes, including quick reversals');
+ assert.ok(morphed.samples.every(sample=>JSON.stringify(sample.iconBox)===JSON.stringify(morphed.box)),'morphing never moves or resizes the icon');
+ await page.emulateMedia({reducedMotion:'reduce'});
+ await page.locator('#play').click();await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+ const pausePaths=await page.locator('#play path').evaluateAll(paths=>paths.map(path=>path.getAttribute('d')));
+ assert.deepEqual(pausePaths,[originalPath('pause')],'pause retains the original rounded bars and stroke weight');
+ assert.equal(await page.locator('#play path').getAttribute('transform'),'','pause retains its original centering');
+ await page.locator('#play').click();await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+ assert.deepEqual(await page.locator('#play path').evaluateAll(paths=>paths.map(path=>path.getAttribute('d'))),morphed.rest,'reduced motion returns immediately to the play endpoint');
+ await page.emulateMedia({reducedMotion:'no-preference'});
  await page.locator('#play').focus();
  await page.keyboard.press('Enter');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
  await page.keyboard.press('Enter');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);

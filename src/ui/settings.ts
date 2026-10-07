@@ -25,7 +25,8 @@ export function installSettings() {
   narrow.addEventListener('change', orientation, { signal: life.signal }); orientation();
   let selected = 'appearance'; let returnFocus: HTMLElement | null = null;
   let closeEpoch = 0; let outsidePointer: number | null = null;
-  function select(id: string) {
+  function select(id: string, refresh = false) {
+    if (id === selected && !refresh) { revealTab(); return; }
     selected = id;
     document.getElementById('settings-current-title')!.textContent = settingsPanes().find(([key]) => key === id)![1];
     for (const [key] of settingsPanes()) {
@@ -45,7 +46,7 @@ export function installSettings() {
       return;
     }
     returnFocus = invoker;
-    dialog.showModal(); trigger.setAttribute('aria-expanded', 'true'); select(selected);
+    dialog.showModal(); trigger.setAttribute('aria-expanded', 'true'); select(selected, true);
     tabs.find(t => t.dataset.settingsPane === selected)!.focus({ preventScroll: true });
   }
   async function dismiss() {
@@ -85,6 +86,7 @@ export function installSettings() {
   }, { signal: life.signal });
   return { openPane(id: string, invoker: HTMLElement | null = trigger) {
     if (!settingsPanes().some(([key]) => key === id)) throw new Error(t(msg("settings.unknownSettingsPage", "未知设置页面。")));
-    select(id); open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
+    if (dialog.open) select(id); else selected = id;
+    open(invoker); tabs.find(t => t.dataset.settingsPane === id)!.focus({ preventScroll: true });
   }, close: dismiss, dispose() { ++closeEpoch; life.abort(); dialog.close(); } };
 }

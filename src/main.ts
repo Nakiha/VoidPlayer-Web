@@ -24,6 +24,7 @@ import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
+import { animatePlaybackIcon } from './ui/playback-icon.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { installMarkPreviewBackfill } from './ui/mark-preview-backfill.ts';
 import { benchmarkPlayback } from './benchmark.ts';
@@ -315,6 +316,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   $<HTMLButtonElement>('benchmark').disabled = benchmarkRunning || !loaded || state.busy || state.playing;
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
+    animatePlaybackIcon($('play'), state.playing);
   }
   const playLabel = state.playing ? tr(msg("player.pause", "暂停")) : tr(msg("shell.play", "播放"));
   if ($('play').getAttribute('aria-label') !== playLabel) $('play').setAttribute('aria-label', playLabel);

@@ -1,0 +1,36 @@
+/* Apply to the resting state too, so release fades back just like press. */
+button, .connection-status {
+  transition: background-color 240ms ease, color 240ms ease !important;
+}
+
+button[role=tab] { transition: none !important; }
+
+.connection-status:hover { background: var(--surface-hover); }
+
+/* Press feedback takes precedence over component hover/selected fills, including
+   primary buttons whose light text would be unreadable on a pale background. */
+button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(.remove-track),
+.connection-status:active {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
+  color: var(--text) !important;
+}
+
+#settings-close:is(:active, :focus-visible):not(:disabled), .remove-track:is(:active, :focus-visible):not(:disabled) {
+  background: color-mix(in srgb, var(--action-danger) 22%, var(--surface-panel)) !important;
+  color: var(--action-danger) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button, .connection-status { transition: none !important; }
+}
+:focus-visible { outline: none; }
+
+/* Keyboard focus shares the press material without adding an outer ring.
+   Use native focus-visible so clicking a button does not leave it highlighted. */
+:where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true])) {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
+  color: var(--text) !important;
+}
+
+.welcome-field:has(:focus-visible) { background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)); }
+.welcome-field input:focus-visible { background: transparent !important; }

@@ -19,7 +19,7 @@ dialog.settings-window { background: var(--surface-panel); border: 0; }
 .settings-body { display: grid; grid-template-columns: 156px minmax(0, 1fr); height: 100%; }
 .settings-navigation { display: flex; flex-direction: column; background: var(--surface); box-shadow: inset 0 1px 0 var(--glass-highlight); padding: 12px 8px; min-height: 0; overflow: auto; }
 .settings-navigation [role=tablist] { display: flex; flex-direction: column; gap: 3px; }
-.settings-navigation [role=tab] { height: 34px; justify-content: flex-start; padding: 0 10px; gap: 9px; background: transparent; border: 0; color: var(--text); font-size: 13px; border-radius: 7px; }
+.settings-navigation [role=tab] { height: 34px; justify-content: flex-start; padding: 0 10px; gap: 9px; background: transparent; border: 0; color: var(--text); font-size: 13px; border-radius: 7px; user-select: none; -webkit-user-select: none; }
 .settings-navigation [role=tab] .icon { width: 17px; height: 17px; color: var(--text-secondary); }
 .settings-navigation [role=tab][aria-selected=true] { background: var(--surface-selected); color: var(--accent); }
 .settings-navigation [role=tab][aria-selected=true] .icon { color: inherit; }
@@ -520,10 +520,7 @@ html[lang=en] .color-flow-link span { max-width: 34px; white-space: normal; text
 #settings-pane-identity .identity-input-row > button { max-width: 100%; white-space: normal; }
 .settings-navigation [role=tab] { height: auto; min-height: 34px; white-space: normal; }
 .settings-floating-header h2 { min-width: 0; overflow-wrap: anywhere; }
-#identity-save { max-width: 100%; white-space: normal; }
-@media (max-width: 640px) {
-  .identity-compact #identity-form { grid-template-columns: minmax(0, 1fr); }
-}
+#identity-save { max-width: 100%; white-space: nowrap; }
 #settings-pane-logs .log-send-footer { min-width: 0; flex-wrap: wrap; }
 #settings-pane-logs .log-submit-row { min-width: 0; max-width: 100%; }
 @media (max-width: 640px) {

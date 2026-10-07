@@ -25,13 +25,18 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   nav.append(address, button);
   const back = createIconButton({ glyph: 'caretLeft', label: t(msg("libraryBrowser.goUp", "返回上一级")), className: 'crumbs-back' });
   const toggle = createIconButton({ glyph: 'search', label: t(msg("libraryBrowser.toggleSearch", "搜索片源")), className: 'crumbs-search-toggle', attributes: { id: 'sources-search-toggle', 'aria-expanded': 'false' } });
-  const field = document.createElement('label'); field.className = 'search-field crumbs-search-field'; field.id = 'source-search-field'; field.hidden = true;
+  const field = document.createElement('label'); field.className = 'search-field crumbs-search-field'; field.id = 'source-search-field'; field.inert = true; field.setAttribute('aria-hidden', 'true');
   const searchIcon = document.createElement('span'); searchIcon.className = 'crumbs-search-icon'; searchIcon.innerHTML = icon('search');
   const input = document.createElement('input'); input.id = 'source-search'; input.type = 'search'; input.placeholder = t(msg("libraryBrowser.toggleSearch", "搜索片源")); input.setAttribute('aria-label', t(msg("libraryBrowser.toggleSearch", "搜索片源")));
-  const close = createIconButton({ glyph: 'close', label: t(msg("libraryBrowser.closeSearch", "关闭搜索")), className: 'crumbs-search-close', attributes: { id: 'source-search-close' } });
-  close.dataset.tooltip = t(msg("libraryBrowser.closeSearchAndClear", "关闭搜索并清空"));
-  field.append(searchIcon, input, close);
-  tools.replaceChildren(back, nav, toggle, field);
+  field.append(searchIcon, input);
+  const rail = document.createElement('div'); rail.className = 'source-navigation-rail'; rail.append(back, nav);
+  tools.replaceChildren(rail, toggle, field);
+  function searchToggleLabel() {
+    const open = toggle.getAttribute('aria-expanded') === 'true';
+    const label = open ? t(msg("libraryBrowser.closeSearch", "关闭搜索")) : t(msg("libraryBrowser.toggleSearch", "搜索片源"));
+    toggle.setAttribute('aria-label', label); toggle.title = label;
+    toggle.dataset.tooltip = open ? t(msg("libraryBrowser.closeSearchAndClear", "关闭搜索并清空")) : label;
+  }
   const key = (id: string, path = '') => JSON.stringify([id, path]);
   address.addEventListener('focus', () => { address.value = recent ? '' : libraryLocationExpression({ root, directory, all }); address.select(); });
   address.addEventListener('blur', () => { address.removeAttribute('aria-invalid'); address.value = displayPath(); });
@@ -144,13 +149,18 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
   const stopLanguage = onLanguageChange(() => { if (!signal.aborted) {
     address.setAttribute('aria-label',t(msg("libraryBrowser.locationLabel", "媒体库路径或链接")));
     button.setAttribute('aria-label',t(msg("libraryBrowser.scopeLabel", "媒体库范围")));
-    for(const [element,label] of [[back,t(msg("libraryBrowser.goUp", "返回上一级"))],[toggle,t(msg("libraryBrowser.toggleSearch", "搜索片源"))],[close,t(msg("libraryBrowser.closeSearch", "关闭搜索"))]] as const){element.setAttribute('aria-label',label);element.title=label;}
+    const backLabel = t(msg("libraryBrowser.goUp", "返回上一级")); back.setAttribute('aria-label', backLabel); back.title = backLabel;
+    searchToggleLabel();
     input.setAttribute('aria-label',t(msg("libraryBrowser.toggleSearch", "搜索片源")));
-    close.dataset.tooltip=t(msg("libraryBrowser.closeSearchAndClear", "关闭搜索并清空"));
     controls();
   } }, signal);
   signal.addEventListener('abort', () => { stopLanguage(); clearInterval(timer); clearTimeout(searchTimer); request?.abort(); resize.disconnect(); menu.dispose(); }, { once: true });
   return {
+    setSearchOpen(open: boolean) {
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.innerHTML = icon(open ? 'close' : 'search');
+      searchToggleLabel();
+    },
     snapshot: () => ({ root, directory, search, all }),
     async restore(state: { root: string; directory: string; search: string; all: boolean; recent?: boolean }) {
       clearTimeout(searchTimer); request?.abort(); sequence++;

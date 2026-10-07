@@ -603,8 +603,10 @@ export function createSourcesPane(shared: WorkbenchShared) {
       renderSources();
     }
     tools.classList.toggle('searching', open);
-    field.hidden = !open;
-    toggle.setAttribute('aria-expanded', String(open));
+    field.inert = !open;
+    field.setAttribute('aria-hidden', String(!open));
+    tools.querySelector<HTMLElement>('.source-navigation-rail')!.inert = open;
+    libraryBrowser.setSearchOpen(open);
     if (open) input.focus();
     else toggle.focus();
   }
@@ -618,7 +620,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const showIdentity = () => { if (identity) {
       const actorName = currentActor()?.name ?? t(msg("sources.guest", "访客"));
       const name = document.createElement('span'); name.className = 'start-identity-name'; name.textContent = actorName;
-      identity.replaceChildren(document.createTextNode(t(msg("sources.currentIdentityPrefix", "当前身份 · "))), name);
+      const prefix = document.createElement('span'); prefix.className = 'start-identity-prefix'; prefix.textContent = t(msg("sources.currentIdentityPrefix", "当前身份 · "));
+      identity.replaceChildren(prefix, name);
       identity.title = t(msg("sources.identityTitle", "点击打开用户设置（当前身份：{name}）"), {name:actorName});
       identity.setAttribute('aria-label', t(msg("sources.identityAria", "当前身份：{name}，打开用户设置"), {name:actorName}));
     } };
@@ -628,7 +631,6 @@ export function createSourcesPane(shared: WorkbenchShared) {
     $('replace-source-close').onclick = () => $<HTMLDialogElement>('replace-source-dialog').close();
     $('source-search').oninput = () => { if (!libraryBrowser.isRecent()) libraryBrowser.search($<HTMLInputElement>('source-search').value); renderSources(); };
     $('sources-search-toggle').onclick = () => setSearching(!$('source-tools').classList.contains('searching'));
-    $('source-search-close').onclick = () => setSearching(false);
     $('source-search').onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); setSearching(false); } };
     $('source-files').onchange = () => {
       const input = $<HTMLInputElement>('source-files');

@@ -1,3 +1,5 @@
+@import './button-feedback.css';
+
 /* Connection guide: base palettes come from the render-blocking theme links in
    index.html plus themes/accessibility.css imported by connection-guide.ts.
    Keep all rules scoped under .connection-page/.connection-guide. */
@@ -59,7 +61,6 @@
 .connection-button.secondary { background: var(--surface-input); color: var(--text); border-color: var(--border-soft); box-shadow: var(--control-shadow); backdrop-filter: var(--glass-filter); min-width: 144px; }
 .connection-button .connection-icon { width: 18px; height: 18px; }
 .connection-button[aria-busy=true] { opacity: .65; cursor: progress; }
-.connection-guide :focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
 .connection-os { display: inline-flex; gap: 3px; padding: 4px; border-radius: 999px; background: var(--segment-fill); box-shadow: inset 0 1px 2px color-mix(in srgb, var(--text) 5%, transparent); margin: 19px 0 8px; }
 .connection-os button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; background: transparent; color: var(--text-secondary); border-radius: 999px; min-height: 36px; min-width: 112px; padding: 6px 16px; font-size: 13px; }
 .connection-os .connection-icon { width: 17px; height: 17px; }
@@ -121,7 +122,6 @@
 .connection-page .popup-menu:popover-open { display:flex; flex-direction:column; gap:4px; }
 .connection-page .popup-menu button { border:0; border-radius:var(--radius-control); background:transparent; color:inherit; text-align:left; padding:8px 12px; font:inherit; }
 .connection-page .popup-menu button[aria-checked=true] { color:var(--accent); background:var(--surface-selected); }
-.connection-page :is(button,a,summary):focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 .connection-page #language-status { overflow-wrap:anywhere; font-size:12px; }
 
 .connection-guide .connection-button, .connection-guide .connection-retry { max-width:100%; white-space:normal; overflow-wrap:anywhere; }

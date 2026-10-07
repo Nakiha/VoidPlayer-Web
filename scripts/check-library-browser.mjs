@@ -23,8 +23,8 @@ try {
   const page = await context.newPage(); const errors = [], legacy = [];
   page.on('pageerror', e => errors.push(e.message)); page.on('request', r => { if (new URL(r.url()).pathname === '/api/library') legacy.push(r.url()); });
   const choose = async name => { await page.locator('#library-root').click(); await page.locator('#library-root-menu').getByRole('menuitemradio', { name, exact: true }).click(); };
-  const openSearch = async () => { if (await page.locator('#source-search-field').isHidden()) await page.locator('#sources-search-toggle').click(); };
-  const closeSearch = async () => { if (!await page.locator('#source-search-field').isHidden()) await page.locator('#source-search-close').click(); };
+  const openSearch = async () => { if (await page.locator('#sources-search-toggle').getAttribute('aria-expanded') !== 'true') await page.locator('#sources-search-toggle').click(); };
+  const closeSearch = async () => { if (await page.locator('#sources-search-toggle').getAttribute('aria-expanded') === 'true') await page.locator('#sources-search-toggle').click(); };
   await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
   await page.locator('#toggle-sources').click();
   await page.locator('#library-root').click();

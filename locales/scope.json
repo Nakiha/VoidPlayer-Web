@@ -31,6 +31,7 @@
     "src/ui/frame-task.ts",
     "src/ui/header-actions.ts",
     "src/ui/icons.ts",
+    "src/ui/playback-icon.ts",
     "src/ui/identity-onboarding.ts",
     "src/ui/identity-settings.ts",
     "src/ui/index-progress.ts",

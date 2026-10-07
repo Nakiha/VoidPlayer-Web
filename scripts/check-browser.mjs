@@ -90,6 +90,147 @@ try {
     assert.equal(await version.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the version');
   });
 
+  await check('start header and identity confirmation stay on one row at narrow widths', async page => {
+    for (const width of [1280, 581, 390, 320]) {
+      await page.setViewportSize({ width, height: 800 });
+      const header = await page.locator('.start-header').boundingBox();
+      const title = await page.locator('.start-header > h3').boundingBox();
+      const identity = await page.locator('#start-identity').boundingBox();
+      const library = await page.locator('#start-library-more').boundingBox();
+      assert.ok(Math.abs(title.y + title.height / 2 - (library.y + library.height / 2)) < 1);
+      assert.ok(Math.abs(identity.y + identity.height / 2 - (library.y + library.height / 2)) < 1);
+      assert.ok(library.x + library.width <= header.x + header.width + 1);
+      const prefix = await page.locator('.start-identity-prefix').isVisible();
+      assert.equal(prefix, (await page.locator('#start-panel').boundingBox()).width > 420, 'prefix responds to the width available to the recent panel');
+      await page.locator('#start-identity').click();
+      const combo = await page.locator('.identity-combo').boundingBox();
+      const save = await page.locator('#identity-save').boundingBox();
+      assert.ok(save.x >= combo.x + combo.width, 'confirmation stays to the right of the username field');
+      assert.ok(Math.abs(save.y + save.height / 2 - (combo.y + combo.height / 2)) < 1);
+      await page.locator('#settings-close').click();
+      await page.waitForFunction(() => !document.querySelector('#settings').open);
+    }
+    await page.setViewportSize({ width: 581, height: 664 });
+    await page.locator('#toggle-sources').click();
+    const identity = await page.locator('#start-identity').boundingBox();
+    const library = await page.locator('#start-library-more').boundingBox();
+    assert.ok(Math.abs(identity.y + identity.height / 2 - (library.y + library.height / 2)) < 1);
+    assert.equal(await page.locator('.start-identity-prefix').isVisible(), false);
+    assert.equal(await page.locator('#start-library-more > span').isVisible(), true, '581px with sources retains the library action label');
+    await page.screenshot({ path: path.join(screenshots, 'start-header-narrow.png') });
+  });
+
+  await check('keyboard focus uses a theme fill while mouse dropdowns have no focus ring', async page => {
+    await page.locator('#toggle-sources').click();
+    // macOS WebKit uses Option+Tab to include buttons in native focus navigation.
+    const tabKey = browserName === 'webkit' ? 'Alt+Tab' : 'Tab';
+    for (const theme of ['light', 'dark']) {
+      await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+      const expected = await page.evaluate(() => {
+        const probe = document.createElement('span');
+        probe.style.background = 'color-mix(in srgb, var(--accent) 22%, var(--surface-panel))';
+        document.body.append(probe); const value = getComputedStyle(probe).backgroundColor; probe.remove(); return value;
+      });
+      await page.locator('#library-location').click();
+      await page.keyboard.press(tabKey);
+      assert.equal(await page.locator('#library-root').evaluate(el => document.activeElement === el && el.matches(':focus-visible')), true);
+      assert.equal(await page.locator('#library-root').evaluate(el => getComputedStyle(el).backgroundColor), expected);
+      assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+      await page.keyboard.press('Enter');
+      await page.locator('#library-root-menu').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#library-root-menu button:focus').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#library-root').evaluate(el => document.activeElement === el), true);
+      await page.locator('#library-root').click();
+      assert.equal(await page.locator('#library-root').evaluate(el => el.matches(':focus-visible')), false, 'mouse click does not activate the keyboard focus fill');
+      assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
+      await page.locator('#library-root').click();
+      await page.keyboard.press(tabKey);
+      assert.equal(await page.locator('#sources-search-toggle').evaluate(el => document.activeElement === el), true);
+      assert.equal(await page.locator('#sources-search-toggle').evaluate(el => getComputedStyle(el).backgroundColor), expected);
+    }
+  });
+
+  await check('press feedback respects links, tabs and close colors; search overlays navigation', async page => {
+    const insetButtons = await page.locator('button.icon-button').evaluateAll(buttons => buttons.filter(el => getComputedStyle(el).backgroundClip !== 'border-box').map(el => el.id || el.getAttribute('aria-label')));
+    assert.deepEqual(insetButtons, [], 'all icon buttons paint their full background by default');
+    const style = selector => page.locator(selector).evaluate(el => {
+      const s = getComputedStyle(el);
+      return { background: s.backgroundColor, color: s.color, transition: s.transitionDuration };
+    });
+    const press = async selector => {
+      await page.locator(selector).hover(); await page.waitForTimeout(280);
+      const hover = await style(selector);
+      await page.mouse.down(); await page.waitForTimeout(280);
+      const held = await style(selector);
+      await page.mouse.move(0, 0); await page.mouse.up();
+      return { hover, held };
+    };
+    const idle = await style('#server-status');
+    const status = await press('#server-status');
+    assert.notEqual(status.hover.background, idle.background);
+    assert.notEqual(status.held.background, status.hover.background);
+    assert.equal(status.held.transition, '0.24s, 0.24s');
+    await page.locator('#settings-open').click();
+    const tab = await press('#settings-tab-performance');
+    assert.equal(tab.held.transition, '0s');
+    assert.deepEqual(tab.held, tab.hover, 'holding a tab does not add a press fill');
+    const close = await press('#settings-close');
+    assert.equal(close.held.color, close.hover.color, 'close keeps its danger color');
+    assert.notEqual(close.held.background, close.hover.background);
+    await page.locator('#settings-close').click();
+    await page.waitForFunction(() => !document.querySelector('#settings').open);
+    await page.locator('#toggle-sources').click();
+    await page.waitForTimeout(300);
+    const materials = await page.locator('#source-tools').evaluate(tools =>
+      ['.crumbs-back', '.library-navigation', '#sources-search-toggle', '#source-search-field'].map(selector => {
+        const s = getComputedStyle(tools.querySelector(selector));
+        return { background: s.backgroundColor, filter: s.backdropFilter || s.webkitBackdropFilter };
+      }));
+    assert.ok(materials.every(material => material.background === materials[0].background && material.filter === 'none'), 'navigation controls share a light fill without a second blur layer');
+    assert.equal(await page.locator('.crumbs-back').evaluate(el => getComputedStyle(el).opacity), '1', 'disabled back keeps the glass surface visible');
+    for (const selector of ['.crumbs-back', '#sources-search-toggle']) {
+      assert.deepEqual(await page.locator(selector).evaluate(el => {
+        const s = getComputedStyle(el);
+        return { clip: s.backgroundClip, padding: s.padding };
+      }), { clip: 'border-box', padding: '0px' }, `${selector} paints its entire surface, including nested navigation controls`);
+    }
+    assert.equal(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter), 'blur(6px)', 'the full toolbar retains its glass backplate');
+    assert.notEqual(await page.locator('#source-tools').evaluate(el => getComputedStyle(el).backgroundColor), materials[0].background, 'the continuous glass backplate and light button fills remain distinct');
+    const navigation = await page.locator('#library-navigation').boundingBox();
+    const tools = await page.locator('#source-tools').boundingBox();
+    const list = await page.locator('#source-list').boundingBox();
+    const searchButton = await page.locator('#sources-search-toggle').boundingBox();
+    const searchIcon = await page.locator('#sources-search-toggle .icon').boundingBox();
+    await page.locator('#sources-search-toggle').click();
+    await page.waitForTimeout(60);
+    assert.deepEqual(await page.locator('#sources-search-toggle').boundingBox(), searchButton, 'one persistent button stays in place during expansion');
+    const opacity = await page.locator('#source-tools').evaluate(tools => ['.source-navigation-rail', '#source-search-field'].map(selector => getComputedStyle(tools.querySelector(selector)).opacity));
+    assert.deepEqual(opacity, ['1', '1'], 'navigation and search wipe at full opacity without crossfading');
+    await page.waitForTimeout(280);
+    const search = await page.locator('#source-search-field').boundingBox();
+    assert.ok(search.x <= navigation.x && search.x + search.width >= navigation.x + navigation.width);
+    assert.deepEqual(await page.locator('#source-tools').boundingBox(), tools);
+    assert.deepEqual(await page.locator('#source-list').boundingBox(), list);
+    assert.equal(await page.locator('.source-navigation-rail').evaluate(el => el.inert), true);
+    assert.deepEqual(await page.locator('#sources-search-toggle .icon').boundingBox(), searchIcon, 'search and close icons have identical geometry');
+    assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '关闭搜索');
+    assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true);
+    await page.locator('#source-search').fill('sample');
+    await page.screenshot({ path: path.join(screenshots, 'source-search-overlay.png') });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#source-search').inputValue(), '');
+    assert.equal(await page.locator('#source-search-field').evaluate(el => el.inert), true);
+    assert.equal(await page.locator('#sources-search-toggle').evaluate(el => document.activeElement === el), true);
+    assert.deepEqual(await page.locator('#library-navigation').boundingBox(), navigation);
+    await page.waitForTimeout(280);
+    await page.locator('#sources-search-toggle').click();
+    await page.locator('#source-search').fill('sample');
+    await page.locator('#sources-search-toggle').click();
+    assert.equal(await page.locator('#source-search').inputValue(), '');
+    assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-label'), '搜索片源');
+  }, { viewport: { width: 581, height: 664 }, reducedMotion: 'no-preference' });
+
   await check('recent list resizes symmetrically, preserves rows/scroll and remembers its width', async page => {
     await page.addInitScript(() => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(Array.from({ length: 40 }, (_, i) => ({ name: `recent-${i}.mp4`, size: 1000, lastModified: 1000 + i })))));
     await page.reload(); await page.waitForFunction(() => window.voidPlayer);
@@ -99,7 +240,7 @@ try {
     await list.locator('.start-recent-row').first().evaluate(el => el.setAttribute('data-resize-proof', 'retained'));
     const scroll = await list.evaluate(el => { el.scrollTop = 240; return el.scrollTop; });
     const initial = await panel.boundingBox(), center = initial.x + initial.width / 2;
-    assert.equal(await page.locator('#start-identity').evaluate(el => getComputedStyle(el).transitionDuration), '0s', 'identity changes have no transition even with motion enabled');
+    assert.equal(await page.locator('#start-identity').evaluate(el => getComputedStyle(el).transitionDuration), '0.24s, 0.24s', 'identity button uses the shared color transition');
     for (const handle of [left, right]) {
       assert.equal(await handle.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'idle handles stay hidden');
     }
@@ -113,7 +254,11 @@ try {
       return next;
     }
     await right.hover();
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#start-resize-right'), '::after').opacity === '1');
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '1', 'hover illuminates the handle');
+    assert.deepEqual(await right.evaluate(el => ['::before', '::after'].map(pseudo => {
+      const style = getComputedStyle(el, pseudo); return [style.transitionProperty, style.transitionDuration];
+    })), [['opacity', '0.16s'], ['opacity', '0.32s']], 'line fades in faster than the glow without interpolating pointer position');
     assert.equal(await left.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'only the hovered edge illuminates');
     assert.match(await right.evaluate(el => getComputedStyle(el, '::after').maskImage), /linear-gradient/, 'vertical ends fade out');
     assert.match(await right.evaluate(el => getComputedStyle(el, '::after').backgroundImage), /linear-gradient/, 'outer edge fades out');
@@ -136,12 +281,14 @@ try {
       await page.mouse.move(hoverBox.x + hoverBox.width / 2, hoverBox.y + y);
       await page.screenshot({ path: path.join(screenshots, `start-panel-resize-${edge}-${browserName}.png`) });
     }
-    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').transitionDuration), '0s', 'glow tracks without interpolation');
     await page.mouse.move(center, initial.y + 10);
-    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'leaving hides the glow immediately');
+    assert.deepEqual(await right.evaluate(el => ['::before', '::after'].map(pseudo => getComputedStyle(el, pseudo).transitionDuration)), ['0.22s', '0.42s'], 'line fades out first and the glow lingers');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#start-resize-right'), '::after').opacity === '0');
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'leaving fades the glow away');
     await right.focus();
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'focus cannot leave the glow visible');
     await right.click(); await page.mouse.move(center, initial.y + 10);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#start-resize-right'), '::after').opacity === '0');
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'clicking then leaving keeps the handle hidden');
     assert.equal(await right.evaluate(el => el.classList.contains('resizing')), false, 'click without dragging clears the drag state');
     assert.ok(Math.abs((await drag(right, 50)).width - initial.width - 100) < 1);
@@ -151,6 +298,7 @@ try {
     assert.equal(await list.locator('.start-recent-row').first().getAttribute('data-resize-proof'), 'retained', 'resizing does not rebuild recent rows');
     assert.equal(await left.getAttribute('aria-valuenow'), await right.getAttribute('aria-valuenow'));
     await page.mouse.move(center, initial.y + 10);
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#start-resize-left'), '::after').opacity === '0');
     assert.equal(await left.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'dragging then leaving hides the handle too');
     const box = await right.boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await page.mouse.down();
@@ -180,7 +328,12 @@ try {
     await page.waitForFunction(() => !document.querySelector('#workspace').classList.contains('panel-motion'));
     await page.waitForFunction(width => Math.abs(document.querySelector('#start-panel').getBoundingClientRect().width - width) < 1, preferred);
     await settle(page); await right.hover();
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#start-resize-right'), '::after').opacity === '1');
     await page.screenshot({ path: path.join(screenshots, `start-panel-resize-${browserName}.png`) });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.deepEqual(await right.evaluate(el => ['::before', '::after'].map(pseudo => getComputedStyle(el, pseudo).transitionDuration)), ['0s', '0s'], 'reduced motion disables both fades');
+    await page.mouse.move(center, initial.y + 10);
+    assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'reduced motion hides the glow immediately');
   }, { reducedMotion: 'no-preference' });
 
   await check('brand effects can leave the toolbar and keep the About button usable', async page => {
@@ -600,7 +753,7 @@ try {
       await page.locator('#sources-search-toggle').click();
       assert.equal(await page.locator('#source-search').evaluate(el => document.activeElement === el), true, 'search toggle focuses the input');
       await page.keyboard.press('Escape');
-      assert.equal(await page.locator('#source-search-field').isHidden(), true, 'escape closes search');
+      assert.equal(await page.locator('#source-search-field').evaluate(el => el.inert && el.getAttribute('aria-hidden') === 'true'), true, 'escape closes search');
       await page.screenshot({ path: path.join(screenshots, `${browserName}-loading.png`) });
       await page.setViewportSize({ width: 1280, height: 800 });
       await settle(page);

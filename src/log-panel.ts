@@ -27,7 +27,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     help.style.top = `${Math.min(rect.bottom + 8, innerHeight - 230)}px`;
   });
   const closeHelp = () => { if (help.matches(':popover-open')) help.hidePopover(); };
-  let selectedSession = '', busy = false, refreshRequested = false, disposed = false, generation = 0, snapshotGeneration = 0;
+  let selectedSession = '', busy = false, syncing = false, refreshRequested = false, disposed = false, generation = 0, snapshotGeneration = 0;
   let sessions: { value: string; label: string }[] = [];
   let sessionDates: { sessionId: string; current: boolean; startedAt: string }[] = [];
   const sessionOptions = () => sessionDates.map(s => ({ value: s.sessionId, label: `${s.current ? t(msg("logPanel.current", "本次")) : t(msg("logPanel.history", "历史"))} · ${formatDate(s.startedAt)}` }));
@@ -77,10 +77,10 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     previewPage += button.dataset.page === 'next' ? 1 : -1; renderReport();
   };
   description.addEventListener('input', () => { fitDescription(); descriptions.set(selectedSession, description.value); message(); });
-  async function snapshot(serialize = false) {
+  async function snapshot(serialize = false, followLatest = true) {
     const ticket = ++snapshotGeneration, id = selectedSession;
     const doc = await exportLog(id || undefined, descriptions.get(id) ?? '');
-    if (ticket === snapshotGeneration && id === selectedSession) { reportDocument = doc; previewPage = Math.max(0, Math.ceil(doc.events.length / 25) - 1); renderReport(); }
+    if (ticket === snapshotGeneration && id === selectedSession) { reportDocument = doc; if (followLatest) previewPage = Math.max(0, Math.ceil(doc.events.length / 25) - 1); renderReport(); }
     return { json: serialize ? JSON.stringify(withLogDescription(doc, description.value), null, 2) : '', filename: `voidplayer-log-${doc.startedAt.slice(0, 10)}-${doc.sessionId.slice(0, 8)}.json` };
   }
   async function refresh() {
@@ -98,12 +98,13 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
     description.value = descriptions.get(selectedSession) ?? '';
     fitDescription();
     menu.setOptions(sessions); syncMenu();
-    await snapshot();
+    await snapshot(false, !reportDocument);
     const historyError = history.error;
     if (historyError) message(() => t(msg("logPanel.unableToReadLogHistory", "历史日志读取异常：{p0}"), { p0: historyError }), true);
   }
   const action = async (name: string, work: () => unknown | Promise<unknown>, record = true) => {
     if (busy) return;
+    ++generation; ++snapshotGeneration;
     busy = true; message(); controls();
     try { if (record) await traceOperation('ui', `logs.${name}`, { sessionId: selectedSession }, work); else await work(); }
     catch (error) {
@@ -114,7 +115,7 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
       busy = false;
       if (!disposed) {
         controls();
-        if (refreshRequested && dialog.open && !pane.hidden) { refreshRequested = false; void action('sync', refresh, false); }
+        if (refreshRequested) syncVisibleLogs();
       }
     }
   };
@@ -126,16 +127,20 @@ export function installLogPanel(container: HTMLElement, toasts: ToastStack) {
   controls();
   const onPaneChange = () => {
     closeHelp();
-    if (dialog.open && !pane.hidden) { fitDescription(); storageStatus(); if (busy) refreshRequested = true; else void action('open', refresh); }
+    if (dialog.open && !pane.hidden) { message(); fitDescription(); storageStatus(); syncVisibleLogs(); }
     else { refreshRequested = false; ++generation; ++snapshotGeneration; }
   };
   dialog.addEventListener('settings-pane-change', onPaneChange);
   window.addEventListener('resize', fitDescription);
-  const syncVisibleLogs = () => {
+  function syncVisibleLogs() {
     if (disposed || !dialog.open || pane.hidden) return;
-    if (busy) { refreshRequested = true; return; }
-    void action('sync', refresh, false);
-  };
+    if (busy || syncing) { refreshRequested = true; return; }
+    syncing = true; refreshRequested = false;
+    void refresh().catch(error => { if (!disposed && dialog.open && !pane.hidden) message(error instanceof Error ? error.message : String(error), true); }).finally(() => {
+      syncing = false;
+      if (!disposed) { controls(); if (refreshRequested && !busy) syncVisibleLogs(); }
+    });
+  }
   window.addEventListener('focus', syncVisibleLogs);
   const onVisibilityChange = () => { if (!document.hidden) syncVisibleLogs(); };
   document.addEventListener('visibilitychange', onVisibilityChange);

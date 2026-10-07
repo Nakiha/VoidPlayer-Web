@@ -20,7 +20,10 @@ async function checkSettingsScrollbar(page, width, artifact) {
  await page.locator('#settings-tab-shortcuts').click();
  const pane=page.locator('#settings-pane-shortcuts'), bar=page.locator('#settings-scrollbar'), thumb=page.locator('#settings-scrollbar-thumb');
  await pane.evaluate(e=>{e.scrollTop=0;});
- await page.waitForFunction(()=>!document.querySelector('#settings-scrollbar').hidden&&document.querySelector('#settings-scrollbar-thumb').clientHeight>0);
+ await page.waitForFunction(()=>{
+  const bar=document.querySelector('#settings-scrollbar'),thumb=document.querySelector('#settings-scrollbar-thumb');
+  return !bar.hidden&&thumb.clientHeight>0&&Math.abs(thumb.getBoundingClientRect().top-bar.getBoundingClientRect().top)<1;
+ });
  const rail=await bar.boundingBox(), handle=await thumb.boundingBox(), header=await page.locator('.settings-floating-header').boundingBox();
  assert.ok(rail.y>=header.y+header.height,`${width}px scrollbar excludes the glass heading`);
  if(width<600) {const nav=await page.locator('.settings-navigation').boundingBox();assert.ok(rail.y>=nav.y+nav.height,'portrait scrollbar excludes the category rail');}
@@ -48,6 +51,28 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  assert.equal(await page.locator('#settings [role=tab]').count(),7);
  assert.equal(await page.locator('#settings details, #settings summary').count(),0,'settings contain no disclosure controls');
  assert.equal(await page.locator('#settings [role=tabpanel]:not(#settings-pane-performance) select').count(),0,'settings use shared choice menus');
+ await page.evaluate(()=>{
+  window.settingsChanges=[];
+  document.querySelector('#settings').addEventListener('settings-pane-change',event=>window.settingsChanges.push(event.detail));
+ });
+ await page.locator('#settings-tab-shortcuts span').dblclick();
+ assert.equal(await page.evaluate(()=>getSelection().toString()),'','double clicking tab text never selects it');
+ assert.deepEqual(await page.evaluate(()=>window.settingsChanges),['shortcuts'],'double clicking selects a new tab just once');
+ for(const pane of ['workspace','logs']) {
+  await page.locator(`#settings-tab-${pane}`).click();
+  const count=await page.evaluate(()=>window.settingsChanges.length);
+  await page.locator(`#settings-tab-${pane}`).dblclick();
+  assert.equal(await page.evaluate(()=>window.settingsChanges.length),count,'clicking the active tab never starts another refresh');
+ }
+ await page.locator('#settings-tab-appearance').click();
+ await page.evaluate(()=>{
+  window.logRefreshBusy=[];
+  new MutationObserver(records=>window.logRefreshBusy.push(...records.map(record=>record.oldValue)))
+   .observe(document.querySelector('.log-panel'),{attributes:true,attributeFilter:['aria-busy'],attributeOldValue:true});
+ });
+ await page.locator('#settings-tab-logs').click();
+ await page.waitForFunction(()=>document.querySelector('.log-json').value.startsWith('{')&&!document.querySelector('#log-description').disabled);
+ assert.equal(await page.evaluate(()=>window.logRefreshBusy.includes('true')),false,'showing feedback never dims its controls for a background refresh');
  for(const pane of ['appearance','workspace','identity','shortcuts','logs','performance','about']) {
   await page.locator(`#settings-tab-${pane}`).click();assert.equal(await page.locator('[role=tabpanel]:visible').count(),1);assert.equal(await page.locator('dialog[open]').count(),1);
   assert.deepEqual(await page.locator('#settings').boundingBox(),geometry,'panes keep a stable window');
@@ -87,12 +112,14 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
     const sizes=await decoderGroup.locator('button').evaluateAll(buttons=>buttons.map(button=>button.getBoundingClientRect().width));
     assert.ok(Math.abs(sizes[0]-sizes[1])<1,'decoder segments have equal widths despite different label lengths');
     assert.notEqual(await decoderGroup.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','decoder options share a visible base');
+    await selected.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
     const fill=await selected.evaluate(el=>getComputedStyle(el).backgroundColor);
     assert.notEqual(fill,'rgba(0, 0, 0, 0)','selected decoder fills its segment');
     await other.hover();
+    await other.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
     assert.equal(await other.evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','hover does not make the other segment look selected');
     assert.equal(await selected.evaluate(el=>getComputedStyle(el).backgroundColor),fill,'hover preserves the selected segment');
-    assert.equal(await selected.evaluate(el=>getComputedStyle(el).transitionDuration),'0s','decoder selection changes instantly');
+    assert.equal(await selected.evaluate(el=>getComputedStyle(el).transitionDuration),'0.24s, 0.24s','decoder buttons share the smooth color feedback');
     assert.equal(await decoderGroup.locator('[aria-pressed=true]').count(),1,'exactly one decoder is selected');
     await page.locator('#reference-decode-settings').screenshot({path:artifact(`voidplayer-decoder-segments-${decoder}-${name}.png`)});
    }
@@ -236,7 +263,10 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   assert.ok(first.x>=rail.x&&first.x+first.width<=rail.x+rail.width+1,'Home reveals the first category');
   const header=await page.locator('.settings-floating-header').boundingBox(), pane=await page.locator('#settings-pane-appearance').boundingBox();
   assert.ok(header.y+header.height<=rail.y+1&&rail.y+rail.height<=pane.y+1,'title, category rail and content occupy independent rows');
-  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','mobile selection uses an underline without a filled tile');
+  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>el.matches(':focus-visible')),true,'keyboard navigation keeps a visible focus cue');
+  assert.notEqual(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','keyboard focus uses a light background');
+  await page.locator('#settings-tab-about').click();await page.locator('#settings-tab-appearance').click();
+  assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','pointer selection uses an underline without a filled tile');
   assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el,'::after').height),'2px');
   if(width===550) {
    for(const theme of ['light','dark']) {
@@ -294,7 +324,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.mouse.click(5,5);await page.locator('#settings').waitFor({state:'hidden'});
  await page.locator('#settings-open').click();
  const closeColor=await page.locator('#settings-close').evaluate(e=>getComputedStyle(e).color);assert.notEqual(closeColor,'rgb(206, 57, 57)');
- await page.locator('#settings-close').hover();assert.equal(await page.locator('#settings-close').evaluate(e=>getComputedStyle(e).color),'rgb(206, 57, 57)');
+ await page.locator('#settings-close').hover();await page.locator('#settings-close').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));assert.equal(await page.locator('#settings-close').evaluate(e=>getComputedStyle(e).color),'rgb(206, 57, 57)');
  // Reopening during exit cancels the pending close, without a late close/focus jump.
  await page.locator('#settings-close').click();await page.keyboard.press('Control+,');
  await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));

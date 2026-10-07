@@ -38,18 +38,18 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
- // Dark palette: grouped and input surfaces are light translucent overlays, not opaque dark fills.
- // The library scope trigger (#library-root) and the search field (#source-search-field) are
- // deliberately transparent (style.css .library-navigation .choice-trigger / .source-tools
- // #source-search-field); the light fill they sit on is --search-fill, painted by the
- // .library-navigation row that hosts both. The segmented control no longer lives in
- // .source-tools, so the selected segment is read from the comparison-layout group.
+ // Only the continuous backing blurs the list; navigation has a thin tint.
  const surfaces=await page.evaluate(()=>{
   const bg=selector=>getComputedStyle(document.querySelector(selector)).backgroundColor;
-  return {segment:bg('#layout-mode [aria-pressed=true]'),search:bg('.library-navigation'),placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
+  const probe=document.createElement('div');probe.style.background='var(--source-control-fill)';document.querySelector('#source-tools').append(probe);
+  const control=getComputedStyle(probe).backgroundColor;probe.remove();
+  const navStyle=getComputedStyle(document.querySelector('.library-navigation'));
+  const backplateStyle=getComputedStyle(document.querySelector('#source-tools'));
+  return {segment:bg('#layout-mode [aria-pressed=true]'),search:bg('.library-navigation'),control,filter:navStyle.backdropFilter || navStyle.webkitBackdropFilter,backplateFilter:backplateStyle.backdropFilter || backplateStyle.webkitBackdropFilter,placeholder:getComputedStyle(document.querySelector('#source-search'),'::placeholder').color,grid:document.querySelector('#grid-A').getContext('2d').strokeStyle};
  });
   assert.match(surfaces.segment,/rgba\(255, 255, 255,/,'selected segment uses a light overlay (--segment-selected-fill)');
- assert.match(surfaces.search,/rgba\(255, 255, 255,/,'library scope/search row uses a light overlay (--search-fill)');
+ assert.equal(surfaces.search,surfaces.control,'library navigation uses a thin control fill');
+ assert.equal(surfaces.filter,'none');assert.equal(surfaces.backplateFilter,'blur(6px)');
   assert.equal(surfaces.placeholder,'rgb(182, 182, 182)');
  assert.ok(Number(surfaces.grid.match(/, ([\d.]+)\)$/)[1])<=.15,'grid stays subdued');
 
@@ -74,13 +74,14 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  assert.equal(await page.locator('#drawing-color-choice-menu').evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'blur(8px)');
  await page.keyboard.press('Escape');await page.locator('#mark-close').click();
  await page.emulateMedia({contrast:'more'});
+ await page.waitForTimeout(280);
  const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
  // prefers-contrast: more pins --viewport-chrome-fill to --surface and drops the blur
  // (themes/accessibility.css), so the transport paints the opaque dark surface:
  // themes/dark.css --surface #212121.
  assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(33, 33, 33)');
  assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
- assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(48, 52, 59)');
+ assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(33, 33, 33)');
  await page.emulateMedia({contrast:'no-preference'});
  // Compact presets and custom colors stay independent of the review.
  const reviewBefore=await evidence();

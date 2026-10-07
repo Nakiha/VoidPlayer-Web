@@ -5,6 +5,7 @@ import { buildInfo } from '../build-info.ts';
 import { SLOTS } from '../model.ts';
 import { iconButton } from './controls.ts';
 import { icon } from './icons.ts';
+import { playbackIcon } from './playback-icon.ts';
 import { PANEL_SHORTCUTS, shortcutTooltip } from './shortcuts.ts';
 import type { Shortcut } from './shortcuts.ts';
 import type { Slot } from '../model.ts';
@@ -72,7 +73,7 @@ export function shell() {
 
         <section class="transport glass" aria-label="${th(msg("shell.sharedPlaybackControls", "共用播放控制"))}" hidden>
           <div class="transport-actions" role="group" aria-label="${th(msg("shell.playbackControls", "播放功能"))}">
-            <div class="play-buttons"><button class="icon-button" id="previous" data-tooltip="${shortcutTooltip(t(msg("shell.previousFrame", "上一帧")), 'previous')}" aria-label="${th(msg("shell.previousFrame", "上一帧"))}" disabled>${icon('previous')}</button><button class="icon-button" id="play" data-playing="false" aria-label="${th(msg("shell.play", "播放"))}" data-tooltip="${shortcutTooltip(t(msg("shell.playPause", "播放 / 暂停")), 'play')}" disabled>${icon('play')}${icon('pause')}</button><button class="icon-button" id="next" data-tooltip="${shortcutTooltip(t(msg("shell.nextFrame", "下一帧")), 'next')}" aria-label="${th(msg("shell.nextFrame", "下一帧"))}" disabled>${icon('next')}</button></div>
+            <div class="play-buttons"><button class="icon-button" id="previous" data-tooltip="${shortcutTooltip(t(msg("shell.previousFrame", "上一帧")), 'previous')}" aria-label="${th(msg("shell.previousFrame", "上一帧"))}" disabled>${icon('previous')}</button><button class="icon-button" id="play" data-playing="false" aria-label="${th(msg("shell.play", "播放"))}" data-tooltip="${shortcutTooltip(t(msg("shell.playPause", "播放 / 暂停")), 'play')}" disabled>${playbackIcon()}</button><button class="icon-button" id="next" data-tooltip="${shortcutTooltip(t(msg("shell.nextFrame", "下一帧")), 'next')}" aria-label="${th(msg("shell.nextFrame", "下一帧"))}" disabled>${icon('next')}</button></div>
             <div class="transport-time"><input id="position" class="time-input" type="text" aria-label="${th(msg("shell.seekToTime", "定位时间"))}" autocomplete="off" spellcheck="false" value="00:00.000" disabled><span class="duration"><span aria-hidden="true">/</span><span id="duration">00:00.000</span></span></div>
           <div class="timeline-control"><input id="timeline" type="range" min="0" max="1" step="1" value="0" aria-label="${th(msg("shell.sharedTimelineMicroseconds", "共用时间轴，微秒"))}" disabled><span class="timeline-playhead" aria-hidden="true"></span><span id="timeline-hover" class="timeline-hover" aria-hidden="true" hidden></span><output id="timeline-preview" class="seek-preview" hidden></output></div>
             <button id="fullscreen" class="icon-button" aria-label="${th(msg("shell.fullscreen", "全屏"))}" title="${th(msg("shell.fullscreen", "全屏"))}">${icon('fit')}</button>

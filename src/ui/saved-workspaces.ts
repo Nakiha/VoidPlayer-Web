@@ -123,9 +123,11 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   const refresh = () => void actCurrent(async () => { message(''); before = ''; search = $<HTMLInputElement>('search').value.trim(); await list(); });
   let searchTimer: ReturnType<typeof setTimeout> | undefined;
   const syncVisibleList = () => {
-    if (options.signal.aborted || !available || document.getElementById('settings-pane-workspace')!.hidden) return;
+    if (options.signal.aborted || !(document.getElementById('settings') as HTMLDialogElement).open || !available || document.getElementById('settings-pane-workspace')!.hidden) return;
     if (busy) { refreshAfterBusy = true; return; }
-    void actCurrent(list);
+    const context = captureRequest();
+    // Reading the list must not dim the current document or its existing rows.
+    void list().catch(error => { if (isCurrent(context)) { message((error as Error).message, true); options.report(error as Error); } });
   };
   window.addEventListener('focus', syncVisibleList, { signal: options.signal });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncVisibleList(); }, { signal: options.signal });
@@ -151,10 +153,17 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     if (actor && !document.getElementById('settings-pane-workspace')!.hidden) { if (busy) refreshAfterBusy = true; else refresh(); }
   }, { signal: options.signal });
   const settings = document.getElementById('settings')!;
-  settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') void actCurrent(async () => {
-    message(''); const health = await identityHealth(); available = !!health.capabilities?.workspaces; controls();
+  settings.addEventListener('settings-pane-change', event => {
+    if ((event as CustomEvent).detail !== 'workspace') return;
+    const context = captureRequest();
+    void (async () => {
+    if (busy) { refreshAfterBusy = true; return; }
+    const health = await identityHealth();
+    if (!isCurrent(context) || busy) return;
+    available = !!health.capabilities?.workspaces; controls();
     if (available) await list(); else message(() => t(msg("savedWorkspaces.workspaceServiceUnavailable", "工作区服务不可用。")));
-  }); }, { signal: options.signal });
+    })().catch(error => { if (isCurrent(context)) { message((error as Error).message, true); options.report(error as Error); } });
+  }, { signal: options.signal });
   controls();
   return { name: title, binding: () => binding,
     async share(document: WorkspaceFile, id: string, previous?: SavedWorkspace) {
