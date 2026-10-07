@@ -173,12 +173,16 @@ try {
   });
   await page.locator('[data-seg="full"]').click();
   const smoothWidths = [];
-  for (let step = 0; step < 40; step++) {
+  // Use small deltas throughout so this checks the bucket/raw seam during
+  // continuous zoom. A first -400 jump changes scale fourfold; a slow query
+  // could leave its first snapshot at the previous scale and falsely compare
+  // that deliberate jump with the subsequent small gestures.
+  for (let step = 0; step < 80; step++) {
     await page.evaluate(delta => {
       const canvas = document.getElementById('analysis-canvas'), rect = canvas.getBoundingClientRect();
       canvas.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: delta,
         clientX: rect.x + rect.width * 0.3, clientY: rect.y + rect.height * 0.7, bubbles: true, cancelable: true }));
-    }, step === 0 ? -400 : -8);
+    }, -8);
     await page.waitForTimeout(80);
     const snapshot = await page.evaluate(() => {
       const glyphs = window.__vpAnalysis?.glyphs ?? [];
@@ -187,7 +191,7 @@ try {
     });
     if (snapshot.width != null) smoothWidths.push(snapshot);
   }
-  assert.ok(smoothWidths.length > 30 && smoothWidths.some(s => s.raw), 'mixed-format zoom produces single-frame bars');
+  assert.ok(smoothWidths.length > 60 && smoothWidths.some(s => !s.raw) && smoothWidths.some(s => s.raw), 'mixed-format smooth zoom crosses from shared buckets to single-frame bars');
   for (let i = 1; i < smoothWidths.length; i++) assert.ok(Math.abs(smoothWidths[i].width - smoothWidths[i - 1].width) < 0.5,
     `smooth zoom width jumped: ${JSON.stringify(smoothWidths)}`);
   await saveDiagnostics(page, 'smooth-width', { smoothWidths });
