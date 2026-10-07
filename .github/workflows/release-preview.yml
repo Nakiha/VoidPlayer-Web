@@ -414,9 +414,9 @@ jobs:
         # The runner records every exit status and fails only after all cases ran.
         run: node scripts/run-tests.mjs uncovered --prepared --engine ${{ matrix.engine }}
         env:
-          # Only WASM + SwiftShader throughput/gaps are informational. Raw
+          # Only virtual headless Linux throughput/gaps are informational. Raw
           # negative verdicts remain in reports; all functional failures gate.
-          VOIDPLAYER_FLV_SOFTWARE_PERF: report
+          VOIDPLAYER_FLV_VIRTUAL_PERF: report
       - name: Report virtual FLV playback timing
         if: always()
         run: |

@@ -4233,7 +4233,8 @@
     "locations": [
       "src/ui/annotation-panel.ts:72",
       "src/ui/annotation-panel.ts:166",
-      "src/ui/checkpoint-history.ts:76"
+      "src/ui/checkpoint-history.ts:39",
+      "src/ui/checkpoint-history.ts:92"
     ]
   },
   "marks.colorBlack": {
@@ -4341,8 +4342,8 @@
       "src/admin/annotations.ts:13",
       "src/ui/annotation-panel.ts:73",
       "src/ui/annotation-panel.ts:166",
-      "src/ui/checkpoint-history.ts:66",
-      "src/ui/checkpoint-history.ts:77"
+      "src/ui/checkpoint-history.ts:27",
+      "src/ui/checkpoint-history.ts:94"
     ]
   },
   "marks.deleteConfirm": {
@@ -5046,7 +5047,7 @@
       "used": "string | number"
     },
     "locations": [
-      "src/ui/checkpoint-history.ts:35"
+      "src/ui/checkpoint-history.ts:29"
     ]
   },
   "recovery.capacityReached": {
@@ -5060,14 +5061,15 @@
     "source": "删除这份本机恢复记录？",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:75"
+      "src/ui/checkpoint-history.ts:38",
+      "src/ui/checkpoint-history.ts:90"
     ]
   },
   "recovery.export": {
     "source": "导出备份",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:60"
+      "src/ui/checkpoint-history.ts:27"
     ]
   },
   "recovery.history": {
@@ -5081,8 +5083,8 @@
     "source": "恢复记录已改变，请刷新列表后重试。",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:56",
-      "src/ui/checkpoint-history.ts:67"
+      "src/ui/checkpoint-history.ts:71",
+      "src/ui/checkpoint-history.ts:82"
     ]
   },
   "recovery.historyCounts": {
@@ -5092,7 +5094,7 @@
       "tracks": "number"
     },
     "locations": [
-      "src/ui/checkpoint-history.ts:48"
+      "src/ui/checkpoint-history.ts:36"
     ]
   },
   "recovery.historyHelp": {
@@ -5106,7 +5108,8 @@
     "source": "暂无本机恢复记录",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:41"
+      "src/ui/checkpoint-history.ts:41",
+      "src/ui/checkpoint-history.ts:57"
     ]
   },
   "recovery.readFailed": {
@@ -5120,7 +5123,7 @@
     "source": "恢复工作区",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:59",
+      "src/ui/checkpoint-history.ts:27",
       "src/ui/workspace-recovery.ts:18",
       "src/ui/workspace-recovery.ts:51"
     ]
@@ -5246,7 +5249,7 @@
     "source": "未命名工作区",
     "params": {},
     "locations": [
-      "src/ui/checkpoint-history.ts:46",
+      "src/ui/checkpoint-history.ts:35",
       "src/ui/saved-workspaces.ts:11",
       "src/ui/workspace-transfer.ts:112"
     ]

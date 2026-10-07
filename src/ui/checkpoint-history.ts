@@ -1,6 +1,6 @@
 import { currentActor } from '../identity.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
-import type { WorkspaceCheckpoints, CheckpointSummary } from '../workspace-checkpoint.ts';
+import type { WorkspaceCheckpoints, CheckpointSummary, CheckpointUsage } from '../workspace-checkpoint.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
 
 export function checkpointHistoryShell() {
@@ -22,7 +22,24 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   const next = document.getElementById('checkpoint-history-next') as HTMLButtonElement;
   const actor = () => currentActor()?.id ?? 'local';
   let before: CheckpointSummary | undefined, page: CheckpointSummary[] = [], more = false, busy = false, sequence = 0;
+  let usageInfo: CheckpointUsage | undefined;
   const current = (owner: string) => !options.signal.aborted && actor() === owner;
+  const labels = () => ({ restore: t(msg('recovery.restore', '恢复工作区')), export: t(msg('recovery.export', '导出备份')), delete: t(msg('marks.delete', '删除')) });
+  function localize() {
+    if (usageInfo) usage.textContent = t(msg('recovery.capacity', '已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。'),
+      { count: usageInfo.count, limit: usageInfo.limits.count, used: (usageInfo.bytes / 1048576).toFixed(1), budget: (usageInfo.limits.bytes / 1048576).toFixed(0) });
+    const translated = labels();
+    for (const row of list.querySelectorAll<HTMLElement>('.checkpoint-history-row')) {
+      const entry = page.find(entry => entry.id === row.dataset.checkpointId);
+      if (!entry) continue;
+      row.querySelector('strong')!.textContent = entry.name || t(msg('savedWorkspaces.untitledWorkspace', '未命名工作区'));
+      row.querySelector('.saved-workspace-meta')!.textContent = `${formatDate(new Date(entry.updatedAt).toISOString())} · ${t(msg('recovery.historyCounts', '{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}'), { tracks: entry.tracks, marks: entry.marks })}`;
+      for (const button of row.querySelectorAll<HTMLElement>('[data-checkpoint-action]')) button.textContent = translated[button.dataset.checkpointAction as keyof typeof translated];
+      const prompt = row.querySelector('[data-checkpoint-confirm=prompt]'); if (prompt) prompt.textContent = t(msg('recovery.deleteHistory', '删除这份本机恢复记录？'));
+      const cancel = row.querySelector('[data-checkpoint-confirm=cancel]'); if (cancel) cancel.textContent = t(msg('marks.cancel', '取消'));
+    }
+    const empty = list.querySelector('p'); if (empty) empty.textContent = t(msg('recovery.noHistory', '暂无本机恢复记录'));
+  }
   function controls() {
     first.disabled = busy || !before; next.disabled = busy || !more;
     for (const button of list.querySelectorAll<HTMLButtonElement>('button')) button.disabled = busy || button.dataset.current === 'true';
@@ -32,8 +49,7 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
     try {
       const [result, budget] = await Promise.all([store.list(owner, before), store.usage(owner)]);
       if (!current(owner) || sequence !== request) return;
-      usage.textContent = t(msg('recovery.capacity', '已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。'),
-        { count: budget.count, limit: budget.limits.count, used: (budget.bytes / 1048576).toFixed(1), budget: (budget.limits.bytes / 1048576).toFixed(0) });
+      usageInfo = budget;
       page = result.entries; more = result.more; message.hidden = true;
       list.replaceChildren();
       if (!page.length) {
@@ -43,12 +59,11 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
       for (const entry of page) {
         const row = document.createElement('div'); row.className = 'checkpoint-history-row'; row.dataset.checkpointId = entry.id;
         const info = document.createElement('span'); info.className = 'saved-workspace-info';
-        const name = document.createElement('strong'); name.textContent = entry.name || t(msg('savedWorkspaces.untitledWorkspace', '未命名工作区'));
+        const name = document.createElement('strong');
         const detail = document.createElement('span'); detail.className = 'saved-workspace-meta';
-        detail.textContent = `${formatDate(new Date(entry.updatedAt).toISOString())} · ${t(msg('recovery.historyCounts', '{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}'), { tracks: entry.tracks, marks: entry.marks })}`;
         info.append(name, detail); row.append(info);
-        const action = (label: string, work: () => Promise<void>) => {
-          const button = document.createElement('button'); button.type = 'button'; button.textContent = label;
+        const action = (kind: keyof ReturnType<typeof labels>, work: () => Promise<void>) => {
+          const button = document.createElement('button'); button.type = 'button'; button.dataset.checkpointAction = kind; button.textContent = labels()[kind];
           button.onclick = () => void run(owner, work); row.append(button); return button;
         };
         const read = async () => {
@@ -56,14 +71,14 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
           if (!record || record.updatedAt !== entry.updatedAt) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试。')));
           return record.document;
         };
-        action(t(msg('recovery.restore', '恢复工作区')), async () => { const document = await read(); if (current(owner)) await options.restore(document); });
-        action(t(msg('recovery.export', '导出备份')), async () => {
+        action('restore', async () => { const document = await read(); if (current(owner)) await options.restore(document); });
+        action('export', async () => {
           const workspace = await read(); if (!current(owner)) return;
           const url = URL.createObjectURL(new Blob([JSON.stringify(workspace, null, 2)], { type: 'application/json' }));
           const link = document.createElement('a'); link.href = url; link.download = `voidplayer-recovery-${entry.updatedAt}.voidplayer`; link.click();
           setTimeout(() => URL.revokeObjectURL(url), 1000);
         });
-        const remove = action(t(msg('marks.delete', '删除')), async () => {
+        const remove = action('delete', async () => {
           if (!await store.remove(owner, entry.id, entry.updatedAt)) throw new Error(t(msg('recovery.historyChanged', '恢复记录已改变，请刷新列表后重试。')));
           await refresh();
         });
@@ -73,15 +88,18 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
           row.querySelector('.annotation-confirm')?.remove();
           const confirm = document.createElement('div'); confirm.className = 'annotation-confirm';
           const prompt = document.createElement('span'); prompt.textContent = t(msg('recovery.deleteHistory', '删除这份本机恢复记录？'));
+          prompt.dataset.checkpointConfirm = 'prompt';
           const cancel = document.createElement('button'); cancel.textContent = t(msg('marks.cancel', '取消'));
+          cancel.dataset.checkpointConfirm = 'cancel';
           const accept = document.createElement('button'); accept.textContent = t(msg('marks.delete', '删除'));
+          accept.dataset.checkpointAction = 'delete';
           cancel.onclick = () => { confirm.remove(); remove.focus(); };
           accept.onclick = event => { confirm.remove(); commit?.call(remove, event); };
           confirm.append(prompt, cancel, accept); row.append(confirm); cancel.focus();
         };
         list.append(row);
       }
-      controls();
+      localize(); controls();
     } catch (error) { if (current(owner) && sequence === request) showError(error); }
   }
   function showError(error: unknown) {
@@ -101,6 +119,8 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') refreshVisible(); }, { signal: options.signal });
   window.addEventListener('focus', refreshVisible, { signal: options.signal });
   window.addEventListener('voidplayer-identity-change', () => { ++sequence; before = undefined; page = []; list.replaceChildren(); refreshVisible(); }, { signal: options.signal });
-  onLanguageChange(refreshVisible, options.signal);
+  // Locale commits update rendered (including hidden) labels synchronously,
+  // preserving row nodes, focus and user-entered checkpoint names.
+  onLanguageChange(localize, options.signal);
   controls();
 }

@@ -10,18 +10,22 @@ import { stageRelease } from '../../scripts/stage-release.mjs';
 import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
 
 test('virtual FLV timing reports retain negative verdicts and never waive functional failures', () => {
-  const benchmark = { passed: false, tracks: [{ decoder: 'ffmpeg-wasm' }], failures: ['below-realtime', 'A:presentation-stall'] };
-  const context = { softwareRunner: true, engine: 'chromium', renderer: 'webgl-yuv' };
+  const benchmark = { passed: false, tracks: [{ decoder: 'ffmpeg-wasm' }], environment: { hardwareUseVerified: false, userAgent: 'Mozilla/5.0 (X11; Linux x86_64) HeadlessChrome/153.0' }, failures: ['below-realtime', 'A:presentation-stall'] };
+  const context = { virtualRunner: true, engine: 'chromium', renderer: 'webgl-yuv' };
   assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, context), []);
   assert.equal(benchmark.passed, false);
   assert.deepEqual(benchmark.failures, ['below-realtime', 'A:presentation-stall']);
-  for (const patch of [{ softwareRunner: false }, { engine: 'webkit' }, { renderer: 'cpu-yuv' }, { renderer: 'browser-managed' }]) {
+  for (const patch of [{ virtualRunner: false }, { engine: 'webkit' }, { renderer: 'cpu-yuv' }, { renderer: 'unknown' }]) {
     assert.deepEqual(blockingFlvBenchmarkFailures(benchmark, { ...context, ...patch }), benchmark.failures);
   }
   for (const failure of ['insufficient-sample', 'no-frames', 'A:no-frames', 'frame-lag', 'track-skew', 'pause-latency', 'stale-frame-after-pause', 'playback-error', 'interrupted', 'premature-end', 'media-changed', 'page-not-visible', 'unknown']) {
     assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, failures: [...benchmark.failures, failure] }, context), [failure]);
   }
-  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'webcodecs' }] }, context), benchmark.failures);
+  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'webcodecs' }] }, { ...context, renderer: 'browser-managed' }), []);
+  for (const environment of [{}, { ...benchmark.environment, hardwareUseVerified: true }, { ...benchmark.environment, userAgent: 'Chrome/153.0' }, { ...benchmark.environment, userAgent: 'HeadlessChrome/153.0 Macintosh' }]) {
+    assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, environment }, context), benchmark.failures);
+  }
+  assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [{ decoder: 'unknown' }] }, context), benchmark.failures);
   assert.deepEqual(blockingFlvBenchmarkFailures({ ...benchmark, tracks: [] }, context), benchmark.failures);
 });
 

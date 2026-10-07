@@ -99,6 +99,13 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  await switchLanguage('zh-CN');
  assert.equal(await page.locator('#settings-current-title').innerText(),'工作区');
  assert.deepEqual(await page.evaluate(()=>({same:window.__edit===document.querySelector('#saved-workspace-name'),focus:document.activeElement===window.__edit,value:window.__edit.value,selection:[window.__edit.selectionStart,window.__edit.selectionEnd],open:document.querySelector('#settings').open})),{same:true,focus:true,value:'未保存 Workspace name',selection:[2,6],open:true});
+ // Dynamic checkpoint labels translate on the same locale commit, preserving
+ // their action nodes and focus as well as the user's checkpoint name.
+ const historyRestore=page.locator('.checkpoint-history-row [data-checkpoint-action=restore]').first();
+ await historyRestore.waitFor();await historyRestore.focus();await historyRestore.evaluate(el=>{window.__historyRestore=el;});
+ await switchLanguage('en');
+ assert.equal(await historyRestore.innerText(),'Restore workspace');
+ assert.deepEqual(await page.evaluate(()=>({same:window.__historyRestore===document.querySelector('.checkpoint-history-row [data-checkpoint-action=restore]'),focus:document.activeElement===window.__historyRestore})),{same:true,focus:true});
  await page.locator('#settings-tab-logs').click();await page.locator('#log-description').fill('未提交 Report <原文>');await page.locator('#log-description').evaluate(e=>{e.focus();e.setSelectionRange(1,4);window.__report=e;});await switchLanguage('en');
  assert.equal(await page.locator('#log-description').inputValue(),'未提交 Report <原文>');assert.equal(await page.evaluate(()=>document.activeElement===window.__report),true);assert.match(await page.locator('#log-description').getAttribute('placeholder'),/happened|reproduce/i);
  await page.locator('#settings-tab-performance').click();const originalFlow=await page.locator('#color-flow-diagram').evaluate(e=>{window.__flow=e.firstElementChild;return e.innerText;});await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__flow===document.querySelector('#color-flow-diagram').firstElementChild),true);assert.notEqual(await page.locator('#color-flow-diagram').innerText(),originalFlow);
