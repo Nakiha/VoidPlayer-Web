@@ -37,6 +37,10 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  const before=await evidence();
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');
+ await page.evaluate(async () => {
+  const transitions = document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime));
+  await Promise.all(transitions.map(animation => animation.finished.catch(() => {})));
+ });
  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
  // Only the continuous backing blurs the list; navigation has a thin tint.
  const surfaces=await page.evaluate(()=>{
@@ -80,6 +84,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // (themes/accessibility.css), so the transport paints the opaque dark surface:
  // themes/dark.css --surface #212121.
  assert.equal(high.filter,'none');assert.equal(high.bg,'rgb(33, 33, 33)');
+ await page.waitForFunction(() => getComputedStyle(document.querySelector('#layout-mode [aria-pressed=true]')).backgroundColor === 'rgb(59, 63, 70)');
  assert.equal(await page.locator('#layout-mode [aria-pressed=true]').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(59, 63, 70)');
  assert.equal(await page.locator('.library-navigation').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(33, 33, 33)');
  await page.emulateMedia({contrast:'no-preference'});

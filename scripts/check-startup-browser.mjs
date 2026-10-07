@@ -65,8 +65,9 @@ try {
       let blocked = 0;
       await failed.route(target, route => { blocked++; return route.fulfill({ status: 504, body: 'Outdated Optimize Dep' }); });
       await failed.goto(base);
-      assert.ok(blocked > 0, `failure injection must reach ${target}`);
       await failed.locator('#startup-fallback a').waitFor({state:'visible',timeout:5000});
+      // Dynamic imports can begin after the document's load event.
+      assert.ok(blocked > 0, `failure injection must reach ${target}`);
       assert.equal(await failed.locator('#app').evaluate(el => el.inert), false);
       assert.equal(await failed.locator('#app').isVisible(), false);
       await failed.unroute(target);

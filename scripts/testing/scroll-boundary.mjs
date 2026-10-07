@@ -7,6 +7,18 @@ export async function checkScrollBoundary(page, selector) {
   const settle = () => page.evaluate(() => new Promise(resolve => {
     requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   }));
+  const scrollSettled = () => page.locator('[data-scroll-boundary-list]').evaluate(element => new Promise((resolve, reject) => {
+    let previous = element.scrollTop, changed = performance.now();
+    const deadline = changed + 3000;
+    const sample = () => {
+      const now = performance.now(), position = element.scrollTop;
+      if (position !== previous) { previous = position; changed = now; }
+      if (now - changed >= 200) resolve();
+      else if (now >= deadline) reject(new Error('Scroll boundary probe did not settle'));
+      else requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  }));
   await page.locator(selector).evaluate(element => {
     const outer = document.createElement('div');
     outer.id = 'scroll-boundary-probe';
@@ -35,16 +47,21 @@ export async function checkScrollBoundary(page, selector) {
       await list.evaluate((el, edge) => { el.scrollTop = edge === 'top' ? 0 : el.scrollHeight; }, edge);
       await settle();
       await page.mouse.wheel(0, edge === 'top' ? -180 : 180);
-      await page.waitForTimeout(150);
+      await scrollSettled();
       assert.equal(await outer.evaluate(el => el.scrollTop), 120, `${selector}: ${edge} edge gesture stays in the list`);
     }
     await list.evaluate(el => { el.scrollTop = 0; });
     await settle();
     await page.mouse.wheel(0, 100);
     await page.waitForFunction(() => document.querySelector('[data-scroll-boundary-list]').scrollTop > 0);
+    // WebKit on Linux reports the first fractional smooth-scroll step before
+    // the wheel delta has finished. Compare the reverse gesture with its final
+    // position, otherwise a successful reversal can still exceed that first step.
+    await scrollSettled();
     const position = await list.evaluate(el => el.scrollTop);
     await page.mouse.wheel(0, -60);
     await page.waitForFunction(position => document.querySelector('[data-scroll-boundary-list]').scrollTop < position, position);
+    await scrollSettled();
     assert.equal(await outer.evaluate(el => el.scrollTop), 120, `${selector}: ordinary scrolling stays in the list`);
   } finally {
     await outer.evaluate(el => el.remove());

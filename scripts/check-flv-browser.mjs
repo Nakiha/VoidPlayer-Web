@@ -1,7 +1,7 @@
 // Production-bundle FLV regression, no screenshots or persistent services.
 import assert from 'node:assert/strict';
 import path from 'node:path';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { webkit, chromium } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 // The native-decode policy (prefer WebCodecs when the platform accepts the
@@ -21,15 +21,22 @@ function nativeRefusal(decisions) {
 }
 const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'webkit';
+const reports = path.join(root, '.run/playback-reports', 'flv', browserName);
+await mkdir(reports, { recursive: true });
 const server = createMediaServer({ roots: [path.join(root, 'fixtures/flv')], staticDir: path.join(root, 'dist'), onLog() {} });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 let browser;
 try {
-  browser = await (browserName === 'chromium' ? chromium : webkit).launch({ headless: true });
+  // Chromium's headless GPU blocklist otherwise sends every full-size YUV
+  // frame through the scalar CPU fallback. Enable the isolated test process's
+  // software WebGL adapter, with a fixed viewport on both engines; source
+  // dimensions, decode work, frame identity and benchmark limits are unchanged.
+  browser = await (browserName === 'chromium' ? chromium : webkit).launch({ headless: true,
+    ...(browserName === 'chromium' ? { args: ['--enable-unsafe-swiftshader', '--use-angle=swiftshader'] } : {}) });
   const base = `http://127.0.0.1:${server.address().port}`;
   for (const name of ['standard-h264', 'legacy-hevc', 'private-av1', 'private-vvc', 'enhanced-hevc', 'enhanced-av1', 'enhanced-vvc']) {
     if (process.env.FLV_CASE && name !== process.env.FLV_CASE) continue;
-    const page = await browser.newPage({locale:'zh-CN'});
+    const page = await browser.newPage({locale:'zh-CN', viewport:{width:640,height:480}});
     const errors = [], mediaRequests = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('request', request => { if (/\/api\/media\/[0-9a-f]+$/.test(new URL(request.url()).pathname)) mediaRequests.push(request.headers()); });
@@ -57,13 +64,14 @@ try {
         states.push(await call('get_review_session'));
         // Leave a margin above the 1000 ms minimum: the last rendered frame
         // can precede the polling deadline by one refresh interval.
-        const benchmark = await call('benchmark_review', { durationMs: 1200 });
+        const benchmark = await call('benchmark_review', { durationMs: 2400 });
         const probeLogs = await call('get_review_logs', { level: 'info', limit: 500 });
         const probeDecisions = probeLogs.events
           .filter(e => e.cat === 'media' && e.msg === '原生解码路径探测')
           .flatMap(e => e.data?.decisions ?? []);
-        return { states, benchmark, referenceDecoder, probeDecisions };
+        return { states, benchmark, referenceDecoder, probeDecisions, renderer:document.getElementById('canvas-A').dataset.colorExecutor };
       }, { name, reference });
+      await writeFile(path.join(reports, `${name}.json`), JSON.stringify({ browserName, name, ...result }, null, 2) + '\n');
       assert.deepEqual(errors, []);
       assert.ok(mediaRequests.length > 0);
       assert.ok(mediaRequests.every(r => /^bytes=/.test(r.range ?? '')), 'FLV must never download the whole library file');

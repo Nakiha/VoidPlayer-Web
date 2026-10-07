@@ -17,6 +17,8 @@
 
 `browser` 是自动化浏览器套件。需要 Windows 可见桌面的 Chrome/Edge 色彩与 WebGPU 检查属于清单中的 `manual-regression`，仍使用原有专用命令；外部服务、用户指定媒体的诊断/实验/基准属于显式工具分类，不会自动变成发布门禁。清单记录限制和理由，不能把 `npm test` 当作 fast，也不能把旧 `test:browser` 当作完整浏览器套件。
 
+FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Chromium 的隔离 headless 进程显式启用 SwiftShader WebGL，避免 GPU 黑名单把整帧 YUV 转换送进逐像素 CPU 兜底；这不代表物理 GPU 或大视口性能验收。实时速度、呈现间隔、seek、逐帧、尾帧与暂停稳定性仍按原有阈值必过，每个输入的完整结果保存到 `.run/playback-reports/flv/<engine>/` 并随 CI 报告上传。
+
 ```sh
 npm run test:manifest
 npm run test:suite -- browser --list
