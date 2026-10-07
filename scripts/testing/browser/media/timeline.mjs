@@ -15,6 +15,13 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.length===2&&s.tracks.every(t=>t.frame&&t.indexState==='complete');},null,{timeout:60000});
  const seek=ptsUs=>page.evaluate(ptsUs=>window.voidPlayer.tools.find(t=>t.name==='seek_review').execute({ptsUs}),ptsUs);
  const settle=()=>page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
+ // Read the final visual state: selection changes start a CSS color transition.
+ // Two animation frames flush layout but do not finish that transition.
+ const settledBackground=locator=>locator.evaluate(async element=>{
+   getComputedStyle(element).backgroundColor;
+   await Promise.allSettled(element.getAnimations().map(animation=>animation.finished));
+   return getComputedStyle(element).backgroundColor;
+ });
  const timeline=page.locator('#timeline');
  const max=Number(await timeline.getAttribute('max'));
  const durations=await page.evaluate(()=>window.voidPlayer.getState().tracks.map(t=>t.durationUs+t.offsetUs));
@@ -78,8 +85,13 @@ const errors=[];page.on('pageerror',e=>errors.push(e.message));
    const trackName=await page.evaluate(slot=>window.voidPlayer.getState().tracks.find(track=>track.slot===slot).name,slot);
    assert.equal(await label.getAttribute('data-tooltip'),trackName,'filename tooltip retains the complete source path after selection');
    const selected=page.locator(`.subtrack-row[data-track-drag=${slot}]`);
-   const duration=selected.locator('.track-duration');const color=await duration.evaluate(e=>getComputedStyle(e).backgroundColor);
-   await duration.hover();assert.equal(await duration.evaluate(e=>getComputedStyle(e).backgroundColor),color,'hover preserves selected track color');
+   const duration=selected.locator('.track-duration');const color=await settledBackground(duration);
+   const selectedColor=await selected.evaluate(element=>{
+     const probe=document.createElement('span');probe.style.backgroundColor='var(--track-active)';
+     element.append(probe);const color=getComputedStyle(probe).backgroundColor;probe.remove();return color;
+   });
+   assert.equal(color,selectedColor,'selection reaches the theme selected track color');
+   await duration.hover();assert.equal(await settledBackground(duration),selectedColor,'hover preserves selected track color');
    const playhead=selected.locator('.track-playhead:not(.track-seek-preview)');assert.equal(await playhead.evaluate(e=>getComputedStyle(e).width),'2px');
    assert.equal(await playhead.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(0, 122, 255)');
    assert.equal(await page.locator('.subtrack-row:not(.selected) .track-playhead:not(.track-seek-preview)').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(142, 142, 147)');
