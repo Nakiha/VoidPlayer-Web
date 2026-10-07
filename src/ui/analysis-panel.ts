@@ -649,7 +649,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         && cached.sourceVersion === cover.sourceVersion) {
         // 可见区是否需要逐样本：用缓存估计密度，不只看点数。
         const estimated = estimateSamplesIn(track.slot, range.start, range.end);
-        const needRaw = estimated == null ? false : !shouldBucketize(estimated, pixelWidth);
+        const needRaw = estimated == null ? false : !shouldBucketize(estimated, pixelWidth, 2);
         const ok = canSatisfy(cover, {
           startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
           axis: prefs.axis, windowUs: prefs.windowUs, offsetUs: track.offsetUs,
@@ -729,7 +729,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const width = plotWidthCss();
     const merged = prefs.layoutMode === 'merged';
     const plotW = Math.max(1, width - 46);
-    // LOD：平均密度（≥2.5px/样本）只是必要条件；固定 7px 柱还需相邻组容量复核。
+    // LOD：每个样本至少容纳 1px 柱 + 1px 间隔；柱宽按时间轴比例连续计算。
     // 逐样本可用当且仅当全部选中轨都有完整 raw；否则用共享桶，仍保持合并。
     // 计数只看视口内（查询含预取 margin，视口外不参与），放大后可从桶切回 raw。
     let totalRawInView = 0;
@@ -769,10 +769,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     const preGroups: TimeGroup[] = groupInputs.length ? groupSamples(groupInputs, GROUP_TOLERANCE_US) : [];
     // 视口内无样本时不断言 raw 可用，走桶/空态，避免 0 样本误判为稀疏。
-    // 平均密度通过后仍需相邻组容量复核（固定柱宽在密集合并处会重叠约数 px）。
+    // 平均密度通过后仍复核局部密集组，绘图与容量判断使用相同的连续柱宽。
     const lanesForCap = Math.max(1, merged ? sel.length : 1);
     const useRaw = allRaw && totalRawInView > 0
-      && !shouldBucketize(totalRawInView, plotW, 2.5)
+      && !shouldBucketize(totalRawInView, plotW, 2)
       && canLayoutRaw(preGroups, range.start, Math.max(range.start + 1, range.end), 46, plotW, lanesForCap);
     const canvasTracks: CanvasTrack[] = [];
     // 纵轴按视口内数据取最大（查询含预取 margin，视口外峰值不参与），
@@ -1051,6 +1051,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       if (hoverUs != null) { positionHover(); updateInspection(lastClient.x, lastClient.y); }
     }
     lastViewSig = viewSig;
+    publishTestHook();
     refreshOverlay();
     // 底图重绘后卡片按最后光标重新限位（仍在坞内横向滑动，不跟随翻边）。
     if (hoverUs != null && lastClient && !pinned) positionFloat(lastClient.x);
@@ -1428,14 +1429,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
             const s = g as SampleGlyph;
             return {
               kind: 'sample', slot: s.slot, id: s.sampleId, axisUs: s.axisUs,
-              stacked: s.stackedCount > 1,
+              stacked: s.stackedCount > 1, width: s.rect.width,
               cx: s.interactionRect.x + s.interactionRect.width / 2,
               cy: s.interactionRect.y + s.interactionRect.height / 2,
             };
           }
           const b = g as BucketGlyph;
           return {
-            kind: 'bucket', slot: b.slot, startUs: b.startUs, endUs: b.endUs,
+            kind: 'bucket', slot: b.slot, startUs: b.startUs, endUs: b.endUs, width: b.rect.width,
             cx: b.interactionRect.x + b.interactionRect.width / 2,
             cy: b.interactionRect.y + b.interactionRect.height / 2,
           };

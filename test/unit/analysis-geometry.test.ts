@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSamples } from '../../src/analysis/grouping.ts';
-import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY } from '../../src/ui/analysis-geometry.ts';
+import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth } from '../../src/ui/analysis-geometry.ts';
 import type { Slot } from '../../src/model.ts';
 
 const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>([
@@ -164,8 +164,8 @@ test('视口边缘只裁剪不移位：左半单元在外不把整组搬进视�
   assert.equal(pickGlyph(glyphs, cx, 30)!.slot, 'B');
 });
 
-test('容量复核：600px/3s/双30fps 不允许 raw（固定 7px 会重叠约 5.67px）', () => {
-  // 双轨各 90 帧、锚点约 33ms 间隔：600px/3s 下锚点间距约 6.6px，远小于双轨单元 16px。
+test('容量复核：低于最小柱宽容量才切到共享桶', () => {
+  // 双轨各 90 帧：缩小柱宽后 600px 可逐样本绘制，300px 已不足 1px 柱 + 间隔。
   const aTimes = Array.from({ length: 90 }, (_, i) => i * 33_333);
   const bTimes = Array.from({ length: 90 }, (_, i) => i * 33_333 + 1_000);
   const groups = groupSamples([
@@ -173,7 +173,8 @@ test('容量复核：600px/3s/双30fps 不允许 raw（固定 7px 会重叠约 5
     { slot: 'B', samples: refs('B', bTimes) },
   ], 2000);
   assert.ok(groups.length > 50);
-  assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 600, 2), false);
+  assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 600, 2), true);
+  assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 300, 2), false);
   // 同样数据放大 10 倍宽度后可以 raw。
   assert.equal(canLayoutRaw(groups, 0, 3_000_000, 46, 6000, 2), true);
 });
@@ -214,4 +215,28 @@ test('纵轴映射零在下、上限在上', () => {
   assert.ok(top < 20, `top=${top}`);
   assert.ok(zero > 80, `zero=${zero}`);
   assert.ok(top < zero);
+});
+
+
+test('双轨连续缩放跨过旧 7px 容量阈值，柱宽连续、身份与命中保持一致', () => {
+  const times = Array.from({ length: 100 }, (_, i) => 33_333 * i);
+  const groups = groupSamples([
+    { slot: 'A', samples: refs('A', times) },
+    { slot: 'B', samples: refs('B', times.map(t => t + 5000)) },
+  ], 2000);
+  let previous = 7;
+  for (let span = 150_000; span <= 700_000; span += 1000) {
+    const start = 1_000_000 - span / 2, end = start + span;
+    const width = sampleBarWidth(groups, start, end, 600, 2);
+    assert.ok(width <= previous && previous - width < 0.05, `span=${span}, ${previous}->${width}`);
+    assert.equal(canLayoutRaw(groups, start, end, 46, 600, 2), true);
+    const glyphs = layoutMergedSamples(groups, { trackOrder: ['A', 'B'], viewStart: start, viewEnd: end,
+      gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot });
+    const sample = glyphs.find(g => g.sampleId === 'B30')!;
+    assert.ok(sample && sample.stackedCount === 1);
+    assert.ok(Math.abs(sample.rect.width - width) < 1e-9);
+    assert.equal(pickGlyph(glyphs, sample.rect.x + width / 2, 30)?.slot, 'B');
+    previous = width;
+  }
+  assert.ok(previous < 2);
 });

@@ -125,6 +125,42 @@ try {
     await saveDiagnostics(page, `shared-index-${mode}-${name}`);
     }
   }
+  // Smooth wheel zoom with the exact mixed-container pair from the reported issue.
+  await page.evaluate(async ids => {
+    const load = window.voidPlayer.tools.find(t => t.name === 'load_library_item');
+    await load.execute({ id: ids['mpeg2_10s_1280x720.ts'], slot: 'A' });
+    await load.execute({ id: ids['av1_10s_1920x1080.webm'], slot: 'B' });
+  }, ids);
+  await page.evaluate(async () => {
+    const q = window.voidPlayer.tools.find(t => t.name === 'query_analysis'), deadline = performance.now() + 30000;
+    while (performance.now() < deadline) {
+      const results = await Promise.all(['A', 'B'].map(slot => q.execute({ slot, startUs: 0, endUs: 10_000_000, pixelWidth: 2000 })));
+      if (results.every(r => r.capability.indexState === 'complete' && r.samples.length)) return;
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('mixed-format indexes did not complete');
+  });
+  await page.locator('[data-seg="full"]').click();
+  const smoothWidths = [];
+  for (let step = 0; step < 40; step++) {
+    await page.evaluate(delta => {
+      const canvas = document.getElementById('analysis-canvas'), rect = canvas.getBoundingClientRect();
+      canvas.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: delta,
+        clientX: rect.x + rect.width * 0.3, clientY: rect.y + rect.height * 0.7, bubbles: true, cancelable: true }));
+    }, step === 0 ? -400 : -8);
+    await page.waitForTimeout(80);
+    const snapshot = await page.evaluate(() => {
+      const glyphs = window.__vpAnalysis?.glyphs ?? [];
+      const widths = glyphs.filter(g => !g.stacked && g.width > 0).map(g => g.width).sort((a,b) => a-b);
+      return { width: widths[Math.floor(widths.length / 2)] ?? null, raw: glyphs.some(g => g.kind === 'sample') };
+    });
+    if (snapshot.width != null) smoothWidths.push(snapshot);
+  }
+  assert.ok(smoothWidths.length > 30 && smoothWidths.some(s => s.raw), 'mixed-format zoom produces single-frame bars');
+  for (let i = 1; i < smoothWidths.length; i++) assert.ok(Math.abs(smoothWidths[i].width - smoothWidths[i - 1].width) < 0.5,
+    `smooth zoom width jumped: ${JSON.stringify(smoothWidths)}`);
+  await saveDiagnostics(page, 'smooth-width', { smoothWidths });
+  await page.locator('[data-seg="full"]').click();
   await page.evaluate(async () => {
     const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
     await remove.execute({ slot: 'A' }); await remove.execute({ slot: 'B' });
@@ -324,18 +360,24 @@ try {
   assert.equal(bottom.t, top.t);
   assert.deepEqual(bottom.tracks.map(t => t.bitrate), top.tracks.map(t => t.bitrate));
 
-  // 全览区间桶点击：按峰值样本定位，不缩放视图（取中间桶，避开 0 时刻峰值）。
+  // 缩窄绘图区使全览低于 1px 柱 + 间隔容量，验证聚合桶仍按峰值定位。
+  await page.locator('[data-seg="full"]').click();
+  await page.setViewportSize({ width: 640, height: 800 });
+  await page.waitForFunction(() => window.__vpAnalysis?.glyphs.some(g => g.kind === 'bucket'));
+  const bucketBox = await page.locator('#analysis-canvas').boundingBox();
   const bucket = await page.evaluate(() => {
     const bs = window.__vpAnalysis.glyphs.filter(g => g.kind === 'bucket');
     return bs[Math.floor(bs.length / 2)];
   });
   assert.ok(bucket, '全览应有区间桶 glyph');
   const viewB0 = await page.evaluate(() => window.__vpAnalysis.view);
-  await page.mouse.click(box.x + bucket.cx, box.y + bucket.cy);
+  await page.mouse.click(bucketBox.x + bucket.cx, bucketBox.y + bucket.cy);
   await page.waitForFunction(pos => document.getElementById('position').value !== pos, posBefore, { timeout: 8000 });
   const viewB1 = await page.evaluate(() => window.__vpAnalysis.view);
   assert.deepEqual(viewB1, viewB0, '桶点击只定位，不缩放视图');
   posBefore = await page.locator('#position').inputValue();
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.waitForTimeout(300);
 
   // 框选放大后跟随关闭（区间桶按峰值样本定位，放大只走框选/滚轮）。
   await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.5);

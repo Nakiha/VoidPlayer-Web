@@ -2217,7 +2217,7 @@
     "source": "码率 · Mbps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1249"
+      "src/ui/analysis-panel.ts:1250"
     ]
   },
   "analysis.bitrateTitle": {
@@ -2367,8 +2367,8 @@
     "source": "帧率 · fps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1250",
-      "src/ui/analysis-panel.ts:1296"
+      "src/ui/analysis-panel.ts:1251",
+      "src/ui/analysis-panel.ts:1297"
     ]
   },
   "analysis.frameSize": {
@@ -2383,7 +2383,7 @@
     "source": "帧大小 · KiB",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1251"
+      "src/ui/analysis-panel.ts:1252"
     ]
   },
   "analysis.frameSizeTitle": {
@@ -2551,7 +2551,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1583"
+      "src/ui/analysis-panel.ts:1584"
     ]
   },
   "analysis.noSampleAtTime": {
@@ -2560,7 +2560,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1713"
+      "src/ui/analysis-panel.ts:1714"
     ]
   },
   "analysis.noVideoYet": {
@@ -2576,14 +2576,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1603"
+      "src/ui/analysis-panel.ts:1604"
     ]
   },
   "analysis.pinnedSuffix": {
     "source": " · 已固定",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1294"
+      "src/ui/analysis-panel.ts:1295"
     ]
   },
   "analysis.provisional": {
@@ -2614,7 +2614,7 @@
     "source": "样本率 /s",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1296"
+      "src/ui/analysis-panel.ts:1297"
     ]
   },
   "analysis.seekReason": {
@@ -2624,9 +2624,9 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1575",
-      "src/ui/analysis-panel.ts:1592",
-      "src/ui/analysis-panel.ts:1610"
+      "src/ui/analysis-panel.ts:1576",
+      "src/ui/analysis-panel.ts:1593",
+      "src/ui/analysis-panel.ts:1611"
     ]
   },
   "analysis.showTrack": {
@@ -2643,21 +2643,21 @@
     "source": "索引错",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1168"
+      "src/ui/analysis-panel.ts:1169"
     ]
   },
   "analysis.statePending": {
     "source": "统计中",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1165"
+      "src/ui/analysis-panel.ts:1166"
     ]
   },
   "analysis.stateUnsupported": {
     "source": "不可用",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1166"
+      "src/ui/analysis-panel.ts:1167"
     ]
   },
   "analysis.statusLabel": {
@@ -2700,7 +2700,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1699"
+      "src/ui/analysis-panel.ts:1700"
     ]
   },
   "analysis.trackFocusWithContext": {
@@ -2710,7 +2710,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1697"
+      "src/ui/analysis-panel.ts:1698"
     ]
   },
   "analysis.trackFrameNumber": {

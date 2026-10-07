@@ -75,7 +75,7 @@ export function barHeight(rowH: number, value: number, yMax: number, scale: Size
 }
 
 const MAX_CELL_PX = 56;
-/** 详细模式目标柱宽（CSS px）：同一视口一致，不随稀疏/缺席变化。 */
+/** 单帧柱宽上限（CSS px）；实际宽度随时间轴比例连续变化。 */
 export const TARGET_BAR_PX = 7;
 const LANE_GAP_PX = 1;
 
@@ -100,9 +100,28 @@ function timeToX(viewStart: number, viewEnd: number, gutter: number, plotW: numb
   return gutter + ((t - viewStart) / span) * plotW;
 }
 
-/** 固定单元宽度下，相邻组是否可全部无重叠绘制。 */
+/** 单元宽度上限：保留给调用方估算聚合桶容量。 */
 export function cellTargetFor(lanes: number): number {
   return (TARGET_BAR_PX + LANE_GAP_PX) * Math.max(1, lanes);
+}
+
+/** Shared width from a representative group interval, including the viewport halo.
+ * The lower quartile follows dense mixed-frame-rate groups without letting one
+ * isolated close pair shrink every bar. Missing lanes retain their reserved space.
+ */
+export function sampleBarWidth(
+  groups: readonly TimeGroup[], viewStart: number, viewEnd: number, plotW: number, lanes: number,
+): number {
+  const intervals: number[] = [];
+  for (let i = 1; i < groups.length; i++) {
+    const delta = groups[i].anchorUs - groups[i - 1].anchorUs;
+    if (delta > 0) intervals.push(delta);
+  }
+  if (!intervals.length) return TARGET_BAR_PX;
+  intervals.sort((a, b) => a - b);
+  const intervalUs = intervals[Math.ceil((intervals.length - 1) / 4)];
+  const lanePx = intervalUs * plotW / Math.max(1, viewEnd - viewStart) / Math.max(1, lanes);
+  return Math.max(1, Math.min(TARGET_BAR_PX, lanePx - LANE_GAP_PX));
 }
 
 /**
@@ -119,13 +138,13 @@ export function canLayoutRaw(
   lanes: number,
 ): boolean {
   if (!groups.length) return true;
-  const cellTarget = cellTargetFor(lanes);
+  const cellTarget = (sampleBarWidth(groups, viewStart, viewEnd, plotW, lanes) + LANE_GAP_PX) * Math.max(1, lanes);
   const xs = groups.map(g => timeToX(viewStart, viewEnd, gutter, plotW, g.anchorUs)).sort((a, b) => a - b);
   let runLen = 1;
   let maxRun = 1;
   let overlapGroups = 0;
   for (let i = 1; i < xs.length; i++) {
-    if (xs[i] - xs[i - 1] < cellTarget) {
+    if (xs[i] - xs[i - 1] < cellTarget - 1e-6) {
       runLen++;
       maxRun = Math.max(maxRun, runLen);
     } else {
@@ -151,7 +170,7 @@ function clipX(x: number, w: number, lo: number, hi: number): { x: number; w: nu
 /**
  * 合并行的逐样本布局：组中心锚定真实时间，各轨按稳定顺序小幅错开。
  * 同轨重复时间戳在组内单元继续细分；放不下聚合为多样本标记，点击展开。
- * 相邻组固定单元重叠时，整段重叠组合并为局部聚合标记（stackedCount>1 且带
+ * 相邻组单元重叠时，整段重叠组合并为局部聚合标记（stackedCount>1 且带
  * clusterStartUs/EndUs），点击放大，不默默重叠、后画覆盖前画。
  * 视口边缘只裁剪可见部分，不把整组钳到边缘再移动轨道位置；绘图与命中共用裁剪后几何。
  */
@@ -176,8 +195,9 @@ export function layoutMergedSamples(
     selected.push(g);
   }
   selected.sort((a, b) => a.anchorUs - b.anchorUs);
-  // 一致目标宽度：稀疏不撑宽、缺席留空；时间关系由锚点距离表达，不由柱宽编码。
-  const laneW = TARGET_BAR_PX + LANE_GAP_PX;
+  // 统一连续宽度：随缩放变细，稀疏不超过上限，缺席仍留空。
+  const barWidth = sampleBarWidth(groups, viewStart, viewEnd, plotW, lanes);
+  const laneW = barWidth + LANE_GAP_PX;
   const cellTarget = laneW * lanes;
   const plotLeft = gutter, plotRight = gutter + plotW;
   const anchorXOf = (g: TimeGroup) => timeToX(viewStart, viewEnd, gutter, plotW, g.anchorUs);
@@ -188,7 +208,7 @@ export function layoutMergedSamples(
     if (!last) { runs.push([g]); continue; }
     const prevX = anchorXOf(last[last.length - 1]);
     const curX = anchorXOf(g);
-    if (curX - prevX < cellTarget) last.push(g);
+    if (curX - prevX < cellTarget - 1e-6) last.push(g);
     else runs.push([g]);
   }
   const emitSingle = (
@@ -200,7 +220,7 @@ export function layoutMergedSamples(
     if (m.axisUs < viewStart || m.axisUs > viewEnd) return;
     const laneXRaw = cellLeftRaw + lane * laneW;
     const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize, scale);
-    const barW = TARGET_BAR_PX;
+    const barW = barWidth;
     const xRaw = laneXRaw + (laneW - barW) / 2;
     const clipped = clipX(xRaw, barW, plotLeft, plotRight);
     if (!clipped) return;
@@ -258,7 +278,7 @@ export function layoutMergedSamples(
         } else {
           const primary = [...visible].sort((a, b) => (b.sizeBytes ?? 0) - (a.sizeBytes ?? 0))[0];
           const h = barHeight(rowH, primary.sizeBytes ?? 0, yMaxSize, scale);
-          const clipped = clipX(laneXRaw + (laneW - TARGET_BAR_PX) / 2, TARGET_BAR_PX, plotLeft, plotRight);
+          const clipped = clipX(laneXRaw + (laneW - barWidth) / 2, barWidth, plotLeft, plotRight);
           if (!clipped) continue;
           const laneClip = clipX(laneXRaw, laneW, plotLeft, plotRight);
           if (!laneClip) continue;
@@ -302,7 +322,7 @@ export function layoutMergedSamples(
       const laneXRaw = runLeftRaw + lane * laneW;
       const maxSize = Math.max(...arr.map(m => m.sizeBytes ?? 0));
       const h = barHeight(rowH, maxSize, yMaxSize, scale);
-      const clipped = clipX(laneXRaw + (laneW - TARGET_BAR_PX) / 2, TARGET_BAR_PX, plotLeft, plotRight);
+      const clipped = clipX(laneXRaw + (laneW - barWidth) / 2, barWidth, plotLeft, plotRight);
       if (!clipped) continue;
       const laneClip = clipX(laneXRaw, laneW, plotLeft, plotRight);
       if (!laneClip) continue;
