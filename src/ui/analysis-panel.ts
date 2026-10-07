@@ -137,13 +137,14 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         <span class="st-items" id="analysis-status-items"></span>
       </div>
     </header>
+    <div class="analysis-notice" role="status" aria-live="polite" hidden></div>
     <div class="analysis-body" id="analysis-body">
       <div class="analysis-plot" id="analysis-plot">
         <canvas id="analysis-canvas" tabindex="0" role="img" aria-label="${th(msg("analysis.canvasLabel", "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。"))}"></canvas>
         <canvas id="analysis-overlay" aria-hidden="true"></canvas>
         <div class="analysis-line analysis-playhead" hidden></div>
         <div class="analysis-line analysis-hover" hidden></div>
-        <div class="analysis-empty" hidden></div>
+        <div class="analysis-empty" role="status" aria-live="polite" hidden></div>
       </div>
     </div>
     <output class="sr-only" aria-live="polite"></output>`);
@@ -163,6 +164,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const playheadEl = $<HTMLElement>('.analysis-playhead');
   const hoverEl = $<HTMLElement>('.analysis-hover');
   const emptyEl = $<HTMLElement>('.analysis-empty');
+  const noticeEl = $<HTMLElement>('.analysis-notice');
   // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
   // abort 时移除，平时 pointer-events:none 不拦截输入。
   const floatLayer = document.createElement('div');
@@ -181,6 +183,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   let tracks: TrackEntry[] = [];
   let caps = new Map<Slot, AnalysisCapability>();
   let results = new Map<Slot, AnalysisResult>();
+  const queryErrors = new Map<Slot, string>();
   let seqBySlot = new Map<Slot, number>();
   let abortBySlot = new Map<Slot, AbortController>();
   let panelSeq = 0;
@@ -637,9 +640,11 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const visibleBucketW = bucketWidthFor(range.start, range.end, pixelWidth);
     for (const track of selectedTracks()) {
       const cap = caps.get(track.slot);
+      // Unsupported paths and failed indexes are terminal states, not pending queries.
+      if (cap?.hasSize === false || cap?.indexState === 'error') continue;
       const cover = queriedBySlot.get(track.slot);
       const cached = results.get(track.slot);
-      if (cap?.indexState === 'complete' && cover && cached
+      if (!queryErrors.has(track.slot) && cap?.indexState === 'complete' && cover && cached
         && cached.indexRevision === cover.indexRevision
         && cached.sourceVersion === cover.sourceVersion) {
         // 可见区是否需要逐样本：用缓存估计密度，不只看点数。
@@ -679,6 +684,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         // session 盖章的 generation 校验；内层 mediaId 由 adapter 在打开时
         // 铸造，可能早于身份钉定（updateMediaInfo），不得参与比较。
         if (!result.sourceVersion.startsWith(`${current.sourceGen}#`)) return;
+        queryErrors.delete(track.slot);
         results.set(track.slot, result);
         // 索引进展可能使暂定排名转正，按当前帧重估状态区。
         updateStatus();
@@ -705,7 +711,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         if (abortBySlot.get(track.slot) === controller) abortBySlot.delete(track.slot);
         if (signal.aborted || seqBySlot.get(track.slot) !== mySeq) return;
         if (error instanceof Error && error.name === 'AbortError') return;
-        live.textContent = t(msg("analysis.queryFailed", "轨道 {slot} 查询失败：{error}"), { slot: track.slot, error: error instanceof Error ? error.message : String(error) });
+        queryErrors.set(track.slot, error instanceof Error ? error.message : String(error));
+        render();
       });
     }
     render();
@@ -967,6 +974,19 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     const model = buildModel();
     const builtMs = performance.now() - renderStart;
     const sel = selectedTracks();
+    const problems = sel.flatMap(track => {
+      const cap = caps.get(track.slot);
+      if (cap?.indexState === 'error') return [t(msg("analysis.indexFailed", "轨道 {slot} 索引失败：{error}"), {
+        slot: track.slot, error: cap.indexError ?? t(msg("analysis.unknownError", "未知错误")),
+      })];
+      if (cap?.hasSize === false) return [t(msg("analysis.trackUnsupported", "轨道 {slot}：当前片源路径暂不支持码流分析。"), { slot: track.slot })];
+      const error = queryErrors.get(track.slot);
+      return error === undefined ? [] : [t(msg("analysis.queryFailed", "轨道 {slot} 查询失败：{error}"), { slot: track.slot, error })];
+    }).join('\n');
+    // Keep failures visible beside any healthy tracks, or in the empty state.
+    // The screen-reader output is also used by hover and cannot own error state.
+    if (noticeEl.textContent !== problems) noticeEl.textContent = problems;
+    noticeEl.hidden = !model || !problems;
     if (!model) {
       canvas.hidden = true;
       overlay.hidden = true;
@@ -975,7 +995,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       emptyEl.hidden = false;
       emptyEl.textContent = !tracks.length ? t(msg("analysis.emptyNoVideo", "尚未载入视频。载入后可在此检查码率与帧大小走向。"))
         : !sel.length ? t(msg("analysis.emptyAllHidden", "已全部隐藏，请在工具条中选择要对比的轨道。"))
-        : t(msg("analysis.emptyQuerying", "正在查询统计…"));
+        : problems || t(msg("analysis.emptyQuerying", "正在查询统计…"));
       playheadEl.hidden = true;
       hoverEl.hidden = true;
       lastModel = null;
@@ -1033,7 +1053,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // 底图重绘后卡片按最后光标重新限位（仍在坞内横向滑动，不跟随翻边）。
     if (hoverUs != null && lastClient && !pinned) positionFloat(lastClient.x);
     // 索引构建中渐进重查（仅面板打开时）；完成后自动停止。
-    if (selectedTracks().some(t => caps.get(t.slot)?.indexState === 'building')) {
+    if (selectedTracks().some(t => caps.get(t.slot)?.indexState === 'building' && !queryErrors.has(t.slot))) {
       buildingTimer = window.setTimeout(() => {
         if (open && !signal.aborted) void refresh();
       }, 1000);
@@ -1801,7 +1821,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     if (sig !== trackSig) {
       trackSig = sig;
+      for (const slot of queryErrors.keys()) {
+        const previous = tracks.find(t => t.slot === slot);
+        const current = entries.find(t => t.slot === slot);
+        if (!current || current.mediaId !== previous?.mediaId || current.sourceGen !== previous.sourceGen) queryErrors.delete(slot);
+      }
       tracks = entries;
+      // Invalidate in-flight results even if the last query never produced data.
+      for (const [slot, controller] of abortBySlot) {
+        controller.abort();
+        seqBySlot.set(slot, ++panelSeq);
+      }
+      abortBySlot.clear();
       for (const slot of [...results.keys()]) {
         const entry = entries.find(e => e.slot === slot);
         // 结果携带 generation 盖章：同媒体重建实例的旧结果一并失效。
@@ -1850,10 +1881,17 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const offSession = session.subscribe(onSession);
   const offProgress = session.subscribeProgress(onProgress);
 
+  let resizeRaf = 0;
   const resizer_obs = new ResizeObserver(() => {
-    if (!open) return;
-    render();
-    scheduleQuery();
+    if (!open || resizeRaf) return;
+    // Notices and the empty/chart transition change the observed body height.
+    // Apply layout writes next frame, outside ResizeObserver delivery.
+    resizeRaf = requestAnimationFrame(() => {
+      resizeRaf = 0;
+      if (!open || signal.aborted) return;
+      render();
+      scheduleQuery();
+    });
   });
   resizer_obs.observe(body);
   resizer_obs.observe(plot);
@@ -1884,6 +1922,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     window.clearTimeout(buildingTimer);
     if (hoverRaf) cancelAnimationFrame(hoverRaf);
     if (viewRaf) cancelAnimationFrame(viewRaf);
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
     offSession();
     offProgress();
     stopLanguage();

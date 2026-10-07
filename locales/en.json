@@ -1315,6 +1315,10 @@
     "source": "隐藏轨道 {slot}",
     "translation": "Hide track {slot}"
   },
+  "analysis.indexFailed": {
+    "source": "轨道 {slot} 索引失败：{error}",
+    "translation": "Track {slot} index failed: {error}"
+  },
   "analysis.indexNotReady": {
     "source": "帧索引尚未就绪",
     "translation": "Frame index not ready"
@@ -1422,6 +1426,14 @@
   "analysis.trackHasNoFrame": {
     "source": "轨道 {slot}：暂无上屏帧",
     "translation": "Track {slot}: no on-screen frame"
+  },
+  "analysis.trackUnsupported": {
+    "source": "轨道 {slot}：当前片源路径暂不支持码流分析。",
+    "translation": "Track {slot}: the current media path does not support bitstream analysis."
+  },
+  "analysis.unknownError": {
+    "source": "未知错误",
+    "translation": "Unknown error"
   },
   "annotation.framePreview": {
     "source": "标注画面",

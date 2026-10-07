@@ -329,6 +329,7 @@ export interface Sources {
   "analysis.fullRange": "完整范围";
   "analysis.fullRangeTitle": "双击图也可恢复完整范围";
   "analysis.hideTrack": "隐藏轨道 {slot}";
+  "analysis.indexFailed": "轨道 {slot} 索引失败：{error}";
   "analysis.indexNotReady": "帧索引尚未就绪";
   "analysis.layoutMerged": "合并";
   "analysis.layoutRows": "分轨";
@@ -356,6 +357,8 @@ export interface Sources {
   "analysis.trackFocusWithContext": "轨道焦点 {slot}。{rest}";
   "analysis.trackFrameNumber": "轨道 {slot} {axis}帧号";
   "analysis.trackHasNoFrame": "轨道 {slot}：暂无上屏帧";
+  "analysis.trackUnsupported": "轨道 {slot}：当前片源路径暂不支持码流分析。";
+  "analysis.unknownError": "未知错误";
   "annotation.framePreview": "标注画面";
   "appearance.amber": "琥珀";
   "appearance.baseBlush": "浅玫瑰";
@@ -1320,6 +1323,7 @@ export interface MessageParameters {
   "analysis.fullRange": {  };
   "analysis.fullRangeTitle": {  };
   "analysis.hideTrack": { "slot": string | number };
+  "analysis.indexFailed": { "error": string | number; "slot": string | number };
   "analysis.indexNotReady": {  };
   "analysis.layoutMerged": {  };
   "analysis.layoutRows": {  };
@@ -1347,6 +1351,8 @@ export interface MessageParameters {
   "analysis.trackFocusWithContext": { "rest": string | number; "slot": string | number };
   "analysis.trackFrameNumber": { "axis": string | number; "slot": string | number };
   "analysis.trackHasNoFrame": { "slot": string | number };
+  "analysis.trackUnsupported": { "slot": string | number };
+  "analysis.unknownError": {  };
   "annotation.framePreview": {  };
   "appearance.amber": {  };
   "appearance.baseBlush": {  };

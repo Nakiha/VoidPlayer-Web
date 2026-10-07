@@ -2210,14 +2210,14 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:123",
-      "src/ui/analysis-panel.ts:516"
+      "src/ui/analysis-panel.ts:519"
     ]
   },
   "analysis.bitrateMbps": {
     "source": "码率 · Mbps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1227"
+      "src/ui/analysis-panel.ts:1247"
     ]
   },
   "analysis.bitrateTitle": {
@@ -2225,7 +2225,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:123",
-      "src/ui/analysis-panel.ts:516"
+      "src/ui/analysis-panel.ts:519"
     ]
   },
   "analysis.bitrateWindow": {
@@ -2233,7 +2233,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:127",
-      "src/ui/analysis-panel.ts:524"
+      "src/ui/analysis-panel.ts:527"
     ]
   },
   "analysis.bitrateWindowTitle": {
@@ -2241,15 +2241,15 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:127",
-      "src/ui/analysis-panel.ts:524"
+      "src/ui/analysis-panel.ts:527"
     ]
   },
   "analysis.canvasLabel": {
     "source": "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:142",
-      "src/ui/analysis-panel.ts:540"
+      "src/ui/analysis-panel.ts:143",
+      "src/ui/analysis-panel.ts:543"
     ]
   },
   "analysis.compareTracks": {
@@ -2257,7 +2257,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:125",
-      "src/ui/analysis-panel.ts:519"
+      "src/ui/analysis-panel.ts:522"
     ]
   },
   "analysis.currentFrameNumbers": {
@@ -2265,21 +2265,21 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:132",
-      "src/ui/analysis-panel.ts:538"
+      "src/ui/analysis-panel.ts:541"
     ]
   },
   "analysis.currentFrameNumbersEmpty": {
     "source": "当前上屏帧号：尚未载入视频",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:343"
+      "src/ui/analysis-panel.ts:346"
     ]
   },
   "analysis.dtsOrder": {
     "source": "DTS序",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:336"
+      "src/ui/analysis-panel.ts:339"
     ]
   },
   "analysis.editTrackFrameNumber": {
@@ -2289,28 +2289,28 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:368"
+      "src/ui/analysis-panel.ts:371"
     ]
   },
   "analysis.emptyAllHidden": {
     "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:977"
+      "src/ui/analysis-panel.ts:997"
     ]
   },
   "analysis.emptyNoVideo": {
     "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:976"
+      "src/ui/analysis-panel.ts:996"
     ]
   },
   "analysis.emptyQuerying": {
     "source": "正在查询统计…",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:978"
+      "src/ui/analysis-panel.ts:998"
     ]
   },
   "analysis.enterFrameNumber": {
@@ -2320,15 +2320,15 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:367"
+      "src/ui/analysis-panel.ts:370"
     ]
   },
   "analysis.followOff": {
     "source": "跟随：关",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:474",
-      "src/ui/analysis-panel.ts:535"
+      "src/ui/analysis-panel.ts:477",
+      "src/ui/analysis-panel.ts:538"
     ]
   },
   "analysis.followOn": {
@@ -2336,8 +2336,8 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:129",
-      "src/ui/analysis-panel.ts:474",
-      "src/ui/analysis-panel.ts:535"
+      "src/ui/analysis-panel.ts:477",
+      "src/ui/analysis-panel.ts:538"
     ]
   },
   "analysis.followTitle": {
@@ -2345,14 +2345,14 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:129",
-      "src/ui/analysis-panel.ts:535"
+      "src/ui/analysis-panel.ts:538"
     ]
   },
   "analysis.frameNumberMustBeNonNegativeInteger": {
     "source": "帧号必须是非负整数。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:385"
+      "src/ui/analysis-panel.ts:388"
     ]
   },
   "analysis.frameNumberOrder": {
@@ -2360,15 +2360,15 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:133",
-      "src/ui/analysis-panel.ts:539"
+      "src/ui/analysis-panel.ts:542"
     ]
   },
   "analysis.frameRateFps": {
     "source": "帧率 · fps",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1228",
-      "src/ui/analysis-panel.ts:1274"
+      "src/ui/analysis-panel.ts:1248",
+      "src/ui/analysis-panel.ts:1294"
     ]
   },
   "analysis.frameSize": {
@@ -2376,14 +2376,14 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:124",
-      "src/ui/analysis-panel.ts:518"
+      "src/ui/analysis-panel.ts:521"
     ]
   },
   "analysis.frameSizeKib": {
     "source": "帧大小 · KiB",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1229"
+      "src/ui/analysis-panel.ts:1249"
     ]
   },
   "analysis.frameSizeTitle": {
@@ -2391,7 +2391,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:124",
-      "src/ui/analysis-panel.ts:518"
+      "src/ui/analysis-panel.ts:521"
     ]
   },
   "analysis.frameTitleBase": {
@@ -2402,15 +2402,15 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:403",
-      "src/ui/analysis-panel.ts:410"
+      "src/ui/analysis-panel.ts:406",
+      "src/ui/analysis-panel.ts:413"
     ]
   },
   "analysis.frameTitleDtsMissing": {
     "source": " · DTS序 —（解码 PTS 不在包表内，不猜测）",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:407"
+      "src/ui/analysis-panel.ts:410"
     ]
   },
   "analysis.frameTitleDtsOrdinal": {
@@ -2419,14 +2419,14 @@
       "ordinal": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:407"
+      "src/ui/analysis-panel.ts:410"
     ]
   },
   "analysis.frameTitleProvisional": {
     "source": "（索引构建中，暂定）",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:408"
+      "src/ui/analysis-panel.ts:411"
     ]
   },
   "analysis.frameTitlePtsRank": {
@@ -2435,7 +2435,7 @@
       "rank": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:405"
+      "src/ui/analysis-panel.ts:408"
     ]
   },
   "analysis.frameTitlePtsTotal": {
@@ -2444,14 +2444,14 @@
       "total": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:406"
+      "src/ui/analysis-panel.ts:409"
     ]
   },
   "analysis.frameTitleQuerying": {
     "source": " · 帧号查询中",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:412"
+      "src/ui/analysis-panel.ts:415"
     ]
   },
   "analysis.frameTitleRankPending": {
@@ -2460,7 +2460,7 @@
       "note": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:412"
+      "src/ui/analysis-panel.ts:415"
     ]
   },
   "analysis.frameTitleSourcePts": {
@@ -2469,8 +2469,8 @@
       "sourcePtsUs": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:404",
-      "src/ui/analysis-panel.ts:411"
+      "src/ui/analysis-panel.ts:407",
+      "src/ui/analysis-panel.ts:414"
     ]
   },
   "analysis.fullRange": {
@@ -2478,7 +2478,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:130",
-      "src/ui/analysis-panel.ts:537"
+      "src/ui/analysis-panel.ts:540"
     ]
   },
   "analysis.fullRangeTitle": {
@@ -2486,7 +2486,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:130",
-      "src/ui/analysis-panel.ts:537"
+      "src/ui/analysis-panel.ts:540"
     ]
   },
   "analysis.hideTrack": {
@@ -2495,14 +2495,24 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:486"
+      "src/ui/analysis-panel.ts:489"
+    ]
+  },
+  "analysis.indexFailed": {
+    "source": "轨道 {slot} 索引失败：{error}",
+    "params": {
+      "error": "string | number",
+      "slot": "string | number"
+    },
+    "locations": [
+      "src/ui/analysis-panel.ts:979"
     ]
   },
   "analysis.indexNotReady": {
     "source": "帧索引尚未就绪",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:367"
+      "src/ui/analysis-panel.ts:370"
     ]
   },
   "analysis.layoutMerged": {
@@ -2524,7 +2534,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:128",
-      "src/ui/analysis-panel.ts:525"
+      "src/ui/analysis-panel.ts:528"
     ]
   },
   "analysis.multiTrackLayoutTitle": {
@@ -2532,7 +2542,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:128",
-      "src/ui/analysis-panel.ts:525"
+      "src/ui/analysis-panel.ts:528"
     ]
   },
   "analysis.noLocatablePeak": {
@@ -2541,7 +2551,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1561"
+      "src/ui/analysis-panel.ts:1581"
     ]
   },
   "analysis.noSampleAtTime": {
@@ -2550,14 +2560,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1691"
+      "src/ui/analysis-panel.ts:1711"
     ]
   },
   "analysis.noVideoYet": {
     "source": "尚未载入视频",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:341"
+      "src/ui/analysis-panel.ts:344"
     ]
   },
   "analysis.peakSeekFailed": {
@@ -2566,14 +2576,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1581"
+      "src/ui/analysis-panel.ts:1601"
     ]
   },
   "analysis.pinnedSuffix": {
     "source": " · 已固定",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1272"
+      "src/ui/analysis-panel.ts:1292"
     ]
   },
   "analysis.provisional": {
@@ -2587,7 +2597,7 @@
     "source": "PTS序",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:336"
+      "src/ui/analysis-panel.ts:339"
     ]
   },
   "analysis.queryFailed": {
@@ -2597,14 +2607,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:708"
+      "src/ui/analysis-panel.ts:984"
     ]
   },
   "analysis.sampleRate": {
     "source": "样本率 /s",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1274"
+      "src/ui/analysis-panel.ts:1294"
     ]
   },
   "analysis.seekReason": {
@@ -2614,9 +2624,9 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1553",
-      "src/ui/analysis-panel.ts:1570",
-      "src/ui/analysis-panel.ts:1588"
+      "src/ui/analysis-panel.ts:1573",
+      "src/ui/analysis-panel.ts:1590",
+      "src/ui/analysis-panel.ts:1608"
     ]
   },
   "analysis.showTrack": {
@@ -2626,28 +2636,28 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:486"
+      "src/ui/analysis-panel.ts:489"
     ]
   },
   "analysis.stateError": {
     "source": "索引错",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1146"
+      "src/ui/analysis-panel.ts:1166"
     ]
   },
   "analysis.statePending": {
     "source": "统计中",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1143"
+      "src/ui/analysis-panel.ts:1163"
     ]
   },
   "analysis.stateUnsupported": {
     "source": "不可用",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1144"
+      "src/ui/analysis-panel.ts:1164"
     ]
   },
   "analysis.statusLabel": {
@@ -2657,7 +2667,7 @@
       "summary": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:418"
+      "src/ui/analysis-panel.ts:421"
     ]
   },
   "analysis.timeBase": {
@@ -2665,7 +2675,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:126",
-      "src/ui/analysis-panel.ts:523"
+      "src/ui/analysis-panel.ts:526"
     ]
   },
   "analysis.timeBaseTitle": {
@@ -2673,7 +2683,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:126",
-      "src/ui/analysis-panel.ts:523"
+      "src/ui/analysis-panel.ts:526"
     ]
   },
   "analysis.tools": {
@@ -2681,7 +2691,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:122",
-      "src/ui/analysis-panel.ts:514"
+      "src/ui/analysis-panel.ts:517"
     ]
   },
   "analysis.trackFocus": {
@@ -2690,7 +2700,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1677"
+      "src/ui/analysis-panel.ts:1697"
     ]
   },
   "analysis.trackFocusWithContext": {
@@ -2700,7 +2710,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1675"
+      "src/ui/analysis-panel.ts:1695"
     ]
   },
   "analysis.trackFrameNumber": {
@@ -2710,7 +2720,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:376"
+      "src/ui/analysis-panel.ts:379"
     ]
   },
   "analysis.trackHasNoFrame": {
@@ -2719,7 +2729,23 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:401"
+      "src/ui/analysis-panel.ts:404"
+    ]
+  },
+  "analysis.trackUnsupported": {
+    "source": "轨道 {slot}：当前片源路径暂不支持码流分析。",
+    "params": {
+      "slot": "string | number"
+    },
+    "locations": [
+      "src/ui/analysis-panel.ts:982"
+    ]
+  },
+  "analysis.unknownError": {
+    "source": "未知错误",
+    "params": {},
+    "locations": [
+      "src/ui/analysis-panel.ts:980"
     ]
   },
   "annotation.framePreview": {

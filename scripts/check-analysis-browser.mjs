@@ -56,8 +56,16 @@ try {
   await page.addInitScript(() => { window.__vpAnalysisQA = true; });
   page.setDefaultTimeout(30000);
   const errors = [];
+  const decoderNotices = [];
   page.on('pageerror', error => errors.push(error.message));
-  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  page.on('console', message => {
+    if (message.type() !== 'error') return;
+    const text = message.text();
+    // FFmpeg writes this AV1 size-limit notice to stderr; preserve it as
+    // evidence while still rejecting every actual error and unexpected line.
+    if (/^\[libdav1d @ 0x[0-9a-f]+\] Frame size limit reduced from 2147483647 to 67108864\.$/.test(text)) decoderNotices.push(text);
+    else errors.push(text);
+  });
   await page.goto(base);
   await page.waitForFunction(() => window.voidPlayer);
   if (await page.locator('#identity-welcome').isVisible().catch(() => false)) {
@@ -74,7 +82,7 @@ try {
     const tools = window.voidPlayer.tools;
     const list = tools.find(t => t.name === 'list_library');
     const found = {};
-    for (const name of ['ci_h264_smoke.mp4', 'h264_9s_1920x1080.mp4']) {
+    for (const name of ['ci_h264_smoke.mp4', 'h264_9s_1920x1080.mp4', 'av1_10s_1920x1080.webm']) {
       const page1 = await list.execute({ search: name, limit: 10 });
       const entry = (page1.entries ?? []).find(e => e.name === name);
       found[name] = entry?.id;
@@ -83,15 +91,64 @@ try {
   });
   assert.ok(ids['ci_h264_smoke.mp4'], 'Missing fixture: ci_h264_smoke.mp4');
   assert.ok(ids['h264_9s_1920x1080.mp4'], 'Missing fixture: h264_9s_1920x1080.mp4');
+  assert.ok(ids['av1_10s_1920x1080.webm'], 'Missing fixture: av1_10s_1920x1080.webm');
+  // Unsupported paths must settle visibly without issuing doomed queries.
+  await page.evaluate(async ids => {
+    await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id: ids['av1_10s_1920x1080.webm'], slot: 'A' });
+  }, ids);
+  await page.locator('#toggle-analysis').click();
+  await page.waitForFunction(() => document.querySelector('.analysis-empty')?.textContent.includes('暂不支持码流分析'));
+  assert.equal(await page.locator('.analysis-empty').isVisible(), true);
+  assert.match(await page.locator('.analysis-empty').textContent(), /轨道 A/);
+  assert.equal(await page.locator('#analysis-canvas').getAttribute('data-analysis-queries'), null);
+  await page.locator('#analysis-tracks button').click();
+  assert.match(await page.locator('.analysis-empty').textContent(), /已全部隐藏/);
+  await page.locator('#analysis-tracks button').click();
+  await page.evaluate(async ids => {
+    await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id: ids['ci_h264_smoke.mp4'], slot: 'B' });
+  }, ids);
+  await page.waitForFunction(() => !document.getElementById('analysis-canvas').hidden);
+  assert.equal(await page.locator('.analysis-notice').isVisible(), true, 'unsupported track stays visible beside a healthy chart');
+  assert.match(await page.locator('.analysis-notice').textContent(), /轨道 A.*暂不支持码流分析/);
+  await saveDiagnostics(page, 'unsupported-track');
+  await page.evaluate(async () => {
+    const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
+    await remove.execute({ slot: 'A' }); await remove.execute({ slot: 'B' });
+  });
+  await page.waitForFunction(() => document.getElementById('analysis-panel').hidden);
   await page.evaluate(async ids => {
     const tools = window.voidPlayer.tools;
     const load = tools.find(t => t.name === 'load_library_item');
     await load.execute({ id: ids['ci_h264_smoke.mp4'], slot: 'A' });
     await load.execute({ id: ids['h264_9s_1920x1080.mp4'], slot: 'B' });
   }, ids);
+  // Inject a query-only RPC failure; playback and the real index remain healthy.
+  await page.evaluate(() => {
+    window.analysisOriginalPost = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function(message, ...args) {
+      if (message.type === 'analysis') {
+        queueMicrotask(() => this.dispatchEvent(new MessageEvent('message', { data: { id: message.id, ok: false, error: 'analysis regression failure' } })));
+        return;
+      }
+      return window.analysisOriginalPost.call(this, message, ...args);
+    };
+  });
   // 有轨道后开关可用，展开面板，并等打开动画落定再量坐标。
   await page.waitForFunction(() => !document.getElementById('toggle-analysis').disabled, undefined, { timeout: 30000 });
   await page.locator('#toggle-analysis').click();
+  await page.waitForFunction(() => document.querySelector('.analysis-empty')?.textContent.includes('analysis regression failure'));
+  assert.equal(await page.locator('.analysis-empty').isVisible(), true, 'query failure must be visible, not only announced to screen readers');
+  assert.match(await page.locator('.analysis-empty').textContent(), /轨道 A 查询失败/);
+  assert.doesNotMatch(await page.locator('.analysis-empty').textContent(), /正在查询统计/);
+  await page.waitForTimeout(350); // Capture the settled panel, not its opening animation.
+  await saveDiagnostics(page, 'query-failure');
+  await page.evaluate(() => { Worker.prototype.postMessage = window.analysisOriginalPost; delete window.analysisOriginalPost; });
+  await page.locator('#toggle-analysis').click();
+  await page.waitForFunction(() => document.getElementById('analysis-panel').hidden);
+  await page.locator('#toggle-analysis').click();
+  await page.waitForFunction(() => !document.getElementById('analysis-canvas').hidden);
+  await page.waitForFunction(() => document.querySelector('.analysis-notice').hidden);
+  assert.equal(await page.locator('.analysis-empty').isVisible(), false, 'successful retry clears the failed empty state');
   await page.waitForFunction(() => !document.getElementById('analysis-panel').hidden);
   await page.waitForFunction(() => {
     const r1 = document.getElementById('analysis-canvas').getBoundingClientRect();
@@ -444,7 +501,7 @@ try {
   }));
   await writeFile(
     join(reportDir, 'analysis-panel.json'),
-    JSON.stringify({ engine: engineName, time: new Date().toISOString(), state: successState, errors }, null, 2),
+    JSON.stringify({ engine: engineName, time: new Date().toISOString(), state: successState, errors, decoderNotices }, null, 2),
   );
   await browser.close(); browser = undefined;
   console.log('PASS analysis panel: capabilities, merged layout, read-only hover, click seek, zoom, playback coexistence');
