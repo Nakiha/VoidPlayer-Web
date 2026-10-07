@@ -57,4 +57,3 @@ export function loadAnalysisPreferences(): AnalysisPreferences {
   } catch { /* 损坏的 v1 视为无偏好。 */ }
   return fallback;
 }
-
