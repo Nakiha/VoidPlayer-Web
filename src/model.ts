@@ -27,6 +27,9 @@ export type MediaInfo = {
   indexProgress?: { scannedBytes: number; totalBytes: number; packets: number };
   indexWaiting?: boolean;
   indexWarning?: string;
+  /** Index completion does not certify an undamaged, fully covered source. */
+  indexIntegrity?: 'complete' | 'recovered' | 'prefix';
+  indexTruncatedAt?: number;
   /** Explicit recovery provenance; original packet timestamps remain in the demux index. */
   timelineSource?: 'hevc-poc';
   id: string; name: string; size: number; lastModified: number;

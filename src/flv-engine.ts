@@ -2,7 +2,7 @@ import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
-import { scanFlv, flvDecoderConfig, flvIndexWarning, flvMediaTiming, FlvReader } from './flv-demux.ts';
+import { scanFlv, flvDecoderConfig, flvIndexWarning, flvIndexIntegrity, flvMediaTiming, FlvReader } from './flv-demux.ts';
 import type { FlvInput, FlvIndex, FlvCheckpoint } from './flv-demux.ts';
 import { nativeFlvDecoder, wasmFlvDecoder, packetDecodeError } from './flv-decoder.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
@@ -45,7 +45,7 @@ export class FlvEngine {
     if (this.indexingFailure) throw this.indexingFailure;
   };
   private wake() { for (const resolve of this.waiters) resolve(); this.waiters.clear(); }
-  /** 后台索引是否已完整；分析面板据此区分确定值与暂定值。 */
+  /** Indexing is terminal; file integrity is reported separately. */
   get indexComplete(): boolean { return !!this.checkpoint?.complete; }
   private publishIndex(checkpoint: FlvCheckpoint) {
     this.checkpoint = checkpoint; this.index = checkpoint.index;
@@ -92,7 +92,7 @@ export class FlvEngine {
       if(!cached && this.cache.serverIndexRequired)throw new MediaOpenError('container','服务端 FLV 索引与源文件首包不一致，请清理旧索引后重试。');
       if (!this.checkpoint!.complete) {
         let completed: FlvCheckpoint;
-        if(cached)completed={index:cached,nextOffset:this.reader.size,complete:true};
+        if(cached)completed={index:cached,nextOffset:cached.truncatedAt??this.reader.size,complete:true};
         else {
           const scanner=this.scanReader=new FlvReader(this.reader.input,this.reader.version);scanner.setIndexing(true);
           completed=await scanFlv(scanner,()=>onProgress?.('index'),this.checkpoint,false,commit);
@@ -101,7 +101,7 @@ export class FlvEngine {
         commit(completed);
       }
       if (!cached) void this.cache.save(this.index).catch(() => {});
-      return { indexWarning: flvIndexWarning(this.index), indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
+      return { indexWarning: flvIndexWarning(this.index), indexIntegrity:flvIndexIntegrity(this.index), indexTruncatedAt:this.index.truncatedAt, indexSource: cached ? 'server' as const : 'client' as const, ...flvMediaTiming(this.index) };
     } catch (error) {
       this.indexingFailure = error; this.wake(); throw error;
     } finally { this.serverProgress=undefined; this.scanReader?.close(); this.scanReader = undefined; }
@@ -137,6 +137,8 @@ export class FlvEngine {
         hardwareAcceleration: this.decoder.hardwareAcceleration,
         ...this.decoder.metadata?.(), decodedPixelFormat: this.primed!.frame?.format ?? null,
         indexWarning: flvIndexWarning(this.index),
+        indexIntegrity: this.checkpoint!.complete ? flvIndexIntegrity(this.index) : undefined,
+        indexTruncatedAt: this.index.truncatedAt,
         indexSource: this.cache.serverIndexRequired ? 'server' as const : 'client' as const,
         indexState: this.checkpoint!.complete ? 'complete' as const : 'building' as const,
         ...flvMediaTiming(this.index) };

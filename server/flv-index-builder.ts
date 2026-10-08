@@ -53,9 +53,9 @@ export async function buildFlvIndexDocument(filePath:string,size:number,version:
     });
     await assertVersion();
     const document=serializeFlvIndex(scanned.index,size);
-    onProgress?.({phase:'scan',packets:scanned.index.packets.length,scannedBytes:size,totalBytes:size});
+    onProgress?.({phase:'scan',packets:scanned.index.packets.length,scannedBytes:scanned.nextOffset,totalBytes:size});
     const used=process.cpuUsage(cpu);
     return {document,profile:{scanMode:'flv-shared-parser',totalBuildWallMs:performance.now()-started,cpuUserMs:used.user/1000,cpuSystemMs:used.system/1000,
-      scannedBytes:size,packets:scanned.index.packets.length,diskReadCalls:reader.readCalls,diskReadBytes:reader.readBytes}};
+      scannedBytes:scanned.nextOffset,packets:scanned.index.packets.length,diskReadCalls:reader.readCalls,diskReadBytes:reader.readBytes}};
   }finally{await handle.close();}
 }

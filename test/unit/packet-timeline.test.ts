@@ -115,3 +115,21 @@ test('a growing decode frontier waits without drain/reset and resumes at the sam
     assert.deepEqual(sent, [0, 40000, 80000]);
   } finally { timeline.close(); }
 });
+
+test('a recovery boundary drains the prefix, resets even without a config change, and isolates seeks',async()=>{
+ const {timeline,closed}=fixture();
+ const index:FlvIndex={...timeline.index,configurations:undefined,packets:timeline.index.packets.map((p,i)=>({...p,configuration:undefined,...(i?{discontinuity:true}:{})}))};
+ timeline.replaceIndex(index);let resets=0;
+ const reset=timeline.decoder.reset.bind(timeline.decoder);timeline.decoder.reset=()=>{resets++;reset();};
+ try{
+  (await timeline.at(0)).frame!.close();assert.equal(resets,1);
+  const delayed=await timeline.next(0);assert.equal(delayed?.pts,20000);delayed!.frame!.close();
+  assert.equal(resets,1,'delayed prefix output is consumed before reset');
+  const resumed=await timeline.next(20000);assert.equal(resumed?.pts,40000);resumed!.frame!.close();assert.equal(resets,2);
+  assert.equal(await timeline.next(40000),null);
+  (await timeline.at(40000)).frame!.close();assert.equal(resets,3);
+  assert.equal(await timeline.next(40000),null);
+  (await timeline.at(0)).frame!.close();assert.equal(resets,4);
+  assert.ok(closed.includes(20000));
+ }finally{timeline.close();}
+});
