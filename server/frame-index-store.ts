@@ -6,6 +6,8 @@ import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../src/media-index-identity.ts';
+import { validFfmpegRecovery } from '../src/index-integrity.ts';
+import type { FfmpegIndexRecovery } from '../src/index-integrity.ts';
 
 export type FrameIndexKind = MediaIndexKind;
 
@@ -176,7 +178,7 @@ export class FrameIndexStore {
       .run(packets, scannedBytes, Date.now(), id, version, ...identityArgs(identity), buildId);
   }
 
-  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number) {
+  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number, recovery: FfmpegIndexRecovery = {}) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
@@ -190,7 +192,9 @@ export class FrameIndexStore {
         throw new AdminError(500, 'FFmpeg 索引完成信息与持久化 batch 不一致。');
       }
       const metadata = row && this.db.prepare('SELECT metadata_json FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere).get(id, version, ...identityArgs(identity)) as { metadata_json: string } | undefined;
-      const metadataJson = metadata?.metadata_json ? JSON.stringify({ ...JSON.parse(metadata.metadata_json), count: frames }) : null;
+      if (!metadata?.metadata_json || !validFfmpegRecovery(recovery, Number(JSON.parse(metadata.metadata_json).size)))
+        throw new AdminError(500, 'FFmpeg 索引损坏边界无效。');
+      const metadataJson = metadata?.metadata_json ? JSON.stringify({ ...JSON.parse(metadata.metadata_json), ...recovery, count: frames }) : null;
       this.db.prepare("UPDATE media_index_manifests SET state='complete',complete=1,scanned_bytes=?,stable_presentation_us=?,frames=?,metadata_json=coalesce(?,metadata_json),accessed_at=? WHERE media_id=? AND media_version=? AND " + identityWhere)
         .run(scannedBytes, stablePresentationUs, frames, metadataJson, Date.now(), id, version, ...identityArgs(identity));
       this.db.exec('COMMIT');

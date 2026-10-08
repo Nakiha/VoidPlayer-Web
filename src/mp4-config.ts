@@ -2,21 +2,27 @@ import { avcGeometry } from './avc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { RangeReader } from './range-reader.ts';
 
-interface Box { type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; }
+interface Box { type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; ignoredTail?: boolean; }
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
 async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
   const result: Box[] = [];
+  const ignoreTail = (type?: string) => {
+    if (!root || !result.some(b => b.type === 'moov') || !result.some(b => b.type === 'mdat')
+      || (type && ['moov', 'moof', 'mdat', 'mfra', 'sidx', 'ftyp', 'styp'].includes(type))) return false;
+    result.push({ type: 'ignored-tail', data: start, end, ignoredTail: true });
+    return true;
+  };
   while (start < end) {
-    if (end - start < 8) invalid('box 头被截断。');
+    if (end - start < 8) { if (ignoreTail()) break; invalid('box 头被截断。'); }
     const header = await reader.read(start, Math.min(16, end - start));
     const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
     let length = view.getUint32(0), bytes = 8;
-    if (length === 1) { if (header.length < 16) invalid('扩展 box 头被截断。'); length = Number(view.getBigUint64(8)); bytes = 16; }
-    if (!length) length = end - start;
     const type = String.fromCharCode(...header.subarray(4, 8));
-    if (!Number.isSafeInteger(length) || length < bytes) invalid('box 长度越界。');
+    if (length === 1) { if (header.length < 16) { if (ignoreTail(type)) break; invalid('扩展 box 头被截断。'); } length = Number(view.getBigUint64(8)); bytes = 16; }
+    if (!length) length = end - start;
+    if (!Number.isSafeInteger(length) || length < bytes) { if (ignoreTail(type)) break; invalid('box 长度越界。'); }
     const truncated = length > end - start;
-    if (truncated && !(root && type === 'mdat')) invalid(`${type} box 长度越界。`);
+    if (truncated && !(root && type === 'mdat')) { if (ignoreTail(type)) break; invalid(`${type} box 长度越界。`); }
     const declaredEnd = start + length;
     if (!Number.isSafeInteger(declaredEnd)) invalid('box 末尾超出安全整数范围。');
     if (truncated) length = end - start;
@@ -61,7 +67,7 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
   return invalid('未找到对应的 VVC 视频轨道。');
 }
 
-export interface Mp4Configurations { warning?: string; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
+export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
@@ -117,6 +123,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
     if(offsetsData.length!==8+chunks*stride)return invalid('chunk offset 数量无效。');
     const sampleOffsets:number[]=[];let run=0;
     const recovered = root.some(b => b.truncated);
+    const ignoredTail = root.find(b => b.ignoredTail);
     const damaged = (message: string): never => { throw new MediaOpenError('input', `MP4 文件不完整，无法安全恢复：${message}`); };
     for(let chunk=1;chunk<=chunks;chunk++){
       while(run+1<count&&v.getUint32(20+run*12)<=chunk)run++;
@@ -132,7 +139,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       }
     }
     let availableSamples = samples;
-    if (recovered) {
+    if (recovered || ignoredTail) {
       const media = root.filter(b => b.type === 'mdat');
       let previousEnd = -1;
       for (let i = 0; i < sampleOffsets.length; i++) {
@@ -157,7 +164,10 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       let at=0;for(let i=0;i<cv.getUint32(4);i++){const n=cv.getUint32(8+i*8),offset=data[0]===1?cv.getInt32(12+i*8):cv.getUint32(12+i*8);if(at+n>samples)return invalid('CTTS 样本数量越界。');compositionOffsets.fill(offset,at,at+n);at+=n;}
       if(at!==samples)return invalid('CTTS 样本数量不一致。');
     }
-    return {descriptions,sampleConfigurations,compositionOffsets,sampleOffsets,sampleSizes,availableSamples,...(recovered ? {warning: availableSamples < samples
+    const indexIntegrity = availableSamples < samples ? 'prefix' : recovered || ignoredTail ? 'recovered' : 'complete';
+    return {descriptions,sampleConfigurations,compositionOffsets,sampleOffsets,sampleSizes,availableSamples,indexIntegrity,
+      ...(indexIntegrity === 'prefix' ? { indexTruncatedAt: sampleOffsets[availableSamples] } : {}),
+      ...(ignoredTail ? {warning: '文件末尾存在异常数据；已验证并保留完整的视频样本。'} : recovered ? {warning: availableSamples < samples
       ? `文件尾部缺失：仅播放前 ${availableSamples} 个完整视频包（声明 ${samples} 个）；时长按有效前缀计算。`
       : 'mdat 声明超出文件末尾；已确认视频样本完整，按实际文件范围读取。'} : {})};
   }

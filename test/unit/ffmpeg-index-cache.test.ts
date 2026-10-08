@@ -57,3 +57,16 @@ test('FFmpeg v3 keeps untimed packet sizes and rejects duplicate original ordina
   view.setBigUint64(88, 0n, true);
   assert.equal(parseFfmpegIndex(serializeFfmpegIndex(metadata, bytes), metadata.size), null);
 });
+
+test('damaged FFmpeg prefixes round-trip their terminal decode boundary and reject forged coverage', () => {
+  const recovery = { indexIntegrity: 'prefix' as const, indexTruncatedAt: 900, indexEndDts: '19' };
+  const document = serializeFfmpegIndex({ ...metadata, ...recovery }, records());
+  assert.ok(parseFfmpegIndex(document, metadata.size));
+  for (const patch of [
+    { indexIntegrity: 'recovered' }, { indexIntegrity: 'complete' }, { indexTruncatedAt: -1 },
+    { indexTruncatedAt: metadata.size }, { indexEndDts: undefined }, { indexEndDts: '18' },
+    { indexEndDts: '-9223372036854775808' }, { indexEndDts: '9223372036854775808' },
+  ]) assert.equal(parseFfmpegIndex({ ...document, ...patch }, metadata.size), null);
+  const broken = records(); new DataView(broken.buffer).setBigInt64(56, -9223372036854775808n, true);
+  assert.equal(parseFfmpegIndex(serializeFfmpegIndex({ ...metadata, ...recovery }, broken), metadata.size), null);
+});

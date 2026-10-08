@@ -1,5 +1,6 @@
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
+import { FLV_INDEX_SCHEMA } from '../src/flv-index-cache.ts';
 import { verifySavedWorkspaces, verifyWorkspaceRestore } from './workspace-acceptance.mjs';
 import { verifyMeasurements } from './measurement-acceptance.mjs';
 import { openIndexDatabase } from '../server/sqlite.ts';
@@ -163,7 +164,7 @@ try {
   // unrelated cwd, so it cannot accidentally load checkout TypeScript.
   const indexUrl = base + '/api/media/' + listing.entries[0].id + '/frame-index?v=' + listing.entries[0].version;
   const emptyIndex = await (await fetch(indexUrl)).json();
-  const frameIndex = { schema: 2, size: bytes.length, codec: 'h264', description: [1, 100, 0, 31, 255, 224, 0], packets: [[13, 10, 0, 0, 1], [40, 10, 40000, 40000, 0]] };
+  const frameIndex = { schema: FLV_INDEX_SCHEMA, size: bytes.length, codec: 'h264', description: [1, 100, 0, 31, 255, 224, 0], packets: [[13, 10, 0, 0, 1], [40, 10, 40000, 40000, 0]] };
   const savedIndex = await fetch(indexUrl, { method: 'POST', headers: { origin: base, 'content-type': 'application/json', 'x-voidplayer-action': 'frame-index' }, body: JSON.stringify({ epoch: emptyIndex.epoch, index: frameIndex }) });
   assert.equal(savedIndex.status, 201, await savedIndex.text());
   assert.deepEqual((await (await fetch(indexUrl)).json()).index, frameIndex);

@@ -133,3 +133,8 @@ FFmpeg-backed WebM, Matroska, TS, PS and AVI use one scan and one persisted pack
 Missing timestamps remain null. Their bytes and identities remain queryable, but the affected axis has unknown bitrate coverage and the panel reports excluded packet counts and bytes. Key flags are container flags, not I/P/B or QP classification. Sample payload bytes exclude container overhead and other streams.
 
 The server scans with demux-only mode; `scanDecodedPackets` must be zero. Opening still probes the codec and primes the first presentable frame, and seeking still decodes the necessary GOP. Analysis queries perform neither media reads nor decode. Local files build the same records in the decoder Worker. Streamed and warm-cache records feed the same analysis adapter. ABI v2 caches cannot provide original ordinals and are rebuilt under the new identity.
+
+## Damaged recordings
+
+See [container-recovery.md](container-recovery.md) for source integrity, terminal
+prefixes, decode boundaries, cache/transport behavior and recovery limits.

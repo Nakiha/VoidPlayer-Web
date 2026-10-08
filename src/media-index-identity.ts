@@ -8,11 +8,11 @@ export interface MediaIndexIdentity {
   indexerBuild: string;
 }
 
-export const FLV_INDEXER_BUILD = 'flv-demux-v2';
+export const FLV_INDEXER_BUILD = 'flv-demux-v3';
 export const FLV_MEDIA_INDEX_IDENTITY: MediaIndexIdentity = {
   kind: 'flv',
   streamKey: 'video:0',
-  schemaVersion: 2,
+  schemaVersion: 3,
   indexerBuild: FLV_INDEXER_BUILD,
 };
 

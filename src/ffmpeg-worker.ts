@@ -5,6 +5,8 @@ import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, In
 import { rangeBlobReader } from './range-bridge-reader.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
+import { validFfmpegRecovery } from './index-integrity.ts';
+import type { FfmpegIndexRecovery } from './index-integrity.ts';
 import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
@@ -195,6 +197,15 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       const result = core.ccall('vp_index_import_batch', 'number', ['number', 'number', 'number', 'number', 'i64', 'number'],
         [ctx, 0, 0, streamedLastSeq + 1, streamedSafeTick, 1]) as number;
       if (result !== 0) throw new MediaOpenError('resource', 'FFmpeg 无法完成服务端索引导入。');
+      applyRecovery(manifest.metadata);
+    };
+    const applyRecovery = (metadata: FfmpegIndexRecovery) => {
+      if (!validFfmpegRecovery(metadata, payload.mediaSize ?? payload.blob?.size ?? payload.file?.byteLength ?? payload.range?.size ?? 0))
+        throw new MediaOpenError('resource', 'FFmpeg 索引损坏边界无效。');
+      if (metadata.indexIntegrity !== 'prefix') return;
+      if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1
+        || core.ccall('vp_index_apply_prefix', 'number', ['number', 'i64', 'i64'], [ctx, BigInt(metadata.indexTruncatedAt!), BigInt(metadata.indexEndDts!)]) !== 1)
+        throw new MediaOpenError('resource', 'FFmpeg 无法安全导入损坏前段索引。');
     };
     const makeIndexResult = (count: number, indexSource: 'server' | 'client', localIndexBuildCalls: number): FfmpegInitResult => {
       if (count <= 0) throw new Error('FFmpeg WASM 无法建立该文件的帧索引。');
@@ -235,6 +246,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
         entry.indexComplete = true;
       }
       return {
+        ...readRecovery(),
         ctx, path, ticks, durations, analysis: entry?.packets.summary, indexMs: Math.round(performance.now() - indexStart), indexSource,
         localIndexBuildCalls, ioMode, indexIdentity,
         indexTrace: { ...externalIndexTrace, recordImportMs },
@@ -250,6 +262,14 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
         colorSpace: core.ccall('vp_color_space', 'number', ['number'], [ctx]),
         colorRange: core.ccall('vp_color_range', 'number', ['number'], [ctx]),
       };
+    };
+    const readRecovery = (): FfmpegIndexRecovery => {
+      if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1)
+        throw new MediaOpenError('resource', 'FFmpeg 损坏恢复接口版本不匹配。');
+      return core.ccall('vp_index_integrity', 'number', ['number'], [ctx]) ? {
+        indexIntegrity: 'prefix', indexTruncatedAt: Number(core.ccall('vp_index_truncated_at', 'i64', ['number'], [ctx])),
+        indexEndDts: String(core.ccall('vp_index_end_dts', 'i64', ['number'], [ctx])),
+      } : { indexIntegrity: 'complete' };
     };
     const externalIndex = payload.externalIndexSession === true && canImportIndex && Number.isSafeInteger(payload.mediaSize);
     if (externalIndex && typeof core._vp_prime_first_presentable === 'function') {
@@ -289,6 +309,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
               if (core.ccall('vp_index_seek_anchors', 'number', ['number'], [ctx]) !== expectedAnchors) {
                 throw new MediaOpenError('resource', '服务器索引的 seek anchor 数量不匹配，已停止这次解码。');
               }
+              applyRecovery(parsed.document);
               return makeIndexResult(imported, 'server', 0);
             } finally { core._free(ptr); }
           }

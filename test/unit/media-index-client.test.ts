@@ -96,7 +96,7 @@ test('FFmpeg record batches are incrementally validated and delivered before str
     { type: 'progress', phase: 'scan', packets: 0, scannedBytes: 1200, totalBytes: 4096 },
     { type: 'batch', buildId, seq: 0, count: 2, safePresentationUs: 33_333, data: Buffer.from(records).toString('base64') },
     { type: 'manifest', protocol: 2, epoch: 2, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64', state: 'complete', buildId,
-      identity, metadata: { ...metadata, count: 2 }, recordBytes: FFMPEG_INDEX_RECORD_BYTES, lastSeq: 0 },
+      identity, metadata: { ...metadata, count: 2, indexIntegrity: 'prefix', indexTruncatedAt: 2048, indexEndDts: '90000' }, recordBytes: FFMPEG_INDEX_RECORD_BYTES, lastSeq: 0 },
     { type: 'complete', buildId, lastSeq: 0, frames: 2, stablePresentationUs: 33_333 },
   ].map(event => JSON.stringify(event));
   globalThis.fetch = (async () => ndjsonResponse(lines)) as typeof fetch;
@@ -112,6 +112,9 @@ test('FFmpeg record batches are incrementally validated and delivered before str
     assert.deepEqual(Array.from(batches[0].records), Array.from(records));
     assert.equal(batches[0].safePresentationUs, 33_333);
     assert.equal(completed[0].frames, 2);
+    assert.equal(completed[0].manifest.metadata.indexIntegrity, 'prefix');
+    assert.equal(completed[0].manifest.metadata.indexTruncatedAt, 2048);
+    assert.equal(completed[0].manifest.metadata.indexEndDts, '90000');
     assert.deepEqual(client.diagnostics().indexIdentity, identity);
     assert.equal(client.diagnostics().indexBuildId, buildId);
     assert.equal(client.diagnostics().serverIndexRequests, 1);

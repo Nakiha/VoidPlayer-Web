@@ -15,6 +15,7 @@ import {syntheticFlv} from '.././flv-fixture.ts';
 
 function damagedFlv(vvc=false){
  const bytes=syntheticFlv(),at=bytes.length-25;
+ if(!vvc){bytes[at+11]=0x17;bytes[bytes.length-5]=0x65;}
  if(vvc)for(let offset=13;offset<bytes.length;offset+=15+bytes.readUIntBE(offset+1,3))if(bytes[offset]===9)bytes[offset+11]=(bytes[offset+11]&0xf0)|14;
  const audio=Buffer.alloc(16);audio[0]=8;audio.writeUIntBE(1,1,3);audio[11]=1;audio.writeUInt32BE(12,12);
  return Buffer.concat([bytes.subarray(0,at),Buffer.alloc(149,0xa5),bytes.subarray(at),audio,audio]);
@@ -44,9 +45,9 @@ test('VVC uses the same disk parser and recovery without a decoder core',async()
  }finally{reader.close();await rm(dir,{recursive:true,force:true});}
 });
 
-test('cold library FLV builds on disk, joins concurrent requests, persists and never scans/uploads in the client',async()=>{
+for(const outcome of ['recovered','prefix'] as const) test(`cold library FLV ${outcome} indexes persist, join builds and never scan/upload client-side`,async()=>{
  const dir=await mkdtemp(path.join(tmpdir(),'vp-flv-server-')),media=path.join(dir,'media');await mkdir(media);
- const bytes=damagedFlv();await writeFile(path.join(media,'clip.flv'),bytes);
+ const bytes=outcome==='recovered'?damagedFlv():Buffer.concat([syntheticFlv(),Buffer.alloc(190*1024,0xa5)]);await writeFile(path.join(media,'clip.flv'),bytes);
  const library=new MediaLibraryIndex([media],{watch:false});await library.refresh();
  const entry=library.browse().entries[0];
  const server=createMediaServer({roots:[media],library,onLog(){}});
@@ -65,9 +66,11 @@ test('cold library FLV builds on disk, joins concurrent requests, persists and n
   assert.ok(results.every(r=>r.indexSource==='server'));
   assert.deepEqual(first.index,joined.index);assert.equal(handles.size,1);
   assert.equal(uploads,0);assert.equal(ranges,2,'each client reads only its initial 64 KiB block');
-  assert.equal(buildRequests,2);assert.match(results[0].indexWarning!,/149.*重同步/);
+  assert.equal(buildRequests,2);assert.match(results[0].indexWarning!,outcome==='recovered'?/149.*重同步/:/有效视频前缀/);
+  assert.ok(results.every(r=>r.indexIntegrity===outcome));
+  if(outcome==='prefix')assert.equal(results[0].indexTruncatedAt,syntheticFlv().length);
   const cached=await library.indexJobs.call('has',{id:entry.id,version:entry.version,identity:FLV_MEDIA_INDEX_IDENTITY});assert.equal(cached,true);
-  const warm=new FlvEngine(input);try{await warm.prepare();assert.equal((await warm.completeIndex()).indexSource,'server');}finally{warm.close();}
+  const warm=new FlvEngine(input);try{await warm.prepare();const result=await warm.completeIndex();assert.equal(result.indexSource,'server');assert.equal(result.indexIntegrity,outcome);assert.equal(result.indexWarning,results[0].indexWarning);}finally{warm.close();}
   assert.equal(handles.size,1,'warm lookup does not start another build');assert.equal(uploads,0);
   const reader=new FlvReader({file:new Blob([bytes])});try{assert.deepEqual(first.index,await demuxFlv(reader));}finally{reader.close();}
  }finally{first.close();joined.close();server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));await library.close();await rm(dir,{recursive:true,force:true});}

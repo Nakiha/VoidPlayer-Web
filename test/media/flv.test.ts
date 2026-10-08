@@ -1,5 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { FlvEngine } from '../../src/flv-engine.ts';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { demuxFlv, FlvReader } from '../../src/flv-demux.ts';
@@ -99,3 +101,41 @@ for (const name of ['legacy-hevc', 'private-vvc', 'standard-h264']) {
     } finally { source.dispose(); }
   });
 }
+
+test('real AVC playback keeps a large corrupt tail usable and restarts recovered segments with identical pixels',async()=>{
+ const {bytes}=await fixture('standard-h264');
+ const reader=new FlvReader({file:new Blob([bytes])});let cleanIndex;
+ try{cleanIndex=await demuxFlv(reader);}finally{reader.close();}
+ const key=cleanIndex.packets.findIndex((p,i)=>i>0&&p.key);assert.ok(key>1);
+ const anchor=cleanIndex.packets[key].offset-16;
+ const lostAt=cleanIndex.packets[Math.floor(key/2)].offset-16;
+ const variants=[
+  {name:'clean',bytes,integrity:'complete'},
+  {name:'large-tail',bytes:Buffer.concat([bytes,Buffer.alloc(190*1024,0xa5)]),integrity:'prefix'},
+  {name:'inserted-gap',bytes:Buffer.concat([bytes.subarray(0,anchor),Buffer.alloc(5828,0xa5),bytes.subarray(anchor)]),integrity:'recovered'},
+  {name:'lost-dependent-pictures',bytes:Buffer.concat([bytes.subarray(0,lostAt),Buffer.alloc(5828,0xa5),bytes.subarray(lostAt+cleanIndex.packets[Math.floor(key/2)].size+20)]),integrity:'recovered'},
+ ];
+ const oracle=new Map<number,string>();
+ const wasmBinary=await readFile(new URL('voidplayer-core.wasm',core));
+ for(const variant of variants){
+  const engine=new FlvEngine({file:new Blob([variant.bytes])});
+  try{
+   await engine.open(new URL('voidplayer-core.js',core).href,wasmBinary,true);
+   const result=await engine.completeIndex();assert.equal(result.indexIntegrity,variant.integrity,variant.name);
+   let frame=await engine.at(engine.index.packets[0].pts),last=-Infinity,count=0;
+   for(;;){
+    assert.ok(frame.pts>last);last=frame.pts;count++;
+    const hash=createHash('sha256').update(new Uint8Array(frame.pixels!)).digest('hex');
+    if(variant.name==='clean')oracle.set(frame.pts,hash);else assert.equal(hash,oracle.get(frame.pts),`${variant.name} PTS ${frame.pts}`);
+    frame.frame?.close();const next=await engine.next(last);if(!next)break;frame=next;
+   }
+   assert.ok(count>1);
+   if(variant.name!=='lost-dependent-pictures')assert.equal(count,oracle.size,variant.name);
+   else {assert.ok(count<oracle.size);assert.ok(last>=cleanIndex.packets[key].pts);}
+   for(const target of [cleanIndex.packets[0].pts,last,cleanIndex.packets[key].pts,cleanIndex.packets[0].pts]){
+    const sought=await engine.at(target),hash=createHash('sha256').update(new Uint8Array(sought.pixels!)).digest('hex');
+    assert.equal(hash,oracle.get(sought.pts),`${variant.name} seek ${target}`);sought.frame?.close();
+   }
+  }finally{engine.close();}
+ }
+});

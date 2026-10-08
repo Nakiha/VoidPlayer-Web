@@ -15,6 +15,7 @@ export class PacketTimeline {
   private failure:unknown;
   private operation=0;
   private actualPacket:FlvPacket|undefined;
+  private segmentStart=0;
   private growth?: () => Promise<void>;
   setGrowth(wait?: () => Promise<void>) { this.growth = wait; }
   appendIndex(index: FlvIndex) { this.index = index; }
@@ -42,7 +43,8 @@ export class PacketTimeline {
     while(position>0&&packets[order[position-1]].pts===packets[order[position]].pts)position--;
     this.cursor=order[position];
     const config=packets[this.cursor].configuration??0;
-    while(this.cursor>0&&(packets[this.cursor-1].configuration??0)===config&&(!packets[this.cursor].key||packets[this.cursor].pts>target))this.cursor--;
+    while(this.cursor>0&&!packets[this.cursor].discontinuity&&(packets[this.cursor-1].configuration??0)===config&&(!packets[this.cursor].key||packets[this.cursor].pts>target))this.cursor--;
+    this.segmentStart=this.cursor;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
   private async pull(recycle?:ArrayBuffer):Promise<FlvFrame|null>{
@@ -56,15 +58,16 @@ export class PacketTimeline {
       }
       const packet=this.index.packets[this.cursor];
       if (!packet && this.growth) { await this.growth(); continue; }
-      if(!packet||(packet.configuration??0)!==this.configuration){
+      if(!packet||(packet.configuration??0)!==this.configuration||(packet.discontinuity&&this.cursor!==this.segmentStart)){
         if(!this.drained){this.drained=true;await this.decoder.drain();continue;}
         if(!packet)return null;
-        await this.configure(packet.configuration??0);continue;
+        await this.configure(packet.configuration??0);
+        this.segmentStart=this.cursor;this.anchor=this.cursor;continue;
       }
       this.actualPacket=packet;
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
-      if((this.index.codec==='hevc'||this.index.codec==='vvc')&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
       if (await this.decoder.send(await this.read(packet),packet) !== false) this.cursor++;
     }
   }

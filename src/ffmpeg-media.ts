@@ -16,6 +16,7 @@ import type { DecodedFrame, MediaSource, MediaMeta } from './media.ts';
 import type { MediaInfo } from './model.ts';
 import { MAX_FALLBACK_FILE_BYTES } from './model.ts';
 import { contextLog } from './log.ts';
+import { indexRecoveryWarning } from './index-integrity.ts';
 import { updateMediaInfo } from './media-state.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import { isHdrTransfer } from './presentation-color.ts';
@@ -244,6 +245,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     pixelFormat: init.pixelFormat ?? null,
     color: ffmpegColorInfo(init),
     colorSource: 'decoder',
+    indexIntegrity: init.indexIntegrity, indexTruncatedAt: init.indexTruncatedAt,
+    indexWarning: indexRecoveryWarning(init.indexIntegrity),
     indexSource: init.indexPending ? (indexUrl ? 'server' : 'client') : init.indexSource ?? 'client', indexState: init.indexPending ? 'building' : 'complete',
     indexKind: 'timestamps', seekAnchorCount: init.seekAnchorCount ?? 0,
     seekStrategy: init.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
@@ -327,9 +330,14 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     });
     updateMediaInfo(source, {
       durationUs, stableCoverageUs: durationUs, indexState: 'complete', indexSource: result.indexSource ?? info.indexSource,
+      indexIntegrity: result.indexIntegrity, indexTruncatedAt: result.indexTruncatedAt,
+      indexWarning: indexRecoveryWarning(result.indexIntegrity),
       seekAnchorCount: result.seekAnchorCount ?? info.seekAnchorCount,
       seekStrategy: result.seekAnchorCount ? 'demuxer-keyframe' : 'demuxer-timestamp',
     }, 'index');
+    if (result.indexIntegrity === 'prefix') contextLog().warn('media', 'FFmpeg 已保留损坏文件的有效前段', {
+      name: file.name, indexTruncatedAt: result.indexTruncatedAt, durationUs, frames: ticks.length,
+    });
     containerSession?.index.markComplete(durationUs);
     wakeIndex();
   };
@@ -409,6 +417,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     getAnalysisCapability: () => ({ hasSize: true, hasDts: analysisSummary?.hasDts ?? false, keySource: 'container',
       pictureType: 'key-only', qp: 'unsupported', indexState: info.indexState ?? 'complete',
       ...(info.indexError ? { indexError: info.indexError } : {}),
+      ...(info.indexWarning ? { note: info.indexWarning } : {}),
     }),
     async queryAnalysis(query: AnalysisQuery & { requestId: number }) {
       if (disposed) throw new Error('媒体已释放。');
@@ -417,10 +426,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       if (signal?.aborted) throw signal.reason;
       const promise = activeRpc.call('analysis', { ...request, ctx: init!.ctx,
         mediaId: info.id, firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
-        coverageUs: info.indexState === 'complete' ? { start: 0, end: info.durationUs } : null,
+        coverageUs: info.indexState === 'complete' && info.indexIntegrity !== 'prefix' ? { start: 0, end: info.durationUs } : null,
       });
       const result = await (signal ? abortableWait(promise, signal) : promise);
-      return { ...result, requestId: query.requestId };
+      return { ...result, requestId: query.requestId, ...(info.indexWarning ? { capability: { ...result.capability, note: info.indexWarning } } : {}) };
     },
     async locateAnalysisSample(sampleId: string) {
       return activeRpc.call('analysis-locate', { ctx: init!.ctx, mediaId: info.id, firstPtsUs: info.firstPtsUs, sampleId });

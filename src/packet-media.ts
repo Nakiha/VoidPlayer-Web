@@ -112,9 +112,10 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (disposed) return;
         contextLog().info('media', 'FLV 后台索引完成', { name: meta.name, originPtsUs: result.firstPtsUs,
           earliestRelativePtsUs: result.times[0], packets: result.times.length,
-          durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource });
+          durationBeforeUs: info.durationUs, durationUs: result.durationUs, indexSource: result.indexSource,
+          indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt });
         times = result.times; durations = result.durations;
-        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning},'index');
+        updateMediaInfo(source,{firstPtsUs:result.firstPtsUs,durationUs:result.durationUs,indexState:'complete',indexSource:result.indexSource,indexWarning:result.indexWarning,indexIntegrity:result.indexIntegrity,indexTruncatedAt:result.indexTruncatedAt},'index');
         wakeIndex();
       }, error => {
         if (!disposed) {
@@ -255,6 +256,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           indexState: info.indexState ?? 'complete',
           ...(info.indexError ? { indexError: info.indexError } : {}),
           ...(info.indexState === 'building' ? { note: '后台索引构建中，数值为暂定。' } : {}),
+          ...(info.indexIntegrity&&info.indexIntegrity!=='complete'?{note:info.indexWarning}:{}),
         };
       },
       async queryAnalysis(query: AnalysisQuery & { requestId: number }): Promise<AnalysisResult> {
@@ -271,7 +273,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           ...(query.curveEndUs !== undefined ? { curveEndUs: query.curveEndUs } : {}),
           ...(query.curvePixelWidth !== undefined ? { curvePixelWidth: query.curvePixelWidth } : {}),
           firstPtsUs: info.firstPtsUs, durationUs: info.durationUs,
-          coverageUs: complete ? { start: 0, end: info.durationUs } : null,
+          coverageUs: complete && (!info.indexIntegrity||info.indexIntegrity==='complete') ? { start: 0, end: info.durationUs } : null,
         }, [], 60000);
         // signal 仅表示“结果不再消费”（调用方不再等待），worker 侧排队/执行中的
         // 统计不会因此撤销；调用方必须按 requestId/版本丢弃旧结果，不得冒充已取消计算。
@@ -286,6 +288,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
             ...result.capability,
             indexState: (info.indexState ?? 'complete') as AnalysisCapability['indexState'],
             ...(info.indexError ? { indexError: info.indexError } : {}),
+            ...(info.indexIntegrity&&info.indexIntegrity!=='complete'?{note:info.indexWarning}:{}),
           },
           coverageUs: result.coverageUs ?? null,
         };

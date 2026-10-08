@@ -127,21 +127,49 @@ hardware preference nor capability acceptance proves the GPU actually used.
 
 ## Damaged tails
 
-Incomplete trailing tags retain complete indexed packets. A structurally corrupt
-suffix (stream ID, tag type/flags or footer mismatch) is also ignored only after
-a configured initial key packet, within the last 64 KiB, and when a bounded scan
-finds no later complete tag with a valid stream ID and footer. The index completes
-with `truncatedAt` and an explicit warning, persisted in shared caches. Interior gaps can recover after a playable prefix: search at most 4 KiB ahead
-and validate two consecutive complete, nonempty tags (type/flags, stream ID,
-size and PreviousTagSize). Candidate probing is capped at 64 chains and recovery
-at 16 gaps per file. The normal codec/configuration parser still validates every
-resumed tag. Original offsets, timestamps and compressed packets are retained;
-no frames or timestamps are invented. `recoveredGaps` survives immutable scan
-checkpoints and cache round trips and produces an explicit warning. Inserted
-garbage can leave decoding unchanged; lost compressed data may affect nearby
-pictures and still fail decoding. Unproven or over-limit gaps, longer corrupt
-suffixes, IO/version errors and codec/configuration errors remain failures.
-Recovery never indexes bytes from the rejected gap or suffix.
+The scanner treats container damage after a configured initial key packet as a
+recoverable boundary. Invalid type/flags, stream ID, footer, clipped tags and
+malformed video tag headers can no longer invalidate the verified packet prefix.
+It first attempts resynchronization; if proof or recovery budgets fail it returns
+that prefix with `truncatedAt` and `truncationReason`. Bad file/startup headers,
+unsupported codecs/features, codec switches, invalid configuration transitions,
+resource limits, IO/version failures, cancellation and publication failures still
+propagate as their original error types. There is no general catch-and-truncate.
+
+Recovery searches at most 1 MiB ahead, in 64 KiB blocks with ten-byte overlap.
+Two consecutive complete nonempty tags must pass type/flags, stream ID, size and
+PreviousTagSize validation. A scan has a 4 MiB recovery-probe read budget, 256
+candidate chains and at most 16 recovered segments. Budgets limit work rather
+than video availability. Reads use the existing cancellable readers; block scans
+yield to allow cancellation. Looking for a decode restart after structural
+resynchronization is also limited to 1 MiB.
+
+Structural tag recovery is not decoder recovery. After a gap, dependent pictures
+and container-only key flags are discarded until length-prefixed NAL validation
+proves an AVC IDR, HEVC IDR (19/20), or VVC IDR (7/8), with PTS later than the
+prefix's presentation frontier. A packet mixing dependent VCL NALs with an IDR
+is rejected as an anchor. CRA/open-GOP recovery and AV1 recovery are conservative:
+if no independently decodable anchor is proven, keep only the prefix. This may
+omit valid suffix pictures; it does not pretend lost references are available.
+Configuration changes during this search remain uncommitted until an anchor.
+
+The first packet of each recovered segment has `discontinuity: true`.
+`PacketTimeline` drains all available prefix outputs before resetting, even when
+the decoder configuration stays the same. Seek cannot walk back across that
+boundary. `recoveredGaps` records the corrupt offset/length and the later restart
+`resumeAt`; offsets, compressed payloads and original timestamps are preserved.
+Warnings explain both recovered gaps and an unrecovered suffix. No frame or
+source timestamp is invented. Structurally valid but damaged coded payloads can
+still cause decoder errors; these rules do not certify arbitrary bitstream data.
+
+Checkpoint `complete` and media `indexState: complete` mean indexing is terminal,
+so playback/seek waiters stop waiting. Separate `indexIntegrity` reports
+`complete`, `recovered` or `prefix`; `indexTruncatedAt` exposes the unrecovered
+byte boundary. Final progress stops at that boundary rather than claiming all
+source bytes were indexed. Degraded analysis has no continuous whole-file
+coverage claim. Schema 3 / `flv-demux-v3` persists the damage reason and decoder
+boundaries and forces old indexes to rebuild. Client and server must be upgraded
+together. Warm cache results retain the same provenance and warnings.
 
 ## Index ownership and shared scanner
 

@@ -238,6 +238,13 @@ export async function buildFfmpegIndexDocument(
     profile.scanCompleteMs = performance.now() - buildStarted;
     const count = core.ccall('vp_index_count', 'number', ['number'], [ctx]) as number;
     if (count <= 0) throw new Error('服务端 FFmpeg 无法建立媒体帧索引。');
+    if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1)
+      throw new Error('服务端 FFmpeg 损坏恢复接口版本不匹配。');
+    metadata.indexIntegrity = core.ccall('vp_index_integrity', 'number', ['number'], [ctx]) ? 'prefix' : 'complete';
+    if (metadata.indexIntegrity === 'prefix') {
+      metadata.indexTruncatedAt = Number(core.ccall('vp_index_truncated_at', 'i64', ['number'], [ctx]));
+      metadata.indexEndDts = String(core.ccall('vp_index_end_dts', 'i64', ['number'], [ctx]));
+    }
     if (count > 2_000_000) throw new Error('媒体帧数超过服务端索引上限。');
     const scannedBytes = Math.min(fileSize, Math.max(0, Number(core.ccall('vp_index_scan_bytes', 'i64', ['number'], [ctx]))));
     profile.scannedBytes = scannedBytes;

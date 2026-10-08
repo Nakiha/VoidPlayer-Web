@@ -36,13 +36,22 @@ export class Mp4Engine {
       const codec:FlvCodec=id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
       if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
       const configs=await readMp4Configurations(this.reader,track.id);
-      const available = configs.availableSamples ?? configs.sampleSizes!.length;
+      let available = configs.availableSamples ?? configs.sampleSizes!.length;
       onProgress?.('index');this.sink=new EncodedPacketSink(track);
       for await(const packet of this.sink.packets(undefined,undefined,{metadataOnly:true})){
         this.packets.push(packet);if(this.packets.length===available)break;if(this.packets.length>2_000_000)throw new MediaOpenError('resource','MP4 包索引超过上限。');
       }
       if(!this.packets.length||this.packets[0].type!=='key')throw new MediaOpenError('container','MP4 缺少起始关键帧。');
       if(available!==this.packets.length)throw new MediaOpenError('container','MP4 包数量与 sample 表不一致。');
+      if (configs.indexIntegrity === 'prefix') {
+        let cut = 0;
+        for (let i = 1; i < this.packets.length; i++) if (this.packets[i].type === 'key') cut = i;
+        if (!cut) throw new MediaOpenError('input', 'MP4 损坏前没有可确认完整的 GOP。');
+        available = cut;
+        this.packets.length = cut;
+        configs.indexTruncatedAt = configs.sampleOffsets![cut];
+        configs.warning = `文件尾部缺失：仅播放前 ${cut} 个完整视频包；已舍弃末尾可能缺少参考帧的 GOP。`;
+      }
       const resolution=await track.getTimeResolution();
       const packets:FlvPacket[]=this.packets.map((p,i)=>{
         const configuration=configs.sampleConfigurations?.[i]??0;
@@ -59,7 +68,8 @@ export class Mp4Engine {
       if(pts.some((p,i)=>i>0&&p<=pts[i-1]))throw new MediaOpenError('container','MP4 包时间戳存在歧义，需要容器解码路径。');
       const durations=order.map((p,i)=>recovered&&i+1<pts.length?pts[i+1]-pts[i]:Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
-      this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations};
+      this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
+        ...(configs.indexIntegrity === 'prefix' ? { truncatedAt: configs.indexTruncatedAt } : {})};
       this.nativeConfig=await track.getDecoderConfig()??undefined;
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
@@ -80,6 +90,7 @@ export class Mp4Engine {
       return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
+        indexIntegrity: configs.indexIntegrity, indexTruncatedAt: configs.indexTruncatedAt,
         indexWarning: [configs.warning, recovered ? '容器未记录图片重排时间，已按 HEVC 图片顺序恢复等距时间线。' : undefined].filter(Boolean).join(' ') || undefined,
         firstPtsUs,durationUs:firstPts+duration-firstPtsUs,times:pts.filter(p=>p>=firstPtsUs).map(p=>p-firstPtsUs),durations};
     }catch(error){this.close();throw error;}

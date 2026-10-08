@@ -5,7 +5,7 @@ import {
 } from '../../src/media-index-identity.ts';
 
 test('media index identity validates format, stream, schema, and indexer build', () => {
-  const flv = new URLSearchParams('stream=video%3A0&schema=2&indexer=flv-demux-v2');
+  const flv = new URLSearchParams('stream=video%3A0&schema=3&indexer=flv-demux-v3');
   assert.deepEqual(parseMediaIndexIdentity('flv', flv), FLV_MEDIA_INDEX_IDENTITY);
 
   const ffmpeg = new URLSearchParams('stream=video%3A2&schema=3&indexer=' + 'a'.repeat(40));

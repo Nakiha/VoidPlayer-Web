@@ -64,7 +64,9 @@ parentPort!.on('message', async (request: {
       },
     );
     const finishStarted = performance.now();
-    store.finishBuild(request.id, request.version, request.identity, request.epoch, request.buildId, result.scannedBytes, result.stablePresentationUs, result.count);
+    store.finishBuild(request.id, request.version, request.identity, request.epoch, request.buildId, result.scannedBytes, result.stablePresentationUs, result.count, {
+      indexIntegrity: result.metadata.indexIntegrity, indexTruncatedAt: result.metadata.indexTruncatedAt, indexEndDts: result.metadata.indexEndDts,
+    });
     storageProfile.finishMs = performance.now() - finishStarted;
     result.profile.storage = storageProfile;
     parentPort!.postMessage({ type: 'complete', data: { buildId: request.buildId } });
