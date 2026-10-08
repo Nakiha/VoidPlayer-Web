@@ -27,7 +27,12 @@ try {
   const b = await browser.newContext({locale:'zh-CN'}); const errors = [];
   const page = await a.newPage(), other = await b.newPage();
   for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
-  const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
+  // Labels can update before the following user-list refresh finishes. Drain
+  // normal requests before navigation/restart/close so WebKit does not report
+  // a test-induced aborted fetch as a page error. The stalled-list case below
+  // deliberately does not use this wait and still requires prompt guest entry.
+  const settled = (...pages) => Promise.all(pages.map(p => p.waitForLoadState('networkidle')));
+  const settings = async p => { await p.locator('#settings-open').click(); await p.locator('#settings-tab-identity').click(); await p.waitForFunction(() => !document.querySelector('#identity-name').disabled); await settled(p); if ((await p.locator('#identity-current').innerText()) !== '访客') { await p.locator('#identity-users').click(); await p.locator('#identity-users-menu [data-value=rename]').click(); } };
   if (insecure) await routeInsecureTestOrigin(page);
   const initial = await page.goto(base);
   if (insecure) {
@@ -141,6 +146,7 @@ try {
   const tab = await a.newPage(); await tab.goto(base); await settings(tab);
   await tab.locator('#identity-name').fill('新名字'); await tab.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '新名字');
+  await settled(page, other, tab);
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-name').fill('   '); assert.equal(await page.locator('#identity-save').isDisabled(), true);
   assert.equal(await page.locator('#identity-current').innerText(), '新名字');
@@ -151,11 +157,12 @@ try {
   await page.setViewportSize({ width: 390, height: 700 });
   const overflow = await page.locator('#settings-pane-identity').evaluate(e => e.scrollWidth - e.clientWidth); assert.ok(overflow <= 1);
   await page.screenshot({ path: '/tmp/voidplayer-identity-mobile.png' });
+  await settled(page, other, tab);
   console.log('Identity browser: users, cross-tab synchronization and layout passed; restarting service');
   service = await lifecycle.restart();
   console.log('Identity browser: service restarted');
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
-  await a.clearCookies(); await page.reload(); await page.locator('#identity-welcome [data-guest]').click(); await settings(page);
+  await a.clearCookies(); await page.reload(); await settled(page); await page.locator('#identity-welcome [data-guest]').click(); await settings(page);
   assert.notEqual(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-users').click();
   await page.locator(`#identity-users-menu [data-value="${id}"]`).click(); await page.locator("#identity-save").click();
@@ -200,6 +207,7 @@ try {
   await returning.locator('#identity-welcome .welcome-enter').click();
   await returning.locator('#identity-welcome').waitFor({ state: 'hidden' });
   assert.equal(await returning.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.identity')).id), id);
+  await settled(returning);
   await returningContext.close();
   // Explicit settings actions keep rename, create and switch distinct.
   const editContext = await browser.newContext({locale:'zh-CN'}); const editPage = await editContext.newPage();
@@ -221,6 +229,7 @@ try {
   assert.equal(await editPage.locator('.saved-workspace-search').isVisible(), true);
   assert.equal(await editPage.locator('.saved-workspace-pages').isVisible(), false);
   assert.equal(await editPage.locator('#saved-workspace-share').isEnabled(), false);
+  await settled(editPage);
   await editContext.close();
   // A failed list must not label unknown names as new; failed submission remains retryable.
   const failureContext = await browser.newContext({locale:'zh-CN'}); const failure = await failureContext.newPage();
@@ -237,6 +246,7 @@ try {
   await failure.locator('#identity-welcome input').fill('');
   await failure.locator('.welcome-enter').click();
   await failure.locator('#identity-welcome').waitFor({ state: 'hidden' });
+  await settled(failure);
   await failureContext.close();
   // A stalled list must not block visitor entry or keep the welcome dialog alive.
   const slowContext = await browser.newContext({locale:'zh-CN'}); const slow = await slowContext.newPage();
@@ -247,6 +257,7 @@ try {
   await slow.locator('#identity-welcome [data-guest]').click();
   await slow.locator('#identity-welcome').waitFor({ state: 'hidden', timeout: 2000 });
   releaseList(); await slowContext.close();
+  await settled(page, other, tab);
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
   console.log('PASS identity: explicit names and guests, no read-created users, unique rename, dropdown switch, cross-tab sync, reload/restart/cleared-cookie recovery, invalid input, light/dark/mobile layout');
