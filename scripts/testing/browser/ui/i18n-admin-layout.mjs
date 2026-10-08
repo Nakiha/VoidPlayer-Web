@@ -18,7 +18,13 @@ await withBrowserFixture({caseName:'i18n-admin-layout',engine,pageOptions:{viewp
  for(const width of [1280,720,390,320]){
   await page.setViewportSize({width,height:900});
   for(const pane of ['overview','library','caches','workspaces','annotations','logs','measurements']){
-   await page.locator(`[data-pane=${pane}]`).click();await page.waitForTimeout(80);
+   // A pane click starts an asynchronous measurement poll. Finish its body
+   // before installing routes/navigating: WebKit reports an in-flight request
+   // interrupted by navigation as an access-control page error.
+   const measurement = pane === 'measurements' ? page.waitForResponse(response => new URL(response.url()).pathname === '/api/admin/measurements') : null;
+   await page.locator(`[data-pane=${pane}]`).click();
+   if(measurement){const response=await measurement;assert.equal(response.status(),200);assert.equal(await response.finished(),null);}
+   await page.waitForTimeout(80);
    const result=await page.locator(`#pane-${pane}`).evaluate(el=>{
     const errors=[],bounds=el.getBoundingClientRect();
     for(const node of el.querySelectorAll('button,input,textarea,h1,h2,dt')){
@@ -31,6 +37,9 @@ await withBrowserFixture({caseName:'i18n-admin-layout',engine,pageOptions:{viewp
    if(width===390&&['library','measurements'].includes(pane)||width===1280&&pane==='overview')await page.screenshot({path:artifact(`admin-pseudo-${pane}-${width}.png`)});
   }
  }
+ // Leave the measurement pane so its interval cannot start another poll
+ // while the next document is loading. Keep the page-error assertion intact.
+ await page.locator('[data-pane=overview]').click();
  await page.route('**/api/connection',r=>r.fulfill({json:{configured:true,httpsUrl:'https://example.test/',certificateUrl:'/api/connection/certificate',fingerprint:'00:AB'}}));
  await page.goto(url+'connection?pseudo-locale');await page.locator('#connection-setup').waitFor({state:'visible'});
  assert.match(await page.locator('#connection-download-title').innerText(),/［/);
