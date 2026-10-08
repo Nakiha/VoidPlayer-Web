@@ -2,18 +2,22 @@ import { createHash } from 'node:crypto';
 
 class IntegrityError extends Error {}
 class HttpError extends Error {
-  constructor(file, status) { super(`${file}: HTTP ${status}`); this.status = status; }
+  status: number;
+  constructor(file: string, status: number) { super(`${file}: HTTP ${status}`); this.status = status; }
 }
-const retryable = error => error instanceof HttpError
+const retryable = (error: unknown) => error instanceof HttpError
   ? error.status === 429 || error.status >= 500
-  : !(error instanceof IntegrityError) && (error instanceof TypeError || error.name === 'TimeoutError' || /^(UND_ERR_|ECONNRESET|ETIMEDOUT)/.test(error.cause?.code ?? error.code ?? ''));
+  : error instanceof Error && !(error instanceof IntegrityError) && (error instanceof TypeError || error.name === 'TimeoutError' || /^(UND_ERR_|ECONNRESET|ETIMEDOUT)/.test((error as {cause?: {code?: string}; code?: string}).cause?.code ?? (error as {code?: string}).code ?? ''));
+
+type PinnedSample = {file: string; url: string; size: number; sha256: string};
+type DownloadOptions = {fetchImpl?: typeof fetch; wait?: (ms: number) => Promise<void>; onRetry?: (message: string) => void; attempts?: number};
 
 // Shared fixture acquisition helper, imported by the FATE preparation tool.
 // Retry only transport/server availability failures. Pinned byte counts and
 // hashes are mandatory on every attempt, and integrity failures stay fatal.
-export async function downloadPinnedSample(sample, { fetchImpl = fetch,
+export async function downloadPinnedSample(sample: PinnedSample, { fetchImpl = fetch,
   wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
-  onRetry = message => console.warn(message), attempts = 3 } = {}) {
+  onRetry = message => console.warn(message), attempts = 3 }: DownloadOptions = {}) {
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       const response = await fetchImpl(sample.url, { signal: AbortSignal.timeout(60000) });
@@ -21,7 +25,8 @@ export async function downloadPinnedSample(sample, { fetchImpl = fetch,
         await response.body?.cancel();
         throw new HttpError(sample.file, response.status);
       }
-      const chunks = []; let size = 0;
+      if (!response.body) throw new IntegrityError(`${sample.file}: empty download body`);
+      const chunks: Uint8Array[] = []; let size = 0;
       for await (const chunk of response.body) {
         size += chunk.byteLength;
         if (size > sample.size) throw new IntegrityError(`${sample.file}: download exceeds pinned size`);

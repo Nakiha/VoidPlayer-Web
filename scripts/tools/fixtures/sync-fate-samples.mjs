@@ -1,6 +1,6 @@
 import {readFile,writeFile,mkdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
-import {downloadPinnedSample} from '../../testing/pinned-download.mjs';
+import {downloadPinnedSample} from '../../testing/pinned-download.ts';
 const samples=[...JSON.parse(await readFile(new URL('../../fate-samples.json',import.meta.url))),
   ...JSON.parse(await readFile(new URL('../../fate-timestamp-samples.json',import.meta.url)))];
 await mkdir('fixtures/fate',{recursive:true});
