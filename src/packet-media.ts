@@ -93,6 +93,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     contextLog().info('media', `${container.toUpperCase()} 已通过 TS 解封装载入`, { name: meta.name, codec: init.codec, decoder: init.decoder, packets: times.length, io: 'file' in input ? 'blob-chunks' : 'http-range',timelineSource:init.timelineSource,indexWarning:init.indexWarning,hardwareAcceleration:init.hardwareAcceleration, coreVariant: info.coreVariant, requestedThreads: init.decoder === 'ffmpeg-wasm' ? reservation.threads : undefined,
       startupPacketOffset: startup?.index.packets[0]?.offset, startupNextOffset: startup?.nextOffset, startupIndexComplete: startup?.complete });
     const yuvPool=createYuvBufferPool();
+    if (container === 'flv') info.opportunisticAudio = 'flv-aac';
     let disposed = false, spare: ArrayBuffer | undefined;
     let serial = Promise.resolve();
     let indexing: Promise<void> | undefined;
@@ -244,6 +245,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     };
     const source: MediaSource = {
       info, ensureIndexed,
+      ...(container === 'flv' ? {
+        requestCachedAudio(ptsUs: number, generation: number) { if (!disposed) activeRpc.requestCachedAudio(ptsUs + info.firstPtsUs, generation); },
+      } : {}),
       reconfigureColorMode,
       async admitReference(depth) {
         await reconfigureColorMode('reference', { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] }, deps.signal);
@@ -343,7 +347,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() { if (!disposed) { deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
     };
     const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
     activateVerifiedNativeYuv=adapter=>{
@@ -363,6 +367,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       source.framesFollowing=baseFramesFollowing;
       adapter.dispose();
     };
+    activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
     return source;
   } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

@@ -1,3 +1,4 @@
+import { FlvCachedAudio } from './flv-cached-audio.ts';
 import { PacketTimeline } from './packet-timeline.ts';
 import { FlvIndexClient } from './flv-index-client.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
@@ -13,6 +14,7 @@ export interface PreparedFlv extends FlvCheckpoint { version: RangeVersion; }
 export class FlvEngine {
   nativeDiagnostics: Record<string, unknown>[] = [];
   readonly reader: FlvReader;
+  readonly cachedAudio: FlvCachedAudio;
   private cache: FlvIndexClient;
   private scanReader?: FlvReader;
   private serverProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
@@ -57,6 +59,7 @@ export class FlvEngine {
   }
   constructor(input: FlvInput, prepared?: PreparedFlv) {
     this.reader = new FlvReader(input, prepared?.version);
+    this.cachedAudio = new FlvCachedAudio(this.reader);
     this.cache = new FlvIndexClient('url' in input ? input.url : undefined, this.reader.size, progress => {
       if(this.index)this.serverProgress?.({...progress,durationUs:flvMediaTiming(this.index).durationUs});
     });
@@ -73,6 +76,7 @@ export class FlvEngine {
       } catch (error) { this.close(); throw error; }
       finally { this.reader.setIndexing(false); }
     }
+    this.cachedAudio.prime();
     return { ...this.checkpoint!, version: this.reader.version };
   }
   async completeIndex(onProgress?: MediaOpenProgress, cached?: FlvIndex, publish?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void) {

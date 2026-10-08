@@ -102,6 +102,8 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     get info(){return source.info;},set info(info){source.info=info;},
     get onInfoChange(){return source.onInfoChange;},set onInfoChange(fn){source.onInfoChange=fn;},
     ensureIndexed:source.ensureIndexed?.bind(source),
+    requestCachedAudio:source.requestCachedAudio?.bind(source),
+    get onCachedAudio(){return source.onCachedAudio;},set onCachedAudio(fn){source.onCachedAudio=fn;},
     getAnalysisCapability:source.getAnalysisCapability?.bind(source),
     queryAnalysis:source.queryAnalysis?.bind(source),
     rankAnalysisTime:source.rankAnalysisTime?.bind(source),

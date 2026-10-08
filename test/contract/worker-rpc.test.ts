@@ -35,6 +35,29 @@ test('browser transport preserves request IDs, command payloads, transfers and r
   rpc.terminate();
 });
 
+test('optional cache observations never occupy or fail video RPC requests', async () => {
+  const stub = browserWorker(), rpc = new WorkerRpc<PacketCommands>(stub.worker);
+  let observed = 0;
+  rpc.onCachedAudio = generation => { observed = generation; };
+  rpc.requestCachedAudio(42, 7);
+  assert.deepEqual(stub.sent[0].message, { id: 0, type: 'cached-audio', pts: 42, generation: 7 });
+  stub.emit({ id: 0, type: 'cached-audio', generation: 7, data: { packets: [] } });
+  assert.equal(observed, 7);
+  const post = stub.worker.postMessage.bind(stub.worker);
+  stub.worker.postMessage = ((message: { type: string }, transfer?: Transferable[]) => {
+    if (message.type === 'cached-audio') throw new Error('audio observation unavailable');
+    post(message, transfer ?? []);
+  }) as Worker['postMessage'];
+  assert.doesNotThrow(() => rpc.requestCachedAudio(43, 8));
+  const pending = rpc.call('at', { pts: 44 });
+  assert.equal((stub.sent.at(-1)!.message as { id: number }).id, 1);
+  stub.emit(workerReply<PacketCommands>()({ id: 1, type: 'at', pts: 44 }, null));
+  assert.equal(await pending, null);
+  rpc.terminate(); rpc.requestCachedAudio(45, 9);
+  stub.emit({ id: 0, type: 'cached-audio', generation: 9, data: { packets: [] } });
+  assert.equal(observed, 7);
+});
+
 test('browser errors reject all pending requests and termination is idempotent', async () => {
   const stub = browserWorker(); let released = 0;
   const rpc = new WorkerRpc(stub.worker, () => released++);

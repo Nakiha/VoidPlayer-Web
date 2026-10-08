@@ -15,11 +15,29 @@ async function start() {
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | undefined;
   let chain = Promise.resolve();
+  let audioTimer: ReturnType<typeof setTimeout> | undefined;
+  let audioRequest: { pts: number; generation: number } | undefined;
   // 轴排序缓存：同一包表只付一次排序成本，hover/缩放只做区间二分与有界物化。
   // 首个大索引的同步排序仍会短暂占用本 worker 线程（与解码同线程），因此
   // 主线程只在视口需要时查询，且结果按像素宽度聚合，不逐帧全量索取。
   const querier = createSourceQuerier();
   const receive = (message: WorkerRequest<PacketCommands>) => {
+    if (message.type === 'cached-audio') {
+      // Never enter the video extraction chain. Coalesce and defer the bounded
+      // cache walk; no network access, IO queue, or decoder is involved here.
+      audioRequest = message;
+      if (audioTimer === undefined) audioTimer = setTimeout(() => {
+        audioTimer = undefined;
+        const request = audioRequest; audioRequest = undefined;
+        if (!request) return;
+        try {
+          const data = engine instanceof FlvEngine && engine.index
+            ? engine.cachedAudio.read(engine.index, request.pts) : { packets: [] };
+          send({ id: 0, type: 'cached-audio', generation: request.generation, data }, data.packets.map(p => p.data.buffer as ArrayBuffer));
+        } catch { /* Optional audio cannot fail the video command chain. */ }
+      }, 0);
+      return;
+    }
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Incremental commits never await the extraction chain: an extract may

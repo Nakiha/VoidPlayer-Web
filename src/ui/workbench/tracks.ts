@@ -98,6 +98,16 @@ export function createTracksPane(shared: WorkbenchShared) {
     }
   }
 
+  function audioLabel(state: WorkbenchState, track: ReviewTrack) {
+    if (!track.opportunisticAudio) return t(msg('tracks.audioUnsupportedContainer', '顺带音频暂仅支持 FLV/AAC'));
+    if (state.audioSlot !== track.slot) return t(msg('tracks.unmuteAudio', '解除轨道 {slot} 静音（仅利用视频已读数据）'), { slot: track.slot });
+    const status = state.audioStatus === 'unsupported' ? t(msg('tracks.audioUnsupportedCodec', '音频编码或浏览器暂不支持'))
+      : state.audioStatus === 'blocked' ? t(msg('tracks.audioBlocked', '浏览器未允许音频，请关闭后再次点击喇叭'))
+      : state.audioStatus === 'playing' ? t(msg('tracks.audioPlaying', '正在出声'))
+      : t(msg('tracks.audioWaiting', '等待播放或可用的附带音频'));
+    return t(msg('tracks.muteAudio', '静音轨道 {slot} · {status}'), { slot: track.slot, status });
+  }
+
   function renderDock(state: WorkbenchState, annotations: { render(items: { mark: Mark; slot: Slot; offsetUs: number }[]): void }) {
     const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision ?? 0}`).join('/') + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
@@ -169,18 +179,32 @@ export function createTracksPane(shared: WorkbenchShared) {
           format: value => `${+(value / 1000).toFixed(3)} ms`, parse: value => parseTimeInput(value, 'ms', true), begin: () => session.pause(),
           commit: offsetUs => act(() => session.setTrackOffset(track.slot, offsetUs), 'ui.track-offset', { slot: track.slot, offsetUs }),
         });
+        const audio = createIconButton({ glyph: 'speakerMuted', label: audioLabel(state, track), className: 'track-audio' });
+        audio.onclick = () => {
+          const enabled = session.getState().audioSlot !== track.slot;
+          // Keep user activation: do not defer this action through an async UI queue.
+          session.setTrackAudio(track.slot, enabled);
+        };
         const visibility = createIconButton({ glyph: 'eye', label: t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }), className: 'track-visibility' });
         visibility.onclick = () => {
           const current = session.getState().tracks.find(t => t.slot === track.slot);
           if (current) session.setTrackVisibility(track.slot, !current.visible);
         };
-        label.append(name); row.append(label, offset, lane, visibility); list.append(row);
+        label.append(name); row.append(label, offset, lane, audio, visibility); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
     }
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
       const track = state.tracks.find(t => t.slot === row.dataset.trackDrag)!;
+      const audio = row.querySelector<HTMLButtonElement>('.track-audio')!;
+      const enabled = state.audioSlot === track.slot, audioGlyph = enabled ? 'speaker' : 'speakerMuted';
+      audio.disabled = !track.opportunisticAudio || !!track.failure;
+      audio.setAttribute('aria-label', audioLabel(state, track));
+      audio.setAttribute('aria-pressed', String(enabled));
+      audio.dataset.tooltip = audioLabel(state, track);
+      audio.dataset.audioStatus = enabled ? state.audioStatus : 'muted';
+      if (audio.firstElementChild?.getAttribute('data-icon') !== audioGlyph) audio.innerHTML = icon(audioGlyph);
       const visibility = row.querySelector<HTMLButtonElement>('.track-visibility')!;
       const label = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });
       visibility.setAttribute('aria-label', label);
@@ -240,6 +264,8 @@ export function createTracksPane(shared: WorkbenchShared) {
       const offset = row.querySelector<HTMLElement>('.track-offset')!;
       offset.setAttribute('aria-label', t(msg("tracks.trackOffsetMilliseconds", "轨道 {p0} 偏移，毫秒"), { p0: track.slot }));
       offset.dataset.tooltip = t(msg("tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds", "同步偏移：正值延后，负值提前（毫秒）"));
+      const audio = row.querySelector<HTMLElement>('.track-audio')!;
+      audio.setAttribute('aria-label', audioLabel(state, track)); audio.dataset.tooltip = audioLabel(state, track);
       const visibility = row.querySelector<HTMLElement>('.track-visibility');
       if (visibility) {
         const visibilityLabel = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });

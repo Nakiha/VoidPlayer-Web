@@ -19,6 +19,7 @@ import { randomUUID } from './uuid.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { Input, BlobSource, UrlSource, ALL_FORMATS, IsobmffInputFormat, VideoSampleSink, UnsupportedInputFormatError } from 'mediabunny';
+import type { CachedAudioBatch } from './audio-types.ts';
 import type { VideoSample } from 'mediabunny';
 import { NativeAnalysisAdapter } from './analysis/native-adapter.ts';
 import type { MediaInfo, FrameInfo } from './model.ts';
@@ -42,6 +43,9 @@ export interface DecodedFrame extends FrameInfo {
 }
 export interface MediaSource {
   info: MediaInfo;
+  /** Fire-and-forget cache observation; implementations must never read missing bytes. */
+  requestCachedAudio?(ptsUs: number, generation: number): void;
+  onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
   /** Background container indexing can extend duration after the first frame. */
   onInfoChange?: (change?:MediaInfoChange) => void;
   ensureIndexed?(ptsUs?: number): Promise<void>;

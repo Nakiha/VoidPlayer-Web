@@ -7051,12 +7051,47 @@
       "src/ui/workbench/tracks.ts:48"
     ]
   },
+  "tracks.audioBlocked": {
+    "source": "浏览器未允许音频，请关闭后再次点击喇叭",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:105"
+    ]
+  },
+  "tracks.audioPlaying": {
+    "source": "正在出声",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:106"
+    ]
+  },
+  "tracks.audioUnsupportedCodec": {
+    "source": "音频编码或浏览器暂不支持",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:104"
+    ]
+  },
+  "tracks.audioUnsupportedContainer": {
+    "source": "顺带音频暂仅支持 FLV/AAC",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:102"
+    ]
+  },
+  "tracks.audioWaiting": {
+    "source": "等待播放或可用的附带音频",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:107"
+    ]
+  },
   "tracks.browserDecoderMemoryFormatMayDifferFrom": {
     "source": "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:79",
-      "src/ui/workbench/tracks.ts:223"
+      "src/ui/workbench/tracks.ts:247"
     ]
   },
   "tracks.browserDefault": {
@@ -7085,7 +7120,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:86",
-      "src/ui/workbench/tracks.ts:230"
+      "src/ui/workbench/tracks.ts:254"
     ]
   },
   "tracks.codec": {
@@ -7128,7 +7163,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:84",
-      "src/ui/workbench/tracks.ts:229"
+      "src/ui/workbench/tracks.ts:253"
     ]
   },
   "tracks.decodedPixelFormat": {
@@ -7173,7 +7208,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:86",
-      "src/ui/workbench/tracks.ts:230"
+      "src/ui/workbench/tracks.ts:254"
     ]
   },
   "tracks.frameIndex": {
@@ -7196,9 +7231,9 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:172",
-      "src/ui/workbench/tracks.ts:185",
-      "src/ui/workbench/tracks.ts:245"
+      "src/ui/workbench/tracks.ts:188",
+      "src/ui/workbench/tracks.ts:209",
+      "src/ui/workbench/tracks.ts:271"
     ]
   },
   "tracks.indexFailed": {
@@ -7216,15 +7251,15 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:119",
-      "src/ui/workbench/tracks.ts:236"
+      "src/ui/workbench/tracks.ts:129",
+      "src/ui/workbench/tracks.ts:260"
     ]
   },
   "tracks.loadAVideoToViewTracksAnd": {
     "source": "载入视频后查看轨道与标记",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:179"
+      "src/ui/workbench/tracks.ts:195"
     ]
   },
   "tracks.mark": {
@@ -7235,8 +7270,8 @@
       "p2": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:155",
-      "src/ui/workbench/tracks.ts:250"
+      "src/ui/workbench/tracks.ts:165",
+      "src/ui/workbench/tracks.ts:276"
     ]
   },
   "tracks.matrixCoefficients": {
@@ -7246,11 +7281,21 @@
       "src/ui/workbench/tracks.ts:53"
     ]
   },
+  "tracks.muteAudio": {
+    "source": "静音轨道 {slot} · {status}",
+    "params": {
+      "slot": "string | number",
+      "status": "string | number"
+    },
+    "locations": [
+      "src/ui/workbench/tracks.ts:108"
+    ]
+  },
   "tracks.noTrackLoaded": {
     "source": "尚未载入轨道",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:232"
+      "src/ui/workbench/tracks.ts:256"
     ]
   },
   "tracks.noTracksLoaded": {
@@ -7300,7 +7345,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:86",
-      "src/ui/workbench/tracks.ts:230"
+      "src/ui/workbench/tracks.ts:254"
     ]
   },
   "tracks.reusedServerCache": {
@@ -7330,8 +7375,8 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:129",
-      "src/ui/workbench/tracks.ts:239"
+      "src/ui/workbench/tracks.ts:139",
+      "src/ui/workbench/tracks.ts:263"
     ]
   },
   "tracks.selectTrack": {
@@ -7341,7 +7386,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:67",
-      "src/ui/workbench/tracks.ts:217"
+      "src/ui/workbench/tracks.ts:241"
     ]
   },
   "tracks.showTrack": {
@@ -7350,8 +7395,8 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:185",
-      "src/ui/workbench/tracks.ts:245"
+      "src/ui/workbench/tracks.ts:209",
+      "src/ui/workbench/tracks.ts:271"
     ]
   },
   "tracks.sourceBitstreamMetadataReadByDecoder": {
@@ -7359,7 +7404,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:80",
-      "src/ui/workbench/tracks.ts:224"
+      "src/ui/workbench/tracks.ts:248"
     ]
   },
   "tracks.sourceContainerTags": {
@@ -7367,7 +7412,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:80",
-      "src/ui/workbench/tracks.ts:224"
+      "src/ui/workbench/tracks.ts:248"
     ]
   },
   "tracks.sourcePts": {
@@ -7375,15 +7420,15 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:86",
-      "src/ui/workbench/tracks.ts:230"
+      "src/ui/workbench/tracks.ts:254"
     ]
   },
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": {
     "source": "同步偏移：正值延后，负值提前（毫秒）",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:166",
-      "src/ui/workbench/tracks.ts:242"
+      "src/ui/workbench/tracks.ts:176",
+      "src/ui/workbench/tracks.ts:266"
     ]
   },
   "tracks.track": {
@@ -7393,7 +7438,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:75",
-      "src/ui/workbench/tracks.ts:228"
+      "src/ui/workbench/tracks.ts:252"
     ]
   },
   "tracks.trackDurationClickToSeek": {
@@ -7403,8 +7448,8 @@
       "p1": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:128",
-      "src/ui/workbench/tracks.ts:238"
+      "src/ui/workbench/tracks.ts:138",
+      "src/ui/workbench/tracks.ts:262"
     ]
   },
   "tracks.trackOffsetMilliseconds": {
@@ -7413,8 +7458,8 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:166",
-      "src/ui/workbench/tracks.ts:241"
+      "src/ui/workbench/tracks.ts:176",
+      "src/ui/workbench/tracks.ts:265"
     ]
   },
   "tracks.transferFunction": {
@@ -7422,6 +7467,15 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:52"
+    ]
+  },
+  "tracks.unmuteAudio": {
+    "source": "解除轨道 {slot} 静音（仅利用视频已读数据）",
+    "params": {
+      "slot": "string | number"
+    },
+    "locations": [
+      "src/ui/workbench/tracks.ts:103"
     ]
   },
   "transfer.cancelImport": {

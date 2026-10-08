@@ -1,3 +1,4 @@
+import type { CachedAudioBatch } from './audio-types.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
@@ -7,6 +8,7 @@ import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordMani
 import type { FfmpegCommands, FfmpegInitResult as InitResult, WorkerMessage, IndexBatch, IndexError, IndexEvent, IndexInputPayload, CommandsShape } from './worker-protocol.ts';
 
 export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
+  onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
   onIndexWaiting?: (waiting: boolean) => void;
   onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   private indexHandlers?: { batch?: (data: IndexBatch) => void; complete?: (data: InitResult) => void; error?: (data: IndexError) => void };
@@ -29,6 +31,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     this.worker = worker;
     const onMessage = (data: WorkerMessage<C>) => {
       if ('type' in data) {
+        if (data.type === 'cached-audio') { if (!this.failure) this.onCachedAudio?.(data.generation, data.data); return; }
         if (data.type === 'ready') {
           const entry = this.pending.get(data.id);
           if (!entry) return;
@@ -159,6 +162,11 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     if (this.failure || this.indexTerminal || this.indexRequestId === undefined) return;
     try { this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', ...input }, transfer); }
     catch (error) { this.reportIndexError(error instanceof Error ? error.message : String(error)); }
+  }
+  /** Optional cache observation has no pending entry, timeout, or video-worker failure path. */
+  requestCachedAudio(pts: number, generation: number) {
+    if (this.failure) return;
+    try { this.worker.postMessage({ id: 0, type: 'cached-audio', pts, generation }); } catch {}
   }
   call<K extends keyof C & string>(type: K, payload: NoInfer<C[K]['request']>, transfer: Transferable[] = [], timeoutMs = 15000, idleTimeout = false): Promise<C[K]['response']> {
     if (this.failure) return Promise.reject(this.failure);

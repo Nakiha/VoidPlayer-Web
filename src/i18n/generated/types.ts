@@ -925,6 +925,11 @@ export interface Sources {
   "theme.invalidBase": "请输入有效的 HEX 基调色，例如 #EEE7DE。";
   "toast.dismissNotification": "关闭通知";
   "tracks.accelerationRequest": "加速请求";
+  "tracks.audioBlocked": "浏览器未允许音频，请关闭后再次点击喇叭";
+  "tracks.audioPlaying": "正在出声";
+  "tracks.audioUnsupportedCodec": "音频编码或浏览器暂不支持";
+  "tracks.audioUnsupportedContainer": "顺带音频暂仅支持 FLV/AAC";
+  "tracks.audioWaiting": "等待播放或可用的附带音频";
   "tracks.browserDecoderMemoryFormatMayDifferFrom": "浏览器解码输出的内存格式，可能与源视频的像素格式不同";
   "tracks.browserDefault": "浏览器自动选择";
   "tracks.browserMediaIndex": "浏览器媒体索引";
@@ -950,6 +955,7 @@ export interface Sources {
   "tracks.loadAVideoToViewTracksAnd": "载入视频后查看轨道与标记";
   "tracks.mark": "标记 {p0} {p1} {p2}";
   "tracks.matrixCoefficients": "矩阵系数";
+  "tracks.muteAudio": "静音轨道 {slot} · {status}";
   "tracks.noTrackLoaded": "尚未载入轨道";
   "tracks.noTracksLoaded": "尚未载入轨道";
   "tracks.notProvided": "未提供";
@@ -972,6 +978,7 @@ export interface Sources {
   "tracks.trackDurationClickToSeek": "轨道 {p0} 时长 {p1}；点击定位";
   "tracks.trackOffsetMilliseconds": "轨道 {p0} 偏移，毫秒";
   "tracks.transferFunction": "传递特性";
+  "tracks.unmuteAudio": "解除轨道 {slot} 静音（仅利用视频已读数据）";
   "transfer.cancelImport": "取消导入";
   "transfer.detailSeparator": "、";
   "transfer.identityMismatch": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。";
@@ -1926,6 +1933,11 @@ export interface MessageParameters {
   "theme.invalidBase": {  };
   "toast.dismissNotification": {  };
   "tracks.accelerationRequest": {  };
+  "tracks.audioBlocked": {  };
+  "tracks.audioPlaying": {  };
+  "tracks.audioUnsupportedCodec": {  };
+  "tracks.audioUnsupportedContainer": {  };
+  "tracks.audioWaiting": {  };
   "tracks.browserDecoderMemoryFormatMayDifferFrom": {  };
   "tracks.browserDefault": {  };
   "tracks.browserMediaIndex": {  };
@@ -1951,6 +1963,7 @@ export interface MessageParameters {
   "tracks.loadAVideoToViewTracksAnd": {  };
   "tracks.mark": { "p0": string | number; "p1": string | number; "p2": string | number };
   "tracks.matrixCoefficients": {  };
+  "tracks.muteAudio": { "slot": string | number; "status": string | number };
   "tracks.noTrackLoaded": {  };
   "tracks.noTracksLoaded": {  };
   "tracks.notProvided": {  };
@@ -1973,6 +1986,7 @@ export interface MessageParameters {
   "tracks.trackDurationClickToSeek": { "p0": string | number; "p1": string | number };
   "tracks.trackOffsetMilliseconds": { "p0": string | number };
   "tracks.transferFunction": {  };
+  "tracks.unmuteAudio": { "slot": string | number };
   "transfer.cancelImport": {  };
   "transfer.detailSeparator": {  };
   "transfer.identityMismatch": { "details": string | number; "name": string | number };

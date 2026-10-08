@@ -9,6 +9,7 @@ import type { FlvInput } from './flv-demux.ts';
 import type { FlvEngine, PreparedFlv } from './flv-engine.ts';
 import type { Mp4Engine } from './mp4-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
+import type { CachedAudioBatch } from './audio-types.ts';
 import type { MediaInfo } from './model.ts';
 import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
@@ -57,6 +58,7 @@ type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
   init: Command<SoftwareOptions & { input: FlvInput; prepared?: PreparedFlv; forceWasm?: boolean; container?: 'flv' | 'mp4' }, PacketInitResult>;
@@ -86,6 +88,7 @@ export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };
 export type WorkerEvent = ({ id: number } & IndexEvent)
+  | { id: number; type: 'cached-audio'; generation: number; data: CachedAudioBatch }
   | { id: number; type: 'ready'; data: FfmpegInitResult }
   | { id: number; type: 'index-waiting'; data: boolean }
   | { id: number; type: 'index-progress'; data: IndexProgress }

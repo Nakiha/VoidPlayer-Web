@@ -25,6 +25,23 @@ export class RangeReader {
   }
   /** Preserve the source version when a decoder worker is replaced. */
   get version(): RangeVersion { return { validator: this.validator, ifRange: this.ifRange }; }
+  /** Cache-only observation: never loads, queues IO, or promotes/evicts blocks. */
+  peek(offset: number, length: number): Uint8Array | undefined {
+    if (this.controller.signal.aborted || !Number.isSafeInteger(offset) || !Number.isSafeInteger(length)
+      || offset < 0 || length < 0 || length > 64 * 1024 || offset + length > this.size) return;
+    for (let p = Math.floor(offset / this.blockSize) * this.blockSize; p < offset + length; p += this.blockSize) {
+      if (!this.cache.has(p)) return;
+    }
+    const output = new Uint8Array(length);
+    for (let position = offset; position < offset + length;) {
+      const start = Math.floor(position / this.blockSize) * this.blockSize;
+      const bytes = this.cache.get(start)!;
+      const count = Math.min(bytes.length - (position - start), offset + length - position);
+      output.set(bytes.subarray(position - start, position - start + count), position - offset);
+      position += count;
+    }
+    return output;
+  }
   protected setReadAheadBlocks(blocks: number) { this.readAheadBlocks = Math.max(1, Math.min(blocks, Math.floor(CACHE_BYTES / this.blockSize))); }
   read(offset: number, length: number): Promise<Uint8Array> {
     // A slow background scan must not hold already cached startup frames
