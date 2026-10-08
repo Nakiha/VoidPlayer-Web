@@ -95,6 +95,7 @@ try {
   assert.equal(await otherWelcome.isVisible(), true);
   await otherWelcome.locator('.welcome-toggle').click();
   await nameInput.fill('无匹配');
+  await other.waitForFunction(() => document.querySelector('.welcome-empty')?.textContent === '没有匹配的用户');
   assert.equal(await otherWelcome.locator('.welcome-empty').innerText(), '没有匹配的用户');
   await nameInput.fill('');
   for (const colorScheme of ['light', 'dark']) {

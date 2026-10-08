@@ -148,6 +148,10 @@ try {
     });
     assert.ok(packets.samples.length > 0, `compressed packet samples are available: ${JSON.stringify({name, cap:packets.capability, sampleCount:packets.samples.length, buckets:packets.buckets?.length, revision:packets.indexRevision,version:packets.sourceVersion, range:packets.coverageUs,truncated:packets.truncated})}`);
     assert.ok(packets.samples.every(p => p.sizeBytes >= 0 && p.decodeOrdinal >= 0));
+    // The direct query completing does not complete the panel's independent
+    // query/render cycle. Require the same ready UI state before asserting it.
+    await page.locator('.analysis-empty').waitFor({ state: 'hidden' });
+    await page.locator('.analysis-notice').waitFor({ state: 'hidden' });
     assert.equal(await page.locator('.analysis-empty').isVisible(), false);
     assert.equal(await page.locator('.analysis-notice').isVisible(), false);
     const identity = packets.samples.map(p => [p.decodeOrdinal, p.containerPtsUs, p.dtsUs, p.sizeBytes]);

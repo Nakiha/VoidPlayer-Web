@@ -46,11 +46,27 @@ try {
         await call('load_library_item', { id: item.id, slot: 'A' });
         const first = await call('get_review_session');
         const duration = first.tracks[0].durationUs;
-        for (const ptsUs of [Math.floor(duration * .6), 0, duration - 1, 0]) await call('seek_review', { ptsUs });
+        let boundary;
+        if (file === 'h264_truncated.mp4') {
+          // Sample 13 is incomplete; discard its entire GOP, including the
+          // three earlier packets in that GOP, rather than exposing them.
+          await call('seek_review', { ptsUs: 1299999 });
+          const tail = (await call('get_review_session')).tracks[0].frame.ptsUs;
+          await call('step_review', { direction: 1 });
+          const afterEnd = (await call('get_review_session')).tracks[0].frame.ptsUs;
+          await call('step_review', { direction: -1 });
+          const previous = (await call('get_review_session')).tracks[0].frame.ptsUs;
+          boundary = { tail, afterEnd, previous };
+        }
+        const seekFrames = [];
+        for (const ptsUs of [Math.floor(duration * .6), 0, duration - 1, 0]) {
+          await call('seek_review', { ptsUs });
+          seekFrames.push((await call('get_review_session')).tracks[0].frame.ptsUs);
+        }
         await call('step_review', { direction: 1 });
         const last = await call('get_review_session');
         const bench = await call('benchmark_review', { durationMs: 1000 });
-        return { first, last, bench };
+        return { first, last, bench, boundary, seekFrames };
       }, file);
       assert.deepEqual(errors, []);
       // New Chromium builds can decode High 4:2:2 natively. Preserve the
@@ -63,8 +79,13 @@ try {
       }
       if (file === 'h264_truncated.mp4') {
         assert.equal(result.first.tracks[0].decoder, 'webcodecs', 'tail truncation alone must not force software decoding');
-        assert.equal(result.first.tracks[0].durationUs, 1300000);
-        assert.match(result.first.tracks[0].indexWarning, /前 13 个完整视频包/);
+        assert.equal(result.first.tracks[0].durationUs, 1000000);
+        assert.equal(result.first.tracks[0].indexIntegrity, 'prefix');
+        assert.match(result.first.tracks[0].indexWarning, /前 10 个完整视频包/);
+        assert.match(result.first.tracks[0].indexWarning, /GOP/);
+        assert.deepEqual(result.boundary, { tail: 900000, afterEnd: 900000, previous: 800000 });
+        assert.deepEqual(result.seekFrames, [600000, 0, 900000, 0]);
+        assert.equal(result.last.tracks[0].frame.ptsUs, 100000);
       }
       assert.ok(result.last.tracks[0].frame.ptsUs > 0);
       assert.ok(requests.length > 0 && requests.every(r => /^bytes=/.test(r.range ?? '')));
