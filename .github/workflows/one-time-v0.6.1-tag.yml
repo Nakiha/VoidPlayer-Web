@@ -1,0 +1,49 @@
+name: One-time v0.6.1 tag
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: one-time-v0.6.1-tag
+  cancel-in-progress: false
+jobs:
+  create-tag:
+    if: github.ref == 'refs/heads/main' && github.repository == 'Nakiha/VoidPlayer-Web'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const repo = { owner: 'Nakiha', repo: 'VoidPlayer-Web' };
+            const sha = '801cee1e98a30d1024df02b1615674a7cc895002';
+            const tag = 'v0.6.1';
+            const { data: run } = await github.rest.actions.getWorkflowRun({ ...repo, run_id: 37730492442 });
+            assert.equal(run.head_sha, sha);
+            assert.equal(run.event, 'push');
+            assert.equal(run.head_branch, 'main');
+            assert.equal(run.status, 'completed');
+            assert.equal(run.conclusion, 'success');
+            assert.equal(run.path, '.github/workflows/release-preview.yml');
+            const { data: pkg } = await github.rest.repos.getContent({ ...repo, path: 'package.json', ref: sha });
+            assert.equal(JSON.parse(Buffer.from(pkg.content, 'base64').toString()).version, '0.6.1');
+            const { data: notes } = await github.rest.repos.getContent({ ...repo, path: 'docs/releases/0.6.1.md', ref: sha });
+            assert.ok(Buffer.from(notes.content, 'base64').toString().trim());
+            const releases = await github.paginate(github.rest.repos.listReleases, { ...repo, per_page: 100 });
+            assert.ok(!releases.some(release => release.tag_name === tag), 'Refuse existing release');
+            try {
+              await github.rest.git.getRef({ ...repo, ref: 'tags/' + tag });
+              throw new Error('Refuse existing tag');
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            const { data: created } = await github.rest.git.createRef({ ...repo, ref: 'refs/tags/' + tag, sha });
+            assert.equal(created.object.sha, sha);
+            const { data: verified } = await github.rest.git.getRef({ ...repo, ref: 'tags/' + tag });
+            assert.equal(verified.object.type, 'commit');
+            assert.equal(verified.object.sha, sha);
+            await core.summary.addHeading('Verified v0.6.1 tag').addRaw(tag + ' -> ' + sha).write();
