@@ -145,9 +145,17 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
     assert.equal(await page.locator(selector).first().evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'none','high contrast disables blur');
   }
   // A future dark palette must also control opaque/high-contrast fallbacks.
-  await page.addStyleTag({content: ':root { --surface-input-solid: #252932; --contrast-text-secondary: #e4e7ed; --swatch-selection-fill: #353b45; }'});
-  await page.waitForFunction(() => getComputedStyle(document.querySelector('#drawing-color')).backgroundColor === 'rgb(37, 41, 50)');
-  assert.equal(await page.locator('#drawing-color').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
+  await page.addStyleTag({content: ':root, :root[data-theme] { --surface-input-solid: #252932; --contrast-text-secondary: #e4e7ed; --swatch-selection-fill: #353b45; }'});
+  // drawing-color is a hidden value store, not a rendered input. Linux WebKit
+  // need not update its computed paint style. Check the real, visible share
+  // textbox instead, using the same input fallback and exact expected color.
+  await page.keyboard.press('Escape');
+  const shareDialog = page.locator('#workspace-share-link');
+  await shareDialog.evaluate(e => e.showModal());
+  await shareDialog.locator('input').waitFor({state:'visible'});
+  await page.waitForFunction(() => getComputedStyle(document.querySelector('#workspace-share-link input')).backgroundColor === 'rgb(37, 41, 50)');
+  assert.equal(await shareDialog.locator('input').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
+  await shareDialog.evaluate(e => e.close());
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.transport .duration')).color === 'rgb(228, 231, 237)');
   assert.equal(await page.locator('.transport .duration').evaluate(e=>getComputedStyle(e).color),'rgb(228, 231, 237)');
   await page.keyboard.press('Escape');await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');
