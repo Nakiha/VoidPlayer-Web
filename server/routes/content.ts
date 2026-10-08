@@ -124,7 +124,7 @@ async function sendFfmpegRecordStream(
   if (!res.headersSent) beginMediaIndexStream(res);
   const streamTimer = setTimeout(() => res.destroy(), INDEX_STREAM_LEASE_MS);
   let seq = after;
-  let sentManifest = false;
+  let sentManifest = false, sentFinalManifest = false;
   let sentReset = false;
   let sentScanProgress = -1;
   let lastKnownTick: bigint | undefined;
@@ -144,7 +144,7 @@ async function sendFfmpegRecordStream(
           lastKnownTick = undefined;
         }
         if (seq > manifest.lastSeq) throw new AdminError(416, '索引流续传序号超过当前 build。');
-        if (!sentManifest) {
+        if (!sentManifest || (manifest.complete && !sentFinalManifest)) {
           await writeMediaIndexEvent(res, {
             type: 'manifest', protocol: 2, epoch: snapshot.epoch, kind: 'ffmpeg', encoding: 'ffmpeg-records-base64',
             state: manifest.state, buildId: manifest.buildId, identity, metadata: manifest.metadata,
@@ -152,6 +152,7 @@ async function sendFfmpegRecordStream(
             scannedBytes: manifest.scannedBytes, stablePresentationUs: manifest.stablePresentationUs,
           });
           sentManifest = true;
+          sentFinalManifest = manifest.complete;
         }
         if (!manifest.complete && manifest.scannedBytes > 0 && manifest.scannedBytes !== sentScanProgress && size && size > 0) {
           sentScanProgress = manifest.scannedBytes;

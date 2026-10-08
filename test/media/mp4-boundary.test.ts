@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { Worker } from 'node:worker_threads';
 import { RangeReader } from '../../src/range-reader.ts';
 import { readMp4Configurations } from '../../src/mp4-config.ts';
@@ -10,6 +11,30 @@ import { Mp4Engine } from '../../src/mp4-engine.ts';
 import { mp4BoundaryFixture } from '../../scripts/mp4-boundary-fixture.ts';
 
 const fixture = await mp4BoundaryFixture();
+
+test('appended MP4 garbage preserves all verified samples and exact seek pixels', async () => {
+  const glue = new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href;
+  const wasm = await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url));
+  const clean = new Mp4Engine({ file: new Blob([fixture.valid]) });
+  const hash = (frame: Awaited<ReturnType<Mp4Engine['at']>>) => createHash('sha256').update(new Uint8Array(frame.pixels!)).digest('hex');
+  try {
+    const normal = await clean.open(glue, wasm);
+    const expected = new Map<number, string>();
+    for (const time of normal.times) expected.set(time, hash(await clean.at(time + normal.firstPtsUs)));
+    for (const garbage of [Buffer.alloc(3, 0xa5), Buffer.alloc(5828, 0xa5), Buffer.alloc(190 * 1024, 0xa5)]) {
+      const damaged = new Mp4Engine({ file: new Blob([fixture.valid, garbage]) });
+      try {
+        const info = await damaged.open(glue, wasm);
+        assert.equal(info.indexIntegrity, 'recovered');
+        assert.equal(info.durationUs, normal.durationUs);
+        assert.deepEqual(info.times, normal.times);
+        assert.match(info.indexWarning!, /异常数据/);
+        for (const time of [...info.times, 0, info.times.at(-1)!])
+          assert.equal(hash(await damaged.at(time + info.firstPtsUs)), expected.get(time));
+      } finally { damaged.close(); }
+    }
+  } finally { clean.close(); }
+});
 test('only top-level mdat overstatement is recoverable; missing suffix samples are excluded', async () => {
   for (const mode of ['valid', 'oversized', 'missing-sample', 'bad-moov', 'bad-child']) {
     const bytes = Buffer.from(mode === 'valid' ? fixture.valid : fixture.oversized);
@@ -77,9 +102,9 @@ test('truncated MP4 indexes and decodes only complete samples, including repeat 
   try {
     const info = await engine.open(new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href,
       await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)));
-    assert.match(info.indexWarning!, /前 13 个完整视频包/);
-    assert.equal(info.durationUs, 1300000);
-    for (const pts of [0, 1200000, 500000, 0]) {
+    assert.match(info.indexWarning!, /前 10 个完整视频包/);
+    assert.equal(info.durationUs, 1000000);
+    for (const pts of [0, 900000, 500000, 0]) {
       const frame = await engine.at(pts);
       assert.equal(frame.pts, pts); assert.equal(frame.pixels!.byteLength, 160 * 96 * 1.5);
     }
@@ -109,16 +134,20 @@ test('co64 with B-frame reordering keeps decode-order prefix and presentation ti
   assert.ok(new Set(table.compositionOffsets).size > 1);
   const bytes = source.valid.subarray(0, table.sampleOffsets![13] + 1);
   const engine = new Mp4Engine({ file: new Blob([bytes]) });
+  const oracle = new Mp4Engine({ file: new Blob([source.valid]) });
   try {
-    const info = await engine.open(new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href,
-      await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)));
-    assert.match(info.indexWarning!, /前 13 个完整视频包/);
-    assert.equal(info.times.length, 13);
+    const glue = new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href;
+    const wasm = await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url));
+    const info = await engine.open(glue, wasm);
+    await oracle.open(glue, wasm);
+    assert.match(info.indexWarning!, /前 10 个完整视频包/);
+    assert.equal(info.times.length, 10);
     assert.ok(info.durationUs < 2000000);
     for (const pts of [...info.times, 0, info.times.at(-1)!]) {
       const frame = await engine.at(pts + info.firstPtsUs);
       assert.equal(frame.pts, pts + info.firstPtsUs);
       assert.equal(frame.pixels!.byteLength, 160 * 96 * 1.5);
+      assert.deepEqual(new Uint8Array(frame.pixels!), new Uint8Array((await oracle.at(frame.pts)).pixels!), 'retained reordered frames keep the original pixels');
     }
-  } finally { engine.close(); }
+  } finally { engine.close(); oracle.close(); }
 });

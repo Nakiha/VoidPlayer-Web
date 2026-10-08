@@ -1,6 +1,7 @@
 import type { FfmpegAnalysisSummary } from './analysis/ffmpeg-adapter.ts';
 import type { WasmFrameOutput } from './wasm-frame.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
+import type { FfmpegIndexRecovery } from './index-integrity.ts';
 import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
 import type { MediaLoadStage } from './media-progress.ts';
 import type { OpenStage } from './media-errors.ts';
@@ -14,7 +15,7 @@ import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from
 // Command maps are the single wire contract for callers and Worker responders.
 // No result type is selected by the caller. Engine imports above are type-only.
 type Command<Request extends object, Response> = { request: Request; response: Response };
-export interface FfmpegInitResult {
+export interface FfmpegInitResult extends FfmpegIndexRecovery {
   analysis?: FfmpegAnalysisSummary;
   ctx: number;
   firstPts?: number;

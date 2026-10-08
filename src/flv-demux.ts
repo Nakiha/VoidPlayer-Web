@@ -2,6 +2,7 @@ import { hevcGeometry } from './hevc-geometry.ts';
 import { RangeReader } from './range-reader.ts';
 import type { RangeVersion } from './range-reader.ts';
 import { MediaOpenError } from './media-errors.ts';
+import type { IndexIntegrity } from './index-integrity.ts';
 
 export type FlvInput = { file: Blob } | { url: string; size: number };
 export interface FlvScanReader { readonly size: number; read(offset: number, length: number): Promise<Uint8Array>; }
@@ -102,7 +103,7 @@ async function recoveryKey(reader:FlvScanReader,codec:FlvCodec,description:Uint8
   return found;
 }
 
-export function flvIndexIntegrity(index:FlvIndex):'complete'|'recovered'|'prefix'{
+export function flvIndexIntegrity(index:FlvIndex):IndexIntegrity{
   return index.truncatedAt!==undefined?'prefix':index.recoveredGaps?.length?'recovered':'complete';
 }
 

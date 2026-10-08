@@ -1,3 +1,5 @@
+import { validFfmpegRecovery } from './index-integrity.ts';
+import type { FfmpegIndexRecovery } from './index-integrity.ts';
 export const FFMPEG_INDEX_SCHEMA = 3;
 export const FFMPEG_INDEX_KIND = 'ffmpeg-container';
 export const FFMPEG_INDEX_RECORD_BYTES = 48;
@@ -5,7 +7,7 @@ export const FFMPEG_INDEX_RECORD_LIMIT = 2_000_000;
 // Base64 for two million 48-byte records is about 128 MiB.
 export const FFMPEG_INDEX_BYTES = 160 * 1024 * 1024;
 
-export interface FfmpegIndexDocument {
+export interface FfmpegIndexDocument extends FfmpegIndexRecovery {
   schema: number;
   kind: string;
   size: number;
@@ -22,7 +24,7 @@ export interface FfmpegIndexDocument {
   count: number;
   records: string;
 }
-export interface FfmpegIndexMetadata {
+export interface FfmpegIndexMetadata extends FfmpegIndexRecovery {
   size: number;
   codec: string;
   timeBaseNum: number;
@@ -64,7 +66,7 @@ export function serializeFfmpegIndex(metadata: FfmpegIndexMetadata, records: Uin
 
 export function parseFfmpegIndex(value: unknown, size: number, expected?: Partial<FfmpegIndexMetadata>): ParsedFfmpegIndex | null {
   const doc = value as FfmpegIndexDocument | null;
-  if (!doc || doc.schema !== FFMPEG_INDEX_SCHEMA || doc.kind !== FFMPEG_INDEX_KIND || doc.size !== size
+  if (!doc || !validFfmpegRecovery(doc, size) || doc.schema !== FFMPEG_INDEX_SCHEMA || doc.kind !== FFMPEG_INDEX_KIND || doc.size !== size
     || typeof doc.codec !== 'string' || !/^[a-z0-9_+-]{1,64}$/i.test(doc.codec)
     || !Number.isSafeInteger(doc.timeBaseNum) || doc.timeBaseNum <= 0 || doc.timeBaseNum > 1_000_000_000
     || !Number.isSafeInteger(doc.timeBaseDen) || doc.timeBaseDen <= 0 || doc.timeBaseDen > 1_000_000_000
@@ -100,6 +102,7 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     const packetSize = view.getInt32(offset + 32, true);
     const flags = view.getUint32(offset + 36, true);
     const ordinal = view.getBigUint64(offset + 40, true);
+    if (doc.indexIntegrity === 'prefix' && (pts === noTimestamp || dts === noTimestamp || dts > BigInt(doc.indexEndDts!))) return null;
     const key = (flags & 1) !== 0;
     const seekAnchor = (flags & 2) !== 0;
     if (packetSize < 0 || pos < -1n || (flags & ~3) !== 0

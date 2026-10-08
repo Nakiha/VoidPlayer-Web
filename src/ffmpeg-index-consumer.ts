@@ -1,5 +1,6 @@
 import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, parseFfmpegIndex, FFMPEG_INDEX_SCHEMA, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from './ffmpeg-index-cache.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
+import { validFfmpegRecovery } from './index-integrity.ts';
 import type { IndexStreamCursor, IndexStreamEventResult } from './index-stream-transport.ts';
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 import type { MediaIndexClientTrace, MediaIndexRecordBatch, MediaIndexRecordManifest, MediaIndexScanProgress, ServerIndexResult } from './media-index-types.ts';
@@ -107,6 +108,7 @@ export class FfmpegIndexConsumer {
       || !/^[0-9a-f-]{36}$/i.test(event.buildId) || event.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
       || !identity || identity.kind !== 'ffmpeg' || identity.streamKey !== `video:${metadata?.streamIndex}`
       || !metadata || metadata.schema !== FFMPEG_INDEX_SCHEMA || metadata.kind !== 'ffmpeg-container' || metadata.recordBytes !== FFMPEG_INDEX_RECORD_BYTES
+      || !validFfmpegRecovery(metadata, Number(metadata.size))
       || !Number.isSafeInteger(metadata.size) || Number(metadata.size) <= 0 || typeof metadata.codec !== 'string'
       || !Number.isSafeInteger(metadata.timeBaseNum) || Number(metadata.timeBaseNum) <= 0
       || !Number.isSafeInteger(metadata.timeBaseDen) || Number(metadata.timeBaseDen) <= 0
@@ -136,6 +138,9 @@ export class FfmpegIndexConsumer {
     if (this.recordManifest && !sameRecordIdentity(this.recordManifest, nextManifest)) {
       throw new Error('FFmpeg 索引续传期间 manifest 身份发生改变。');
     }
+    if (this.recordManifest?.metadata.indexIntegrity === 'prefix' &&
+      ['indexIntegrity', 'indexTruncatedAt', 'indexEndDts'].some(key => this.recordManifest!.metadata[key] !== metadata[key]))
+      throw new Error('FFmpeg 索引损坏边界在续传期间改变。');
     this.recordManifest = nextManifest;
     this.recordStream = true;
     this.options.onRecordManifest?.(nextManifest);

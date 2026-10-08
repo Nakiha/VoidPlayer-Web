@@ -1,12 +1,60 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { MediaLibraryIndex } from '../../server/library.ts';
 import { instantiateCore } from '../../src/wasm-core.ts';
+import { createMediaServer } from '../../server/app.ts';
+import { openFFmpegMedia, openFFmpegContainerFromUrl } from '../../src/ffmpeg-media.ts';
+
+test('cold and warm server corruption prefixes import the same decode boundary and exact seek pixels', { timeout: 60000 }, async () => {
+  const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
+  const deps = { glueURL: pathToFileURL(path.join(coreDir, 'voidplayer-core.js')).href,
+    wasmBinary: await readFile(path.join(coreDir, 'voidplayer-core.wasm')) };
+  const bytes = await readFile('fixtures/video/mpeg2_10s_1280x720.ts');
+  const damaged = Buffer.concat([bytes, Buffer.alloc(190 * 1024, 0xa5)]);
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-damaged-index-'));
+  await writeFile(path.join(root, 'damaged.ts'), damaged);
+  const library = new MediaLibraryIndex([root], { watch: false });
+  const server = createMediaServer({ roots: [root], library, onLog() {} });
+  const original = await openFFmpegMedia(new File([bytes], 'original.ts'), deps);
+  try {
+    await library.refresh();
+    const entry = library.browse().entries[0];
+    await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+    const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}?v=${entry.version}`;
+    let boundary: number | undefined, duration: number | undefined;
+    for (const phase of ['cold', 'warm']) {
+      const source = await openFFmpegContainerFromUrl(url, { name: 'damaged.ts', size: damaged.length, lastModified: 0 }, deps);
+      try {
+        await source.ensureIndexed?.();
+        assert.equal(source.info.indexSource, 'server');
+        assert.equal(source.info.indexState, 'complete');
+        assert.equal(source.info.indexIntegrity, 'prefix');
+        assert.match(source.info.indexWarning!, /有效前段/);
+        assert.ok(source.info.indexTruncatedAt! < bytes.length);
+        boundary ??= source.info.indexTruncatedAt; duration ??= source.info.durationUs;
+        assert.equal(source.info.indexTruncatedAt, boundary, `${phase} retains the same file boundary`);
+        assert.equal(source.info.durationUs, duration);
+        for (const time of [source.info.durationUs - 1, 0, Math.floor(source.info.durationUs / 2), source.info.durationUs - 1]) {
+          const expected = await original.frameAt(time), actual = await source.frameAt(time);
+          try {
+            assert.equal(actual.ptsUs, expected.ptsUs);
+            assert.equal(createHash('sha256').update(actual.pixels!).digest('hex'), createHash('sha256').update(expected.pixels!).digest('hex'));
+          } finally { expected.close(); actual.close(); }
+        }
+        assert.deepEqual(await source.framesAfter(source.info.durationUs, 1), []);
+      } finally { source.dispose(); }
+    }
+  } finally {
+    original.dispose(); server.closeAllConnections();
+    await new Promise<void>(resolve => server.close(() => resolve()));
+    await library.close(); await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('cold server index build returns AVIO, scan, storage and CPU profile counters', async t => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
