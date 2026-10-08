@@ -3724,8 +3724,8 @@
     "translation": "Audio codec or browser is not supported"
   },
   "tracks.audioUnsupportedContainer": {
-    "source": "顺带音频暂仅支持 FLV/AAC",
-    "translation": "Opportunistic audio currently supports FLV/AAC only"
+    "source": "此容器暂不支持顺带音频",
+    "translation": "This container does not support opportunistic audio yet"
   },
   "tracks.audioWaiting": {
     "source": "等待播放或可用的附带音频",

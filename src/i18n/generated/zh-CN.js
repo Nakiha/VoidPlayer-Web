@@ -930,7 +930,7 @@ export default {
   "tracks.audioBlocked": () => "浏览器未允许音频，请关闭后再次点击喇叭",
   "tracks.audioPlaying": () => "正在出声",
   "tracks.audioUnsupportedCodec": () => "音频编码或浏览器暂不支持",
-  "tracks.audioUnsupportedContainer": () => "顺带音频暂仅支持 FLV/AAC",
+  "tracks.audioUnsupportedContainer": () => "此容器暂不支持顺带音频",
   "tracks.audioWaiting": () => "等待播放或可用的附带音频",
   "tracks.browserDecoderMemoryFormatMayDifferFrom": () => "浏览器解码输出的内存格式，可能与源视频的像素格式不同",
   "tracks.browserDefault": () => "浏览器自动选择",

@@ -12,7 +12,7 @@ export type ColorInfo = {
   fullRange: boolean | null;
 };
 export type MediaInfo = {
-  opportunisticAudio?: 'flv-aac';
+  opportunisticAudio?: 'flv-aac' | 'cached-container';
   container?: 'flv' | 'isobmff' | 'mpegts' | 'other';
   indexKind?: 'packet-offsets' | 'timestamps' | 'container';
   seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';

@@ -26,6 +26,15 @@ export class RangeReader {
   /** Preserve the source version when a decoder worker is replaced. */
   get version(): RangeVersion { return { validator: this.validator, ifRange: this.ifRange }; }
   /** Cache-only observation: never loads, queues IO, or promotes/evicts blocks. */
+  cachedWindows() {
+    if (this.controller.signal.aborted) return [];
+    return [...this.cache].flatMap(([offset, bytes]) => {
+      const windows = [];
+      for (let at = 0; at < bytes.length; at += 65536) windows.push({ offset: offset + at, length: Math.min(65536, bytes.length - at) });
+      return windows;
+    }).sort((a, b) => a.offset - b.offset);
+  }
+  /** Cache-only observation: never loads, queues IO, or promotes/evicts blocks. */
   peek(offset: number, length: number): Uint8Array | undefined {
     if (this.controller.signal.aborted || !Number.isSafeInteger(offset) || !Number.isSafeInteger(length)
       || offset < 0 || length < 0 || length > 64 * 1024 || offset + length > this.size) return;

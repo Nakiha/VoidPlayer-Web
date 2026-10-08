@@ -45,6 +45,7 @@ export interface MediaSource {
   info: MediaInfo;
   /** Fire-and-forget cache observation; implementations must never read missing bytes. */
   requestCachedAudio?(ptsUs: number, generation: number): void;
+  setCachedAudioEnabled?(enabled: boolean): void;
   onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
   /** Background container indexing can extend duration after the first frame. */
   onInfoChange?: (change?:MediaInfoChange) => void;

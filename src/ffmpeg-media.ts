@@ -9,6 +9,8 @@ import { validateDescription } from './frame-description.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { createRangeBridge } from './range-bridge.ts';
+import { attachCachedContainerAudio } from './cached-audio-client.ts';
+import type { AudioPeek } from './cached-container-audio.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
@@ -162,6 +164,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const readMs = Math.round(performance.now() - openStart);
   const threads = threadBudget();
   let coreVariant: 'single-thread' | 'multi-thread' = 'single-thread';
+  let peekAudio: AudioPeek = async () => undefined;
+  let audioWindows = async () => [] as import('./audio-types.ts').CachedWindow[];
   let init: InitResult | null = null;
   let rpc: WorkerRpc | null = null;
   let lastError: unknown = null;
@@ -175,6 +179,9 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     } catch (error) { worker.terminate(); throw error; }
     rpc = new WorkerRpc(worker, () => bridge?.close(), deps.onProgress);
     const activeRpc = rpc;
+    audioWindows = () => bridge ? Promise.resolve(bridge.cachedWindows()) : activeRpc.requestCachedWindows(init?.ctx);
+    peekAudio = (offset, length) => bridge ? Promise.resolve(bridge.peek(offset, length))
+      : activeRpc.requestCachedBytes(offset, length, init?.ctx);
     const detachAbort = onLoadAbort(deps.signal, () => activeRpc.terminate(deps.signal!.reason));
     try {
       const payload: FfmpegCommands['init']['request'] = { glueURL, name: file.name, threads, mediaSize: file.size, externalIndexSession: !!indexUrl,
@@ -261,6 +268,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const wakeIndex = () => { for (const resolve of indexWaiters) resolve(); indexWaiters.clear(); };
   const waitForIndexUpdate = () => new Promise<void>(resolve => indexWaiters.add(resolve));
   let source: MediaSource;
+  let stopAudio = () => {};
   let analysisSummary = init.analysis;
   const activeRpc = rpc;
   let containerSession: FfmpegContainerSession | undefined;
@@ -484,6 +492,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     dispose() {
       if (disposed) return;
       disposed = true;
+      stopAudio(); source.onCachedAudio = undefined;
       wakeIndex();
       firstFrame = undefined;
       spare = null;
@@ -494,6 +503,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       activeRpc.terminate(undefined, false);
     },
   };
+  stopAudio = attachCachedContainerAudio(source, peekAudio,
+    'url' in file ? undefined : enabled => activeRpc.setCachedAudioObservation(init!.ctx, enabled), audioWindows);
   activeRpc.setIndexHandlers({ batch: applyIndexBatch, complete: applyIndexComplete, error: applyIndexError });
   activeRpc.setIndexProgressHandler(progress => {
     if (!disposed) updateMediaInfo(source, { indexProgress: progress }, 'index');

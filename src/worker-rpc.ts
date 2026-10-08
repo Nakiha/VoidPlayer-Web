@@ -1,4 +1,4 @@
-import type { CachedAudioBatch } from './audio-types.ts';
+import type { CachedWindow, CachedAudioBatch } from './audio-types.ts';
 import { randomUUID } from './uuid.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { OpenStage } from './media-errors.ts';
@@ -9,6 +9,8 @@ import type { FfmpegCommands, FfmpegInitResult as InitResult, WorkerMessage, Ind
 
 export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
   onCachedAudio?: (generation: number, batch: CachedAudioBatch) => void;
+  private byteRequests = new Map<number, (reply?: { data?: Uint8Array; windows?: CachedWindow[] }) => void>();
+  private nextByteId = -1;
   onIndexWaiting?: (waiting: boolean) => void;
   onIndexProgress?: (data: { durationUs: number; scannedBytes: number; totalBytes: number; packets: number }) => void;
   private indexHandlers?: { batch?: (data: IndexBatch) => void; complete?: (data: InitResult) => void; error?: (data: IndexError) => void };
@@ -31,6 +33,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     this.worker = worker;
     const onMessage = (data: WorkerMessage<C>) => {
       if ('type' in data) {
+        if (data.type === 'cached-bytes') { this.byteRequests.get(data.id)?.(data); return; }
         if (data.type === 'cached-audio') { if (!this.failure) this.onCachedAudio?.(data.generation, data.data); return; }
         if (data.type === 'ready') {
           const entry = this.pending.get(data.id);
@@ -163,6 +166,21 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     try { this.worker.postMessage({ id: this.indexRequestId, type: 'index-input', ...input }, transfer); }
     catch (error) { this.reportIndexError(error instanceof Error ? error.message : String(error)); }
   }
+  requestCachedBytes(offset: number, length: number, ctx?: number) { return this.requestAudioCache(offset, length, ctx).then(reply => reply?.data); }
+  requestCachedWindows(ctx?: number) { return this.requestAudioCache(0, 0, ctx, true).then(reply => reply?.windows ?? []); }
+  private requestAudioCache(offset: number, length: number, ctx?: number, windows = false): Promise<{ data?: Uint8Array; windows?: CachedWindow[] } | undefined> {
+    if (this.failure || this.byteRequests.size >= 8) return Promise.resolve(undefined);
+    return new Promise(resolve => {
+      const id = this.nextByteId--;
+      const finish = (reply?: { data?: Uint8Array; windows?: CachedWindow[] }) => { clearTimeout(timer); this.byteRequests.delete(id); resolve(reply); };
+      const timer = setTimeout(() => finish(), 1000);
+      this.byteRequests.set(id, finish);
+      try { this.worker.postMessage({ id, type: 'peek-audio', offset, length, ctx, windows }); } catch { finish(); }
+    });
+  }
+  setCachedAudioObservation(ctx: number, enabled: boolean) {
+    if (!this.failure) try { this.worker.postMessage({ id: 0, type: 'observe-audio', ctx, enabled }); } catch {}
+  }
   /** Optional cache observation has no pending entry, timeout, or video-worker failure path. */
   requestCachedAudio(pts: number, generation: number) {
     if (this.failure) return;
@@ -186,6 +204,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     if (this.failure) return;
     const notifyIndex = reportIndexFailure && this.indexReady && !this.indexTerminal;
     this.failure = error;
+    for (const finish of this.byteRequests.values()) finish();
     if (notifyIndex) {
       this.indexTerminal = true;
       this.queuedIndexProgress = undefined;

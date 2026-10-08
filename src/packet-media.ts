@@ -1,4 +1,5 @@
 import { WorkerRpc } from './worker-rpc.ts';
+import { attachCachedContainerAudio } from './cached-audio-client.ts';
 import type { PacketCommands, PacketInitResult } from './worker-protocol.ts';
 import { prepareYuvFrame, createYuvBufferPool } from './yuv-frame.ts';
 import { updateMediaInfo } from './media-state.ts';
@@ -243,6 +244,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         if (info.decoder === 'webcodecs') releaseReservation();
       }
     };
+    let stopAudio = () => {};
     const source: MediaSource = {
       info, ensureIndexed,
       ...(container === 'flv' ? {
@@ -347,7 +349,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() { if (!disposed) { deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
     };
     const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
     activateVerifiedNativeYuv=adapter=>{
@@ -368,6 +370,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       adapter.dispose();
     };
     activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
+    if (container === 'mp4') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     return source;
   } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

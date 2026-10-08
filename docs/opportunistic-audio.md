@@ -2,29 +2,48 @@
 
 所有轨道默认静音。下方子轨道窗格中，喇叭按钮紧靠可视按钮左侧；用户点击后选择该轨道出声，选择另一轨道会先停止原轨道，再切换输出。隐藏画面与静音是独立操作。暂停和定位立即停止已排队的声音，定位后的声音只使用新位置附近的包。工作区不保存声音选择；刷新、导入工作区、移除或替换所选片源后，需要再次点击喇叭。
 
-首版仅支持 FLV 中的 AAC-LC 单/双声道，并要求浏览器支持 WebCodecs AudioDecoder 和 Web Audio。其他容器的喇叭禁用；FLV 中不支持的编码或没有可用音频时保持静音。浏览器拒绝出声时，按钮提示用户关闭后再次点击。音频配置在流中发生变化时，该片源停止顺带音频，避免向后定位使用错误的历史配置。
+要求浏览器支持 WebCodecs AudioDecoder 和 Web Audio。FLV 支持 AAC-LC 单/双声道；MP4、WebM、Matroska 通过 Mediabunny 解析已有数据，再交给浏览器支持的音频解码器（至多双声道）；MPEG-TS 支持 PMT 中首个 ADTS AAC-LC 音轨。验收覆盖 MP4 / MKV / TS 的 AAC 和 WebM 的 Opus，不代表这些容器内所有音频编码均可出声。TS 的 LATM、AC-3、跨窗口不完整的包和多包分段的 PAT/PMT 暂不支持。没有可用编码、配置、索引或完整包时保持静音。浏览器拒绝出声时，按钮提示用户关闭后再次点击。FLV / TS 音频配置在流中发生变化时，该片源停止顺带音频，避免向后定位使用错误的历史配置。
 
-## 读取与时钟
+## 读取与索引
 
-复用现有视频包索引和 FLV 播放 worker 的压缩数据缓存，不新增音频索引，不改变服务端索引格式，不为声音发出 HTTP Range 或本地 Blob 读取。`RangeReader.peek` 只复制已缓存字节，不进入 IO 队列，不提升缓存优先级，不保留缓存块。启动时仅记住已读数据中的少量 AAC 配置字节，以免启动缓存被视频播放淘汰。
+不为声音发出 HTTP Range 或本地 Blob 读取，不改变服务端视频索引格式。音频仅能观察视频读取已缓存的压缩数据；缓存缺失时直接返回，不补读、不扫描缺失区域、不进入视频提取请求链。`RangeReader.peek` 不进入 IO 队列，不提升缓存优先级。音频设备、解码器和轮询均只在用户解除静音后启用。
 
-解除静音后，每 80 ms 至多请求一次缓存观察。worker 合并请求并延后执行；从视频索引定位附近 tag，以最多 512 个 tag / 512 KiB、24 个音频包的固定预算遍历。单次复制包不超过 16 KiB，解码队列、PCM 队列和排程节点也有上限。缺少头、完整 tag 或配置时直接返回，不补读、不扫描缺失区域、不进入视频提取请求链。默认静音时不创建音频设备或解码器，也不轮询声音。
+| 容器 | 如何从已读数据定位音频 |
+| --- | --- |
+| FLV | 复用视频包索引定位附近 tag，保留已读的少量 AAC 配置。 |
+| 普通 MP4 / MOV | 在独立音频 worker 中解析已读 `moov` 的音轨 sample 表，再按时间查询缓存中的音频包；视频 sample 表本身不能替代音频 sample 表。 |
+| 前置 moov 的普通 MP4（faststart） | 仍是完整 sample 表，初始化更容易命中头部缓存；不需要再扫描媒体数据。 |
+| 分片 MP4（fMP4） | `moov` 提供初始化配置，每段 `moof` 提供 sample 信息；只查询视频已经读到并仍可用的片段。 |
+| WebM / MKV | 解析已读 EBML 元数据、Cues 和 Cluster；遇到缺失索引或 Cluster 时保持静音。 |
+| MPEG-TS | 从缓存窗口识别 PAT / PMT、PES 原时间戳及完整 ADTS 帧，不建立全文件音频索引。 |
 
-声音服从会话视频时钟及轨道偏移；已有包按原时间戳播放，迟到的包丢弃或截掉过期部分。视频不前进时停止声音，音频不参与视频等待条件。定位后可能马上有声，也可能缺失数秒甚至整段无声，取决于视频已读字节中何时出现完整、可定位的音频 tag；恢复后仍对齐当前位置，不把晚到的旧声音延迟播放。当前实现不承诺连续音频、每次定位后的恢复时限或采样级同步。
+普通 MP4 的视频 Input 已经解析过 `moov`，但其内部音轨对象不跨 worker 共享。因此解除静音后会有一次额外的**元数据解析**，没有额外媒体下载，也不展开遍历全文件音频包。MP4 路径保留视频已经消费的 `moov` 数据引用（至多 4 MiB）及最多 64 KiB 启动前缀，以免原视频块缓存淘汰后丢失初始化信息；不保留整个 `mdat`。
 
-音频需要额外 CPU 和少量有界内存。它不增加媒体读取，也不让视频等待音频，但与视频共享线程调度，不能据此保证所有设备和素材上的性能完全相同。
+DASH 常用分片 MP4，但「moov 放在前面」本身不能判断文件是否分片。此功能支持已载入的单个 fMP4 文件中顺带读到的音频，不新增 MPD/分段播放器。如果 DASH 的音频来自另一个 URL 或独立音频分段，视频的缓存中没有那些字节，零额外读取模式下仍不能出声。
+
+本地 FFmpeg 的同步 AVIO 原先没有可查询的压缩数据缓存，现仅记录其既有读取返回的字节。默认静音保留至多 1 MiB 最近数据、128 KiB 启动前缀及最近一个不超过 256 KiB 的 AVIO 缓冲；解除静音后最近数据预算为 8 MiB，静音后缩回 1 MiB。缓存块最多 256 个，音频查询不延长其存活时间。远程 FFmpeg 复用原 Range bridge 缓存。
+
+## 时钟与预算
+
+解除静音后，每 80 ms 至多请求一次缓存观察，worker 合并重复请求。FLV 单次遍历最多 512 个 tag / 512 KiB、24 个音频包。其他容器的解析运行在独立的可终止 worker：初始化读缓存预算 4 MiB，后续查询 512 KiB、128 次源读取调用，每次桥接至多 64 KiB；TS 单次最多观察八个缓存窗口。返回至多 24 个音频包，单包至多 16 KiB。解码队列、PCM 队列和排程节点也有上限。缓存 RPC 超时只返回缺失，不触发视频 worker 的超时失败或终止。
+
+声音服从会话视频时钟及轨道偏移；已有包按原时间戳播放，迟到的包丢弃或截掉过期部分。视频不前进时停止声音，音频不参与视频等待条件。定位后可能马上有声，也可能缺失数秒甚至整段无声，取决于缓存是否包含初始化元数据、定位信息和完整音频包；恢复后仍对齐当前位置，不把晚到的旧声音延迟播放。当前实现不承诺连续音频、每次定位后的恢复时限或采样级同步。
+
+音频需要额外 CPU 和有界的缓存/队列内存，也增加一个按需加载的解析 worker 代码资源。零额外读取指媒体数据，不指 JavaScript 资源。音频不让视频等待，但仍共享设备计算资源，不能保证所有设备和素材上的性能完全相同。
 
 ## 验证
 
 ```sh
 npm run build
 npm run test:fast
-node --test test/session.test.ts test/worker-rpc.test.ts
+node --test test/session.test.ts test/worker-rpc.test.ts test/opportunistic-audio.test.ts
 node scripts/check-opportunistic-audio-browser.mjs chromium
+AUDIO_CONTAINER=fragmented node scripts/check-opportunistic-audio-browser.mjs chromium
+AUDIO_CONTAINER=mkv AUDIO_INPUT=local node scripts/check-opportunistic-audio-browser.mjs chromium
 ```
 
-浏览器回归自己用 ffmpeg 生成 H.264/AAC FLV，检查真实 PCM 中的音调、默认无音频设备、按钮位置、定位清空声音、单轨切换、排序/移除/刷新，以及开关声音前后完全相同的 Range 请求和字节数。通过统一清单可运行 `npm run test:suite -- browser --case browser-opportunistic-audio-chromium`；支持 `CHROME_EXECUTABLE_PATH` 指定 Chromium。
+`AUDIO_CONTAINER` 支持 `flv`、`mp4`、`faststart`、`fragmented`、`ts`、`mkv`、`webm`；`AUDIO_INPUT=local` 验证本地文件。浏览器回归用 ffmpeg 生成 3 秒 320×180 合成音视频，检查真实 PCM、默认无音频设备、按钮位置、定位清空声音、单轨切换、排序/移除/刷新，以及关闭/开启声音采用相同播放和 seek 操作时完全相同的媒体 Range 请求与字节数、本地 Blob 读取序列。用例注册在统一测试清单，支持 `CHROME_EXECUTABLE_PATH` 指定 Chromium。
 
-本次 Linux Chromium 153 验证：3 秒 320×180 合成素材，关闭和开启声音均为 7 次 Range、361,075 字节。另用 12 秒 320×180 素材对原版、当前默认静音、当前开启声音分别运行三次现有播放基准，九次均达到原阈值；未放宽门限。该结果不代表高分辨率、多轨或 WebKit 已验收。
+Linux Chromium 153 验证了七种远程素材（FLV、普通 MP4、faststart、fMP4、TS、MKV、WebM）和五种本地素材（普通 MP4、fMP4、TS、MKV、WebM），开关声音的媒体读取逐条一致。12 秒 320×180 素材的 MP4、远程 TS、本地 TS 分别比较原版、默认静音、开启声音各三轮现有 `benchmark_review`，共 27 轮通过，门限不变。TS 对照使用相同 1280×800 视口、展开的子轨道窗格及 Chromium `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader` 参数；远程 TS 的三组 P95 帧间隔分别为 44.36–46.09 / 44.17–46.20 / 45.67–49.61 ms。未指定这些 GPU 参数的原 CLI 基准中，原版和默认静音版远程 TS 均未达门限，不能把该环境失败归为音频回归。
 
-快速套件及 session / worker RPC 测试通过。通用 UI 回归在 reference 菜单断言处失败，contract 套件在进程组查询处失败；相同环境下原版也有相同失败。完整浏览器矩阵和 WebKit 尚未验证。
+这些小型合成素材回归不能代表高分辨率、多轨或 WebKit 已验收。快速套件及 session / worker RPC / 顺带音频单元测试通过。通用 UI 回归在 reference 菜单断言处失败，contract 套件在进程组查询处失败；相同环境下原版也有相同失败。完整浏览器矩阵和 WebKit 尚未验证。

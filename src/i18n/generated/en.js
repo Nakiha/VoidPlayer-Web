@@ -930,7 +930,7 @@ export default {
   "tracks.audioBlocked": () => "Audio was blocked; switch off and click the speaker again",
   "tracks.audioPlaying": () => "Playing audio",
   "tracks.audioUnsupportedCodec": () => "Audio codec or browser is not supported",
-  "tracks.audioUnsupportedContainer": () => "Opportunistic audio currently supports FLV/AAC only",
+  "tracks.audioUnsupportedContainer": () => "This container does not support opportunistic audio yet",
   "tracks.audioWaiting": () => "Waiting for playback or incidental audio data",
   "tracks.browserDecoderMemoryFormatMayDifferFrom": () => "Browser decoder memory format; may differ from the source pixel format",
   "tracks.browserDefault": () => "Browser default",

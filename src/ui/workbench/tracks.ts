@@ -99,7 +99,7 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function audioLabel(state: WorkbenchState, track: ReviewTrack) {
-    if (!track.opportunisticAudio) return t(msg('tracks.audioUnsupportedContainer', '顺带音频暂仅支持 FLV/AAC'));
+    if (!track.opportunisticAudio) return t(msg('tracks.audioUnsupportedContainer', '此容器暂不支持顺带音频'));
     if (state.audioSlot !== track.slot) return t(msg('tracks.unmuteAudio', '解除轨道 {slot} 静音（仅利用视频已读数据）'), { slot: track.slot });
     const status = state.audioStatus === 'unsupported' ? t(msg('tracks.audioUnsupportedCodec', '音频编码或浏览器暂不支持'))
       : state.audioStatus === 'blocked' ? t(msg('tracks.audioBlocked', '浏览器未允许音频，请关闭后再次点击喇叭'))

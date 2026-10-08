@@ -930,7 +930,7 @@ export default {
   "tracks.audioBlocked": () => "［A~u~d~i~o~ w~a~s~ b~l~o~c~k~e~d~; s~w~i~t~c~h~ o~f~f~ a~n~d~ c~l~i~c~k~ t~h~e~ s~p~e~a~k~e~r~ a~g~a~i~n~ ········］",
   "tracks.audioPlaying": () => "［P~l~a~y~i~n~g~ a~u~d~i~o~ ········］",
   "tracks.audioUnsupportedCodec": () => "［A~u~d~i~o~ c~o~d~e~c~ o~r~ b~r~o~w~s~e~r~ i~s~ n~o~t~ s~u~p~p~o~r~t~e~d~ ········］",
-  "tracks.audioUnsupportedContainer": () => "［O~p~p~o~r~t~u~n~i~s~t~i~c~ a~u~d~i~o~ c~u~r~r~e~n~t~l~y~ s~u~p~p~o~r~t~s~ F~L~V~/A~A~C~ o~n~l~y~ ········］",
+  "tracks.audioUnsupportedContainer": () => "［T~h~i~s~ c~o~n~t~a~i~n~e~r~ d~o~e~s~ n~o~t~ s~u~p~p~o~r~t~ o~p~p~o~r~t~u~n~i~s~t~i~c~ a~u~d~i~o~ y~e~t~ ········］",
   "tracks.audioWaiting": () => "［W~a~i~t~i~n~g~ f~o~r~ p~l~a~y~b~a~c~k~ o~r~ i~n~c~i~d~e~n~t~a~l~ a~u~d~i~o~ d~a~t~a~ ········］",
   "tracks.browserDecoderMemoryFormatMayDifferFrom": () => "［B~r~o~w~s~e~r~ d~e~c~o~d~e~r~ m~e~m~o~r~y~ f~o~r~m~a~t~; m~a~y~ d~i~f~f~e~r~ f~r~o~m~ t~h~e~ s~o~u~r~c~e~ p~i~x~e~l~ f~o~r~m~a~t~ ········］",
   "tracks.browserDefault": () => "［B~r~o~w~s~e~r~ d~e~f~a~u~l~t~ ········］",

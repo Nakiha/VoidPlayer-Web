@@ -52,7 +52,7 @@ export class OpportunisticAudio {
   /** Must run synchronously inside the speaker click, before any await. */
   select(source?: MediaSource) {
     this.pause();
-    if (this.source) this.source.onCachedAudio = undefined;
+    if (this.source) { this.source.onCachedAudio = undefined; this.source.setCachedAudioEnabled?.(false); }
     this.source = source;
     if (!source) { void this.context?.suspend?.().catch(() => {}); this.setStatus('muted'); return; }
     this.playedPackets = 0;
@@ -60,6 +60,7 @@ export class OpportunisticAudio {
       this.setStatus('unsupported'); return;
     }
     try {
+      source.setCachedAudioEnabled?.(true);
       this.context ??= new this.platform.AudioContext();
       const context = this.context, generation = this.generation;
       // User activation is available here; the playback loop never tries to unlock audio.

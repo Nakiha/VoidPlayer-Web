@@ -22,6 +22,15 @@ async function start() {
   // 主线程只在视口需要时查询，且结果按像素宽度聚合，不逐帧全量索取。
   const querier = createSourceQuerier();
   const receive = (message: WorkerRequest<PacketCommands>) => {
+    if (message.type === 'peek-audio') {
+      try {
+        const data = engine instanceof FlvEngine ? engine.reader.peek(message.offset, message.length)
+          : engine?.peekCachedBytes(message.offset, message.length);
+        const windows = message.windows ? engine instanceof FlvEngine ? engine.reader.cachedWindows() : engine?.cachedWindows() : undefined;
+        send({ id: message.id, type: 'cached-bytes', data, windows }, data ? [data.buffer as ArrayBuffer] : []);
+      } catch { send({ id: message.id, type: 'cached-bytes' }); }
+      return;
+    }
     if (message.type === 'cached-audio') {
       // Never enter the video extraction chain. Coalesce and defer the bounded
       // cache walk; no network access, IO queue, or decoder is involved here.

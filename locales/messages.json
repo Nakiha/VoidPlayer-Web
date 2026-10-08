@@ -7073,7 +7073,7 @@
     ]
   },
   "tracks.audioUnsupportedContainer": {
-    "source": "顺带音频暂仅支持 FLV/AAC",
+    "source": "此容器暂不支持顺带音频",
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:102"

@@ -58,6 +58,19 @@ test('optional cache observations never occupy or fail video RPC requests', asyn
   assert.equal(observed, 7);
 });
 
+test('cache byte replies, timeout and teardown remain independent of video RPC deadlines', async () => {
+  const stub = browserWorker(), rpc = new WorkerRpc<PacketCommands>(stub.worker);
+  const bytes = rpc.requestCachedBytes(100, 4);
+  const request = stub.sent.at(-1)!.message as { id: number };
+  stub.emit({ id: request.id, type: 'cached-bytes', data: Uint8Array.of(1, 2, 3, 4) });
+  assert.deepEqual(await bytes, Uint8Array.of(1, 2, 3, 4));
+  const video = rpc.call('at', { pts: 44 }, [], 5000);
+  assert.equal(await rpc.requestCachedBytes(200, 4), undefined, 'missing optional reply expires quietly');
+  assert.equal(stub.terminated, 0);
+  stub.emit(workerReply<PacketCommands>()({ id: 1, type: 'at', pts: 44 }, null)); assert.equal(await video, null);
+  const late = rpc.requestCachedBytes(300, 4); rpc.terminate(); assert.equal(await late, undefined);
+});
+
 test('browser errors reject all pending requests and termination is idempotent', async () => {
   const stub = browserWorker(); let released = 0;
   const rpc = new WorkerRpc(stub.worker, () => released++);

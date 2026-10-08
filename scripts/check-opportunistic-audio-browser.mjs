@@ -1,4 +1,4 @@
-// Actual AAC output + equal video Range traffic with the speaker off/on.
+// Actual AAC/Opus output + equal media IO with the speaker off/on.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, rm, copyFile, writeFile } from 'node:fs/promises';
@@ -10,9 +10,13 @@ import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'chromium';
+const container = process.env.AUDIO_CONTAINER ?? 'flv';
+const local = process.env.AUDIO_INPUT === 'local';
+const extension = ['faststart', 'fragmented'].includes(container) ? 'mp4' : container;
+assert.ok(['flv', 'mp4', 'faststart', 'fragmented', 'ts', 'mkv', 'webm'].includes(container));
 assert.ok(['chromium', 'webkit'].includes(browserName));
 const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-audio-'));
-const artifacts = path.join(root, '.run/opportunistic-audio'); await mkdir(artifacts, { recursive: true });
+const artifacts = path.join(root, '.run/opportunistic-audio', container + (local ? '-local' : '')); await mkdir(artifacts, { recursive: true });
 let browser, server, library, activePage, evidence;
 try {
   const media = path.join(temporary, 'media'); await mkdir(media);
@@ -20,11 +24,15 @@ try {
   execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=30',
     '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '3', '-c:v', 'libx264', '-preset', 'ultrafast',
     '-g', '30', '-bf', '0', '-b:v', '700k', '-c:a', 'aac', '-b:a', '128k', '-y', fixture]);
-  await copyFile(fixture, path.join(media, 'second.flv'));
+  const selected = container === 'flv' ? fixture : path.join(media, `audio.${extension}`);
+  if (container !== 'flv') execFileSync('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-i', fixture,
+    ...(container === 'webm' ? ['-c:v', 'libvpx-vp9', '-deadline', 'realtime', '-cpu-used', '8', '-c:a', 'libopus'] : ['-c', 'copy']),
+    ...(container === 'faststart' ? ['-movflags', '+faststart'] : container === 'fragmented' ? ['-movflags', '+frag_keyframe+empty_moov+default_base_moof'] : []), '-y', selected]);
+  await copyFile(selected, path.join(media, `second.${extension}`));
   library = new MediaLibraryIndex([media], { database: path.join(temporary, 'library.sqlite'), watch: false });
   const listing = await library.list();
-  const id = listing.entries.find(e => e.name === 'audio.flv').id;
-  const second = listing.entries.find(e => e.name === 'second.flv').id;
+  const id = listing.entries.find(e => e.name === `audio.${extension}`).id;
+  const second = listing.entries.find(e => e.name === `second.${extension}`).id;
   let traffic = [];
   server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
   server.on('request', (req, res) => {
@@ -47,6 +55,7 @@ try {
     // Count actual output nodes and verify a pause/mute immediately stops all of them.
     await page.addInitScript(() => {
       localStorage.setItem('voidplayer.color-mode', 'browser');
+      window.audioBlobReads = [];
       window.audioEvidence = { contexts: 0, starts: 0, stopped: 0, maxRms: 0, live: new Set() };
       const Native = window.AudioContext;
       window.AudioContext = class extends Native {
@@ -62,9 +71,19 @@ try {
         }
       };
     });
+    await page.context().route(/\/assets\/(?:ffmpeg|packet)-worker-[^/]+\.js$/, async route => {
+      const response = await route.fetch();
+      const prefix = `if (typeof self.FileReaderSync !== 'undefined') { const NativeReader = self.FileReaderSync; self.FileReaderSync = class extends NativeReader { readAsArrayBuffer(blob) { self.postMessage({type:'audio-test-blob-read', bytes:blob.size}); return super.readAsArrayBuffer(blob); } }; } const blobRead = Blob.prototype.arrayBuffer; Blob.prototype.arrayBuffer = function() { self.postMessage({type:'audio-test-blob-read', bytes:this.size}); return blobRead.call(this); };\n`;
+      await route.fulfill({ response, body: prefix + await response.text() });
+    });
+    await page.addInitScript(() => {
+      const NativeWorker = window.Worker;
+      window.Worker = class extends NativeWorker { constructor(...args) { super(...args); this.addEventListener('message', e => { if (e.data.type === 'audio-test-blob-read') window.audioBlobReads.push(e.data.bytes); }); } };
+    });
     traffic = [];
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
-    await tool(page, 'load_library_item', { id, slot: 'A' });
+    if (local) { await page.locator('#file-A').setInputFiles(selected); await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy); }
+    else await tool(page, 'load_library_item', { id, slot: 'A' });
     if (await page.locator('#toggle-subtracks').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-subtracks').click();
     const speaker = page.locator('.subtrack-row[data-track-drag="A"] .track-audio');
     assert.equal(await speaker.getAttribute('aria-pressed'), 'false');
@@ -78,19 +97,17 @@ try {
     if (enabled) { await speaker.click(); assert.equal((await state(page)).audioSlot, 'A'); }
     await page.locator('#play').click();
     await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_review_session').execute({}).positionUs > 800000);
-    if (enabled) {
-      await page.waitForFunction(() => window.audioEvidence.starts > 0, undefined, { timeout: 10000 });
-      await tool(page, 'seek_review', { ptsUs: 1500000 });
-      assert.equal(await page.evaluate(() => window.audioEvidence.live.size), 0, 'seek stops old audio before returning');
-      await page.locator('#play').click();
-    }
+    if (enabled) await page.waitForFunction(() => window.audioEvidence.starts > 0, undefined, { timeout: 10000 });
+    await tool(page, 'seek_review', { ptsUs: 1500000 });
+    assert.equal(await page.evaluate(() => window.audioEvidence.live.size), 0, 'seek stops old audio before returning');
+    await page.locator('#play').click();
     await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_review_session').execute({}); return !s.playing && s.positionUs > 2500000; });
     const result = await state(page);
     const audioEvidence = await page.evaluate(() => ({ ...window.audioEvidence, live: window.audioEvidence.live.size }));
     if (enabled) { assert.ok(audioEvidence.starts > 0); assert.ok(audioEvidence.maxRms > 0.01, 'decoded PCM contains the fixture tone'); } else assert.equal(audioEvidence.starts, 0);
     assert.equal(audioEvidence.live, 0, 'end of video stops audio');
     assert.deepEqual(errors, []);
-    report.push({ enabled, traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
+    report.push({ enabled, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
     if (enabled) {
       await tool(page, 'load_library_item', { id: second, slot: 'B' });
       await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
@@ -103,19 +120,20 @@ try {
       await tool(page, 'reorder_review_tracks', { order: ['B', 'A'] }); assert.equal((await state(page)).audioSlot, 'B');
       await page.waitForFunction(() => window.voidPlayer.getState().audioPacketsPlayed > 0);
       await tool(page, 'pause_review');
-      await page.screenshot({ path: path.join(artifacts, 'speaker-panel.png') });
+      if (container === 'flv' && !local) await page.screenshot({ path: path.join(artifacts, 'speaker-panel.png') });
       await tool(page, 'remove_review_track', { slot: 'B' }); assert.equal((await state(page)).audioSlot, null);
       await page.reload(); await page.waitForFunction(() => window.voidPlayer);
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
     await page.close();
   }
-  // The complete clip fits the existing video cache. The enabled run also seeks,
-  // but may not issue an extra request for any already-read audio byte.
-  assert.ok(report[0].traffic.length > 0, 'the control must measure real media Range traffic');
+  // The complete clip fits the video cache. Both runs use the same seek sequence.
+  if (!local) assert.ok(report[0].traffic.length > 0, 'the control must measure real media Range traffic');
+  if (local) assert.ok(report[0].blobReads.length, 'local control observes actual Blob IO');
+  assert.deepEqual(report[1].blobReads, report[0].blobReads, 'speaker adds zero local Blob reads');
   assert.deepEqual(report[1].traffic, report[0].traffic, 'speaker adds zero media requests and bytes');
   await writeFile(path.join(artifacts, `${browserName}.json`), JSON.stringify(report, null, 2));
-  console.log(JSON.stringify(report)); console.log('PASS default mute, AAC output, seek, single slot, button geometry, restore and identical Range traffic');
+  console.log(JSON.stringify({ container, local, report })); console.log('PASS default mute, decoded audio, seek, single slot, button geometry, restore and identical media IO');
 } catch (error) {
   await saveBrowserFailure({ page: activePage, directory: artifacts, name: browserName,
     context: { caseName: 'opportunistic-audio', engine: browserName }, error, evidence });

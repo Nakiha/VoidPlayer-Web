@@ -3,6 +3,7 @@ import { workerReply } from './worker-protocol.ts';
 import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from './worker-protocol.ts';
 
 import { rangeBlobReader } from './range-bridge-reader.ts';
+import { ObservedBytes } from './observed-bytes.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { validFfmpegRecovery } from './index-integrity.ts';
@@ -57,6 +58,7 @@ type FfmpegIndexSink = {
 };
 type DecodeContext = { packets: FfmpegPacketIndex; indexComplete: boolean; ticks: number[]; durations: number[]; blobHandle: number; path: string; indexSink?: FfmpegIndexSink };
 const contexts = new Map<number, DecodeContext>();
+const observations = new Map<number, ObservedBytes>();
 
 async function init(payload: FfmpegCommands['init']['request'], onProgress: MediaOpenProgress, onReady?: (data: FfmpegInitResult) => void): Promise<FfmpegInitResult> {
   onProgress('decoder');
@@ -66,6 +68,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
   const ctx = core.ccall('vp_create', 'number', [], []);
   if (!ctx) throw new Error('无法创建 WASM 解码上下文。');
   const path = `/vp-in-${randomUUID()}`;
+  const observed = new ObservedBytes(); observations.set(ctx, observed);
   let blobHandle = 0;
   let firstPresentation: ReturnType<typeof readWasmFrame> | undefined;
   try {
@@ -86,7 +89,14 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     } else if (payload.blob && typeof FileReaderSync !== 'undefined') {
       ioMode = 'blob';
       blobHandle = ctx; // the ctx pointer is already a unique id per context
-      core.vpBlobs.set(blobHandle, { blob: payload.blob, reader: new FileReaderSync() });
+      const blob = payload.blob, reader = new FileReaderSync();
+      core.vpBlobs.set(blobHandle, {
+        blob: { slice: (start: number, end: number) => ({ start, end }) },
+        reader: { readAsArrayBuffer({ start, end }: { start: number; end: number }) {
+          const buffer = reader.readAsArrayBuffer(blob.slice(start, end));
+          observed.add(start, new Uint8Array(buffer)); return buffer;
+        } },
+      });
       if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
@@ -94,6 +104,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       const bytes = payload.file ?? await payload.blob?.arrayBuffer();
       if (!bytes) throw new Error('缺少媒体数据。');
       if (bytes.byteLength > 512 * 1024 * 1024) throw new Error('文件超过 WASM 回退解码的内存上限。');
+      observed.add(0, new Uint8Array(bytes));
       core.FS.writeFile(path, new Uint8Array(bytes));
       if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
@@ -344,6 +355,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     return makeIndexResult(count, 'client', 1);
   } catch (error) {
     if (contexts.has(ctx)) throw error;
+    observations.delete(ctx);
     if (blobHandle) core.vpBlobs.delete(blobHandle);
     try { core.FS.unlink(path); } catch { /* best effort */ }
     core.ccall('vp_destroy', null, ['number'], [ctx]);
@@ -370,6 +382,12 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
 port.onmessage = async (event: { data: Request }) => {
   const message = event.data;
   const { id, type } = message;
+  if (type === 'peek-audio') {
+    const data = observations.get(message.ctx ?? 0)?.peek(message.offset, message.length);
+    const windows = message.windows ? observations.get(message.ctx ?? 0)?.cachedWindows() : undefined;
+    port.postMessage({ id, type: 'cached-bytes', data, windows }, data ? [data.buffer as ArrayBuffer] : []); return;
+  }
+  if (type === 'observe-audio') { observations.get(message.ctx)?.setEnabled(message.enabled); return; }
   if (type === 'init') indexRequestId = id;
   let readyContext: number | undefined;
   try {
@@ -414,6 +432,7 @@ port.onmessage = async (event: { data: Request }) => {
       const ctx = message.ctx;
       const entry = contexts.get(ctx);
       if (contexts.delete(ctx)) {
+        observations.delete(ctx);
         if (entry?.blobHandle) core.vpBlobs.delete(entry.blobHandle);
         try { core.FS.unlink(message.path); } catch { /* already gone */ }
         core.ccall('vp_destroy', null, ['number'], [ctx]);
