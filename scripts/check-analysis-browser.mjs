@@ -127,8 +127,16 @@ try {
     let baseline;
     for (const mode of ['cold', 'warm', 'local']) {
     if (mode === 'local') {
+      const previousGen = await page.evaluate(() => window.voidPlayer.getState().tracks.find(track => track.slot === 'A')?.sourceGen);
       await page.locator('#file-A').setInputFiles(join(root, 'fixtures/video', name));
-      await page.waitForTimeout(300);
+      // File-input dispatch does not await session.load. A fixed 300 ms can
+      // query the previous Worker while replacement is terminating it.
+      await page.waitForFunction(({name,previousGen}) => {
+        const state = window.voidPlayer.getState(), load = state.mediaLoad;
+        if (load?.name === name && load.state === 'error') throw new Error(load.error);
+        const track = state.tracks.find(track => track.slot === 'A');
+        return load?.state === 'complete' && load.slot === 'A' && track?.name === name && track.sourceGen !== previousGen && track.frame != null;
+      }, {name,previousGen});
     } else {
       await page.evaluate(async id => {
         await window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' });
