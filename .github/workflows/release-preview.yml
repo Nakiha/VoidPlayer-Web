@@ -548,6 +548,7 @@ jobs:
       - run: npm ci
       - run: node scripts/run-tests.mjs --case release-core
       - name: Verify configuration and persistent index on Node
+        id: native-node
         run: node scripts/run-tests.mjs ci-native-node
       - name: Verify persistent index on packaged runtime
         run: node scripts/run-tests.mjs ci-native-bun
@@ -583,7 +584,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Diagnose failed Windows Node checks with full TAP details
-        if: failure() && runner.os == 'Windows'
+        if: failure() && runner.os == 'Windows' && steps.native-node.outcome == 'failure'
         timeout-minutes: 2
         run: node --experimental-strip-types --test --test-reporter=tap test/measurement.test.ts
       - uses: actions/upload-artifact@v4

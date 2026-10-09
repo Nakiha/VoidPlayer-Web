@@ -548,9 +548,23 @@ try {
     await page.locator('#settings-close').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
     await page.locator('#play').click();
-    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 500000);
+    // A virtual runner can use CPU HDR conversion without WebGL/WebGPU.
+    // This checks eventual UI playback; the separate benchmarks check speed.
+    try {
+      await page.waitForFunction(() => {
+        const state = window.voidPlayer.getState();
+        return state.positionUs > 500000 || state.error !== null;
+      }, undefined, { timeout: 60000 });
+    } catch (error) {
+      console.error('HLG browser playback stalled', await page.evaluate(() => ({
+        state: window.voidPlayer.getState(),
+        canvases: [...document.querySelectorAll('canvas[data-color-executor]')].map(c => ({ executor: c.dataset.colorExecutor, performance: c.dataset.colorPerformance })),
+      })));
+      throw error;
+    }
     await page.locator('#play').click();
     const state = await page.evaluate(() => window.voidPlayer.getState());
+    assert.ok(state.positionUs > 500000, 'HLG browser playback advances through real frames');
     assert.ok(state.tracks[0].frame && !state.tracks[0].failure);
     assert.equal(state.error, null);
     await page.screenshot({ path: path.join(screenshots, `${browserName}-dolby-browser-color.png`) });
