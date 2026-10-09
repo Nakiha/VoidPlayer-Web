@@ -171,6 +171,10 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 路径状态变化时才记录转换计划，不能逐帧写日志。Windows 原问题必须在用户原设备重跑；Mac 证据不能代替 Windows/Edge 最终验收。
 Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮支持范围。
 
+## HDR 开发内核（尚未接入播放）
+
+`hdr-color.ts` / `hdr-shader.ts` 提供独立的 PQ/HLG→SDR 预览参考与 GLSL/WGSL 函数，版本为 `voidplayer-hdr-sdr-preview-v1`。当前不改变上文的两套生产路径、HDR 拒绝条件或工作区 `voidplayer-sdr-v1` 契约。上游 core 的 HDR 原始平面交付、presenter 接入和比较条件迁移仍需完成；不能把新内核测试通过标记为已支持 HDR 播放或显示。参数、数值验证和接入顺序见 [HDR 开发记录](hdr-support.md)。
+
 ## 首帧封面资源
 
 缩略图不修改播放帧、源标签或 presenter 的播放采样策略。软件 YUV/RGBA 候选复制一份有界缓冲并转移至单任务 Worker，按小尺寸目标双线性采样，YUV 使用共同 range/matrix/primaries 转换；不再生成全尺寸 RGBA 中间图。旋转和显示比例沿用帧描述。原生 sample 克隆后直接绘制到小画布。不可管理的 HDR 仍跳过。候选有独立所有权和 500ms 到期释放；事件循环被外部任务阻塞时定时器只能在恢复调度后执行，此期限不是实时系统保证。慢编码、存储和上传不串行阻塞下一张完整帧。

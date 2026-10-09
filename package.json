@@ -21,6 +21,7 @@
     "test:thumbnails:browser": "npm run build && node scripts/check-thumbnail-browser.mjs",
     "test:startup:browser": "npm run build && node scripts/check-startup-browser.mjs",
     "test:browser": "npm run build && node scripts/check-browser.mjs",
+    "test:hdr:color": "node --test test/hdr-color.test.ts && node scripts/check-hdr-color-browser.mjs chromium --require-webgpu && node scripts/check-hdr-color-browser.mjs webkit",
     "test:presentation:browser": "node scripts/check-presentation-browser.mjs",
     "test:connection:browser": "npm run build && node scripts/check-connection-guide-browser.mjs",
     "test:range:browser": "npm run build && node scripts/check-range-browser.mjs",
