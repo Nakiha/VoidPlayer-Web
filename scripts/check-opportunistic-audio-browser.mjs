@@ -44,9 +44,13 @@ try {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
+  // Use the browser's normal rendering capabilities. Forcing SwiftShader here
+  // queues viewport-sized software YUV draws behind this small audio fixture
+  // and can stall native document destruction after JS cleanup has completed.
+  // Dedicated presentation/FLV suites retain their explicit GPU coverage.
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(browserName === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}),
-    ...(browserName === 'chromium' ? { args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) });
+    ...(browserName === 'chromium' ? { args: ['--no-sandbox'] } : {}) });
   const report = [];
   async function tool(page, name, input = {}) { return page.evaluate(({ name, input }) => window.voidPlayer.tools.find(t => t.name === name).execute(input), { name, input }); }
   async function state(page) { return tool(page, 'get_review_session'); }
@@ -61,8 +65,7 @@ try {
       localStorage.setItem('voidplayer.color-mode', 'browser');
       window.audioLifecycle = stage => { if (window.audioRecordLifecycle) navigator.sendBeacon('/audio-test-lifecycle?stage=' + encodeURIComponent(stage), ''); };
       window.addEventListener('beforeunload', () => window.audioLifecycle('beforeunload'));
-      window.audioUnloadContextLosses = 0;
-      window.addEventListener('pagehide', () => { window.audioPagehiding = true; window.audioLifecycle('pagehide-enter'); });
+      window.addEventListener('pagehide', () => window.audioLifecycle('pagehide-enter'));
       window.addEventListener('unload', () => window.audioLifecycle('unload'));
       // Locate native cleanup stalls even if the renderer can no longer answer
       // DevTools. These wrappers preserve every call and are armed only at reload.
@@ -70,7 +73,6 @@ try {
         const original = target?.[name];
         if (!original) return;
         target[name] = function(...args) {
-          if (name === 'loseContext' && window.audioPagehiding) window.audioUnloadContextLosses++;
           window.audioLifecycle(name + '-enter');
           const result = original.apply(this, args);
           window.audioLifecycle(name + '-return');
@@ -95,7 +97,9 @@ try {
             if (samples?.length) window.audioEvidence.maxRms = Math.max(window.audioEvidence.maxRms, Math.sqrt(samples.reduce((n, v) => n + v * v, 0) / samples.length));
             window.audioEvidence.starts++; window.audioEvidence.live.add(node);
             if (window.audioSwitch && window.voidPlayer.getState().audioSlot !== 'B') window.audioSwitch.wrongSlotStarts++;
-            return start(...args); };
+            const result = start(...args);
+            queueMicrotask(() => window.audioOnStart?.());
+            return result; };
           node.stop = (...args) => { window.audioEvidence.stopped++; window.audioEvidence.live.delete(node); return stop(...args); };
           node.addEventListener('ended', () => window.audioEvidence.live.delete(node)); return node;
         }
@@ -147,20 +151,27 @@ try {
     if (enabled) { assert.ok(audioEvidence.starts > 0); assert.ok(audioEvidence.maxRms > 0.01, 'decoded PCM contains the fixture tone'); } else assert.equal(audioEvidence.starts, 0);
     assert.equal(audioEvidence.live, 0, 'end of video stops audio');
     assert.deepEqual(errors, []);
-    report.push({ enabled, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
+    assert.equal(result.error, null, 'video completes without a decode/presentation error');
+    assert.ok(result.playback.tracks.A.drawn > 0, 'the audio test presents real video frames');
+    const renderer = await page.locator('#canvas-A').getAttribute('data-color-executor');
+    report.push({ enabled, renderer, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
     if (enabled) {
-      // Keep the active-seek cancellation check outside the IO comparison:
-      // snapshot and seek in one browser task while old nodes are still live.
-      await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
-      await page.waitForFunction(() => {
-        if (!window.audioEvidence.live.size) return false;
-        const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
-        const seeking = window.voidPlayer.tools.find(t => t.name === 'seek_review').execute({ ptsUs: 1500000 });
-        window.audioSeek = { oldCount: old.size, survivors: [...old].filter(node => window.audioEvidence.live.has(node)).length,
-          stopped: window.audioEvidence.stopped - stopped };
-        window.audioSeekPending = seeking;
-        return true;
+      // Arm before playback. Real output-node starts drive the assertions in a
+      // microtask, before an ended event can retire the ~21 ms buffers. A
+      // DevTools/rAF round trip can miss every live buffer on a busy runner.
+      await tool(page, 'seek_review', { ptsUs: 0 });
+      await page.evaluate(() => {
+        window.audioOnStart = () => {
+          if (!window.audioEvidence.live.size) return;
+          window.audioOnStart = null;
+          const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
+          window.audioSeekPending = window.voidPlayer.tools.find(t => t.name === 'seek_review').execute({ ptsUs: 1500000 });
+          window.audioSeek = { oldCount: old.size, survivors: [...old].filter(node => window.audioEvidence.live.has(node)).length,
+            stopped: window.audioEvidence.stopped - stopped };
+        };
       });
+      await page.locator('#play').click();
+      await page.waitForFunction(() => !!window.audioSeek);
       await page.evaluate(() => window.audioSeekPending);
       const sought = await page.evaluate(() => window.audioSeek);
       assert.ok(sought.oldCount > 0, 'seek exercised live nodes');
@@ -168,23 +179,23 @@ try {
       assert.ok(sought.stopped >= sought.oldCount, 'seek stops nodes rather than waiting for their natural end');
       report[1].seek = sought;
       await tool(page, 'load_library_item', { id: second, slot: 'B' });
-      await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
-      const beforeSwitch = await page.evaluate(() => window.audioEvidence.starts);
-      await page.waitForFunction(before => window.audioEvidence.starts > before, beforeSwitch);
-      // Snapshot identities, click the current rendered button, and inspect
-      // cleanup in one browser task. Both ~21 ms buffers and the track row can
-      // change during a protocol round trip. A's trusted click already unlocked
-      // the AudioContext; B still exercises the actual synchronous UI handler.
-      await page.waitForFunction(() => {
-        const button = document.querySelector('.subtrack-row[data-track-drag="B"] .track-audio');
-        if (!button || button.disabled || !window.audioEvidence.live.size) return false;
-        const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
-        window.audioSwitch = { oldCount: old.size, survivors: null, stopped: 0, wrongSlotStarts: 0 };
-        button.click();
-        window.audioSwitch.survivors = [...old].filter(node => window.audioEvidence.live.has(node)).length;
-        window.audioSwitch.stopped = window.audioEvidence.stopped - stopped;
-        return true;
+      await tool(page, 'seek_review', { ptsUs: 0 });
+      await page.evaluate(() => {
+        window.audioOnStart = () => {
+          const button = document.querySelector('.subtrack-row[data-track-drag="B"] .track-audio');
+          if (!button || button.disabled || !window.audioEvidence.live.size) return;
+          window.audioOnStart = null;
+          const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
+          window.audioSwitch = { oldCount: old.size, survivors: null, stopped: 0, wrongSlotStarts: 0 };
+          // A's trusted click unlocked the AudioContext; use B's current UI
+          // button so row rerenders cannot detach the assertion's target.
+          button.click();
+          window.audioSwitch.survivors = [...old].filter(node => window.audioEvidence.live.has(node)).length;
+          window.audioSwitch.stopped = window.audioEvidence.stopped - stopped;
+        };
       });
+      await page.locator('#play').click();
+      await page.waitForFunction(() => !!window.audioSwitch);
       const switched = await page.evaluate(() => window.audioSwitch);
       assert.ok(switched.oldCount > 0, 'switch exercised live old-track nodes');
       assert.equal(switched.survivors, 0, 'switching synchronously stops all old nodes');
@@ -207,14 +218,14 @@ try {
         // its termination calls before the departing document is discarded.
         window.addEventListener('pagehide', () => { window.audioLifecycle('pagehide-after-app'); sessionStorage.setItem('audio-test-pagehide', JSON.stringify({
           workers: window.audioWorkers.size, contexts: window.audioEvidence.contexts,
-          closes: window.audioEvidence.closes, live: window.audioEvidence.live.size, forcedContextLosses: window.audioUnloadContextLosses,
+          closes: window.audioEvidence.closes, live: window.audioEvidence.live.size,
         })); }, { once: true });
       });
       await page.context().tracing.start({ snapshots: true }); tracing = true;
       await page.reload(); await page.waitForFunction(() => window.voidPlayer);
       await page.context().tracing.stop(); tracing = false;
       const unloaded = await page.evaluate(() => JSON.parse(sessionStorage.getItem('audio-test-pagehide')));
-      assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0, forcedContextLosses: 0 }, 'pagehide releases workers and audio synchronously');
+      assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0 }, 'pagehide releases workers and audio synchronously');
       report[1].pagehide = unloaded;
       report[1].lifecycleTrace = [...lifecycleTrace];
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');

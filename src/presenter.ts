@@ -214,5 +214,5 @@ export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: Pre
   if (!surfaces.has(canvas) && geometry) { const surface = createPresentationSurface(canvas); if (surface) surfaces.set(canvas, surface); }
   surfaces.get(canvas)?.geometry(geometry);
 }
-export function disposePresentation({ documentUnloading = false } = {}) {
-  for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose({ documentUnloading }); surfaces.clear(); }
+export function disposePresentation() {
+  for (const release of captureLeases.values()) release(); captureLeases.clear(); disposeGpuPresentation(); for (const surface of surfaces.values()) surface.dispose(); surfaces.clear(); }

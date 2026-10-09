@@ -116,15 +116,6 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
       return source;
     },
     geometry(value: PresentationGeometry | null) { if (JSON.stringify(geometry) === JSON.stringify(value)) return; geometry = value; canvas.hidden = !value || (!!gl && !useGl); draw(); },
-    dispose({ documentUnloading = false } = {}) {
-      if (gl) {
-        yuv?.dispose(); gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program);
-        // A discarded document already owns native context destruction. Forcing
-        // a synchronous context loss during pagehide can block its navigation.
-        // Track removal and live-page disposal still release the context eagerly.
-        if (!documentUnloading) gl.getExtension('WEBGL_lose_context')?.loseContext();
-      }
-      canvas.remove(); source.classList.remove('frame-source');
-    },
+    dispose() { if (gl) { yuv?.dispose(); gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program); gl.getExtension('WEBGL_lose_context')?.loseContext(); } canvas.remove(); source.classList.remove('frame-source'); },
   };
 }

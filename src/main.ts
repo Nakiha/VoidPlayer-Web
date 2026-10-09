@@ -113,7 +113,7 @@ const renderColorMode=()=>{
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
-window.addEventListener('pagehide',event=>{if(!event.persisted){void session.dispose();removeBrandEffects();disposePresentation({documentUnloading:true});}});
+window.addEventListener('pagehide',event=>{if(!event.persisted){void session.dispose();removeBrandEffects();disposePresentation();}});
 const toasts = installToasts(uiEvents.signal);
 const renderTrackToasts = createTrackToasts(toasts, () => settings.openPane('logs', $<HTMLElement>('settings-open')), uiEvents.signal);
 const removeLogPanel = installLogPanel($('diagnostic-logs'), toasts);
