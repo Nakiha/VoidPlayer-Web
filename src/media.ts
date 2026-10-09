@@ -28,7 +28,8 @@ import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
   /** Filled only by the presenter after a successful paint; never decoder tags. */
-  presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string };
+  presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string;
+    displayHdr: boolean; outputColorSpace: 'srgb' | 'display-p3'; outputFormat: 'unorm8' | 'float16'; toneMapping: 'standard' | 'extended'; fallbackReason?: string };
   readonly description: FrameDescription;
   readonly copyMs?: number;
   readonly rotation?: number;

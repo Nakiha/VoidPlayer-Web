@@ -150,7 +150,11 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
       try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
       let closed = false;
-      const rawFrame = { description: frame.description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+      // Preserve encoded metadata separately from the browser's actual resource
+      // tags. A platform may return an SDR-tagged resource for an HDR source.
+      const description = info.color && !frame.description.sourceColor
+        ? { ...frame.description, sourceColor: { ...info.color } } : frame.description;
+      const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
         close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },

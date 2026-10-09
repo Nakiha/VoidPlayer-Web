@@ -63,8 +63,8 @@ await withBrowserFixture({caseName:'hdr-playback',engine,roots:[root]},async({pa
  // Request is retained even when this headless SDR environment cannot activate extended output.
  assert.ok(restored.tracks.every(t=>t.presentation.requestedTarget==='hdr'&&t.presentation.captureTarget==='sdr'));
  await call('set_reference_decode',{decoder:'hardware',depth:2});const hardware=await state();for(const track of hardware.tracks.filter(t=>t.color.transfer==='pq')){assert.ok(track.output.yuv.bitDepth>=10);assert.equal(track.output.color.primaries,'bt2020');assert.ok(['webcodecs','ffmpeg-wasm'].includes(track.decoder));}
- await call('set_review_color_mode',{mode:'browser'});const browser=await state();assert.ok(browser.tracks.every(t=>t.presentation.actualTarget==='sdr'));
- await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();assert.match(await page.locator('#color-output-description').innerText(),/SDR.*自有色彩/);
+ await call('set_review_color_mode',{mode:'browser'});const browser=await state();for(const track of browser.tracks){assert.equal(track.presentation.captureTarget,'sdr');if(['pq','smpte2084','hlg','arib-std-b67'].includes(track.color?.transfer)&&!['pq','smpte2084','hlg','arib-std-b67'].includes(track.output.color.transfer)&&!track.output.yuv){assert.equal(track.presentation.actualTarget,'sdr');assert.equal(track.presentation.fallbackReason,'native-hdr-resource-unverified');}}
+ await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();assert.match(await page.locator('#color-output-description').innerText(),/SDR.*(自有色彩|HDR 显示目标)/);
  assert.deepEqual(errors,[]);
  await writeFile(artifact('hdr-playback.json'),JSON.stringify({engine,rows,comparison:snapshot.comparison,actualTargets:restored.tracks.map(t=>t.presentation),hardware:hardware.tracks.map(t=>({decoder:t.decoder,output:t.output,presentation:t.presentation}))},null,2));
  console.log(`PASS ${engine}: real PQ/HLG 10-bit local and Range decode, seek/step/tail, peak changes, mixed SDR, playback, v2 workspace restore and browser downgrade`);

@@ -115,8 +115,9 @@ const renderColorMode=()=>{
   $('color-mode').setAttribute('aria-busy',String(state.busy));
   for(const button of outputButtons){button.setAttribute('aria-pressed',String(button.dataset.colorTarget===state.colorOutput.target));button.setAttribute('aria-disabled',String(state.busy));}
   peakMenu.sync(String(state.colorOutput.preview.sourcePeakNits),`${state.colorOutput.preview.sourcePeakNits} nits`,!state.busy);
-  const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.every(track=>track.presentation?.actualTarget!=='hdr');
-  $('color-output-description').textContent=state.colorOutput.target==='hdr'&&mode==='browser'?tr(msg("colorOutput.browserPreview", "浏览器色彩使用 SDR 兼容预览；HDR 输出请选择自有色彩。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):state.colorOutput.target==='hdr'?tr(msg("colorOutput.hdrDescription", "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。")):tr(msg("colorOutput.sdrDescription", "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。"));
+  const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.some(track=>track.presentation?.actualTarget!=='hdr');
+  const nativeBlocked=state.tracks.some(track=>track.presentation?.fallbackReason?.startsWith('browser-hdr-'));
+  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):state.colorOutput.target==='hdr'&&mode==='browser'?tr(msg("colorOutput.browserHdr", "原生 HDR 由浏览器转换为浮点画面后上屏；截图和缩略图为 SDR。假定峰值仅用于软件回退。")):state.colorOutput.target==='hdr'?tr(msg("colorOutput.hdrDescription", "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。")):tr(msg("colorOutput.sdrDescription", "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。"));
   const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
@@ -128,7 +129,7 @@ let pendingDisplayRefresh=false;
 const refreshDisplay=()=>{const state=session.getState();if(!pendingDisplayRefresh||state.busy||state.playing)return;pendingDisplayRefresh=false;queueMicrotask(()=>void act(()=>session.refreshColorOutput()).finally(renderColorMode));};
 matchMedia('(dynamic-range: high)').addEventListener('change',()=>{pendingDisplayRefresh=true;refreshDisplay();});
 session.subscribe(refreshDisplay);
-void gpuReady.then(()=>{const state=session.getState();if(hdrDisplayAvailable()&&state.colorMode==='reference'&&state.colorOutput.target==='hdr'&&state.tracks.some(track=>track.presentation?.executor!=='webgpu-yuv')){pendingDisplayRefresh=true;refreshDisplay();}});
+void gpuReady.then(()=>{const state=session.getState();if(hdrDisplayAvailable()&&state.colorOutput.target==='hdr'&&state.tracks.some(track=>track.presentation?.actualTarget!=='hdr')){pendingDisplayRefresh=true;refreshDisplay();}});
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
@@ -248,9 +249,13 @@ function render() {
   $('performance-current').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
     const native=track.decoder==='webcodecs', label=native?tr(msg("player.browserNativeDecoding", "浏览器原生解码")):tr(msg("colorFlow.softwareDecoding", "软件解码"));
+    const presentation=track.presentation;
+    const display=presentation?` · ${presentation.actualTarget==='hdr'?'HDR':'SDR'} · ${presentation.outputFormat==='float16'?'Display-P3 float16':'sRGB 8-bit'}`:'';
+    const blocked=presentation?.fallbackReason;
+    const reason=blocked==='browser-hdr-headroom-unavailable'||blocked==='browser-hdr-float16-unavailable'?tr(msg("colorOutput.nativeHdrUnavailable", " · 浏览器未开放 HDR 浮点转换")):blocked==='native-hdr-resource-unverified'?tr(msg("colorOutput.nativeResourceUnverified", " · 原生帧未通过 HDR 资源验证")):blocked==='hdr-display-unavailable'?tr(msg("colorOutput.displayUnavailable", " · 浏览器未报告 HDR 屏幕")):blocked?tr(msg("colorOutput.gpuUnavailable", " · HDR 呈现条件未满足")):'';
     const fallback=!native && (state.colorMode==='browser'||state.referenceDecode.decoder==='hardware');
     return `${track.slot} · ${track.name}
-${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.output?.yuv?tr(msg("player.rawPlanes", "原始平面")):track.output?.format??tr(msg("player.waitingForFrame", "等待帧"))}`;
+${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.output?.yuv?tr(msg("player.rawPlanes", "原始平面")):track.output?.format??tr(msg("player.waitingForFrame", "等待帧"))}${display}${reason}`;
   }).join('\n');
   viewportChrome.update(loaded);
   const cards = document.querySelectorAll<HTMLElement>('.video-card');

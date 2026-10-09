@@ -1711,18 +1711,33 @@
     "source": "HDR 假定峰值",
     "translation": "Assumed HDR peak"
   },
+  "colorOutput.browserHdr": {
+    "source": "原生 HDR 由浏览器转换为浮点画面后上屏；截图和缩略图为 SDR。假定峰值仅用于软件回退。",
+    "translation": "The browser converts native HDR to floating-point pixels for display. Captures and thumbnails are SDR. The assumed peak only applies to software fallback.",
+    "needsReview": false
+  },
   "colorOutput.browserPreview": {
-    "source": "浏览器色彩使用 SDR 兼容预览；HDR 输出请选择自有色彩。",
-    "translation": "Browser color uses an SDR compatibility preview. Select managed color for HDR output.",
+    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。",
+    "translation": "The browser does not expose native HDR float conversion. Using an SDR preview; select managed color for HDR output.",
     "needsReview": false
   },
   "colorOutput.displayTarget": {
     "source": "显示目标",
     "translation": "Display target"
   },
+  "colorOutput.displayUnavailable": {
+    "source": " · 浏览器未报告 HDR 屏幕",
+    "translation": " · Browser reports no HDR display",
+    "needsReview": false
+  },
   "colorOutput.fallbackDescription": {
     "source": "当前环境使用 SDR 预览；HDR 显示目标已保留。",
     "translation": "This environment uses an SDR preview; the HDR display target is retained."
+  },
+  "colorOutput.gpuUnavailable": {
+    "source": " · HDR 呈现条件未满足",
+    "translation": " · HDR presentation requirements not met",
+    "needsReview": false
   },
   "colorOutput.hdrDescription": {
     "source": "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。",
@@ -1731,6 +1746,16 @@
   "colorOutput.managedConversion": {
     "source": "统一 SDR / HDR 转换",
     "translation": "Unified SDR / HDR conversion"
+  },
+  "colorOutput.nativeHdrUnavailable": {
+    "source": " · 浏览器未开放 HDR 浮点转换",
+    "translation": " · Browser HDR float conversion unavailable",
+    "needsReview": false
+  },
+  "colorOutput.nativeResourceUnverified": {
+    "source": " · 原生帧未通过 HDR 资源验证",
+    "translation": " · Native frame HDR resource unverified",
+    "needsReview": false
   },
   "colorOutput.sdrDescription": {
     "source": "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。",

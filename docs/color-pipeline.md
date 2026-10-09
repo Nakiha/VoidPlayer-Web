@@ -3,7 +3,7 @@
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
 应用保留“自有色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。自有色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
 
-PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源。自有模式拒绝 RGBA8、低位深或标签不足的 HDR 资源；符合 BT.2100 平面契约时使用统一 HDR 数学。浏览器原生 HDR 保留 sRGB Canvas 兼容预览，不开放 external texture HDR 输出；当前导入未通过扩展显示光契约验证，不能推定所有 WebCodecs/WebGPU 资源都无法呈现 HDR。Dolby Vision/HDR10+ 动态元数据不参与转换。
+PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源。自有模式拒绝 RGBA8、低位深或标签不足的 HDR 资源；符合 BT.2100 平面契约时使用统一 HDR 数学。浏览器原生 HDR 不直接导入 external texture；具备无限 HDR headroom 和 float16 2D 转换的浏览器使用浮点 Display-P3 中转，再复制到 WebGPU rgba16float 扩展画布。缺少接口时明确使用 sRGB Canvas 兼容预览。转换完全归浏览器，不叠加源 PQ/HLG 变换。Dolby Vision/HDR10+ 动态元数据不参与转换。
 
 ## 用户选择的两条路径
 
@@ -47,13 +47,14 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 
 - 初始化/刷新共用 epoch 失效守卫（`gpu-presentation-guard.ts`）：进入即递增，旧任务迟到成功或失败只清理自己那批候选，不提交全局 entries，也不全局 dispose 新一代资源；完整 source 列表独立保存，不从已提交反推，避免启动与色彩切换重叠时旧 profile 资源晚到。
 
-- WebCodecs：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB GPU 画布。播放无应用层 copyTo/readback。
+- WebCodecs SDR：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB / 扩展 Display-P3 GPU 画布。播放无应用层 copyTo/readback。
+- WebCodecs HDR：仅在 HDR 目标和能力满足时，原生 VideoFrame clone → 浏览器 float16 Display-P3 2D 转换（`globalHDRHeadroom=Infinity`）→ `copyExternalImageToTexture` 至 rgba16float → WebGPU 扩展画布。此呈现入口多一次转换和纹理复制，不是零拷贝直通；不取 CPU 像素，不重新解码。每轨只保留一个可复用转换表面，尺寸变化重设无限 headroom，清空/释放时缩小表面。截图/缩略图仍按需独立生成，不读取中转画布作为 HDR 导出。
 - WASM：ABI v2 原始 YUV → GPU storage buffer → `webgpu-yuv-kernel.mjs` 的 range/matrix/transfer/primaries 转换 → 同一输出。8–16 位精度保留到运算；无需 memory VideoFrame。
 - Apple/CV profile 仅用于用户选择的近似匹配或显式 `colorPipeline=webgpu-apple709` / `webgpu-cv-full-range` 实验参数。Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。
 - profile 是独立的资源呈现约定，不覆盖源标签。旧 `resolveYuvColor` 的默认值与新 profile 需区分；未知的显式色彩不强制套 709。
 - 两入口对整数源像素转换为 RGB，缩小对四点 RGB 做双线性，放大 NEAREST；避免两路分别在 YUV/RGB 域滤波。共享设备和微任务提交，引用的资源覆写前先提交，旧 clone 在提交后关闭。
-- 每个 surface 只保留当前 clone 或已上传 YUV buffer；截图按需用同一 shader 渲染源尺寸 SDR 预览，旋转后物化 2D 画布。HDR 浮点表面截图显式关闭扩展输出并执行保存的预览策略，不能将普通截图标为 HDR 导出。播放不维护隐藏 RGBA 中间画布。
-- GPU 丢失、资源超限/导入失败、RGBA 或原生 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对交付资源的 `color.transfer` 用 `isHdrTransfer` 判定：`pq`/`hlg` 及 `smpte2084`/`arib-std-b67` 别名写法的原生帧一律拒绝 external 纹理导入，沿用 VideoSample.draw → sRGB Canvas 2D 旧路径——external 采样不对 HLG/PQ 做 tone mapping，直接导入会发灰发白。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
+- 每个 surface 保留当前 clone 或已上传 YUV buffer；原生 HDR 另外复用一个 float16 转换表面和浮点纹理；自有截图按需用同一 shader 渲染源尺寸 SDR 预览，旋转后物化 2D 画布；原生 HDR 截图按需由浏览器转换为 sRGB。自有 HDR 浮点表面截图显式关闭扩展输出并执行保存的预览策略，不能将普通截图标为 HDR 导出。SDR 和原始 YUV 播放不维护隐藏 RGBA 中间画布；原生 HDR 中转仅服务于浏览器浮点呈现。
+- GPU 丢失、资源超限/导入失败、RGBA 或未满足浮点转换能力的原生 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对实际资源 transfer 判定，别名与标准名等价；原生 HDR 只通过上述浏览器浮点转换，不使用未经验证的 external HDR 导入。降级原因随每轨 `presentation.fallbackReason` 和本地日志报告。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
 - 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
 
 ## 显式统一平面路径
@@ -177,11 +178,13 @@ Dolby Vision/HDR10+ 动态元数据、母版元数据自动推定峰值及物理
 
 默认假定源峰值 1000、曝光白 203、HLG 参考显示峰值 1000 nits、system gamma 1.2。UI 峰值档位 1000/2000/4000/10000 同步 HLG 显示峰值及相应 gamma，完整参数通过 session/export 保存；不把假定值标为母版实测。修改目标或参数暂停并准备原位置的新帧，失败连同模式/解码/画面回滚。
 
-HDR 显示仅在自有模式、`dynamic-range: high`、WebGPU 可用且 `rgba16float` / `toneMapping.mode=extended` 配置核验成功时启用。显示光 BT.2020 → Display-P3 → 按显式 hdrWhiteNits（默认 203、80–400 可选）归一化 → 扩展 sRGB/P3 编码，保留 >1 高亮，负色域通道钳制到 0；屏幕最终峰值由浏览器与系统决定。普通 SDR 帧转为 P3、保持 1.0 参考白。此过程无 SDR shoulder，不套浏览器近似 profile。
+HDR 显示要求 `dynamic-range: high`、WebGPU 可用且 `rgba16float` / `toneMapping.mode=extended` 配置核验成功时启用。自有平面的转换为显示光 BT.2020 → Display-P3 → 按显式 hdrWhiteNits（默认 203、80–400 可选）归一化 → 扩展 sRGB/P3 编码，保留 >1 高亮，负色域通道钳制到 0；屏幕最终峰值由浏览器与系统决定。普通 SDR 帧转为 P3、保持 1.0 参考白。此过程无 SDR shoulder，不套浏览器近似 profile。
 
-`MediaInfo.presentation` 单独记录 requestedTarget、actualTarget、captureTarget、executor、contract；`output` 仍是实际解码资源，不冒充显示画布。actualTarget=hdr 表示浮点 extended 输出契约，不能证明物理屏幕已测得 nits。无相应能力或浏览器模式使用 SDR，保留请求目标，UI 说明降级。显示能力变化在会话空闲暂停后重建，启动 GPU 就绪后也重新呈现早期回退帧。
+`MediaInfo.presentation` 单独记录 requestedTarget、actualTarget、captureTarget、executor、contract；`output` 仍是实际解码资源，不冒充显示画布。actualTarget=hdr 表示浮点 extended 输出契约，不能证明物理屏幕已测得 nits。无相应能力使用 SDR，保留请求目标，UI 说明降级。显示能力变化在会话空闲暂停后重建，启动 GPU 就绪后也重新呈现早期回退帧。
 
-浏览器原生 HDR 暂不准入 external HDR 呈现；实际实验的内存帧和 Chrome 154 WebCodecs HEVC10 资源在导入后最高为 1，原始平面浮点输出可超过 1。完整灰阶仍可区分，所以最高值不能单独证明硬截断；目前未得到符合约定的 HDR 显示光输出，转换边界尚未定位。禁止由容器标签推定导入保留动态范围，也不对浏览器已经转换的资源盲目叠加 PQ/HLG 变换。详细数学、验证和限制见 [HDR 支持](hdr-support.md)。
+浏览器原生 HDR 仅准入 `browser-hdr-bridge.mjs` 的浮点转换。显式检查真实 2D context 的 Display-P3、float16、无限 `globalHDRHeadroom`；只设置浮点 backing store 仍会在 drawImage 时进行 SDR 映射。此接口在当前 Chromium 为实验性能力，应用不会修改浏览器启动参数或系统设置。未开放时报告 `browser-hdr-headroom-unavailable`，可切换自有色彩取得 HDR。浏览器决定原生 HLG OOTF、PQ 参考白及 HDR 转换，应用的 hdrWhiteNits/预览峰值只用于自有平面和软件回退，不用于二次校正 browser RGB。色域外负通道仍钳制到 0，正高亮保留。
+
+直接 external HDR 导入的 Chrome 154 实验未得到符合约定的扩展显示光，但灰阶仍能区分，所以不能仅凭最高值 ≤1 宣称硬截断。当前 Chromium 源码的高位深非 RGBAF16 路径使用 N32 中间资源；`copyExternalImageToTexture(VideoFrame)` 复用同一个 external helper，直接复制到浮点目的纹理也不能解决。浮点 2D 入口绕开这个 helper。若源是 HDR 而原生资源已变为 SDR 标签，尚未验证该资源是否保留扩展显示光，使用 SDR 预览并报告 `native-hdr-resource-unverified`，不覆盖资源标签或把普通 SDR 纹理放到扩展画布后冒充 HDR 保留。每轨诊断报告 `displayHdr`、`outputColorSpace`、`outputFormat`、`toneMapping`、请求/实际目标、executor 和 fallbackReason；`webgpu-browser-hdr-float` 表示浏览器浮点中转，不表示零拷贝或自有数学认证。真实 HEVC PQ/HLG 灰阶、彩色块和浮点 GPU 读回证据见 [HDR 支持](hdr-support.md)。
 
 ## 首帧封面资源
 

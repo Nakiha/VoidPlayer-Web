@@ -9,16 +9,16 @@ import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
 import { log } from './log.ts';
-import { getColorOutput } from './color-output.ts';
+import { getColorOutput, hdrDisplayAvailable } from './color-output.ts';
 import { HDR_PREVIEW_POLICY } from './hdr-policy.ts';
 
 // Presentation is the only place that decides HOW a decoded frame reaches the
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or
-// RGBA8 pixels); they never paint. Native HDR is converted by the browser's
-// sRGB Canvas 2D path before upload, consistently from the first frame onward.
+// RGBA8 pixels); they never paint. Native HDR uses browser-owned float
+// conversion when available, otherwise the sRGB compatibility preview.
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  const record=()=>{frame.presentation={requestedTarget:getColorOutput().target,actualTarget:canvas.dataset.displayTarget==='hdr'?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown'};};
+  const record=()=>{const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
   if(gpuPaint(canvas,frame)){
     // GPU warmup may finish after a GL frame. Retire its viewport surface only
     // after successful GPU presentation; two visible surfaces retain stale pixels.

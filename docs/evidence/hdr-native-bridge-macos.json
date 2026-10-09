@@ -1,0 +1,2942 @@
+{
+  "recordedAt": "2026-10-09T18:27:53.510194+00:00",
+  "platform": "macOS ARM64",
+  "conditions": {
+    "visibleBrowser": true,
+    "forcedSrgbRemoved": true,
+    "realHdrMediaQueryRequired": true,
+    "mediaQueryOverride": false,
+    "experimentalFlagsAffectOnlyIsolatedTestProcess": true,
+    "pipeline": "native VideoFrame -> browser float16 Display-P3 draw with infinite HDR headroom -> copyExternalImageToTexture rgba16float -> WebGPU extended canvas",
+    "notZeroCopy": true,
+    "readback": "diagnostic only; playback performs no application CPU readback"
+  },
+  "limitations": [
+    "Does not measure physical monitor nits or certify color reference accuracy.",
+    "Browser-managed conversion may differ from the common raw-YUV HDR math and from other browser versions/platforms.",
+    "Default Chromium lacks the experimental HDR headroom API; product retains SDR preview with a reason.",
+    "Resource tags which no longer expose source HDR transfer are not admitted as preserved native HDR."
+  ],
+  "runs": [
+    {
+      "mode": "native-hdr-default-chromium",
+      "report": {
+        "experimental": false,
+        "channel": "chrome",
+        "result": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "configuration": {
+            "displayHdr": true,
+            "format": "rgba16float",
+            "colorSpace": "display-p3",
+            "toneMapping": "extended"
+          },
+          "nativeHdrAvailable": false,
+          "nativeHdrReason": "browser-hdr-headroom-unavailable",
+          "rows": [
+            {
+              "label": "pq:memory",
+              "format": "I420P10",
+              "rejected": true,
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "browser-hdr-headroom-unavailable"
+              }
+            },
+            {
+              "label": "pq:decoded",
+              "format": null,
+              "rejected": true,
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "browser-hdr-headroom-unavailable"
+              }
+            },
+            {
+              "label": "hlg:memory",
+              "format": "I420P10",
+              "rejected": true,
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "browser-hdr-headroom-unavailable"
+              }
+            },
+            {
+              "label": "hlg:decoded",
+              "format": null,
+              "rejected": true,
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "browser-hdr-headroom-unavailable"
+              }
+            },
+            {
+              "label": "sdr-after-hdr",
+              "maxRgb": 0.38427734375
+            },
+            {
+              "label": "pq:after-resize",
+              "format": "I420P10",
+              "rejected": true,
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "browser-hdr-headroom-unavailable"
+              }
+            },
+            {
+              "label": "hdr-source-sdr-tagged-resource",
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "native-hdr-resource-unverified"
+              }
+            }
+          ],
+          "gpuErrors": []
+        },
+        "playback": [
+          {
+            "transfer": "pq",
+            "mixed": false,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:60170/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 0.9650000035762787,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 0.8149999976158142,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2034.449999988079,
+                "mediaUs": 2034205,
+                "waitingMs": 6.121397131408912e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9998795743379879,
+                "maxFrameLagUs": 27810,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.983533633344358,
+                    "maxGapMs": 35.20999999344349,
+                    "p95GapMs": 34.50499999523163
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "b58c4dde-af3f-4a8c-838c-9d370d2edc83",
+                  "name": "pq.mp4",
+                  "size": 10125,
+                  "lastModified": 1791570428267,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "pq",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "b958cfff482e97645d5d9a7a",
+                    "url": "/api/media/b958cfff482e97645d5d9a7a?v=9cc20da0c5c4726a153e6cbe"
+                  },
+                  "metadataRevision": 3,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "sdr",
+                    "captureTarget": "sdr",
+                    "executor": "browser-managed",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "srgb",
+                    "outputFormat": "unorm8",
+                    "toneMapping": "standard",
+                    "fallbackReason": "browser-hdr-headroom-unavailable"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 2
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "pq",
+            "mixed": true,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:60170/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 1.1400000005960464,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.0750000029802322,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2039.765000000596,
+                "mediaUs": 2038525,
+                "waitingMs": 6.240606307272856e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  },
+                  "B": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 331776,
+                    "peakFrames": 4,
+                    "peakBytes": 331776,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9993920868332402,
+                "maxFrameLagUs": 31143,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.905405769773566,
+                    "maxGapMs": 37.50499999523163,
+                    "p95GapMs": 34.6000000089407
+                  },
+                  "B": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.905405769773566,
+                    "maxGapMs": 37.65999999642372,
+                    "p95GapMs": 34.70000000298023
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "b58c4dde-af3f-4a8c-838c-9d370d2edc83",
+                  "name": "pq.mp4",
+                  "size": 10125,
+                  "lastModified": 1791570428267,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "pq",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "b958cfff482e97645d5d9a7a",
+                    "url": "/api/media/b958cfff482e97645d5d9a7a?v=9cc20da0c5c4726a153e6cbe"
+                  },
+                  "metadataRevision": 3,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "sdr",
+                    "captureTarget": "sdr",
+                    "executor": "browser-managed",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "srgb",
+                    "outputFormat": "unorm8",
+                    "toneMapping": "standard",
+                    "fallbackReason": "browser-hdr-headroom-unavailable"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 2
+                },
+                {
+                  "slot": "B",
+                  "id": "3e7d4ca7-62e5-4357-9103-b1ebdcbd3b78",
+                  "name": "sdr.mp4",
+                  "size": 131600,
+                  "lastModified": 1791570428530,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": null,
+                    "transfer": null,
+                    "matrix": null,
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "71687c44a5b309ffb09b860a",
+                    "url": "/api/media/71687c44a5b309ffb09b860a?v=f631d490f0c527bc5610a94b"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 82944,
+                    "byteLengthEstimated": false,
+                    "format": "NV12",
+                    "color": {
+                      "primaries": "smpte170m",
+                      "transfer": "bt709",
+                      "matrix": "smpte170m",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": null,
+                      "transfer": null,
+                      "matrix": null,
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": "NV12",
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-external",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 3
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "hlg",
+            "mixed": false,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:60170/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 0.5649999976158142,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 3.415000006556511,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 1997.8650000095367,
+                "mediaUs": 1996290,
+                "waitingMs": 1.5500006288290011,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9992116584406208,
+                "maxFrameLagUs": 31538,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 59,
+                    "dropped": 0,
+                    "fps": 29.53152490269281,
+                    "maxGapMs": 39.35999999940395,
+                    "p95GapMs": 34.25499999523163
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "fd1582d0-b9ce-4ed6-b564-1f5ed6609a4c",
+                  "name": "hlg.mp4",
+                  "size": 10117,
+                  "lastModified": 1791570428463,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "1a8f044795e732cfa14de40f",
+                    "url": "/api/media/1a8f044795e732cfa14de40f?v=6a48d532d06d55430334d35a"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "sdr",
+                    "captureTarget": "sdr",
+                    "executor": "browser-managed",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "srgb",
+                    "outputFormat": "unorm8",
+                    "toneMapping": "standard",
+                    "fallbackReason": "browser-hdr-headroom-unavailable"
+                  },
+                  "frame": {
+                    "ptsUs": 1966667,
+                    "sourcePtsUs": 1966667,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 6
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "hlg",
+            "mixed": true,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:60170/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 1.030000001192093,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.3250000029802322,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2036.6349999904633,
+                "mediaUs": 2036160,
+                "waitingMs": 5.680322630041701e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  },
+                  "B": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 331776,
+                    "peakFrames": 4,
+                    "peakBytes": 331776,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9997667721558033,
+                "maxFrameLagUs": 28307,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.95136585607418,
+                    "maxGapMs": 36.17000000178814,
+                    "p95GapMs": 34.33499999344349
+                  },
+                  "B": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.95136585607418,
+                    "maxGapMs": 36.40500000119209,
+                    "p95GapMs": 34.38499999046326
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "fd1582d0-b9ce-4ed6-b564-1f5ed6609a4c",
+                  "name": "hlg.mp4",
+                  "size": 10117,
+                  "lastModified": 1791570428463,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "1a8f044795e732cfa14de40f",
+                    "url": "/api/media/1a8f044795e732cfa14de40f?v=6a48d532d06d55430334d35a"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "sdr",
+                    "captureTarget": "sdr",
+                    "executor": "browser-managed",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "srgb",
+                    "outputFormat": "unorm8",
+                    "toneMapping": "standard",
+                    "fallbackReason": "browser-hdr-headroom-unavailable"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 6
+                },
+                {
+                  "slot": "B",
+                  "id": "7e2b8c04-05fd-465f-976f-cf25fe6eafe7",
+                  "name": "sdr.mp4",
+                  "size": 131600,
+                  "lastModified": 1791570428530,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": null,
+                    "transfer": null,
+                    "matrix": null,
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "71687c44a5b309ffb09b860a",
+                    "url": "/api/media/71687c44a5b309ffb09b860a?v=f631d490f0c527bc5610a94b"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 82944,
+                    "byteLengthEstimated": false,
+                    "format": "NV12",
+                    "color": {
+                      "primaries": "smpte170m",
+                      "transfer": "bt709",
+                      "matrix": "smpte170m",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": null,
+                      "transfer": null,
+                      "matrix": null,
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": "NV12",
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-external",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 7
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "mode": "native-hdr-enabled-chromium",
+      "report": {
+        "experimental": true,
+        "channel": "chrome",
+        "result": {
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+          "configuration": {
+            "displayHdr": true,
+            "format": "rgba16float",
+            "colorSpace": "display-p3",
+            "toneMapping": "extended"
+          },
+          "nativeHdrAvailable": true,
+          "nativeHdrReason": null,
+          "rows": [
+            {
+              "label": "pq:memory",
+              "format": "I420P10",
+              "color": {
+                "primaries": "bt2020",
+                "transfer": "pq",
+                "matrix": "bt2020-ncl",
+                "fullRange": false
+              },
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              "points": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.72314453125,
+                  0.72314453125,
+                  0.72314453125
+                ],
+                [
+                  0.99853515625,
+                  0.99853515625,
+                  0.99853515625
+                ],
+                [
+                  1.97265625,
+                  1.97265625,
+                  1.97265625
+                ],
+                [
+                  3.58984375,
+                  3.58984375,
+                  3.58984375
+                ],
+                [
+                  5.2109375,
+                  5.2109375,
+                  5.2109375
+                ],
+                [
+                  2.158203125,
+                  0.056121826171875,
+                  0.163330078125
+                ],
+                [
+                  0,
+                  2.03515625,
+                  0.3330078125
+                ],
+                [
+                  0,
+                  0,
+                  1.728515625
+                ],
+                [
+                  2.58984375,
+                  1.552734375,
+                  0
+                ],
+                [
+                  2.6640625,
+                  0,
+                  1.7607421875
+                ],
+                [
+                  0,
+                  2.0234375,
+                  2.232421875
+                ]
+              ],
+              "maxRgb": 5.2109375,
+              "maxDelta": 0,
+              "retainedDelta": 0,
+              "captureMax": 255,
+              "captureDelta": 0,
+              "captureStable": true,
+              "rotationDelta": 0,
+              "rotatedPixels": 221184
+            },
+            {
+              "label": "pq:decoded",
+              "format": null,
+              "color": {
+                "primaries": "bt2020",
+                "transfer": "pq",
+                "matrix": "bt2020-ncl",
+                "fullRange": false
+              },
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              "points": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.72314453125,
+                  0.72314453125,
+                  0.72314453125
+                ],
+                [
+                  0.99853515625,
+                  0.99853515625,
+                  0.99853515625
+                ],
+                [
+                  1.96484375,
+                  2.005859375,
+                  1.97265625
+                ],
+                [
+                  3.58984375,
+                  3.58984375,
+                  3.58984375
+                ],
+                [
+                  5.30078125,
+                  5.296875,
+                  5.2109375
+                ],
+                [
+                  2.2265625,
+                  0,
+                  0.1497802734375
+                ],
+                [
+                  0,
+                  2.03515625,
+                  0.2900390625
+                ],
+                [
+                  0,
+                  0,
+                  1.9873046875
+                ],
+                [
+                  2.6328125,
+                  1.5478515625,
+                  0
+                ],
+                [
+                  2.697265625,
+                  0,
+                  1.9912109375
+                ],
+                [
+                  0,
+                  2.021484375,
+                  2.376953125
+                ]
+              ],
+              "maxRgb": 5.47265625,
+              "maxDelta": 0,
+              "retainedDelta": 0,
+              "captureMax": 255,
+              "captureDelta": 0,
+              "captureStable": true,
+              "rotationDelta": 0,
+              "rotatedPixels": 221184
+            },
+            {
+              "label": "hlg:memory",
+              "format": "I420P10",
+              "color": {
+                "primaries": "bt2020",
+                "transfer": "hlg",
+                "matrix": "bt2020-ncl",
+                "fullRange": false
+              },
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              "points": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.2420654296875,
+                  0.2420654296875,
+                  0.2420654296875
+                ],
+                [
+                  0.5341796875,
+                  0.5341796875,
+                  0.5341796875
+                ],
+                [
+                  0.99755859375,
+                  0.99755859375,
+                  0.99755859375
+                ],
+                [
+                  1.5,
+                  1.5,
+                  1.5
+                ],
+                [
+                  1.9736328125,
+                  1.9736328125,
+                  1.9736328125
+                ],
+                [
+                  1.0087890625,
+                  0.46044921875,
+                  0.2435302734375
+                ],
+                [
+                  0,
+                  0.99658203125,
+                  0.466064453125
+                ],
+                [
+                  0.259765625,
+                  0.1705322265625,
+                  0.765625
+                ],
+                [
+                  1.1728515625,
+                  0.86669921875,
+                  0.1871337890625
+                ],
+                [
+                  1.1494140625,
+                  0,
+                  0.869140625
+                ],
+                [
+                  0,
+                  0.99951171875,
+                  1.044921875
+                ]
+              ],
+              "maxRgb": 1.9736328125,
+              "maxDelta": 0,
+              "retainedDelta": 0,
+              "captureMax": 255,
+              "captureDelta": 0,
+              "captureStable": true,
+              "rotationDelta": 0,
+              "rotatedPixels": 221184
+            },
+            {
+              "label": "hlg:decoded",
+              "format": null,
+              "color": {
+                "primaries": "bt2020",
+                "transfer": "hlg",
+                "matrix": "bt2020-ncl",
+                "fullRange": false
+              },
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              "points": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.2369384765625,
+                  0.2421875,
+                  0.2379150390625
+                ],
+                [
+                  0.5341796875,
+                  0.5341796875,
+                  0.5341796875
+                ],
+                [
+                  0.99755859375,
+                  0.99755859375,
+                  0.99755859375
+                ],
+                [
+                  1.5,
+                  1.5,
+                  1.5
+                ],
+                [
+                  1.99609375,
+                  1.9951171875,
+                  1.9765625
+                ],
+                [
+                  1.0302734375,
+                  0.458984375,
+                  0.220458984375
+                ],
+                [
+                  0,
+                  0.99658203125,
+                  0.452392578125
+                ],
+                [
+                  0.245849609375,
+                  0.1678466796875,
+                  0.8349609375
+                ],
+                [
+                  1.185546875,
+                  0.86669921875,
+                  0.1357421875
+                ],
+                [
+                  1.1611328125,
+                  0,
+                  0.93505859375
+                ],
+                [
+                  0,
+                  0.99951171875,
+                  1.083984375
+                ]
+              ],
+              "maxRgb": 2.021484375,
+              "maxDelta": 0,
+              "retainedDelta": 0,
+              "captureMax": 255,
+              "captureDelta": 0,
+              "captureStable": true,
+              "rotationDelta": 0,
+              "rotatedPixels": 221184
+            },
+            {
+              "label": "sdr-after-hdr",
+              "maxRgb": 0.38427734375
+            },
+            {
+              "label": "pq:after-resize",
+              "format": "I420P10",
+              "color": {
+                "primaries": "bt2020",
+                "transfer": "pq",
+                "matrix": "bt2020-ncl",
+                "fullRange": false
+              },
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              "points": [
+                [
+                  0,
+                  0,
+                  0
+                ],
+                [
+                  0.72314453125,
+                  0.72314453125,
+                  0.72314453125
+                ],
+                [
+                  0.99853515625,
+                  0.99853515625,
+                  0.99853515625
+                ],
+                [
+                  1.97265625,
+                  1.97265625,
+                  1.97265625
+                ],
+                [
+                  3.58984375,
+                  3.58984375,
+                  3.58984375
+                ],
+                [
+                  5.2109375,
+                  5.2109375,
+                  5.2109375
+                ],
+                [
+                  2.158203125,
+                  0.056121826171875,
+                  0.163330078125
+                ],
+                [
+                  0,
+                  2.03515625,
+                  0.3330078125
+                ],
+                [
+                  0,
+                  0,
+                  1.728515625
+                ],
+                [
+                  2.58984375,
+                  1.552734375,
+                  0
+                ],
+                [
+                  2.6640625,
+                  0,
+                  1.7607421875
+                ],
+                [
+                  0,
+                  2.0234375,
+                  2.232421875
+                ]
+              ],
+              "maxRgb": 5.2109375,
+              "maxDelta": 0,
+              "retainedDelta": 0,
+              "captureMax": 255,
+              "captureDelta": 0,
+              "captureStable": true,
+              "rotationDelta": 0,
+              "rotatedPixels": 221184
+            },
+            {
+              "label": "hdr-source-sdr-tagged-resource",
+              "presentation": {
+                "requestedTarget": "hdr",
+                "actualTarget": "sdr",
+                "captureTarget": "sdr",
+                "executor": "browser-managed",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "srgb",
+                "outputFormat": "unorm8",
+                "toneMapping": "standard",
+                "fallbackReason": "native-hdr-resource-unverified"
+              }
+            }
+          ],
+          "gpuErrors": []
+        },
+        "playback": [
+          {
+            "transfer": "pq",
+            "mixed": false,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 1.1850000023841858,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.6949999928474426,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2038.2999999970198,
+                "mediaUs": 2037755,
+                "waitingMs": 5.972385297425831e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9997326203223174,
+                "maxFrameLagUs": 31638,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.926899867580428,
+                    "maxGapMs": 38.91000001132488,
+                    "p95GapMs": 34.110000014305115
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "e74a912b-7046-4ebe-bc28-de42ecb4731a",
+                  "name": "pq.mp4",
+                  "size": 10125,
+                  "lastModified": 1791570387188,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "pq",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "bd0455a0dad1b60478a34f96",
+                    "url": "/api/media/bd0455a0dad1b60478a34f96?v=a17d3ac08ea5440c676594f9"
+                  },
+                  "metadataRevision": 3,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 2
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "pq",
+            "mixed": true,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 1.3050000071525574,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.469999998807907,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2039.0750000029802,
+                "mediaUs": 2038305,
+                "waitingMs": 6.741285396572039e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  },
+                  "B": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 331776,
+                    "peakFrames": 4,
+                    "peakBytes": 331776,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9996223777923916,
+                "maxFrameLagUs": 31732,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.915525422022654,
+                    "maxGapMs": 38.46500000357628,
+                    "p95GapMs": 34.269999995827675
+                  },
+                  "B": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.915525422022654,
+                    "maxGapMs": 38.54500000178814,
+                    "p95GapMs": 34.29500000178814
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "e74a912b-7046-4ebe-bc28-de42ecb4731a",
+                  "name": "pq.mp4",
+                  "size": 10125,
+                  "lastModified": 1791570387188,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "pq",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "bd0455a0dad1b60478a34f96",
+                    "url": "/api/media/bd0455a0dad1b60478a34f96?v=a17d3ac08ea5440c676594f9"
+                  },
+                  "metadataRevision": 3,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "pq",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 2
+                },
+                {
+                  "slot": "B",
+                  "id": "d4b9be47-4d2c-4537-acbe-787358e084fd",
+                  "name": "sdr.mp4",
+                  "size": 131600,
+                  "lastModified": 1791570387462,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": null,
+                    "transfer": null,
+                    "matrix": null,
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "c28972d0d2b0f4cd911ac471",
+                    "url": "/api/media/c28972d0d2b0f4cd911ac471?v=e11ccbe0e833691f407c62f2"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 82944,
+                    "byteLengthEstimated": false,
+                    "format": "NV12",
+                    "color": {
+                      "primaries": "smpte170m",
+                      "transfer": "bt709",
+                      "matrix": "smpte170m",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": null,
+                      "transfer": null,
+                      "matrix": null,
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": "NV12",
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-external",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 3
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "hlg",
+            "mixed": false,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 0.5150000005960464,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.405000001192093,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2033.7749999910593,
+                "mediaUs": 2032585,
+                "waitingMs": 1.1700005936622624,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9994148811982326,
+                "maxFrameLagUs": 33248,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 60,
+                    "dropped": 0,
+                    "fps": 29.50178854606029,
+                    "maxGapMs": 41.935000002384186,
+                    "p95GapMs": 34.35999999940395
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "9988fa9f-e65e-427a-a9c0-be344939f74d",
+                  "name": "hlg.mp4",
+                  "size": 10117,
+                  "lastModified": 1791570387389,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "2dedd30aa56b85383844fd35",
+                    "url": "/api/media/2dedd30aa56b85383844fd35?v=a486a3e4396bed4e3dd69ab9"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2000000,
+                    "sourcePtsUs": 2000000,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 6
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "hlg",
+            "mixed": true,
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 1.3200000077486038,
+              "requestedWallMs": 2000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.300000011920929,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2039.734999999404,
+                "mediaUs": 2037400,
+                "waitingMs": 1.820000609755514,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 1769472,
+                    "peakFrames": 4,
+                    "peakBytes": 1769472,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  },
+                  "B": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 331776,
+                    "peakFrames": 4,
+                    "peakBytes": 331776,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9988552434510343,
+                "maxFrameLagUs": 30567,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.905845612306415,
+                    "maxGapMs": 39.48499999940395,
+                    "p95GapMs": 34.53000000119209
+                  },
+                  "B": {
+                    "drawn": 61,
+                    "dropped": 0,
+                    "fps": 29.905845612306415,
+                    "maxGapMs": 39.560000002384186,
+                    "p95GapMs": 34.54000000655651
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "9988fa9f-e65e-427a-a9c0-be344939f74d",
+                  "name": "hlg.mp4",
+                  "size": 10117,
+                  "lastModified": 1791570387389,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "2dedd30aa56b85383844fd35",
+                    "url": "/api/media/2dedd30aa56b85383844fd35?v=a486a3e4396bed4e3dd69ab9"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 442368,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 6
+                },
+                {
+                  "slot": "B",
+                  "id": "3ebf2c5a-833d-436a-855d-1d79f94610dd",
+                  "name": "sdr.mp4",
+                  "size": 131600,
+                  "lastModified": 1791570387462,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 384,
+                  "height": 144,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": null,
+                    "transfer": null,
+                    "matrix": null,
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 4000000,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "c28972d0d2b0f4cd911ac471",
+                    "url": "/api/media/c28972d0d2b0f4cd911ac471?v=e11ccbe0e833691f407c62f2"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 384,
+                    "height": 144,
+                    "codedWidth": 384,
+                    "codedHeight": 144,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 384,
+                      "height": 144
+                    },
+                    "displayWidth": 384,
+                    "displayHeight": 144,
+                    "stride": null,
+                    "byteLength": 82944,
+                    "byteLengthEstimated": false,
+                    "format": "NV12",
+                    "color": {
+                      "primaries": "smpte170m",
+                      "transfer": "bt709",
+                      "matrix": "smpte170m",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": null,
+                      "transfer": null,
+                      "matrix": null,
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": "NV12",
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-external",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2033333,
+                    "sourcePtsUs": 2033333,
+                    "durationUs": 33333
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 7
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "qa-hlg-1080p",
+            "mixed": false,
+            "presentation": [
+              {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              }
+            ],
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 0.9050000011920929,
+              "requestedWallMs": 3000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.094999998807907,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 3010.8349999934435,
+                "mediaUs": 3010820,
+                "waitingMs": 9.590387439750714e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 66355200,
+                    "peakFrames": 4,
+                    "peakBytes": 66355200,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.999995017995525,
+                "maxFrameLagUs": 30886,
+                "maxFrameSkewUs": 0,
+                "tracks": {
+                  "A": {
+                    "drawn": 90,
+                    "dropped": 0,
+                    "fps": 29.892039915902394,
+                    "maxGapMs": 35.69499999284744,
+                    "p95GapMs": 34.28000000119209
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "2bb966a0-5e3f-45d3-9902-9f04dd5e016d",
+                  "name": "dolby_hlg_1080p30.mp4",
+                  "size": 42732770,
+                  "lastModified": 1788615242678,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 1920,
+                  "height": 1080,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 9355756,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "752365883aa7e3328977e8f5",
+                    "url": "/api/media/752365883aa7e3328977e8f5?v=64d1baecf4853cedb2aa29c4"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 1920,
+                    "height": 1080,
+                    "codedWidth": 1920,
+                    "codedHeight": 1080,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    "displayWidth": 1920,
+                    "displayHeight": 1080,
+                    "stride": null,
+                    "byteLength": 16588800,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2996478,
+                    "sourcePtsUs": 2996478,
+                    "durationUs": 33300
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 10
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          },
+          {
+            "transfer": "qa-hlg-1080p",
+            "mixed": true,
+            "presentation": [
+              {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-browser-hdr-float",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              },
+              {
+                "requestedTarget": "hdr",
+                "actualTarget": "hdr",
+                "captureTarget": "sdr",
+                "executor": "webgpu-external",
+                "contract": "browser-managed",
+                "displayHdr": true,
+                "outputColorSpace": "display-p3",
+                "outputFormat": "float16",
+                "toneMapping": "extended"
+              }
+            ],
+            "report": {
+              "schema": "voidplayer-playback-benchmark",
+              "version": 1,
+              "passed": true,
+              "failures": [],
+              "limits": {
+                "minWallMs": 1000,
+                "minSpeed": 0.9,
+                "maxFrameLagUs": 100000,
+                "maxFrameSkewUs": 100000,
+                "maxP95GapMs": 75,
+                "maxGapMs": 250,
+                "maxPauseMs": 100
+              },
+              "environment": {
+                "build": {
+                  "revision": "v0.6.0-35-g9c78b39-dirty",
+                  "builtAt": "2026-10-09T18:26:19.415Z",
+                  "sourceDigest": "0c7a85290656f6bcbb66b886ab95d8b00cd3c22befc5deaaec2d2fd97c49275d",
+                  "wasmDigests": {
+                    "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+                    "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+                  }
+                },
+                "page": "http://127.0.0.1:59985/",
+                "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36",
+                "crossOriginIsolated": true,
+                "secureContext": true,
+                "webCodecsAvailable": true,
+                "hardwareUseVerified": false,
+                "sharedArrayBuffer": true,
+                "visibility": "visible",
+                "viewport": {
+                  "width": 1280,
+                  "height": 720,
+                  "devicePixelRatio": 1
+                }
+              },
+              "startupMs": 0.75,
+              "requestedWallMs": 3000,
+              "reachedEnd": false,
+              "error": null,
+              "pauseMs": 1.0550000071525574,
+              "staleAfterPause": false,
+              "measurements": {
+                "wallMs": 2996.4449999928474,
+                "mediaUs": 2996435,
+                "waitingMs": 8.76784342018766e-07,
+                "buffers": {
+                  "A": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 66355200,
+                    "peakFrames": 4,
+                    "peakBytes": 66355200,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  },
+                  "B": {
+                    "ended": false,
+                    "suspended": false,
+                    "stopped": false,
+                    "error": null,
+                    "frames": 4,
+                    "bytes": 12441600,
+                    "peakFrames": 4,
+                    "peakBytes": 12441600,
+                    "capacity": 4,
+                    "budgetBytes": 67108864,
+                    "effectiveBudgetBytes": 67108864
+                  }
+                },
+                "speed": 0.9999966627143674,
+                "maxFrameLagUs": 33365,
+                "maxFrameSkewUs": 20133,
+                "tracks": {
+                  "B": {
+                    "drawn": 179,
+                    "dropped": 0,
+                    "fps": 59.73745555163778,
+                    "maxGapMs": 21.700000002980232,
+                    "p95GapMs": 17.594999998807907
+                  },
+                  "A": {
+                    "drawn": 89,
+                    "dropped": 0,
+                    "fps": 29.701863374836663,
+                    "maxGapMs": 41.78499999642372,
+                    "p95GapMs": 38.525000005960464
+                  }
+                }
+              },
+              "tracks": [
+                {
+                  "slot": "A",
+                  "id": "4b45f807-d980-4139-97ed-fc497cd09f72",
+                  "name": "dolby_hlg_1080p30.mp4",
+                  "size": 42732770,
+                  "lastModified": 1788615242678,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "hevc",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 1920,
+                  "height": 1080,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": "bt2020",
+                    "transfer": "hlg",
+                    "matrix": "bt2020-ncl",
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 9355756,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "752365883aa7e3328977e8f5",
+                    "url": "/api/media/752365883aa7e3328977e8f5?v=64d1baecf4853cedb2aa29c4"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 1920,
+                    "height": 1080,
+                    "codedWidth": 1920,
+                    "codedHeight": 1080,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    "displayWidth": 1920,
+                    "displayHeight": 1080,
+                    "stride": null,
+                    "byteLength": 16588800,
+                    "byteLengthEstimated": true,
+                    "format": null,
+                    "color": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": "bt2020",
+                      "transfer": "hlg",
+                      "matrix": "bt2020-ncl",
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": null,
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-browser-hdr-float",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2963178,
+                    "sourcePtsUs": 2963178,
+                    "durationUs": 33300
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 11
+                },
+                {
+                  "slot": "B",
+                  "id": "a8b935be-b5b8-4443-93e3-42ba0f819f1e",
+                  "name": "h264_9s_1920x1080.mp4",
+                  "size": 19334432,
+                  "lastModified": 1788613262817,
+                  "indexSource": "client",
+                  "indexState": "complete",
+                  "indexKind": "packet-offsets",
+                  "seekStrategy": "packet-anchor",
+                  "codec": "h264",
+                  "decoder": "webcodecs",
+                  "hardwareAcceleration": "prefer-hardware",
+                  "width": 1920,
+                  "height": 1080,
+                  "colorSource": "decoder",
+                  "color": {
+                    "primaries": null,
+                    "transfer": null,
+                    "matrix": null,
+                    "fullRange": false
+                  },
+                  "indexIntegrity": "complete",
+                  "firstPtsUs": 0,
+                  "durationUs": 9999956,
+                  "opportunisticAudio": "cached-container",
+                  "container": "isobmff",
+                  "source": {
+                    "kind": "library",
+                    "id": "c971cc3cf7c7c79a847f94cb",
+                    "url": "/api/media/c971cc3cf7c7c79a847f94cb?v=141ac8df8970c33fa4b25de5"
+                  },
+                  "metadataRevision": 2,
+                  "output": {
+                    "revision": 1,
+                    "width": 1920,
+                    "height": 1080,
+                    "codedWidth": 1920,
+                    "codedHeight": 1080,
+                    "visibleRect": {
+                      "x": 0,
+                      "y": 0,
+                      "width": 1920,
+                      "height": 1080
+                    },
+                    "displayWidth": 1920,
+                    "displayHeight": 1080,
+                    "stride": null,
+                    "byteLength": 3110400,
+                    "byteLengthEstimated": false,
+                    "format": "NV12",
+                    "color": {
+                      "primaries": "bt709",
+                      "transfer": "bt709",
+                      "matrix": "bt709",
+                      "fullRange": false
+                    },
+                    "sourceColor": {
+                      "primaries": null,
+                      "transfer": null,
+                      "matrix": null,
+                      "fullRange": false
+                    }
+                  },
+                  "decodedPixelFormat": "NV12",
+                  "presentation": {
+                    "requestedTarget": "hdr",
+                    "actualTarget": "hdr",
+                    "captureTarget": "sdr",
+                    "executor": "webgpu-external",
+                    "contract": "browser-managed",
+                    "displayHdr": true,
+                    "outputColorSpace": "display-p3",
+                    "outputFormat": "float16",
+                    "toneMapping": "extended"
+                  },
+                  "frame": {
+                    "ptsUs": 2983311,
+                    "sourcePtsUs": 2983311,
+                    "durationUs": 16667
+                  },
+                  "visible": true,
+                  "offsetUs": 0,
+                  "sourceGen": 12
+                }
+              ],
+              "longTasks": {
+                "count": 0,
+                "totalMs": 0
+              },
+              "evidence": "actual-app-canvas-draws; physical-screen-scanout-unverified"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

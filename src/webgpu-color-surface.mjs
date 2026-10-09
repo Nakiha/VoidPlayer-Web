@@ -3,7 +3,7 @@ import { resolveYuvColor, validateYuv, yuvCoefficients, chromaOffset } from './y
 import { getPresentationChannel, presentationChannelCode } from './presentation-channel.ts';
 import { getColorOutput, hdrDisplayAvailable } from './color-output.ts';
 import { hdrTransfer } from './hdr-policy.ts';
-import { getColorMode } from './color-mode.ts';
+import { createBrowserHdrBridge } from './browser-hdr-bridge.mjs';
 // One submission per microtask across canvases. Flush before overwriting a
 // resource already referenced by queued commands. Frame closure follows submit.
 const batches=new WeakMap();
@@ -23,17 +23,17 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   const onError = e => errors.push(e.error.message);
   device.addEventListener('uncapturederror', onError);
   if (!['external','copy','hybrid','planes','webkit-planes'].includes(mode)) throw new Error('Unknown GPU input mode');
-  let lost = false, disposed = false, current, copiedTexture, copiedWidth=0, copiedHeight=0;
+  let lost = false, disposed = false, current, copiedTexture, copiedWidth=0, copiedHeight=0, copiedFormat;
   device.lost.then(() => { lost = true; });
   let geometry=null,rotation=0;
-  let context, externalUniform, yuvBuffer, yuvSize=0, yuvUniform, yuvParams;
+  let context, externalUniform, yuvBuffer, yuvSize=0, yuvUniform, yuvParams, browserHdrBridge;
   try {
   context = canvas.getContext('webgpu');
   if (!context) { if(ownsDevice)device.destroy(); throw new Error('WebGPU canvas unavailable'); }
   const output=getColorOutput(),sdrFormat=navigator.gpu.getPreferredCanvasFormat();
-  // Tested native HDR imports did not produce verified extended display light.
-  // Browser matching stays SDR until actual decode/import resources pass admission.
-  let hdrOutput=output.target==='hdr'&&hdrDisplayAvailable()&&getColorMode()!=='browser'&&mode!=='copy';
+  const displayHdr=hdrDisplayAvailable();
+  let hdrOutput=output.target==='hdr'&&displayHdr&&mode!=='copy';
+  let outputFallbackReason=output.target!=='hdr'?null:!displayHdr?'hdr-display-unavailable':mode==='copy'?'hdr-copy-mode-unavailable':null;
   if(hdrOutput){
     device.pushErrorScope('validation');
     try{context.configure({device,format:'rgba16float',colorSpace:'display-p3',toneMapping:{mode:'extended'},alphaMode:'premultiplied'});
@@ -41,10 +41,13 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     }catch{hdrOutput=false;}
     const error=await device.popErrorScope();if(error)hdrOutput=false;
   }
+  if(output.target==='hdr'&&!hdrOutput&&!outputFallbackReason)outputFallbackReason='hdr-canvas-unavailable';
+  if(hdrOutput){try{browserHdrBridge=createBrowserHdrBridge();}catch{browserHdrBridge={available:false,reason:'browser-hdr-float16-unavailable'};}}
+  const nativeHdrReason=outputFallbackReason??(browserHdrBridge?.available?null:browserHdrBridge?.reason??'hdr-output-not-requested');
   const format=hdrOutput?'rgba16float':sdrFormat;
   if(!hdrOutput)context.configure({device,format,colorSpace:'srgb',alphaMode:'premultiplied'});
-  const shader = device.createShaderModule({code:`
-    @group(0) @binding(0) var input: ${mode==='copy'?'texture_2d<f32>':'texture_external'};
+  const nativeShader = copied => device.createShaderModule({code:`
+    @group(0) @binding(0) var input: ${copied?'texture_2d<f32>':'texture_external'};
     @group(0) @binding(1) var smp: sampler;
     @group(0) @binding(2) var<uniform> geom:array<vec4f,2>;
     struct V { @builtin(position) p: vec4f, @location(0) uv: vec2f }
@@ -54,7 +57,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     }
     fn samplePoint(pixel:vec2f)->vec3f{
       let size=geom[1].yz;let uv=(clamp(pixel,vec2f(0),size-1)+0.5)/size;
-      return ${hdrOutput?'max':'clamp'}(${mode==='copy'?'textureSampleLevel':'textureSampleBaseClampToEdge'}(input,smp,uv${mode==='copy'?',0.0':''}).rgb,vec3f(0)${hdrOutput?'':',vec3f(1)'});
+      return ${hdrOutput?'max':'clamp'}(${copied?'textureSampleLevel':'textureSampleBaseClampToEdge'}(input,smp,uv${copied?',0.0':''}).rgb,vec3f(0)${hdrOutput?'':',vec3f(1)'});
     }
     @fragment fn fs(v:V)->@location(0) vec4f {
       var uv=(v.p.xy-geom[0].xy)/geom[0].zw;
@@ -64,12 +67,18 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       if(geom[1].w>0){let a=floor(pixel);let w=fract(pixel);return vec4f(mix(mix(samplePoint(a),samplePoint(a+vec2f(1,0)),w.x),mix(samplePoint(a+vec2f(0,1)),samplePoint(a+vec2f(1,1)),w.x),w.y),1);}
       return vec4f(samplePoint(floor(pixel+0.5)),1);
     }`});
+  const shader=nativeShader(mode==='copy');
   const compilation = await shader.getCompilationInfo();
   if (compilation.messages.some(m => m.type==='error')) { if(ownsDevice)device.destroy(); throw new Error(JSON.stringify(compilation.messages)); }
   const pipelines = new Map();
   for (const target of new Set([format,sdrFormat,'rgba8unorm'])) pipelines.set(target, await device.createRenderPipelineAsync({
     layout:'auto', vertex:{module:shader,entryPoint:'vs'}, fragment:{module:shader,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}
   }));
+  const bridgePipelines=new Map();
+  if(browserHdrBridge?.available){
+    const module=nativeShader(true);
+    for(const target of new Set([format,sdrFormat,'rgba8unorm']))bridgePipelines.set(target,await device.createRenderPipelineAsync({layout:'auto',vertex:{module,entryPoint:'vs'},fragment:{module,entryPoint:'fs',targets:[{format:target}]},primitive:{topology:'triangle-list'}}));
+  }
   const yuvModule=device.createShaderModule({code:yuvKernel});
   const yuvInfo=await yuvModule.getCompilationInfo();if(yuvInfo.messages.some(m=>m.type==='error'))throw new Error(yuvInfo.messages.map(m=>m.message+' at '+m.lineNum).join('\n'));
   const yuvPipelines=new Map();
@@ -81,12 +90,13 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     if (disposed || lost || !current) throw new Error('No live GPU/frame resource');
     beforeWrite(device,token);
     const isYuv=!!current.yuv;
-    const pipeline=(isYuv?yuvPipelines:pipelines).get(target);
+    const bridge=!isYuv&&browserHdrBridge?.available&&hdrTransfer(current.colorSpace?.transfer);
+    const pipeline=(isYuv?yuvPipelines:bridge?bridgePipelines:pipelines).get(target);
     let rect=[0,0,texture.width,texture.height];
     if(geometry&&!capture){const g=geometry,w=g.imageWidth*g.zoom*g.dpr,h=g.imageHeight*g.zoom*g.dpr;rect=[((g.width-g.imageWidth*g.zoom)/2+g.offsetX)*g.dpr,((g.height-g.imageHeight*g.zoom)/2+g.offsetY)*g.dpr,w,h];}
     device.queue.writeBuffer(externalUniform,0,new Float32Array([...rect,rotation,current.displayWidth,current.displayHeight,Number(linear)]));
     if(isYuv){yuvParams[3]=presentationChannelCode(getPresentationChannel());yuvParams.set(rect,32);yuvParams[31]=rotation;yuvParams[29]=Number(linear);yuvParams[45]=Number(hdrOutput&&(!capture||hdrCapture));yuvParams[46]=output.hdrWhiteNits;device.queue.writeBuffer(yuvUniform,0,yuvParams);}
-    const external=isYuv?null:mode==='copy'?copiedTexture.createView():device.importExternalTexture({source:current,colorSpace:hdrOutput&&(!capture||hdrCapture)?'display-p3':'srgb'});
+    const external=isYuv?null:bridge||mode==='copy'?copiedTexture.createView():device.importExternalTexture({source:current,colorSpace:hdrOutput&&(!capture||hdrCapture)?'display-p3':'srgb'});
     const group=device.createBindGroup({layout:pipeline.getBindGroupLayout(0),entries:isYuv?[{binding:0,resource:{buffer:yuvBuffer}},{binding:1,resource:{buffer:yuvUniform}}]:[{binding:0,resource:external},{binding:1,resource:samplers.nearest},{binding:2,resource:{buffer:externalUniform}}]});
     const encoder=device.createCommandEncoder();
     const pass=encoder.beginRenderPass({colorAttachments:[{view:texture.createView(),loadOp:'clear',storeOp:'store',clearValue:[0,0,0,0]}]});
@@ -94,7 +104,9 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     submit(device,token,encoder.finish());
   }
   return {
-    outputTarget:hdrOutput?'hdr':'sdr',
+    outputTarget:hdrOutput?'hdr':'sdr',outputFallbackReason,
+    nativeHdrAvailable:!!browserHdrBridge?.available,nativeHdrReason,
+    outputConfiguration:{displayHdr,format,colorSpace:hdrOutput?'display-p3':'srgb',toneMapping:hdrOutput?'extended':'standard'},
     setGeometry(g,r=rotation){if(JSON.stringify(g)===JSON.stringify(geometry)&&r===rotation)return;geometry=g;rotation=r;if(current&&g)this.presentRetained();},
     presentRetained(){const w=geometry?Math.max(1,Math.round(geometry.width*geometry.dpr)):canvas.width,h=geometry?Math.max(1,Math.round(geometry.height*geometry.dpr)):canvas.height;if(canvas.width!==w)canvas.width=w;if(canvas.height!==h)canvas.height=h;if(current?.yuv&&yuvParams)yuvParams[3]=presentationChannelCode(getPresentationChannel());render(context.getCurrentTexture(),format,geometry?geometry.imageWidth*geometry.zoom*geometry.dpr<current.displayWidth:w<current.displayWidth);},
     device, adapter: adapter ? {vendor:adapter.info?.vendor,architecture:adapter.info?.architecture,device:adapter.info?.device} : null,errors,
@@ -102,6 +114,7 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
     present(frame,width=frame.displayWidth,height=frame.displayHeight) {
       beforeWrite(device,token);
       const isYuv=frame.kind==='yuv';
+      if(!isYuv&&hdrTransfer(frame.colorSpace?.transfer)&&!browserHdrBridge?.available)throw new Error(nativeHdrReason);
       if(isYuv){
         const d=frame.description,l=d.yuv,plan=resolveYuvColor(d);validateYuv(d,frame.pixels.byteLength);
         if(mode==='webkit-planes'&&d.color.matrix==null){plan.matrix='bt709';plan.primaries=d.color.primaries??'bt709';}
@@ -120,19 +133,21 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       }
       const next=isYuv?{yuv:true,displayWidth:frame.description.width,displayHeight:frame.description.height,close(){}}:frame.clone();const previous=current;current=next;
       try {if(!geometry){if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;}
-        if(mode==='copy'){
+        const bridge=!isYuv&&browserHdrBridge?.available&&hdrTransfer(current.colorSpace?.transfer);
+        if(!isYuv&&(mode==='copy'||bridge)){
           const w=frame.displayWidth,h=frame.displayHeight;
-          if(!copiedTexture||copiedWidth!==w||copiedHeight!==h){
-            copiedTexture?.destroy();copiedTexture=device.createTexture({size:[w,h],format:'rgba8unorm',usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT});copiedWidth=w;copiedHeight=h;
+          const textureFormat=bridge?'rgba16float':'rgba8unorm';
+          if(!copiedTexture||copiedWidth!==w||copiedHeight!==h||copiedFormat!==textureFormat){
+            copiedTexture?.destroy();copiedTexture=device.createTexture({size:[w,h],format:textureFormat,usage:GPUTextureUsage.COPY_DST|GPUTextureUsage.TEXTURE_BINDING|GPUTextureUsage.RENDER_ATTACHMENT});copiedWidth=w;copiedHeight=h;copiedFormat=textureFormat;
           }
-          device.queue.copyExternalImageToTexture({source:current},{texture:copiedTexture,colorSpace:hdrOutput?'display-p3':'srgb',premultipliedAlpha:false},[w,h]);
+          device.queue.copyExternalImageToTexture({source:bridge?browserHdrBridge.draw(current):current},{texture:copiedTexture,colorSpace:hdrOutput?'display-p3':'srgb',premultipliedAlpha:false},[w,h]);
         }
         this.presentRetained();
       } catch(e) {current=previous;next.close();throw e;}
       retire(device,previous);
     },
     get available(){return !lost&&!disposed;},
-    clear(){flush(device);current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;},
+    clear(){flush(device);current?.close();current=undefined;yuvBuffer?.destroy();yuvBuffer=undefined;yuvSize=0;copiedTexture?.destroy();copiedTexture=undefined;browserHdrBridge?.dispose?.();},
     captureSource(target) {
       if(!current)throw new Error('No frame');
       const swap=rotation===90||rotation===270;
@@ -184,10 +199,10 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
       }finally{buffer.destroy();texture.destroy();}
     },
     drain:()=>{flush(device);return device.queue.onSubmittedWorkDone();},
-    dispose(){if(disposed)return;flush(device);disposed=true;current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
+    dispose(){if(disposed)return;flush(device);disposed=true;current?.close();current=undefined;yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();context.unconfigure();device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();}
   };
   } catch(error) {
-    current?.close();yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();context?.unconfigure();
+    current?.close();yuvBuffer?.destroy();yuvUniform?.destroy();externalUniform?.destroy();copiedTexture?.destroy();browserHdrBridge?.dispose?.();context?.unconfigure();
     device.removeEventListener('uncapturederror',onError);if(ownsDevice)device.destroy();
     throw error;
   }
