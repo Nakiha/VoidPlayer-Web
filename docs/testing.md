@@ -10,7 +10,7 @@
 | `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 独立 `source-logic` job，不等待解码器构建 |
 | `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | playback job 的 `unit` |
-| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
+| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | `ci-perf`，保留 `continue-on-error`；可信 HTTPS 仅在一次性 CI 主机执行 |
@@ -55,6 +55,7 @@ Node worker_threads 的 transport 测试。负例位于 `test/helpers/worker-pro
 
 ```sh
 node scripts/run-tests.mjs --prepare
+node scripts/run-tests.mjs ci-audio --prepared
 node scripts/run-tests.mjs ci-playback --prepared
 node scripts/run-tests.mjs uncovered --prepared
 ```

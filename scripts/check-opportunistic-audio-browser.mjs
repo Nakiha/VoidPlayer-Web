@@ -44,21 +44,21 @@ try {
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const base = `http://127.0.0.1:${server.address().port}`;
-  // Use the browser's normal rendering capabilities. Forcing SwiftShader here
-  // queues viewport-sized software YUV draws behind this small audio fixture
-  // and can stall native document destruction after JS cleanup has completed.
-  // Dedicated presentation/FLV suites retain their explicit GPU coverage.
+  // The tiny audio fixture needs real GPU presentation, not a full-screen
+  // software-GPU throughput benchmark. Match the established FLV test viewport
+  // while preserving source pixels, frame traversal, audio and IO assertions.
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,
     ...(browserName === 'chromium' && process.env.CHROME_EXECUTABLE_PATH ? { executablePath: process.env.CHROME_EXECUTABLE_PATH } : {}),
-    ...(browserName === 'chromium' ? { args: ['--no-sandbox'] } : {}) });
+    ...(browserName === 'chromium' ? { args: ['--no-sandbox', '--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] } : {}) });
   const report = [];
   async function tool(page, name, input = {}) { return page.evaluate(({ name, input }) => window.voidPlayer.tools.find(t => t.name === name).execute(input), { name, input }); }
   async function state(page) { return tool(page, 'get_review_session'); }
   for (const enabled of [false, true]) {
-    const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
+    const page = await browser.newPage({ viewport: { width: 640, height: 480 }, deviceScaleFactor: 1, locale: 'zh-CN' });
     activePage = page; lifecycleTrace = [];
     const browserEvidence = recordBrowserEvidence(page);
-    evidence = () => ({ ...browserEvidence(), lifecycleTrace });
+    let glBackends = [];
+    evidence = () => ({ ...browserEvidence(), lifecycleTrace, glBackends });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     // Count actual output nodes and verify a pause/mute immediately stops all of them.
     await page.addInitScript(() => {
@@ -84,6 +84,19 @@ try {
       };
       for (const name of ['deleteTexture', 'deleteBuffer', 'deleteProgram', 'getExtension']) instrument(window.WebGLRenderingContext?.prototype, name);
       instrument(window.Element?.prototype, 'remove');
+      window.audioGlBackends = [];
+      const contexts = new WeakSet(), getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+        const context = getContext.call(this, type, ...args);
+        if (context && ['webgl', 'webgl2', 'experimental-webgl'].includes(type) && !contexts.has(context)) {
+          contexts.add(context);
+          const debug = context.getExtension('WEBGL_debug_renderer_info');
+          window.audioGlBackends.push({ api: type, canvas: this.id || this.className,
+            renderer: context.getParameter(debug?.UNMASKED_RENDERER_WEBGL ?? context.RENDERER),
+            vendor: context.getParameter(debug?.UNMASKED_VENDOR_WEBGL ?? context.VENDOR) });
+        }
+        return context;
+      };
       window.audioBlobReads = [];
       window.audioEvidence = { contexts: 0, closes: 0, starts: 0, stopped: 0, maxRms: 0, live: new Set() };
       const Native = window.AudioContext;
@@ -125,6 +138,7 @@ try {
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
     if (local) { await page.locator('#file-A').setInputFiles(selected); await page.waitForFunction(() => window.voidPlayer.getState().tracks.length === 1 && !window.voidPlayer.getState().busy); }
     else await tool(page, 'load_library_item', { id, slot: 'A' });
+    glBackends = await page.evaluate(() => window.audioGlBackends);
     if (await page.locator('#toggle-subtracks').getAttribute('aria-expanded') !== 'true') await page.locator('#toggle-subtracks').click();
     const speaker = page.locator('.subtrack-row[data-track-drag="A"] .track-audio');
     assert.equal(await speaker.getAttribute('aria-pressed'), 'false');
@@ -135,6 +149,7 @@ try {
       return { speakerRight: speaker.right, eyeLeft: eye.left };
     });
     assert.ok(positions.speakerRight <= positions.eyeLeft, 'speaker is immediately left of visibility');
+    glBackends = await page.evaluate(() => window.audioGlBackends);
     if (enabled) { await speaker.click(); assert.equal((await state(page)).audioSlot, 'A'); }
     await page.locator('#play').click();
     // Measure a complete video traversal in both runs. Interrupting playback
@@ -154,7 +169,25 @@ try {
     assert.equal(result.error, null, 'video completes without a decode/presentation error');
     assert.ok(result.playback.tracks.A.drawn > 0, 'the audio test presents real video frames');
     const renderer = await page.locator('#canvas-A').getAttribute('data-color-executor');
-    report.push({ enabled, renderer, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
+    const presentation = await page.locator('#canvas-A').evaluate(source => {
+      const canvas = source.closest('.frame-stage').querySelector('.frame-presentation');
+      if (!canvas) throw new Error('Missing real presentation canvas');
+      const gl = canvas.getContext('webgl'), started = performance.now();
+      const pixels = new Uint8Array(canvas.width * canvas.height * 4);
+      if (gl) gl.readPixels(0, 0, canvas.width, canvas.height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      else pixels.set(canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data);
+      const colors = new Set();
+      for (let i = 0; i < pixels.length && colors.size < 32; i += 16) {
+        if (pixels[i + 3]) colors.add(`${pixels[i]},${pixels[i + 1]},${pixels[i + 2]}`);
+      }
+      return { width: canvas.width, height: canvas.height, sourceWidth: source.width, sourceHeight: source.height,
+        webgl: !!gl, colors: colors.size, readbackMs: performance.now() - started };
+    });
+    assert.ok(presentation.colors >= 4, 'the fixture presents nonblank multicolor video pixels');
+    assert.equal(presentation.sourceWidth, 320); assert.equal(presentation.sourceHeight, 180);
+    glBackends = await page.evaluate(() => window.audioGlBackends);
+    if (browserName === 'chromium') assert.ok(presentation.webgl && glBackends.length > 0, 'Chromium exercises the real WebGL presentation path');
+    report.push({ enabled, renderer, glBackends, presentation, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error, drawnFrames: result.playback.tracks.A.drawn, fps: result.playback.tracks.A.fps, speed: result.playback.speed, wallMs: result.playback.wallMs } });
     if (enabled) {
       // Arm before playback. Real output-node starts drive the assertions in a
       // microtask, before an ended event can retire the ~21 ms buffers. A

@@ -314,20 +314,26 @@ jobs:
       - name: Build browser regression inputs
         id: browser-inputs
         run: node scripts/run-tests.mjs --prepare
-      - run: node scripts/run-tests.mjs unit
-        env:
-          VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
-      - name: Verify independent playback and source UI cases
+      - name: Verify opportunistic audio before the full playback suites
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-playback --prepared
+        run: node scripts/run-tests.mjs ci-audio --prepared
       - name: Preserve audio navigation and output evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: opportunistic-audio-reports
-          path: .run/opportunistic-audio/
+          path: |
+            .run/opportunistic-audio/
+            .run/test-suites/ci-audio/
           if-no-files-found: ignore
           retention-days: 30
+      - run: node scripts/run-tests.mjs unit
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        env:
+          VOIDPLAYER_FFMPEG_ORACLE: ${{ github.workspace }}/.run/native-oracle/ffmpeg
+      - name: Verify independent playback and source UI cases
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-playback --prepared
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
