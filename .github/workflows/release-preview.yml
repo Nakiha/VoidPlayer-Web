@@ -376,6 +376,7 @@ jobs:
         with:
           name: https-playback-reports
           path: |
+            .run/opportunistic-audio/
             .run/playback-reports/
             .run/test-suites/
           if-no-files-found: ignore

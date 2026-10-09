@@ -17,7 +17,7 @@ assert.ok(['flv', 'mp4', 'faststart', 'fragmented', 'ts', 'mkv', 'webm'].include
 assert.ok(['chromium', 'webkit'].includes(browserName));
 const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-audio-'));
 const artifacts = path.join(root, '.run/opportunistic-audio', container + (local ? '-local' : '')); await mkdir(artifacts, { recursive: true });
-let browser, server, library, activePage, evidence;
+let browser, server, library, activePage, evidence, tracing = false;
 try {
   const media = path.join(temporary, 'media'); await mkdir(media);
   const fixture = path.join(media, 'audio.flv');
@@ -65,7 +65,9 @@ try {
           node.start = (...args) => {
             const samples = node.buffer?.getChannelData(0);
             if (samples?.length) window.audioEvidence.maxRms = Math.max(window.audioEvidence.maxRms, Math.sqrt(samples.reduce((n, v) => n + v * v, 0) / samples.length));
-            window.audioEvidence.starts++; window.audioEvidence.live.add(node); return start(...args); };
+            window.audioEvidence.starts++; window.audioEvidence.live.add(node);
+            if (window.audioSwitch && window.voidPlayer.getState().audioSlot !== 'B') window.audioSwitch.wrongSlotStarts++;
+            return start(...args); };
           node.stop = (...args) => { window.audioEvidence.stopped++; window.audioEvidence.live.delete(node); return stop(...args); };
           node.addEventListener('ended', () => window.audioEvidence.live.delete(node)); return node;
         }
@@ -113,16 +115,41 @@ try {
       await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
       const beforeSwitch = await page.evaluate(() => window.audioEvidence.starts);
       await page.waitForFunction(before => window.audioEvidence.starts > before, beforeSwitch);
-      await page.locator('.subtrack-row[data-track-drag="B"] .track-audio').click();
-      assert.equal(await page.evaluate(() => window.audioEvidence.live.size), 0, 'switching stops all old nodes');
+      const secondSpeaker = page.locator('.subtrack-row[data-track-drag="B"] .track-audio');
+      // Snapshot node identities in capture phase, immediately before the real UI
+      // handler. Check again in bubble phase: a later Playwright round trip can
+      // already see valid B nodes, and must not mistake them for surviving A nodes.
+      await secondSpeaker.evaluate(button => {
+        button.addEventListener('click', () => {
+          const old = new Set(window.audioEvidence.live);
+          window.audioSwitch = { oldCount: old.size, survivors: null, stopped: 0, wrongSlotStarts: 0 };
+          const stopped = window.audioEvidence.stopped;
+          document.addEventListener('click', () => {
+            window.audioSwitch.survivors = [...old].filter(node => window.audioEvidence.live.has(node)).length;
+            window.audioSwitch.stopped = window.audioEvidence.stopped - stopped;
+          }, { once: true });
+        }, { capture: true, once: true });
+      });
+      await secondSpeaker.click();
+      const switched = await page.evaluate(() => window.audioSwitch);
+      assert.ok(switched.oldCount > 0, 'switch exercised live old-track nodes');
+      assert.equal(switched.survivors, 0, 'switching synchronously stops all old nodes');
+      assert.ok(switched.stopped >= switched.oldCount, 'old nodes are stopped, not merely naturally ended');
       assert.equal((await state(page)).audioSlot, 'B');
       assert.equal(await speaker.getAttribute('aria-pressed'), 'false');
       await tool(page, 'reorder_review_tracks', { order: ['B', 'A'] }); assert.equal((await state(page)).audioSlot, 'B');
       await page.waitForFunction(() => window.voidPlayer.getState().audioPacketsPlayed > 0);
+      assert.equal(await page.evaluate(() => window.audioSwitch.wrongSlotStarts), 0, 'only the selected track starts nodes after switching');
       await tool(page, 'pause_review');
+      assert.equal(await page.evaluate(() => window.audioEvidence.live.size), 0, 'pause stops the new track too');
+      report[1].switch = switched;
       if (container === 'flv' && !local) await page.screenshot({ path: path.join(artifacts, 'speaker-panel.png') });
       await tool(page, 'remove_review_track', { slot: 'B' }); assert.equal((await state(page)).audioSlot, null);
+      // Keep navigation tracing on failure: worker teardown and load-blocking
+      // requests must be diagnosable without retrying or extending the timeout.
+      await page.context().tracing.start({ snapshots: true }); tracing = true;
       await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+      await page.context().tracing.stop(); tracing = false;
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
     await page.close();
@@ -135,6 +162,7 @@ try {
   await writeFile(path.join(artifacts, `${browserName}.json`), JSON.stringify(report, null, 2));
   console.log(JSON.stringify({ container, local, report })); console.log('PASS default mute, decoded audio, seek, single slot, button geometry, restore and identical media IO');
 } catch (error) {
+  if (tracing) await activePage.context().tracing.stop({ path: path.join(artifacts, `${browserName}-navigation.zip`) }).catch(() => {});
   await saveBrowserFailure({ page: activePage, directory: artifacts, name: browserName,
     context: { caseName: 'opportunistic-audio', engine: browserName }, error, evidence });
   throw error;

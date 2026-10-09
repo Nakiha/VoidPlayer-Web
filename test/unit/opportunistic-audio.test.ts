@@ -221,3 +221,30 @@ test('late codec probe cannot resurrect output after mute or seek; missing bytes
   assert.equal(FakeDecoder.instances.length, count); assert.equal(output.status, 'muted');
   output.dispose(); FakeDecoder.support = async () => ({ supported: true });
 });
+
+test('switch stops old node identities while new audio plays and rejects late old-generation output', async () => {
+  const output = new OpportunisticAudio(() => {}, platform), a = source(), b = source();
+  output.select(a.media); await settle(); output.tick(100000, 0, true);
+  const oldReceive = a.media.onCachedAudio!, generation = a.requests[0][1];
+  oldReceive(generation, batch(2100000)); await settle(); output.tick(100000, 0, true);
+  const context = FakeContext.instances.at(-1)!, oldNodes = [...context.nodes];
+  const oldDecoder = FakeDecoder.instances.at(-1)!;
+  assert.equal(oldNodes.length, 1);
+  output.select(b.media);
+  assert.ok(oldNodes.every(node => node.stopped), 'old nodes stop synchronously');
+  assert.equal(oldDecoder.state, 'closed');
+  await settle(); output.tick(100000, 0, true);
+  b.media.onCachedAudio!(b.requests[0][1], batch(2100000)); await settle(); output.tick(100000, 0, true);
+  assert.equal(context.nodes.length, 2);
+  assert.equal(context.nodes[1].stopped, false, 'new generation may already be audible');
+  const decoders = FakeDecoder.instances.length;
+  let closed = false;
+  oldReceive(generation, batch(2120000));
+  oldDecoder.init.output({ timestamp: 120000, numberOfFrames: 1024, sampleRate: 48000,
+    numberOfChannels: 2, copyTo() { assert.fail('late old frame must not be copied'); }, close() { closed = true; } });
+  await settle(); output.tick(120000, 0, true);
+  assert.equal(FakeDecoder.instances.length, decoders);
+  assert.equal(context.nodes.length, 2, 'old callbacks cannot schedule new nodes');
+  assert.equal(closed, true, 'late old frame is released');
+  output.dispose(); assert.ok(context.nodes.every(node => node.stopped));
+});
