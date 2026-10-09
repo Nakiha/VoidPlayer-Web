@@ -7182,7 +7182,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:283"
+      "src/ui/workbench/tracks.ts:285"
     ]
   },
   "tracks.codec": {
@@ -7240,7 +7240,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:114",
-      "src/ui/workbench/tracks.ts:282"
+      "src/ui/workbench/tracks.ts:284"
     ]
   },
   "tracks.decodedPixelFormat": {
@@ -7285,7 +7285,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:283"
+      "src/ui/workbench/tracks.ts:285"
     ]
   },
   "tracks.frameIndex": {
@@ -7308,9 +7308,9 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:219",
-      "src/ui/workbench/tracks.ts:240",
-      "src/ui/workbench/tracks.ts:300"
+      "src/ui/workbench/tracks.ts:221",
+      "src/ui/workbench/tracks.ts:242",
+      "src/ui/workbench/tracks.ts:302"
     ]
   },
   "tracks.indexFailed": {
@@ -7328,15 +7328,15 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:160",
-      "src/ui/workbench/tracks.ts:289"
+      "src/ui/workbench/tracks.ts:162",
+      "src/ui/workbench/tracks.ts:291"
     ]
   },
   "tracks.loadAVideoToViewTracksAnd": {
     "source": "载入视频后查看轨道与标记",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:226"
+      "src/ui/workbench/tracks.ts:228"
     ]
   },
   "tracks.mark": {
@@ -7347,8 +7347,8 @@
       "p2": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:196",
-      "src/ui/workbench/tracks.ts:305"
+      "src/ui/workbench/tracks.ts:198",
+      "src/ui/workbench/tracks.ts:307"
     ]
   },
   "tracks.matrixCoefficients": {
@@ -7379,7 +7379,7 @@
     "source": "尚未载入轨道",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:285"
+      "src/ui/workbench/tracks.ts:287"
     ]
   },
   "tracks.noTracksLoaded": {
@@ -7429,7 +7429,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:283"
+      "src/ui/workbench/tracks.ts:285"
     ]
   },
   "tracks.reusedServerCache": {
@@ -7459,8 +7459,8 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:170",
-      "src/ui/workbench/tracks.ts:292"
+      "src/ui/workbench/tracks.ts:172",
+      "src/ui/workbench/tracks.ts:294"
     ]
   },
   "tracks.selectTrack": {
@@ -7470,7 +7470,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:93",
-      "src/ui/workbench/tracks.ts:272"
+      "src/ui/workbench/tracks.ts:274"
     ]
   },
   "tracks.showTrack": {
@@ -7479,8 +7479,8 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:240",
-      "src/ui/workbench/tracks.ts:300"
+      "src/ui/workbench/tracks.ts:242",
+      "src/ui/workbench/tracks.ts:302"
     ]
   },
   "tracks.sourceBitstreamMetadataReadByDecoder": {
@@ -7502,15 +7502,15 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:283"
+      "src/ui/workbench/tracks.ts:285"
     ]
   },
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": {
     "source": "同步偏移：正值延后，负值提前（毫秒）",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:207",
-      "src/ui/workbench/tracks.ts:295"
+      "src/ui/workbench/tracks.ts:209",
+      "src/ui/workbench/tracks.ts:297"
     ]
   },
   "tracks.track": {
@@ -7520,7 +7520,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:101",
-      "src/ui/workbench/tracks.ts:281"
+      "src/ui/workbench/tracks.ts:283"
     ]
   },
   "tracks.trackDurationClickToSeek": {
@@ -7530,8 +7530,8 @@
       "p1": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:169",
-      "src/ui/workbench/tracks.ts:291"
+      "src/ui/workbench/tracks.ts:171",
+      "src/ui/workbench/tracks.ts:293"
     ]
   },
   "tracks.trackOffsetMilliseconds": {
@@ -7540,8 +7540,8 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/ui/workbench/tracks.ts:207",
-      "src/ui/workbench/tracks.ts:294"
+      "src/ui/workbench/tracks.ts:209",
+      "src/ui/workbench/tracks.ts:296"
     ]
   },
   "tracks.transferFunction": {

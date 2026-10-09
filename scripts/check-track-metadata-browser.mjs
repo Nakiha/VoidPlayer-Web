@@ -59,9 +59,13 @@ try {
    if(local){await page.locator('#file-A').setInputFiles(path.join(media,f.name));await page.waitForFunction(()=>window.voidPlayer.getState().tracks.length===1&&!window.voidPlayer.getState().busy);}
    else await tool(page,'load_library_item',{slot:'A',id:listing.entries.find(e=>e.name===f.name).id});
    await page.waitForFunction(()=>window.voidPlayer.getState().tracks[0].indexState!=='building');
+   await page.locator('#toggle-subtracks').click();
    if(open){
+    await page.evaluate(()=>{window.metadataDock={nodes:[...document.querySelectorAll('#subtrack-list *, #subtrack-ruler *')],offset:document.querySelector('.track-offset'),value:document.querySelector('.track-offset').value};window.metadataDock.offset.value='pending edit';});
     await page.locator('#toggle-inspector').click();
     await page.waitForFunction(({presence,channels,codec})=>{const m=window.voidPlayer.getState().tracks[0].trackMetadata;return m?.audio.presence===presence&&(!channels||m.audio.tracks[0]?.channels===channels)&&(!codec||m.audio.tracks[0]?.codec===codec);},f);
+    assert.deepEqual(await page.evaluate(()=>({connected:window.metadataDock.nodes.every(n=>n.isConnected),sameInput:window.metadataDock.offset===document.querySelector('.track-offset'),value:window.metadataDock.offset.value})),{connected:true,sameInput:true,value:'pending edit'},'cached metadata preserves dock nodes and uncommitted input');
+    await page.evaluate(()=>{window.metadataDock.offset.value=window.metadataDock.value;});
     const metadata=await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata);
     assert.equal(metadata.container,f.format);if(f.rate)assert.equal(metadata.audio.tracks[0].sampleRate,f.rate);
     assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['封装','视频','音频']);

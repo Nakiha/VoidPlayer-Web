@@ -140,7 +140,9 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function renderDock(state: WorkbenchState, annotations: { render(items: { mark: Mark; slot: Slot; offsetUs: number }[]): void }) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision ?? 0}`).join('/') + JSON.stringify(state.marks);
+    // Rebuild only for data captured by dock geometry/handlers. Inspector-only
+    // codec/channel updates must preserve editable offsets, focus and ruler nodes.
+    const signature = JSON.stringify(state.tracks.map(t => [t.slot, t.id, t.name, t.offsetUs, t.durationUs])) + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
       hideSeekPreview(); cursors.clear();
