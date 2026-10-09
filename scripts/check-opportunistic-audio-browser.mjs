@@ -130,7 +130,14 @@ try {
           }, { once: true });
         }, { capture: true, once: true });
       });
-      await secondSpeaker.click();
+      // Switch in the same browser task that observes live A nodes. A protocol
+      // round trip/actionability wait can outlive these ~21 ms buffers. A has
+      // already unlocked the AudioContext with a trusted speaker click above.
+      await page.waitForFunction(() => {
+        if (!window.audioEvidence.live.size) return false;
+        document.querySelector('.subtrack-row[data-track-drag="B"] .track-audio').click();
+        return true;
+      });
       const switched = await page.evaluate(() => window.audioSwitch);
       assert.ok(switched.oldCount > 0, 'switch exercised live old-track nodes');
       assert.equal(switched.survivors, 0, 'switching synchronously stops all old nodes');
