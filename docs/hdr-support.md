@@ -20,7 +20,7 @@ PQ/HLG 传递函数依据 [ITU-R BT.2100](https://www.itu.int/rec/R-REC-BT.2100)
 
 ## 解码与会话
 
-上游 [core f9a41c7](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/commit/f9a41c7baf7031a65279b14a55803380f90128f4) 已推送并由 `scripts/release-core.json` 锁定。单/多线程 ABI v2 均交付合法 PQ/HLG 高精度平面；不符合标签/布局的资源继续显式 RGBA 回退。浏览器硬件只接受可读取的 10/12-bit 4:2:0 HDR，并与同 PTS 软件首帧逐样本核对；失败沿用既有 decode 阶段的软件回退。
+上游 [core 1e68e6c](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/commit/1e68e6c4980c132d16f967739d93abac5b5fe2e1) 已推送并由 `scripts/release-core.json` 锁定。单/多线程 ABI v2 均交付合法 PQ/HLG 高精度平面；不符合标签/布局的资源继续显式 RGBA 回退。浏览器硬件只接受可读取的 10/12-bit 4:2:0 HDR，并与同 PTS 软件首帧逐样本核对；失败沿用既有 decode 阶段的软件回退。
 
 UI 和 Agent 的 `set_review_color_output` 都使用 `session.setColorOutput`。改变目标或参数暂停播放，重新准备相同位置；保留媒体 ID、标注、偏移，失败恢复原条件与画面。模式、解码偏好和输出设置本地保存；工作区/review 使用 `comparison.version=2` / `voidplayer-color-v2`，保存完整预览参数、HDR 白与请求目标。旧 version 1 SDR 契约恢复固定默认 SDR 条件；未知契约拒绝。
 

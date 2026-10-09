@@ -582,6 +582,10 @@ jobs:
           path: artifacts/*.tar.gz*
           if-no-files-found: error
           retention-days: 30
+      - name: Diagnose failed Windows Node checks with full TAP details
+        if: failure() && runner.os == 'Windows'
+        timeout-minutes: 2
+        run: node --experimental-strip-types --test --test-reporter=tap test/measurement.test.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:
