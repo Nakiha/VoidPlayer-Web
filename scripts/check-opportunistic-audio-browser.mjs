@@ -131,27 +131,18 @@ try {
       await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
       const beforeSwitch = await page.evaluate(() => window.audioEvidence.starts);
       await page.waitForFunction(before => window.audioEvidence.starts > before, beforeSwitch);
-      const secondSpeaker = page.locator('.subtrack-row[data-track-drag="B"] .track-audio');
-      // Snapshot node identities in capture phase, immediately before the real UI
-      // handler. Check again in bubble phase: a later Playwright round trip can
-      // already see valid B nodes, and must not mistake them for surviving A nodes.
-      await secondSpeaker.evaluate(button => {
-        button.addEventListener('click', () => {
-          const old = new Set(window.audioEvidence.live);
-          window.audioSwitch = { oldCount: old.size, survivors: null, stopped: 0, wrongSlotStarts: 0 };
-          const stopped = window.audioEvidence.stopped;
-          document.addEventListener('click', () => {
-            window.audioSwitch.survivors = [...old].filter(node => window.audioEvidence.live.has(node)).length;
-            window.audioSwitch.stopped = window.audioEvidence.stopped - stopped;
-          }, { once: true });
-        }, { capture: true, once: true });
-      });
-      // Switch in the same browser task that observes live A nodes. A protocol
-      // round trip/actionability wait can outlive these ~21 ms buffers. A has
-      // already unlocked the AudioContext with a trusted speaker click above.
+      // Snapshot identities, click the current rendered button, and inspect
+      // cleanup in one browser task. Both ~21 ms buffers and the track row can
+      // change during a protocol round trip. A's trusted click already unlocked
+      // the AudioContext; B still exercises the actual synchronous UI handler.
       await page.waitForFunction(() => {
-        if (!window.audioEvidence.live.size) return false;
-        document.querySelector('.subtrack-row[data-track-drag="B"] .track-audio').click();
+        const button = document.querySelector('.subtrack-row[data-track-drag="B"] .track-audio');
+        if (!button || button.disabled || !window.audioEvidence.live.size) return false;
+        const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
+        window.audioSwitch = { oldCount: old.size, survivors: null, stopped: 0, wrongSlotStarts: 0 };
+        button.click();
+        window.audioSwitch.survivors = [...old].filter(node => window.audioEvidence.live.has(node)).length;
+        window.audioSwitch.stopped = window.audioEvidence.stopped - stopped;
         return true;
       });
       const switched = await page.evaluate(() => window.audioSwitch);
@@ -173,7 +164,7 @@ try {
       await page.evaluate(() => {
         window.audioRecordLifecycle = true;
         // Registered after the app's pagehide handler: cleanup must have issued
-        // its termination calls by this point, without an awaited microtask.
+        // its termination calls before the departing document is discarded.
         window.addEventListener('pagehide', () => { window.audioLifecycle('pagehide-after-app'); sessionStorage.setItem('audio-test-pagehide', JSON.stringify({
           workers: window.audioWorkers.size, contexts: window.audioEvidence.contexts,
           closes: window.audioEvidence.closes, live: window.audioEvidence.live.size,
