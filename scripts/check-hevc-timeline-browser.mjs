@@ -35,13 +35,19 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
   try{for(const remote of [false,true]){
     if(selectedInput&&(selectedInput==='remote')!==remote)continue;
     const page=await browser.newPage({locale:'zh-CN'}),requests=[];
-    page.on('console',message=>{if(message.text().startsWith('hevc-timeline: '))console.log(message.text());});
+    let lastProgress=performance.now(),lastStage='evaluation-start',progressWatchdog;
+    page.on('console',message=>{if(message.text().startsWith('hevc-timeline: ')){lastProgress=performance.now();lastStage=message.text();console.log(lastStage);}});
     page.on('pageerror',error=>audit('page-error',{browserName,remote,error:String(error)}));
     page.on('request',r=>{if(r.url().includes('/fixtures/video/'))requests.push(r.headers());});
     try{
       await page.route('**/timeline-test',r=>r.fulfill({contentType:'text/html',headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'},body:'<div class="frame-stage"><canvas></canvas></div>'}));
       await page.goto(base+'/timeline-test');
-      const rows=await page.evaluate(async({name,remote,refs,order})=>{
+      // CI graphics can spend ~0.6–1.4s on every full-source capture.
+      // Keep all 1200 frame audits; detect an actual stalled phase separately
+      // from the suite's total budget, with enough room for 100-frame reports.
+      lastProgress=performance.now();
+      const stalled=new Promise((_,reject)=>{progressWatchdog=setInterval(()=>{if(performance.now()-lastProgress>=180000)reject(Error(`HEVC timeline made no progress for 180s: ${lastStage}`));},1000);});
+      const rows=await Promise.race([page.evaluate(async({name,remote,refs,order})=>{
         const started=performance.now();
         const progress=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,remote,elapsedMs:Math.round(performance.now()-started),...detail}));
         const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
@@ -151,10 +157,10 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
           rows.push(row);
           progress('round-complete',{round});
         }return rows;
-      },{name,remote,refs,order:oracle.displayOrder});
+      },{name,remote,refs,order:oracle.displayOrder}),stalled]);
       if(browserName==='webkit'&&process.platform==='darwin')for(const row of rows){assert.equal(row.info.decoder,'webcodecs');assert.equal(row.info.hardwareAcceleration,'prefer-hardware');}
       if(remote)assert.ok(requests.some(r=>/^bytes=/.test(r.range??'')),'Range reads');
       results.push({browserName,remote,rows});console.log(JSON.stringify(results.at(-1)));
-    }finally{await page.close();}
+    }finally{clearInterval(progressWatchdog);await page.close();}
   }}finally{await browser.close();}
 }}finally{await server.close();await mkdir('.run/playback-reports',{recursive:true});await writeFile('.run/playback-reports/hevc-timeline-browser.json',JSON.stringify(results,null,2)+'\n');}

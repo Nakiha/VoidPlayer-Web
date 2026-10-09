@@ -474,7 +474,9 @@ jobs:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Chromium software graphics audits 1200 full-source captures. The case
+    # has a separate no-progress watchdog; leave room for its 30-minute budget.
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:

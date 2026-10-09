@@ -19,6 +19,8 @@
 
 FLV 浏览器回归固定 640×480 视口，两种引擎均解码原始尺寸的输入。Chromium 的隔离 headless 进程显式启用 SwiftShader WebGL，避免 GPU 黑名单把整帧 YUV 转换送进逐像素 CPU 兜底；这不代表物理 GPU 或大视口性能验收。普通本地命令仍按原有全部性能阈值必过。GitHub 虚拟 runner 显式设置 `VOIDPLAYER_FLV_VIRTUAL_PERF=report`，只在 Linux headless Chromium、未验证物理硬件、已知 WebCodecs/WASM 与 browser-managed/WebGL 渲染路径中把 `below-realtime` 和 `A:presentation-stall` 留作非阻断性能报告；基准的阈值、`passed:false` 和失败原因不变，负面结果写入 job summary。没有采样/帧、错误、延迟、同步偏差与暂停后冒帧等失败仍阻断，seek、逐帧、尾帧与 Range 原有断言也保留。每个输入的完整结果保存到 `.run/playback-reports/flv/<engine>/` 并随 CI 报告上传。0.6.0 预检的 [1080p HEVC 负面记录](evidence/release-0.6.0/flv-legacy-hevc-ci.json)为 0.366×，[AV1 负面记录](evidence/release-0.6.0/flv-private-av1-ci.json)为 0.8998×，不能把功能门禁通过解释成实时播放达标。
 
+HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图、帧身份和 seek/逐帧/尾帧断言。Linux Chromium 每次全尺寸截图实测可耗时约 0.6–1.4 秒，因此 Chromium 单项总预算为 30 分钟，CI job 留出 35 分钟；这不是实时播放性能阈值。每 100 帧以及打开、seek、重开边界记录进度和呈现/截图/读回耗时；页面连续 180 秒没有进度则立即失败并输出最后阶段，关闭页面与浏览器。播放基准的帧率、延迟与停顿阈值不变。
+
 ```sh
 npm run test:manifest
 npm run test:suite -- browser --list
