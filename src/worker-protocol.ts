@@ -9,6 +9,7 @@ import type { FlvInput } from './flv-demux.ts';
 import type { FlvEngine, PreparedFlv } from './flv-engine.ts';
 import type { Mp4Engine } from './mp4-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
+import type { CachedWindow, CachedAudioBatch } from './audio-types.ts';
 import type { MediaInfo } from './model.ts';
 import type { AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
@@ -44,6 +45,8 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
 }
 
 export interface FfmpegCommands {
+  'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
+  'observe-audio': Command<{ ctx: number; enabled: boolean }, null>;
   analysis: Command<{ ctx: number } & AnalysisOrigin & Omit<AnalysisQuery, 'signal'> & { durationUs: number; coverageUs: { start: number; end: number } | null }, AnalysisResult>;
   'analysis-locate': Command<{ ctx: number } & AnalysisOrigin & { sampleId: string }, AnalysisSample | null>;
   'analysis-rank': Command<{ ctx: number } & AnalysisOrigin & { axis: 'pts' | 'dts'; tUs: number }, Omit<AnalysisRank, 'complete'>>;
@@ -57,6 +60,8 @@ type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
+  'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
   init: Command<SoftwareOptions & { input: FlvInput; prepared?: PreparedFlv; forceWasm?: boolean; container?: 'flv' | 'mp4' }, PacketInitResult>;
@@ -86,6 +91,8 @@ export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };
 export type WorkerEvent = ({ id: number } & IndexEvent)
+  | { id: number; type: 'cached-audio'; generation: number; data: CachedAudioBatch }
+  | { id: number; type: 'cached-bytes'; data?: Uint8Array; windows?: CachedWindow[] }
   | { id: number; type: 'ready'; data: FfmpegInitResult }
   | { id: number; type: 'index-waiting'; data: boolean }
   | { id: number; type: 'index-progress'; data: IndexProgress }

@@ -9,6 +9,8 @@ import check from '@phosphor-icons/core/assets/regular/check.svg?raw';
 // only the icons we use; no icon font, CDN, or entire catalog enters the bundle.
 import settings from '@phosphor-icons/core/assets/regular/gear-six.svg?raw';
 import focus from '@phosphor-icons/core/assets/regular/frame-corners.svg?raw';
+import speaker from '@phosphor-icons/core/assets/regular/speaker-high.svg?raw';
+import speakerMuted from '@phosphor-icons/core/assets/regular/speaker-slash.svg?raw';
 import eye from '@phosphor-icons/core/assets/regular/eye.svg?raw';
 import eyeClosed from '@phosphor-icons/core/assets/regular/eye-slash.svg?raw';
 import sidebar from '@phosphor-icons/core/assets/regular/sidebar-simple.svg?raw';
@@ -59,7 +61,7 @@ import select from '@phosphor-icons/core/assets/regular/cursor.svg?raw';
 import eraser from '@phosphor-icons/core/assets/regular/eraser.svg?raw';
 import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
-const icons = { cpu, memory, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, caretLeft, arrowRight, film, fit, marker };
+const icons = { speaker, speakerMuted, cpu, memory, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, caretLeft, arrowRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

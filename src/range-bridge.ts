@@ -27,7 +27,7 @@ export function createRangeBridge(worker: Worker, url: string, size: number) {
   const nodeWorker = worker as unknown as { on?(type: string, fn: typeof receive): void; off?(type: string, fn: typeof receive): void };
   if (worker.addEventListener) worker.addEventListener('message', browserReceive);
   else nodeWorker.on!('message', receive);
-  return { shared, close() {
+  return { shared, cachedWindows: () => reader.cachedWindows(), peek: (offset: number, length: number) => reader.peek(offset, length), close() {
     closed = true; reader.close();
     Atomics.store(control, 0, -2); Atomics.notify(control, 0);
     if (worker.removeEventListener) worker.removeEventListener('message', browserReceive);

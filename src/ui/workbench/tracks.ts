@@ -56,6 +56,32 @@ export function createTracksPane(shared: WorkbenchShared) {
     ];
   }
 
+  function propertyGroups(track: ReviewTrack) {
+    const metadata = track.trackMetadata, audio = metadata?.audio;
+    const pending = t(msg('tracks.metadataUnknown', '尚未确认'));
+    const rows: string[][] = [[t(msg('tracks.audioPresence', '音轨')), audio?.presence === 'present' ? t(msg('tracks.audioPresent', '有音频')) : audio?.presence === 'absent' ? t(msg('tracks.audioAbsent', '确认无音频')) : pending]];
+    for (const [index, item] of (audio?.tracks ?? []).entries()) {
+      const suffix = audio!.tracks.length > 1 ? ` ${index + 1}` : '';
+      const unsupported = !track.opportunisticAudio || (item.channels ?? 0) > 2
+        || (track.container === 'flv' && !!item.codec && !['AAC', 'AAC-LC'].includes(item.codec))
+        || (track.container === 'mpegts' && !!item.codec && !['AAC', 'AAC-LC'].includes(item.codec));
+      rows.push([t(msg('tracks.codec', '编码')) + suffix, item.codec ?? pending],
+        [t(msg('tracks.audioSampleRate', '采样率')) + suffix, item.sampleRate ? `${item.sampleRate} Hz` : pending],
+        [t(msg('tracks.audioChannels', '声道数')) + suffix, item.channels ? String(item.channels) : pending],
+        [t(msg('tracks.audioPlaybackSupport', '播放支持')) + suffix, unsupported ? t(msg('tracks.audioMetadataUnsupported', '当前播放路径不支持')) : t(msg('tracks.audioMetadataUnverified', '播放时确认'))]);
+    }
+    return [
+      { id: 'container', title: t(msg('tracks.containerGroup', '封装')), rows: [[t(msg('tracks.containerFormat', '格式')), metadata?.container ?? pending]] },
+      { id: 'video', title: t(msg('tracks.videoGroup', '视频')), rows: propertyRows(track) },
+      { id: 'audio', title: t(msg('tracks.audioGroup', '音频')), rows },
+    ];
+  }
+  function decorateProperty(dd: HTMLElement, id: string | undefined, selected: ReviewTrack) {
+    if (id === 'decoded-format') dd.dataset.tooltip = t(msg('tracks.browserDecoderMemoryFormatMayDifferFrom', '浏览器解码输出的内存格式，可能与源视频的像素格式不同'));
+    if (id === 'color-metadata' && selected.colorSource) dd.title = selected.colorSource === 'container' ? t(msg('tracks.sourceContainerTags', '来源：封装标记')) : t(msg('tracks.sourceBitstreamMetadataReadByDecoder', '来源：解码器读取的码流元数据'));
+    if (dd.dataset.tooltip) { dd.tabIndex = 0; dd.setAttribute('aria-description', dd.dataset.tooltip); }
+  }
+
   function renderInspector(state: WorkbenchState) {
     const selected = state.tracks.find(t => t.slot === view.selected);
     const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.metadataRevision ?? 0}`).join('/') + view.selected;
@@ -72,17 +98,22 @@ export function createTracksPane(shared: WorkbenchShared) {
       const properties = $('track-properties'); properties.replaceChildren();
       if (!selected) properties.append(text('p', t(msg("tracks.noTracksLoaded", "尚未载入轨道")), 'panel-empty'));
       else {
-        properties.append(text('h3', t(msg("tracks.track", "轨道 {p0}"), { p0: selected.slot })));
-        const dl = document.createElement('dl');
-        for (const [label, value, id] of propertyRows(selected)) {
-          const dd = text('dd', value);
-          if (id === 'decoded-format') dd.dataset.tooltip = t(msg("tracks.browserDecoderMemoryFormatMayDifferFrom", "浏览器解码输出的内存格式，可能与源视频的像素格式不同"));
-          if (id === 'color-metadata' && selected.colorSource) dd.title = selected.colorSource === 'container' ? t(msg("tracks.sourceContainerTags", "来源：封装标记")) : t(msg("tracks.sourceBitstreamMetadataReadByDecoder", "来源：解码器读取的码流元数据"));
-          if(dd.dataset.tooltip) { dd.tabIndex=0; dd.setAttribute('aria-description',dd.dataset.tooltip); }
-          dl.append(text('dt', label), dd);
+        const title = text('h3', t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot })); title.dataset.inspectorTitle = '';
+        properties.append(title);
+        for (const group of propertyGroups(selected)) {
+          const section = document.createElement('section'); section.dataset.metadataGroup = group.id;
+          const heading = text('h3', group.title); heading.id = `inspect-heading-${group.id}`;
+          section.setAttribute('aria-labelledby', heading.id);
+          const dl = document.createElement('dl');
+          for (const [label, value, id] of group.rows) {
+            const dd = text('dd', value); decorateProperty(dd, id, selected);
+            dl.append(text('dt', label), dd);
+          }
+          section.append(heading, dl); properties.append(section);
         }
-        properties.append(dl, text('h3', t(msg("tracks.currentFrame", "当前帧"))));
-        const timing = document.createElement('dl');
+        const frameTitle = text('h3', t(msg('tracks.currentFrame', '当前帧'))); frameTitle.dataset.frameTitle = '';
+        properties.append(frameTitle);
+        const timing = document.createElement('dl'); timing.dataset.frameTiming = '';
         for (const [label, id] of [[t(msg("tracks.clipPts", "片内 PTS")), 'inspect-pts'], [t(msg("tracks.sourcePts", "源 PTS")), 'inspect-source-pts'], [t(msg("tracks.frameDuration", "帧时长")), 'inspect-frame-duration'], [t(msg("tracks.relativeToPlayhead", "相对游标")), 'inspect-frame-delta']]) {
           const dd = text('dd', '—'); dd.id = id; timing.append(text('dt', label), dd);
         }
@@ -98,8 +129,20 @@ export function createTracksPane(shared: WorkbenchShared) {
     }
   }
 
+  function audioLabel(state: WorkbenchState, track: ReviewTrack) {
+    if (!track.opportunisticAudio) return t(msg('tracks.audioUnsupportedContainer', '此容器暂不支持顺带音频'));
+    if (state.audioSlot !== track.slot) return t(msg('tracks.unmuteAudio', '解除轨道 {slot} 静音（仅利用视频已读数据）'), { slot: track.slot });
+    const status = state.audioStatus === 'unsupported' ? t(msg('tracks.audioUnsupportedCodec', '音频编码或浏览器暂不支持'))
+      : state.audioStatus === 'blocked' ? t(msg('tracks.audioBlocked', '浏览器未允许音频，请关闭后再次点击喇叭'))
+      : state.audioStatus === 'playing' ? t(msg('tracks.audioPlaying', '正在出声'))
+      : t(msg('tracks.audioWaiting', '等待播放或可用的附带音频'));
+    return t(msg('tracks.muteAudio', '静音轨道 {slot} · {status}'), { slot: track.slot, status });
+  }
+
   function renderDock(state: WorkbenchState, annotations: { render(items: { mark: Mark; slot: Slot; offsetUs: number }[]): void }) {
-    const signature = state.tracks.map(t => `${t.slot}:${t.id}:${t.offsetUs}:${t.metadataRevision ?? 0}`).join('/') + JSON.stringify(state.marks);
+    // Rebuild only for data captured by dock geometry/handlers. Inspector-only
+    // codec/channel updates must preserve editable offsets, focus and ruler nodes.
+    const signature = JSON.stringify(state.tracks.map(t => [t.slot, t.id, t.name, t.offsetUs, t.durationUs])) + JSON.stringify(state.marks);
     if (signature !== dockSignature) {
       dockSignature = signature;
       hideSeekPreview(); cursors.clear();
@@ -169,18 +212,32 @@ export function createTracksPane(shared: WorkbenchShared) {
           format: value => `${+(value / 1000).toFixed(3)} ms`, parse: value => parseTimeInput(value, 'ms', true), begin: () => session.pause(),
           commit: offsetUs => act(() => session.setTrackOffset(track.slot, offsetUs), 'ui.track-offset', { slot: track.slot, offsetUs }),
         });
+        const audio = createIconButton({ glyph: 'speakerMuted', label: audioLabel(state, track), className: 'track-audio' });
+        audio.onclick = () => {
+          const enabled = session.getState().audioSlot !== track.slot;
+          // Keep user activation: do not defer this action through an async UI queue.
+          session.setTrackAudio(track.slot, enabled);
+        };
         const visibility = createIconButton({ glyph: 'eye', label: t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }), className: 'track-visibility' });
         visibility.onclick = () => {
           const current = session.getState().tracks.find(t => t.slot === track.slot);
           if (current) session.setTrackVisibility(track.slot, !current.visible);
         };
-        label.append(name); row.append(label, offset, lane, visibility); list.append(row);
+        label.append(name); row.append(label, offset, lane, audio, visibility); list.append(row);
       }
       if (!state.tracks.length) list.append(text('p', t(msg("tracks.loadAVideoToViewTracksAnd", "载入视频后查看轨道与标记")), 'panel-empty'));
     }
     // Selection changes state in place; keep row, offset input and seek nodes.
     for (const row of $('subtrack-list').querySelectorAll<HTMLElement>('.subtrack-row')) {
       const track = state.tracks.find(t => t.slot === row.dataset.trackDrag)!;
+      const audio = row.querySelector<HTMLButtonElement>('.track-audio')!;
+      const enabled = state.audioSlot === track.slot, audioGlyph = enabled ? 'speaker' : 'speakerMuted';
+      audio.disabled = !track.opportunisticAudio || !!track.failure;
+      audio.setAttribute('aria-label', audioLabel(state, track));
+      audio.setAttribute('aria-pressed', String(enabled));
+      audio.dataset.tooltip = audioLabel(state, track);
+      audio.dataset.audioStatus = enabled ? state.audioStatus : 'muted';
+      if (audio.firstElementChild?.getAttribute('data-icon') !== audioGlyph) audio.innerHTML = icon(audioGlyph);
       const visibility = row.querySelector<HTMLButtonElement>('.track-visibility')!;
       const label = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });
       visibility.setAttribute('aria-label', label);
@@ -209,6 +266,10 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function localize(state: WorkbenchState) {
+    // A hidden inspector may still describe a replaced source. Reconcile its
+    // shape before relabeling; this only renders existing facts, without querying.
+    // Stable signatures preserve nodes, including focused property tooltips.
+    renderInspector(state);
     // The dock owns editable offsets and annotation cards. Keep their nodes and
     // pending input intact, including when a peer tab changes the language.
     const selected = state.tracks.find(track => track.slot === view.selected);
@@ -216,19 +277,17 @@ export function createTracksPane(shared: WorkbenchShared) {
       const slot = button.querySelector('.slot')!.textContent!;
       button.setAttribute('aria-label', t(msg('tracks.selectTrack', '选择轨道 {p0}'), {p0:slot}));
     }
-    if(selected && $('track-properties').querySelector('dl')) {
-      const rows = propertyRows(selected), properties = $('track-properties').querySelector('dl')!;
-      [...properties.querySelectorAll('dt')].forEach((node,i)=>{node.textContent=rows[i][0];});
-      [...properties.querySelectorAll('dd')].forEach((node,i)=>{node.textContent=rows[i][1];
-        if(rows[i][2]==='decoded-format')node.dataset.tooltip=t(msg('tracks.browserDecoderMemoryFormatMayDifferFrom', '浏览器解码输出的内存格式，可能与源视频的像素格式不同'));
-        if(rows[i][2]==='color-metadata'&&selected.colorSource)node.title=selected.colorSource==='container'?t(msg('tracks.sourceContainerTags', '来源：封装标记')):t(msg('tracks.sourceBitstreamMetadataReadByDecoder', '来源：解码器读取的码流元数据'));
-        if(node.dataset.tooltip)node.setAttribute('aria-description',node.dataset.tooltip);
-      });
-      const headings = $('track-properties').querySelectorAll('h3');
-      headings[0].textContent=t(msg('tracks.track', '轨道 {p0}'), {p0:selected.slot});
-      headings[1].textContent=t(msg('tracks.currentFrame', '当前帧'));
-      const labels=[t(msg('tracks.clipPts','片内 PTS')),t(msg('tracks.sourcePts','源 PTS')),t(msg('tracks.frameDuration','帧时长')),t(msg('tracks.relativeToPlayhead','相对游标'))];
-      [...$('track-properties').querySelectorAll('dl')[1].querySelectorAll('dt')].forEach((node,i)=>node.textContent=labels[i]);
+    if (selected && $('track-properties').querySelector('[data-inspector-title]')) {
+      for (const group of propertyGroups(selected)) {
+        const section = $('track-properties').querySelector<HTMLElement>(`[data-metadata-group="${group.id}"]`)!;
+        section.querySelector('h3')!.textContent = group.title;
+        [...section.querySelectorAll('dt')].forEach((node, i) => { node.textContent = group.rows[i][0]; });
+        [...section.querySelectorAll('dd')].forEach((node, i) => { node.textContent = group.rows[i][1]; decorateProperty(node, group.rows[i][2], selected); });
+      }
+      $('track-properties').querySelector('[data-inspector-title]')!.textContent = t(msg('tracks.track', '轨道 {p0}'), { p0: selected.slot });
+      $('track-properties').querySelector('[data-frame-title]')!.textContent = t(msg('tracks.currentFrame', '当前帧'));
+      const labels = [t(msg('tracks.clipPts','片内 PTS')),t(msg('tracks.sourcePts','源 PTS')),t(msg('tracks.frameDuration','帧时长')),t(msg('tracks.relativeToPlayhead','相对游标'))];
+      [...$('track-properties').querySelectorAll('[data-frame-timing] dt')].forEach((node,i) => { node.textContent = labels[i]; });
     } else if(!selected) $('track-properties').querySelector('.panel-empty')?.replaceChildren(t(msg('tracks.noTrackLoaded','尚未载入轨道')));
     for (const track of state.tracks) {
       const row = $('subtrack-list').querySelector<HTMLElement>(`[data-track-drag="${track.slot}"]`);
@@ -240,6 +299,8 @@ export function createTracksPane(shared: WorkbenchShared) {
       const offset = row.querySelector<HTMLElement>('.track-offset')!;
       offset.setAttribute('aria-label', t(msg("tracks.trackOffsetMilliseconds", "轨道 {p0} 偏移，毫秒"), { p0: track.slot }));
       offset.dataset.tooltip = t(msg("tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds", "同步偏移：正值延后，负值提前（毫秒）"));
+      const audio = row.querySelector<HTMLElement>('.track-audio')!;
+      audio.setAttribute('aria-label', audioLabel(state, track)); audio.dataset.tooltip = audioLabel(state, track);
       const visibility = row.querySelector<HTMLElement>('.track-visibility');
       if (visibility) {
         const visibilityLabel = track.visible ? t(msg("tracks.hideTrack", "隐藏轨道 {slot}"), { slot: track.slot }) : t(msg("tracks.showTrack", "显示轨道 {slot}"), { slot: track.slot });

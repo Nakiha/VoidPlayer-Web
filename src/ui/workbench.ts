@@ -107,6 +107,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     view.reconcile(state.tracks);
     if (!state.tracks.length && view.panels.subtracks) { view.panels.subtracks = false; syncPanels(); }
     if (!state.tracks.length && view.panels.analysis) { view.panels.analysis = false; syncPanels(); }
+    session.inspectTrackMetadata(view.panels.inspector ? view.selected : null);
     if (view.panels.inspector) tracks.renderInspector(state);
     if (view.panels.subtracks) tracks.renderDock(state, annotations);
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');

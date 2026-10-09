@@ -10,7 +10,7 @@
 | `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 独立 `source-logic` job，不等待解码器构建 |
 | `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | playback job 的 `unit` |
-| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
+| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | `ci-perf`，保留 `continue-on-error`；可信 HTTPS 仅在一次性 CI 主机执行 |
@@ -55,6 +55,7 @@ Node worker_threads 的 transport 测试。负例位于 `test/helpers/worker-pro
 
 ```sh
 node scripts/run-tests.mjs --prepare
+node scripts/run-tests.mjs ci-audio --prepared
 node scripts/run-tests.mjs ci-playback --prepared
 node scripts/run-tests.mjs uncovered --prepared
 ```
@@ -240,3 +241,9 @@ npm run test:fate:browser
 `fate-expectations.json` 按片源和后端区分成功与预期拒绝；新失败令检查返回非零。
 组合数量以当前参考和预期文件及执行报告为准，不能沿用历史验收计数。适用组合及浏览器本地/HTTP 重开必须通过；明确的 container 能力拒绝按预期校验，不作为已知失败豁免。CI 将此步骤作为阻塞门禁；
 独立性能报告保持非阻塞。报告仍写入 `.run/playback-reports/`。
+
+### 静音轨道信息
+
+`node scripts/check-track-metadata-browser.mjs chromium`（登记在 `ci-audio`）用真实 MP4、FLV、TS、Matroska/WebM 比较信息面板关闭/打开时的 HTTP Range 与本地 Blob offset/length 序列；视频执行相同完整遍历、往返 seek，音频保持静音。包含确认无音频、未支持编码、多声道、重复开关、中文/英文切换和实际面板截图；不得用媒体读取重试补全元数据。源逻辑测试另覆盖缺缓存、查询预算、取消和过期回包。
+
+轨道信息是缓存证据，不是完整 ffprobe：仅检查已读的 FLV header/tag、MP4 moov、EBML Tracks 和 TS PAT/PMT（以及已有 AAC 配置）。每次查询最多 4 MiB、256 个不超过 64 KiB 的缓存 peek，2 秒软截止；顶层遍历和轨道数另有上限。TS 限制为启动 64 KiB 内完整且 CRC 有效的单节 PAT/PMT，未知私有流不推断为无音频。EBML 不扫描 Cluster；超预算、缓存空洞、复杂或缺失元数据保留“尚未确认”。只在信息面板请求时查询，最多每秒一次；正常视频读取带来新证据后可更新，关闭/换片/释放会取消旧查询。不会创建 AudioContext/AudioDecoder、额外元数据 worker 或修改服务端索引及 WASM ABI。

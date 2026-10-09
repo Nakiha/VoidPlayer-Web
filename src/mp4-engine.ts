@@ -3,6 +3,7 @@ import { Input, CustomSource, MP4, QTFF, EncodedPacketSink } from 'mediabunny';
 import type { EncodedPacket } from 'mediabunny';
 import { MediaOpenError } from './media-errors.ts';
 import { RangeReader } from './range-reader.ts';
+import { Mp4CachedMetadata } from './mp4-cached-metadata.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { readMp4Configurations } from './mp4-config.ts';
 import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
@@ -16,6 +17,7 @@ import { PacketTimeline } from './packet-timeline.ts';
 export class Mp4Engine {
   private reader:RangeReader;
   private input:Input;
+  private audioMetadata = new Mp4CachedMetadata();
   private sink!:EncodedPacketSink;
   private packets:EncodedPacket[]=[];
   private index!:FlvIndex;
@@ -24,13 +26,18 @@ export class Mp4Engine {
   private nativeConfig?:VideoDecoderConfig;
   constructor(source:RandomAccessInput){
     this.reader=new RangeReader(source);
-    this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:(start,end)=>this.reader.read(start,end-start),maxCacheSize:1024*1024}),formats:[MP4,QTFF]});
+    this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:async(start,end)=>{
+      const bytes = await this.reader.read(start,end-start); this.audioMetadata.observe(start, bytes); return bytes;
+    },maxCacheSize:1024*1024}),formats:[MP4,QTFF]});
   }
+  cachedWindows() { return this.reader.cachedWindows(); }
+  peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length) ?? this.audioMetadata.peek(offset, length); }
   async open(glueURL:string,wasmBinary?:Uint8Array,forceWasm=true,threads=1,onProgress?:MediaOpenProgress){
     try{
       onProgress?.('inspect');
       try{await this.input.getFormat();}catch(error){if(error instanceof MediaOpenError)throw error;throw new MediaOpenError('container','不是可通过 MP4 索引读取的文件。');}
       const track=await this.input.getPrimaryVideoTrack();if(!track)throw new MediaOpenError('container','MP4 没有视频轨道。');
+      this.audioMetadata.retainPrefix(this.reader.peek(0, Math.min(65536, this.reader.size)));
       if(track.rotation!==0)throw new MediaOpenError('container','旋转 MP4 需要容器展示路径。');
       const id=await track.getInternalCodecId(),known=await track.getCodec();
       const codec:FlvCodec=id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];

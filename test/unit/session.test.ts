@@ -379,6 +379,25 @@ test('pause retains a pending decode without late presentation; dispose releases
   assert.equal(returned, true);
 });
 
+test('dispose releases media synchronously before awaiting cancelled session work', async () => {
+  const m = media(), started = deferred<void>(), release = deferred<void>();
+  let draws = 0;
+  const session = new ReviewSession(() => draws++);
+  await session.load('A', async () => m.source);
+  const frameAt = m.source.frameAt, dispose = m.source.dispose;
+  m.source.frameAt = async time => { started.resolve(); await release.promise; return frameAt(time); };
+  m.source.dispose = () => { dispose(); release.resolve(); };
+  const seeking = session.seek(40000);
+  const cancelled = assert.rejects(seeking, { name: 'AbortError' });
+  await started.promise;
+  const before = draws, closing = session.dispose();
+  assert.equal(m.disposed, 1, 'pagehide must release media before its handler returns');
+  assert.equal(session.getState().tracks.length, 0);
+  await Promise.all([closing, cancelled]);
+  assert.equal(draws, before, 'cancelled work cannot present after disposal');
+  await session.dispose(); assert.equal(m.disposed, 1, 'cleanup remains idempotent');
+});
+
 test('both track producers start independently and paused sleep releases their queues', async () => {
   const a = media('A'), b = media('B');
   const release = deferred<void>(); let bStarted = false;
@@ -1181,3 +1200,22 @@ test('all-missing recovery retains scene duration and position while playback re
    assert.equal(source.disposed, 0);
    await session.dispose();
  });
+
+test('metadata inspection follows source instances, stays muted and does not seek or decode', async () => {
+  const session = new ReviewSession(() => {}), a = media('same-id'), b = media('same-id');
+  const enabled: string[] = [], queries: string[] = [];
+  for (const [name, item] of [['old',a],['new',b]] as const) {
+    item.source.setMetadataInspectionEnabled = value => enabled.push(`${name}:${value}`);
+    item.source.requestCachedMetadata = () => queries.push(name);
+  }
+  try {
+    await session.load('A', async () => a.source);
+    const before = session.getState(); session.inspectTrackMetadata('A'); session.inspectTrackMetadata('A');
+    assert.deepEqual(enabled,['old:true']); assert.deepEqual(queries,['old','old']);
+    assert.equal(session.getState().audioSlot,null); assert.equal(session.getState().positionUs,before.positionUs);
+    await session.load('A',async()=>b.source); session.inspectTrackMetadata('A');
+    assert.deepEqual(enabled,['old:true','old:false','new:true']);
+    assert.notEqual(session.getState().tracks[0].sourceGen,before.tracks[0].sourceGen);
+    session.inspectTrackMetadata(null); assert.equal(enabled.at(-1),'new:false');
+  } finally { await session.dispose(); }
+});

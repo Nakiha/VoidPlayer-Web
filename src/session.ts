@@ -1,3 +1,4 @@
+import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
 import { unavailableSource } from './session/unavailable-source.ts';
@@ -34,6 +35,34 @@ type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; 
   sourceGen: number };
 type SourceOpener = (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>;
 export class ReviewSession {
+  private metadataSource?: MediaSource;
+  /** UI and agents share the same source-owned, cache-only query lifecycle. */
+  inspectTrackMetadata(slot: Slot | null) {
+    if (slot !== null) slotValue(slot);
+    const source = slot === null ? undefined : this.tracks.get(slot)?.source;
+    if (source !== this.metadataSource) {
+      this.metadataSource?.setMetadataInspectionEnabled?.(false);
+      this.metadataSource = source;
+      source?.setMetadataInspectionEnabled?.(true);
+    }
+    source?.requestCachedMetadata?.();
+  }
+  private audioSlot: Slot | null = null;
+  private audioSource?: MediaSource;
+  private readonly audioOutput = new OpportunisticAudio(() => this.emit());
+  /** Explicit speaker action only; never restored from a saved workspace. */
+  setTrackAudio(slot: Slot, enabled: boolean) {
+    slotValue(slot);
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) throw new Error('轨道尚未载入或已停用。');
+    if (!enabled && this.audioSlot !== slot) return this.getState();
+    if (enabled && !track.source.requestCachedAudio) throw new Error('此片源暂不支持顺带音频。');
+    this.audioSlot = enabled ? slot : null;
+    this.audioSource = enabled ? track.source : undefined;
+    this.audioOutput.select(this.audioSource);
+    this.emit();
+    return this.getState();
+  }
   readonly resources = new SessionResources();
   private resourceSources = new WeakSet<MediaSource>();
   private trackSourceResources(source: MediaSource) {
@@ -251,6 +280,9 @@ export class ReviewSession {
   }
   private lastTransition = '';
   private emit() {
+    if (this.audioSlot && (this.tracks.get(this.audioSlot)?.source !== this.audioSource || this.tracks.get(this.audioSlot)?.failure)) {
+      this.audioSlot = null; this.audioSource = undefined; this.audioOutput.select();
+    }
     const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,syncState:t.syncState})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
@@ -284,7 +316,7 @@ export class ReviewSession {
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       resources: this.resources.snapshot(),
-      frameEvidence: 'decoded-and-drawn-to-canvas', audio: 'muted', color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
+      frameEvidence: 'decoded-and-drawn-to-canvas', audio: this.audioSlot ? 'opportunistic' : 'muted', audioSlot: this.audioSlot, audioStatus: this.audioOutput.status, audioPacketsPlayed: this.audioOutput.playedPackets, color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
       marks: this.marks,
     });
@@ -576,6 +608,7 @@ export class ReviewSession {
   }
   private get durationUs() { return Math.max(0, ...[...this.tracks.values()].filter(t => !t.failure || t.pendingRelink).map(t => t.source.info.durationUs + t.offsetUs)); }
   pause() {
+    this.audioOutput.pause();
     const wasPlaying = this.playing;
     ++this.revision;
     this.abortLoad?.();
@@ -1090,6 +1123,12 @@ export class ReviewSession {
           } catch (error) { this.failTrack(slot, track, error); } finally { frame.close(); }
         }
         this.positionUs = target;
+        if (this.audioSlot) {
+          const audioTrack = this.tracks.get(this.audioSlot);
+          if (audioTrack && audioTrack.source === this.audioSource && !audioTrack.failure) {
+            try { this.audioOutput.tick(target, audioTrack.offsetUs, advance > 0); } catch { this.audioOutput.pause(); }
+          }
+        }
         metrics.wallMs = performance.now() - start;
         metrics.mediaUs = target - base;
         // Holding a finished track is intentional, not decoder lag or track skew.
@@ -1122,7 +1161,7 @@ export class ReviewSession {
       // stop readers that a rapid resume has adopted.
       if (revision === this.revision) this.releaseReaders('playback-finished');
       scoped.info('session', '播放统计', metrics.snapshot());
-      if (revision === this.revision) { this.stopPlayback = undefined; this.emit(); }
+      if (revision === this.revision) { this.audioOutput.pause(); this.stopPlayback = undefined; this.emit(); }
     }
   }
   addMark(input: { slot: unknown; text: unknown; severity?: unknown; origin?: unknown; region?: unknown; drawings?: unknown }) {
@@ -1264,10 +1303,14 @@ export class ReviewSession {
   async dispose() {
     this.cancelLoad(); this.pause();
     this.releaseReaders('dispose');
-    await this.queue.catch(() => {});
+    // pagehide cannot await the session queue. Terminate owned workers and
+    // audio synchronously, while the departing document can still run cleanup.
     for (const t of this.tracks.values()) if (!t.failure) t.source.dispose();
+    this.inspectTrackMetadata(null);
+    this.audioSlot = null; this.audioSource = undefined; this.audioOutput.dispose();
     this.tracks.clear();
     this.listeners.clear();
     this.progressListeners.clear();
+    await this.queue.catch(() => {});
   }
 }
