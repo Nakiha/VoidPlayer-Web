@@ -63,6 +63,23 @@ try {
       window.addEventListener('beforeunload', () => window.audioLifecycle('beforeunload'));
       window.addEventListener('pagehide', () => window.audioLifecycle('pagehide-enter'));
       window.addEventListener('unload', () => window.audioLifecycle('unload'));
+      // Locate native cleanup stalls even if the renderer can no longer answer
+      // DevTools. These wrappers preserve every call and are armed only at reload.
+      const instrument = (target, name) => {
+        const original = target?.[name];
+        if (!original) return;
+        target[name] = function(...args) {
+          window.audioLifecycle(name + '-enter');
+          const result = original.apply(this, args);
+          window.audioLifecycle(name + '-return');
+          if (name === 'getExtension' && args[0] === 'WEBGL_lose_context' && result && !result.audioInstrumented) {
+            result.audioInstrumented = true; instrument(result, 'loseContext');
+          }
+          return result;
+        };
+      };
+      for (const name of ['deleteTexture', 'deleteBuffer', 'deleteProgram', 'getExtension']) instrument(window.WebGLRenderingContext?.prototype, name);
+      instrument(window.Element?.prototype, 'remove');
       window.audioBlobReads = [];
       window.audioEvidence = { contexts: 0, closes: 0, starts: 0, stopped: 0, maxRms: 0, live: new Set() };
       const Native = window.AudioContext;
@@ -114,7 +131,10 @@ try {
     assert.ok(positions.speakerRight <= positions.eyeLeft, 'speaker is immediately left of visibility');
     if (enabled) { await speaker.click(); assert.equal((await state(page)).audioSlot, 'A'); }
     await page.locator('#play').click();
-    await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_review_session').execute({}).positionUs > 800000);
+    // Measure a complete video traversal in both runs. Interrupting playback
+    // at a polled wall-clock boundary changes FFmpeg read-ahead before the seek
+    // depending on runner load, even with audio completely disconnected.
+    await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_review_session').execute({}); return !s.playing && s.positionUs > 2500000; });
     if (enabled) await page.waitForFunction(() => window.audioEvidence.starts > 0, undefined, { timeout: 10000 });
     await tool(page, 'seek_review', { ptsUs: 1500000 });
     assert.equal(await page.evaluate(() => window.audioEvidence.live.size), 0, 'seek stops old audio before returning');
@@ -176,11 +196,12 @@ try {
       const unloaded = await page.evaluate(() => JSON.parse(sessionStorage.getItem('audio-test-pagehide')));
       assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0 }, 'pagehide releases workers and audio synchronously');
       report[1].pagehide = unloaded;
+      report[1].lifecycleTrace = [...lifecycleTrace];
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
     await page.close();
   }
-  // The complete clip fits the video cache. Both runs use the same seek sequence.
+  // Both runs complete the same video traversal and then the same seek/replay.
   if (!local) assert.ok(report[0].traffic.length > 0, 'the control must measure real media Range traffic');
   if (local) assert.ok(report[0].blobReads.length, 'local control observes actual Blob IO');
   assert.deepEqual(report[1].blobReads, report[0].blobReads, 'speaker adds zero local Blob reads');
