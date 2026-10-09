@@ -35,6 +35,7 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 ## 信息与责任
 
 - `MediaInfo.color` / `FrameDescription.sourceColor` 是码流或容器原始标签，未知保持 null。
+- `FrameDescription.sourceColorOrigin` 保留源标签的 container/decoder 来源，上屏同步 `MediaInfo.colorSource` 时沿用此来源；旧解码资源未标来源时按 decoder 处理，不把容器标签误报成解码器标签。
 - `FrameDescription.color` 描述实际交付资源，不能用容器标签覆盖已经转换的浏览器资源。
 - `resolveYuvColor` 产生单独的 resolved plan，逐字段记录 resource/fallback 来源，不改原标签。
 - `yuv` 描述位深、位对齐、子采样、平面 offset/stride/尺寸及 chroma location。偏移按字节计，16 位数据为 little endian。

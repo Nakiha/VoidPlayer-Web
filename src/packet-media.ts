@@ -153,7 +153,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       // Preserve encoded metadata separately from the browser's actual resource
       // tags. A platform may return an SDR-tagged resource for an HDR source.
       const description = info.color && !frame.description.sourceColor
-        ? { ...frame.description, sourceColor: { ...info.color } } : frame.description;
+        ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
       const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,

@@ -19,6 +19,8 @@ export type FrameDescription = {
   color: ColorInfo;
   sourcePixelFormat?: string | null;
   sourceColor?: ColorInfo;
+  /** Provenance of encoded tags, independent of the delivered resource color. */
+  sourceColorOrigin?: 'container' | 'decoder';
 };
 export const unknownColor = (): ColorInfo => ({ primaries:null, transfer:null, matrix:null, fullRange:null });
 export function rgbaDescription(width: number, height: number, overrides: Partial<FrameDescription> = {}): FrameDescription {
