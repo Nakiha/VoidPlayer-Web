@@ -2,6 +2,7 @@ import { requestError, rootReason } from './diagnostics.ts';
 import { apiError } from '../api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';
 import { installLanguageControls } from '../ui/language.ts';
+import { installFocusFeedback } from '../ui/focus-feedback.ts';
 import { installLiveLocalization, localizedText, localizedFragment, localizedAttribute, type LocalizedValue } from '../ui/live-localization.ts';
 import { initializeLanguage, onLanguageChange, formatDate, t, th, msg } from '../i18n.ts';
 import { chooseInitialIdentity } from '../ui/identity-onboarding.ts';
@@ -29,6 +30,7 @@ type Scan = ReturnType<MediaLibraryIndex['status']> & { errors: Record<string, u
 type Status = ReturnType<AdminController['status']> & { identity: { id: string; name: string }; http: { activeRequests: number; connections: number; completedRequests: number; abortedRequests: number }; recentRequests: Record<string, unknown>[] };
 const disposeLanguage = await initializeLanguage();
 const life = new AbortController();
+installFocusFeedback(life.signal);
 const app = document.getElementById('admin-app')!; mountLocalizedShell(app, adminShell, life.signal);
 installLanguageControls(life.signal);
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;

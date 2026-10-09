@@ -17,6 +17,7 @@ import { installThemeControls } from './ui/theme.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
 import { installSettings } from './ui/settings.ts';
 import { matchesShortcut, PANEL_SHORTCUTS } from './ui/shortcuts.ts';
+import { installFocusFeedback } from './ui/focus-feedback.ts';
 import { createFrameTask } from './ui/frame-task.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
@@ -62,6 +63,7 @@ import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts
 
 const stopLogging = startBrowserLogging();
 const uiEvents = new AbortController();
+installFocusFeedback(uiEvents.signal);
 
 const $ = <T extends Element = HTMLElement>(id: string) => document.getElementById(id) as unknown as T;
 mountLocalizedShell($<HTMLElement>('app'), shell, uiEvents.signal);

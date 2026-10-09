@@ -1,5 +1,6 @@
 import { mountLocalizedShell } from './ui/localized-shell.ts';
 import { installLanguageControls } from './ui/language.ts';
+import { installFocusFeedback } from './ui/focus-feedback.ts';
 import { requestError } from './admin/diagnostics.ts';
 import { installLiveLocalization, localizedText, localizedAttribute, type LocalizedValue } from './ui/live-localization.ts';
 import { onLanguageChange, t, th, msg } from './i18n.ts';
@@ -20,6 +21,7 @@ export async function showConnectionGuide({automatic=false}={}) {
   const requested=automatic?location.pathname+location.search+location.hash:new URL(location.href).searchParams.get('next')??'/';
   let destination:URL|null=null, checking=false, loaded=false;
   const life = new AbortController(), disposeTheme = observeTheme();
+  installFocusFeedback(life.signal);
   let certificatePage = !automatic;
   const title = () => { document.title = certificatePage ? t(msg('connection.certTitle', '证书设置 · VoidPlayer')) : t(msg('connection.connectingTitle', '正在连接 · VoidPlayer')); };
   title(); onLanguageChange(title, life.signal);

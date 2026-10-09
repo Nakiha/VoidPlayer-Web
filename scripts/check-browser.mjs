@@ -87,7 +87,7 @@ try {
     await version.click();
     assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
     await page.locator('#settings-close').click();
-    await page.waitForFunction(() => !document.getElementById('settings')?.open);
+    await page.waitForFunction(() => !document.getElementById('settings')?.open && document.activeElement === document.getElementById('start-version-about'));
     assert.equal(await version.evaluate(el => document.activeElement === el), true, 'closing About restores focus to the version');
   });
 
@@ -135,6 +135,7 @@ try {
       await page.locator('#library-location').click();
       await page.keyboard.press(tabKey);
       assert.equal(await page.locator('#library-root').evaluate(el => document.activeElement === el && el.matches(':focus-visible')), true);
+      await page.waitForFunction(expected => getComputedStyle(document.getElementById('library-root')).backgroundColor === expected, expected);
       assert.equal(await page.locator('#library-root').evaluate(el => getComputedStyle(el).backgroundColor), expected);
       assert.equal(await page.locator('#library-navigation').evaluate(el => getComputedStyle(el).outlineStyle), 'none');
       await page.keyboard.press('Enter');
@@ -148,6 +149,7 @@ try {
       await page.locator('#library-root').click();
       await page.keyboard.press(tabKey);
       assert.equal(await page.locator('#sources-search-toggle').evaluate(el => document.activeElement === el), true);
+      await page.waitForFunction(expected => getComputedStyle(document.getElementById('sources-search-toggle')).backgroundColor === expected, expected);
       assert.equal(await page.locator('#sources-search-toggle').evaluate(el => getComputedStyle(el).backgroundColor), expected);
     }
   });

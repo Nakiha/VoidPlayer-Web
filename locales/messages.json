@@ -15,7 +15,7 @@
       "s": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:92",
+      "src/admin/main.ts:94",
       "src/ui/source-activity.ts:20"
     ]
   },
@@ -148,7 +148,7 @@
     "source": "匿名",
     "params": {},
     "locations": [
-      "src/admin/main.ts:165"
+      "src/admin/main.ts:167"
     ]
   },
   "admin.backToLatest": {
@@ -493,28 +493,28 @@
     "source": "目录名称",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.dirNamePh": {
     "source": "例如：拍摄素材",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.dirsSaved": {
     "source": "目录配置已保存",
     "params": {},
     "locations": [
-      "src/admin/main.ts:62"
+      "src/admin/main.ts:64"
     ]
   },
   "admin.dirsSavedNotice": {
     "source": "媒体目录已保存，后台开始校准索引。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:187"
+      "src/admin/main.ts:189"
     ]
   },
   "admin.disk": {
@@ -605,22 +605,22 @@
     "source": "无法读取此目录",
     "params": {},
     "locations": [
-      "src/admin/main.ts:123",
-      "src/admin/main.ts:123"
+      "src/admin/main.ts:125",
+      "src/admin/main.ts:125"
     ]
   },
   "admin.errNoEnt": {
     "source": "路径不存在",
     "params": {},
     "locations": [
-      "src/admin/main.ts:123"
+      "src/admin/main.ts:125"
     ]
   },
   "admin.errStorage": {
     "source": "网络存储已断开",
     "params": {},
     "locations": [
-      "src/admin/main.ts:123"
+      "src/admin/main.ts:125"
     ]
   },
   "admin.errorAccess": {
@@ -672,7 +672,7 @@
     "source": " · 详情保留前 1000 条",
     "params": {},
     "locations": [
-      "src/admin/main.ts:126"
+      "src/admin/main.ts:128"
     ]
   },
   "admin.errorUnavailable": {
@@ -725,7 +725,7 @@
       "size": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:157"
+      "src/admin/main.ts:159"
     ]
   },
   "admin.hoursMinutes": {
@@ -735,7 +735,7 @@
       "m": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:92"
+      "src/admin/main.ts:94"
     ]
   },
   "admin.httpRequests": {
@@ -749,7 +749,7 @@
     "source": "保存后开始索引",
     "params": {},
     "locations": [
-      "src/admin/main.ts:85"
+      "src/admin/main.ts:87"
     ]
   },
   "admin.indexTitle": {
@@ -847,14 +847,14 @@
     "source": "本机用户",
     "params": {},
     "locations": [
-      "src/admin/main.ts:165"
+      "src/admin/main.ts:167"
     ]
   },
   "admin.logDeleted": {
     "source": "日志已从服务器删除。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:205"
+      "src/admin/main.ts:207"
     ]
   },
   "admin.logJson": {
@@ -885,7 +885,7 @@
       "user": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:157"
+      "src/admin/main.ts:159"
     ]
   },
   "admin.logsDesc": {
@@ -899,21 +899,21 @@
     "source": "未开启日志接收",
     "params": {},
     "locations": [
-      "src/admin/main.ts:142"
+      "src/admin/main.ts:144"
     ]
   },
   "admin.logsEmptyHint": {
     "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:142"
+      "src/admin/main.ts:144"
     ]
   },
   "admin.logsNoDir": {
     "source": "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:142"
+      "src/admin/main.ts:144"
     ]
   },
   "admin.logsTitle": {
@@ -965,7 +965,7 @@
     "source": "已完成",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38",
+      "src/admin/main.ts:40",
       "src/admin/measurement.ts:16"
     ]
   },
@@ -1008,7 +1008,7 @@
     "source": "进行中",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38",
+      "src/admin/main.ts:40",
       "src/admin/measurement.ts:16"
     ]
   },
@@ -1135,7 +1135,7 @@
     "source": "本次扫描没有读取错误",
     "params": {},
     "locations": [
-      "src/admin/main.ts:126"
+      "src/admin/main.ts:128"
     ]
   },
   "admin.noReadableMedia": {
@@ -1150,21 +1150,21 @@
     "source": "尚未扫描",
     "params": {},
     "locations": [
-      "src/admin/main.ts:100"
+      "src/admin/main.ts:102"
     ]
   },
   "admin.noScanJob": {
     "source": "尚无扫描任务",
     "params": {},
     "locations": [
-      "src/admin/main.ts:117"
+      "src/admin/main.ts:119"
     ]
   },
   "admin.noUploadedLogs": {
     "source": "暂无上传日志",
     "params": {},
     "locations": [
-      "src/admin/main.ts:142"
+      "src/admin/main.ts:144"
     ]
   },
   "admin.noWsYet": {
@@ -1186,8 +1186,8 @@
     "params": {},
     "locations": [
       "src/admin/presentation.ts:9",
-      "src/connection-guide.ts:60",
-      "src/connection-guide.ts:61"
+      "src/connection-guide.ts:62",
+      "src/connection-guide.ts:63"
     ]
   },
   "admin.openInPlayerLink": {
@@ -1269,7 +1269,7 @@
     "source": "管理 · VoidPlayer",
     "params": {},
     "locations": [
-      "src/admin/main.ts:41"
+      "src/admin/main.ts:43"
     ]
   },
   "admin.prevErrors": {
@@ -1417,14 +1417,14 @@
     "source": "移除目录",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.removeDirTitle": {
     "source": "移出媒体库，不删除文件",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.reqDuration": {
@@ -1470,7 +1470,7 @@
       "done": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:97"
+      "src/admin/main.ts:99"
     ]
   },
   "admin.rescan": {
@@ -1559,7 +1559,7 @@
     "source": "(根目录)",
     "params": {},
     "locations": [
-      "src/admin/main.ts:122"
+      "src/admin/main.ts:124"
     ]
   },
   "admin.rootNoSource": {
@@ -1583,7 +1583,7 @@
       "o": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:98"
+      "src/admin/main.ts:100"
     ]
   },
   "admin.runtime": {
@@ -1625,7 +1625,7 @@
     "source": "正在保存…",
     "params": {},
     "locations": [
-      "src/admin/main.ts:62"
+      "src/admin/main.ts:64"
     ]
   },
   "admin.scanActive": {
@@ -1634,7 +1634,7 @@
       "visited": "number"
     },
     "locations": [
-      "src/admin/main.ts:100"
+      "src/admin/main.ts:102"
     ]
   },
   "admin.scanDesc": {
@@ -1648,21 +1648,21 @@
     "source": "目录离线时保留已有视频索引。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:118"
+      "src/admin/main.ts:120"
     ]
   },
   "admin.scanDetailPartial": {
     "source": "部分目录无法读取，请检查下方路径或网络挂载。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:118"
+      "src/admin/main.ts:120"
     ]
   },
   "admin.scanDetailReading": {
     "source": "正在读取根目录…",
     "params": {},
     "locations": [
-      "src/admin/main.ts:118"
+      "src/admin/main.ts:120"
     ]
   },
   "admin.scanErrors": {
@@ -1672,7 +1672,7 @@
       "truncated": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:126"
+      "src/admin/main.ts:128"
     ]
   },
   "admin.scanJobSummary": {
@@ -1682,7 +1682,7 @@
       "state": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:100"
+      "src/admin/main.ts:102"
     ]
   },
   "admin.scanJobs": {
@@ -1707,7 +1707,7 @@
       "visited": "number"
     },
     "locations": [
-      "src/admin/main.ts:117"
+      "src/admin/main.ts:119"
     ]
   },
   "admin.search": {
@@ -1776,7 +1776,7 @@
     "source": "选择一份日志查看内容",
     "params": {},
     "locations": [
-      "src/admin/main.ts:130",
+      "src/admin/main.ts:132",
       "src/admin/shell.ts:39"
     ]
   },
@@ -1799,21 +1799,21 @@
     "source": "服务器路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.serverPathAria": {
     "source": "服务器上的目录路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.serverPathPh": {
     "source": "填写完整目录路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69"
+      "src/admin/main.ts:71"
     ]
   },
   "admin.serviceDesc": {
@@ -1883,63 +1883,63 @@
     "source": "已停止",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateError": {
     "source": "扫描出错",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateFailed": {
     "source": "失败",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateInterrupted": {
     "source": "上次任务被中断",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateOffline": {
     "source": "存储离线",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.statePartial": {
     "source": "部分路径不可读",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateReady": {
     "source": "可用",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateScanning": {
     "source": "扫描中",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stateUnscanned": {
     "source": "等待扫描",
     "params": {},
     "locations": [
-      "src/admin/main.ts:38"
+      "src/admin/main.ts:40"
     ]
   },
   "admin.stopScan": {
@@ -2023,14 +2023,14 @@
     "source": "未知",
     "params": {},
     "locations": [
-      "src/admin/main.ts:157"
+      "src/admin/main.ts:159"
     ]
   },
   "admin.unsavedChanges": {
     "source": "有未保存的修改",
     "params": {},
     "locations": [
-      "src/admin/main.ts:62"
+      "src/admin/main.ts:64"
     ]
   },
   "admin.uploadedLogs": {
@@ -2066,7 +2066,7 @@
     "source": " · 其余由周期校准覆盖",
     "params": {},
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.watchDirs": {
@@ -2080,14 +2080,14 @@
     "source": " · 部分目录监听不可用",
     "params": {},
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.watchPollOnly": {
     "source": "仅周期校准",
     "params": {},
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.watchSummary": {
@@ -2099,7 +2099,7 @@
       "partial": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.workspaceCopyName": {
@@ -2179,7 +2179,7 @@
     "source": "名称",
     "params": {},
     "locations": [
-      "src/admin/main.ts:69",
+      "src/admin/main.ts:71",
       "src/admin/workspaces.ts:14"
     ]
   },
@@ -3188,7 +3188,7 @@
     "source": "软件解码",
     "params": {},
     "locations": [
-      "src/main.ts:231",
+      "src/main.ts:233",
       "src/ui/color-flow.ts:18",
       "src/ui/color-flow.ts:22",
       "src/ui/color-flow.ts:40",
@@ -3237,270 +3237,270 @@
     "source": "无法安装或找不到证书？",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:56"
+      "src/connection-guide.ts:58"
     ]
   },
   "connection.cantInstallBody": {
     "source": "浏览器不能代替你安装系统证书。请确认已下载 voidplayer-ca.crt；如果设备由组织管理，请联系管理员部署。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:56"
+      "src/connection-guide.ts:58"
     ]
   },
   "connection.certReady": {
     "source": "服务器已配置证书，请向管理员获取与证书匹配的 HTTPS 地址。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:120"
+      "src/connection-guide.ts:122"
     ]
   },
   "connection.certSettings": {
     "source": "证书设置",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:32",
-      "src/connection-guide.ts:125"
+      "src/connection-guide.ts:34",
+      "src/connection-guide.ts:127"
     ]
   },
   "connection.certTitle": {
     "source": "证书设置 · VoidPlayer",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:24"
+      "src/connection-guide.ts:26"
     ]
   },
   "connection.checkingConfig": {
     "source": "正在检查连接配置…",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:36",
-      "src/connection-guide.ts:108"
+      "src/connection-guide.ts:38",
+      "src/connection-guide.ts:110"
     ]
   },
   "connection.connectingTitle": {
     "source": "正在连接 · VoidPlayer",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:24"
+      "src/connection-guide.ts:26"
     ]
   },
   "connection.contactAdmin": {
     "source": "请联系管理员开启 HTTPS。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:63"
+      "src/connection-guide.ts:65"
     ]
   },
   "connection.defaultPorts": {
     "source": "默认 HTTPS 端口为 5180，证书引导页端口为 5181。已启用时，请使用管理员提供的引导地址。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:63"
+      "src/connection-guide.ts:65"
     ]
   },
   "connection.downloadAgain": {
     "source": "再次下载证书",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:98"
+      "src/connection-guide.ts:100"
     ]
   },
   "connection.downloadCert": {
     "source": "下载证书",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:42",
-      "src/connection-guide.ts:47"
+      "src/connection-guide.ts:44",
+      "src/connection-guide.ts:49"
     ]
   },
   "connection.downloading": {
     "source": "正在下载…",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:92"
+      "src/connection-guide.ts:94"
     ]
   },
   "connection.httpsOff": {
     "source": "服务器尚未开启 HTTPS。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:116"
+      "src/connection-guide.ts:118"
     ]
   },
   "connection.httpsUnavailable": {
     "source": "服务器未开启 HTTPS",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:63"
+      "src/connection-guide.ts:65"
     ]
   },
   "connection.installTitle": {
     "source": "安装并信任",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:52"
+      "src/connection-guide.ts:54"
     ]
   },
   "connection.macRich1": {
     "source": "打开<strong>钥匙串访问</strong>，选中“登录”，通过“文件 → 导入项目”导入下载的证书。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:55"
+      "src/connection-guide.ts:57"
     ]
   },
   "connection.macRich2": {
     "source": "找到 <strong>VoidPlayer Local CA</strong> 证书，双击打开。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:55"
+      "src/connection-guide.ts:57"
     ]
   },
   "connection.macRich3": {
     "source": "展开“信任”，将<strong>安全套接字层（SSL）</strong>设为“始终信任”。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:55"
+      "src/connection-guide.ts:57"
     ]
   },
   "connection.macStep4": {
     "source": "关闭窗口，按系统提示验证身份并保存。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:55"
+      "src/connection-guide.ts:57"
     ]
   },
   "connection.openPlayerHint": {
     "source": "安装完成后，点击“打开播放器”重新检查。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:60",
-      "src/connection-guide.ts:132"
+      "src/connection-guide.ts:62",
+      "src/connection-guide.ts:134"
     ]
   },
   "connection.os": {
     "source": "操作系统",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:53"
+      "src/connection-guide.ts:55"
     ]
   },
   "connection.ownCertHint": {
     "source": "此服务器使用自有证书。若浏览器仍提示证书问题，请联系管理员。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:132"
+      "src/connection-guide.ts:134"
     ]
   },
   "connection.pageTitle": {
     "source": "连接",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:32"
+      "src/connection-guide.ts:34"
     ]
   },
   "connection.recheck": {
     "source": "重新检查",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:37"
+      "src/connection-guide.ts:39"
     ]
   },
   "connection.recheckLabel": {
     "source": "重新检查连接配置",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:37"
+      "src/connection-guide.ts:39"
     ]
   },
   "connection.retryDownload": {
     "source": "重试下载",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:101"
+      "src/connection-guide.ts:103"
     ]
   },
   "connection.serverCa": {
     "source": "服务器信任证书",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:45"
+      "src/connection-guide.ts:47"
     ]
   },
   "connection.standaloneExample": {
     "source": "独立程序启动示例：",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:63"
+      "src/connection-guide.ts:65"
     ]
   },
   "connection.untrusted": {
     "source": "暂时无法建立可信的 HTTPS 连接。安装证书后可重新检查。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:133"
+      "src/connection-guide.ts:135"
     ]
   },
   "connection.verifyNote": {
     "source": "安装前，请与管理员核对服务器地址和证书指纹。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:48"
+      "src/connection-guide.ts:50"
     ]
   },
   "connection.viewFingerprint": {
     "source": "查看证书指纹",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:49"
+      "src/connection-guide.ts:51"
     ]
   },
   "connection.viewServerDocs": {
     "source": "查看服务器设置说明",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:63"
+      "src/connection-guide.ts:65"
     ]
   },
   "connection.whyBody": {
     "source": "信任服务器证书后，浏览器可以建立可信的 HTTPS 连接，使用 WebCodecs 原生解码。实际硬件加速取决于浏览器、显卡和视频格式。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:33"
+      "src/connection-guide.ts:35"
     ]
   },
   "connection.whyTitle": {
     "source": "为什么需要证书？",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:33"
+      "src/connection-guide.ts:35"
     ]
   },
   "connection.winRich1": {
     "source": "双击下载的证书，选择<strong>安装证书</strong>。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:54"
+      "src/connection-guide.ts:56"
     ]
   },
   "connection.winRich2": {
     "source": "选择<strong>当前用户</strong>，点击“下一步”。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:54"
+      "src/connection-guide.ts:56"
     ]
   },
   "connection.winRich3": {
     "source": "选择“将所有的证书都放入下列存储”，浏览并选中<strong>受信任的根证书颁发机构</strong>。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:54"
+      "src/connection-guide.ts:56"
     ]
   },
   "connection.winStep4": {
     "source": "核对来源与指纹，按系统提示完成导入。",
     "params": {},
     "locations": [
-      "src/connection-guide.ts:54"
+      "src/connection-guide.ts:56"
     ]
   },
   "drawing.changed": {
@@ -3789,7 +3789,7 @@
     "params": {},
     "locations": [
       "src/admin/shell.ts:14",
-      "src/connection-guide.ts:30",
+      "src/connection-guide.ts:32",
       "src/ui/settings-shell.ts:38",
       "src/ui/settings-shell.ts:39"
     ]
@@ -4466,8 +4466,8 @@
     "source": "VoidPlayer · 视频对比",
     "params": {},
     "locations": [
-      "src/main.ts:69",
-      "src/main.ts:548"
+      "src/main.ts:71",
+      "src/main.ts:550"
     ]
   },
   "player.aBFrameStartDifferenceMs": {
@@ -4476,7 +4476,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:347"
+      "src/main.ts:349"
     ]
   },
   "player.actualSpeed": {
@@ -4485,28 +4485,28 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:322"
+      "src/main.ts:324"
     ]
   },
   "player.arrangeTracksHorizontally": {
     "source": "横向排列轨道",
     "params": {},
     "locations": [
-      "src/main.ts:249"
+      "src/main.ts:251"
     ]
   },
   "player.browserNativeDecoding": {
     "source": "浏览器原生解码",
     "params": {},
     "locations": [
-      "src/main.ts:231"
+      "src/main.ts:233"
     ]
   },
   "player.catchingUpToPlayback": {
     "source": " · 正在追赶播放位置",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.catchingUpToPlayback2": {
@@ -4520,35 +4520,35 @@
     "source": "测试被中断",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:631"
     ]
   },
   "player.checkingPlaybackPerformance": {
     "source": "正在检查播放性能…",
     "params": {},
     "locations": [
-      "src/main.ts:619"
+      "src/main.ts:621"
     ]
   },
   "player.comparisonVideo": {
     "source": "对比视频",
     "params": {},
     "locations": [
-      "src/main.ts:269"
+      "src/main.ts:271"
     ]
   },
   "player.decoding": {
     "source": "正在解码…",
     "params": {},
     "locations": [
-      "src/main.ts:321"
+      "src/main.ts:323"
     ]
   },
   "player.exitFullscreen": {
     "source": "退出全屏",
     "params": {},
     "locations": [
-      "src/main.ts:450"
+      "src/main.ts:452"
     ]
   },
   "player.failed": {
@@ -4557,44 +4557,44 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:632"
     ]
   },
   "player.fallback": {
     "source": "（已回退）",
     "params": {},
     "locations": [
-      "src/main.ts:234"
+      "src/main.ts:236"
     ]
   },
   "player.fallsBackToSoftwareIfFirstFrame": {
     "source": "首帧核对失败则改用软件解码；读回帧有额外开销。",
     "params": {},
     "locations": [
-      "src/main.ts:110"
+      "src/main.ts:112"
     ]
   },
   "player.fileImportWasSupersededByANewer": {
     "source": "文件导入已被新的请求取代。",
     "params": {},
     "locations": [
-      "src/main.ts:367"
+      "src/main.ts:369"
     ]
   },
   "player.fillView": {
     "source": "填满视图",
     "params": {},
     "locations": [
-      "src/main.ts:203",
       "src/main.ts:205",
-      "src/main.ts:294"
+      "src/main.ts:207",
+      "src/main.ts:296"
     ]
   },
   "player.frameChangedAfterPausing": {
     "source": "暂停后画面改变",
     "params": {},
     "locations": [
-      "src/main.ts:628"
+      "src/main.ts:630"
     ]
   },
   "player.frames": {
@@ -4603,50 +4603,50 @@
       "count": "number"
     },
     "locations": [
-      "src/main.ts:94",
-      "src/main.ts:105"
+      "src/main.ts:96",
+      "src/main.ts:107"
     ]
   },
   "player.framesLagging": {
     "source": "画面落后",
     "params": {},
     "locations": [
-      "src/main.ts:626"
+      "src/main.ts:628"
     ]
   },
   "player.hdrSource": {
     "source": " · HDR 源",
     "params": {},
     "locations": [
-      "src/main.ts:274"
+      "src/main.ts:276"
     ]
   },
   "player.hdrSourceSdrFallback": {
     "source": " · HDR 源（SDR 兜底显示）",
     "params": {},
     "locations": [
-      "src/main.ts:274"
+      "src/main.ts:276"
     ]
   },
   "player.incompleteTailPlayingCompletePortion": {
     "source": " · 尾部不完整，播放完整部分",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.indexFailed": {
     "source": " · 索引失败",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.invalidAnnotationAddress": {
     "source": "标注地址无效。",
     "params": {},
     "locations": [
-      "src/main.ts:599"
+      "src/main.ts:601"
     ]
   },
   "player.lastSeekMs": {
@@ -4655,155 +4655,155 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:322"
+      "src/main.ts:324"
     ]
   },
   "player.mixingSoftwareAndNativeFramesInBrowser": {
     "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
     "params": {},
     "locations": [
-      "src/main.ts:336"
+      "src/main.ts:338"
     ]
   },
   "player.noFramesPresented": {
     "source": "没有输出画面",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:631"
     ]
   },
   "player.noReadableFrameInThisTrack": {
     "source": "轨道没有可读取的画面。",
     "params": {},
     "locations": [
-      "src/main.ts:562"
+      "src/main.ts:564"
     ]
   },
   "player.notLoaded": {
     "source": "尚未载入",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.openColorSettings": {
     "source": "前往色彩设置",
     "params": {},
     "locations": [
-      "src/main.ts:219",
-      "src/main.ts:338"
+      "src/main.ts:221",
+      "src/main.ts:340"
     ]
   },
   "player.openOneWorkspaceFileAtATime": {
     "source": "每次请打开一个工作区文件。",
     "params": {},
     "locations": [
-      "src/main.ts:379"
+      "src/main.ts:381"
     ]
   },
   "player.pageHiddenDuringCheck": {
     "source": "测试期间页面不可见",
     "params": {},
     "locations": [
-      "src/main.ts:627"
+      "src/main.ts:629"
     ]
   },
   "player.passed": {
     "source": "通过",
     "params": {},
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:632"
     ]
   },
   "player.pause": {
     "source": "暂停",
     "params": {},
     "locations": [
-      "src/main.ts:314"
+      "src/main.ts:316"
     ]
   },
   "player.paused": {
     "source": "已暂停",
     "params": {},
     "locations": [
-      "src/main.ts:321"
+      "src/main.ts:323"
     ]
   },
   "player.playbackDidNotFinish": {
     "source": "画面未播完",
     "params": {},
     "locations": [
-      "src/main.ts:628"
+      "src/main.ts:630"
     ]
   },
   "player.playbackError": {
     "source": "播放出错",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:631"
     ]
   },
   "player.playbackTooSlow": {
     "source": "播放速度不足",
     "params": {},
     "locations": [
-      "src/main.ts:626"
+      "src/main.ts:628"
     ]
   },
   "player.playingMuted": {
     "source": "播放中 · 静音",
     "params": {},
     "locations": [
-      "src/main.ts:321"
+      "src/main.ts:323"
     ]
   },
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {
     "source": "保留原始帧精度，按统一规则转换；仅支持 SDR。",
     "params": {},
     "locations": [
-      "src/main.ts:110"
+      "src/main.ts:112"
     ]
   },
   "player.rawPlanes": {
     "source": "原始平面",
     "params": {},
     "locations": [
-      "src/main.ts:234"
+      "src/main.ts:236"
     ]
   },
   "player.referenceVideo": {
     "source": "参考视频",
     "params": {},
     "locations": [
-      "src/main.ts:269"
+      "src/main.ts:271"
     ]
   },
   "player.sampleTooShort": {
     "source": "样本时长不足",
     "params": {},
     "locations": [
-      "src/main.ts:627"
+      "src/main.ts:629"
     ]
   },
   "player.showAllTracksSeparately": {
     "source": "独立显示所有轨道",
     "params": {},
     "locations": [
-      "src/main.ts:285"
+      "src/main.ts:287"
     ]
   },
   "player.slowPauseResponse": {
     "source": "暂停响应慢",
     "params": {},
     "locations": [
-      "src/main.ts:628"
+      "src/main.ts:630"
     ]
   },
   "player.softwareFallbackIsAnApproximationColorsMay": {
     "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
     "params": {},
     "locations": [
-      "src/main.ts:110"
+      "src/main.ts:112"
     ]
   },
   "player.sourceTimestampSFrameDurationS": {
@@ -4813,28 +4813,28 @@
       "p1": "string | number"
     },
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:279"
     ]
   },
   "player.switchToHorizontalLayout": {
     "source": "切换为横向布局",
     "params": {},
     "locations": [
-      "src/main.ts:248"
+      "src/main.ts:250"
     ]
   },
   "player.switchToManagedColorInColorDecoding": {
     "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。",
     "params": {},
     "locations": [
-      "src/main.ts:218"
+      "src/main.ts:220"
     ]
   },
   "player.thisAnnotationIsInTheRecycleBin": {
     "source": "这条标注已在回收站。",
     "params": {},
     "locations": [
-      "src/main.ts:601"
+      "src/main.ts:603"
     ]
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
@@ -4863,7 +4863,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:632"
     ]
   },
   "player.tracks": {
@@ -4872,51 +4872,51 @@
       "p0": "number"
     },
     "locations": [
-      "src/main.ts:348"
+      "src/main.ts:350"
     ]
   },
   "player.tracksOutOfSync": {
     "source": "双轨不同步",
     "params": {},
     "locations": [
-      "src/main.ts:627"
+      "src/main.ts:629"
     ]
   },
   "player.uChannel": {
     "source": "U 通道",
     "params": {},
     "locations": [
-      "src/main.ts:207"
+      "src/main.ts:209"
     ]
   },
   "player.uniformPixels": {
     "source": "统一像素",
     "params": {},
     "locations": [
-      "src/main.ts:203",
       "src/main.ts:205",
-      "src/main.ts:294"
+      "src/main.ts:207",
+      "src/main.ts:296"
     ]
   },
   "player.vChannel": {
     "source": "V 通道",
     "params": {},
     "locations": [
-      "src/main.ts:207"
+      "src/main.ts:209"
     ]
   },
   "player.videoReplacedDuringCheck": {
     "source": "测试期间视频被替换",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:631"
     ]
   },
   "player.waitingForFrame": {
     "source": "等待帧",
     "params": {},
     "locations": [
-      "src/main.ts:234"
+      "src/main.ts:236"
     ]
   },
   "player.waitingForIndexData": {
@@ -4930,56 +4930,56 @@
     "source": " · 等待索引，画面暂未同步",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.waitingForVideo": {
     "source": "等待视频",
     "params": {},
     "locations": [
-      "src/main.ts:321"
+      "src/main.ts:323"
     ]
   },
   "player.wasmSoftwareDecoding": {
     "source": "WASM 软件解码",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.webcodecsBrowserDecoding": {
     "source": "WebCodecs · 浏览器解码",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.webcodecsPreferHardware": {
     "source": "WebCodecs · 硬件优先",
     "params": {},
     "locations": [
-      "src/main.ts:275"
+      "src/main.ts:277"
     ]
   },
   "player.wipeBetweenTheFirstTwoTracksIn": {
     "source": "擦拭对比当前排序的前两个轨道",
     "params": {},
     "locations": [
-      "src/main.ts:285"
+      "src/main.ts:287"
     ]
   },
   "player.yChannel": {
     "source": "Y 通道",
     "params": {},
     "locations": [
-      "src/main.ts:207"
+      "src/main.ts:209"
     ]
   },
   "player.yuvChannelsSwitchToManagedColorFirst": {
     "source": "YUV 通道：请先切换为自有色彩",
     "params": {},
     "locations": [
-      "src/main.ts:297"
+      "src/main.ts:299"
     ]
   },
   "progress.decode": {
@@ -5345,7 +5345,7 @@
     "source": "色彩与解码",
     "params": {},
     "locations": [
-      "src/main.ts:170",
+      "src/main.ts:172",
       "src/ui/settings-shell.ts:11",
       "src/ui/settings-shell.ts:68"
     ]
@@ -5715,7 +5715,7 @@
     "source": "田字排列轨道",
     "params": {},
     "locations": [
-      "src/main.ts:249",
+      "src/main.ts:251",
       "src/ui/shell.ts:24"
     ]
   },
@@ -5890,7 +5890,7 @@
     "source": "全屏",
     "params": {},
     "locations": [
-      "src/main.ts:450",
+      "src/main.ts:452",
       "src/ui/shell.ts:79",
       "src/ui/shell.ts:79"
     ]
@@ -5939,7 +5939,7 @@
     "source": "日志",
     "params": {},
     "locations": [
-      "src/main.ts:170",
+      "src/main.ts:172",
       "src/ui/track-toasts.ts:35"
     ]
   },
@@ -6001,7 +6001,7 @@
     "source": "播放",
     "params": {},
     "locations": [
-      "src/main.ts:314",
+      "src/main.ts:316",
       "src/ui/shell.ts:76"
     ]
   },
@@ -6252,7 +6252,7 @@
     "source": "切换为田字布局",
     "params": {},
     "locations": [
-      "src/main.ts:248",
+      "src/main.ts:250",
       "src/ui/shell.ts:24"
     ]
   },
@@ -6419,7 +6419,7 @@
     "source": "YUV 通道：仅原始平面帧生效",
     "params": {},
     "locations": [
-      "src/main.ts:297",
+      "src/main.ts:299",
       "src/ui/shell.ts:28"
     ]
   },

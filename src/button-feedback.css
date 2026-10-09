@@ -15,7 +15,9 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
   color: var(--text) !important;
 }
 
-#settings-close:is(:active, :focus-visible):not(:disabled), .remove-track:is(:active, :focus-visible):not(:disabled) {
+#settings-close:active:not(:disabled), .remove-track:active:not(:disabled),
+:root[data-keyboard-navigation] #settings-close:focus-visible:not(:disabled),
+:root[data-keyboard-navigation] .remove-track:focus-visible:not(:disabled) {
   background: color-mix(in srgb, var(--action-danger) 22%, var(--surface-panel)) !important;
   color: var(--action-danger) !important;
 }
@@ -25,12 +27,13 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 }
 :focus-visible { outline: none; }
 
-/* Keyboard focus shares the press material without adding an outer ring.
-   Use native focus-visible so clicking a button does not leave it highlighted. */
-:where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true])) {
+/* Keyboard navigation shares the press material without adding an outer ring.
+   A shortcut after a pointer click can match native focus-visible, so require
+   explicit navigation as well. DOM focus and selected fills remain intact. */
+:root[data-keyboard-navigation] :where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true])) {
   background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
   color: var(--text) !important;
 }
 
-.welcome-field:has(:focus-visible) { background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)); }
-.welcome-field input:focus-visible { background: transparent !important; }
+:root[data-keyboard-navigation] .welcome-field:has(:focus-visible) { background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)); }
+:root[data-keyboard-navigation] .welcome-field input:focus-visible { background: transparent !important; }

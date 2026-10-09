@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
 const name=process.argv[2]??'webkit';
-await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {viewport:{width:1280,height:800}} }, async ({ page, ready }) => {
+await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {viewport:{width:1280,height:800}} }, async ({ page, ready, artifact }) => {
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await ready();
   await page.waitForFunction(() => window.voidPlayer);
@@ -33,6 +33,41 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
     assert.equal(await page.locator('#toggle-chrome').getAttribute('aria-pressed'),'false');
     assert.equal(await page.locator(`#${id}`).evaluate(e=>getComputedStyle(e).outlineStyle),'none','Space retains keyboard focus without a focus ring');
   }
+  // Pointer focus followed by a global shortcut must not acquire the shared
+  // keyboard-navigation fill, even if the browser now matches :focus-visible.
+  // WebKit can serialize the same resting color as rgba or oklab after a
+  // transition. Compare resolved pixels instead of the CSS spelling.
+  const fill = id => page.locator(`#${id}`).evaluate(e=>{
+    const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+    const context=canvas.getContext('2d');context.fillStyle=getComputedStyle(e).backgroundColor;
+    context.fillRect(0,0,1,1);return Array.from(context.getImageData(0,0,1,1).data);
+  });
+  for (const id of ['previous','next','reset-view']) {
+    await page.locator(`#${id}`).click();
+    await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+    // macOS WebKit does not focus every button on pointer clicks. Reproduce
+    // the retained pointer-origin focus explicitly on that platform as well.
+    await page.locator(`#${id}`).focus();
+    await page.mouse.move(0,0);
+    await page.waitForTimeout(300);
+    const resting = await fill(id);
+    await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+    await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+    assert.equal(await page.locator(`#${id}`).evaluate(e=>document.activeElement===e),true,'shortcut retains pointer-focused control');
+    await page.waitForTimeout(300);
+    assert.deepEqual(await fill(id),resting,`${id}: shortcut does not tint the previously clicked control`);
+    assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),null);
+  }
+  await page.locator('#previous').click();await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+  await page.locator('#previous').focus();await page.keyboard.press(name === 'webkit' ? 'Alt+Tab' : 'Tab');
+  await page.waitForFunction(()=>document.documentElement.hasAttribute('data-keyboard-navigation'));
+  assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),'','Tab enables keyboard navigation feedback');
+  assert.equal(await page.evaluate(()=>document.activeElement.matches(':focus-visible')),true);
+  await page.locator('#previous').click();
+  await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+  assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),null,'pointer resumes without clearing DOM focus');
+  await page.keyboard.press('ArrowRight');await page.waitForFunction(()=>!window.voidPlayer.getState().busy);
+  assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),null,'frame-step shortcut does not enable navigation feedback');
   await page.locator('#previous').focus();
   await page.keyboard.down('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
   await page.keyboard.down('Space');await page.keyboard.down('Space');
@@ -43,6 +78,8 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await playing(),false,'IME composition does not trigger playback');
   await page.locator('#pixel-size').click();
   await page.keyboard.press('ArrowDown');
+  await page.waitForFunction(()=>document.documentElement.hasAttribute('data-keyboard-navigation'));
+  assert.equal(await page.locator('html').getAttribute('data-keyboard-navigation'),'','menu arrow navigation enables focus feedback');
   const pixelMode=await page.evaluate(()=>window.voidPlayer.getViewport().pixelSize);
   await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
   assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().pixelSize),pixelMode);
@@ -64,6 +101,14 @@ await withBrowserFixture({ caseName: 'shortcuts', engine: name, pageOptions: {vi
   assert.equal(await page.locator('#source-search').inputValue(),'samplef');assert.equal(await focused(),'false','typing F in search does not toggle focus mode');
   await page.locator('#source-search').fill('sample');
   await page.keyboard.press('Space');assert.equal(await page.locator('#source-search').inputValue(),'sample ');assert.equal(await playing(),false);
+  await page.locator('#sources-search-toggle').click();await page.mouse.move(0,0);await page.waitForTimeout(300);
+  const searchResting = await fill('sources-search-toggle');
+  await page.keyboard.press('Space');await page.waitForFunction(()=>window.voidPlayer.getState().playing);
+  await page.keyboard.press('Space');await page.waitForFunction(()=>!window.voidPlayer.getState().playing);
+  await page.waitForTimeout(300);
+  assert.deepEqual(await fill('sources-search-toggle'),searchResting,'closed search stays untinted after global Space');
+  assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-expanded'),'false','Space does not reopen search');
+  await page.screenshot({path:artifact(`shortcuts-pointer-space-${name}.png`)});
   await page.locator('#toggle-sources').click();
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });await page.keyboard.press('n');
   // Wait for the selected tool on the drawing layer as well as its button.

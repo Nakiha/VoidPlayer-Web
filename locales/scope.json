@@ -40,6 +40,7 @@
     "src/ui/diagnostic-message.ts",
     "src/ui/drawing-editor.ts",
     "src/ui/filename.ts",
+    "src/ui/focus-feedback.ts",
     "src/ui/frame-task.ts",
     "src/ui/header-actions.ts",
     "src/ui/icons.ts",

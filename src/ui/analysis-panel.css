@@ -142,7 +142,7 @@
   background: transparent;
   cursor: text;
 }
-.analysis-status .st-num:hover:not(:disabled), .analysis-status .st-num:focus-visible { background: var(--surface-hover); }
+.analysis-status .st-num:hover:not(:disabled), :root[data-keyboard-navigation] .analysis-status .st-num:focus-visible { background: var(--surface-hover); }
 .analysis-status .st-num:disabled { cursor: default; }
 .analysis-status .st-num-input { color: var(--text); background: var(--surface-table); border: 1px solid var(--accent); }
 /* 换行独占一行时左对齐（JS 按实际换行状态挂 .status-wrapped，同行仍靠右）。 */
