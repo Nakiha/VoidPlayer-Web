@@ -90,7 +90,27 @@ try {
    await page.waitForFunction(()=>{const s=window.voidPlayer.getState();return !s.playing&&s.positionUs>1800000;});
    const state=await tool(page,'get_review_session');assert.equal(state.audioSlot,null);assert.equal(state.error,null);assert.ok(state.tracks[0].frame,'actual decoded frame survives inspection and seeks');
    const observed=await page.evaluate(()=>window.metadataEvidence);assert.equal(observed.contexts,0);assert.equal(observed.decoders,0);assert.ok(observed.workerUrls.every(url=>!url.includes('cached-audio')&&!url.includes('metadata')),'no audio/metadata parser workers');assert.deepEqual(errors,[]);
-   pair.push({open,traffic:structuredClone(traffic),...observed,metadata:state.tracks[0].trackMetadata});await context.close();
+   pair.push({open,traffic:structuredClone(traffic),...observed,metadata:state.tracks[0].trackMetadata});
+   if(open&&f.name==='audio.mp4'&&!local){
+    // Exercise hidden stale rows after replacing the inspected source in-place.
+    await page.locator('#toggle-inspector').click();
+    await tool(page,'load_library_item',{slot:'A',id:listing.entries.find(e=>e.name==='silent.mp4').id});
+    assert.equal(await page.evaluate(()=>window.voidPlayer.getState().tracks[0].trackMetadata),undefined,'hidden replacement does not request metadata');
+    const beforeHidden=structuredClone(traffic),hiddenEvidence=await page.evaluate(()=>window.metadataEvidence);
+    const peer=await context.newPage();await peer.goto(url);await peer.evaluate(()=>localStorage.setItem('voidplayer.language','en'));
+    await page.waitForFunction(()=>document.documentElement.lang==='en');
+    assert.deepEqual(errors,[],'localizing hidden stale inspector must not throw');
+    assert.equal(await page.locator('[data-frame-title]').textContent(),'Current frame','hidden inspector localization must finish before reopening');
+    await page.locator('#toggle-inspector').click();
+    await page.waitForFunction(()=>window.voidPlayer.getState().tracks[0].trackMetadata?.audio.presence==='absent');
+    assert.deepEqual(await page.locator('[data-metadata-group] h3').allTextContents(),['Container','Video','Audio']);
+    assert.equal(await page.locator('[data-metadata-group=audio] dd').count(),1);
+    assert.equal(await page.locator('[data-metadata-group=audio] dd').innerText(),'No audio confirmed');
+    assert.deepEqual(traffic,beforeHidden,'hidden replacement localization and reopening cannot read media');
+    assert.deepEqual(await page.evaluate(()=>window.metadataEvidence),hiddenEvidence);
+    assert.deepEqual(errors,[]);await peer.close();console.log(`PASS ${engine}: closed inspector, same-slot replacement, peer language change, reopen`);
+   }
+   await context.close();
   }
   assert.deepEqual(pair[1].workerUrls,pair[0].workerUrls,'inspection preserves worker creation');
   assert.deepEqual(pair[1].traffic,pair[0].traffic,`${f.name}/${local}: HTTP read sequence`);assert.deepEqual(pair[1].blobReads,pair[0].blobReads,`${f.name}/${local}: Blob offset/length sequence`);

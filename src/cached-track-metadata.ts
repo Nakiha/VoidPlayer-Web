@@ -227,15 +227,30 @@ async function ts(reader: Budget, result: CachedTrackMetadata) {
     if (length > 4096 || length < 12) { partial.delete(pid); continue; }
     if (part.data.length >= length) { const section = Uint8Array.from(part.data.slice(0,length)); if (crc(section) === 0 && section[5] & 1 && section[6] === 0 && section[7] === 0) sections.set(pid, section); partial.delete(pid); }
   }
-  const pat = sections.get(0); if (!pat || pat[0] !== 0) return;
+  const pat = sections.get(0); if (!pat || pat[0] !== 0 || (pat.length - 12) % 4) return;
   const tracks: AudioTrackMetadata[] = [], aacPids = new Map<number, AudioTrackMetadata>(); let complete = true, programs = 0;
   for (let p = 8; p + 4 <= pat.length - 4; p += 4) {
     if (!pat[p] && !pat[p + 1]) continue;
     programs++; const pmt = sections.get(((pat[p + 2] & 31) << 8) | pat[p + 3]);
     if (!pmt || pmt[0] !== 2 || pmt[3] !== pat[p] || pmt[4] !== pat[p + 1]) { complete = false; continue; }
-    for (let q = 12 + (((pmt[10] & 15) << 8) | pmt[11]); q + 5 <= pmt.length - 4;) {
+    const end = pmt.length - 4;
+    if (end < 12) { complete = false; continue; }
+    const streamStart = 12 + (((pmt[10] & 15) << 8) | pmt[11]);
+    // CRC only validates transport integrity. Every declared descriptor and ES
+    // must also fit completely before absence can become a durable fact.
+    const descriptors = (start: number, limit: number) => {
+      if (limit > end) return false;
+      for (let d = start; d < limit;) {
+        if (d + 2 > limit || d + 2 + pmt[d + 1] > limit) return false;
+        d += 2 + pmt[d + 1];
+      }
+      return true;
+    };
+    if (!descriptors(12, streamStart)) { complete = false; continue; }
+    for (let q = streamStart; q < end;) {
+      if (q + 5 > end) { complete = false; break; }
       const type = pmt[q], length = ((pmt[q + 3] & 15) << 8) | pmt[q + 4];
-      if (q + 5 + length > pmt.length - 4) { complete = false; break; }
+      if (!descriptors(q + 5, q + 5 + length)) { complete = false; break; }
       let codec = ({ 3:'MPEG audio', 4:'MPEG audio', 15:'AAC', 17:'AAC LATM', 0x81:'AC-3', 0x87:'E-AC-3', 0x83:'TrueHD', 0x84:'E-AC-3', 0x8a:'DTS' } as Record<number,string>)[type];
       if (type === 6) for (let d = q + 5; d + 2 <= q + 5 + length;) {
         const tag = pmt[d], len = pmt[d + 1]; if (d + 2 + len > q + 5 + length) break;

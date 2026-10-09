@@ -266,6 +266,10 @@ export function createTracksPane(shared: WorkbenchShared) {
   }
 
   function localize(state: WorkbenchState) {
+    // A hidden inspector may still describe a replaced source. Reconcile its
+    // shape before relabeling; this only renders existing facts, without querying.
+    // Stable signatures preserve nodes, including focused property tooltips.
+    renderInspector(state);
     // The dock owns editable offsets and annotation cards. Keep their nodes and
     // pending input intact, including when a peer tab changes the language.
     const selected = state.tracks.find(track => track.slot === view.selected);

@@ -24,10 +24,11 @@ function flv(audio: boolean, format = 10, config = [0x11,0xb0]) {
   return Buffer.concat([header,...(audio ? [tag] : [])]);
 }
 function crc(bytes: Uint8Array) { let v = 0xffffffff; for (const b of bytes) { v ^= b << 24; for (let i=0;i<8;i++) v = v & 0x80000000 ? (v<<1)^0x04c11db7 : v<<1; } const b=Buffer.alloc(4);b.writeUInt32BE(v>>>0);return b; }
-function ts(type?: number, privateDescriptor = false) {
+function ts(type?: number, privateDescriptor = false, editPmt?: (pmt: Buffer) => Buffer) {
   const pat=Buffer.from([0,0xb0,13,0,1,0xc1,0,0,0,1,0xe1,0]);
   const streams=Buffer.from([0x1b,0xe1,1,0xf0,0,...(type === undefined ? [] : [type,0xe1,2,0xf0,privateDescriptor ? 2 : 0,...(privateDescriptor ? [0x6a,0] : [])])]);
-  const pmt=Buffer.concat([Buffer.from([2,0xb0,13+streams.length,0,1,0xc1,0,0,0xe1,1,0xf0,0]),streams]);
+  let pmt: Buffer=Buffer.concat([Buffer.from([2,0xb0,13+streams.length,0,1,0xc1,0,0,0xe1,1,0xf0,0]),streams]);
+  if(editPmt)pmt=editPmt(pmt);pmt[2]=pmt.length+1;
   const packet=(pid: number, section: Buffer)=>{const b=Buffer.alloc(188,255);b.set([0x47,0x40|(pid>>8),pid&255,0x10,0]);b.set(Buffer.concat([section,crc(section)]),5);return b;};
   return Buffer.concat([packet(0,pat),packet(256,pmt),packet(0,pat)]);
 }
@@ -55,6 +56,18 @@ test('TS identifies PMT audio beyond ADTS playback and only confirms absence for
   assert.equal((await inspect(ts(6,true))).audio.tracks[0].codec,'AC-3');
   assert.equal((await inspect(ts())).audio.presence,'absent');assert.equal((await inspect(ts(6))).audio.presence,'unknown');
   const corrupt=ts();corrupt[195]^=1;assert.equal((await inspect(corrupt)).audio.presence,'unknown');
+});
+test('CRC-valid but truncated PMT structures cannot confirm absence',async()=>{
+  const cases: [string,(pmt:Buffer)=>Buffer][]=[
+    ['program_info_length beyond section',p=>{p[11]=6;return p;}],
+    ['incomplete program descriptor',p=>{p[11]=1;return Buffer.concat([p.subarray(0,12),Buffer.from([0x52]),p.subarray(12)]);}],
+    ['program descriptor payload overflow',p=>{p[11]=2;return Buffer.concat([p.subarray(0,12),Buffer.from([0x52,1]),p.subarray(12)]);}],
+    ['incomplete video ES descriptor',p=>{p[16]=1;return Buffer.concat([p,Buffer.from([0x52])]);}],
+    ['video ES descriptor payload overflow',p=>{p[16]=2;return Buffer.concat([p,Buffer.from([0x52,1])]);}],
+    ...[1,2,3,4].map(n=>[`trailing ${n}-byte ES header`,(p:Buffer)=>Buffer.concat([p,Buffer.alloc(n)])] as [string,(p:Buffer)=>Buffer]),
+  ];
+  for(const [name,edit] of cases){const result=await inspect(ts(undefined,false,edit));assert.equal(result.container,'MPEG-TS',name);assert.deepEqual(result.audio,{presence:'unknown',complete:false,tracks:[]},name);}
+  assert.equal((await inspect(ts(undefined,false,p=>{p[11]=2;return Buffer.concat([p.subarray(0,12),Buffer.from([0x52,0]),p.subarray(12)]);}))).audio.presence,'absent','complete descriptors still permit absence');
 });
 test('missing and oversized metadata never become absence; malicious box chains obey query budget',async()=>{
   assert.equal((await inspectCachedTracks(10000,async()=>undefined)).audio.presence,'unknown');

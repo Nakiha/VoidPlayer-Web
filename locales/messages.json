@@ -7182,7 +7182,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:285"
+      "src/ui/workbench/tracks.ts:289"
     ]
   },
   "tracks.codec": {
@@ -7240,7 +7240,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:114",
-      "src/ui/workbench/tracks.ts:284"
+      "src/ui/workbench/tracks.ts:288"
     ]
   },
   "tracks.decodedPixelFormat": {
@@ -7285,7 +7285,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:285"
+      "src/ui/workbench/tracks.ts:289"
     ]
   },
   "tracks.frameIndex": {
@@ -7310,7 +7310,7 @@
     "locations": [
       "src/ui/workbench/tracks.ts:221",
       "src/ui/workbench/tracks.ts:242",
-      "src/ui/workbench/tracks.ts:302"
+      "src/ui/workbench/tracks.ts:306"
     ]
   },
   "tracks.indexFailed": {
@@ -7329,7 +7329,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:162",
-      "src/ui/workbench/tracks.ts:291"
+      "src/ui/workbench/tracks.ts:295"
     ]
   },
   "tracks.loadAVideoToViewTracksAnd": {
@@ -7348,7 +7348,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:198",
-      "src/ui/workbench/tracks.ts:307"
+      "src/ui/workbench/tracks.ts:311"
     ]
   },
   "tracks.matrixCoefficients": {
@@ -7379,7 +7379,7 @@
     "source": "尚未载入轨道",
     "params": {},
     "locations": [
-      "src/ui/workbench/tracks.ts:287"
+      "src/ui/workbench/tracks.ts:291"
     ]
   },
   "tracks.noTracksLoaded": {
@@ -7429,7 +7429,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:285"
+      "src/ui/workbench/tracks.ts:289"
     ]
   },
   "tracks.reusedServerCache": {
@@ -7460,7 +7460,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:172",
-      "src/ui/workbench/tracks.ts:294"
+      "src/ui/workbench/tracks.ts:298"
     ]
   },
   "tracks.selectTrack": {
@@ -7470,7 +7470,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:93",
-      "src/ui/workbench/tracks.ts:274"
+      "src/ui/workbench/tracks.ts:278"
     ]
   },
   "tracks.showTrack": {
@@ -7480,7 +7480,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:242",
-      "src/ui/workbench/tracks.ts:302"
+      "src/ui/workbench/tracks.ts:306"
     ]
   },
   "tracks.sourceBitstreamMetadataReadByDecoder": {
@@ -7502,7 +7502,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:117",
-      "src/ui/workbench/tracks.ts:285"
+      "src/ui/workbench/tracks.ts:289"
     ]
   },
   "tracks.syncOffsetPositiveDelaysNegativeAdvancesMilliseconds": {
@@ -7510,7 +7510,7 @@
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:209",
-      "src/ui/workbench/tracks.ts:297"
+      "src/ui/workbench/tracks.ts:301"
     ]
   },
   "tracks.track": {
@@ -7520,7 +7520,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:101",
-      "src/ui/workbench/tracks.ts:283"
+      "src/ui/workbench/tracks.ts:287"
     ]
   },
   "tracks.trackDurationClickToSeek": {
@@ -7531,7 +7531,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:171",
-      "src/ui/workbench/tracks.ts:293"
+      "src/ui/workbench/tracks.ts:297"
     ]
   },
   "tracks.trackOffsetMilliseconds": {
@@ -7541,7 +7541,7 @@
     },
     "locations": [
       "src/ui/workbench/tracks.ts:209",
-      "src/ui/workbench/tracks.ts:296"
+      "src/ui/workbench/tracks.ts:300"
     ]
   },
   "tracks.transferFunction": {
