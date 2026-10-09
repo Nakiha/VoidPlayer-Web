@@ -52,7 +52,7 @@ export function colorSettingsShell() {
     <h4 class="settings-section-title">${th(msg("colorFlow.colorConversion", "色彩转换"))}</h4>
     <div class="settings-group color-settings-card">
       <div id="color-mode" class="color-mode-options segmented" role="group" aria-label="${th(msg("colorFlow.colorConversion", "色彩转换"))}">
-        <button data-color-mode="reference" aria-pressed="false"><strong>${th(msg("colorFlow.managedColor", "自有色彩"))}</strong><span>${th(msg("colorFlow.unifiedSdrConversion", "统一 SDR 转换"))}</span></button>
+        <button data-color-mode="reference" aria-pressed="false"><strong>${th(msg("colorFlow.managedColor", "自有色彩"))}</strong><span>${th(msg("colorOutput.managedConversion", "统一 SDR / HDR 转换"))}</span></button>
         <button data-color-mode="browser" aria-pressed="false"><strong>${th(msg("colorFlow.browserColor", "浏览器色彩"))}</strong><span>${th(msg("colorFlow.nativeFrameConversion", "沿用原生帧转换"))}</span></button>
       </div>
       <div id="reference-decode-settings" class="color-decode-controls">
@@ -61,6 +61,9 @@ export function colorSettingsShell() {
       </div>
       <figure class="color-flow"><figcaption>${th(msg("colorFlow.frameDataFlow", "帧数据流"))} <span>${th(msg("colorFlow.pathOverview", "路径示意"))}</span></figcaption><div id="color-flow-diagram"></div></figure>
       <p id="color-mode-description" class="color-flow-note" role="status"></p>
+      <div class="color-decode-controls"><span>${th(msg("colorOutput.displayTarget", "显示目标"))}</span><div id="color-output-target" class="color-segmented segmented" role="group" aria-label="${th(msg("colorOutput.displayTarget", "显示目标"))}"><button data-color-target="sdr" aria-pressed="false">SDR</button><button data-color-target="hdr" aria-pressed="false">HDR</button></div></div>
+      <div class="color-decode-controls"><label for="hdr-source-peak">${th(msg("colorOutput.assumedPeak", "HDR 假定峰值"))}</label><button id="hdr-source-peak" class="settings-choice"></button></div>
+      <p id="color-output-description" class="color-flow-note" role="status"></p>
     </div>
   </div>
   <div class="settings-section"><h4 class="settings-section-title">${th(msg("colorFlow.currentRuntime", "当前运行"))}</h4><div class="settings-group">

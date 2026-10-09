@@ -1,39 +1,39 @@
-# HDR 支持开发
+# HDR 支持
 
-本分支先建立可独立验证的 HDR→SDR 预览内核，再接入真实解码与 presenter。
-两套用户色彩模式继续保留；色彩转换的归属（自有/浏览器）与显示目标（SDR/HDR）分开设计。
+两套色彩模式继续保留，转换归属与显示目标独立选择。PQ/HLG 高位深原始平面已接入解码、首帧、播放、seek、逐帧、按需截图、封面以及工作区比较条件。
 
-## 已实现的基础
+## 使用
 
-- `src/hdr-color.ts`：PQ EOTF → 绝对 cd/m²；HLG 逆 OETF → 场景光，再按场景亮度执行 OOTF → 显示光。使用实际资源标签，容器 `sourceColor` 不覆盖资源。
-- 原始平面 CPU 参考：明确标签的 BT.2020 NCL、PQ/HLG（含别名）、10–16 位描述，复用现有 range、位对齐、裁剪与色度位置重建。不对 RGBA8、不透明资源或缺失标签作 HDR 推断。
-- `src/hdr-shader.ts`：GLSL/WGSL 转换函数；目前是独立内核，未安装到播放 shader。
-- 显式策略 `voidplayer-hdr-sdr-preview-v1`：亮度扩展 Reinhard、线性 BT.2020→709、向映射亮度去饱和以压缩色域、sRGB 编码。算法与参数一起描述结果，不宣称为标准母版转换或专业 HDR 参考显示。
+打开“色彩与解码”，选择“自有色彩”。默认 SDR 目标将 HDR 映射为可复现的 SDR 预览；“HDR”目标在支持的屏幕、浏览器与浮点 WebGPU 环境中开启扩展输出，其余环境明确显示 SDR 预览并保留目标。假定峰值档位是算法参数，不能当作源母版或屏幕测量结果。
 
-默认策略采用 1000 nits 的假定源峰值、203 nits 的曝光归一化白、1000 nits 的 HLG 参考显示和 system gamma 1.2。203 作为算法曝光参数，不表示映射后保持 203 nits，也不表示已测得显示器亮度。超过假定源峰值的亮度会饱和到输出白。亮度参数域为 1–10000 nits，源峰值不得小于曝光白；HLG gamma 为 1–2。策略可显式传入并序列化；尚未接入 session 或工作区快照。
+浏览器色彩沿用原生资源转换和 SDR 兼容预览。原生 HDR 纹理导入的实测高亮被截断，因此这条路径暂不开放 HDR 输出。软件回退交付合法 HDR 平面时执行共同 SDR 预览。截图和缩略图始终是 SDR，普通图片不冒充 HDR 导出。
 
-PQ/HLG 传递函数依据 [ITU-R BT.2100](https://www.itu.int/rec/R-REC-BT.2100)。参考白背景见 [ITU-R BT.2408](https://www.itu.int/pub/r-rep-bt.2408)。预览的亮度/色域映射是本项目显式选择，不冒充 BT.2390、BT.2446、浏览器 tone mapping 或 Dolby Vision。
+## 数学与资源
 
-## 当前边界
+- `hdr-policy.ts`：明确的实际资源准入、别名和版本化策略。只接受有 BT.2020 primaries、BT.2020 NCL matrix、PQ/HLG、明确 range、10/12/14/16-bit 的实际平面；不从容器标签还原 RGBA8 或补未知字段。
+- `hdr-color.ts` / `hdr-shader.ts`：PQ EOTF → 绝对 cd/m²；HLG 逆 OETF → 场景光，再按场景亮度执行 OOTF → 显示光。HLG 不逐通道独立 gamma。
+- SDR 策略 `voidplayer-hdr-sdr-preview-v1`：扩展 Reinhard 亮度映射、线性 BT.2020→709、朝映射亮度去饱和以压缩色域、sRGB 编码。CPU、GLSL、WGSL 使用同一规则。
+- 默认源峰值 1000、曝光白 203、HLG 参考显示 1000 nits、gamma 1.2。203 是算法曝光参数，不表示 SDR 映射后保留 203 nits。超过假定源峰值会饱和到输出白；参数随工作区保存。
+- HDR 输出：Display-P3、rgba16float、extended canvas；显示光除以显式参考白 hdrWhiteNits（默认 203、范围 80–400），扩展 P3 编码保留 >1 高亮，色域外负通道钳制。不会先执行 SDR tone mapping；浏览器/系统处理最终显示动态范围。
 
-生产行为仍执行 [现有 SDR 契约](color-pipeline.md)：自有色彩拒绝 HDR，浏览器 HDR 沿用 sRGB Canvas 兼容绘制。新内核没有放宽 `resolveYuvColor`、`referenceSource` 或硬件准入；播放、截图、工作区和导出没有切换到新策略。
+PQ/HLG 传递函数依据 [ITU-R BT.2100](https://www.itu.int/rec/R-REC-BT.2100)，参考白背景见 [BT.2408](https://www.itu.int/pub/r-rep-bt.2408)，扩展画布见 [Chrome WebGPU HDR 说明](https://developer.chrome.com/blog/new-in-webgpu-129#hdr_support_with_canvas_tone_mapping_mode)。项目的预览亮度/色域映射不冒充 BT.2390、BT.2446、浏览器映射或 Dolby Vision。
 
-上游 `VoidPlayer-FFmpeg-Build/wasm/vp_decoder.c` 的帧交付代码主动将 PQ/HLG 排除在原始平面输出之外，当前会走 RGBA 回退。完整接入之前必须在上游单独验证 HDR 高精度输出，推送源码并锁定新 core 修订；不能从已有 RGBA8 还原源 HDR。
+## 解码与会话
 
-已核对 Web 仓库锁定的 [core 源码 dc74d66d](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/blob/dc74d66daa56047a365eae45dd109eaf2309fbd6/wasm/vp_decoder.c#L1051)：PQ/HLG 会清除 `planar` 标记。后续还须用真实 HDR 解码结果验证更新后的产物。
+上游 [core f9a41c7](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/commit/f9a41c7baf7031a65279b14a55803380f90128f4) 已推送并由 `scripts/release-core.json` 锁定。单/多线程 ABI v2 均交付合法 PQ/HLG 高精度平面；不符合标签/布局的资源继续显式 RGBA 回退。浏览器硬件只接受可读取的 10/12-bit 4:2:0 HDR，并与同 PTS 软件首帧逐样本核对；失败沿用既有 decode 阶段的软件回退。
 
-## 后续接入顺序
+UI 和 Agent 的 `set_review_color_output` 都使用 `session.setColorOutput`。改变目标或参数暂停播放，重新准备相同位置；保留媒体 ID、标注、偏移，失败恢复原条件与画面。模式、解码偏好和输出设置本地保存；工作区/review 使用 `comparison.version=2` / `voidplayer-color-v2`，保存完整预览参数、HDR 白与请求目标。旧 version 1 SDR 契约恢复固定默认 SDR 条件；未知契约拒绝。
 
-1. 上游 core 交付 HDR 原始平面；核对源标签、实际资源、位深和布局，以及可用静态 HDR 元数据。保持既有失败阶段和帧关闭契约。
-2. 在 presenter 的 CPU/WebGL/WebGPU 执行器中安装同一预览策略，首帧/播放/seek/按需截图共用。另核验硬件高位深读回；无法核验时使用软件路径。
-3. 通过 session 为 UI/Agent 提供同一设置行为；将新呈现契约及所有映射参数保存到工作区和 review 的比较条件，兼容旧 `voidplayer-sdr-v1`，未知契约拒绝。
-4. 完成真实 PQ/HLG 片源、双轨混比、SDR 回归、截图/缩略图、生命周期和播放 benchmark 验收，再开放自有模式的 HDR→SDR 预览。
-5. 独立增加 HDR 显示目标：浮点画布、正确输出色彩编码和 extended 输出；明确 SDR 白与能力降级，实机验证系统与 HDR 屏幕。浏览器托管 HDR 单独验证转换归属，禁止二次 tone mapping。
-
-首轮不实现 Dolby Vision/HDR10+ 动态元数据。浏览器 API 初始化成功、浮点缓冲或普通截图均不能证明物理 HDR 显示已通过验收。
+每轨 `presentation` 报告 requestedTarget、actualTarget、captureTarget、executor、contract。解码 `output` 独立保存资源描述，源 `color` 标签保持不变。actualTarget=hdr 证明选择了浮点扩展画布契约，不能证明物理屏幕已测得亮度。
 
 ## 验证
 
-`npm run test:hdr:color` 执行标准亮度锚点、HLG 彩色 OOTF、单调灰阶、亮度/色域约束、原始平面精度及标签准入，以及 Chromium WebGL/WebGPU、WebKit WebGL 对照。Chromium WebGPU 使用有窗口浏览器；缺少 GPU 必须失败，不把跳过报告为通过。WebGPU 也可显式在 WebKit 上测：`node scripts/check-hdr-color-browser.mjs webkit --require-webgpu`。
+- `npm run test:hdr:color`：标准亮度锚点、HLG 彩色 OOTF、单调灰阶、色域/亮度约束、原始平面精度和标签准入；Chromium WebGL/WebGPU、WebKit WebGL 每个浏览器 794 个向量 × 3 组策略。SDR 最大误差预算为 1 个 8-bit 码值，显示光浮点相对误差预算 0.001。
+- 扩展画布测试模拟 `dynamic-range: high`，读回浮点高亮 >1，验证普通截图重新执行同一 SDR 策略；原生纹理夹断仅作为诊断证据，未开放产品 HDR 路径。缺少 WebGPU 的显式 GPU 测试必须失败。
+- `npm run test:hdr:browser`：生成真实 10-bit PQ/HLG HEVC，验证本地/Range、seek/逐帧/尾帧、峰值修改/恢复、混合 SDR、播放、v2 工作区还原与浏览器模式降级，登记为 ci-playback 必跑用例。
+- `npm run test:presentation:browser`：包含 24 个 HDR 原始布局组合（别名 × 10/12/16-bit × planar/semiplanar），与 CPU 对照，同时覆盖原有 SDR、裁剪、旋转、采样与原生 HDR 兼容路径。
+- 上游 `scripts/test-hdr-planes.mjs` 在单/多线程 core 对 PQ/HLG 首帧原始平面逐字节核对独立 FFmpeg，并检查重复 seek 的资源标签与 ABI；应用回归另验 seek 后的图片身份。
 
-每个浏览器覆盖 794 个信号向量和 3 组显式策略；GLSL/WGSL 的最终 SDR 结果对 CPU 参考预算最多 1 个 8-bit 码值。WebGPU 另读回浮点显示光，绝对误差除以 `max(1, expectedNits)` 不超过 0.001。标准锚点由 Node 测试单独核验。该测试只证明内核数值，不证明真实片源解码、完整播放或 HDR 显示。
+Dolby Vision/HDR10+ 动态元数据、母版静态元数据自动决定峰值、HDR 图片导出与物理显示校准尚未实现。浮点读回和普通截图无法代替真实 HDR 屏幕验收；Windows 原设备的最终颜色/性能应单独验证。
+
+本轮 macOS 有窗口 WebKit 的 PQ/HLG 小片源及混合双轨共 6 轮、1080p HLG 单轨/混合 SDR 共 4 轮达到原有阈值；1080p HLG 约 29.7–29.9 fps，混合 H264 约 57–58 fps。浏览器色彩的 SDR 基准有负面结果；初次旧版对照通过，后续完全旧代码也出现同类失败，当前视频/图形负载使这组测试无法建立稳定代码归因。保留通过与失败的[聚合证据](evidence/hdr-support-macos.json)，不宣称所有场景或物理显示验收通过。

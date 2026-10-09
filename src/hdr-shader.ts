@@ -1,7 +1,7 @@
-/** Experimental shader helpers, matching hdr-color.ts. Inputs are nonlinear
+/** Shared playback shader helpers, matching hdr-color.ts. Inputs are nonlinear
  * BT.2020 RGB, transfer=1 (PQ) or 2 (HLG), and policy=(sourcePeakNits,
  * exposureWhiteNits, hlgDisplayPeakNits, hlgSystemGamma). Output is SDR sRGB.
- * These are deliberately not installed in either production color pipeline. */
+ * WGSL additionally supplies extended Display-P3 output for HDR canvases. */
 export const hdrPreviewGlsl = `
 float hdrPq(float signal) {
   float n=pow(clamp(signal,0.0,1.0),32.0/2523.0);
@@ -67,5 +67,20 @@ fn hdrPreview(rgb:vec3f,transfer:f32,policy:vec4f)->vec3f {
   let chroma=min(hdrChromaBound(linear.r,mapped),min(hdrChromaBound(linear.g,mapped),hdrChromaBound(linear.b,mapped)));
   let v=clamp(vec3f(mapped)+(linear-vec3f(mapped))*chroma,vec3f(0),vec3f(1));
   return select(12.92*v,1.055*pow(v,vec3f(1.0/2.4))-0.055,v>vec3f(0.0031308));
+}
+fn hdrEncodeExtended(v:vec3f)->vec3f {
+  let c=max(v,vec3f(0));
+  return select(12.92*c,1.055*pow(c,vec3f(1.0/2.4))-0.055,c>vec3f(0.0031308));
+}
+// Extended Display-P3 code values; no SDR shoulder or [0,1] highlight clamp.
+// Negative linear P3 channels are clipped at the chosen output gamut boundary.
+fn hdrOutputP3(rgb:vec3f,transfer:f32,policy:vec4f,whiteNits:f32)->vec3f {
+  let c=hdrDisplayNits(rgb,transfer,policy)/whiteNits;
+  return hdrEncodeExtended(vec3f(dot(c,vec3f(1.343578252,-0.282179671,-0.061398582)),dot(c,vec3f(-0.065297452,1.075787916,-0.010490464)),dot(c,vec3f(0.002821787,-0.019598495,1.016776708))));
+}
+// SDR reference code values keep their viewing convention and common white.
+fn sdrOutputP3(rgb:vec3f)->vec3f {
+  let c=select(rgb/12.92,pow((max(rgb,vec3f(0))+0.055)/1.055,vec3f(2.4)),rgb>vec3f(0.04045));
+  return hdrEncodeExtended(vec3f(dot(c,vec3f(0.822461969,0.177538031,0)),dot(c,vec3f(0.033194199,0.966805801,0)),dot(c,vec3f(0.017082631,0.072397440,0.910519929))));
 }
 `;

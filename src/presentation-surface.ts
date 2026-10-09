@@ -14,8 +14,9 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
   stage.prepend(canvas);
   const gl = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false, antialias: false, preserveDrawingBuffer: true });
   const ctx = gl ? null : canvas.getContext('2d');
-  let useGl=!!gl;
+  let useGl=!!gl,disposed=false;
   canvas.addEventListener('webglcontextlost', () => {
+    if(disposed)return;
     useGl=false;canvas.hidden=true;source.classList.remove('frame-source');
   });
   let yuv: ReturnType<typeof createYuvSurface> | null = null;
@@ -116,6 +117,6 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
       return source;
     },
     geometry(value: PresentationGeometry | null) { if (JSON.stringify(geometry) === JSON.stringify(value)) return; geometry = value; canvas.hidden = !value || (!!gl && !useGl); draw(); },
-    dispose() { if (gl) { yuv?.dispose(); gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program); gl.getExtension('WEBGL_lose_context')?.loseContext(); } canvas.remove(); source.classList.remove('frame-source'); },
+    dispose() { if(disposed)return;disposed=true; if (gl) { yuv?.dispose(); gl.deleteTexture(texture); gl.deleteBuffer(buffer); gl.deleteProgram(program); gl.getExtension('WEBGL_lose_context')?.loseContext(); } canvas.remove(); source.classList.remove('frame-source'); },
   };
 }

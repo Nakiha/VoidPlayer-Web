@@ -1,0 +1,1898 @@
+{
+  "schema": "voidplayer-hdr-validation",
+  "version": 1,
+  "platform": "macOS ARM64",
+  "browser": "Playwright WebKit 26.6, visible desktop",
+  "coreRevision": "f9a41c7baf7031a65279b14a55803380f90128f4",
+  "limits": "Unchanged application playback thresholds. Raw negative reports remain negative.",
+  "interpretation": [
+    "PQ/HLG synthetic playback and 1080p HLG/SDR mixed playback passed 10 visible runs.",
+    "The first unchanged-source SDR baseline passed, but a later identical original-source control failed under concurrent video/graphics activity. Slow SDR runs cannot establish a repeatable code regression or a complete performance certification.",
+    "GPU float readback with simulated display capability is not physical HDR display calibration."
+  ],
+  "results": [
+    {
+      "group": "hdr-small-visible",
+      "scenario": "pq-solo",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1023.46,
+        "mediaUs": 1023420,
+        "waitingMs": 2.646327601496523e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9999609168897661,
+        "maxFrameLagUs": 33160,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.31233267543431,
+            "maxGapMs": 51.66000000000008,
+            "p95GapMs": 45.680000000000064
+          }
+        }
+      },
+      "pauseMs": 1.7000000000000455,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-small-visible",
+      "scenario": "pq-solo",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1016.8800000000001,
+        "mediaUs": 1016880,
+        "waitingMs": 4.888978111239339e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9999999999999999,
+        "maxFrameLagUs": 33320,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.502006136417272,
+            "maxGapMs": 50.539999999999964,
+            "p95GapMs": 50.2800000000002
+          }
+        }
+      },
+      "pauseMs": 1.3600000000001273,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-small-visible",
+      "scenario": "hlg-solo",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1024.76,
+        "mediaUs": 1024740,
+        "waitingMs": 1.908695423935569e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9999804832350989,
+        "maxFrameLagUs": 25820,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.275147351575004,
+            "maxGapMs": 38.58000000000004,
+            "p95GapMs": 36.83999999999992
+          }
+        }
+      },
+      "pauseMs": 1.67999999999995,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-small-visible",
+      "scenario": "hlg-solo",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1028.2799999999997,
+        "mediaUs": 1028240,
+        "waitingMs": 5.2444715237243145e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.99996110008947,
+        "maxFrameLagUs": 33233,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.174932897654344,
+            "maxGapMs": 50.09999999999991,
+            "p95GapMs": 49.2199999999998
+          }
+        }
+      },
+      "pauseMs": 1.9200000000000728,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-small-visible",
+      "scenario": "hdr+sdr",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1022.3199999999999,
+        "mediaUs": 1022260,
+        "waitingMs": 2.3842039453825237e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 55296,
+            "peakFrames": 4,
+            "peakBytes": 55296,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.999941309961656,
+        "maxFrameLagUs": 33327,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.345019172079194,
+            "maxGapMs": 45.01999999999998,
+            "p95GapMs": 44.659999999999854
+          },
+          "B": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.345019172079194,
+            "maxGapMs": 45,
+            "p95GapMs": 44.700000000000045
+          }
+        }
+      },
+      "pauseMs": 1.6399999999999864,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-small-visible",
+      "scenario": "hdr+sdr",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 1024.7799999999997,
+        "mediaUs": 1022520,
+        "waitingMs": 2.2000000000049735,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 110592,
+            "peakFrames": 4,
+            "peakBytes": 110592,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 55296,
+            "peakFrames": 4,
+            "peakBytes": 55296,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9977946486075062,
+        "maxFrameLagUs": 31740,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.274576006557513,
+            "maxGapMs": 44.840000000000146,
+            "p95GapMs": 42.61999999999989
+          },
+          "B": {
+            "drawn": 30,
+            "dropped": 0,
+            "fps": 29.274576006557513,
+            "maxGapMs": 44.820000000000164,
+            "p95GapMs": 42.64000000000033
+          }
+        }
+      },
+      "pauseMs": 1.7199999999998,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-1080-visible",
+      "scenario": "hlg-1080p",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2012.8200000000002,
+        "mediaUs": 2012800,
+        "waitingMs": 7.061684570430771e-12,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 24883200,
+            "peakFrames": 4,
+            "peakBytes": 24883200,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9999900636917358,
+        "maxFrameLagUs": 33191,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 60,
+            "dropped": 0,
+            "fps": 29.80892479208275,
+            "maxGapMs": 48.92000000000007,
+            "p95GapMs": 44.180000000000064
+          }
+        }
+      },
+      "pauseMs": 1.259999999999991,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-1080-visible",
+      "scenario": "hlg-1080p",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2007.0199999999995,
+        "mediaUs": 2002980,
+        "waitingMs": 3.1800000000198567,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 24883200,
+            "peakFrames": 4,
+            "peakBytes": 24883200,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9979870654004447,
+        "maxFrameLagUs": 32951,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 60,
+            "dropped": 0,
+            "fps": 29.895068310231096,
+            "maxGapMs": 49.30000000000018,
+            "p95GapMs": 43.48000000000047
+          }
+        }
+      },
+      "pauseMs": 1.7200000000002547,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-1080-visible",
+      "scenario": "hlg-1080p+sdr",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2018,
+        "mediaUs": 2015040,
+        "waitingMs": 2.520000000008092,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 24883200,
+            "peakFrames": 4,
+            "peakBytes": 24883200,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9985332011892963,
+        "maxFrameLagUs": 32931,
+        "maxFrameSkewUs": 19522,
+        "tracks": {
+          "B": {
+            "drawn": 117,
+            "dropped": 3,
+            "fps": 57.97819623389495,
+            "maxGapMs": 31.639999999999873,
+            "p95GapMs": 26.179999999999836
+          },
+          "A": {
+            "drawn": 60,
+            "dropped": 0,
+            "fps": 29.73240832507433,
+            "maxGapMs": 51.440000000000055,
+            "p95GapMs": 46.059999999999945
+          }
+        }
+      },
+      "pauseMs": 1.7999999999999545,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "hdr-1080-visible",
+      "scenario": "hlg-1080p+sdr",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2034.7400000000007,
+        "mediaUs": 2031560,
+        "waitingMs": 2.2200000000196676,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 24883200,
+            "peakFrames": 4,
+            "peakBytes": 24883200,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9984371467607651,
+        "maxFrameLagUs": 33191,
+        "maxFrameSkewUs": 19522,
+        "tracks": {
+          "A": {
+            "drawn": 61,
+            "dropped": 0,
+            "fps": 29.97926024946675,
+            "maxGapMs": 52.900000000000546,
+            "p95GapMs": 43.57999999999993
+          },
+          "B": {
+            "drawn": 116,
+            "dropped": 5,
+            "fps": 57.009740802264645,
+            "maxGapMs": 36.07999999999993,
+            "p95GapMs": 26.599999999999454
+          }
+        }
+      },
+      "pauseMs": 1.319999999999709,
+      "staleAfterPause": false,
+      "sourceDigest": "9a46703b18625a44c6f21ffa7a0a1f59176e1741a2e14c65fccd6c9de8e6beea",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-hdr-preview"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "common-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "hevc-4k-solo",
+      "repeat": 1,
+      "passed": false,
+      "failures": [],
+      "operationError": true,
+      "measurements": null,
+      "pauseMs": null,
+      "staleAfterPause": null,
+      "sourceDigest": null,
+      "coreDigests": null,
+      "decoders": []
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "vvc-wasm-solo",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2014.04,
+        "mediaUs": 1016667,
+        "waitingMs": 993.1530000000004,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.5047898750769597,
+        "maxFrameLagUs": 16240,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 24,
+            "dropped": 37,
+            "fps": 11.916347242358643,
+            "maxGapMs": 179.85999999999967,
+            "p95GapMs": 134.5999999999999
+          }
+        }
+      },
+      "pauseMs": 11.340000000000146,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "vvc-wasm-solo",
+      "repeat": 2,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2107.34,
+        "mediaUs": 1050000,
+        "waitingMs": 1057.3000000000018,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 0,
+            "bytes": 0,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.498258468021297,
+        "maxFrameLagUs": 15354,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 22,
+            "dropped": 41,
+            "fps": 10.439701234731936,
+            "maxGapMs": 242.39999999999964,
+            "p95GapMs": 138.63999999999942
+          }
+        }
+      },
+      "pauseMs": 3.600000000000364,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "vvc+hevc-4k",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2099.1,
+        "mediaUs": 833333,
+        "waitingMs": 1262.947000000001,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 49766400,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.39699537897194037,
+        "maxFrameLagUs": 16660,
+        "maxFrameSkewUs": 16188,
+        "tracks": {
+          "A": {
+            "drawn": 31,
+            "dropped": 19,
+            "fps": 14.768234005049784,
+            "maxGapMs": 134.23999999999978,
+            "p95GapMs": 129.19999999999982
+          },
+          "B": {
+            "drawn": 30,
+            "dropped": 19,
+            "fps": 14.291839359725598,
+            "maxGapMs": 133.34000000000015,
+            "p95GapMs": 131.5599999999995
+          }
+        }
+      },
+      "pauseMs": 8.5,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "vvc+hevc-4k",
+      "repeat": 2,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2135.6600000000017,
+        "mediaUs": 916667,
+        "waitingMs": 1218.7730000000038,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 0,
+            "bytes": 0,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 3,
+            "bytes": 37324800,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.4292195386906152,
+        "maxFrameLagUs": 17197,
+        "maxFrameSkewUs": 17197,
+        "tracks": {
+          "A": {
+            "drawn": 23,
+            "dropped": 32,
+            "fps": 10.769504509144706,
+            "maxGapMs": 210.73999999999978,
+            "p95GapMs": 144.0599999999995
+          },
+          "B": {
+            "drawn": 24,
+            "dropped": 30,
+            "fps": 11.237743835629258,
+            "maxGapMs": 212.3799999999992,
+            "p95GapMs": 154.15999999999985
+          }
+        }
+      },
+      "pauseMs": 8.959999999999127,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2097.5600000000004,
+        "mediaUs": 866666,
+        "waitingMs": 1228.654,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 3,
+            "bytes": 4147200,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.41317816892007847,
+        "maxFrameLagUs": 16656,
+        "maxFrameSkewUs": 16656,
+        "tracks": {
+          "A": {
+            "drawn": 25,
+            "dropped": 27,
+            "fps": 11.918610194702413,
+            "maxGapMs": 134.17999999999984,
+            "p95GapMs": 132.82000000000016
+          },
+          "B": {
+            "drawn": 21,
+            "dropped": 31,
+            "fps": 10.011632563550029,
+            "maxGapMs": 145.25999999999976,
+            "p95GapMs": 134.34000000000015
+          }
+        }
+      },
+      "pauseMs": 5.880000000000109,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-initial",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 2,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2096.1400000000012,
+        "mediaUs": 1083322,
+        "waitingMs": 1012.7780000000009,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 1382400,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 0,
+            "bytes": 0,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.5168175789785031,
+        "maxFrameLagUs": 16656,
+        "maxFrameSkewUs": 16656,
+        "tracks": {
+          "A": {
+            "drawn": 26,
+            "dropped": 38,
+            "fps": 12.403751657809108,
+            "maxGapMs": 143.95999999999913,
+            "p95GapMs": 128.77999999999975
+          },
+          "B": {
+            "drawn": 26,
+            "dropped": 39,
+            "fps": 12.403751657809108,
+            "maxGapMs": 144.3199999999997,
+            "p95GapMs": 128.82000000000062
+          }
+        }
+      },
+      "pauseMs": 8.759999999999309,
+      "staleAfterPause": false,
+      "sourceDigest": "608226cbe26d8a8b7f5029d7aa6832d8855fb378dc5632b7a1ad6f8e95e57d84",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-isolated",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2056.7400000000002,
+        "mediaUs": 1033322,
+        "waitingMs": 1021.8780000000013,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 5529600,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.5024076937289107,
+        "maxFrameLagUs": 16656,
+        "maxFrameSkewUs": 16656,
+        "tracks": {
+          "A": {
+            "drawn": 26,
+            "dropped": 36,
+            "fps": 12.641364489434736,
+            "maxGapMs": 132.15999999999985,
+            "p95GapMs": 128.7599999999993
+          },
+          "B": {
+            "drawn": 27,
+            "dropped": 35,
+            "fps": 13.127570815951456,
+            "maxGapMs": 131.60000000000036,
+            "p95GapMs": 128.65999999999985
+          }
+        }
+      },
+      "pauseMs": 10.800000000000182,
+      "staleAfterPause": false,
+      "sourceDigest": "95294a30828f1189090c40552e05d26755cf57cf165f0dd5cd694dbb88175a0f",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-isolated",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 2,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall",
+        "B:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2062.96,
+        "mediaUs": 933333,
+        "waitingMs": 1128.1270000000052,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 2,
+            "bytes": 2764800,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 3,
+            "bytes": 9331200,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.45242418660565403,
+        "maxFrameLagUs": 16656,
+        "maxFrameSkewUs": 16656,
+        "tracks": {
+          "A": {
+            "drawn": 25,
+            "dropped": 31,
+            "fps": 12.118509326404777,
+            "maxGapMs": 345.22000000000025,
+            "p95GapMs": 137.60000000000036
+          },
+          "B": {
+            "drawn": 22,
+            "dropped": 34,
+            "fps": 10.664288207236204,
+            "maxGapMs": 345.4800000000005,
+            "p95GapMs": 141.11999999999898
+          }
+        }
+      },
+      "pauseMs": 7.700000000000728,
+      "staleAfterPause": false,
+      "sourceDigest": "95294a30828f1189090c40552e05d26755cf57cf165f0dd5cd694dbb88175a0f",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-yuv",
+            "contract": "profile-yuv-sdr"
+          }
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-isolated",
+      "scenario": "hevc-4k-solo",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2121.76,
+        "mediaUs": 982407,
+        "waitingMs": 1139.3130000000012,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 0,
+            "bytes": 0,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.4630151383756881,
+        "maxFrameLagUs": 16800,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 20,
+            "dropped": 39,
+            "fps": 9.426136792097125,
+            "maxGapMs": 132.14000000000033,
+            "p95GapMs": 126.76000000000022
+          }
+        }
+      },
+      "pauseMs": 4.899999999999864,
+      "staleAfterPause": false,
+      "sourceDigest": "95294a30828f1189090c40552e05d26755cf57cf165f0dd5cd694dbb88175a0f",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-isolated",
+      "scenario": "hevc-4k-solo",
+      "repeat": 2,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2059.08,
+        "mediaUs": 1137588,
+        "waitingMs": 920.7320000000011,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 1,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.5524739203916312,
+        "maxFrameLagUs": 15208,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 20,
+            "dropped": 48,
+            "fps": 9.71307574256464,
+            "maxGapMs": 142.15999999999985,
+            "p95GapMs": 128.26000000000022
+          }
+        }
+      },
+      "pauseMs": 3.9200000000000728,
+      "staleAfterPause": false,
+      "sourceDigest": "95294a30828f1189090c40552e05d26755cf57cf165f0dd5cd694dbb88175a0f",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "webcodecs",
+          "presentation": {
+            "requestedTarget": "sdr",
+            "actualTarget": "sdr",
+            "captureTarget": "sdr",
+            "executor": "webgpu-external",
+            "contract": "browser-managed"
+          }
+        }
+      ]
+    },
+    {
+      "group": "sdr-baseline-first",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2006.54,
+        "mediaUs": 2002280,
+        "waitingMs": 3.9200000000074877,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 5529600,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9978769423983573,
+        "maxFrameLagUs": 16298,
+        "maxFrameSkewUs": 11,
+        "tracks": {
+          "A": {
+            "drawn": 108,
+            "dropped": 12,
+            "fps": 53.823995534601856,
+            "maxGapMs": 34.27999999999997,
+            "p95GapMs": 33.01999999999998
+          },
+          "B": {
+            "drawn": 108,
+            "dropped": 12,
+            "fps": 53.823995534601856,
+            "maxGapMs": 34.25999999999999,
+            "p95GapMs": 33.039999999999964
+          }
+        }
+      },
+      "pauseMs": 1.5599999999999454,
+      "staleAfterPause": false,
+      "sourceDigest": "259cf87ccdb00d53caf151e2468dc2ba9ca3286c8adc4c14d2be1b2729dde2d6",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": null
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": null
+        }
+      ]
+    },
+    {
+      "group": "sdr-baseline-first",
+      "scenario": "mpeg2ts+h264",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2027.52,
+        "mediaUs": 2024500,
+        "waitingMs": 2.620000000020971,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 5529600,
+            "peakFrames": 4,
+            "peakBytes": 5529600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          },
+          "B": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 12441600,
+            "peakFrames": 4,
+            "peakBytes": 12441600,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9985104955808081,
+        "maxFrameLagUs": 16324,
+        "maxFrameSkewUs": 11,
+        "tracks": {
+          "A": {
+            "drawn": 115,
+            "dropped": 6,
+            "fps": 56.719539141414145,
+            "maxGapMs": 38.559999999999945,
+            "p95GapMs": 29.600000000000364
+          },
+          "B": {
+            "drawn": 115,
+            "dropped": 6,
+            "fps": 56.719539141414145,
+            "maxGapMs": 38.63999999999987,
+            "p95GapMs": 29.61999999999989
+          }
+        }
+      },
+      "pauseMs": 1.5,
+      "staleAfterPause": false,
+      "sourceDigest": "259cf87ccdb00d53caf151e2468dc2ba9ca3286c8adc4c14d2be1b2729dde2d6",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "ffmpeg-wasm",
+          "presentation": null
+        },
+        {
+          "slot": "B",
+          "decoder": "webcodecs",
+          "presentation": null
+        }
+      ]
+    },
+    {
+      "group": "sdr-baseline-first",
+      "scenario": "hevc-4k-solo",
+      "repeat": 1,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2001.1,
+        "mediaUs": 1998560,
+        "waitingMs": 2.3400000000065164,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 49766400,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9987306981160362,
+        "maxFrameLagUs": 21737,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 109,
+            "dropped": 11,
+            "fps": 54.47004147718755,
+            "maxGapMs": 35.88000000000011,
+            "p95GapMs": 32.200000000000045
+          }
+        }
+      },
+      "pauseMs": 1.240000000000009,
+      "staleAfterPause": false,
+      "sourceDigest": "259cf87ccdb00d53caf151e2468dc2ba9ca3286c8adc4c14d2be1b2729dde2d6",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "webcodecs",
+          "presentation": null
+        }
+      ]
+    },
+    {
+      "group": "sdr-baseline-first",
+      "scenario": "hevc-4k-solo",
+      "repeat": 2,
+      "passed": true,
+      "failures": [],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2010.0799999999995,
+        "mediaUs": 2008100,
+        "waitingMs": 1.800000000015185,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 4,
+            "bytes": 49766400,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.9990149645785245,
+        "maxFrameLagUs": 18412,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 112,
+            "dropped": 8,
+            "fps": 55.719175356204744,
+            "maxGapMs": 34.74000000000069,
+            "p95GapMs": 32.52000000000044
+          }
+        }
+      },
+      "pauseMs": 0.9800000000000182,
+      "staleAfterPause": false,
+      "sourceDigest": "259cf87ccdb00d53caf151e2468dc2ba9ca3286c8adc4c14d2be1b2729dde2d6",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "webcodecs",
+          "presentation": null
+        }
+      ]
+    },
+    {
+      "group": "sdr-original-control-later",
+      "scenario": "hevc-4k-solo",
+      "repeat": 1,
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "operationError": false,
+      "measurements": {
+        "wallMs": 2044.06,
+        "mediaUs": 937148,
+        "waitingMs": 1105.6920000000005,
+        "buffers": {
+          "A": {
+            "ended": false,
+            "suspended": false,
+            "stopped": false,
+            "error": null,
+            "frames": 3,
+            "bytes": 37324800,
+            "peakFrames": 4,
+            "peakBytes": 49766400,
+            "capacity": 4,
+            "budgetBytes": 67108864,
+            "effectiveBudgetBytes": 67108864
+          }
+        },
+        "speed": 0.4584738217077777,
+        "maxFrameLagUs": 15340,
+        "maxFrameSkewUs": 0,
+        "tracks": {
+          "A": {
+            "drawn": 20,
+            "dropped": 36,
+            "fps": 9.784448597399294,
+            "maxGapMs": 131.32000000000016,
+            "p95GapMs": 130.94000000000005
+          }
+        }
+      },
+      "pauseMs": 4.039999999999964,
+      "staleAfterPause": false,
+      "sourceDigest": "8c306ea33667ab2af845ad3cd4f913473192101251b7c7b25a753434ead8f3cd",
+      "coreDigests": {
+        "voidplayer-core.wasm": "f550aa61b1054180d78adb9caa624f05159ec742489c2cdeebb349ebf92881a4",
+        "voidplayer-core-mt.wasm": "91af02ab40c7048b4d0dafb57ddb4e9d0aba6e6e1253a6bdf4fcac2c1bf663fb"
+      },
+      "decoders": [
+        {
+          "slot": "A",
+          "decoder": "webcodecs",
+          "presentation": null
+        }
+      ]
+    }
+  ]
+}

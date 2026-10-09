@@ -79,7 +79,8 @@
     "test:manifest": "node scripts/run-tests.mjs --check",
     "i18n:extract": "node scripts/i18n.mjs extract",
     "i18n:check": "node scripts/i18n.mjs check",
-    "i18n:compile": "node scripts/i18n.mjs compile"
+    "i18n:compile": "node scripts/i18n.mjs compile",
+    "test:hdr:browser": "npm run build && node scripts/check-hdr-playback-browser.mjs chromium && node scripts/check-hdr-playback-browser.mjs webkit"
   },
   "dependencies": {
     "@messageformat/runtime": "3.0.2",

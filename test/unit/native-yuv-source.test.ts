@@ -1,3 +1,4 @@
+import { yuvFixture } from '../helpers/yuv-fixture.ts';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {nativeYuvSource,verifyNativeWitness} from '../../src/native-yuv-source.ts';
@@ -79,5 +80,18 @@ test('witness rejects visible chroma changes for odd crops, both crop edges',()=
    assert.throws(()=>verifyNativeWitness(native,reference),/可见样本/);native.pixels![at]=0;
   }
   assert.deepEqual(yuvToRgba(native.description,native.pixels!),yuvToRgba(reference.description,reference.pixels!));
+ }
+});
+
+
+test('HDR native witness accepts exact 10/12-bit BT.2100 planes and rejects precision loss',()=>{
+ for(const depth of [10,12])for(const transfer of ['pq','hlg']) {
+  const frames=[yuvFixture(depth,false,false,'bt2020-ncl',4,2),yuvFixture(depth,true,false,'bt2020-ncl',4,2)].map(f=>{
+    f.description.color.transfer=transfer;
+    return {...f,ptsUs:0,sourcePtsUs:0,durationUs:1,width:4,height:2,byteSize:f.pixels.byteLength,kind:'yuv' as const,close(){}};
+  });
+  verifyNativeWitness(frames[0],frames[1]);
+  frames[1].pixels[0]^=1;assert.throws(()=>verifyNativeWitness(frames[0],frames[1]),/核对/);frames[1].pixels[0]^=1;
+  frames[1].description.yuv!.bitDepth=8;assert.throws(()=>verifyNativeWitness(frames[0],frames[1]),/核对/);
  }
 });

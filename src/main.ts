@@ -78,6 +78,8 @@ $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identi
 const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
+const {setColorOutput,hdrDisplayAvailable}=await import('./color-output.ts');
+try{const saved=localStorage.getItem('voidplayer.color-output');if(saved)setColorOutput(JSON.parse(saved));}catch{}
 try{const saved=localStorage.getItem('voidplayer.reference-decode');if(saved)setReferenceDecode(JSON.parse(saved));}catch{}
 let savedColorMode:'reference'|'browser'='browser';
 try{if(localStorage.getItem('voidplayer.color-mode')==='reference')savedColorMode='reference';}catch{}
@@ -86,12 +88,17 @@ if(!new URLSearchParams(location.search).has('colorPipeline'))setColorMode(saved
 // GPU warmup runs after first paint: early frames use the canvas path, surface
 // creation failures already fall back inside initializeGpuPresentation, and
 // color policy (set above) is only read lazily at decode time.
-void initializeGpuPresentation(Object.values(canvases)).catch(error => {
+const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error => {
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
+const outputButtons=[...document.querySelectorAll<HTMLButtonElement>('[data-color-target]')];
+const peakMenu=installChoiceMenu('hdr-source-peak',()=>[1000,2000,4000,10000].map(n=>({value:String(n),label:`${n} nits`})),value=>{
+  const output=session.getState().colorOutput,peak=Number(value);
+  void act(()=>session.setColorOutput({...output,preview:{...output.preview,sourcePeakNits:peak,hlgDisplayPeakNits:peak,hlgSystemGamma:1.2+.42*Math.log10(peak/1000)}})).finally(renderColorMode);
+});
 const decoderButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-reference-decoder]')];
 const depthMenu = installChoiceMenu('hardware-buffer-depth', () => [1,2,4,8].map(n=>({value:String(n),label:tr(msg("player.frames", "{count, plural, other {# 帧}}"), { count: n })})), value=>{
   void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,depth:Number(value) as 1|2|4|8})).finally(renderColorMode);
@@ -106,12 +113,22 @@ const renderColorMode=()=>{
   $('hardware-depth-row').inert=decoder!=='hardware';
   depthMenu.sync(String(state.referenceDecode.depth),tr(msg("player.frames", "{count, plural, other {# 帧}}"), { count: state.referenceDecode.depth }),!state.busy);
   $('color-mode').setAttribute('aria-busy',String(state.busy));
+  for(const button of outputButtons){button.setAttribute('aria-pressed',String(button.dataset.colorTarget===state.colorOutput.target));button.setAttribute('aria-disabled',String(state.busy));}
+  peakMenu.sync(String(state.colorOutput.preview.sourcePeakNits),`${state.colorOutput.preview.sourcePeakNits} nits`,!state.busy);
+  const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.every(track=>track.presentation?.actualTarget!=='hdr');
+  $('color-output-description').textContent=state.colorOutput.target==='hdr'&&mode==='browser'?tr(msg("colorOutput.browserPreview", "浏览器色彩使用 SDR 兼容预览；HDR 输出请选择自有色彩。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):state.colorOutput.target==='hdr'?tr(msg("colorOutput.hdrDescription", "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。")):tr(msg("colorOutput.sdrDescription", "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。"));
   const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
-    $('color-mode-description').textContent=mode==='browser'?tr(msg("player.softwareFallbackIsAnApproximationColorsMay", "软件回退仅近似匹配，颜色可能与原生帧不同。")):decoder==='hardware'?tr(msg("player.fallsBackToSoftwareIfFirstFrame", "首帧核对失败则改用软件解码；读回帧有额外开销。")):tr(msg("player.preservesOriginalFramePrecisionWithConsistentConversion", "保留原始帧精度，按统一规则转换；仅支持 SDR。"));
+    $('color-mode-description').textContent=mode==='browser'?tr(msg("player.softwareFallbackIsAnApproximationColorsMay", "软件回退仅近似匹配，颜色可能与原生帧不同。")):decoder==='hardware'?tr(msg("player.fallsBackToSoftwareIfFirstFrame", "首帧核对失败则改用软件解码；读回帧有额外开销。")):tr(msg("player.preservesOriginalFramePrecisionWithConsistentConversion", "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。"));
   }
 };
+for(const button of outputButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorOutput({...session.getState().colorOutput,target:button.dataset.colorTarget as 'sdr'|'hdr'})).finally(renderColorMode);};
+let pendingDisplayRefresh=false;
+const refreshDisplay=()=>{const state=session.getState();if(!pendingDisplayRefresh||state.busy||state.playing)return;pendingDisplayRefresh=false;queueMicrotask(()=>void act(()=>session.refreshColorOutput()).finally(renderColorMode));};
+matchMedia('(dynamic-range: high)').addEventListener('change',()=>{pendingDisplayRefresh=true;refreshDisplay();});
+session.subscribe(refreshDisplay);
+void gpuReady.then(()=>{const state=session.getState();if(hdrDisplayAvailable()&&state.colorMode==='reference'&&state.colorOutput.target==='hdr'&&state.tracks.some(track=>track.presentation?.executor!=='webgpu-yuv')){pendingDisplayRefresh=true;refreshDisplay();}});
 session.subscribe(renderColorMode);renderColorMode();
 for(const button of colorButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setColorMode(button.dataset.colorMode as 'reference'|'browser')).finally(renderColorMode);};
 for(const button of decoderButtons)button.onclick=()=>{if(session.getState().busy)return;void act(()=>session.setReferenceDecode({...session.getState().referenceDecode,decoder:button.dataset.referenceDecoder as 'hardware'|'software'})).finally(renderColorMode);};
@@ -273,7 +290,7 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
     else delete name.parentElement!.dataset.tooltip;
     // Source HDR metadata is not proof of the browser's final HDR output.
     const hdr = t?.color && isHdrTransfer(t.color.transfer);
-    const hdrTag = hdr ? (t.decoder === 'ffmpeg-wasm' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 兜底显示）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
+    const hdrTag = hdr ? (t.presentation?.actualTarget==='hdr' ? tr(msg("player.hdrDisplay", " · HDR 输出")) : t.presentation?.actualTarget==='sdr' ? tr(msg("player.hdrSourceSdrFallback", " · HDR 源（SDR 预览）")) : tr(msg("player.hdrSource", " · HDR 源"))) : '';
     $(`meta-${slot}`).textContent = t ? `${t.width} × ${t.height} · ${t.codec} · ${t.decoder === 'ffmpeg-wasm' ? tr(msg("player.wasmSoftwareDecoding", "WASM 软件解码")) : t.hardwareAcceleration === 'prefer-hardware' ? tr(msg("player.webcodecsPreferHardware", "WebCodecs · 硬件优先")) : tr(msg("player.webcodecsBrowserDecoding", "WebCodecs · 浏览器解码"))}${hdrTag}${t.syncState ? (t.syncState === 'index-wait' ? tr(msg("player.waitingForIndexFrameNotSynchronized", " · 等待索引，画面暂未同步")) : tr(msg("player.catchingUpToPlayback", " · 正在追赶播放位置"))) : ''}${t.indexState === 'building' ? ` · ${indexProgressLabel(t)}` : t.indexState === 'error' ? tr(msg("player.indexFailed", " · 索引失败")) : t.indexWarning ? tr(msg("player.incompleteTailPlayingCompletePortion", " · 尾部不完整，播放完整部分")) : ''}` : tr(msg("player.notLoaded", "尚未载入"));
     $(`pts-${slot}`).textContent = t?.frame ? formatTime(t.frame.ptsUs) : '—';
     $(`pts-${slot}`).title = t?.frame ? tr(msg("player.sourceTimestampSFrameDurationS", "源时间戳 {p0} µs · 帧时长 {p1} µs"), { p0: t.frame.sourcePtsUs, p1: t.frame.durationUs }) : '';

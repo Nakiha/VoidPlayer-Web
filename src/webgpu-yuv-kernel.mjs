@@ -1,8 +1,10 @@
 // Raw-plane kernel. Apple/CV compensation is available only through explicit
 // diagnostic modes, never inferred from a neutral startup probe.
+import { hdrPreviewWgsl } from './hdr-shader.ts';
 export const yuvKernel = `
 @group(0) @binding(0) var<storage,read> bytes:array<u32>;
-@group(0) @binding(1) var<uniform> p:array<vec4f,10>;
+@group(0) @binding(1) var<uniform> p:array<vec4f,12>;
+${hdrPreviewWgsl}
 fn byteAt(i:u32)->u32{return (bytes[i/4u]>>((i%4u)*8u))&255u;}
 fn codeAt(i:u32)->f32 {var v=byteAt(i);if(p[2].x>1){v=v|(byteAt(i+1u)<<8u);}return f32(v>>u32(p[2].y));}
 fn planeCode(c:u32,xy:vec2f)->f32{
@@ -40,7 +42,11 @@ fn pixelAt(xy0:vec2f)->vec3f {
  }
  let kr=p[6].z;let kb=p[6].w;let kg=1-kr-kb;
  var rgb=vec3f(y+2*(1-kr)*cr,y-2*kb*(1-kb)/kg*cb-2*kr*(1-kr)/kg*cr,y+2*(1-kb)*cb);
- if(p[7].x>0||p[0].z>0){
+ if(p[11].x>0.5){
+   if(p[11].y>0.5){return hdrOutputP3(rgb,p[11].x,p[10],p[11].z);}
+   rgb=hdrPreview(rgb,p[11].x,p[10]);
+ }
+ else if(p[7].x>0||p[0].z>0){
    var c=select(max(rgb,vec3f(0))/12.92,pow((max(rgb,vec3f(0))+0.055)/1.055,vec3f(2.4)),rgb>vec3f(0.04045));
    if(p[7].x>0){c=sign(rgb)*pow(abs(rgb),vec3f(p[7].x));}
    if(p[0].z==1){c=vec3f(dot(c,vec3f(0.93954206,0.05018136,0.01027658)),dot(c,vec3f(0.01777222,0.96579286,0.01643491)),dot(c,vec3f(-0.00162160,-0.00436975,1.00599135)));}
@@ -48,7 +54,9 @@ fn pixelAt(xy0:vec2f)->vec3f {
    else if(p[0].z==3){c=vec3f(dot(c,vec3f(1.660491,-0.587641,-0.072850)),dot(c,vec3f(-0.124550,1.132900,-0.008349)),dot(c,vec3f(-0.018151,-0.100579,1.118730)));}
    rgb=srgb(c);
  }
- return clamp(rgb,vec3f(0),vec3f(1));
+ rgb=clamp(rgb,vec3f(0),vec3f(1));
+ if(p[11].y>0.5){return sdrOutputP3(rgb);}
+ return rgb;
 }
 struct V{@builtin(position) pos:vec4f,@location(0) uv:vec2f}
 @vertex fn vs(@builtin(vertex_index)i:u32)->V{

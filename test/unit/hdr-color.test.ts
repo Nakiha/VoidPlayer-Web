@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HDR_PREVIEW_POLICY, hdrTransfer, pqToNits, hlgToScene, hdrToDisplayNits, hdrToSdrPreview, hdrYuvToRgba, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from '../../src/hdr-color.ts';
+import { HDR_PREVIEW_POLICY, hdrTransfer, pqToNits, hlgToScene, hdrToDisplayNits, hdrToDisplayP3, hdrToSdrPreview, hdrYuvToRgba, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from '../../src/hdr-color.ts';
 import { resolveYuvColor } from '../../src/yuv-color.ts';
 import { isHdrTransfer } from '../../src/presentation-color.ts';
 import { yuvFixture } from '../helpers/yuv-fixture.ts';
@@ -55,12 +55,12 @@ test('saturated BT.2020 colors compress chroma without independent channel clipp
   }
 });
 
-test('HDR admission requires actual tagged high-depth planes; production SDR admission stays closed', () => {
+test('HDR admission requires actual tagged high-depth planes; shared presentation admits tagged raw HDR', () => {
   const f = yuvFixture(10, false, false, 'bt2020-ncl');
   f.description.color.transfer = 'pq';
   const before = structuredClone(f.description);
   assert.equal(resolveHdrPreviewPlan(f.description).supported, true);
-  assert.equal(resolveYuvColor(f.description).supported, false);
+  assert.equal(resolveYuvColor(f.description).supported, true);
   for (const transfer of ['pq', 'smpte2084', 'hlg', 'arib-std-b67']) { assert.ok(hdrTransfer(transfer)); assert.equal(isHdrTransfer(transfer), true); }
   assert.equal(hdrTransfer('bt709'), null);
   for (const color of [{ ...f.description.color, transfer: null }, { ...f.description.color, primaries: null }, { ...f.description.color, matrix: 'bt709' }, { ...f.description.color, fullRange: null }]) {
@@ -104,4 +104,17 @@ test('10/12/16-bit PQ and HLG limited/full range endpoints retain black and whit
     const f = yuvFixture(depth, false, full, 'bt2020-ncl', 2, 1); f.description.color.transfer = transfer;
     assert.deepEqual([...hdrYuvToRgba(f.description, f.pixels)], [0, 0, 0, 255, 255, 255, 255, 255]);
   }
+});
+
+
+test('extended P3 output preserves PQ highlights and explicit reference white',()=>{
+  for(const nits of [100,203,1000,10000]) {
+    const signal=(()=>{const m1=2610/16384,m2=2523/32,p=(nits/10000)**m1;return ((3424/4096+2413/128*p)/(1+2392/128*p))**m2;})();
+    const channels=hdrToDisplayP3([signal,signal,signal],'pq',203);
+    const linear=(nits/203),encoded=linear<=.0031308?12.92*linear:1.055*linear**(1/2.4)-.055;
+    channels.forEach(c=>near(c,encoded,1e-5));
+    if(nits>203)assert.ok(channels.every(c=>c>1));
+  }
+  assert.deepEqual(hdrToDisplayP3([0,0,0],'pq'),[0,0,0]);
+  const white=hdrToDisplayP3([1,1,1],'hlg');assert.ok(white.every(c=>c>1));
 });

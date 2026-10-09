@@ -2997,7 +2997,7 @@
     "source": "检查结果",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:70"
+      "src/ui/color-flow.ts:73"
     ]
   },
   "colorFlow.colorConversion": {
@@ -3012,7 +3012,7 @@
     "source": "当前运行",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:66"
+      "src/ui/color-flow.ts:69"
     ]
   },
   "colorFlow.decode": {
@@ -3108,21 +3108,21 @@
     "source": "从头播放，检查后暂停。",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:68"
+      "src/ui/color-flow.ts:71"
     ]
   },
   "colorFlow.playbackPerformanceReportJson": {
     "source": "播放性能报告 JSON",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:70"
+      "src/ui/color-flow.ts:73"
     ]
   },
   "colorFlow.playbackSmoothness": {
     "source": "播放流畅度",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:68"
+      "src/ui/color-flow.ts:71"
     ]
   },
   "colorFlow.preferHardware": {
@@ -3167,7 +3167,7 @@
     "source": "开始检查",
     "params": {},
     "locations": [
-      "src/ui/color-flow.ts:68"
+      "src/ui/color-flow.ts:71"
     ]
   },
   "colorFlow.screen": {
@@ -3188,19 +3188,12 @@
     "source": "软件解码",
     "params": {},
     "locations": [
-      "src/main.ts:233",
+      "src/main.ts:250",
       "src/ui/color-flow.ts:18",
       "src/ui/color-flow.ts:22",
       "src/ui/color-flow.ts:40",
       "src/ui/color-flow.ts:44",
       "src/ui/workbench/tracks.ts:48"
-    ]
-  },
-  "colorFlow.unifiedSdrConversion": {
-    "source": "统一 SDR 转换",
-    "params": {},
-    "locations": [
-      "src/ui/color-flow.ts:55"
     ]
   },
   "colorFlow.upload": {
@@ -3231,6 +3224,56 @@
     "locations": [
       "src/ui/color-flow.ts:18",
       "src/ui/color-flow.ts:44"
+    ]
+  },
+  "colorOutput.assumedPeak": {
+    "source": "HDR 假定峰值",
+    "params": {},
+    "locations": [
+      "src/ui/color-flow.ts:65"
+    ]
+  },
+  "colorOutput.browserPreview": {
+    "source": "浏览器色彩使用 SDR 兼容预览；HDR 输出请选择自有色彩。",
+    "params": {},
+    "locations": [
+      "src/main.ts:119"
+    ]
+  },
+  "colorOutput.displayTarget": {
+    "source": "显示目标",
+    "params": {},
+    "locations": [
+      "src/ui/color-flow.ts:64",
+      "src/ui/color-flow.ts:64"
+    ]
+  },
+  "colorOutput.fallbackDescription": {
+    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留。",
+    "params": {},
+    "locations": [
+      "src/main.ts:119"
+    ]
+  },
+  "colorOutput.hdrDescription": {
+    "source": "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。",
+    "params": {},
+    "locations": [
+      "src/main.ts:119"
+    ]
+  },
+  "colorOutput.managedConversion": {
+    "source": "统一 SDR / HDR 转换",
+    "params": {},
+    "locations": [
+      "src/ui/color-flow.ts:55"
+    ]
+  },
+  "colorOutput.sdrDescription": {
+    "source": "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。",
+    "params": {},
+    "locations": [
+      "src/main.ts:119"
     ]
   },
   "connection.cantInstall": {
@@ -3596,7 +3639,7 @@
     ]
   },
   "error.referenceHdr": {
-    "source": "自有色彩目前仅支持 SDR。请切换为浏览器色彩后重试。",
+    "source": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。",
     "params": {},
     "locations": [
       "src/ui/diagnostic-message.ts:7"
@@ -4467,7 +4510,7 @@
     "params": {},
     "locations": [
       "src/main.ts:71",
-      "src/main.ts:550"
+      "src/main.ts:567"
     ]
   },
   "player.aBFrameStartDifferenceMs": {
@@ -4476,7 +4519,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:349"
+      "src/main.ts:366"
     ]
   },
   "player.actualSpeed": {
@@ -4485,28 +4528,28 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:324"
+      "src/main.ts:341"
     ]
   },
   "player.arrangeTracksHorizontally": {
     "source": "横向排列轨道",
     "params": {},
     "locations": [
-      "src/main.ts:251"
+      "src/main.ts:268"
     ]
   },
   "player.browserNativeDecoding": {
     "source": "浏览器原生解码",
     "params": {},
     "locations": [
-      "src/main.ts:233"
+      "src/main.ts:250"
     ]
   },
   "player.catchingUpToPlayback": {
     "source": " · 正在追赶播放位置",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.catchingUpToPlayback2": {
@@ -4520,35 +4563,35 @@
     "source": "测试被中断",
     "params": {},
     "locations": [
-      "src/main.ts:631"
+      "src/main.ts:648"
     ]
   },
   "player.checkingPlaybackPerformance": {
     "source": "正在检查播放性能…",
     "params": {},
     "locations": [
-      "src/main.ts:621"
+      "src/main.ts:638"
     ]
   },
   "player.comparisonVideo": {
     "source": "对比视频",
     "params": {},
     "locations": [
-      "src/main.ts:271"
+      "src/main.ts:288"
     ]
   },
   "player.decoding": {
     "source": "正在解码…",
     "params": {},
     "locations": [
-      "src/main.ts:323"
+      "src/main.ts:340"
     ]
   },
   "player.exitFullscreen": {
     "source": "退出全屏",
     "params": {},
     "locations": [
-      "src/main.ts:452"
+      "src/main.ts:469"
     ]
   },
   "player.failed": {
@@ -4557,44 +4600,44 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:632"
+      "src/main.ts:649"
     ]
   },
   "player.fallback": {
     "source": "（已回退）",
     "params": {},
     "locations": [
-      "src/main.ts:236"
+      "src/main.ts:253"
     ]
   },
   "player.fallsBackToSoftwareIfFirstFrame": {
     "source": "首帧核对失败则改用软件解码；读回帧有额外开销。",
     "params": {},
     "locations": [
-      "src/main.ts:112"
+      "src/main.ts:123"
     ]
   },
   "player.fileImportWasSupersededByANewer": {
     "source": "文件导入已被新的请求取代。",
     "params": {},
     "locations": [
-      "src/main.ts:369"
+      "src/main.ts:386"
     ]
   },
   "player.fillView": {
     "source": "填满视图",
     "params": {},
     "locations": [
-      "src/main.ts:205",
-      "src/main.ts:207",
-      "src/main.ts:296"
+      "src/main.ts:222",
+      "src/main.ts:224",
+      "src/main.ts:313"
     ]
   },
   "player.frameChangedAfterPausing": {
     "source": "暂停后画面改变",
     "params": {},
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:647"
     ]
   },
   "player.frames": {
@@ -4603,50 +4646,57 @@
       "count": "number"
     },
     "locations": [
-      "src/main.ts:96",
-      "src/main.ts:107"
+      "src/main.ts:103",
+      "src/main.ts:114"
     ]
   },
   "player.framesLagging": {
     "source": "画面落后",
     "params": {},
     "locations": [
-      "src/main.ts:628"
+      "src/main.ts:645"
+    ]
+  },
+  "player.hdrDisplay": {
+    "source": " · HDR 输出",
+    "params": {},
+    "locations": [
+      "src/main.ts:293"
     ]
   },
   "player.hdrSource": {
     "source": " · HDR 源",
     "params": {},
     "locations": [
-      "src/main.ts:276"
+      "src/main.ts:293"
     ]
   },
   "player.hdrSourceSdrFallback": {
-    "source": " · HDR 源（SDR 兜底显示）",
+    "source": " · HDR 源（SDR 预览）",
     "params": {},
     "locations": [
-      "src/main.ts:276"
+      "src/main.ts:293"
     ]
   },
   "player.incompleteTailPlayingCompletePortion": {
     "source": " · 尾部不完整，播放完整部分",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.indexFailed": {
     "source": " · 索引失败",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.invalidAnnotationAddress": {
     "source": "标注地址无效。",
     "params": {},
     "locations": [
-      "src/main.ts:601"
+      "src/main.ts:618"
     ]
   },
   "player.lastSeekMs": {
@@ -4655,155 +4705,155 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:324"
+      "src/main.ts:341"
     ]
   },
   "player.mixingSoftwareAndNativeFramesInBrowser": {
     "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
     "params": {},
     "locations": [
-      "src/main.ts:338"
+      "src/main.ts:355"
     ]
   },
   "player.noFramesPresented": {
     "source": "没有输出画面",
     "params": {},
     "locations": [
-      "src/main.ts:631"
+      "src/main.ts:648"
     ]
   },
   "player.noReadableFrameInThisTrack": {
     "source": "轨道没有可读取的画面。",
     "params": {},
     "locations": [
-      "src/main.ts:564"
+      "src/main.ts:581"
     ]
   },
   "player.notLoaded": {
     "source": "尚未载入",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.openColorSettings": {
     "source": "前往色彩设置",
     "params": {},
     "locations": [
-      "src/main.ts:221",
-      "src/main.ts:340"
+      "src/main.ts:238",
+      "src/main.ts:357"
     ]
   },
   "player.openOneWorkspaceFileAtATime": {
     "source": "每次请打开一个工作区文件。",
     "params": {},
     "locations": [
-      "src/main.ts:381"
+      "src/main.ts:398"
     ]
   },
   "player.pageHiddenDuringCheck": {
     "source": "测试期间页面不可见",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:646"
     ]
   },
   "player.passed": {
     "source": "通过",
     "params": {},
     "locations": [
-      "src/main.ts:632"
+      "src/main.ts:649"
     ]
   },
   "player.pause": {
     "source": "暂停",
     "params": {},
     "locations": [
-      "src/main.ts:316"
+      "src/main.ts:333"
     ]
   },
   "player.paused": {
     "source": "已暂停",
     "params": {},
     "locations": [
-      "src/main.ts:323"
+      "src/main.ts:340"
     ]
   },
   "player.playbackDidNotFinish": {
     "source": "画面未播完",
     "params": {},
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:647"
     ]
   },
   "player.playbackError": {
     "source": "播放出错",
     "params": {},
     "locations": [
-      "src/main.ts:631"
+      "src/main.ts:648"
     ]
   },
   "player.playbackTooSlow": {
     "source": "播放速度不足",
     "params": {},
     "locations": [
-      "src/main.ts:628"
+      "src/main.ts:645"
     ]
   },
   "player.playingMuted": {
     "source": "播放中 · 静音",
     "params": {},
     "locations": [
-      "src/main.ts:323"
+      "src/main.ts:340"
     ]
   },
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {
-    "source": "保留原始帧精度，按统一规则转换；仅支持 SDR。",
+    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。",
     "params": {},
     "locations": [
-      "src/main.ts:112"
+      "src/main.ts:123"
     ]
   },
   "player.rawPlanes": {
     "source": "原始平面",
     "params": {},
     "locations": [
-      "src/main.ts:236"
+      "src/main.ts:253"
     ]
   },
   "player.referenceVideo": {
     "source": "参考视频",
     "params": {},
     "locations": [
-      "src/main.ts:271"
+      "src/main.ts:288"
     ]
   },
   "player.sampleTooShort": {
     "source": "样本时长不足",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:646"
     ]
   },
   "player.showAllTracksSeparately": {
     "source": "独立显示所有轨道",
     "params": {},
     "locations": [
-      "src/main.ts:287"
+      "src/main.ts:304"
     ]
   },
   "player.slowPauseResponse": {
     "source": "暂停响应慢",
     "params": {},
     "locations": [
-      "src/main.ts:630"
+      "src/main.ts:647"
     ]
   },
   "player.softwareFallbackIsAnApproximationColorsMay": {
     "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
     "params": {},
     "locations": [
-      "src/main.ts:112"
+      "src/main.ts:123"
     ]
   },
   "player.sourceTimestampSFrameDurationS": {
@@ -4813,28 +4863,28 @@
       "p1": "string | number"
     },
     "locations": [
-      "src/main.ts:279"
+      "src/main.ts:296"
     ]
   },
   "player.switchToHorizontalLayout": {
     "source": "切换为横向布局",
     "params": {},
     "locations": [
-      "src/main.ts:250"
+      "src/main.ts:267"
     ]
   },
   "player.switchToManagedColorInColorDecoding": {
     "source": "请先在“色彩与解码”中切换为“自有色彩”，再选择 YUV 通道。",
     "params": {},
     "locations": [
-      "src/main.ts:220"
+      "src/main.ts:237"
     ]
   },
   "player.thisAnnotationIsInTheRecycleBin": {
     "source": "这条标注已在回收站。",
     "params": {},
     "locations": [
-      "src/main.ts:603"
+      "src/main.ts:620"
     ]
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {
@@ -4863,7 +4913,7 @@
       "p0": "string | number"
     },
     "locations": [
-      "src/main.ts:632"
+      "src/main.ts:649"
     ]
   },
   "player.tracks": {
@@ -4872,51 +4922,51 @@
       "p0": "number"
     },
     "locations": [
-      "src/main.ts:350"
+      "src/main.ts:367"
     ]
   },
   "player.tracksOutOfSync": {
     "source": "双轨不同步",
     "params": {},
     "locations": [
-      "src/main.ts:629"
+      "src/main.ts:646"
     ]
   },
   "player.uChannel": {
     "source": "U 通道",
     "params": {},
     "locations": [
-      "src/main.ts:209"
+      "src/main.ts:226"
     ]
   },
   "player.uniformPixels": {
     "source": "统一像素",
     "params": {},
     "locations": [
-      "src/main.ts:205",
-      "src/main.ts:207",
-      "src/main.ts:296"
+      "src/main.ts:222",
+      "src/main.ts:224",
+      "src/main.ts:313"
     ]
   },
   "player.vChannel": {
     "source": "V 通道",
     "params": {},
     "locations": [
-      "src/main.ts:209"
+      "src/main.ts:226"
     ]
   },
   "player.videoReplacedDuringCheck": {
     "source": "测试期间视频被替换",
     "params": {},
     "locations": [
-      "src/main.ts:631"
+      "src/main.ts:648"
     ]
   },
   "player.waitingForFrame": {
     "source": "等待帧",
     "params": {},
     "locations": [
-      "src/main.ts:236"
+      "src/main.ts:253"
     ]
   },
   "player.waitingForIndexData": {
@@ -4930,56 +4980,56 @@
     "source": " · 等待索引，画面暂未同步",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.waitingForVideo": {
     "source": "等待视频",
     "params": {},
     "locations": [
-      "src/main.ts:323"
+      "src/main.ts:340"
     ]
   },
   "player.wasmSoftwareDecoding": {
     "source": "WASM 软件解码",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.webcodecsBrowserDecoding": {
     "source": "WebCodecs · 浏览器解码",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.webcodecsPreferHardware": {
     "source": "WebCodecs · 硬件优先",
     "params": {},
     "locations": [
-      "src/main.ts:277"
+      "src/main.ts:294"
     ]
   },
   "player.wipeBetweenTheFirstTwoTracksIn": {
     "source": "擦拭对比当前排序的前两个轨道",
     "params": {},
     "locations": [
-      "src/main.ts:287"
+      "src/main.ts:304"
     ]
   },
   "player.yChannel": {
     "source": "Y 通道",
     "params": {},
     "locations": [
-      "src/main.ts:209"
+      "src/main.ts:226"
     ]
   },
   "player.yuvChannelsSwitchToManagedColorFirst": {
     "source": "YUV 通道：请先切换为自有色彩",
     "params": {},
     "locations": [
-      "src/main.ts:299"
+      "src/main.ts:316"
     ]
   },
   "progress.decode": {
@@ -5345,7 +5395,7 @@
     "source": "色彩与解码",
     "params": {},
     "locations": [
-      "src/main.ts:172",
+      "src/main.ts:189",
       "src/ui/settings-shell.ts:11",
       "src/ui/settings-shell.ts:68"
     ]
@@ -5715,7 +5765,7 @@
     "source": "田字排列轨道",
     "params": {},
     "locations": [
-      "src/main.ts:251",
+      "src/main.ts:268",
       "src/ui/shell.ts:24"
     ]
   },
@@ -5890,7 +5940,7 @@
     "source": "全屏",
     "params": {},
     "locations": [
-      "src/main.ts:452",
+      "src/main.ts:469",
       "src/ui/shell.ts:79",
       "src/ui/shell.ts:79"
     ]
@@ -5939,7 +5989,7 @@
     "source": "日志",
     "params": {},
     "locations": [
-      "src/main.ts:172",
+      "src/main.ts:189",
       "src/ui/track-toasts.ts:35"
     ]
   },
@@ -6001,7 +6051,7 @@
     "source": "播放",
     "params": {},
     "locations": [
-      "src/main.ts:316",
+      "src/main.ts:333",
       "src/ui/shell.ts:76"
     ]
   },
@@ -6252,7 +6302,7 @@
     "source": "切换为田字布局",
     "params": {},
     "locations": [
-      "src/main.ts:250",
+      "src/main.ts:267",
       "src/ui/shell.ts:24"
     ]
   },
@@ -6419,7 +6469,7 @@
     "source": "YUV 通道：仅原始平面帧生效",
     "params": {},
     "locations": [
-      "src/main.ts:299",
+      "src/main.ts:316",
       "src/ui/shell.ts:28"
     ]
   },
@@ -7295,6 +7345,13 @@
       "src/ui/workbench/tracks.ts:46"
     ]
   },
+  "tracks.hdrDisplay": {
+    "source": "HDR 输出",
+    "params": {},
+    "locations": [
+      "src/ui/workbench/tracks.ts:55"
+    ]
+  },
   "tracks.hdrSource": {
     "source": "HDR 源",
     "params": {},
@@ -7440,7 +7497,7 @@
     ]
   },
   "tracks.sdrFallbackDisplay": {
-    "source": "SDR 兜底显示",
+    "source": "SDR 预览",
     "params": {},
     "locations": [
       "src/ui/workbench/tracks.ts:55"

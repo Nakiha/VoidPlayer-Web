@@ -1,52 +1,9 @@
 import type { FrameDescription } from './frame-description.ts';
 import { validateYuv, yuvSample, yuvReconstructedSample, visibleChromaBounds } from './yuv-color.ts';
 
-export type HdrTransfer = 'pq' | 'hlg';
-export type ColorTriple = readonly [number, number, number];
-
-/** A versioned preview policy, not display calibration or a mastering transform.
- * Peaks are explicit assumptions until decoder metadata is available. */
-export type HdrPreviewPolicy = {
-  presentation: 'voidplayer-hdr-sdr-preview-v1';
-  outputColorSpace: 'srgb';
-  toneMap: 'extended-reinhard-luminance';
-  gamutMap: 'desaturate-to-luminance';
-  sourcePeakNits: number;
-  exposureWhiteNits: number;
-  hlgDisplayPeakNits: number;
-  hlgSystemGamma: number;
-};
-export const HDR_PREVIEW_POLICY: Readonly<HdrPreviewPolicy> = Object.freeze({
-  presentation: 'voidplayer-hdr-sdr-preview-v1', outputColorSpace: 'srgb',
-  toneMap: 'extended-reinhard-luminance', gamutMap: 'desaturate-to-luminance',
-  sourcePeakNits: 1000, exposureWhiteNits: 203, hlgDisplayPeakNits: 1000, hlgSystemGamma: 1.2,
-});
-
-export function hdrTransfer(transfer: string | null | undefined): HdrTransfer | null {
-  if (transfer === 'pq' || transfer === 'smpte2084') return 'pq';
-  if (transfer === 'hlg' || transfer === 'arib-std-b67') return 'hlg';
-  return null;
-}
-
-export function validateHdrPreviewPolicy(p: Readonly<HdrPreviewPolicy>): void {
-  if (p.presentation !== HDR_PREVIEW_POLICY.presentation || p.outputColorSpace !== 'srgb'
-    || p.toneMap !== HDR_PREVIEW_POLICY.toneMap || p.gamutMap !== HDR_PREVIEW_POLICY.gamutMap
-    || ![p.sourcePeakNits, p.exposureWhiteNits, p.hlgDisplayPeakNits, p.hlgSystemGamma].every(Number.isFinite)
-    || p.exposureWhiteNits < 1 || p.sourcePeakNits < p.exposureWhiteNits || p.sourcePeakNits > 10000
-    || p.hlgDisplayPeakNits < 1 || p.hlgDisplayPeakNits > 10000 || p.hlgSystemGamma < 1 || p.hlgSystemGamma > 2) {
-    throw new Error('Unsupported HDR preview policy');
-  }
-}
-
-/** Admit actual raw BT.2100 resources only. Container tags cannot turn an
- * already converted RGBA resource back into HDR, or fill missing raw tags. */
-export function resolveHdrPreviewPlan(d: FrameDescription, policy: Readonly<HdrPreviewPolicy> = HDR_PREVIEW_POLICY) {
-  validateHdrPreviewPolicy(policy);
-  const transfer = hdrTransfer(d.color.transfer);
-  const supported = !!d.yuv && [10, 12, 14, 16].includes(d.yuv.bitDepth) && transfer !== null
-    && d.color.primaries === 'bt2020' && d.color.matrix === 'bt2020-ncl' && typeof d.color.fullRange === 'boolean';
-  return { supported, transfer, policy: { ...policy }, target: 'srgb' as const };
-}
+import { HDR_PREVIEW_POLICY, hdrTransfer, resolveHdrPreviewPlan, validateHdrPreviewPolicy } from './hdr-policy.ts';
+import type { HdrTransfer, ColorTriple, HdrPreviewPolicy } from './hdr-policy.ts';
+export * from './hdr-policy.ts';
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const dot2020 = (c: ColorTriple) => c[0] * .2627 + c[1] * .6780 + c[2] * .0593;
@@ -100,8 +57,19 @@ export function hdrToSdrPreview(rgb: ColorTriple, transfer: HdrTransfer, policy:
   return linear.map(v => encodeSrgb(clamp(mapped + (v - mapped) * chroma))) as [number, number, number];
 }
 
-/** CPU reference for future presenter/capture integration. Existing SDR
- * admission and browser-managed rendering do not call this experimental API. */
+/** Extended Display-P3 output reference. 1.0 is the explicitly chosen HDR
+ * reference white, not a measured browser/OS luminance. No highlight shoulder. */
+export function hdrToDisplayP3(rgb: ColorTriple, transfer: HdrTransfer, whiteNits = 203, policy: Readonly<HdrPreviewPolicy> = HDR_PREVIEW_POLICY): [number, number, number] {
+  if(!Number.isFinite(whiteNits)||whiteNits<80||whiteNits>400)throw new Error('Invalid HDR output reference white');
+  const c=hdrToDisplayNits(rgb,transfer,policy).map(v=>v/whiteNits);
+  return [
+    1.343578252*c[0]-.282179671*c[1]-.061398582*c[2],
+    -.065297452*c[0]+1.075787916*c[1]-.010490464*c[2],
+    .002821787*c[0]-.019598495*c[1]+1.016776708*c[2],
+  ].map(v=>encodeSrgb(Math.max(0,v))) as [number,number,number];
+}
+
+/** Independent raw-plane CPU oracle for the shared HDR preview contract. */
 export function hdrYuvToRgba(d: FrameDescription, pixels: Uint8Array | Uint8ClampedArray, policy: Readonly<HdrPreviewPolicy> = HDR_PREVIEW_POLICY): Uint8ClampedArray<ArrayBuffer> {
   if (!d.yuv) throw new Error('HDR preview requires raw YUV planes');
   validateYuv(d, pixels.byteLength);

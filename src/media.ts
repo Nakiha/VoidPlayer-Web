@@ -27,6 +27,8 @@ import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
+  /** Filled only by the presenter after a successful paint; never decoder tags. */
+  presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string };
   readonly description: FrameDescription;
   readonly copyMs?: number;
   readonly rotation?: number;

@@ -9,6 +9,8 @@ import { createPresentationSurface } from './presentation-surface.ts';
 import type { PresentationGeometry } from './presentation-surface.ts';
 import type { DecodedFrame } from './media.ts';
 import { log } from './log.ts';
+import { getColorOutput } from './color-output.ts';
+import { HDR_PREVIEW_POLICY } from './hdr-policy.ts';
 
 // Presentation is the only place that decides HOW a decoded frame reaches the
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or
@@ -16,13 +18,21 @@ import { log } from './log.ts';
 // sRGB Canvas 2D path before upload, consistently from the first frame onward.
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  if(gpuPaint(canvas,frame))return;
-  canvas.dataset.colorContract=frame.kind==='yuv'?'common-yuv-sdr':frame.kind==='rgba8'?'rgba-resource':'browser-managed';
+  const record=()=>{frame.presentation={requestedTarget:getColorOutput().target,actualTarget:canvas.dataset.displayTarget==='hdr'?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown'};};
+  if(gpuPaint(canvas,frame)){
+    // GPU warmup may finish after a GL frame. Retire its viewport surface only
+    // after successful GPU presentation; two visible surfaces retain stale pixels.
+    const legacy=surfaces.get(canvas);if(legacy){const hiddenSource=canvas.classList.contains('frame-source');surfaces.delete(canvas);legacy.dispose();canvas.classList.toggle('frame-source',hiddenSource);}
+    record();return;
+  }
+  canvas.dataset.displayTarget='sdr';canvas.dataset.captureTarget='sdr';
+  canvas.dataset.colorContract=frame.kind==='yuv'?(presentationColor(frame.kind,frame.description).hdr?'common-yuv-hdr-preview':'common-yuv-sdr'):frame.kind==='rgba8'?'rgba-resource':'browser-managed';
   const fallbackGeometry=gpuFallbackGeometry(canvas);
   if(fallbackGeometry&&!surfaces.has(canvas)){const surface=createPresentationSurface(canvas);if(surface){surfaces.set(canvas,surface);surface.geometry(fallbackGeometry);}}
   const start=performance.now();
   paintFrameContent(canvas,frame);
   if(frame.kind!=='yuv')canvas.dataset.colorExecutor=frame.kind==='rgba8'?'rgba-upload':'browser-managed';
+  record();
   const state=performanceSamples.get(canvas)??{copy:[],submit:[],count:0};
   const index=state.count++%256;
   state.copy[index]=frame.copyMs??0;state.submit[index]=performance.now()-start;performanceSamples.set(canvas,state);
@@ -165,6 +175,7 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
     const view = new Uint8ClampedArray(smallW * smallH * 4);
     const d = frame.description;
     const plan = frame.kind === 'yuv' ? resolveYuvColor(d) : undefined;
+    if(plan?.hdr)plan.hdrPolicy=HDR_PREVIEW_POLICY;
     const rgbAt = (x: number, y: number) => {
       if (frame.kind === 'yuv') return [...yuvPixelRgb(d, frame.pixels!, x, y, plan), 255];
       const offset = (y * d.width + x) * 4;

@@ -161,7 +161,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (!rawForWitness && presentationMode === 'reference' && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
         const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
         decoded.close();
-        throw new MediaOpenError('decode', hdr ? '自有色彩目前仅支持 SDR，无法处理此 HDR 视频。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+        throw new MediaOpenError('decode', hdr ? '此 HDR 视频未提供可核对的高位深 BT.2100 平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
           : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
       }
       return decoded;

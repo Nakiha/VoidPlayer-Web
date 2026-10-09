@@ -2,6 +2,7 @@ import { rgbaDescription } from '../../src/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ReviewSession } from '../../src/session.ts';
+import {getColorOutput,setColorOutput,defaultColorOutput} from '../../src/color-output.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode} from '../../src/color-mode.ts';
 import { minFrameDurationUs, planBackwardStep, planForwardStep, regionValue, timeUs, SLOTS } from '../../src/model.ts';
 import { reviewTools } from '../../src/agent.ts';
@@ -160,7 +161,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_review_color_output', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));
@@ -1218,4 +1219,21 @@ test('metadata inspection follows source instances, stays muted and does not see
     assert.notEqual(session.getState().tracks[0].sourceGen,before.tracks[0].sourceGen);
     session.inspectTrackMetadata(null); assert.equal(enabled.at(-1),'new:false');
   } finally { await session.dispose(); }
+});
+
+
+test('HDR output changes share the session transaction, export conditions and rollback',async()=>{
+  const previous=getColorMode(),oldOutput=getColorOutput();setColorMode('reference');setColorOutput(defaultColorOutput());
+  const session=new ReviewSession(()=>{});let fail=false,opens=0;
+  try{
+    await session.load('A',async()=>{opens++;if(fail)throw Error('HDR replacement failed');return media('hdr').source;});
+    await session.seek(40000);session.addMark({slot:'A',text:'preserve'});const before=session.getState();
+    const output=getColorOutput();output.target='hdr';output.preview.sourcePeakNits=4000;
+    await reviewTools(session).find(t=>t.name==='set_review_color_output')!.execute({target:'hdr',peakNits:4000});
+    const after=session.getState();assert.equal(opens,2);assert.deepEqual(after.marks,before.marks);assert.equal(after.positionUs,before.positionUs);assert.equal(after.tracks[0].id,before.tracks[0].id);
+    const exported=session.exportReview().comparison;assert.equal(exported.version,2);assert.equal(exported.outputColorSpace,'display-p3');assert.equal(exported.version===2&&exported.colorOutput.preview.sourcePeakNits,4000);
+    const detached=getColorOutput();detached.preview.sourcePeakNits=10000;assert.equal(getColorOutput().preview.sourcePeakNits,4000);
+    fail=true;await assert.rejects(session.setColorOutput({...getColorOutput(),target:'sdr'}),/HDR replacement failed/);assert.deepEqual(session.getState().colorOutput,after.colorOutput);assert.deepEqual(session.getState().tracks,after.tracks);
+    await assert.rejects(session.setColorOutput({...getColorOutput(),hdrWhiteNits:Infinity}));assert.equal(opens,3);
+  }finally{await session.dispose();setColorMode(previous);setColorOutput(oldOutput);}
 });

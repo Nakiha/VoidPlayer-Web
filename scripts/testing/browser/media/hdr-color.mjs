@@ -17,7 +17,7 @@ try {
     await page.route('**/hdr-color-test', route => route.fulfill({ contentType: 'text/html', body: '<canvas id="gl" width="1" height="1"></canvas>' }));
     await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/hdr-color-test`);
     const result = await page.evaluate(async requireWebGpu => {
-      const { hdrToSdrPreview, hdrToDisplayNits, HDR_PREVIEW_POLICY } = await import('/src/hdr-color.ts');
+      const { hdrToSdrPreview, hdrToDisplayNits, hdrToDisplayP3, HDR_PREVIEW_POLICY } = await import('/src/hdr-color.ts');
       const { hdrPreviewGlsl, hdrPreviewWgsl } = await import('/src/hdr-shader.ts');
       const vectors = [];
       for (const transfer of ['pq', 'hlg']) {
@@ -105,7 +105,48 @@ try {
           gpu = { required: true, tested: true, maxCodeDelta, maxNitsRelative, errors };
         } finally { input.destroy(); output.destroy(); uniform.destroy(); readback.destroy(); device.destroy(); }
       }
-      return { vectors: vectors.length, policies: policies.length, glMax, glWorst, glError, gpu };
+      let extended;
+      if(requireWebGpu){
+        const {setColorOutput,defaultColorOutput}=await import('/src/color-output.ts');
+        const {createExternalSurface}=await import('/src/webgpu-color-surface.mjs');
+        const {yuvFixture}=await import('/test/helpers/yuv-fixture.ts');
+        const {yuvToRgba}=await import('/src/yuv-color.ts');
+        const {setColorMode,getColorMode}=await import('/src/color-mode.ts');const previousMode=getColorMode();setColorMode('reference');
+        const original=window.matchMedia;
+        // Simulates capability only to exercise the extended canvas. These
+        // readbacks do not certify the physical HDR display or measured nits.
+        window.matchMedia=query=>query==='(dynamic-range: high)'?{matches:true}:original.call(window,query);
+        setColorOutput({...defaultColorOutput(),target:'hdr'});
+        const canvas=document.createElement('canvas');const surface=await createExternalSurface(canvas,undefined,'planes');
+        try{
+          if(surface.outputTarget!=='hdr')throw new Error('Extended canvas configuration unavailable');
+          const f=yuvFixture(10,false,false,'bt2020-ncl',2,2);f.description.color.transfer='pq';
+          const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:2,height:2};
+          surface.present(frame);const pixels=await surface.captureHdrPixels(),preview=await surface.capture();
+          const expected=yuvToRgba(f.description,f.pixels);
+          const endpoint=hdrToDisplayP3([1,1,1],'pq');for(let y=0;y<2;y++)for(let x=0;x<2;x++)for(let c=0;c<4;c++){const expected=c===3?1:x===0?0:endpoint[c];if(Math.abs(pixels[(y*2+x)*4+c]-expected)>.004)throw new Error('Extended P3 pixel differs from independent CPU anchor');}
+          const max=Math.max(...pixels);if(max<=1)throw new Error('HDR highlights were clipped to SDR');
+          const maxPreview=Math.max(...preview.map((v,i)=>Math.abs(v-expected[i])));
+          const capture=new OffscreenCanvas(2,2);surface.captureSource(capture);
+          const captured=capture.getContext('2d').getImageData(0,0,2,2).data;
+          const maxCapture=Math.max(...captured.map((v,i)=>Math.abs(v-expected[i])));
+          if(maxPreview>1||maxCapture>1)throw new Error('HDR canvas SDR preview/capture differs from shared CPU transform');
+          const native=new VideoFrame(new Uint16Array([64,940,64,940,512,512]),{format:'I420P10',codedWidth:2,codedHeight:2,timestamp:0,colorSpace:{matrix:'bt2020-ncl',primaries:'bt2020',transfer:'pq',fullRange:false}});
+          try{surface.present(native);const raw=await surface.captureHdrPixels();const nativeMax=Math.max(...raw);extended={simulatedDisplayCapability:true,max,maxPreview,maxCapture,nativeMax,nativeHdrEnabledInProduct:false};}
+          finally{native.close();}
+          const {renderThumbnailCanvas}=await import('/src/presenter.ts');const {hdrYuvToRgba}=await import('/src/hdr-color.ts');
+          const thumbFrame=yuvFixture(10,false,false,'bt2020-ncl',3,2);thumbFrame.description.color.transfer='pq';
+          setColorOutput({...defaultColorOutput(),target:'hdr',preview:{...HDR_PREVIEW_POLICY,sourcePeakNits:4000}});
+          const thumb=renderThumbnailCanvas({kind:'yuv',...thumbFrame,width:3,height:2},3);
+          if(!thumb)throw new Error('Managed HDR thumbnail was skipped');
+          const thumbPixels=thumb.canvas.getContext('2d').getImageData(0,0,3,2).data,thumbExpected=hdrYuvToRgba(thumbFrame.description,thumbFrame.pixels);
+          extended.thumbnailMax=Math.max(...thumbPixels.map((v,i)=>Math.abs(v-thumbExpected[i])));
+          if(extended.thumbnailMax>1)throw new Error('HDR thumbnail must use the fixed default preview recipe');
+        }finally{surface.dispose();}
+        setColorMode('browser');const browserSurface=await createExternalSurface(document.createElement('canvas'),undefined,'planes');
+        try{if(browserSurface.outputTarget!=='sdr')throw new Error('Browser-managed HDR target must downgrade to SDR');}finally{browserSurface.dispose();window.matchMedia=original;setColorOutput(defaultColorOutput());setColorMode(previousMode);}
+      }
+      return { vectors: vectors.length, policies: policies.length, glMax, glWorst, glError, gpu, extended };
     }, requireWebGpu);
     assert.equal(result.glError, 0); assert.ok(result.glMax <= 1, `${name}: GLSL ${JSON.stringify(result.glWorst)}`);
     if (requireWebGpu) {
@@ -113,6 +154,7 @@ try {
       assert.ok(result.gpu.maxCodeDelta <= 1, `${name}: WGSL code error ${result.gpu.maxCodeDelta}`);
       assert.ok(result.gpu.maxNitsRelative <= .001, `${name}: WGSL nits error ${result.gpu.maxNitsRelative}`);
     }
+    if(requireWebGpu)console.log('Extended surface diagnostics (simulated display capability): '+JSON.stringify(result.extended));
     console.log(`PASS ${name}: ${result.vectors} vectors × ${result.policies} policies; GLSL max ${result.glMax} code; ${requireWebGpu ? `WGSL max ${result.gpu.maxCodeDelta} code, nits relative ${result.gpu.maxNitsRelative}` : 'WebGPU not requested'}`);
     await browser.close(); browser = undefined;
   }

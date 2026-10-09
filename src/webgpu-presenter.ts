@@ -1,3 +1,4 @@
+import { getColorOutput } from './color-output.ts';
 import { log } from './log.ts';
 import { getColorMode } from './color-mode.ts';
 import { getPresentationChannel } from './presentation-channel.ts';
@@ -67,7 +68,7 @@ async function initializeLocked(sources:HTMLCanvasElement[],token:number,geometr
     active=true;
     unified=commonPlanes;
     experimentalProfile=requested!==null;
-    log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv-sdr'});
+    log.info('media','WebGPU 色彩路径已启用。',{profile:mode,selection:commonPlanes?'explicit-common-planes':requested?'explicit-experiment':'resource-contract',nativeContract:'browser-managed',yuvContract:requested?'experimental-profile':'common-yuv',requestedOutput:getColorOutput().target,actualOutputs:[...entries.values()].map(entry=>entry.surface.outputTarget)});
   }catch(error){
     // 只清理本批候选，不全局 dispose，避免清掉新一代已提交资源。
     cleanupPending();
@@ -105,7 +106,7 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   // Native PQ/HLG has no tone mapping on the external-texture path: decline it
   // here so it keeps the documented VideoSample.draw → sRGB canvas route.
   // The check covers both canonical ('pq'/'hlg') and alias spellings.
-  if(!entry.surface.available||(frame.kind==='yuv'&&!resolveYuvColor(frame.description).supported)||frame.kind==='rgba8'||isHdrTransfer(frame.description.color.transfer)){
+  if(!entry.surface.available||(frame.kind==='yuv'&&!resolveYuvColor(frame.description).supported)||frame.kind==='rgba8'||(frame.kind!=='yuv'&&isHdrTransfer(frame.description.color.transfer))){
     entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');
     log.info('media','当前资源使用现有呈现路径。',{kind:frame.kind,transfer:frame.description.color.transfer,gpuAvailable:entry.surface.available});return false;
   }
@@ -119,8 +120,10 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   catch(error){entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');log.info('media','WebGPU 资源呈现失败，使用现有呈现路径。',{reason:String(error)});return false;}
   finally{resource?.close();}
   source.dataset.colorExecutor=frame.kind==='yuv'?'webgpu-yuv':'webgpu-external';
+  source.dataset.displayTarget=entry.surface.outputTarget;
+  source.dataset.captureTarget='sdr';
   source.dataset.channel=frame.kind==='yuv'?getPresentationChannel():'rgb';
-  source.dataset.colorContract=frame.kind==='yuv'?(experimentalProfile?'profile-yuv-sdr':'common-yuv-sdr'):'browser-managed';
+  source.dataset.colorContract=frame.kind==='yuv'?(isHdrTransfer(frame.description.color.transfer)?entry.surface.outputTarget==='hdr'?'common-yuv-hdr':'common-yuv-hdr-preview':experimentalProfile?'profile-yuv-sdr':'common-yuv-sdr'):'browser-managed';
   const timing=timings.get(source)??{values:[],count:0},values=timing.values;values.push(performance.now()-start);if(values.length>128)values.shift();timing.count++;timings.set(source,timing);
   if(timing.count%32===0){const sorted=[...values].sort((a,b)=>a-b);source.dataset.colorPerformance=JSON.stringify({submitP50:sorted[Math.floor(sorted.length*.5)],submitP95:sorted[Math.floor(sorted.length*.95)],submitMax:sorted.at(-1)});}
   return true;
