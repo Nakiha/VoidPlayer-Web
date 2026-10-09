@@ -925,8 +925,17 @@ export interface Sources {
   "theme.invalidBase": "请输入有效的 HEX 基调色，例如 #EEE7DE。";
   "toast.dismissNotification": "关闭通知";
   "tracks.accelerationRequest": "加速请求";
+  "tracks.audioAbsent": "确认无音频";
   "tracks.audioBlocked": "浏览器未允许音频，请关闭后再次点击喇叭";
+  "tracks.audioChannels": "声道数";
+  "tracks.audioGroup": "音频";
+  "tracks.audioMetadataUnsupported": "当前播放路径不支持";
+  "tracks.audioMetadataUnverified": "播放时确认";
+  "tracks.audioPlaybackSupport": "播放支持";
   "tracks.audioPlaying": "正在出声";
+  "tracks.audioPresence": "音轨";
+  "tracks.audioPresent": "有音频";
+  "tracks.audioSampleRate": "采样率";
   "tracks.audioUnsupportedCodec": "音频编码或浏览器暂不支持";
   "tracks.audioUnsupportedContainer": "此容器暂不支持顺带音频";
   "tracks.audioWaiting": "等待播放或可用的附带音频";
@@ -938,6 +947,8 @@ export interface Sources {
   "tracks.codec": "编码";
   "tracks.colorPrimaries": "色域原色";
   "tracks.complete": "已完成";
+  "tracks.containerFormat": "格式";
+  "tracks.containerGroup": "封装";
   "tracks.containerKeyframes": "容器关键帧定位";
   "tracks.containerTimestampsMayScanBackward": "容器时间戳定位（可能回扫）";
   "tracks.currentFrame": "当前帧";
@@ -955,6 +966,7 @@ export interface Sources {
   "tracks.loadAVideoToViewTracksAnd": "载入视频后查看轨道与标记";
   "tracks.mark": "标记 {p0} {p1} {p2}";
   "tracks.matrixCoefficients": "矩阵系数";
+  "tracks.metadataUnknown": "尚未确认";
   "tracks.muteAudio": "静音轨道 {slot} · {status}";
   "tracks.noTrackLoaded": "尚未载入轨道";
   "tracks.noTracksLoaded": "尚未载入轨道";
@@ -979,6 +991,7 @@ export interface Sources {
   "tracks.trackOffsetMilliseconds": "轨道 {p0} 偏移，毫秒";
   "tracks.transferFunction": "传递特性";
   "tracks.unmuteAudio": "解除轨道 {slot} 静音（仅利用视频已读数据）";
+  "tracks.videoGroup": "视频";
   "transfer.cancelImport": "取消导入";
   "transfer.detailSeparator": "、";
   "transfer.identityMismatch": "片源 {name} 已发生变化，与工作区记录不一致（{details}）。请重新选择片源并检查标注。";
@@ -1933,8 +1946,17 @@ export interface MessageParameters {
   "theme.invalidBase": {  };
   "toast.dismissNotification": {  };
   "tracks.accelerationRequest": {  };
+  "tracks.audioAbsent": {  };
   "tracks.audioBlocked": {  };
+  "tracks.audioChannels": {  };
+  "tracks.audioGroup": {  };
+  "tracks.audioMetadataUnsupported": {  };
+  "tracks.audioMetadataUnverified": {  };
+  "tracks.audioPlaybackSupport": {  };
   "tracks.audioPlaying": {  };
+  "tracks.audioPresence": {  };
+  "tracks.audioPresent": {  };
+  "tracks.audioSampleRate": {  };
   "tracks.audioUnsupportedCodec": {  };
   "tracks.audioUnsupportedContainer": {  };
   "tracks.audioWaiting": {  };
@@ -1946,6 +1968,8 @@ export interface MessageParameters {
   "tracks.codec": {  };
   "tracks.colorPrimaries": {  };
   "tracks.complete": {  };
+  "tracks.containerFormat": {  };
+  "tracks.containerGroup": {  };
   "tracks.containerKeyframes": {  };
   "tracks.containerTimestampsMayScanBackward": {  };
   "tracks.currentFrame": {  };
@@ -1963,6 +1987,7 @@ export interface MessageParameters {
   "tracks.loadAVideoToViewTracksAnd": {  };
   "tracks.mark": { "p0": string | number; "p1": string | number; "p2": string | number };
   "tracks.matrixCoefficients": {  };
+  "tracks.metadataUnknown": {  };
   "tracks.muteAudio": { "slot": string | number; "status": string | number };
   "tracks.noTrackLoaded": {  };
   "tracks.noTracksLoaded": {  };
@@ -1987,6 +2012,7 @@ export interface MessageParameters {
   "tracks.trackOffsetMilliseconds": { "p0": string | number };
   "tracks.transferFunction": {  };
   "tracks.unmuteAudio": { "slot": string | number };
+  "tracks.videoGroup": {  };
   "transfer.cancelImport": {  };
   "transfer.detailSeparator": {  };
   "transfer.identityMismatch": { "details": string | number; "name": string | number };

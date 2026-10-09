@@ -3711,13 +3711,49 @@
     "source": "加速请求",
     "translation": "Acceleration request"
   },
+  "tracks.audioAbsent": {
+    "source": "确认无音频",
+    "translation": "No audio confirmed"
+  },
   "tracks.audioBlocked": {
     "source": "浏览器未允许音频，请关闭后再次点击喇叭",
     "translation": "Audio was blocked; switch off and click the speaker again"
   },
+  "tracks.audioChannels": {
+    "source": "声道数",
+    "translation": "Channels"
+  },
+  "tracks.audioGroup": {
+    "source": "音频",
+    "translation": "Audio"
+  },
+  "tracks.audioMetadataUnsupported": {
+    "source": "当前播放路径不支持",
+    "translation": "Unsupported by this playback path"
+  },
+  "tracks.audioMetadataUnverified": {
+    "source": "播放时确认",
+    "translation": "Checked during playback"
+  },
+  "tracks.audioPlaybackSupport": {
+    "source": "播放支持",
+    "translation": "Playback support"
+  },
   "tracks.audioPlaying": {
     "source": "正在出声",
     "translation": "Playing audio"
+  },
+  "tracks.audioPresence": {
+    "source": "音轨",
+    "translation": "Audio tracks"
+  },
+  "tracks.audioPresent": {
+    "source": "有音频",
+    "translation": "Audio present"
+  },
+  "tracks.audioSampleRate": {
+    "source": "采样率",
+    "translation": "Sample rate"
   },
   "tracks.audioUnsupportedCodec": {
     "source": "音频编码或浏览器暂不支持",
@@ -3762,6 +3798,14 @@
   "tracks.complete": {
     "source": "已完成",
     "translation": "Complete"
+  },
+  "tracks.containerFormat": {
+    "source": "格式",
+    "translation": "Format"
+  },
+  "tracks.containerGroup": {
+    "source": "封装",
+    "translation": "Container"
   },
   "tracks.containerKeyframes": {
     "source": "容器关键帧定位",
@@ -3830,6 +3874,10 @@
   "tracks.matrixCoefficients": {
     "source": "矩阵系数",
     "translation": "Matrix coefficients"
+  },
+  "tracks.metadataUnknown": {
+    "source": "尚未确认",
+    "translation": "Not yet confirmed"
   },
   "tracks.muteAudio": {
     "source": "静音轨道 {slot} · {status}",
@@ -3926,6 +3974,10 @@
   "tracks.unmuteAudio": {
     "source": "解除轨道 {slot} 静音（仅利用视频已读数据）",
     "translation": "Unmute track {slot} (only uses data already read for video)"
+  },
+  "tracks.videoGroup": {
+    "source": "视频",
+    "translation": "Video"
   },
   "transfer.cancelImport": {
     "source": "取消导入",

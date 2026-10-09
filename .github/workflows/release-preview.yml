@@ -324,6 +324,7 @@ jobs:
           name: opportunistic-audio-reports
           path: |
             .run/opportunistic-audio/
+            .run/track-metadata/
             .run/test-suites/ci-audio/
           if-no-files-found: ignore
           retention-days: 30

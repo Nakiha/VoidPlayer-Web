@@ -1,3 +1,4 @@
+import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { WorkerRpc } from './worker-rpc.ts';
 import { attachCachedContainerAudio } from './cached-audio-client.ts';
 import type { PacketCommands, PacketInitResult } from './worker-protocol.ts';
@@ -349,7 +350,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
           if (info.indexState === 'building') void completeIndex().catch(() => {});
         }
       },
-      dispose() { if (!disposed) { stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
+      dispose() { if (!disposed) { stopMetadata(); stopAudio(); deactivateVerifiedNativeYuv(); disposed = true; yuvPool.dispose(); wakeIndex(); activeRpc.onIndexProgress = undefined; activeRpc.onIndexWaiting = undefined; clearTimeout(backgroundTimer); source.onInfoChange = undefined; source.onCachedAudio = undefined; activeRpc.onCachedAudio = undefined; spare = undefined; releaseReservation(); activeRpc.terminate(); } },
     };
     const baseFrameAt=source.frameAt.bind(source),baseFramesAfter=source.framesAfter.bind(source),baseFramesFrom=source.framesFrom.bind(source),baseFramesFollowing=source.framesFollowing?.bind(source);
     activateVerifiedNativeYuv=adapter=>{
@@ -369,6 +370,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       source.framesFollowing=baseFramesFollowing;
       adapter.dispose();
     };
+    const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
     if (container === 'mp4') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     return source;

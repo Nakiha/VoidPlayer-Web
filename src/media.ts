@@ -43,6 +43,9 @@ export interface DecodedFrame extends FrameInfo {
 }
 export interface MediaSource {
   info: MediaInfo;
+  /** Cache-only, bounded metadata inspection; never enables audio output. */
+  requestCachedMetadata?(): void;
+  setMetadataInspectionEnabled?(enabled: boolean): void;
   /** Fire-and-forget cache observation; implementations must never read missing bytes. */
   requestCachedAudio?(ptsUs: number, generation: number): void;
   setCachedAudioEnabled?(enabled: boolean): void;

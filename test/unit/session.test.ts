@@ -1200,3 +1200,22 @@ test('all-missing recovery retains scene duration and position while playback re
    assert.equal(source.disposed, 0);
    await session.dispose();
  });
+
+test('metadata inspection follows source instances, stays muted and does not seek or decode', async () => {
+  const session = new ReviewSession(() => {}), a = media('same-id'), b = media('same-id');
+  const enabled: string[] = [], queries: string[] = [];
+  for (const [name, item] of [['old',a],['new',b]] as const) {
+    item.source.setMetadataInspectionEnabled = value => enabled.push(`${name}:${value}`);
+    item.source.requestCachedMetadata = () => queries.push(name);
+  }
+  try {
+    await session.load('A', async () => a.source);
+    const before = session.getState(); session.inspectTrackMetadata('A'); session.inspectTrackMetadata('A');
+    assert.deepEqual(enabled,['old:true']); assert.deepEqual(queries,['old','old']);
+    assert.equal(session.getState().audioSlot,null); assert.equal(session.getState().positionUs,before.positionUs);
+    await session.load('A',async()=>b.source); session.inspectTrackMetadata('A');
+    assert.deepEqual(enabled,['old:true','old:false','new:true']);
+    assert.notEqual(session.getState().tracks[0].sourceGen,before.tracks[0].sourceGen);
+    session.inspectTrackMetadata(null); assert.equal(enabled.at(-1),'new:false');
+  } finally { await session.dispose(); }
+});

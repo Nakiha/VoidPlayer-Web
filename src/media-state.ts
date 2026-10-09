@@ -1,7 +1,7 @@
 import type {MediaInfo} from './model.ts';
 import type {MediaSource,DecodedFrame} from './media.ts';
 import {contextLog} from './log.ts';
-export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity';changed:string[];before:MediaInfo;after:MediaInfo};
+export type MediaInfoChange={revision:number;reason:'index'|'presented-frame'|'identity'|'cached-metadata';changed:string[];before:MediaInfo;after:MediaInfo};
 const equal=(a:unknown,b:unknown)=>a===b||(typeof a==='object'&&typeof b==='object'&&JSON.stringify(a)===JSON.stringify(b));
 /** Single update boundary for source metadata. Stable info identity preserves
  * catalog references; events carry detached snapshots of exactly this change. */

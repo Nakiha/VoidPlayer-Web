@@ -1,3 +1,4 @@
+import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { abortableWait } from './media-abort.ts';
 import type { AnalysisAxis, AnalysisQuery } from './analysis/types.ts';
 import type { FfmpegAnalysisSummary } from './analysis/ffmpeg-adapter.ts';
@@ -492,7 +493,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     dispose() {
       if (disposed) return;
       disposed = true;
-      stopAudio(); source.onCachedAudio = undefined;
+      stopMetadata(); stopAudio(); source.onCachedAudio = undefined;
       wakeIndex();
       firstFrame = undefined;
       spare = null;
@@ -503,6 +504,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       activeRpc.terminate(undefined, false);
     },
   };
+  const stopMetadata = attachCachedTrackMetadata(source, peekAudio);
   stopAudio = attachCachedContainerAudio(source, peekAudio,
     'url' in file ? undefined : enabled => activeRpc.setCachedAudioObservation(init!.ctx, enabled), audioWindows);
   activeRpc.setIndexHandlers({ batch: applyIndexBatch, complete: applyIndexComplete, error: applyIndexError });

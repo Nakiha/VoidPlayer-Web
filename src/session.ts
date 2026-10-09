@@ -35,6 +35,18 @@ type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; 
   sourceGen: number };
 type SourceOpener = (signal: AbortSignal, onProgress: MediaOpenProgress) => Promise<MediaSource>;
 export class ReviewSession {
+  private metadataSource?: MediaSource;
+  /** UI and agents share the same source-owned, cache-only query lifecycle. */
+  inspectTrackMetadata(slot: Slot | null) {
+    if (slot !== null) slotValue(slot);
+    const source = slot === null ? undefined : this.tracks.get(slot)?.source;
+    if (source !== this.metadataSource) {
+      this.metadataSource?.setMetadataInspectionEnabled?.(false);
+      this.metadataSource = source;
+      source?.setMetadataInspectionEnabled?.(true);
+    }
+    source?.requestCachedMetadata?.();
+  }
   private audioSlot: Slot | null = null;
   private audioSource?: MediaSource;
   private readonly audioOutput = new OpportunisticAudio(() => this.emit());
@@ -1294,6 +1306,7 @@ export class ReviewSession {
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.
     for (const t of this.tracks.values()) if (!t.failure) t.source.dispose();
+    this.inspectTrackMetadata(null);
     this.audioSlot = null; this.audioSource = undefined; this.audioOutput.dispose();
     this.tracks.clear();
     this.listeners.clear();
