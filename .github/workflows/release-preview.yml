@@ -263,7 +263,9 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # Full unit/browser/FATE checks can reach 35 minutes before HTTPS starts.
+    # Keep individual case deadlines; allow the serial job to finish reporting.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
