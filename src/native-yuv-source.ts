@@ -1,6 +1,7 @@
 import type {DecodedFrame,MediaSource} from './media.ts';
 import {MediaOpenError} from './media-errors.ts';
 import {chromaOffset,resolveYuvColor,validateYuv,yuvSample,visibleChromaBounds} from './yuv-color.ts';
+import { hdrTransfer } from './hdr-policy.ts';
 
 /** Certify a same-PTS raw-plane witness, never fit browser RGB output. */
 export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
@@ -10,12 +11,12 @@ export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
   const nativePixels=native.pixels,referencePixels=reference.pixels;
   if(!a.yuv||!b.yuv||!nativePixels||!referencePixels)return reject('需要可读取的原始 YUV 平面。');
   try{validateYuv(a,nativePixels.byteLength);validateYuv(b,referencePixels.byteLength);}catch{return reject('YUV 平面布局无效。');}
-  const is420=(l:NonNullable<typeof a.yuv>)=>l.bitDepth===8&&l.bitShift===0&&l.subsampleX===1&&l.subsampleY===1;
-  if(!is420(a.yuv)||!is420(b.yuv))return reject('需要可读取的 8-bit 4:2:0 平面。');
+  const is420=(l:NonNullable<typeof a.yuv>)=>[8,10,12].includes(l.bitDepth)&&l.bitShift===0&&l.subsampleX===1&&l.subsampleY===1;
+  if(!is420(a.yuv)||!is420(b.yuv)||a.yuv.bitDepth!==b.yuv.bitDepth)return reject('需要位深一致的可读取 4:2:0 平面。');
   const ar=a.visibleRect,br=b.visibleRect;
   if(ar.x!==br.x||ar.y!==br.y||ar.width!==br.width||ar.height!==br.height)return reject('裁剪区域不一致。');
   const x=resolveYuvColor(a),y=resolveYuvColor(b);
-  if(!x.supported||!y.supported||(['matrix','primaries','fullRange','transfer'] as const).some(k=>x[k]!==y[k]))return reject('SDR 色彩条件不一致或不受支持。');
+  if(!x.supported||!y.supported||(a.yuv.bitDepth!==8&&!x.hdr)||(['matrix','primaries','fullRange'] as const).some(k=>x[k]!==y[k])||(x.hdr?x.hdr!==y.hdr:x.transfer!==y.transfer))return reject('色彩条件不一致或不受支持。');
   const [aOx,aOy]=chromaOffset(a.yuv),[bOx,bOy]=chromaOffset(b.yuv);
   if(aOx!==bOx||aOy!==bOy)return reject('色度采样位置不一致。');
   // Compare every cell used by crop-bounded reconstruction. CTU padding
@@ -50,9 +51,11 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     const sourceColor=d.sourceColor;
     const conflicting=sourceColor&&(['matrix','primaries'] as const).some(k=>sourceColor[k]!=null&&d.color[k]!=null&&sourceColor[k]!==d.color[k]);
     const sourceUnsupported=sourceColor&&!resolveYuvColor({...d,color:sourceColor}).supported;
+    const sourceHdr=hdrTransfer(sourceColor?.transfer),resourceHdr=hdrTransfer(d.color.transfer);
+    const format=d.format??'',bitDepth=format.endsWith('P10')?10:format.endsWith('P12')?12:8;
     // Keep the initial capability boundary deliberately narrow. Public native
     // APIs do not expose chroma siting; unknown uses the shared center policy.
-    if(!frame.sample||conflicting||sourceUnsupported||!['NV12','I420'].includes(d.format??'')||!resolveYuvColor(d).supported){frame.close();throw new MediaOpenError('decode','硬件帧无法提供色彩标签一致的 SDR 原始平面。');}
+    if(!frame.sample||conflicting||sourceUnsupported||(sourceHdr&&sourceHdr!==resourceHdr)||!['NV12','I420','I420P10','I420P12'].includes(format)||!resolveYuvColor(d).supported||(bitDepth!==8&&!resourceHdr)||(resourceHdr&&bitDepth<10)){frame.close();throw new MediaOpenError('decode','硬件帧无法提供色彩标签与位深一致的原始平面。');}
     const key=JSON.stringify([d.format,d.codedWidth,d.codedHeight,d.visibleRect,d.color]);
     if(signature!==undefined&&signature!==key){frame.close();throw new MediaOpenError('decode','硬件输出格式或色彩标签发生变化，请切换软件解码。');}signature=key;
     const slot=free.shift()??await new Promise<Slot>(r=>waiters.push(r));
@@ -67,7 +70,7 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
         slot.worker.postMessage({frame:resource,buffer},buffer?[resource!,buffer]:[resource!]);
       });
       const pixels=new Uint8ClampedArray(reply.buffer);
-      const description={...d,byteLength:pixels.byteLength,byteLengthEstimated:false,yuv:{bitDepth:8,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:d.format==='NV12',chromaLocation,
+      const description={...d,byteLength:pixels.byteLength,byteLengthEstimated:false,yuv:{bitDepth,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:d.format==='NV12',chromaLocation,
         planes:reply.layout.map((p,i)=>({...p,width:Math.ceil(d.codedWidth/(i?2:1)),height:Math.ceil(d.codedHeight/(i?2:1))}))}};
       validateYuv(description,pixels.byteLength);
       if(disposed)throw aborted();

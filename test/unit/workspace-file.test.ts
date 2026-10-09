@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compressWorkspace, parseWorkspace, readWorkspaceFile } from '../../src/workspace-file.ts';
+import { defaultColorOutput } from '../../src/color-output.ts';
 import { Viewport } from '../../src/viewport.ts';
 const document = () => ({schema:'voidplayer-workspace',version:1,generatedAt:new Date().toISOString(),serverUrl:'http://localhost:5180/',positionUs:500,
   tracks:[{slot:'A',mediaId:'a',offsetUs:0}],media:[{id:'a',name:'movie.mp4',size:100,lastModified:0,codec:'h264',decoder:'webcodecs',width:100,height:100,durationUs:1000,firstPtsUs:0,source:{kind:'library',id:'server-id',url:'/api/media/server-id'}}],marks:[],viewport:new Viewport().snapshot()});
@@ -67,3 +68,13 @@ test('comparison contract round trips and rejects unsupported semantics rather t
    assert.equal(restored.tracks[0].visible, false);
    assert.throws(() => parseWorkspace({ ...old, tracks: [{ ...old.tracks[0], visible: 'false' }] }));
  });
+
+
+test('v2 HDR comparison retains all mapping conditions and rejects ambiguous targets',async()=>{
+  const output=defaultColorOutput();output.target='hdr';output.hdrWhiteNits=250;output.preview.sourcePeakNits=4000;
+  const comparison={version:2,colorMode:'reference',referenceDecode:{decoder:'hardware',depth:4},presentation:'voidplayer-color-v2',outputColorSpace:'display-p3',colorOutput:output};
+  const parsed=parseWorkspace({...document(),comparison});
+  assert.deepEqual((await readWorkspaceFile(await compressWorkspace(parsed),'http://localhost/')).comparison,comparison);
+  output.preview.sourcePeakNits=1000;assert.equal(parsed.comparison?.version===2&&parsed.comparison.colorOutput.preview.sourcePeakNits,4000);
+  for(const change of [{outputColorSpace:'srgb'},{presentation:'unknown'},{colorOutput:{...output,hdrWhiteNits:0}},{colorOutput:{...output,preview:{...output.preview,hlgSystemGamma:3}}},{colorOutput:{...output,target:'unknown'}}])assert.throws(()=>parseWorkspace({...document(),comparison:{...comparison,...change}}));
+});

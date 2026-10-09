@@ -21,6 +21,7 @@
     "test:thumbnails:browser": "npm run build && node scripts/check-thumbnail-browser.mjs",
     "test:startup:browser": "npm run build && node scripts/check-startup-browser.mjs",
     "test:browser": "npm run build && node scripts/check-browser.mjs",
+    "test:hdr:color": "node --test test/hdr-color.test.ts && node scripts/check-hdr-color-browser.mjs chromium --require-webgpu && node scripts/check-hdr-color-browser.mjs webkit",
     "test:presentation:browser": "node scripts/check-presentation-browser.mjs",
     "test:connection:browser": "npm run build && node scripts/check-connection-guide-browser.mjs",
     "test:range:browser": "npm run build && node scripts/check-range-browser.mjs",
@@ -78,7 +79,9 @@
     "test:manifest": "node scripts/run-tests.mjs --check",
     "i18n:extract": "node scripts/i18n.mjs extract",
     "i18n:check": "node scripts/i18n.mjs check",
-    "i18n:compile": "node scripts/i18n.mjs compile"
+    "i18n:compile": "node scripts/i18n.mjs compile",
+    "test:hdr:browser": "npm run build && node scripts/check-hdr-playback-browser.mjs chromium && node scripts/check-hdr-playback-browser.mjs webkit",
+    "test:hdr:native": "npm run build && node scripts/check-native-hdr-browser.mjs chrome --require-native"
   },
   "dependencies": {
     "@messageformat/runtime": "3.0.2",

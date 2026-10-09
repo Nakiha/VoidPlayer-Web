@@ -1691,10 +1691,6 @@
     "source": "软件解码",
     "translation": "Software decoding"
   },
-  "colorFlow.unifiedSdrConversion": {
-    "source": "统一 SDR 转换",
-    "translation": "Unified SDR conversion"
-  },
   "colorFlow.upload": {
     "source": "上传",
     "translation": "Upload"
@@ -1710,6 +1706,60 @@
   "colorFlow.whenNativePlaneVerificationPasses": {
     "source": "原生平面核对通过时",
     "translation": "When native plane verification passes"
+  },
+  "colorOutput.assumedPeak": {
+    "source": "HDR 假定峰值",
+    "translation": "Assumed HDR peak"
+  },
+  "colorOutput.browserHdr": {
+    "source": "原生 HDR 由浏览器转换为浮点画面后上屏；截图和缩略图为 SDR。假定峰值仅用于软件回退。",
+    "translation": "The browser converts native HDR to floating-point pixels for display. Captures and thumbnails are SDR. The assumed peak only applies to software fallback.",
+    "needsReview": false
+  },
+  "colorOutput.browserPreview": {
+    "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。",
+    "translation": "The browser does not expose native HDR float conversion. Using an SDR preview; select managed color for HDR output.",
+    "needsReview": false
+  },
+  "colorOutput.displayTarget": {
+    "source": "显示目标",
+    "translation": "Display target"
+  },
+  "colorOutput.displayUnavailable": {
+    "source": " · 浏览器未报告 HDR 屏幕",
+    "translation": " · Browser reports no HDR display",
+    "needsReview": false
+  },
+  "colorOutput.fallbackDescription": {
+    "source": "当前环境使用 SDR 预览；HDR 显示目标已保留。",
+    "translation": "This environment uses an SDR preview; the HDR display target is retained."
+  },
+  "colorOutput.gpuUnavailable": {
+    "source": " · HDR 呈现条件未满足",
+    "translation": " · HDR presentation requirements not met",
+    "needsReview": false
+  },
+  "colorOutput.hdrDescription": {
+    "source": "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。",
+    "translation": "Uses a supported HDR display and floating-point output. Captures and thumbnails are SDR previews."
+  },
+  "colorOutput.managedConversion": {
+    "source": "统一 SDR / HDR 转换",
+    "translation": "Unified SDR / HDR conversion"
+  },
+  "colorOutput.nativeHdrUnavailable": {
+    "source": " · 浏览器未开放 HDR 浮点转换",
+    "translation": " · Browser HDR float conversion unavailable",
+    "needsReview": false
+  },
+  "colorOutput.nativeResourceUnverified": {
+    "source": " · 原生帧未通过 HDR 资源验证",
+    "translation": " · Native frame HDR resource unverified",
+    "needsReview": false
+  },
+  "colorOutput.sdrDescription": {
+    "source": "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。",
+    "translation": "HDR sources are mapped to SDR previews. The assumed peak is used by managed conversion and is not a measured mastering or display luminance."
   },
   "connection.cantInstall": {
     "source": "无法安装或找不到证书？",
@@ -1912,8 +1962,9 @@
     "translation": "Managed color does not support this pixel format or color metadata. Switch to browser color and retry."
   },
   "error.referenceHdr": {
-    "source": "自有色彩目前仅支持 SDR。请切换为浏览器色彩后重试。",
-    "translation": "Managed color currently supports SDR only. Switch to browser color and retry."
+    "source": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。",
+    "translation": "Managed color needs verifiable high-depth HDR planes. Switch to browser color and retry.",
+    "needsReview": false
   },
   "identity.chooseExisting": {
     "source": "选择已有用户",
@@ -2439,13 +2490,19 @@
     "source": "画面落后",
     "translation": "Frames lagging"
   },
+  "player.hdrDisplay": {
+    "source": " · HDR 输出",
+    "translation": " · HDR output",
+    "needsReview": false
+  },
   "player.hdrSource": {
     "source": " · HDR 源",
     "translation": " · HDR source"
   },
   "player.hdrSourceSdrFallback": {
-    "source": " · HDR 源（SDR 兜底显示）",
-    "translation": " · HDR source (SDR fallback)"
+    "source": " · HDR 源（SDR 预览）",
+    "translation": " · HDR source (SDR preview)",
+    "needsReview": false
   },
   "player.incompleteTailPlayingCompletePortion": {
     "source": " · 尾部不完整，播放完整部分",
@@ -2520,8 +2577,8 @@
     "translation": "Playing · Muted"
   },
   "player.preservesOriginalFramePrecisionWithConsistentConversion": {
-    "source": "保留原始帧精度，按统一规则转换；仅支持 SDR。",
-    "translation": "Preserves original frame precision with consistent conversion; SDR only."
+    "source": "保留原始帧精度，按统一规则转换；HDR 使用明确参数映射。",
+    "translation": "Preserves source precision with a shared transform. HDR uses explicit mapping parameters."
   },
   "player.rawPlanes": {
     "source": "原始平面",
@@ -3847,6 +3904,11 @@
     "source": "帧索引",
     "translation": "Frame index"
   },
+  "tracks.hdrDisplay": {
+    "source": "HDR 输出",
+    "translation": "HDR output",
+    "needsReview": false
+  },
   "tracks.hdrSource": {
     "source": "HDR 源",
     "translation": "HDR source"
@@ -3920,8 +3982,9 @@
     "translation": "Reused server cache"
   },
   "tracks.sdrFallbackDisplay": {
-    "source": "SDR 兜底显示",
-    "translation": "SDR fallback display"
+    "source": "SDR 预览",
+    "translation": "SDR preview",
+    "needsReview": false
   },
   "tracks.seekMethod": {
     "source": "定位方式",

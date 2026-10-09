@@ -28,7 +28,11 @@ try{
    const {sampleDescription,rgbaDescription}=await import('/src/frame-description.ts');
    const adapter=await navigator.gpu?.requestAdapter();
    const environment={userAgent:navigator.userAgent,adapter:adapter?.info?{vendor:adapter.info.vendor,architecture:adapter.info.architecture,device:adapter.info.device,description:adapter.info.description,isFallbackAdapter:adapter.info.isFallbackAdapter}:null};
-   const source=document.querySelector('#source');await initializeGpuPresentation([source]);
+   const source=document.querySelector('#source');
+   // Exercise GPU readiness after a visible GL frame, rather than only warm starts.
+   setPresentationGeometry(source,{width:2,height:2,imageWidth:2,imageHeight:2,zoom:1,offsetX:0,offsetY:0,dpr:1});
+   paintFrame(source,{kind:'rgba8',description:rgbaDescription(2,2),pixels:new Uint8ClampedArray(16).fill(255),width:2,height:2});
+   await initializeGpuPresentation([source]);
    if(keepNativeGpuResource()===unified||!document.querySelector('.frame-presentation'))throw new Error('Wrong GPU resource policy');
    const geometry={width:96,height:64,imageWidth:96,imageHeight:64,zoom:1,offsetX:0,offsetY:0,dpr:2};
    setPresentationGeometry(source,geometry);
@@ -89,7 +93,10 @@ try{
    setPresentationGeometry(source,null);setPresentationGeometry(source,geometry);
    const resumed=new VideoSample(new VideoFrame(input,{timestamp:0}));
    paintFrame(source,{kind:'video-sample',description:sampleDescription(resumed),sample:resumed,width:3,height:2});resumed.close();
-   const resumedExecutor=source.dataset.colorExecutor;disposePresentation();
+   const resumedExecutor=source.dataset.colorExecutor;
+   await new Promise(resolve=>setTimeout(resolve,50));
+   if(source.closest('.frame-stage').querySelectorAll('.frame-presentation').length!==1||!source.classList.contains('frame-source'))throw new Error('GPU handoff retained a GL surface or late context loss reset source visibility');
+   disposePresentation();
    const {readLogs}=await import('/src/log.ts');
    return{environment,logs:await readLogs({limit:50}),results,depths,colorVectors,chromaCases,executor,contract,fallback,resumedExecutor,remaining:document.querySelectorAll('.frame-presentation').length};
   },unified);

@@ -1,15 +1,15 @@
 # 色彩链路与帧资源契约
 
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
-应用提供“自有色彩”（SDR）和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩；已保存的选择继续沿用。设置位于“色彩与解码 → 色彩转换”，UI/Agent 共用 `session.setColorMode`。不承诺跨设备逐像素一致或 HDR/EDR 输出。
+应用保留“自有色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。自有色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
 
-HLG/PQ（包括带 Dolby Vision 元数据的 HLG 样片）在自有色彩模式下会被 SDR 准入检查拒绝；界面以警告 toast 提供“色彩与解码”入口，用户切换到浏览器色彩后重试。不会自动改变工作区色彩条件，也不把浏览器兼容播放标记为完整 Dolby Vision/HDR 参考呈现。
+PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源。自有模式拒绝 RGBA8、低位深或标签不足的 HDR 资源；符合 BT.2100 平面契约时使用统一 HDR 数学。浏览器原生 HDR 不直接导入 external texture；具备无限 HDR headroom 和 float16 2D 转换的浏览器使用浮点 Display-P3 中转，再复制到 WebGPU rgba16float 扩展画布。缺少接口时明确使用 sRGB Canvas 兼容预览。转换完全归浏览器，不叠加源 PQ/HLG 变换。Dolby Vision/HDR10+ 动态元数据不参与转换。
 
 ## 用户选择的两条路径
 
-- **正确颜色（reference）**：未保存解码偏好时默认“优先硬件解码”，也可显式选择“强制软件解码”。硬件优先选择 WebCodecs → Worker 原始 YUV 读回 → 共同颜色转换，不经过浏览器 RGB 呈现；软件选择真实 WASM。已有本机偏好及导入工作区的比较条件优先于新默认。FLV（含非标 HEVC）继续用 TS 解封装及渐进索引，硬件优先时与其他容器共用原始平面读回/首帧核对准入，不再因 reference 模式直接强制 WASM。特殊包索引 MP4 同样保留原生帧交给此准入流程。能力、首帧、读回或核对失败按既有失败阶段回退；input/resource 失败不换后端。RGBA/HDR/不支持颜色明确拒绝。这里的“正确”指本文定义的 SDR 显示参照规则，不代表完整专业 HDR 色彩管理。
+- **正确颜色（reference）**：未保存解码偏好时默认“优先硬件解码”，也可显式选择“强制软件解码”。硬件优先选择 WebCodecs → Worker 原始 YUV 读回 → 共同颜色转换，不经过浏览器 RGB 呈现；软件选择真实 WASM。已有本机偏好及导入工作区的比较条件优先于新默认。FLV（含非标 HEVC）继续用 TS 解封装及渐进索引，硬件优先时与其他容器共用原始平面读回/首帧核对准入，不再因 reference 模式直接强制 WASM。特殊包索引 MP4 同样保留原生帧交给此准入流程。能力、首帧、读回或核对失败按既有失败阶段回退；input/resource 失败不换后端。RGBA/不支持颜色或无法核对的 HDR 资源明确拒绝。这里的“正确”指本文明确的转换契约，不代表专业母版参考显示。
 - 硬件缓冲深度为每轨 1/2/4/8 帧，默认 2；每源固定 Worker 数和顺序读回队列受此上限约束，应用播放队列与解码器内部队列另有自身预算。更多缓冲不保证更快。配置只在 reference 下显示；软件解码隐藏深度控件但保留选择。底层使用 prefer-hardware 偏好，不冒充实际 GPU 使用的证明。
-- 硬件准入目前限 NV12/I420 8-bit SDR。载入时临时打开真实 WASM 取得同 PTS 首帧，核对全部原始 YUV 样本、coded/crop、位深、子采样及 resolved matrix/range/primaries/transfer；通过后沿用该帧确认的 chroma location，释放 WASM 源。保留硬件资源原始 color 和容器 sourceColor，不用源标签覆盖资源，也不拟合 RGB。容器 range 可以与实际帧不同；源 HDR 或 primaries/matrix 冲突拒绝。此验证增加首帧载入成本，不增加逐帧 WASM 解码。首帧证据不是动态码流全程认证；后续公开格式、尺寸、裁剪或色彩标签变化明确报错，提示切换软件，不静默沿用旧契约。
+- 硬件准入支持 NV12/I420 8-bit SDR，以及 I420P10/I420P12、位深和标签一致的 PQ/HLG。载入时临时打开真实 WASM 取得同 PTS 首帧，核对全部原始 YUV 样本、coded/crop、位深、子采样及 resolved matrix/range/primaries/transfer；通过后沿用该帧确认的 chroma location，释放 WASM 源。保留硬件资源原始 color 和容器 sourceColor，不用源标签覆盖资源，也不拟合 RGB。容器 range 可以与实际帧不同；源 HDR 与资源 HDR 身份不一致、低位深 HDR 或 primaries/matrix 冲突拒绝。此验证增加首帧载入成本，不增加逐帧 WASM 解码。首帧证据不是动态码流全程认证；后续公开格式、尺寸、裁剪或色彩标签变化明确报错，提示切换软件，不静默沿用旧契约。
 - 硬件能力/读回/首帧核对失败进入现有 decode 阶段软件回退；input/resource 失败不换后端。播放中的错误继续由会话处理，不新增整体 catch 换路径。每次关闭/seek 归还预取帧，源释放时终止 Worker 并拒绝待处理请求；已交付缓冲只在 frame.close 后回收，每 Worker 最多一个空闲缓冲。
 - **匹配浏览器（browser）**：WebCodecs 优先，原生资源沿用浏览器输出；WASM 回退使用中性探针选择的 Apple/CV/普通 SDR 候选。这个选择仅是近似兼容，不认证未测编码、位深或资源；无有效探针时软件保留普通 SDR 转换。不会按 UA/文件名加 BT601 或 GAMMA22 修正，因此 Windows Edge 的已知资源差异不能承诺消除。
   原生资源的托管归属不依赖 WebGPU 是否成功初始化；无 WebGPU 时仍保留原生 sample，经浏览器纹理导入或 Canvas 绘制。切换模式准备首帧时也按目标用户模式决定，不能因旧 GPU 状态而先转换为自有 YUV 路径。
@@ -19,7 +19,7 @@ HLG/PQ（包括带 Dolby Vision 元数据的 HLG 样片）在自有色彩模式�
 
 工作区导入复用同一回滚策略：准备失败时恢复原模式、解码偏好和呈现通道，再重绘原健康轨道。原导入异常始终保留；presenter 或重绘回滚失败作为带 cause 的 AggregateError 子项和本地诊断报告，受影响轨道停用并释放，保留媒体身份和标注。取消仍返回 AbortError；新意图中止旧重绘，迟到资源仅释放。
 
-review 导出继续使用 `voidplayer-web-review` version 1，保留 media、marks、alignment、frameEvidence 等现有字段；新增可忽略的 `comparison`（version 1）与 workspace 共用快照，包含 colorMode、referenceDecode、presentation=`voidplayer-sdr-v1`、outputColorSpace=`srgb`。`color` 描述与当前 session 一致：reference 为 `reference-sdr`，browser 为 `browser-match-approximate`，均不是实际 GPU 使用或 HDR/色准认证。旧 browser 导出的 `browser-managed-unverified` 仍表示未认证的浏览器条件；消费者应优先读取 comparison，旧文件缺失时只能使用旧 color 描述，未知描述不能推定 reference。仅支持旧固定 color 字符串的消费者应保留为未知并继续读取原标注字段，无 schema/version 或标注形状迁移。
+review 导出继续使用 `voidplayer-web-review` version 1，保留 media、marks、alignment、frameEvidence 等现有字段；`comparison`（version 2）与 workspace 共用快照，包含 colorMode、referenceDecode、presentation=`voidplayer-color-v2`、请求的 outputColorSpace 和完整 colorOutput 参数。旧 version 1 `voidplayer-sdr-v1` 仍可导入，恢复固定默认 SDR 条件；缺少 comparison 时沿用当前选择，未知契约拒绝。`color` 描述与当前 session 一致：reference 请求 SDR 时为 `reference-sdr`、请求 HDR 时为 `reference-hdr-requested`，browser 为 `browser-match-approximate`，均不是实际 GPU 使用或 HDR/色准认证。旧 browser 导出的 `browser-managed-unverified` 仍表示未认证的浏览器条件；消费者应优先读取 comparison，旧文件缺失时只能使用旧 color 描述，未知描述不能推定 reference。仅支持旧固定 color 字符串的消费者应保留为未知并继续读取原标注字段，无 schema/version 或标注形状迁移。
 
 `comparisonScope=export-time` 明确 comparison/color 是生成导出时的当前条件；`markComparisonConditions=not-recorded` 明确既有及新标注都没有逐条历史色彩条件。切换模式或导入旧工作区不会改写标注、不会把当前模式回填为创建时模式。导出依然是 detached snapshot，修改 JSON 不影响会话。UI 和 Agent 的 export_review 共用此行为。
 
@@ -35,6 +35,7 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 ## 信息与责任
 
 - `MediaInfo.color` / `FrameDescription.sourceColor` 是码流或容器原始标签，未知保持 null。
+- `FrameDescription.sourceColorOrigin` 保留源标签的 container/decoder 来源，上屏同步 `MediaInfo.colorSource` 时沿用此来源；旧解码资源未标来源时按 decoder 处理，不把容器标签误报成解码器标签。
 - `FrameDescription.color` 描述实际交付资源，不能用容器标签覆盖已经转换的浏览器资源。
 - `resolveYuvColor` 产生单独的 resolved plan，逐字段记录 resource/fallback 来源，不改原标签。
 - `yuv` 描述位深、位对齐、子采样、平面 offset/stride/尺寸及 chroma location。偏移按字节计，16 位数据为 little endian。
@@ -47,20 +48,21 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 
 - 初始化/刷新共用 epoch 失效守卫（`gpu-presentation-guard.ts`）：进入即递增，旧任务迟到成功或失败只清理自己那批候选，不提交全局 entries，也不全局 dispose 新一代资源；完整 source 列表独立保存，不从已提交反推，避免启动与色彩切换重叠时旧 profile 资源晚到。
 
-- WebCodecs：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB GPU 画布。播放无应用层 copyTo/readback。
+- WebCodecs SDR：原生 VideoFrame clone → external texture 的浏览器资源转换 → sRGB / 扩展 Display-P3 GPU 画布。播放无应用层 copyTo/readback。
+- WebCodecs HDR：仅在 HDR 目标和能力满足时，原生 VideoFrame clone → 浏览器 float16 Display-P3 2D 转换（`globalHDRHeadroom=Infinity`）→ `copyExternalImageToTexture` 至 rgba16float → WebGPU 扩展画布。此呈现入口多一次转换和纹理复制，不是零拷贝直通；不取 CPU 像素，不重新解码。每轨只保留一个可复用转换表面，尺寸变化重设无限 headroom，清空/释放时缩小表面。截图/缩略图仍按需独立生成，不读取中转画布作为 HDR 导出。
 - WASM：ABI v2 原始 YUV → GPU storage buffer → `webgpu-yuv-kernel.mjs` 的 range/matrix/transfer/primaries 转换 → 同一输出。8–16 位精度保留到运算；无需 memory VideoFrame。
 - Apple/CV profile 仅用于用户选择的近似匹配或显式 `colorPipeline=webgpu-apple709` / `webgpu-cv-full-range` 实验参数。Apple profile 使用 CoreVideo BT709_APPLE 1.961 gamma 和 SMPTE-C/BT470BG→709 基色矩阵。CV profile 只对 8-bit 输入复现 full-range 资源重量化，缺失矩阵时使用该资源的 709 默认；sourceColor 和 color 原标签不修改。
 - profile 是独立的资源呈现约定，不覆盖源标签。旧 `resolveYuvColor` 的默认值与新 profile 需区分；未知的显式色彩不强制套 709。
 - 两入口对整数源像素转换为 RGB，缩小对四点 RGB 做双线性，放大 NEAREST；避免两路分别在 YUV/RGB 域滤波。共享设备和微任务提交，引用的资源覆写前先提交，旧 clone 在提交后关闭。
-- 每个 surface 只保留当前 clone 或已上传 YUV buffer；截图按需用同一 shader 渲染源尺寸，旋转后物化 2D 画布。播放不维护隐藏 RGBA 中间画布。
-- GPU 丢失、资源超限/导入失败、RGBA 或 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对交付资源的 `color.transfer` 用 `isHdrTransfer` 判定：`pq`/`hlg` 及 `smpte2084`/`arib-std-b67` 别名写法的原生帧一律拒绝 external 纹理导入，沿用 VideoSample.draw → sRGB Canvas 2D 旧路径——external 采样不对 HLG/PQ 做 tone mapping，直接导入会发灰发白。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
+- 每个 surface 保留当前 clone 或已上传 YUV buffer；原生 HDR 另外复用一个 float16 转换表面和浮点纹理；自有截图按需用同一 shader 渲染源尺寸 SDR 预览，旋转后物化 2D 画布；原生 HDR 截图按需由浏览器转换为 sRGB。自有 HDR 浮点表面截图显式关闭扩展输出并执行保存的预览策略，不能将普通截图标为 HDR 导出。SDR 和原始 YUV 播放不维护隐藏 RGBA 中间画布；原生 HDR 中转仅服务于浏览器浮点呈现。
+- GPU 丢失、资源超限/导入失败、RGBA 或未满足浮点转换能力的原生 PQ/HLG 使用下述旧路径，记本地原因。WebGPU 准入（`gpuPaint`）对实际资源 transfer 判定，别名与标准名等价；原生 HDR 只通过上述浏览器浮点转换，不使用未经验证的 external HDR 导入。降级原因随每轨 `presentation.fallbackReason` 和本地日志报告。清空槽位后可重新尝试；暂停时丢失 GPU 需要 seek。`colorPipeline=legacy` 可显式选择旧路径对照。
 - 可见页面播放时 rAF 与 20 ms timer 竞争且只执行一次，防止浏览器可见状态下异常节流；暂停取消、隐藏不启用兜底。该机制不承诺物理屏幕刷新率。
 
 ## 显式统一平面路径
 
 `colorPipeline=unified` 不运行自动资源 profile 探针，直接初始化无 Apple/CV 补偿的 GPU 平面 kernel。可读原生帧通过现有异步 `prepareYuvFrame` 复制原布局后关闭 sample，与软件 YUV 共用 GPU 转换/采样。初始化失败沿用旧 WebGL/CPU 路径。不改解码器选择。
 
-`data-color-contract` 区分 `common-yuv-sdr`、`profile-yuv-sdr`、`browser-managed` 和 `rgba-resource`。默认的软件平面也标为 common-yuv-sdr；profile-yuv-sdr 仅用于显式补偿实验。统一模式下仍然可能出现 browser-managed，不代表一致性通过。源标签和资源标签不一致时不擅自覆盖；高位深不透明资源不降精度伪装为 YUV。该模式存在真实 GPU→CPU 复制成本，尚不适合直接作为默认播放路径。
+`data-color-contract` 增加原始 HDR 的 `common-yuv-hdr-preview` / `common-yuv-hdr`，并区分 `common-yuv-sdr`、`profile-yuv-sdr`、`browser-managed` 和 `rgba-resource`。默认的软件平面也标为 common-yuv-sdr；profile-yuv-sdr 仅用于显式补偿实验。统一模式下仍然可能出现 browser-managed，不代表一致性通过。源标签和资源标签不一致时不擅自覆盖；高位深不透明资源不降精度伪装为 YUV。该模式存在真实 GPU→CPU 复制成本，尚不适合直接作为默认播放路径。
 
 ## 旧路径及能力回退
 
@@ -72,7 +74,7 @@ Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipelin
 | 不透明或不可读 WebCodecs SDR、非支持色彩 | 浏览器纹理导入或 Canvas 2D | browser-default + colorFallback 原因；未实现确定性统一 |
 | 原生 PQ/HLG | VideoSample.draw → sRGB Canvas 2D → WebGL | canvas2d-srgb |
 | WASM 不支持的布局或色彩 | 明确 swscale RGBA 回退 | rgba8-upload + swscale-rgba |
-| WASM PQ/HLG | 保留原 RGBA 路径及警告 | rgba8-hdr-unmanaged |
+| WASM PQ/HLG、明确的 BT.2020 NCL/primaries/range、高位深平面 | 共同 HDR 转换：SDR 预览或符合条件的 WebGPU extended Display-P3 输出 | common-yuv-hdr-preview / common-yuv-hdr；缺少条件的 RGBA 回退仍为 rgba8-hdr-unmanaged |
 
 截图按需调用同一 shader，在源尺寸 RGB 纹理上物化并读取，不读 Y plane，不在播放中维护隐藏 RGBA 画布。
 YUV shader 的 colorAt 对整数源像素转换并量化，再做视口采样。放大取最近源像素；缩小对邻近四个已经转换、量化的 RGB 做双线性插值。颜色数学不随视口大小变化；色度重建和视口滤波是两次独立决策。
@@ -136,7 +138,7 @@ packet 和 FFmpeg 容器统一调用 `readWasmFrame`，同一 ArrayBuffer 跨 wo
 
 支持无 alpha 的 planar YUV（420/422/444，8–16 位）、NV12、P010 等描述符能够明确表示的布局。
 不通过 swscale 降为 RGBA 后伪称保留高精度；不支持的布局/色彩才走标明的 RGBA 回退。
-HDR 继续旧路径，不把 PQ/HLG 平面误当 SDR。
+锁定 core `f9a41c7baf7031a65279b14a55803380f90128f4` 支持明确 BT.2020 NCL、BT.2020 primaries、至少 10-bit 的 PQ/HLG 原始平面；前端还要求实际 range 明确。HDR 使用独立传递函数，不套 SDR gamma。布局/色彩不满足条件仍显式 RGBA 回退，不将其标为已管理 HDR。
 
 core 每行复制有效字节，去掉 padding，支持负 linesize。descriptor 与缓冲只在下次输出/reset/destroy 前有效。
 Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深及平面非重叠；字符串 ccall 可能增长 heap，描述必须先读完，再刷新像素 heap 视图。
@@ -169,15 +171,29 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 - `scripts/diagnose-sdr-color.mjs`：同一 FLV、同 PTS 比较，新增 plane/shader 参考及 copyMs；不会自动上传片源、像素、日志。
 
 路径状态变化时才记录转换计划，不能逐帧写日志。Windows 原问题必须在用户原设备重跑；Mac 证据不能代替 Windows/Edge 最终验收。
-Dolby Vision/HDR10+ 动态元数据、EDR、高峰值 HDR 输出均不在本轮支持范围。
+Dolby Vision/HDR10+ 动态元数据、母版元数据自动推定峰值及物理显示校准不在本轮支持范围。
+
+## HDR 预览和显示目标
+
+`hdr-policy.ts` 定义版本化参数；`hdr-color.ts` / `hdr-shader.ts` 提供 PQ/HLG 数学。CPU、WebGL、WebGPU 共用 `voidplayer-hdr-sdr-preview-v1`：绝对显示光 → 扩展 Reinhard 亮度压缩 → BT.2020 到 709 → 朝映射亮度去饱和 → sRGB。PQ 为绝对 nits；HLG 先逆 OETF，再按场景亮度执行 OOTF，不能逐通道独立 gamma。
+
+默认假定源峰值 1000、曝光白 203、HLG 参考显示峰值 1000 nits、system gamma 1.2。UI 峰值档位 1000/2000/4000/10000 同步 HLG 显示峰值及相应 gamma，完整参数通过 session/export 保存；不把假定值标为母版实测。修改目标或参数暂停并准备原位置的新帧，失败连同模式/解码/画面回滚。
+
+HDR 显示要求 `dynamic-range: high`、WebGPU 可用且 `rgba16float` / `toneMapping.mode=extended` 配置核验成功时启用。自有平面的转换为显示光 BT.2020 → Display-P3 → 按显式 hdrWhiteNits（默认 203、80–400 可选）归一化 → 扩展 sRGB/P3 编码，保留 >1 高亮，负色域通道钳制到 0；屏幕最终峰值由浏览器与系统决定。普通 SDR 帧转为 P3、保持 1.0 参考白。此过程无 SDR shoulder，不套浏览器近似 profile。
+
+`MediaInfo.presentation` 单独记录 requestedTarget、actualTarget、captureTarget、executor、contract；`output` 仍是实际解码资源，不冒充显示画布。actualTarget=hdr 表示浮点 extended 输出契约，不能证明物理屏幕已测得 nits。无相应能力使用 SDR，保留请求目标，UI 说明降级。显示能力变化在会话空闲暂停后重建，启动 GPU 就绪后也重新呈现早期回退帧。
+
+浏览器原生 HDR 仅准入 `browser-hdr-bridge.mjs` 的浮点转换。显式检查真实 2D context 的 Display-P3、float16、无限 `globalHDRHeadroom`；只设置浮点 backing store 仍会在 drawImage 时进行 SDR 映射。此接口在当前 Chromium 为实验性能力，应用不会修改浏览器启动参数或系统设置。未开放时报告 `browser-hdr-headroom-unavailable`，可切换自有色彩取得 HDR。浏览器决定原生 HLG OOTF、PQ 参考白及 HDR 转换，应用的 hdrWhiteNits/预览峰值只用于自有平面和软件回退，不用于二次校正 browser RGB。色域外负通道仍钳制到 0，正高亮保留。
+
+直接 external HDR 导入的 Chrome 154 实验未得到符合约定的扩展显示光，但灰阶仍能区分，所以不能仅凭最高值 ≤1 宣称硬截断。当前 Chromium 源码的高位深非 RGBAF16 路径使用 N32 中间资源；`copyExternalImageToTexture(VideoFrame)` 复用同一个 external helper，直接复制到浮点目的纹理也不能解决。浮点 2D 入口绕开这个 helper。若源是 HDR 而原生资源已变为 SDR 标签，尚未验证该资源是否保留扩展显示光，使用 SDR 预览并报告 `native-hdr-resource-unverified`，不覆盖资源标签或把普通 SDR 纹理放到扩展画布后冒充 HDR 保留。每轨诊断报告 `displayHdr`、`outputColorSpace`、`outputFormat`、`toneMapping`、请求/实际目标、executor 和 fallbackReason；`webgpu-browser-hdr-float` 表示浏览器浮点中转，不表示零拷贝或自有数学认证。真实 HEVC PQ/HLG 灰阶、彩色块和浮点 GPU 读回证据见 [HDR 支持](hdr-support.md)。
 
 ## 首帧封面资源
 
-缩略图不修改播放帧、源标签或 presenter 的播放采样策略。软件 YUV/RGBA 候选复制一份有界缓冲并转移至单任务 Worker，按小尺寸目标双线性采样，YUV 使用共同 range/matrix/primaries 转换；不再生成全尺寸 RGBA 中间图。旋转和显示比例沿用帧描述。原生 sample 克隆后直接绘制到小画布。不可管理的 HDR 仍跳过。候选有独立所有权和 500ms 到期释放；事件循环被外部任务阻塞时定时器只能在恢复调度后执行，此期限不是实时系统保证。慢编码、存储和上传不串行阻塞下一张完整帧。
+缩略图不修改播放帧、源标签或 presenter 的播放采样策略。软件 YUV/RGBA 候选复制一份有界缓冲并转移至单任务 Worker，按小尺寸目标双线性采样，YUV 使用共同 range/matrix/primaries/HDR 预览转换，缩略图固定默认预览策略以保持缓存内容稳定；不再生成全尺寸 RGBA 中间图。旋转和显示比例沿用帧描述。原生 sample 克隆后直接绘制到小画布。符合平面契约的 HDR 可以生成 SDR 封面；不可管理的 RGBA HDR 仍跳过。候选有独立所有权和 500ms 到期释放；事件循环被外部任务阻塞时定时器只能在恢复调度后执行，此期限不是实时系统保证。慢编码、存储和上传不串行阻塞下一张完整帧。
 
-### 工作区比较条件（v0.3.0）
+### 工作区比较条件
 
-导出/本机检查点持久化 `comparison`：色彩模式、referenceDecode 偏好/深度、`voidplayer-sdr-v1` 呈现契约和 sRGB 目标。导入在打开解码器之前应用，失败/取消回滚原条件；通道仍保存在 viewport。这不会扩展 SDR 准入范围，不宣称 browser 兼容路径与软件输出逐像素相同，也不承诺不同设备的 HDR 参考显示。旧工作区缺少该块时提示沿用当前条件，未知契约拒绝读取。
+导出/本机检查点持久化 `comparison`：色彩模式、referenceDecode 偏好/深度，以及 `voidplayer-color-v2` 的目标、HDR 白与全部预览参数。导入在打开解码器之前应用，失败/取消回滚原条件；通道仍保存在 viewport。兼容旧 version 1 SDR 契约，不宣称 browser 兼容路径与软件输出逐像素相同，也不承诺不同设备的 HDR 参考显示。旧工作区缺少该块时提示沿用当前条件，未知契约拒绝读取。
 
 ### Visible chroma edge contract
 

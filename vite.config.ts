@@ -74,6 +74,8 @@ export default defineConfig({
     },
   }],
   server: {
+    // Generated failure HTML must not reload unrelated browser harnesses.
+    watch: { ignored: ['**/.run/**', '**/artifacts/**'] },
     proxy: { '/api': { target: 'http://127.0.0.1:5180', changeOrigin: false } },
     headers: isolationHeaders,
   },

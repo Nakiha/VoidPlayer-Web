@@ -27,6 +27,9 @@ import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
+  /** Filled only by the presenter after a successful paint; never decoder tags. */
+  presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string;
+    displayHdr: boolean; outputColorSpace: 'srgb' | 'display-p3'; outputFormat: 'unorm8' | 'float16'; toneMapping: 'standard' | 'extended'; fallbackReason?: string };
   readonly description: FrameDescription;
   readonly copyMs?: number;
   readonly rotation?: number;
@@ -289,7 +292,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const yuvPool=createYuvBufferPool();
     const wrap = async (sample: VideoSample): Promise<DecodedFrame> => {
       let description: FrameDescription;
-      try { description=sampleDescription(sample);if(info.color)description.sourceColor={...info.color}; } catch(error) {sample.close();throw error;}
+      try { description=sampleDescription(sample);if(info.color){description.sourceColor={...info.color};description.sourceColorOrigin='container';} } catch(error) {sample.close();throw error;}
       const byteSize=description.byteLength;
       const nativeFrame:DecodedFrame = {
       description,

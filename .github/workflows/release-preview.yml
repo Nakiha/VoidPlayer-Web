@@ -263,7 +263,9 @@ jobs:
     name: Verify trusted HTTPS, WebCodecs and source UI
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    # Full unit/browser/FATE checks can reach 35 minutes before HTTPS starts.
+    # Keep individual case deadlines; allow the serial job to finish reporting.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
@@ -474,7 +476,9 @@ jobs:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
     needs: decoder
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # Chromium software graphics audits 1200 full-source captures. The case
+    # has a separate no-progress watchdog; leave room for its 30-minute budget.
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
@@ -548,6 +552,7 @@ jobs:
       - run: npm ci
       - run: node scripts/run-tests.mjs --case release-core
       - name: Verify configuration and persistent index on Node
+        id: native-node
         run: node scripts/run-tests.mjs ci-native-node
       - name: Verify persistent index on packaged runtime
         run: node scripts/run-tests.mjs ci-native-bun
@@ -582,6 +587,10 @@ jobs:
           path: artifacts/*.tar.gz*
           if-no-files-found: error
           retention-days: 30
+      - name: Diagnose failed Windows Node checks with full TAP details
+        if: failure() && runner.os == 'Windows' && steps.native-node.outcome == 'failure'
+        timeout-minutes: 2
+        run: node --experimental-strip-types --test --test-reporter=tap test/measurement.test.ts
       - uses: actions/upload-artifact@v4
         if: always()
         with:

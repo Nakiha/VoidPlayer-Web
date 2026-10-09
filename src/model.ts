@@ -21,6 +21,7 @@ export type MediaInfo = {
   metadataRevision?:number;
   /** Description of the currently presented frame; prefetch never updates it. */
   output?:FrameDescription;
+  presentation?: import('./media.ts').DecodedFrame['presentation'];
   indexSource?: 'client' | 'server';
   indexState?: 'building' | 'complete' | 'error';
   indexError?: string;

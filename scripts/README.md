@@ -14,3 +14,5 @@
 目录整理按契约、真实媒体、轻量逻辑、服务、其余逻辑和工具分批进行。带专用启动、打包或平台约束的工具继续保留原有入口和实现，职责由本索引及 manifest 的 kind、restrictions、required 明确区分；不能根据 `check-` 或 `test:` 名称推断它是门禁。
 
 新增浏览器或 Node 回归必须登记稳定 ID、矩阵与前置条件。领域浏览器和 `tools/` 中的模块都纳入漏登记检查；工具例外要给出理由且 `required=false`。复用 helper 不单独作为一次回归执行，Node helper 与 Worker 位于 `test/helpers/`。固定参考 JSON、媒体生成入口和旧 Worker URL 保留兼容，不重生成参考结果。
+
+原生 HDR 浮点呈现：`npm run test:hdr:native` 检查实际默认能力与降级；`node scripts/check-native-hdr-browser.mjs chrome --require-native --experimental-hdr [--qa]` 在独立有窗口测试浏览器验证浮点转换和真实播放，详见 `docs/hdr-support.md`。

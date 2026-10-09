@@ -1,5 +1,8 @@
 import type { ColorInfo } from './model.ts';
 import type { FrameDescription } from './frame-description.ts';
+import { hdrTransfer } from './hdr-policy.ts';
+import { hdrToSdrPreview } from './hdr-color.ts';
+import { getHdrPreviewPolicy } from './color-output.ts';
 
 export interface YuvLayout {
   bitDepth: number;
@@ -20,10 +23,12 @@ export function resolveYuvColor(d: FrameDescription) {
   const fullRange = c.fullRange ?? !!d.sourcePixelFormat?.startsWith('yuvj');
   const primaries = c.primaries ?? (matrix === 'bt2020-ncl' ? 'bt2020' : matrix === 'bt709' ? 'bt709' : 'smpte170m');
   const transfer = c.transfer ?? 'bt709';
-  const supported = ['bt709', 'smpte170m', 'bt470bg', 'bt2020-ncl'].includes(matrix)
+  const hdr = hdrTransfer(c.transfer);
+  const supported = hdr ? c.matrix === 'bt2020-ncl' && c.primaries === 'bt2020' && typeof c.fullRange === 'boolean'
+    && (!d.yuv || [10,12,14,16].includes(d.yuv.bitDepth)) : ['bt709', 'smpte170m', 'bt470bg', 'bt2020-ncl'].includes(matrix)
     && ['bt709', 'smpte170m', 'bt470bg', 'bt2020'].includes(primaries)
     && ['bt709', 'smpte170m', 'iec61966-2-1', 'bt2020-10', 'bt2020-12'].includes(transfer);
-  return { matrix, fullRange, primaries, transfer, supported,
+  return { matrix, fullRange, primaries, transfer, supported, hdr, hdrPolicy: hdr ? getHdrPreviewPolicy() : null,
     provenance: Object.fromEntries(['matrix','fullRange','primaries','transfer'].map(k => [k, c[k as keyof ColorInfo] == null ? 'fallback' : 'resource'])),
     target: 'srgb', sdrTransfer: 'display-referred-srgb-like', chromaSampling: 'bilinear-sited' };
 }
@@ -86,7 +91,8 @@ export function yuvPixelRgb(d: FrameDescription, pixels: Uint8Array | Uint8Clamp
   const cb = (yuvReconstructedSample(pixels, l, 1, sx, sy, visibleChromaBounds(d)) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
   const cr = (yuvReconstructedSample(pixels, l, 2, sx, sy, visibleChromaBounds(d)) - 128 * scale) / (plan.fullRange ? max : 224 * scale);
   let rgb = [yy + 2 * (1 - kr) * cr, yy - 2 * kb * (1 - kb) / kg * cb - 2 * kr * (1 - kr) / kg * cr, yy + 2 * (1 - kb) * cb];
-  if (plan.primaries === 'bt2020') {
+  if (plan.hdr && plan.hdrPolicy) rgb = hdrToSdrPreview(rgb as [number,number,number], plan.hdr, plan.hdrPolicy);
+  else if (plan.primaries === 'bt2020') {
     const [r, g, b] = rgb.map(v => linear(Math.max(0, v)));
     rgb = [1.660491 * r - 0.587641 * g - 0.072850 * b, -0.124550 * r + 1.132900 * g - 0.008349 * b, -0.018151 * r - 0.100579 * g + 1.118730 * b].map(encoded);
   }

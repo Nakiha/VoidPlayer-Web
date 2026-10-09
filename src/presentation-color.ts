@@ -19,5 +19,5 @@ export function presentationColor(kind: 'video-sample' | 'rgba8' | 'yuv', descri
     byteLengthEstimated: description.byteLengthEstimated ?? false,
     plan: kind === 'yuv' ? resolveYuvColor(description) : null, fallback: description.colorFallback ?? null,
     target: 'srgb', canvasConversion, unsupportedHdr,
-    conversion: kind === 'yuv' ? 'unified-yuv-sdr' : canvasConversion ? 'canvas2d-srgb' : unsupportedHdr ? 'rgba8-hdr-unmanaged' : kind === 'rgba8' ? 'rgba8-upload' : 'browser-default' };
+    conversion: kind === 'yuv' ? hdr ? 'unified-yuv-hdr-preview' : 'unified-yuv-sdr' : canvasConversion ? 'canvas2d-srgb' : unsupportedHdr ? 'rgba8-hdr-unmanaged' : kind === 'rgba8' ? 'rgba8-upload' : 'browser-default' };
 }

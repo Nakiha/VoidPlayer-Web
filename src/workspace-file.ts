@@ -1,4 +1,6 @@
 import type { ColorMode, ReferenceDecode } from './color-mode.ts';
+import { validateColorOutput } from './color-output.ts';
+import type { ColorOutput } from './color-output.ts';
 import { drawingsValue } from './annotation.ts';
 import { discussionValue } from './mark-discussion.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
@@ -26,10 +28,9 @@ export type WorkspaceLayout = {
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
   analysisView?: AnalysisViewState;
 };
-export type ComparisonConditions = {
-  version: 1; colorMode: ColorMode; referenceDecode: ReferenceDecode;
-  presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
-};
+export type ComparisonConditions = { colorMode:ColorMode; referenceDecode:ReferenceDecode } & ({
+  version: 1; presentation: 'voidplayer-sdr-v1'; outputColorSpace: 'srgb';
+} | { version: 2; presentation:'voidplayer-color-v2'; outputColorSpace:'srgb'|'display-p3'; colorOutput:ColorOutput });
 export type WorkspaceFile = {
   schema: 'voidplayer-workspace'; version: 1; name?: string; generatedAt: string; serverUrl: string;
   comparison?: ComparisonConditions;
@@ -136,9 +137,14 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   let comparison: ComparisonConditions | undefined;
   if (d.comparison !== undefined) {
     const c = object(d.comparison), decode = object(c.referenceDecode);
-    if (c.version !== 1 || !['reference', 'browser'].includes(c.colorMode) || c.presentation !== 'voidplayer-sdr-v1' || c.outputColorSpace !== 'srgb' ||
-      !['hardware', 'software'].includes(decode.decoder) || ![1, 2, 4, 8].includes(decode.depth)) throw new Error('工作区比较条件不受支持，请使用匹配的播放器版本。');
-    comparison = { version: 1, colorMode: c.colorMode, referenceDecode: { decoder: decode.decoder, depth: decode.depth }, presentation: c.presentation, outputColorSpace: c.outputColorSpace };
+    if (!['reference','browser'].includes(c.colorMode)||!['hardware','software'].includes(decode.decoder)||![1,2,4,8].includes(decode.depth)) throw new Error('工作区比较条件不受支持，请使用匹配的播放器版本。');
+    const common={colorMode:c.colorMode,referenceDecode:{decoder:decode.decoder,depth:decode.depth}};
+    if(c.version===1&&c.presentation==='voidplayer-sdr-v1'&&c.outputColorSpace==='srgb')comparison={...common,version:1,presentation:c.presentation,outputColorSpace:c.outputColorSpace};
+    else if(c.version===2&&c.presentation==='voidplayer-color-v2'){
+      const output=object(c.colorOutput) as ColorOutput;validateColorOutput(output);
+      if(c.outputColorSpace!==(output.target==='hdr'?'display-p3':'srgb'))throw new Error('工作区显示目标不一致。');
+      comparison={...common,version:2,presentation:c.presentation,outputColorSpace:c.outputColorSpace,colorOutput:structuredClone(output)};
+    }else throw new Error('工作区比较条件不受支持，请使用匹配的播放器版本。');
   }
   const thumbnails = array(d.thumbnails ?? [], 10000).map(value => {
     const t = object(value), url = text(t.url, 2 * 1024 * 1024), id = text(t.id, 200);

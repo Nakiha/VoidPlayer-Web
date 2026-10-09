@@ -162,9 +162,9 @@ try {
       return { background: s.backgroundColor, color: s.color, transition: s.transitionDuration };
     });
     const press = async selector => {
-      await page.locator(selector).hover(); await page.waitForTimeout(280);
+      await page.locator(selector).hover(); await page.locator(selector).evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
       const hover = await style(selector);
-      await page.mouse.down(); await page.waitForTimeout(280);
+      await page.mouse.down(); await page.locator(selector).evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished)));
       const held = await style(selector);
       await page.mouse.move(0, 0); await page.mouse.up();
       return { hover, held };
@@ -529,29 +529,42 @@ try {
     await warning.waitFor({ state: 'detached' });
   });
 
-  await check('HLG Dolby sample explains SDR restriction in a warning toast and plays in browser color', async page => {
+  await check('HLG Dolby sample uses managed SDR preview and preserves browser compatibility', async page => {
     const id = listing.entries.find(item => item.name === 'dolby_hlg_1080p30.mp4').id;
-    const error = await page.evaluate(async id => {
+    const managed = await page.evaluate(async id => {
       const tool = name => window.voidPlayer.tools.find(t => t.name === name);
       await tool('set_review_color_mode').execute({ mode: 'reference' });
-      try { await tool('load_library_item').execute({ id, slot: 'A' }); }
-      catch (error) { return error.message; }
+      await tool('set_reference_decode').execute({decoder:'software',depth:2});
+      await tool('load_library_item').execute({ id, slot: 'A' });
+      return window.voidPlayer.getState();
     }, id);
-    assert.match(error, /HDR/);
-    const warning = page.locator('.toast-warning');
-    await warning.waitFor({ state: 'visible' });
-    assert.equal(await warning.count(), 1);
-    assert.equal(await page.locator('#notice').count(), 0);
-    await warning.locator('.toast-action').click();
-    assert.equal(await page.locator('#settings-tab-performance').getAttribute('aria-selected'), 'true');
+    assert.equal(managed.error,null);assert.ok(!managed.tracks[0].failure);
+    assert.equal(managed.tracks[0].output.color.transfer,'hlg');assert.ok(managed.tracks[0].output.yuv.bitDepth>=10);
+    assert.equal(managed.tracks[0].presentation.actualTarget,'sdr');
+    assert.equal(await page.locator('.toast-warning').count(),0);
+    await page.locator('#settings-open').click();await page.locator('#settings-tab-performance').click();
     await page.locator('[data-color-mode=browser]').click();
     await page.waitForFunction(() => { const state = window.voidPlayer.getState(); return state.colorMode === 'browser' && !state.busy; });
     await page.locator('#settings-close').click();
     await page.evaluate(async id => window.voidPlayer.tools.find(t => t.name === 'load_library_item').execute({ id, slot: 'A' }), id);
     await page.locator('#play').click();
-    await page.waitForFunction(() => window.voidPlayer.getState().positionUs > 500000);
+    // A virtual runner can use CPU HDR conversion without WebGL/WebGPU.
+    // This checks eventual UI playback; the separate benchmarks check speed.
+    try {
+      await page.waitForFunction(() => {
+        const state = window.voidPlayer.getState();
+        return state.positionUs > 500000 || state.error !== null;
+      }, undefined, { timeout: 60000 });
+    } catch (error) {
+      console.error('HLG browser playback stalled', await page.evaluate(() => ({
+        state: window.voidPlayer.getState(),
+        canvases: [...document.querySelectorAll('canvas[data-color-executor]')].map(c => ({ executor: c.dataset.colorExecutor, performance: c.dataset.colorPerformance })),
+      })));
+      throw error;
+    }
     await page.locator('#play').click();
     const state = await page.evaluate(() => window.voidPlayer.getState());
+    assert.ok(state.positionUs > 500000, 'HLG browser playback advances through real frames');
     assert.ok(state.tracks[0].frame && !state.tracks[0].failure);
     assert.equal(state.error, null);
     await page.screenshot({ path: path.join(screenshots, `${browserName}-dolby-browser-color.png`) });

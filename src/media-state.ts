@@ -20,6 +20,7 @@ export function updateMediaInfo(source:Pick<MediaSource,'info'|'onInfoChange'>,p
 export function recordPresentedFrame(source:MediaSource,frame:DecodedFrame):boolean{
   const d=frame.description;
   return updateMediaInfo(source,{width:frame.width,height:frame.height,output:d,decodedPixelFormat:d.format,
+    presentation:frame.presentation,
     ...(d.sourcePixelFormat!==undefined?{pixelFormat:d.sourcePixelFormat}:{}),
-    ...(d.sourceColor?{color:d.sourceColor,colorSource:'decoder' as const}:{})},'presented-frame',false);
+    ...(d.sourceColor?{color:d.sourceColor,colorSource:d.sourceColorOrigin??'decoder'}:{})},'presented-frame',false);
 }

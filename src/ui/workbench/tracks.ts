@@ -52,7 +52,7 @@ export function createTracksPane(shared: WorkbenchShared) {
       [t(msg("tracks.transferFunction", "传递特性")), colorLabel(color?.transfer), 'color-metadata'],
       [t(msg("tracks.matrixCoefficients", "矩阵系数")), colorLabel(color?.matrix), 'color-metadata'],
       [t(msg("tracks.range", "范围")), rangeLabel(color?.fullRange), 'color-metadata'],
-      ...(hdr ? [[t(msg("tracks.hdrSource", "HDR 源")), track.decoder === 'ffmpeg-wasm' ? t(msg("tracks.sdrFallbackDisplay", "SDR 兜底显示")) : t(msg("tracks.browserOutputUnverified", "浏览器输出未验证"))]] : []),
+      ...(hdr ? [[t(msg("tracks.hdrSource", "HDR 源")), track.presentation?.actualTarget==='hdr' ? t(msg("tracks.hdrDisplay", "HDR 输出")) : track.presentation?.actualTarget==='sdr' ? t(msg("tracks.sdrFallbackDisplay", "SDR 预览")) : t(msg("tracks.browserOutputUnverified", "浏览器输出未验证"))]] : []),
     ];
   }
 

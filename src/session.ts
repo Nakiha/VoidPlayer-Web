@@ -6,6 +6,8 @@ import { getPresentationChannel, setPresentationChannel } from './presentation-c
 import { SessionResources } from './session/resources.ts';
 import { schedulePresentationTick } from './presentation-tick.ts';
 import {getColorMode,setColorMode,getReferenceDecode,setReferenceDecode,type ReferenceDecode,type ColorMode} from './color-mode.ts';
+import { getColorOutput, setColorOutput, validateColorOutput, defaultColorOutput } from './color-output.ts';
+import type { ColorOutput } from './color-output.ts';
 import type { AnnotationDocument } from './annotation-record.ts';import {recordPresentedFrame,updateMediaInfo} from './media-state.ts';
 import type { MediaLoadStatus, MediaOpenProgress } from './media-progress.ts';
 import { abortableLoad, abortableWait } from './media-abort.ts';
@@ -26,7 +28,7 @@ import type { DecodedFrame, MediaSource } from './media.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample, AnalysisStatus } from './analysis/types.ts';
 import { contextLog, log, operationContext, traceOperation, withLogContext } from './log.ts';
 
-const currentColorEvidence = () => getColorMode() === 'reference' ? 'reference-sdr' : 'browser-match-approximate';
+const currentColorEvidence = () => getColorMode() === 'reference' ? (getColorOutput().target==='hdr'?'reference-hdr-requested':'reference-sdr') : 'browser-match-approximate';
 const errorText = (e: unknown) => e instanceof Error ? e.message : String(e);
 
 type Track = { visible?: boolean; pendingRelink?: boolean; source: MediaSource; frame: FrameInfo | null; offsetUs:number; failure?: { message: string; positionUs: number }; syncState?: 'index-wait' | 'catching-up';
@@ -89,15 +91,18 @@ export class ReviewSession {
   private changingColor=false;
   onColorModeChange?:()=>Promise<void>;
   async setReferenceDecode(options:ReferenceDecode){return this.setColorMode(getColorMode()??'reference',options);}
-  async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode()){
+  async setColorOutput(options:ColorOutput){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),options);}
+  async refreshColorOutput(){return this.setColorMode(getColorMode()??'browser',getReferenceDecode(),getColorOutput(),true);}
+  async setColorMode(mode:ColorMode,decode:ReferenceDecode=getReferenceDecode(),output:ColorOutput=getColorOutput(),force=false){
+    validateColorOutput(output);
     if(mode!=='reference'&&mode!=='browser')throw new Error('未知色彩模式。');
     if(this.changingColor)throw new Error('正在切换色彩模式。');
     if(!['hardware','software'].includes(decode.decoder)||![1,2,4,8].includes(decode.depth))throw new Error('无效的解码路径或缓冲深度。');
-    if(getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode))return this.getState();
+    if(!force&&getColorMode()===mode&&JSON.stringify(getReferenceDecode())===JSON.stringify(decode)&&JSON.stringify(getColorOutput())===JSON.stringify(output))return this.getState();
     ++this.analysisIntentSeq;
     this.changingColor=true;
     try{await this.run('color-mode',{mode},async (current, signal)=>{
-      const previous=getColorMode(),previousDecode=getReferenceDecode(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
+      const previous=getColorMode(),previousDecode=getReferenceDecode(),previousOutput=getColorOutput(),prepared:{slot:Slot;track:Track;source:MediaSource;frame:DecodedFrame;reusesSession:boolean}[]=[];
       // Failed sources are already disposed; missing references are restored only by relink.
       const entries = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
       const reconfigured: { slot: Slot; track: Track }[] = [];
@@ -109,7 +114,7 @@ export class ReviewSession {
         // Buffered frames belong to the old decoder/presentation contract, including
         // when an in-place reconfiguration later has to roll back.
         this.releaseReaders('color-mode', entries.map(([, track]) => track.source));
-        setColorMode(mode);setReferenceDecode(decode);
+        setColorMode(mode);setReferenceDecode(decode);setColorOutput(output);
         for(const [slot,track] of entries){
           const reusesSession=!!track.source.reconfigureColorMode;
           let source:MediaSource;
@@ -142,9 +147,9 @@ export class ReviewSession {
           p.source.onInfoChange=()=>this.emit();
         }
         committed=true;
-        try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));}catch{}
+        try{globalThis.localStorage?.setItem('voidplayer.color-mode',mode);globalThis.localStorage?.setItem('voidplayer.reference-decode',JSON.stringify(decode));globalThis.localStorage?.setItem('voidplayer.color-output',JSON.stringify(output));}catch{}
       }catch(error){
-        setColorMode(previous);setReferenceDecode(previousDecode);
+        setColorMode(previous);setReferenceDecode(previousDecode);setColorOutput(previousOutput);
         const rollbackErrors = await this.rollbackPresentation(entries, current, signal, error, '色彩模式', reconfigured);
         if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
           throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
@@ -316,7 +321,7 @@ export class ReviewSession {
       mediaLoad: this.mediaLoad,
       playback: this.measurements?.snapshot() ?? null,
       resources: this.resources.snapshot(),
-      frameEvidence: 'decoded-and-drawn-to-canvas', audio: this.audioSlot ? 'opportunistic' : 'muted', audioSlot: this.audioSlot, audioStatus: this.audioOutput.status, audioPacketsPlayed: this.audioOutput.playedPackets, color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),
+      frameEvidence: 'decoded-and-drawn-to-canvas', audio: this.audioSlot ? 'opportunistic' : 'muted', audioSlot: this.audioSlot, audioStatus: this.audioOutput.status, audioPacketsPlayed: this.audioOutput.playedPackets, color: currentColorEvidence(),colorMode:getColorMode(),referenceDecode:getReferenceDecode(),colorOutput:getColorOutput(),
       tracks: this.order.flatMap(slot => { const t = this.tracks.get(slot); return t ? [{ slot, ...t.source.info, frame: t.frame, visible: t.visible !== false, offsetUs:t.offsetUs, failure:t.failure,syncState:t.syncState, sourceGen:t.sourceGen, pendingRelink:t.pendingRelink }] : []; }),
       marks: this.marks,
     });
@@ -1210,11 +1215,11 @@ export class ReviewSession {
     const document = parseWorkspace(value);
     await this.run('restoreWorkspace', { tracks: document.tracks.length, marks: document.marks.length }, async (current, signal) => {
       const next = new Map<Slot, Track>(); let committed = false;
-      const previousMode = getColorMode(), previousDecode = getReferenceDecode(), previousChannel = getPresentationChannel();
+      const previousMode = getColorMode(), previousDecode = getReferenceDecode(), previousOutput = getColorOutput(), previousChannel = getPresentationChannel();
       const retained = [...this.tracks].filter(([, track]) => !track.failure && !track.pendingRelink);
       const selected = new Map<Slot, DecodedFrame>();
       try {
-        if (document.comparison) { setColorMode(document.comparison.colorMode); setReferenceDecode(document.comparison.referenceDecode); }
+        if (document.comparison) { setColorMode(document.comparison.colorMode); setReferenceDecode(document.comparison.referenceDecode); setColorOutput(document.comparison.version===2?document.comparison.colorOutput:defaultColorOutput()); }
         setPresentationChannel(document.viewport.channel ?? 'rgb');
         await this.onColorModeChange?.();
         for (const track of document.tracks) {
@@ -1250,7 +1255,7 @@ export class ReviewSession {
           this.marks = document.marks; this.measurements = null; committed = true;
         }, selected, undefined, signal);
       } catch (error) {
-        setColorMode(previousMode); setReferenceDecode(previousDecode); setPresentationChannel(previousChannel);
+        setColorMode(previousMode); setReferenceDecode(previousDecode); setColorOutput(previousOutput); setPresentationChannel(previousChannel);
         const rollbackErrors = await this.rollbackPresentation(retained, current, signal, error, '工作区');
         if (rollbackErrors.length && !(error instanceof Error && error.name === 'AbortError'))
           throw new AggregateError([error, ...rollbackErrors], `${errorText(error)}；${rollbackErrors.map(errorText).join('；')}`);
@@ -1288,8 +1293,9 @@ export class ReviewSession {
     return this.getState();
   }
   private comparisonConditions(): ComparisonConditions {
-    return { version: 1, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(),
-      presentation: 'voidplayer-sdr-v1', outputColorSpace: 'srgb' };
+    const output=getColorOutput();
+    return { version: 2, colorMode: getColorMode() ?? 'browser', referenceDecode: getReferenceDecode(),
+      presentation: 'voidplayer-color-v2', outputColorSpace: output.target==='hdr'?'display-p3':'srgb', colorOutput:output };
   }
   exportReview() {
     return structuredClone({ schema: 'voidplayer-web-review', version: 1, generatedAt: new Date().toISOString(),

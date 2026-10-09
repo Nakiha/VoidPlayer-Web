@@ -74,8 +74,11 @@ await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions
    assert.ok(alignment.length>0);
    for(const a of alignment){assert.equal(a.visible,true);assert.equal(a.inactive,'none');assert.equal(a.stroke,'1.25px');assert.ok(a.x<1,JSON.stringify(a));assert.ok(a.y<1,JSON.stringify(a));assert.equal(a.between,true);assert.equal(a.label,true);}
  }
+ await page.locator('[data-color-target=hdr]').click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).target==='hdr');
+ await page.locator('#hdr-source-peak').click();await page.locator('#hdr-source-peak-menu').getByRole('menuitemradio',{name:'4000 nits',exact:true}).click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).preview.sourcePeakNits===4000);
  await page.reload();await page.waitForFunction(()=>window.voidPlayer);
  assert.equal(await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({}).colorMode),'reference','saved explicit choice survives reload');
+ assert.equal(await page.locator('[data-color-target=hdr]').getAttribute('aria-pressed'),'true');assert.match(await page.locator('#hdr-source-peak').innerText(),/4000/);
  assert.deepEqual(errors,[]);
  console.log('PASS color settings: custom controls, diagram changes, persisted decoder/depth/mode, light/dark and narrow layout');
 });

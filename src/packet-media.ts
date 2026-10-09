@@ -150,7 +150,11 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
       try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
       let closed = false;
-      const rawFrame = { description: frame.description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+      // Preserve encoded metadata separately from the browser's actual resource
+      // tags. A platform may return an SDR-tagged resource for an HDR source.
+      const description = info.color && !frame.description.sourceColor
+        ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
+      const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
         close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },
@@ -161,7 +165,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       if (!rawForWitness && presentationMode === 'reference' && (decoded.kind !== 'yuv' || !resolveYuvColor(decoded.description).supported)) {
         const hdr = isHdrTransfer(decoded.description.color.transfer) || isHdrTransfer(info.color?.transfer);
         decoded.close();
-        throw new MediaOpenError('decode', hdr ? '自有色彩目前仅支持 SDR，无法处理此 HDR 视频。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
+        throw new MediaOpenError('decode', hdr ? '此 HDR 视频未提供可核对的高位深 BT.2100 平面。请在“色彩与解码”中切换为“浏览器色彩”后重试。'
           : '自有色彩无法处理此视频的像素格式或颜色信息。请在“色彩与解码”中切换为“浏览器色彩”后重试。', hdr ? 'reference-hdr-unsupported' : 'reference-format-unsupported');
       }
       return decoded;

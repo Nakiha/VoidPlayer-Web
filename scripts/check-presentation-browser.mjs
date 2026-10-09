@@ -126,6 +126,14 @@ try {
         results.push({depth,semi,full,matrix,max:Math.max(...actual.map((v,i)=>Math.abs(v-reference[i])))});
         disposePresentation();
       }
+      for(const transfer of ['pq','hlg','smpte2084','arib-std-b67'])for(const depth of [10,12,16])for(const semi of [false,true]){
+        const f=yuvFixture(depth,semi,false,'bt2020-ncl');f.description.color.transfer=transfer;
+        const frame={kind:'yuv',description:f.description,pixels:f.pixels,width:5,height:3};
+        paintFrame(source,frame);const reference=yuvToRgba(f.description,f.pixels);
+        setPresentationGeometry(source,{width:100,height:60,imageWidth:100,imageHeight:60,zoom:1,offsetX:0,offsetY:0,dpr:2});paintFrame(source,frame);
+        const actual=captureFrame(source).getContext('2d').getImageData(0,0,5,3).data;
+        results.push({depth,semi,transfer,max:Math.max(...actual.map((v,i)=>Math.abs(v-reference[i])))});disposePresentation();
+      }
       const f=yuvFixture(10,true,false,'bt709',5,3,6);
       f.description.visibleRect={x:1,y:1,width:3,height:1};f.description.width=3;f.description.height=1;
       const reference=yuvToRgba(f.description,f.pixels);

@@ -8,6 +8,8 @@ import {yuvPixelRgb} from '../src/yuv-color.ts';
 import {createServer} from 'vite';
 import {webkit,chromium} from 'playwright';
 const selectedBrowser=process.argv[2],selectedInput=process.argv[3];
+const auditStarted=performance.now();
+const audit=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,elapsedMs:Math.round(performance.now()-auditStarted),...detail}));
 if(selectedBrowser&&!['webkit','chromium'].includes(selectedBrowser))throw Error('Unknown browser');
 if(selectedInput&&!['local','remote'].includes(selectedInput))throw Error('Unknown input mode');
 const name='h265_10s_1920x1080.mp4',bytes=await readFile(new URL('../fixtures/video/'+name,import.meta.url));
@@ -18,11 +20,13 @@ const track=await input.getPrimaryVideoTrack(),config=await track.getDecoderConf
 const core=new URL('../public/vendor/voidplayer-core/',import.meta.url);
 const decoder=await wasmFlvDecoder({codec:'hevc',description:new Uint8Array(config.description)},new URL('voidplayer-core.js',core).href,await readFile(new URL('voidplayer-core.wasm',core)));
 const refs=[];
+audit('software-oracle-start');
 const collect=()=>{for(;;){const f=decoder.receive(Number.MIN_SAFE_INTEGER);if(!f)break;const p=f.description.yuv?null:new Uint8Array(f.pixels),sig=[];
   for(let y=0;y<18;y++)for(let x=0;x<32;x++){const px=Math.floor((x+.5)*f.width/32),py=Math.floor((y+.5)*f.height/18);if(p){const k=(py*f.width+px)*4;sig.push(p[k],p[k+1],p[k+2]);}else sig.push(...yuvPixelRgb(f.description,new Uint8Array(f.pixels),px,py));}refs.push(sig);f.frame?.close();}};
 try{for await(const p of new EncodedPacketSink(track).packets()){await decoder.send(p.data,{pts:Math.round(p.timestamp*1e6),dts:Math.round(p.timestamp*1e6),key:p.type==='key'});collect();}await decoder.drain();collect();}
 finally{decoder.close();input.dispose();}
 assert.equal(refs.length,600);
+audit('software-oracle-complete',{count:refs.length});
 const server=await createServer({server:{host:'127.0.0.1',port:0,headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'}}});
 await server.listen();const base=`http://127.0.0.1:${server.httpServer.address().port}`,results=[];
 try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
@@ -31,11 +35,21 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
   try{for(const remote of [false,true]){
     if(selectedInput&&(selectedInput==='remote')!==remote)continue;
     const page=await browser.newPage({locale:'zh-CN'}),requests=[];
+    let lastProgress=performance.now(),lastStage='evaluation-start',progressWatchdog;
+    page.on('console',message=>{if(message.text().startsWith('hevc-timeline: ')){lastProgress=performance.now();lastStage=message.text();console.log(lastStage);}});
+    page.on('pageerror',error=>audit('page-error',{browserName,remote,error:String(error)}));
     page.on('request',r=>{if(r.url().includes('/fixtures/video/'))requests.push(r.headers());});
     try{
       await page.route('**/timeline-test',r=>r.fulfill({contentType:'text/html',headers:{'Cross-Origin-Opener-Policy':'same-origin','Cross-Origin-Embedder-Policy':'require-corp'},body:'<div class="frame-stage"><canvas></canvas></div>'}));
       await page.goto(base+'/timeline-test');
-      const rows=await page.evaluate(async({name,remote,refs,order})=>{
+      // CI graphics can spend ~0.6–1.4s on every full-source capture.
+      // Keep all 1200 frame audits; detect an actual stalled phase separately
+      // from the suite's total budget, with enough room for 100-frame reports.
+      lastProgress=performance.now();
+      const stalled=new Promise((_,reject)=>{progressWatchdog=setInterval(()=>{if(performance.now()-lastProgress>=180000)reject(Error(`HEVC timeline made no progress for 180s: ${lastStage}`));},1000);});
+      const rows=await Promise.race([page.evaluate(async({name,remote,refs,order})=>{
+        const started=performance.now();
+        const progress=(stage,detail={})=>console.log('hevc-timeline: '+JSON.stringify({stage,remote,elapsedMs:Math.round(performance.now()-started),...detail}));
         const {openMedia,openMediaFromUrl}=await import('/src/media.ts');
         const {paintFrame,captureFrame,disposePresentation,setPresentationGeometry}=await import('/src/presenter.ts');
         const {yuvPixelRgb}=await import('/src/yuv-color.ts');
@@ -77,11 +91,14 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
           }finally{if(decoder&&decoder.state!=='closed')decoder.close();input.dispose();}
         };
         for(let round=0;round<2;round++){
+          progress('open-start',{round});
           const source=await(remote?openMediaFromUrl(new URL(url,location.href).href,{name,size:bytes.byteLength,lastModified:0}):openMedia(new File([bytes],name)));
-          if(source.info.decoder==='webcodecs'&&!nativeRefs)nativeRefs=await nativeReference();
+          progress('open-complete',{round,info:source.info});
+          if(source.info.decoder==='webcodecs'&&!nativeRefs){progress('native-reference-start',{round});nativeRefs=await nativeReference();progress('native-reference-complete',{round,count:nativeRefs.length});}
           const row={remote,round,info:structuredClone(source.info),count:0,maxPixelError:0,maxGpuPixelError:0,maxNativePlaneError:0,seeks:[]};
           setPresentationGeometry(sourceCanvas,{width:640,height:360,imageWidth:1920,imageHeight:1080,zoom:1,offsetX:0,offsetY:0,dpr:1});
           const inspect=async(f,index)=>{
+            const inspectStarted=performance.now();
             try{
               assert(f.width===1920&&f.height===1080,'frame geometry');
               if(f.sample){const signature=await planes(f.sample.toVideoFrame());
@@ -99,8 +116,11 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               else if(f.description.yuv){pixels=new Uint8ClampedArray(1920*1080*4);
                 for(let y=0;y<18;y++)for(let x=0;x<32;x++){const px=Math.floor((x+.5)*1920/32),py=Math.floor((y+.5)*1080/18),k=(py*1920+px)*4,[r,g,b]=yuvPixelRgb(f.description,f.pixels,px,py);pixels[k]=r;pixels[k+1]=g;pixels[k+2]=b;pixels[k+3]=255;}}
               else{controlContext.putImageData(new ImageData(f.pixels,1920,1080),0,0);pixels=controlContext.getImageData(0,0,1920,1080).data;}
-              paintFrame(sourceCanvas,f);const image=captureFrame(sourceCanvas);
+              const paintStarted=performance.now();paintFrame(sourceCanvas,f);const paintMs=performance.now()-paintStarted;
+              const captureStarted=performance.now(),image=captureFrame(sourceCanvas),captureMs=performance.now()-captureStarted;
+              const readStarted=performance.now();
               const gpu=image.getContext('2d').getImageData(0,0,image.width,image.height).data;
+              const readMs=performance.now()-readStarted;
               let error=0,n=0;const signature=[];
               for(let y=0;y<18;y++)for(let x=0;x<32;x++){const k=(Math.floor((y+.5)*image.height/18)*image.width+Math.floor((x+.5)*image.width/32))*4;for(let c=0;c<3;c++){signature.push(pixels[k+c]);error+=Math.abs(pixels[k+c]-refs[index][n++]);}}
               error/=n;row.maxPixelError=Math.max(row.maxPixelError,error);
@@ -111,6 +131,7 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               for(let y=0;y<18;y++)for(let x=0;x<32;x++){const k=(Math.floor((y+.5)*1080/18)*1920+Math.floor((x+.5)*1920/32))*4;for(let c=0;c<3;c++)gpuError+=Math.abs(gpu[k+c]-pixels[k+c]);}
               assert(gpuError/n<3,`GPU upload ${index}: RGB difference ${gpuError/n}`);
               row.maxGpuPixelError=Math.max(row.maxGpuPixelError,gpuError/n);
+              if(index%100===0||index===599)progress('frame-inspected',{round,index,ptsUs:f.ptsUs,inspectMs:Math.round(performance.now()-inspectStarted),paintMs:Math.round(paintMs),captureMs:Math.round(captureMs),readMs:Math.round(readMs),executor:sourceCanvas.dataset.colorExecutor});
               return f.ptsUs;
             }finally{f.close();}
           };
@@ -123,19 +144,23 @@ try{for(const [browserName,engine] of Object.entries({webkit,chromium})){
               assert(i===0||pts>times.at(-1),'non-increasing output');times.push(pts);
             }
             assert(row.count===600,`lost tail: ${row.count}/600`);
+            progress('stream-complete',{round,count:row.count});
             for(const i of [0,1,63,64,65,255,256,257,599,0,300]){
+              progress('seek-start',{round,index:i});
               assert(await inspect(await source.frameAt(times[i]),i)===times[i],`seek ${i}`);
               if(i<599){const next=await source.framesAfter(times[i],1);assert(next.length===1,'missing successor');assert(await inspect(next[0],i+1)===times[i+1],'step target');}
               row.seeks.push(i);
+              progress('seek-complete',{round,index:i});
             }
             assert(await inspect(await source.frameAt(source.info.durationUs-1),599)===times[599],'EOF seek');
           }finally{source.dispose();disposePresentation();}
           rows.push(row);
+          progress('round-complete',{round});
         }return rows;
-      },{name,remote,refs,order:oracle.displayOrder});
+      },{name,remote,refs,order:oracle.displayOrder}),stalled]);
       if(browserName==='webkit'&&process.platform==='darwin')for(const row of rows){assert.equal(row.info.decoder,'webcodecs');assert.equal(row.info.hardwareAcceleration,'prefer-hardware');}
       if(remote)assert.ok(requests.some(r=>/^bytes=/.test(r.range??'')),'Range reads');
       results.push({browserName,remote,rows});console.log(JSON.stringify(results.at(-1)));
-    }finally{await page.close();}
+    }finally{clearInterval(progressWatchdog);await page.close();}
   }}finally{await browser.close();}
 }}finally{await server.close();await mkdir('.run/playback-reports',{recursive:true});await writeFile('.run/playback-reports/hevc-timeline-browser.json',JSON.stringify(results,null,2)+'\n');}
