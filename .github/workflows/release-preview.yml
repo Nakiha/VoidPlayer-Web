@@ -320,6 +320,14 @@ jobs:
       - name: Verify independent playback and source UI cases
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs ci-playback --prepared
+      - name: Preserve audio navigation and output evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opportunistic-audio-reports
+          path: .run/opportunistic-audio/
+          if-no-files-found: ignore
+          retention-days: 30
       - name: Generate approximately 100 MB 1080p playback inputs
         id: playback-inputs
         run: |
@@ -376,7 +384,6 @@ jobs:
         with:
           name: https-playback-reports
           path: |
-            .run/opportunistic-audio/
             .run/playback-reports/
             .run/test-suites/
           if-no-files-found: ignore

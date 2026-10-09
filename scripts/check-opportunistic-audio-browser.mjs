@@ -18,6 +18,7 @@ assert.ok(['chromium', 'webkit'].includes(browserName));
 const temporary = await mkdtemp(path.join(tmpdir(), 'voidplayer-audio-'));
 const artifacts = path.join(root, '.run/opportunistic-audio', container + (local ? '-local' : '')); await mkdir(artifacts, { recursive: true });
 let browser, server, library, activePage, evidence, tracing = false;
+let lifecycleTrace = [];
 try {
   const media = path.join(temporary, 'media'); await mkdir(media);
   const fixture = path.join(media, 'audio.flv');
@@ -36,6 +37,7 @@ try {
   let traffic = [];
   server = createMediaServer({ roots: library.roots, library, staticDir: path.join(root, 'dist'), onLog() {} });
   server.on('request', (req, res) => {
+    if (req.url.startsWith('/audio-test-lifecycle?')) lifecycleTrace.push({ time: Date.now(), stage: new URL(req.url, 'http://localhost').searchParams.get('stage') });
     if (req.url.split('?')[0] === `/api/media/${id}` || req.url.split('?')[0] === `/api/media/${second}`) {
       res.on('finish', () => traffic.push({ range: req.headers.range, bytes: Number(res.getHeader('content-length')) }));
     }
@@ -50,16 +52,23 @@ try {
   async function state(page) { return tool(page, 'get_review_session'); }
   for (const enabled of [false, true]) {
     const page = await browser.newPage({ viewport: { width: 1280, height: 800 }, locale: 'zh-CN' });
-    activePage = page; evidence = recordBrowserEvidence(page);
+    activePage = page; lifecycleTrace = [];
+    const browserEvidence = recordBrowserEvidence(page);
+    evidence = () => ({ ...browserEvidence(), lifecycleTrace });
     const errors = []; page.on('pageerror', e => errors.push(e.message));
     // Count actual output nodes and verify a pause/mute immediately stops all of them.
     await page.addInitScript(() => {
       localStorage.setItem('voidplayer.color-mode', 'browser');
+      window.audioLifecycle = stage => { if (window.audioRecordLifecycle) navigator.sendBeacon('/audio-test-lifecycle?stage=' + encodeURIComponent(stage), ''); };
+      window.addEventListener('beforeunload', () => window.audioLifecycle('beforeunload'));
+      window.addEventListener('pagehide', () => window.audioLifecycle('pagehide-enter'));
+      window.addEventListener('unload', () => window.audioLifecycle('unload'));
       window.audioBlobReads = [];
-      window.audioEvidence = { contexts: 0, starts: 0, stopped: 0, maxRms: 0, live: new Set() };
+      window.audioEvidence = { contexts: 0, closes: 0, starts: 0, stopped: 0, maxRms: 0, live: new Set() };
       const Native = window.AudioContext;
       window.AudioContext = class extends Native {
         constructor(...args) { super(...args); window.audioEvidence.contexts++; }
+        close() { window.audioLifecycle('audio-close-enter'); window.audioEvidence.closes++; const closed = super.close(); window.audioLifecycle('audio-close-return'); return closed; }
         createBufferSource() {
           const node = super.createBufferSource(), start = node.start.bind(node), stop = node.stop.bind(node);
           node.start = (...args) => {
@@ -80,7 +89,14 @@ try {
     });
     await page.addInitScript(() => {
       const NativeWorker = window.Worker;
-      window.Worker = class extends NativeWorker { constructor(...args) { super(...args); this.addEventListener('message', e => { if (e.data.type === 'audio-test-blob-read') window.audioBlobReads.push(e.data.bytes); }); } };
+      window.audioWorkers = new Set();
+      window.Worker = class extends NativeWorker {
+        constructor(...args) {
+          super(...args); window.audioWorkers.add(this);
+          this.addEventListener('message', e => { if (e.data.type === 'audio-test-blob-read') window.audioBlobReads.push(e.data.bytes); });
+        }
+        terminate() { window.audioLifecycle('worker-terminate-enter'); super.terminate(); window.audioWorkers.delete(this); window.audioLifecycle('worker-terminate-return'); }
+      };
     });
     traffic = [];
     await page.goto(base); await page.waitForFunction(() => window.voidPlayer);
@@ -154,9 +170,21 @@ try {
       await tool(page, 'remove_review_track', { slot: 'B' }); assert.equal((await state(page)).audioSlot, null);
       // Keep navigation tracing on failure: worker teardown and load-blocking
       // requests must be diagnosable without retrying or extending the timeout.
+      await page.evaluate(() => {
+        window.audioRecordLifecycle = true;
+        // Registered after the app's pagehide handler: cleanup must have issued
+        // its termination calls by this point, without an awaited microtask.
+        window.addEventListener('pagehide', () => { window.audioLifecycle('pagehide-after-app'); sessionStorage.setItem('audio-test-pagehide', JSON.stringify({
+          workers: window.audioWorkers.size, contexts: window.audioEvidence.contexts,
+          closes: window.audioEvidence.closes, live: window.audioEvidence.live.size,
+        })); }, { once: true });
+      });
       await page.context().tracing.start({ snapshots: true }); tracing = true;
       await page.reload(); await page.waitForFunction(() => window.voidPlayer);
       await page.context().tracing.stop(); tracing = false;
+      const unloaded = await page.evaluate(() => JSON.parse(sessionStorage.getItem('audio-test-pagehide')));
+      assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0 }, 'pagehide releases workers and audio synchronously');
+      report[1].pagehide = unloaded;
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
     }
     await page.close();

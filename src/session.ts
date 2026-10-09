@@ -1291,11 +1291,13 @@ export class ReviewSession {
   async dispose() {
     this.cancelLoad(); this.pause();
     this.releaseReaders('dispose');
-    await this.queue.catch(() => {});
+    // pagehide cannot await the session queue. Terminate owned workers and
+    // audio synchronously, while the departing document can still run cleanup.
     for (const t of this.tracks.values()) if (!t.failure) t.source.dispose();
     this.audioSlot = null; this.audioSource = undefined; this.audioOutput.dispose();
     this.tracks.clear();
     this.listeners.clear();
     this.progressListeners.clear();
+    await this.queue.catch(() => {});
   }
 }

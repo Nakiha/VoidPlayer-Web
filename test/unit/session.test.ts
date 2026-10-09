@@ -379,6 +379,25 @@ test('pause retains a pending decode without late presentation; dispose releases
   assert.equal(returned, true);
 });
 
+test('dispose releases media synchronously before awaiting cancelled session work', async () => {
+  const m = media(), started = deferred<void>(), release = deferred<void>();
+  let draws = 0;
+  const session = new ReviewSession(() => draws++);
+  await session.load('A', async () => m.source);
+  const frameAt = m.source.frameAt, dispose = m.source.dispose;
+  m.source.frameAt = async time => { started.resolve(); await release.promise; return frameAt(time); };
+  m.source.dispose = () => { dispose(); release.resolve(); };
+  const seeking = session.seek(40000);
+  const cancelled = assert.rejects(seeking, { name: 'AbortError' });
+  await started.promise;
+  const before = draws, closing = session.dispose();
+  assert.equal(m.disposed, 1, 'pagehide must release media before its handler returns');
+  assert.equal(session.getState().tracks.length, 0);
+  await Promise.all([closing, cancelled]);
+  assert.equal(draws, before, 'cancelled work cannot present after disposal');
+  await session.dispose(); assert.equal(m.disposed, 1, 'cleanup remains idempotent');
+});
+
 test('both track producers start independently and paused sleep releases their queues', async () => {
   const a = media('A'), b = media('B');
   const release = deferred<void>(); let bStarted = false;
