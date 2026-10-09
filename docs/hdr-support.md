@@ -6,7 +6,7 @@
 
 打开“色彩与解码”，选择“自有色彩”。默认 SDR 目标将 HDR 映射为可复现的 SDR 预览；“HDR”目标在支持的屏幕、浏览器与浮点 WebGPU 环境中开启扩展输出，其余环境明确显示 SDR 预览并保留目标。假定峰值档位是算法参数，不能当作源母版或屏幕测量结果。
 
-浏览器色彩沿用原生资源转换和 SDR 兼容预览。原生 HDR 纹理导入的实测高亮被截断，因此这条路径暂不开放 HDR 输出。软件回退交付合法 HDR 平面时执行共同 SDR 预览。截图和缩略图始终是 SDR，普通图片不冒充 HDR 导出。
+浏览器色彩沿用原生资源转换和 SDR 兼容预览。当前原生 HDR 纹理导入未通过扩展显示光契约验证，因此应用暂不开放这条 HDR 路径。该限制不表示 WebCodecs/WebGPU 平台无法呈现 HDR。软件回退交付合法 HDR 平面时执行共同 SDR 预览。截图和缩略图始终是 SDR，普通图片不冒充 HDR 导出。
 
 ## 数学与资源
 
@@ -29,7 +29,7 @@ UI 和 Agent 的 `set_review_color_output` 都使用 `session.setColorOutput`。
 ## 验证
 
 - `npm run test:hdr:color`：标准亮度锚点、HLG 彩色 OOTF、单调灰阶、色域/亮度约束、原始平面精度和标签准入；Chromium WebGL/WebGPU、WebKit WebGL 每个浏览器 794 个向量 × 3 组策略。SDR 最大误差预算为 1 个 8-bit 码值，显示光浮点相对误差预算 0.001。
-- 扩展画布测试模拟 `dynamic-range: high`，读回浮点高亮 >1，验证普通截图重新执行同一 SDR 策略；原生纹理夹断仅作为诊断证据，未开放产品 HDR 路径。缺少 WebGPU 的显式 GPU 测试必须失败。
+- 扩展画布测试模拟 `dynamic-range: high`，读回浮点高亮 >1，验证普通截图重新执行同一 SDR 策略；内存创建的原生帧仅作为导入诊断，不能推定所有解码资源的行为。缺少 WebGPU 的显式 GPU 测试必须失败。
 - `npm run test:hdr:browser`：生成真实 10-bit PQ/HLG HEVC，验证本地/Range、seek/逐帧/尾帧、峰值修改/恢复、混合 SDR、播放、v2 工作区还原与浏览器模式降级，登记为 ci-playback 必跑用例。
 - `npm run test:presentation:browser`：包含 24 个 HDR 原始布局组合（别名 × 10/12/16-bit × planar/semiplanar），与 CPU 对照，同时覆盖原有 SDR、裁剪、旋转、采样与原生 HDR 兼容路径。
 - 上游 `scripts/test-hdr-planes.mjs` 在单/多线程 core 对 PQ/HLG 首帧原始平面逐字节核对独立 FFmpeg，并检查重复 seek 的资源标签与 ABI；应用回归另验 seek 后的图片身份。
@@ -37,3 +37,5 @@ UI 和 Agent 的 `set_review_color_output` 都使用 `session.setColorOutput`。
 Dolby Vision/HDR10+ 动态元数据、母版静态元数据自动决定峰值、HDR 图片导出与物理显示校准尚未实现。浮点读回和普通截图无法代替真实 HDR 屏幕验收；Windows 原设备的最终颜色/性能应单独验证。
 
 本轮 macOS 有窗口 WebKit 的 PQ/HLG 小片源及混合双轨共 6 轮、1080p HLG 单轨/混合 SDR 共 4 轮达到原有阈值；1080p HLG 约 29.7–29.9 fps，混合 H264 约 57–58 fps。浏览器色彩的 SDR 基准有负面结果；初次旧版对照通过，后续完全旧代码也出现同类失败，当前视频/图形负载使这组测试无法建立稳定代码归因。保留通过与失败的[聚合证据](evidence/hdr-support-macos.json)，不宣称所有场景或物理显示验收通过。
+
+原生导入补测：[Chrome 154 本机诊断](evidence/hdr-native-import-macos.json)。移除 Playwright 强制 sRGB 参数后，浏览器实际报告 HDR 显示能力；真实 HEVC10 WebCodecs 帧导入 Display-P3、无 0–1 shader clamp、rgba16float 读回仍全部 ≤1。PQ 100/203/1000/4000/10000 nits 灰阶仍可区分，因此不能仅凭最高值为 1 宣称硬截断；该导入没有得到当前 HDR 输出契约所需的显示光数值。此测量不定位转换发生在解码器、底层纹理导入或浏览器色彩变换中的哪一步，也不认证其他浏览器版本或资源布局。原生 HDR 直通仍需独立准入和真实显示验收。

@@ -31,8 +31,8 @@ export async function createExternalSurface(canvas, sharedDevice, mode = 'extern
   context = canvas.getContext('webgpu');
   if (!context) { if(ownsDevice)device.destroy(); throw new Error('WebGPU canvas unavailable'); }
   const output=getColorOutput(),sdrFormat=navigator.gpu.getPreferredCanvasFormat();
-  // Native HDR external imports clamp on tested Chromium resources. Browser
-  // matching remains an SDR contract until this path is independently proven.
+  // Tested native HDR imports did not produce verified extended display light.
+  // Browser matching stays SDR until actual decode/import resources pass admission.
   let hdrOutput=output.target==='hdr'&&hdrDisplayAvailable()&&getColorMode()!=='browser'&&mode!=='copy';
   if(hdrOutput){
     device.pushErrorScope('validation');

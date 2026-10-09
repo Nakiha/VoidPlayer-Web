@@ -103,8 +103,8 @@ export function gpuPaint(source:HTMLCanvasElement,frame:DecodedFrame){
   const entry=entries.get(source);if(!entry)return false;
   if(entry.disabled)return false;
   validateDescription(frame.description,frame.kind==='yuv'?frame.pixels?.byteLength:undefined);
-  // Native PQ/HLG has no tone mapping on the external-texture path: decline it
-  // here so it keeps the documented VideoSample.draw → sRGB canvas route.
+  // Native PQ/HLG imports have not passed the HDR display-light contract.
+  // Decline them here so they keep VideoSample.draw → sRGB compatibility.
   // The check covers both canonical ('pq'/'hlg') and alias spellings.
   if(!entry.surface.available||(frame.kind==='yuv'&&!resolveYuvColor(frame.description).supported)||frame.kind==='rgba8'||(frame.kind!=='yuv'&&isHdrTransfer(frame.description.color.transfer))){
     entry.disabled=true;entry.canvas.hidden=true;entry.surface.clear();source.classList.remove('frame-source');

@@ -3,7 +3,7 @@
 首帧、播放、seek、截图由 `presenter.ts` 选择同一色彩管线。解码器只交付资源，不画 canvas。
 应用保留“自有色彩”和“浏览器色彩”（软件回退近似匹配）两个选项，未保存偏好时默认浏览器色彩。转换归属与 SDR/HDR 显示目标独立设置，UI/Agent 共用 session 事务。自有色彩支持标签明确的高位深 PQ/HLG 平面；支持的 WebGPU/HDR 环境可使用浮点扩展输出，其余环境明确使用 SDR 预览。请求目标与每轨实际输出分开报告，不承诺物理亮度校准或跨设备逐像素一致。
 
-PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源。自有模式拒绝 RGBA8、低位深或标签不足的 HDR 资源；符合 BT.2100 平面契约时使用统一 HDR 数学。浏览器原生 HDR 保留 sRGB Canvas 兼容预览，不开放 external texture HDR 输出；当前实测导入会截断高亮。Dolby Vision/HDR10+ 动态元数据不参与转换。
+PQ/HLG 使用实际资源标签，不用源标签覆盖浏览器已转换资源。自有模式拒绝 RGBA8、低位深或标签不足的 HDR 资源；符合 BT.2100 平面契约时使用统一 HDR 数学。浏览器原生 HDR 保留 sRGB Canvas 兼容预览，不开放 external texture HDR 输出；当前导入未通过扩展显示光契约验证，不能推定所有 WebCodecs/WebGPU 资源都无法呈现 HDR。Dolby Vision/HDR10+ 动态元数据不参与转换。
 
 ## 用户选择的两条路径
 
@@ -181,7 +181,7 @@ HDR 显示仅在自有模式、`dynamic-range: high`、WebGPU 可用且 `rgba16f
 
 `MediaInfo.presentation` 单独记录 requestedTarget、actualTarget、captureTarget、executor、contract；`output` 仍是实际解码资源，不冒充显示画布。actualTarget=hdr 表示浮点 extended 输出契约，不能证明物理屏幕已测得 nits。无相应能力或浏览器模式使用 SDR，保留请求目标，UI 说明降级。显示能力变化在会话空闲暂停后重建，启动 GPU 就绪后也重新呈现早期回退帧。
 
-浏览器原生 HDR 禁止 external HDR 导入；实际实验的原生 PQ 资源在导入后最高为 1，原始平面浮点输出可超过 1。禁止由容器标签推定导入保留动态范围，也不对浏览器已经映射的 SDR 再执行 HDR 变换。详细数学、验证和限制见 [HDR 支持](hdr-support.md)。
+浏览器原生 HDR 暂不准入 external HDR 呈现；实际实验的内存帧和 Chrome 154 WebCodecs HEVC10 资源在导入后最高为 1，原始平面浮点输出可超过 1。完整灰阶仍可区分，所以最高值不能单独证明硬截断；目前未得到符合约定的 HDR 显示光输出，转换边界尚未定位。禁止由容器标签推定导入保留动态范围，也不对浏览器已经转换的资源盲目叠加 PQ/HLG 变换。详细数学、验证和限制见 [HDR 支持](hdr-support.md)。
 
 ## 首帧封面资源
 
