@@ -61,7 +61,8 @@ try {
       localStorage.setItem('voidplayer.color-mode', 'browser');
       window.audioLifecycle = stage => { if (window.audioRecordLifecycle) navigator.sendBeacon('/audio-test-lifecycle?stage=' + encodeURIComponent(stage), ''); };
       window.addEventListener('beforeunload', () => window.audioLifecycle('beforeunload'));
-      window.addEventListener('pagehide', () => window.audioLifecycle('pagehide-enter'));
+      window.audioUnloadContextLosses = 0;
+      window.addEventListener('pagehide', () => { window.audioPagehiding = true; window.audioLifecycle('pagehide-enter'); });
       window.addEventListener('unload', () => window.audioLifecycle('unload'));
       // Locate native cleanup stalls even if the renderer can no longer answer
       // DevTools. These wrappers preserve every call and are armed only at reload.
@@ -69,6 +70,7 @@ try {
         const original = target?.[name];
         if (!original) return;
         target[name] = function(...args) {
+          if (name === 'loseContext' && window.audioPagehiding) window.audioUnloadContextLosses++;
           window.audioLifecycle(name + '-enter');
           const result = original.apply(this, args);
           window.audioLifecycle(name + '-return');
@@ -147,6 +149,24 @@ try {
     assert.deepEqual(errors, []);
     report.push({ enabled, blobReads: await page.evaluate(() => window.audioBlobReads), traffic: [...traffic], audio: audioEvidence, video: { positionUs: result.positionUs, durationUs: result.durationUs, error: result.error } });
     if (enabled) {
+      // Keep the active-seek cancellation check outside the IO comparison:
+      // snapshot and seek in one browser task while old nodes are still live.
+      await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
+      await page.waitForFunction(() => {
+        if (!window.audioEvidence.live.size) return false;
+        const old = new Set(window.audioEvidence.live), stopped = window.audioEvidence.stopped;
+        const seeking = window.voidPlayer.tools.find(t => t.name === 'seek_review').execute({ ptsUs: 1500000 });
+        window.audioSeek = { oldCount: old.size, survivors: [...old].filter(node => window.audioEvidence.live.has(node)).length,
+          stopped: window.audioEvidence.stopped - stopped };
+        window.audioSeekPending = seeking;
+        return true;
+      });
+      await page.evaluate(() => window.audioSeekPending);
+      const sought = await page.evaluate(() => window.audioSeek);
+      assert.ok(sought.oldCount > 0, 'seek exercised live nodes');
+      assert.equal(sought.survivors, 0, 'seek synchronously stops all old nodes');
+      assert.ok(sought.stopped >= sought.oldCount, 'seek stops nodes rather than waiting for their natural end');
+      report[1].seek = sought;
       await tool(page, 'load_library_item', { id: second, slot: 'B' });
       await tool(page, 'seek_review', { ptsUs: 0 }); await page.locator('#play').click();
       const beforeSwitch = await page.evaluate(() => window.audioEvidence.starts);
@@ -187,14 +207,14 @@ try {
         // its termination calls before the departing document is discarded.
         window.addEventListener('pagehide', () => { window.audioLifecycle('pagehide-after-app'); sessionStorage.setItem('audio-test-pagehide', JSON.stringify({
           workers: window.audioWorkers.size, contexts: window.audioEvidence.contexts,
-          closes: window.audioEvidence.closes, live: window.audioEvidence.live.size,
+          closes: window.audioEvidence.closes, live: window.audioEvidence.live.size, forcedContextLosses: window.audioUnloadContextLosses,
         })); }, { once: true });
       });
       await page.context().tracing.start({ snapshots: true }); tracing = true;
       await page.reload(); await page.waitForFunction(() => window.voidPlayer);
       await page.context().tracing.stop(); tracing = false;
       const unloaded = await page.evaluate(() => JSON.parse(sessionStorage.getItem('audio-test-pagehide')));
-      assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0 }, 'pagehide releases workers and audio synchronously');
+      assert.deepEqual(unloaded, { workers: 0, contexts: 1, closes: 1, live: 0, forcedContextLosses: 0 }, 'pagehide releases workers and audio synchronously');
       report[1].pagehide = unloaded;
       report[1].lifecycleTrace = [...lifecycleTrace];
       assert.equal((await state(page)).audioSlot, null, 'audio selection is never persisted');
