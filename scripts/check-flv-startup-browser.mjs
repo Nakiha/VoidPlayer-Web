@@ -113,6 +113,17 @@ async function run() {
     }
     const report = await call('benchmark_review', { durationMs: 4000 });
     assert.equal(report.error, null); assert.ok(report.measurements.mediaUs > mediaFloor, JSON.stringify(report));
+    // A software runner may still be in the first segment after four wall
+    // seconds. Metadata must follow the drawn frame, not elapsed wall time.
+    const advanced = (await call('get_review_session')).tracks[0];
+    assert.ok(advanced.frame.ptsUs > mediaFloor, 'resolution track must advance, not just the session clock');
+    await within('resolution-info-after-playback', advanced.frame.ptsUs, () => page.waitForFunction(
+      text => document.querySelector('#meta-A')?.textContent.includes(text), `${advanced.width} × ${advanced.height}`));
+    // Keep the larger-frame UI assertion deterministic even on slow runners.
+    const large = await call('seek_review', { ptsUs: 1900000 });
+    assert.equal(large.tracks[0].width, 640); assert.equal(large.tracks[0].height, 360);
+    await within('resolution-info-after-seek', 1900000, () => page.waitForFunction(
+      () => document.querySelector('#meta-A')?.textContent.includes('640 × 360')));
     assert.match(await page.locator('#meta-A').textContent(), /640 × 360/);
     await page.screenshot({ path: `.run/playback-reports/flv-resolution-${codec}-${browserName}.png` });
   }
