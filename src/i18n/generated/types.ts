@@ -385,6 +385,13 @@ export interface Sources {
   "appearance.rose": "玫红";
   "appearance.sky": "天蓝";
   "appearance.teal": "青色";
+  "bitstream.analyze": "分析当前帧";
+  "bitstream.blocks": "块";
+  "bitstream.boundaries": "块边界";
+  "bitstream.mode": "分析遮罩";
+  "bitstream.pending": "正在分析当前帧…";
+  "bitstream.prediction": "预测模式";
+  "bitstream.qp": "QP 热图";
   "bootstrap.reload": "重新加载";
   "bootstrap.startupFailed": "页面未能加载，请刷新重试。";
   "colorFlow.approximateBrowserColors": "近似浏览器颜色";
@@ -1419,6 +1426,13 @@ export interface MessageParameters {
   "appearance.rose": {  };
   "appearance.sky": {  };
   "appearance.teal": {  };
+  "bitstream.analyze": {  };
+  "bitstream.blocks": {  };
+  "bitstream.boundaries": {  };
+  "bitstream.mode": {  };
+  "bitstream.pending": {  };
+  "bitstream.prediction": {  };
+  "bitstream.qp": {  };
   "bootstrap.reload": {  };
   "bootstrap.startupFailed": {  };
   "colorFlow.approximateBrowserColors": {  };

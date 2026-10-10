@@ -31,6 +31,7 @@
     "src/ui/annotation-sync.ts",
     "src/ui/annotation-thumbnails.ts",
     "src/ui/appearance.ts",
+    "src/ui/bitstream-controls.ts",
     "src/ui/brand-effects.ts",
     "src/ui/checkpoint-history.ts",
     "src/ui/choice-menu.ts",

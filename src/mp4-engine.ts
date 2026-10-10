@@ -81,14 +81,14 @@ export class Mp4Engine {
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
       const decoder:PacketDecoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-      this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+      this.timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
       onProgress?.('first-frame');
       try { this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts)); }
       catch(error) {
         if(decoder.kind!=='webcodecs'||!(error instanceof MediaOpenError)||error.stage!=='decode')throw error;
         this.timeline.close();this.timeline=undefined;
         const software=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-        this.timeline=new PacketTimeline(this.index,software,packet=>this.reader.read(packet.offset,packet.size));
+        this.timeline=new PacketTimeline(this.index,software,packet=>this.reader.read(packet.offset,packet.size),true);
         this.primed=await this.timeline.at(recovered?firstPts:Math.max(0,firstPts));
       }
       const firstPtsUs=this.primed.pts;
@@ -113,7 +113,7 @@ export class Mp4Engine {
   async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<FlvFrame>{
     if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
     const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-    const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+    const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
     try{return await timeline.at(this.primed?.pts??this.index.packets[this.index.order[0]].pts);}
     finally{timeline.close();}
   }
@@ -121,7 +121,7 @@ export class Mp4Engine {
   async switchToSoftware(glueURL:string,wasmBinary?:Uint8Array,threads=1){
     if(this.timeline?.decoder.kind==='webcodecs'){
       const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
       const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
       let primed:FlvFrame;
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
@@ -134,7 +134,7 @@ export class Mp4Engine {
     if(this.timeline?.decoder.kind==='ffmpeg-wasm'&&this.nativeConfig){
       const decoder=await nativeFlvDecoder(this.index,this.nativeConfig);
       if(decoder){
-        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
         const target=this.primed?.pts??this.index.packets[this.index.order[0]].pts;
         let primed:FlvFrame;
         try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}

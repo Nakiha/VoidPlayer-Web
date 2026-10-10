@@ -1,3 +1,5 @@
+import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
+import type { BitstreamAnalysisService } from './bitstream-analysis/service.ts';
 import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
@@ -273,7 +275,46 @@ export class ReviewSession {
   private listeners = new Set<() => void>();
   private progressListeners = new Set<(positionUs: number, durationUs: number) => void>();
   private draw: (slot: Slot, frame: DecodedFrame) => void;
-  constructor(draw: (slot: Slot, frame: DecodedFrame) => void) { this.draw = draw; }
+  private presentedFrames = new Map<Slot, PresentedFrameToken>();
+  private frameListeners = new Set<(slot:Slot,token:PresentedFrameToken)=>void>();
+  private bitstream?: BitstreamAnalysisService;
+  private bitstreamLoading?: Promise<BitstreamAnalysisService>;
+  constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
+    this.draw=(slot,frame)=>{
+      draw(slot,frame);
+      if(frame.presentedCommit===undefined)return;
+      const d=frame.description;
+      const token:PresentedFrameToken={slot,generation:this.tracks.get(slot)?.sourceGen??this.nextSourceGen+1,commit:frame.presentedCommit,picture:frame.sourcePicture??null,...(!frame.sourcePicture?{identityReason:'unverified-playback-picture'}:{}),sourcePtsUs:frame.sourcePtsUs,normalizedMediaUs:frame.ptsUs,timeMapping:'source-microseconds-minus-first-pts',geometry:{codedWidth:d.codedWidth,codedHeight:d.codedHeight,visibleRect:{...d.visibleRect},displayWidth:d.displayWidth,displayHeight:d.displayHeight,rotation:frame.rotation??frame.sample?.rotation??0}};
+      this.presentedFrames.set(slot,token);
+      // Listener exceptions are analysis failures, never playback failures.
+      for(const listener of this.frameListeners){try{listener(slot,structuredClone(token));}catch{}}
+    };
+  }
+  async requestBitstreamRange(slot:Slot,startUs:number,endUs:number,signal?:AbortSignal){
+    slotValue(slot);const track=this.tracks.get(slot);if(!track||track.failure)throw new Error('Track unavailable');
+    const sourceVersion=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;
+    if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
+    const service=await this.bitstreamLoading;return service.requestRange(track.source,{sourceVersion,firstPtsUs:track.source.info.firstPtsUs,startUs:startUs-track.offsetUs,endUs:endUs-track.offsetUs},signal);
+  }
+  subscribePresentedFrames(listener:(slot:Slot,token:PresentedFrameToken)=>void){this.frameListeners.add(listener);return()=>this.frameListeners.delete(listener);}
+  getPresentedFrame(slot:Slot):PresentedFrameToken|null{
+    slotValue(slot);const track=this.tracks.get(slot),token=this.presentedFrames.get(slot);
+    if(!track||track.failure||!track.frame||!token||track.frame.sourcePtsUs!==token.sourcePtsUs)return null;
+    const version=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;if(token.picture&&token.picture.sourceVersion!==version)return null;
+    return structuredClone({...token,generation:track.sourceGen});
+  }
+  getBitstreamAnalysisState(){return this.bitstream?.state??{state:'idle' as const};}
+  cancelBitstreamAnalysis(){this.bitstream?.cancel();}
+  cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream?.cached(token)??null:null;}
+  async requestBitstreamAnalysis(slot:Slot,signal?:AbortSignal){
+    slotValue(slot);const track=this.tracks.get(slot),token=this.getPresentedFrame(slot);
+    if(!track||track.failure||!token?.picture)throw new Error('This playback picture cannot be precisely identified');
+    if(this.playing)throw new Error('Pause playback before requesting deep analysis');
+    if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
+    const service=await this.bitstreamLoading;signal?.throwIfAborted();
+    const current=this.getPresentedFrame(slot);if(!current||current.commit!==token.commit||current.generation!==token.generation)throw new DOMException('Presented frame changed','AbortError');
+    return service.request(track.source,token,signal);
+  }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   /** Presentation-clock updates, without cloning the full session or rerendering the workbench. */
   subscribeProgress(listener: (positionUs: number, durationUs: number) => void) {

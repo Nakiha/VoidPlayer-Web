@@ -27,6 +27,8 @@ import { contextLog } from './log.ts';
 import { preferredVideoConfig } from './decoder-policy.ts';
 
 export interface DecodedFrame extends FrameInfo {
+  presentedCommit?: number;
+  readonly sourcePicture?: import('./bitstream-analysis/contract.ts').SourcePictureKey;
   /** Filled only by the presenter after a successful paint; never decoder tags. */
   presentation?: { requestedTarget: 'sdr' | 'hdr'; actualTarget: 'sdr' | 'hdr'; captureTarget: 'sdr'; executor: string; contract: string;
     displayHdr: boolean; outputColorSpace: 'srgb' | 'display-p3'; outputFormat: 'unorm8' | 'float16'; toneMapping: 'standard' | 'extended'; fallbackReason?: string };
@@ -45,6 +47,8 @@ export interface DecodedFrame extends FrameInfo {
   close(): void;
 }
 export interface MediaSource {
+  /** Retained reference only; no analysis instance or IO until explicit request. */
+  bitstreamFile?: Blob;
   info: MediaInfo;
   /** Cache-only, bounded metadata inspection; never enables audio output. */
   requestCachedMetadata?(): void;
@@ -195,6 +199,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
   const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
     native, software: countedSoftware, nativeOwnsFallback: (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
   source.info.container = container;
+  if ('file' in input) source.bitstreamFile = input.file;
   const demuxBackend = container === 'flv' ? 'flv-engine'
     : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
   contextLog().info('media', '媒体管线追踪', {

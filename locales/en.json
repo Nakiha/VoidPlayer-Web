@@ -1551,6 +1551,34 @@
     "source": "青色",
     "translation": "Teal"
   },
+  "bitstream.analyze": {
+    "source": "分析当前帧",
+    "translation": "Analyze current frame"
+  },
+  "bitstream.blocks": {
+    "source": "块",
+    "translation": "blocks"
+  },
+  "bitstream.boundaries": {
+    "source": "块边界",
+    "translation": "Block boundaries"
+  },
+  "bitstream.mode": {
+    "source": "分析遮罩",
+    "translation": "Analysis overlay"
+  },
+  "bitstream.pending": {
+    "source": "正在分析当前帧…",
+    "translation": "Analyzing current frame…"
+  },
+  "bitstream.prediction": {
+    "source": "预测模式",
+    "translation": "Prediction modes"
+  },
+  "bitstream.qp": {
+    "source": "QP 热图",
+    "translation": "QP heatmap"
+  },
   "bootstrap.reload": {
     "source": "重新加载",
     "translation": "Reload"

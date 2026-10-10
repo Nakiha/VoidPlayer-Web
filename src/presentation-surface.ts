@@ -4,6 +4,7 @@ import type { FrameDescription } from './frame-description.ts';
  * that intermediate bitmap. Texture minification is bilinear, magnification
  * is nearest-neighbour, independent of CSS zoom and devicePixelRatio. */
 export interface PresentationGeometry { width: number; height: number; imageWidth: number; imageHeight: number; zoom: number; offsetX: number; offsetY: number; dpr: number; }
+export function presentationRect(g:PresentationGeometry){const width=g.imageWidth*g.zoom,height=g.imageHeight*g.zoom;return {x:(g.width-width)/2+g.offsetX,y:(g.height-height)/2+g.offsetY,width,height};}
 export function presentationSampling(sourceWidth: number, geometry: PresentationGeometry) {
   return geometry.imageWidth * geometry.zoom * geometry.dpr > sourceWidth ? 'nearest' : 'bilinear';
 }
@@ -52,8 +53,7 @@ export function createPresentationSurface(source: HTMLCanvasElement) {
     const g = geometry, width = Math.max(1, Math.round(g.width * g.dpr)), height = Math.max(1, Math.round(g.height * g.dpr));
     if (canvas.width !== width) canvas.width = width;
     if (canvas.height !== height) canvas.height = height;
-    const w = g.imageWidth * g.zoom, h = g.imageHeight * g.zoom;
-    const x = (g.width - w) / 2 + g.offsetX, y = (g.height - h) / 2 + g.offsetY;
+    const {x,y,width:w,height:h}=presentationRect(g);
     canvas.dataset.sampling = presentationSampling(source.width, g);
     if(gl && activeYuv && yuv){
       yuv.draw(null,width,height,{x:x*g.dpr,y:y*g.dpr,width:w*g.dpr,height:h*g.dpr},yuvRotation,canvas.dataset.sampling==='bilinear');

@@ -55,7 +55,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   // job remains required, including any newly added job not explicitly audited.
   const informational = jobs['paired-https'];
   assert.ok(informational, 'paired performance job exists');
-  assert.deepEqual(informational.needs, ['decoder']);
+  assert.deepEqual(informational.needs, ['decoder', 'analysis-core']);
   assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
   assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
   assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
