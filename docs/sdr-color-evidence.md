@@ -1,9 +1,9 @@
 # SDR software/native color evidence
 
-This branch collects evidence before changing color conversion. It does not
-implement a new rendering policy. The production decoder, presenter and WASM
-core remain unchanged. Run on the Windows machine/browser exhibiting the issue,
-with the same original files; another machine's result does not establish parity.
+This opt-in diagnostic measures the production FLV decoder and presenter without
+changing color tags or uploading media. Use the machine/browser exhibiting the
+issue and the same original files; another machine's result does not establish
+parity. The current rendering policy is defined in [the color contract](color-pipeline.md).
 
 ## Run locally
 
@@ -39,10 +39,9 @@ details and codec metadata and may include error paths; redact private values.
 - Requested versus actual source PTS, dimensions, actual frame descriptions,
   source color tags and the production presenter's conversion policy.
 - A bounded page of local diagnostic events (capability probes, fallback reasons
-  and presentation decisions). The current core ABI exposes source frame tags,
-  not the actual swscale coefficient table; these tags alone do not prove the
-  effective conversion parameters. That boundary remains a follow-up probe if
-  the native/WASM comparison implicates conversion.
+  and presentation decisions). Source tags alone do not prove the effective conversion parameters;
+  inspect the actual resource layout and resolved presentation plan. RGBA
+  fallback does not expose swscale's coefficient table through source tags.
 - Source-sized presenter capture in sRGB byte values, without diagnostic resize,
   exposure changes, retagging, or a second color-correction shader.
 - RGB mean/min/max, exact 0/255 populations, RGB MAE/RMSE, maximum difference,
@@ -85,57 +84,20 @@ If WASM input and captured output differ, inspect upload/capture before blaming
 YUV conversion. None of these comparisons alone establishes which image is
 correct; that needs a declared conversion target and independent reference.
 
-### First field report (Edge 152, two SDR files)
+### Diagnostic limits
 
-The supplied summary reports HEVC native/WASM MAE 1.69 and 1.97 at two times,
-with signed blue differences about -2.5 and -2.3. It reports native NV12 tagged
-BT.709 limited, while WASM source matrix/transfer/primaries are unknown and
-source range is explicitly limited. VVC has only a WASM capture. This is
-evidence of a backend-dependent difference for those HEVC captures; it does not
-prove rounding, chroma interpolation, or a particular matrix error.
+Compare the same file, PTS and decoded dimensions before interpreting a backend
+difference. Unknown tags do not mean no conversion occurred, and full-range RGB
+after limited-range YUV expansion is expected. FFprobe is not an independent
+SPS/VUI bit parser. Missing native VVC support prevents a same-codec native/WASM
+comparison; a HEVC/VVC pair must not be auto-scored as backend parity.
 
-- Unknown source tags do not mean swscale uses no matrix: the pinned core
-  `c0d3c369` chooses BT.709 for an unspecified matrix when height >=720.
-  Thus the reported 1080x1920 HEVC already has an effective BT.709 fallback.
-- Limited YUV becoming full-range RGB is expected after range expansion;
-  `matrix=rgb, fullRange=true` on RGBA is not itself an erroneous relabel.
-- VVC lacking native support prevents a VVC same-codec backend comparison. It
-  does **not** eliminate the backend difference from the user's HEVC-native vs
-  VVC-WASM viewing comparison.
-- ffprobe stream/frame output is not an independent SPS/VUI bit parser, and
-  WebCodecs/NV12 alone does not prove hardware execution.
-- A near-100% nonidentical-pixel count can arise from one-code-value differences;
-  two-frame MAE cannot establish either perceptual invisibility or whole-file
-  color correctness. Do not compensate the blue channel with a constant offset.
-
-1. Compare the **same HEVC file** between native and WASM. If it differs, first
-   inspect per-frame range/matrix/transfer/primaries, then pixel differences.
-2. Compare HEVC and VVC FFprobe/frame metadata. Equal filenames or apparent scenes
-   do not establish equal decoded pixels or equal color signalling.
-3. If HEVC matches across backends but VVC differs, compare source YUV and VVC
-   metadata before changing the renderer. This harness does not auto-score
-   different encoded files as a hardware/software parity test.
-4. Range-related errors often affect black/white levels; matrix errors affect
-   colored areas. These appearances are clues, not proof. Do not apply a
-   brightness or saturation patch based only on screenshots.
-
-## Refactoring decision
-
-The current WASM path applies a swscale YUV matrix/range conversion before
-delivering RGBA8; native frames use browser conversion. This split is established
-by source inspection, but the cause of a particular SDR discrepancy requires
-the evidence above. Metadata resolution and conversion provenance should become
-one explicit contract regardless of which renderer is chosen.
-
-If evidence implicates the conversion split, prototype retained YUV/bit depth
-from WASM and tagged VideoFrame construction through the same presentation path.
-Capability-test pixel layouts and validate reference patterns before choosing it.
-Opaque hardware resources mean a native Metal design cannot simply be copied into
-WebGL. A deterministic custom high-precision renderer is a separate, larger
-decision; this diagnostic does not assume it is already required.
-
-References: [existing Web contract](color-pipeline.md),
-[native contract](https://github.com/Nakiha/VoidPlayer/blob/881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba/native/docs/COLOR_PIPELINE.md).
+A near-100% nonidentical-pixel count can arise from one-code-value differences.
+Neither a small two-frame mean error nor a screenshot proves whole-file color
+correctness. Do not add per-channel offsets or infer range from filenames.
+The former RGBA-only refactoring proposal is superseded by the current
+[color contract](color-pipeline.md); old field observations remain in
+[Git history](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/sdr-color-evidence.md).
 
 ## ABI v2 / 统一 SDR 平面取证
 

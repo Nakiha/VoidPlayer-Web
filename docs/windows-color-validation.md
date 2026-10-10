@@ -1,81 +1,42 @@
-# Windows 色彩验证：2026-09-10
+# Windows 色彩验证
 
-Windows 验证已补，但**当前色彩一致性验收未通过**。H264 中性探针通过不代表 HEVC、BT.2020 SDR 或彩色边缘均能对齐。此次只增加测试入口与证据，没有修改生产转换算法、启用条件或误差门限。
+本页是可重复执行的呈现验证入口。当前转换、硬件准入与回退规则以 [色彩链路契约](color-pipeline.md) 为准；历史失败及环境见该文档的 [历史负面证据](color-pipeline.md#历史负面证据的边界)，不能把旧阶段结论当作当前状态。
 
-后续已实现显式统一平面实验：原片整帧色差为 0，但 4K 双轨性能未通过，见 [设计审查与实验结果](color-pipeline-design-review.md)。本页表格继续记录原自动 profile 的基线。
+## 运行
 
-## 环境与方法
-
-- Windows x64，系统 build 26200；NVIDIA RTX 5080，驱动 32.0.16.1664。WebGPU 返回 `nvidia / blackwell`，`isFallbackAdapter=false`。
-- Chrome for Testing **153.0.8010.36**，Edge 安装版 **152.0.4191.66**；均有窗口，未强制软件 GPU。两者版本不同，差异不能仅归因于浏览器品牌。
-- 正常 URL，生产 `initializeGpuPresentation` 自动选择 `planes`；未指定 Apple/CV 实验 profile。
-- Node 24.13.0，FFmpeg CLI 7.1.1；起始提交 `768ca4101b337947498d4a4e97645e4013d130f7`。完整本地报告保存 sourceDigest、浏览器版本、资源标签和参考平面 SHA-256。
-- 原生侧通过 `openMedia`，必须产出 WebCodecs 原生资源；软件侧是 **FFmpeg CLI 解码同一压缩文件所得原精度 YUV**，交给生产 `paintFrame` 的 YUV 入口。两侧通过 `captureFrame` 读取源尺寸 sRGB RGB；执行器必须为 `webgpu-external` / `webgpu-yuv`。
-- 比较前断言实际 source PTS 和尺寸一致；另按需复制可读原生 NV12/I420，逐样本比较 YUV。资源复制仅在诊断中执行。
-
-本机缺少 ABI v2 WASM core，因此这证明的是原生与软件平面的**呈现对比**，不能计作真实 WASM 解码、core ABI 或独立发布包验收。WebCodecs 请求 `prefer-hardware`，并不等于独立证明硬件视频解码器实际执行；非软件 WebGPU 适配器仅证明 GPU 呈现端。也不包含 OS/显示器扫描输出。
-
-## 合成彩色回归
-
-测试自行生成 192×144、4:2:0 对齐的 12 色块视频，含中性端点、中间亮度及彩色块。H264/HEVC 各使用真实编码和独立解码参考；每例比较 0s、1s、回到 0s 三次。共每浏览器 6 例、18 对帧。
-
-固定门限为色块内部每通道最多 **2** 个 8-bit 码值。块边缘各留 8 像素用于隔离色度重建差异，同时完整记录整帧误差；内部通过不代表整帧一致。
-
-| 样片 | Chrome 内部最大差 | Edge 内部最大差 |
-| --- | ---: | ---: |
-| H264 BT.709 limited | 0 | 0 |
-| H264 BT.709 full | 0 | 0 |
-| H264 BT.601 | 0 | 0 |
-| H264 BT.2020 SDR | **83** | **83** |
-| HEVC BT.709 8-bit | 0 | **23** |
-| HEVC BT.709 10-bit | 2 | **23** |
-
-可读 8-bit 资源的 YUV 码值均与软件参考完全相同。10-bit 原生资源 `format=null`，没有伪称完成原生平面读取。BT.2020 样片的原生资源报告 `primaries=bt709`，码流/FFmpeg 参考为 BT.2020；它是需要继续核查的资源约定差异，不能直接覆盖标签。
-
-即使色块内部通过，整帧最大差仍可达 76–91；BT.2020 达 115。边缘差异仍需独立检查，当前门限只验收色块内部，不掩盖整帧数字。两浏览器的整套测试均以非零状态退出。
-
-## 用户原片
-
-`mhw_hevc_fullrange_bt709_3s.mp4`，3840×2160 HEVC。文件名含 fullrange，但 FFmpeg 解码帧为 **limited range、BT.709 matrix/transfer/primaries**；容器流摘要缺少 matrix，测试使用解码帧标签。没有按文件名推断或修改片源。
-
-三次实际 source PTS 为 6,000、988,407、1,985,868 µs。原生与独立软件参考每对各 **12,441,600 个 YUV 样本完全一致**，Chrome、Edge 均如此。
-
-| source PTS (µs) | Chrome RGB MAE | Chrome 最大差 | Edge RGB MAE | Edge 最大差 |
-| --- | ---: | ---: | ---: | ---: |
-| 6,000 | 0.1783 | 77 | 3.8238 | 79 |
-| 988,407 | 0.1919 | 94 | 4.2564 | 93 |
-| 1,985,868 | 0.2206 | 80 | 3.9333 | 78 |
-
-原片对比使用整帧，不排除边缘。原生 external texture 与同资源 Canvas 2D 的最大差：Chrome 0、Edge 1。Edge 原生资源 `transfer=null`，Chrome 为 `bt709`。这些证据将问题收敛到资源转换/呈现，而非这三帧的解码码值差异；尚未证明具体驱动/浏览器转换函数的根因。Chrome 的小平均误差也不能消除其局部大差异。
-
-## HDR 关闭对照
-
-用户确认关闭 Windows HDR 后，重新启动同版本 Chrome/Edge 进程，复跑全部合成样片和用户原片。HDR 状态来自用户操作确认，脚本没有独立查询系统显示设置。
-
-36 对合成帧和 6 对原片帧的 RGB 全帧/内部误差统计、原生 external 对 Canvas 统计、可读 YUV 差异统计及资源色彩标签，与关闭前全部一致；浏览器版本与参考平面 SHA-256 也一致。这里比较的是完整统计对象，没有保存两轮完整 RGBA 来声称逐像素相同。
-
-因此，在本机这次对照中，关闭 HDR **没有改变或消除应用内部读回的色偏**。无需据此添加 HDR 开关补偿；继续定位浏览器原生资源转换和两路色度重建规则。该实验不评价显示器端的亮度/观感变化，也不排除其他设备的显示状态影响。
-
-关闭前报告保留在 `artifacts/color/hdr-on-baseline/`，关闭后报告保留在 `artifacts/color/hdr-off/`；逐对比较记录为 `artifacts/color/hdr-comparison.json`。两个目录的 HDR 标签按用户提供的状态命名。
-
-## 复跑
-
-需要 Node 24+、`npm ci`、含 libx264/libx265 的 ffmpeg 和 ffprobe，以及本机 Chrome/Edge。
+需要 Node 24+、`npm ci`、含 libx264/libx265 的 ffmpeg 和 ffprobe，以及 Windows 上的 Chrome/Edge。默认有窗口运行；脚本记录实际浏览器版本、OS 与 WebGPU adapter 字段，不自动查询驱动版本或系统 HDR 开关。驱动版本和用户手动确认的 HDR 状态需另行记录，并标明来源。
 
 ```powershell
 npm run test:webgpu:browser -- chrome msedge
 npm run test:color:windows
-npm run test:color:windows -- chrome msedge --file 'D:\Code\yorune\agent\VoidPlayer\resources\video\mhw_hevc_fullrange_bt709_3s.mp4'
+npm run test:color:windows -- chrome msedge --file 'D:\media\sample.mp4'
 ```
 
-也可只传 `msedge`。本次 Chrome 安装版不可用，使用下载到 gitignored artifacts 的官方 Chrome for Testing，通过以下变量选择；报告会标出路径覆盖，不能当作安装版 Chrome 验收：
+可只传 `msedge`。使用官方 Chrome for Testing 时设置 `CHROME_EXECUTABLE_PATH` 指向其 chrome.exe；报告中的路径覆盖不能当作安装版 Chrome 验收。显式统一平面对照使用 `--pipeline unified`，呈现回归对应 `npm run test:webgpu:browser -- chrome msedge --unified`。
+
+本地报告位于 `artifacts/color/presentation-chrome-msedge.json`、`artifacts/color/windows/report.json`、`artifacts/color/windows-file/report.json`；统一模式对应 `windows-unified/`、`windows-file-unified/`。合成视频、原片参考平面和详细像素统计只存本地，不自动上传。原片模式限 4:2:0 8/10-bit SDR、前三秒可取三帧、选中帧的布局/色彩标签不变；不支持时明确失败。
+
+需要同时检查真实 WASM 解码时，在相同命令后加 `--wasm`，并先准备锁定 core。该模式先将真实 WASM 帧字节与独立 FFmpeg 参考逐字节核对，再呈现；报告目录增加 `-wasm` 后缀。它仍不代替独立发布包或完整编解码矩阵验收。
+
+## 判读边界
+
+- 原生侧必须实际产出 WebCodecs 资源；软件参考是 FFmpeg CLI 解码同一压缩文件的原精度 YUV，进入生产 presenter。默认不计作实际 WASM core、ABI 或独立发布包验收；后者须另跑 [真实媒体与发布检查](testing.md)。
+- 比较前核对实际 source PTS、尺寸、资源色彩与平面布局。硬件偏好、非软件 WebGPU 适配器都不能单独证明物理硬件视频解码器执行。
+- 合成输入覆盖 H264 BT.709 limited/full、BT.601、BT.2020 SDR，以及 HEVC BT.709 8/10-bit。默认色块内部每通道门限为 2 个 8-bit 码值，边缘留 8 像素；完整帧误差仍须保留。统一模式检查完整帧，不能把内部色块通过说成整帧一致。
+- 原片对照不排除边缘。可读原生平面与独立参考相同，只能排除被测帧的 YUV 码值差异，不能证明浏览器 RGB 转换正确；format=null 时不得宣称拿到原始高位深平面。
+- 不根据文件名或公开标签覆盖已转换资源，不按浏览器品牌拟合补偿。平均差小不能掩盖局部最大差；应用内截图不包含 OS/ICC/物理显示输出。
+- `COLOR_TRACE=1` 可记录 `CreateExternalTexture` 事件；trace 的 VideoFrame 标签并不暴露完整 SharedImage 色彩状态。独立、仅含合成素材的复现见 [Edge 原生 YUV 复现](edge-native-yuv-repro.md)。
+- 未通过的门限保持失败；模式切换、短片吞吐、功能门禁与色彩一致性分别报告。长时间双轨、真实目标设备、显示器 HDR 输出均须单独验收。
+
+## 原始平面读回拆测
+
+Windows 上可运行以下有窗口的 Chrome/Edge 诊断；使用同一原片和版本比较，报告留在本地。流水线对照还需要锁定的真实 WASM core 及 PowerShell 进程采样。
 
 ```powershell
-$env:CHROME_EXECUTABLE_PATH = (Resolve-Path artifacts/browsers/chrome-win64/chrome.exe).Path
+node scripts/bench-native-readback.mjs 'D:\media\sample.mp4'
+node scripts/bench-yuv-pipeline.mjs 'D:\media\sample.mp4'
 ```
 
-本地报告：`artifacts/color/presentation-chrome-msedge.json`、`artifacts/color/windows/report.json`、`artifacts/color/windows-file/report.json`。合成视频、原片参考平面和详细像素统计仅存本地，不提交、不上传。原片模式限 4:2:0 8/10-bit SDR、前三秒可取三帧、选中帧的布局/色彩标签不变；不支持时明确失败。
+串行拆测报告为 `artifacts/color/native-readback.json`，比较主线程/Worker 和 ArrayBuffer/SharedArrayBuffer；首帧哈希相等不认证所有帧。流水线报告为 `artifacts/color/yuv-pipeline/report.json`，比较 WASM、主线程与 Worker 的 1/2/4/8 深度，检查完整 PTS 顺序、每帧抽样 YUV 和队列上限。
 
-已通过：Chrome/Edge 自动 profile、clone 生命周期、按需截图、四旋转、暂停缩放、10 个高位深/对齐/布局用例、RGBA 回退及重新进入、释放；10 项色彩/平面/证据单元测试；`npm run build`。
-
-仍未通过：上述彩色和原片误差门限。仍未覆盖：真实 WASM core/发布包、长时间双轨稳定性、GPU 丢失、系统 Safari、其他 Windows GPU/驱动、显示器/HDR 输出。合入前应处理或明确限制 Windows 的启用范围；本记录不能作为 Windows 全面放行。
+串行耗时不含取得下一解码帧；流水线是无播放时钟限速的单轨吞吐，画布为 960×540，两者不能当作实际 UI 双轨 fps。CPU 时间是被枚举进程各核时间之和，工作集求和可能重复计算共享页且不含独立显存；均不等于整机占用率或精确内存节省。这些实验不补全所有色度元数据，也不认证最终 RGB 或动态高位深边界；不得直接据此开启生产路径。实际会话另跑播放基准，并验证 seek、取消与释放。

@@ -25,7 +25,15 @@ review 导出继续使用 `voidplayer-web-review` version 1，保留 media、mar
 
 Windows 模式切换验证使用 `npm run test:color:modes`（需先运行本地服务，默认 5193）：检查 reference → browser → reference、UI 切换、刷新记忆，以及实际 decoder、时间、媒体 ID 和标注。session 单测覆盖偏移、标注保持和失败回滚。吞吐与颜色一致性需分别验证，不能将模式切换成功当作跨路径逐像素一致或实时播放通过。
 
-2026-09-10/11 的 Windows 实验、吞吐与失败结果属于历史环境，见 [Windows 验证记录](windows-color-validation.md)及 [当时的完整色彩契约](https://github.com/Nakiha/VoidPlayer-Web/blob/f62ca247128cac6a1b9cb8850f2ed603e97709a7/docs/color-pipeline.md)。其中列出的 `artifacts/color/` 本地产物未随仓库提交，无法从当前 checkout 复核。原始阶段记录仍可从 Git 历史读取；当前转换与能力边界以下文及 [HDR 支持](hdr-support.md)为准。
+## 历史负面证据的边界
+
+以下是固定环境的旧实验，不是当前版本验收；详细过程只从 Git 历史读取。对应 `artifacts/color/` 本地产物未提交，当前 checkout 无法复核，不能用旧报告宣称今天通过或失败。
+
+- 2026-09-10 Windows RTX 5080、Chrome 153.0.8010.36 / Edge 152.0.4191.66：统一平面实验虽使所测原片整帧 RGB 差为 0，4K 双轨各轨仍只有 Chrome 6.04–6.08 fps、Edge 10.01–10.48 fps，未达到实时门限。当轮没有真实 ABI v2 WASM core，软件参考来自独立 FFmpeg CLI；不能计作 WASM 解码或发布验收。[原设计实验](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/color-pipeline-design-review.md)
+- 同环境原生/软件平面对照的 BT.2020 SDR 内部最大差为 83，Edge HEVC 8/10-bit 为 23；即使某些内部色块通过，整帧边缘仍有较大差异。用户确认关闭 Windows HDR 后统计没有改变，但脚本未独立查询系统 HDR 状态；这不评价物理显示输出。[原 Windows 记录](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/windows-color-validation.md)；现行复跑入口见 [Windows 色彩验证](windows-color-validation.md)。
+- 2026-09-11 同机读回实验中 SharedArrayBuffer / Worker 未显著降低串行 copyTo 成本；有界流水线的 Chrome Worker 吞吐仍低于片源约 60 fps，深度 8 未带来明确收益。该流水线实验使用真实 ABI v2 多线程 core，但只核对 PTS 与每帧抽样 YUV，不是全像素或最终 RGB 认证，也不是实际双轨 UI 帧率。[原读回实验](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/native-yuv-readback-performance.md)
+- 2026-09-12 macOS 的 Chromium 无界面硬件优先实际回退 WASM，仅约 0.37× 实时；有窗口复核约 0.99× 且通过首帧平面核对。二者不证明浏览器底层物理硬件解码，也不能替代 Windows 验收。[原链路审计](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/color-path-audit-2026-09-12.md)
+- Edge 原片内部 GAMMA22 与 JS transfer=null 的差异、BT.601 候选的数学吻合都不足以确证 SharedImage/驱动根因；候选整帧最大差仍为 78–95，不能按浏览器品牌添加修正。[原源码调查](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/chromium-color-source-investigation.md)；独立复现与上游源码定位见 [Edge 原生 YUV 复现](edge-native-yuv-repro.md)。
 
 ## 信息与责任
 
@@ -159,7 +167,7 @@ NotSupportedError 保留可播放资源并记录原因；其他错误继续传�
 
 - `npm test`：布局/矩阵/范围/高位深/heap growth、真实 single/mt core、packet/container 与生命周期。
 - `npm run test:webgpu:browser`：自动资源探针、原生 clone 生命周期、按需截图、旋转/缩放与直接高位深平面。
-- `npm run test:webgpu:browser -- chrome msedge`：Windows 有窗口浏览器；`npm run test:color:windows` 补合成彩色与独立 FFmpeg 平面对照，`-- --file <MP4>` 补原片同 PTS 取证。当前未通过项和 WASM 证据边界见 [Windows 验证记录](windows-color-validation.md)。
+- `npm run test:webgpu:browser -- chrome msedge`：Windows 有窗口浏览器；`npm run test:color:windows` 补合成彩色与独立 FFmpeg 平面对照，`-- --file <MP4>` 补原片同 PTS 取证。测量方法与 WASM 证据边界见 [Windows 色彩验证](windows-color-validation.md)；历史失败不能替代当前实跑。
 - `npm run test:presentation:browser`：Chromium/WebKit shader 对 CPU 参考、裁剪/旋转/采样及旧 PQ/HLG 路径。
 - `npm run test:browser`：轨道、尺寸调度、双轨布局、关闭与恢复。
 - `node scripts/bench-playback.mjs webkit`：真实应用连续播放；Chrome 可用 BENCH_CHANNEL=chrome。

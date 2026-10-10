@@ -74,15 +74,15 @@ node scripts/run-tests.mjs uncovered --prepared
 
 13 类回归（menu、settings、theme、shortcuts、feedback、mark-cards、color-settings、metadata、stepping、timeline、annotation、annotation-rendering、workspace）已迁入 `scripts/testing/browser-fixture.mjs`：每个 case 独占临时 SQLite、随机端口、浏览器/context 与产物目录，正常完成、断言失败、部分启动失败、超时、取消均按逆序清理。失败产物包含 case/engine/阶段、原始异常、控制台、页面错误、Range 请求、可用的会话状态、截图与 DOM。清理异常单独写入 `cleanup-errors.json`，不会替换原始异常。公共 fixture 接管 SIGINT/SIGTERM/SIGHUP，旧单项脚本直接中断也会先完成资源清理，并在结束后移除信号监听；浏览器关闭由 fixture 统一负责。可信 HTTPS/身份、服务重启、Range 故障注入、Vite 测试页及原生包浏览器保留专用生命周期和服务扩展；它们仍由统一 runner 执行并登记既有产物目录。主题的受限存储 context 与设置的 DPR 2 context 通过 `newContext` 登记；额外 context 的启动失败或取消也属于同一 case 的清理范围。扩展服务在开始监听或等待 ready 前可用 `defer` 注册部分启动资源。连接与身份的普通 HTTP 测试共用 `http-origin.mjs`，将虚拟测试域名的 HTTP 请求转到临时 loopback 服务，保留页面的不安全 origin；HTTPS 请求不匹配此转发，仍验证真实证书信任。
 
-### 迁移覆盖对照与兼容期
+### 覆盖下限与兼容入口
 
-`test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。`uncovered` 保留原有 20 格，并补齐此前遗漏的 16 格；CI 按 Chromium/WebKit 拆分执行。FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。完整 Node 验证仍由 `unit` 运行；`source` 提前独立验证无需媒体的逻辑；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。
+`test/testing-coverage-baseline.json` 保存迁移时已有 case × engine × platform × input、执行命令、required 属性与 CI 归属下限；`test/test-manifest.test.mjs` 检查每格仍存在。`uncovered` 保留原有 20 格，并补齐此前遗漏的 16 格；CI 按 Chromium/WebKit 拆分执行。FLV startup 两引擎、HEVC 的两引擎 × 本地/远程（各两次重开）、FATE 内部矩阵和原生 Node/Bun 三平台验证都保留。完整 Node 验证仍由 `unit` 运行；`source` 提前独立验证无需媒体的逻辑；断言、媒体和参考结果不变。新增 case 必须显式登记，删除矩阵项或 required 属性会使契约失败。不得改写覆盖下限文件来掩盖覆盖减少；新增基础设施用例和工具可追加登记。
 
 契约测试解析发布与身份工作流中的 suite/case 选择和引擎/输入矩阵，要求每个 required 浏览器组合都被实际选择；移除 job、漏掉矩阵引擎或新用例未接入 CI 会失败。
 
 CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
 
-旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 继续枚举旧顶层入口，Bun 和单文件命令也保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。详细覆盖对照见 [迁移验收](testing-coverage.md)。
+旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 继续枚举旧顶层入口，Bun 和单文件命令也保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。逐项覆盖下限见 `test/testing-coverage-baseline.json`，当前选择以统一清单为准。
 
 ## 准备
 
@@ -175,9 +175,9 @@ CI 将这两类检查分开运行：`--functional-only` 检查载入、解码路
 
 `node --test test/flv-startup.test.ts test/frame-index-cache.test.ts` checks checkpoint resume, bounded reads, index deadlines, decoder retry, cache schema/version validation, persistence, deletion and offline storage.
 
-After syncing the pinned core and generating `standard-h264.flv`, run `node --test test/flv-background.test.ts` and `npm run test:flv:startup`. The fixture appends a sparse 256 MiB audio tail and blocks reads beyond the initial 64 KiB. The first decoded/drawn frame must arrive while the tail remains blocked. After release, the worker uploads the complete index, a second opening reuses it without rescanning the tail, and playback plus administrator UI/WebMCP clearing are checked. Run `node scripts/check-flv-startup-browser.mjs webkit` for WebKit.
+After syncing the pinned core and generating `standard-h264.flv`, run `node --test test/flv-background.test.ts` and `npm run test:flv:startup`. The fixture appends a sparse 256 MiB audio tail and blocks reads beyond the initial 64 KiB. The first decoded/drawn frame must arrive while the tail remains blocked. After release, the completed index becomes available, a second opening reuses the cache without rebuilding, and playback plus administrator UI/WebMCP clearing are checked. Run `node scripts/check-flv-startup-browser.mjs webkit` for WebKit.
 
-FLV startup reads the configuration and first video packet, then flushes the decoder to display that frame. The rest is scanned from the saved tag offset after the first frame; seeking outside the indexed prefix waits for completion. Duration is provisional until then, exposed as `indexState` in session metadata and the inspector. Cache lookup/upload is optional and never blocks the first frame.
+FLV startup reads the configuration and first video packet, then flushes the decoder to display that frame. Local files and arbitrary URLs resume the client scanner from the saved tag offset; seeks wait only for the required published prefix. Version-pinned library URLs instead start or join the server shared-parser disk scan, receive progress, and import resumable chunks of the completed document. That server path does not publish playable prefixes during scanning, so seeks beyond startup coverage wait for completion. Index work does not block the first presentation. Duration is provisional until finality, exposed as `indexState` in session metadata and the inspector; a failed library build is not silently replaced with a browser full-file scan.
 
 Media indexes are stored in `library.sqlite` schema 7, keyed by media ID/version, kind, stream, schema, and indexer build. The schema migrates older FLV rows into identity-keyed manifests and batches; downgrading to an older schema requires restoring the prior database backup or rebuilding the library index. Only version-pinned library URLs use the cache API. FLV client uploads validate bounded packet offsets, codec configuration, and timing. FFmpeg fallback indexes are built on the server for versioned library media and streamed as validated record batches. MPEG-TS scan progress is reported before batches; the demux scan reaches EOF before the complete record set is persisted and transferred. While batches import, `indexState: building` means index finality has not arrived, not that scanning is still in progress. The complete document remains available for compatibility. Missing/changed files and removed/relocated roots invalidate caches, while offline storage preserves them. FLV uploads are capped at 32 MiB; FFmpeg record streams are capped at 2 million records/128 MiB, and total live cache data is capped at 256 MiB with least-recently-used eviction. Clearing increments an epoch so an earlier in-flight upload cannot undo the clear. SQLite may retain reusable free pages after deletion.
 
@@ -191,7 +191,7 @@ Administrators can list/search and clear individual versions or all caches under
 失败诊断：`test/media-diagnostics.test.ts` 覆盖带 CRC 的 PAT/PMT、跨包 PSI、连续计数缺口、188/192/204 字节 TS 包，以及 AVS3 (0xD4)、HEVC (0x24)、私有 PES (0x06) 不误识别。只有所有打开路径都失败且不是网络/资源错误时，才额外探测至多 64 KiB、远程读取至多等待 1.5 秒。诊断报告 PMT 声明的编码，不把声明当作码流有效性证明；探测失败保留原错误，不扩大下载范围。
 
 
-FLV 尾部恢复：`test/flv-recovery.test.ts` 和 `test/flv.test.ts` 验证首帧优先后，尾部截断不再使后台索引失败。只将末尾未完成标签排除出索引；非零 stream ID、错误 PreviousTagSize 等依然失败，配置头或起始关键帧缺失不能冒充可播放文件。时长来自完整包的时间戳，UI 明示“尾部不完整”；不把源文件绝对时间戳当作可播放时长。共享 FLV 帧索引格式升级为 schema 2 以保存 truncatedAt，旧格式缓存读取时自动失效，无媒体库数据库迁移。
+FLV 损坏恢复：`test/flv-recovery.test.ts` 和 `test/flv.test.ts` 验证首帧优先、尾部截断与有界内部重同步。已有有效配置和起始关键包后，标签类型/flags、stream ID、PreviousTagSize 或不完整标签等结构损坏会尝试有预算的重新定位；后续必须同时证明标签结构和独立解码锚点，不能仅凭容器 key 标志恢复。找不到安全锚点或耗尽预算时保留已验证前缀，配置头或起始关键帧缺失仍失败。IO/版本变化、取消、不支持的编码/配置和资源限制不转成可缓存的损坏文件。时长来自保留包的真实时间戳；`indexIntegrity` 区分 complete / recovered / prefix，警告及 `indexTruncatedAt` 保留损坏边界，索引 complete 仅表示终态。共享 FLV 帧索引为 schema 3 / `flv-demux-v3`，保存恢复间隙、损坏原因与解码边界；旧格式按新身份重建，客户端和服务器需一起升级。详细恢复预算与准入见 [FLV 时间线](flv-timeline.md#damaged-tails)和 [容器恢复](container-recovery.md)。
 
 真实 HEVC/私有 VVC/AVC 回归在完整码流后追加残缺视频标签，验证连续取帧、前后定位、尾帧及警告。首帧浏览器夹具包含被阻塞的大尾部和最终残缺标签，验证后台恢复、播放基准、警告显示与服务器缓存复用。缺失包可能是其他完整包的参考帧，因此恢复不保证任意损坏流都能输出每一帧；解码失败保留上下文并停止重复调用失败的解码器。worker 原始异常堆栈进入现有本地诊断日志，不额外上传。
 
@@ -255,6 +255,8 @@ npm run test:fate:browser
 轨道信息是缓存证据，不是完整 ffprobe：仅检查已读的 FLV header/tag、MP4 moov、EBML Tracks 和 TS PAT/PMT（以及已有 AAC 配置）。每次查询最多 4 MiB、256 个不超过 64 KiB 的缓存 peek，2 秒软截止；顶层遍历和轨道数另有上限。TS 限制为启动 64 KiB 内完整且 CRC 有效的单节 PAT/PMT，未知私有流不推断为无音频。EBML 不扫描 Cluster；超预算、缓存空洞、复杂或缺失元数据保留“尚未确认”。只在信息面板请求时查询，最多每秒一次；正常视频读取带来新证据后可更新，关闭/换片/释放会取消旧查询。不会创建 AudioContext/AudioDecoder、额外元数据 worker 或修改服务端索引及 WASM ABI。
 
 ## 历史证据的读取边界
+
+2026-09-07 的 [FATE 审计原文](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/fate-audit.md)描述的是修复前状态，其后续任务列表与探索性非阻塞配置已被当前帧契约及门禁替代。FATE 包含故意损坏的输入，不应将全部文件必须可播放当作目标；首帧、帧数或时间推进也不能替代逐帧尺寸、PTS、像素和定位验证。
 
 历史帧契约验收见 [frame-contract-acceptance.json](frame-contract-acceptance.json)，其中包含未达门槛的性能结果。界面重做基准保留在 [2026-09-06 原始报告](../.design/2026-09-06/)，均不代表当前版本验收。
 
