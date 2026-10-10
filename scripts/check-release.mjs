@@ -1,3 +1,4 @@
+import { verifyFrontendIdentity } from './release-version.mjs';
 import { httpFetch } from '../test/http-request.ts';
 import { syntheticFlv } from '../test/flv-fixture.ts';
 import { FLV_INDEX_SCHEMA } from '../src/flv-index-cache.ts';
@@ -73,6 +74,7 @@ try {
   const manifest = JSON.parse(await readFile(path.join(folder, 'release.json'), 'utf8'));
   assert.equal(manifest.target, `bun-${process.platform === 'win32' ? 'windows' : process.platform}-${process.arch}`, 'Test on the target OS/architecture');
   assert.equal(manifest.runtime.name, 'bun');
+  verifyFrontendIdentity(JSON.parse(await readFile(path.join(folder, 'dist/build-info.json'), 'utf8')), { version: manifest.appVersion, revision: manifest.revision, dirty: manifest.dirty, tag: manifest.tag });
   for (const [file, hash] of Object.entries(manifest.files)) assert.equal(digest(await readFile(path.join(folder, file))), hash, file);
   assert.ok(!(await readdir(folder)).some(n => ['server', 'node_modules', 'package.json', 'logs'].includes(n)));
   const snapshotFiles = execFileSync(tar, ['-tzf', path.join(folder, 'source.tar.gz')], { encoding: 'utf8' }).replaceAll('\\', '/');

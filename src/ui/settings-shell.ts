@@ -71,7 +71,7 @@ export function settingsShell() {
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.about", "关于")))}
         <div class="settings-section"><h4 class="settings-section-title">VoidPlayer</h4><div class="about-project settings-group">
-          <div class="about-project-row"><span>${th(msg("settingsShell.version", "版本"))}</span><span>${buildInfo?.revision ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></div>
+          <div class="about-project-row"><span>${th(msg("settingsShell.version", "版本"))}</span><span id="about-version">${buildInfo?.version ?? t(msg("settingsShell.developmentBuild", "开发版本"))}</span></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.projectSource", "项目源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-Web" target="_blank" rel="noopener noreferrer">VoidPlayer-Web ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.decoderSource", "解码器源码"))}</span><a href="https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/tree/wasm" target="_blank" rel="noopener noreferrer">VoidPlayer-FFmpeg-Build ↗</a></div>
           <div class="about-project-row"><span>${th(msg("settingsShell.license", "许可证"))}</span><a href="/licenses/voidplayer-web.txt" target="_blank" rel="noopener">LGPL-2.1-or-later</a></div>

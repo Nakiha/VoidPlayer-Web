@@ -94,6 +94,8 @@ SQLite 的 WAL、SHM 和进程锁也留在 `data/` 内。不会默认写入用�
 
 ## 包的来源
 
+首页底部和“设置 → 关于”的版本与 `--version`、服务管理及 `release.json` 一致：标签包显示语义版本（例如 `0.7.0`），分支包显示 `x.y.z-preview.<修订>`。完整 Git 修订另存于构建诊断信息；部署机器无需安装 Git。
+
 `release.json` 记录平台、版本、源码修订和逐文件校验和；`BUILD-SOURCES.md` 记录构建来源，`source.tar.gz` 是对应源码。运行不依赖源码包。macOS 包的签名和公证尚未提供。
 
 ## 访问边界
