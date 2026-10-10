@@ -164,6 +164,44 @@ await withBrowserFixture(
             (await call("get_bitstream_analysis_state")).cacheHit,
             true,
           );
+          if (
+            input === "local-file" &&
+            decoding === "browser" &&
+            row.codec === "h264"
+          ) {
+            let release;
+            const blocked = new Promise((r) => {
+              release = r;
+            });
+            const pattern = "**/assets/controller-*.js";
+            await page.route(pattern, async (route) => {
+              await blocked;
+              await route.continue();
+            });
+            const requested = page.waitForRequest(pattern, { timeout: 30000 });
+            try {
+              await page.locator("#bitstream-A").click();
+              await requested;
+              await call("step_review", { direction: 1 });
+              release();
+              const cold = page.locator("#bitstream-overlay-A");
+              await cold.waitFor({ state: "attached" });
+              assert.ok(
+                await cold.isHidden(),
+                "lazy overlay loading never changes the click-time picture demand",
+              );
+              assert.equal(
+                (await call("get_bitstream_analysis_state")).cacheHit,
+                true,
+                "superseded activation starts no replacement request",
+              );
+            } finally {
+              release();
+              await page.unroute(pattern);
+            }
+            await page.locator("#bitstream-A").click();
+            await call("seek_review", { ptsUs: 0 });
+          }
           await page.locator("#bitstream-A").click();
           const overlay = page.locator("#bitstream-overlay-A");
           await overlay.waitFor({ state: "visible" });
@@ -352,6 +390,14 @@ await withBrowserFixture(
     // A response for a frame superseded during the request must never become visible.
     await call("seek_review", { ptsUs: 400000 });
     await page.locator("#bitstream-A").click();
+    // Establish that the old-picture demand exists before superseding it;
+    // otherwise an async UI import can start a legitimate new-picture request.
+    await page.waitForFunction(
+      () =>
+        window.voidPlayer.tools
+          .find((t) => t.name === "get_bitstream_analysis_state")
+          .execute({}).state === "pending",
+    );
     await call("step_review", { direction: 1 });
     await page.waitForFunction(
       () =>
@@ -453,7 +499,7 @@ await withBrowserFixture(
     );
     await page.screenshot({ path: artifact("final.png") });
     console.log(
-      `PASS ${engine}: ${rows.length} real local/library decode combinations, picture/offset/cache/range/overlay/cancel isolation`,
+      `PASS ${engine}: ${rows.filter((r) => r.codec).length} real local/library decode combinations plus sustained-load and capability regressions, picture/offset/cache/range/overlay/cancel isolation`,
     );
   },
 );

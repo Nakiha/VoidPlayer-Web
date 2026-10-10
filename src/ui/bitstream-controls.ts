@@ -73,6 +73,7 @@ export function installBitstreamControls(
       button.setAttribute("aria-pressed", "true");
       status.hidden = false;
       status.textContent = t(msg("bitstream.pending", "正在分析当前帧…"));
+      const requested = session.getPresentedFrame(slot);
       try {
         const { createAnalysisOverlay } = await import(
           "../analysis-overlay/controller.ts"
@@ -83,7 +84,13 @@ export function installBitstreamControls(
         entry.tooltip.className = "bitstream-status bitstream-hit-tooltip";
         entry.tooltip.hidden = true;
         stage.append(entry.tooltip);
-        const requested = session.getPresentedFrame(slot);
+        const current = session.getPresentedFrame(slot);
+        if (
+          !requested ||
+          current?.commit !== requested.commit ||
+          current.generation !== requested.generation
+        )
+          return;
         const result = await session.requestBitstreamAnalysis(
           slot,
           entry.controller.signal,

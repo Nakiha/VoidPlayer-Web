@@ -234,6 +234,16 @@ test("failure transport preserves stable categories and never classifies by mess
     restoreFailure({ code: "unknown", message: "bad" }).code,
     "internal-error",
   );
+  for (const [width, code] of [
+    [0, "internal-error"],
+    [8192, "resource-limit"],
+  ] as const) {
+    assert.throws(
+      () => validateResult({ ...result(), width }),
+      (error) => failureInfo(error).code === code,
+    );
+  }
+
   const r = result();
   r.reasonCodes = ["unsupported-qp-depth"];
   r.qp.bitDepth = 10;

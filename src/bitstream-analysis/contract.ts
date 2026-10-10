@@ -193,11 +193,10 @@ export function validateResult(result: AnalysisResult): void {
   const { width: w, height: h, blocks } = result;
   if (
     ![w, h].every((n) => Number.isInteger(n) && n > 0) ||
-    w > 4096 ||
-    h > 2304 ||
-    !Array.isArray(blocks) ||
-    blocks.length > BUDGET.blocks
+    !Array.isArray(blocks)
   )
+    throw new Error("Invalid analysis output geometry");
+  if (w > 4096 || h > 2304 || blocks.length > BUDGET.blocks)
     throw new AnalysisFailure("resource-limit", "Analysis resource limit");
   if (result.confidence !== "exact") return;
   if (
