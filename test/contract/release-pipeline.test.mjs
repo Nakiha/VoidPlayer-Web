@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
-import { releaseVersion, readReleaseIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
+import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease } from '../../scripts/stage-release.mjs';
 import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
@@ -115,12 +115,37 @@ test('tag identity requires the current commit, a clean checkout and committed r
     const result = await readReleaseIdentity(root, 'v0.1.0');
     assert.equal(result.revision, git('rev-parse', 'HEAD')); assert.equal(result.version, '0.1.0');
     assert.match(await readReleaseNotes(root, result), /Release notes/);
+    assert.deepEqual(await readBuildIdentity(root, 'v0.1.0'), result, 'frontend uses exactly the native release identity');
+    const preview = await readBuildIdentity(root, '');
+    assert.equal(preview.version, `0.1.0-preview.${result.revision.slice(0, 8)}`);
+    assert.equal(preview.revision, result.revision, 'diagnostics preserve the full revision');
+    git('-c', 'tag.gpgsign=false', 'tag', 'v0.1.0-rc.1');
+    assert.equal((await readBuildIdentity(root, 'v0.1.0-rc.1')).version, '0.1.0-rc.1');
     await writeFile(path.join(root, 'untracked'), 'x');
     await assert.rejects(readReleaseIdentity(root, 'v0.1.0'), /未提交/);
+    await assert.rejects(readBuildIdentity(root, 'v0.1.0'), /未提交/);
+    assert.equal((await readBuildIdentity(root, '')).version, `0.1.0-preview.${result.revision.slice(0, 8)}.dirty`);
     git('add', '.'); git('-c', 'commit.gpgsign=false', 'commit', '-m', 'next');
     await assert.rejects(readReleaseIdentity(root, 'v0.1.0'), /未指向/);
     await assert.rejects(readReleaseNotes(root, { ...result, version: '0.1.1' }), /ENOENT/);
   } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('frontend source archives are explicit development builds, never unverified tagged releases', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-source-'));
+  try {
+    await writeFile(path.join(root, 'package.json'), '{"version":"2.3.4"}');
+    assert.deepEqual(await readBuildIdentity(root, ''), { version: '2.3.4-development', revision: 'unknown', dirty: false, tag: '' });
+    await assert.rejects(readBuildIdentity(root, 'v2.3.4'));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('packaging rejects stale frontend versions, revisions and release modes', () => {
+  verifyFrontendIdentity(identity, identity);
+  for (const key of ['version', 'revision', 'dirty', 'tag']) {
+    assert.throws(() => verifyFrontendIdentity({ ...identity, [key]: 'mismatch' }, identity), new RegExp(`Frontend build ${key}`));
+  }
+  assert.throws(() => verifyFrontendIdentity(null, identity), /Frontend build version/);
 });
 
 const locked = { bunVersion: '1.4.2', coreSource: { revision: 'b'.repeat(40) } };

@@ -30,7 +30,7 @@ export async function buildFingerprint(root) {
   const bytes = await digest(root, ['src', 'locales', 'server', 'scripts', 'test', 'public', 'index.html', 'admin/index.html', 'package.json', 'package-lock.json', 'tsconfig.json', 'vite.config.ts']);
   let revision = 'archive';
   try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { cwd: root, encoding: 'utf8', stdio: 'pipe' }).trim(); } catch {}
-  const configuration = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(VITE_|NODE_ENV$|NODE_OPTIONS$)/.test(key)).sort(([a], [b]) => a.localeCompare(b)));
+  const configuration = Object.fromEntries(Object.entries(process.env).filter(([key]) => /^(VITE_|VOIDPLAYER_RELEASE_TAG$|NODE_ENV$|NODE_OPTIONS$)/.test(key)).sort(([a], [b]) => a.localeCompare(b)));
   return createHash('sha256').update(JSON.stringify({ bytes, revision, configuration })).digest('hex');
 }
 export async function prepareBuild({ root, directory, output = process.stdout, signal, prepared = false, command = [process.platform === 'win32' ? 'npm.cmd' : 'npm', 'run', 'build'] }) {

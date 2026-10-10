@@ -1,6 +1,6 @@
 import { chooseTestGuest } from './test-identity.mjs';
 // Browser acceptance against an extracted native release; never serves source/dist.
-// Usage: node scripts/check-release-browser.mjs /path/to/package.tar.gz [webkit|chromium]
+// Usage: node scripts/check-release-browser.mjs [/path/to/package.tar.gz|-] [webkit|chromium] [--version-only]
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, readFile, writeFile, rm, access } from 'node:fs/promises';
 import { spawn, execFileSync } from 'node:child_process';
@@ -13,12 +13,14 @@ import { webkit, chromium } from 'playwright';
 import { sha256 } from './check-release-set.mjs';
 import { generatedLibrary } from './check-generated-library.mjs';
 const root = path.resolve(import.meta.dirname, '..');
-const archive = path.resolve(process.argv[2] || JSON.parse(await readFile(path.join(root, 'artifacts/latest-release.json'), 'utf8')).archive);
-const browserName = process.argv[3] || 'webkit';
+const versionOnly = process.argv.includes('--version-only');
+const args = process.argv.slice(2).filter(arg => arg !== '--version-only');
+const archive = path.resolve((args[0] !== '-' && args[0]) || JSON.parse(await readFile(path.join(root, 'artifacts/latest-release.json'), 'utf8')).archive);
+const browserName = args[1] || 'webkit';
 assert.ok(['webkit', 'chromium'].includes(browserName));
 const samples = path.resolve(process.env.VOIDPLAYER_SAMPLES || path.join(root, 'fixtures/video'));
-const generated = process.env.VOIDPLAYER_LIBRARY_FIXTURE ? await generatedLibrary(process.env.VOIDPLAYER_LIBRARY_FIXTURE) : null;
-if (!generated) for (const file of ['av1_10s_1920x1080.webm', 'ffv1_yuv444p10le.mkv']) await access(path.join(samples, file));
+const generated = !versionOnly && process.env.VOIDPLAYER_LIBRARY_FIXTURE ? await generatedLibrary(process.env.VOIDPLAYER_LIBRARY_FIXTURE) : null;
+if (!versionOnly && !generated) for (const file of ['av1_10s_1920x1080.webm', 'ffv1_yuv444p10le.mkv']) await access(path.join(samples, file));
 const temp = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-native-browser-'));
 let child, browser, output = '';
 const env = { ...process.env };
@@ -46,7 +48,7 @@ try {
   const socket = createServer(); await new Promise(r => socket.listen(0, '127.0.0.1', r));
   const port = socket.address().port; await new Promise(r => socket.close(r));
   const base = `http://127.0.0.1:${port}`;
-  await writeFile(path.join(data, 'voidplayer.config.json'), JSON.stringify({ host: '127.0.0.1', port, mediaRoots: generated?.roots || [{ id: 'qa', name: 'QA', path: samples }], logsDir: null, indexWatch: false }));
+  await writeFile(path.join(data, 'voidplayer.config.json'), JSON.stringify({ host: '127.0.0.1', port, mediaRoots: versionOnly ? [] : generated?.roots || [{ id: 'qa', name: 'QA', path: samples }], logsDir: null, indexWatch: false }));
   async function start() {
     output = '';
     child = spawn(executable, ['--data-dir', data], { cwd, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -68,6 +70,15 @@ try {
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, colorScheme: 'dark', reducedMotion: 'reduce' });
   const errors = []; context.on('page', p => { p.setDefaultTimeout(30000); p.on('pageerror', e => errors.push(e.message)); });
   const page = await context.newPage(); await page.goto(base);await chooseTestGuest(page);
+  assert.equal(await page.locator('#start-version-about').innerText(), `VoidPlayer · ${manifest.appVersion}`, 'start screen shows the packaged semantic version');
+  for (const entry of ['#start-version-about', '#brand-about']) {
+    await page.locator(entry).click();
+    await page.locator('#settings-pane-about').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#about-version').innerText(), manifest.appVersion, 'About shows the packaged semantic version');
+    await page.locator('#settings-close').click();
+    await page.locator('#settings').waitFor({ state: 'hidden' });
+  }
+  if (!versionOnly) {
   const call = (p, name, args = {}) => p.evaluate(({ name, args }) => window.voidPlayer.tools.find(t => t.name === name).execute(args), { name, args });
   // Decoded tracks commit before asynchronous annotation/layout restoration.
   const waitForWorkspace = async (p, expected) => {
@@ -149,9 +160,13 @@ try {
   for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(reopened[key], saved[key], `restart ${key}`);
   assert.deepEqual(errors, []);
   console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged frontend, dual decode, vector marks, gzip file restore, server save/admin inspection, process restart and workspace restore; empty PATH and isolated data`);
+  } else {
+    assert.deepEqual(errors, []);
+    console.log(`PASS native ${manifest.appVersion} ${manifest.revision} ${browserName}: packaged start/About version equals server/manifest; empty PATH and unrelated cwd`);
+  }
   await browser.close(); browser = null;
   await generated?.replacement();
-  if (process.env.RELEASE_BENCH === '1') {
+  if (!versionOnly && process.env.RELEASE_BENCH === '1') {
     const bench = spawn(process.execPath, [path.join(root, 'scripts/bench-playback.mjs'), browserName, '--headless'], { cwd: root, env: { ...process.env, BASE_URL: base, BENCH_REPEATS: process.env.BENCH_REPEATS || '1' }, stdio: 'inherit' });
     const timer = setTimeout(() => bench.kill('SIGKILL'), 600000);
     try { const [code] = await once(bench, 'close'); assert.equal(code, 0, 'packaged playback benchmark'); } finally { clearTimeout(timer); }

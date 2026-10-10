@@ -16,3 +16,9 @@
 新增浏览器或 Node 回归必须登记稳定 ID、矩阵与前置条件。领域浏览器和 `tools/` 中的模块都纳入漏登记检查；工具例外要给出理由且 `required=false`。复用 helper 不单独作为一次回归执行，Node helper 与 Worker 位于 `test/helpers/`。固定参考 JSON、媒体生成入口和旧 Worker URL 保留兼容，不重生成参考结果。
 
 原生 HDR 浮点呈现：`npm run test:hdr:native` 检查实际默认能力与降级；`node scripts/check-native-hdr-browser.mjs chrome --require-native --experimental-hdr [--qa]` 在独立有窗口测试浏览器验证浮点转换和真实播放，详见 `docs/hdr-support.md`。
+
+## 前端与独立包版本
+
+Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建必须在构建网页和打包两个步骤使用同一个 `VOIDPLAYER_RELEASE_TAG`；标签必须匹配包版本、指向当前修订且工作区干净。分支构建保留 `-preview.<修订>`（有未提交改动时附加 `.dirty`）；无 Git 的源码网页构建标为 `-development`，不能据此制作正式包。
+
+`dist/build-info.json` 与网页模块由同一份构建信息生成。打包前校验版本、完整修订、标签和工作区状态，防止把预览网页装进正式程序。`release-version-browser` 在 Linux/Windows 原生 CI 中从解压包检查首页及关于页面，与服务端和 manifest 的版本逐字一致；可用 `node scripts/check-release-browser.mjs /path/to/package.tar.gz chromium --version-only` 单独运行，不需要视频素材。

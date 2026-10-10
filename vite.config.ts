@@ -1,6 +1,6 @@
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig, normalizePath } from 'vite';
-import { execFileSync } from 'node:child_process';
+import { readBuildIdentity } from './scripts/release-version.mjs';
 import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -14,9 +14,8 @@ const isolationHeaders = {
   'cross-origin-embedder-policy': 'require-corp',
   'cross-origin-resource-policy': 'same-origin',
 };
-function buildInfo() {
-  let revision = 'unknown';
-  try { revision = execFileSync('git', ['describe', '--always', '--dirty'], { encoding: 'utf8' }).trim(); } catch { /* Archive without Git. */ }
+async function buildInfo() {
+  const identity = await readBuildIdentity(import.meta.dirname);
   const hash = createHash('sha256');
   // UI and themes now live in subdirectories. Build evidence must include
   // them as well as the top-level decoding/session modules.
@@ -33,8 +32,9 @@ function buildInfo() {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
     catch { return [name, null]; }
   }));
-  return { revision, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
+  return { ...identity, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
+let productionBuildInfo: ReturnType<typeof buildInfo> | undefined;
 export default defineConfig({
   build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
   plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
@@ -63,8 +63,12 @@ export default defineConfig({
     },
   }, {
     name: 'voidplayer-build-evidence',
-    transform(code, id) {
-      if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(buildInfo())}`, map: null };
+    async buildStart() {
+      productionBuildInfo = buildCatalog ? buildInfo() : undefined;
+      if (productionBuildInfo) this.emitFile({ type: 'asset', fileName: 'build-info.json', source: JSON.stringify(await productionBuildInfo, null, 2) + '\n' });
+    },
+    async transform(code, id) {
+      if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(await (productionBuildInfo ?? buildInfo()))}`, map: null };
     },
     handleHotUpdate({ file, server }) {
       if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(coreDir))) {

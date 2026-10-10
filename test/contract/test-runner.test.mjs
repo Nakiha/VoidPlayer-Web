@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { runBrowserRegressions } from '../../scripts/run-browser-regressions.mjs';
 import { runTestSuite, parseOptions, suiteExitCode } from '../../scripts/run-tests.mjs';
-import { prepareBuild } from '../../scripts/testing/build.mjs';
+import { prepareBuild, buildFingerprint } from '../../scripts/testing/build.mjs';
 const silent = { write() {} };
 const entry = (id, code, extra = {}) => ({ id, name: id, command: ['node','-e',code], required: true, build: false, tools: [], fixtures: [], restrictions: [], ...extra });
 async function temporary(body) {
@@ -110,5 +110,22 @@ test('parent temporary cleanup failure retains the child exit and every followin
     for (const row of report.results) assert.equal(row.cleanupErrors[0].message, 'injected temporary cleanup failure');
   } finally {
     for (const row of report.results) await rm(row.temporaryDirectory, { recursive: true, force: true });
+  }
+}));
+
+
+test('prepared builds distinguish tagged releases from previews', async () => temporary(async root => {
+  const previous = process.env.VOIDPLAYER_RELEASE_TAG;
+  try {
+    delete process.env.VOIDPLAYER_RELEASE_TAG;
+    const preview = await buildFingerprint(root);
+    process.env.VOIDPLAYER_RELEASE_TAG = 'v1.2.3';
+    assert.notEqual(await buildFingerprint(root), preview);
+    const tagged = await buildFingerprint(root);
+    process.env.VOIDPLAYER_RELEASE_TAG = 'v1.2.3-rc.1';
+    assert.notEqual(await buildFingerprint(root), tagged);
+  } finally {
+    if (previous === undefined) delete process.env.VOIDPLAYER_RELEASE_TAG;
+    else process.env.VOIDPLAYER_RELEASE_TAG = previous;
   }
 }));

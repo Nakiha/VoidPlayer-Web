@@ -23,6 +23,25 @@ export async function readReleaseIdentity(root, tag = process.env.VOIDPLAYER_REL
   return { version, revision, dirty, tag };
 }
 
+// Source archives can build the web app without Git, but must never masquerade
+// as a tagged release. Packaged builds still require readReleaseIdentity.
+export async function readBuildIdentity(root, tag = process.env.VOIDPLAYER_RELEASE_TAG || '') {
+  try { execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, stdio: 'pipe' }); }
+  catch (error) {
+    if (tag) throw error;
+    const { version } = JSON.parse(await readFile(path.join(root, 'package.json'), 'utf8'));
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(version)) throw new Error('package.json version 必须是 x.y.z');
+    return { version: `${version}-development`, revision: 'unknown', dirty: false, tag: '' };
+  }
+  return readReleaseIdentity(root, tag);
+}
+
+export function verifyFrontendIdentity(build, identity) {
+  for (const key of ['version', 'revision', 'dirty', 'tag']) {
+    if (build?.[key] !== identity[key]) throw new Error(`Frontend build ${key} differs from release identity; rebuild with the same VOIDPLAYER_RELEASE_TAG and checkout.`);
+  }
+}
+
 export async function readReleaseNotes(root, identity) {
   if (!identity.tag) return '';
   const notes = await readFile(path.join(root, 'docs/releases', `${identity.version}.md`), 'utf8');
