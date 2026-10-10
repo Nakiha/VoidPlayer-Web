@@ -2947,7 +2947,7 @@
     "source": "块",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:67"
+      "src/ui/bitstream-controls.ts:31"
     ]
   },
   "bitstream.boundaries": {
@@ -2968,7 +2968,7 @@
     "source": "正在分析当前帧…",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:46"
+      "src/ui/bitstream-controls.ts:58"
     ]
   },
   "bitstream.prediction": {

@@ -1,5 +1,6 @@
 import { SLOTS } from "../model.ts";
 import type { Slot } from "../model.ts";
+import type { AnalysisResult } from "../bitstream-analysis/contract.ts";
 import type { ReviewSession } from "../session.ts";
 import { t, msg } from "../i18n.ts";
 export function installBitstreamControls(
@@ -21,6 +22,17 @@ export function installBitstreamControls(
       `bitstream-mode-${slot}`,
     ) as HTMLSelectElement;
     const status = document.getElementById(`bitstream-status-${slot}`)!;
+    const stage = canvases[slot].closest(".frame-stage")!;
+    stage.append(status);
+    const showResult = (result: AnalysisResult) => {
+      mode.hidden = result.confidence !== "exact";
+      status.textContent =
+        result.confidence === "exact"
+          ? `${result.picture.stream} / AU ${result.picture.au} · ${result.blocks.length} ${t(msg("bitstream.blocks", "块"))}${result.qp.mean === null ? "" : ` · QP ${result.qp.mean.toFixed(1)}`}`
+          : result.reasons.join("; ");
+      mode.querySelector<HTMLOptionElement>('[value="qp"]')!.disabled =
+        result.capabilities.qp !== "ready";
+    };
     const off = () => {
       const entry = active.get(slot);
       entry?.controller.abort();
@@ -57,26 +69,27 @@ export function installBitstreamControls(
         );
         if (
           entry.controller.signal.aborted ||
-          session.getPresentedFrame(slot)?.commit !== requested?.commit
+          JSON.stringify(session.getPresentedFrame(slot)?.picture) !==
+            JSON.stringify(requested?.picture) ||
+          session.getPresentedFrame(slot)?.generation !== requested?.generation
         )
           return;
         entry.overlay.setResult(result);
-        mode.hidden = false;
-        status.textContent =
-          result.confidence === "exact"
-            ? `${result.picture.stream} / AU ${result.picture.au} · ${result.blocks.length} ${t(msg("bitstream.blocks", "块"))}${result.qp.mean === null ? "" : ` · QP ${result.qp.mean.toFixed(1)}`}`
-            : result.reasons.join("; ");
-        mode.querySelector<HTMLOptionElement>('[value="qp"]')!.disabled =
-          result.capabilities.qp !== "ready";
+        showResult(result);
       } catch (error) {
         if (!entry.controller.signal.aborted)
           status.textContent =
             error instanceof Error ? error.message : String(error);
       }
     };
-    session.subscribePresentedFrames((changed) => {
+    session.subscribePresentedFrames((changed, next) => {
       if (changed === slot && active.has(slot)) {
-        status.textContent = "";
+        const cached = session.cachedBitstreamAnalysis(slot, next);
+        if (cached) showResult(cached);
+        else
+          status.textContent = next.picture
+            ? `${next.picture.stream} / AU ${next.picture.au}`
+            : (next.identityReason ?? "");
         status.title = "";
       }
     });

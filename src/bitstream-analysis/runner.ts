@@ -79,7 +79,8 @@ export async function analyzePicture(
         !Number.isInteger(n) ||
         n < 0 ||
         n > BUDGET.blocks ||
-        bytes > BUDGET.resultBytes
+        bytes > BUDGET.resultBytes ||
+        n * 128 + 4096 > BUDGET.resultBytes
       )
         throw new Error("Analysis output budget exceeded");
       let result: AnalysisResult | null = null;

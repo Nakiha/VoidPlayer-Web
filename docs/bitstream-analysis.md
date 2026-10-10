@@ -43,7 +43,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 | coded 尺寸 | 4096×2304；4px 网格完整且无重叠 |
 | 核心 collecting + sealed | 32 picture；每 picture 131072 blocks；records 总 32 MiB |
 | WASM heap | 初始 64 MiB，最大 512 MiB；stack 4 MiB |
-| 单 picture 结果 / 出站 chunk | 8 MiB，分配/发送前检查；每 consumer 一块 ACK 背压 |
+| 单 picture 结果 / 出站 chunk | 8 MiB，按每条 128B + header 的保守 JSON 上界在 JS records 分配前检查；每 consumer 一块 ACK 背压 |
 | HTTP 结果传输 | 同时 2 个，忙时返回 429 |
 | 本地结果缓存 | JSON 计量 32 MiB LRU，会话结束回收，无持久化 |
 | 服务端缓存 | 128 MiB LRU，最多 1024 文件；含 manifest |

@@ -128,6 +128,17 @@ await withBrowserFixture(
           await page.locator("#bitstream-A").click();
           const overlay = page.locator("#bitstream-overlay-A");
           await overlay.waitFor({ state: "visible" });
+          await page
+            .locator("#bitstream-status-A")
+            .waitFor({ state: "visible" });
+          assert.equal(
+            await page.locator("#bitstream-A").getAttribute("aria-pressed"),
+            "true",
+          );
+          assert.match(
+            await page.locator("#bitstream-status-A").innerText(),
+            /AU/,
+          );
           assert.equal(
             await overlay.getAttribute("data-picture"),
             JSON.stringify([

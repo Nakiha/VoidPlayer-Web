@@ -856,4 +856,5 @@ input[type=range]::-moz-range-thumb { width: 0; height: var(--timeline-pin-heigh
 .track-properties dd { overflow-wrap: normal; word-break: normal; }
 
 .analysis-picture-overlay { position:absolute; inset:0; width:100%; height:100%; z-index:2; pointer-events:none; }
-.bitstream-status { margin-left:8px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bitstream-status { position:absolute; z-index:4; left:var(--viewport-caption-inset); bottom:calc(var(--transport-height) + var(--transport-bottom, var(--transport-inset)) + var(--viewport-caption-inset)); max-width:calc(100% - 24px); padding:var(--space-1) var(--space-2); border-radius:var(--radius-small); color:var(--viewport-text); background:var(--preview-fill); font:var(--text-xs)/1.5 var(--font-mono); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; pointer-events:none; }
+.header-actions button[id^="bitstream-"][aria-pressed=true] { color:var(--accent); background:var(--surface-selected); }
