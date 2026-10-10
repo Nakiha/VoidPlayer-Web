@@ -234,6 +234,7 @@ jobs:
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
+      - run: node scripts/run-tests.mjs --case node-bitstream-analysis-core --case node-bitstream-analysis-server --prepared
       - name: Verify analysis panel on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-browser --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
@@ -631,6 +632,7 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
       - run: node scripts/run-tests.mjs --case release
+      - run: node scripts/run-tests.mjs --case release-analysis
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium

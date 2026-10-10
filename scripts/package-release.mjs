@@ -77,7 +77,7 @@ Analysis provenance: dist/vendor/voidplayer-analysis/provenance.json
 Analysis license: dist/vendor/voidplayer-analysis/LICENSE
 WASM licenses: dist/vendor/voidplayer-core/LICENSES
 `);
-const manifest = { schema: 'voidplayer-release', version: 2, appVersion: version, revision, dirty, tag, target, runtime: { name: 'bun', version: bunVersion }, decoder: core ? { source: core.source, buildRun: core.buildRun } : null, executable, createdAt: new Date().toISOString(), files: {} };
+const manifest = { schema: 'voidplayer-release', version: 2, appVersion: version, revision, dirty, tag, target, runtime: { name: 'bun', version: bunVersion }, decoder: core ? { source: core.source, buildRun: core.buildRun } : null, analysis: {source: analysis.source}, executable, createdAt: new Date().toISOString(), files: {} };
 async function hashFolder(folder, prefix = '') {
   for (const entry of (await readdir(folder, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
     const relative = prefix + entry.name, file = path.join(folder, entry.name);

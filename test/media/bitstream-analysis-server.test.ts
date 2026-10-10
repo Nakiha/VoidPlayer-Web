@@ -1,19 +1,232 @@
-import{test}from'node:test';import assert from'node:assert/strict';import{mkdtemp,rm,readFile}from'node:fs/promises';import{join,resolve}from'node:path';import{tmpdir}from'node:os';import{createMediaServer}from'../../server/app.ts';import{MediaLibraryIndex}from'../../server/library.ts';
-import{AnalysisScheduler}from'../../server/analysis/scheduler.ts';
-async function fixture(){const folder=await mkdtemp(join(tmpdir(),'vp-deep-server-')),library=new MediaLibraryIndex([resolve('fixtures/video')],{database:join(folder,'library.sqlite'),settleMs:0,watch:false});await library.refresh();const entry=(await library.list()).entries.find(e=>e.name==='h264_9s_1920x1080.mp4')!;return{folder,library,entry,async close(){await library.close();await rm(folder,{recursive:true,force:true});}};}
-const coreDir=resolve('public/vendor/voidplayer-analysis');
-const target=(entry:any)=>({sourceVersion:`${entry.id}@${entry.version}`,sourcePtsUs:0,normalizedMediaUs:0,picture:{sourceVersion:`${entry.id}@${entry.version}`,stream:'video',configuration:0,au:0,picture:0 as const,layer:0 as const,field:'frame' as const}});
-async function wait(scheduler:AnalysisScheduler,id:string,owner:string){for(let i=0;i<200;i++){const s=scheduler.status(id,owner)!;if(s?.state==='complete'||s?.state==='error')return s;await new Promise(r=>setTimeout(r,20));}throw new Error('Analysis did not complete');}
-test('two consumers share real work; cancelling one retains the other; restart hits atomic cache',async()=>{
- const f=await fixture();let scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
- try{const [a,b]=await Promise.all([scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'one'),scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'two')]);assert.notEqual(a.requestId,b.requestId);assert.equal(scheduler.status(a.requestId,'two'),null);scheduler.release(a.requestId,'one');const state=await wait(scheduler,b.requestId,'two');assert.equal(state.state,'complete',state.error??'');const chunk=new URL(state.resultUrl!,'http://localhost').pathname.split('/').at(-1)!;const result=await scheduler.store.get(chunk);assert.equal(result?.confidence,'exact');assert.equal(result?.blocks.length,8160);await scheduler.close();scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));const c=await scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'two');assert.equal(c.cacheHit,true);assert.equal(c.state,'complete');}finally{await scheduler.close();await f.close();}
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { createMediaServer } from "../../server/app.ts";
+import { MediaLibraryIndex } from "../../server/library.ts";
+import { AnalysisScheduler } from "../../server/analysis/scheduler.ts";
+async function fixture() {
+  const folder = await mkdtemp(join(tmpdir(), "vp-deep-server-")),
+    library = new MediaLibraryIndex([resolve("fixtures/video")], {
+      database: join(folder, "library.sqlite"),
+      settleMs: 0,
+      watch: false,
+    });
+  await library.refresh();
+  const entry = (await library.list()).entries.find(
+    (e) => e.name === "h264_9s_1920x1080.mp4",
+  )!;
+  return {
+    folder,
+    library,
+    entry,
+    async close() {
+      await library.close();
+      await rm(folder, { recursive: true, force: true });
+    },
+  };
+}
+const coreDir = resolve("public/vendor/voidplayer-analysis");
+const target = (entry: any) => ({
+  sourceVersion: `${entry.id}@${entry.version}`,
+  sourcePtsUs: 0,
+  normalizedMediaUs: 0,
+  picture: {
+    sourceVersion: `${entry.id}@${entry.version}`,
+    stream: "video",
+    configuration: 0,
+    au: 0,
+    picture: 0 as const,
+    layer: 0 as const,
+    field: "frame" as const,
+  },
 });
-test('expired consumers reclaim shared work without a DELETE and bounded ranges persist progressively',async()=>{
- const f=await fixture();let now=1000;const scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'),()=>now,100);
- try{const a=await scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'owner');now+=101;scheduler.expire();assert.equal(scheduler.status(a.requestId,'owner'),null);
- const range={sourceVersion:`${f.entry.id}@${f.entry.version}`,firstPtsUs:0,startUs:0,endUs:100000};const r=await scheduler.submit(f.entry.id,f.entry.version!,range,'owner'),state=await wait(scheduler,r.requestId,'owner');assert.equal(state.state,'complete',state.error??'');assert.ok(state.chunks.length>=5);const hit=await scheduler.submit(f.entry.id,f.entry.version!,range,'owner');assert.equal(hit.cacheHit,true);}finally{await scheduler.close();await f.close();}
+async function wait(scheduler: AnalysisScheduler, id: string, owner: string) {
+  for (let i = 0; i < 200; i++) {
+    const s = scheduler.status(id, owner)!;
+    if (s?.state === "complete" || s?.state === "error") return s;
+    await new Promise((r) => setTimeout(r, 20));
+  }
+  throw new Error("Analysis did not complete");
+}
+test("two consumers share real work; cancelling one retains the other; restart hits atomic cache", async () => {
+  const f = await fixture();
+  let scheduler = new AnalysisScheduler(
+    f.library,
+    coreDir,
+    join(f.folder, "analysis"),
+  );
+  try {
+    const [a, b] = await Promise.all([
+      scheduler.submit(f.entry.id, f.entry.version!, target(f.entry), "one"),
+      scheduler.submit(f.entry.id, f.entry.version!, target(f.entry), "two"),
+    ]);
+    assert.notEqual(a.requestId, b.requestId);
+    assert.equal(scheduler.status(a.requestId, "two"), null);
+    scheduler.release(a.requestId, "one");
+    const state = await wait(scheduler, b.requestId, "two");
+    assert.equal(state.state, "complete", state.error ?? "");
+    const chunk = new URL(state.resultUrl!, "http://localhost").pathname
+      .split("/")
+      .at(-1)!;
+    const result = await scheduler.store.get(chunk);
+    assert.equal(result?.confidence, "exact");
+    assert.equal(result?.blocks.length, 8160);
+    await scheduler.close();
+    scheduler = new AnalysisScheduler(
+      f.library,
+      coreDir,
+      join(f.folder, "analysis"),
+    );
+    const c = await scheduler.submit(
+      f.entry.id,
+      f.entry.version!,
+      target(f.entry),
+      "two",
+    );
+    assert.equal(c.cacheHit, true);
+    assert.equal(c.state, "complete");
+  } finally {
+    await scheduler.close();
+    await f.close();
+  }
 });
-test('HTTP writes require same origin and version; server failures never download client media',async()=>{
- const f=await fixture(),server=createMediaServer({roots:[],library:f.library,staticDir:resolve('dist'),onLog(){}});await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${(server.address() as any).port}`,url=`${base}/api/media/${f.entry.id}/bitstream-analysis/requests?v=${f.entry.version}`;
- try{const body=JSON.stringify({version:f.entry.version,target:target(f.entry)});assert.equal((await fetch(url,{method:'POST',headers:{origin:'http://other.invalid','content-type':'application/json','x-voidplayer-action':'bitstream-analysis'},body})).status,403);const response=await fetch(url,{method:'POST',headers:{origin:base,'content-type':'application/json','x-voidplayer-action':'bitstream-analysis'},body});assert.equal(response.status,202);const request=await response.json();for(let i=0;i<100;i++){const state=await(await fetch(`${base}/api/bitstream-analysis/requests/${request.requestId}`)).json();if(state.state==='complete'){assert.equal((await(await fetch(base+state.resultUrl)).json()).confidence,'exact');return;}assert.notEqual(state.state,'error',state.error);await new Promise(r=>setTimeout(r,20));}assert.fail('HTTP analysis did not finish');}finally{await new Promise<void>(r=>server.close(()=>r()));await f.close();}
+test("expired consumers reclaim shared work without a DELETE and bounded ranges persist progressively", async () => {
+  const f = await fixture();
+  let now = 1000;
+  const scheduler = new AnalysisScheduler(
+    f.library,
+    coreDir,
+    join(f.folder, "analysis"),
+    () => now,
+    100,
+  );
+  try {
+    const a = await scheduler.submit(
+      f.entry.id,
+      f.entry.version!,
+      target(f.entry),
+      "owner",
+    );
+    now += 101;
+    scheduler.expire();
+    assert.equal(scheduler.status(a.requestId, "owner"), null);
+    const range = {
+      sourceVersion: `${f.entry.id}@${f.entry.version}`,
+      firstPtsUs: 0,
+      startUs: 0,
+      endUs: 100000,
+    };
+    const r = await scheduler.submit(
+        f.entry.id,
+        f.entry.version!,
+        range,
+        "owner",
+      ),
+      state = await wait(scheduler, r.requestId, "owner");
+    assert.equal(state.state, "complete", state.error ?? "");
+    assert.ok(state.chunks.length >= 5);
+    const hit = await scheduler.submit(
+      f.entry.id,
+      f.entry.version!,
+      range,
+      "owner",
+    );
+    assert.equal(hit.cacheHit, true);
+  } finally {
+    await scheduler.close();
+    await f.close();
+  }
+});
+test("HTTP writes require same origin and version; server failures never download client media", async () => {
+  const f = await fixture(),
+    server = createMediaServer({
+      roots: [],
+      library: f.library,
+      staticDir: resolve("dist"),
+      onLog() {},
+    });
+  await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${(server.address() as any).port}`,
+    url = `${base}/api/media/${f.entry.id}/bitstream-analysis/requests?v=${f.entry.version}`;
+  try {
+    const body = JSON.stringify({
+      version: f.entry.version,
+      target: target(f.entry),
+    });
+    assert.equal(
+      (
+        await fetch(url, {
+          method: "POST",
+          headers: {
+            origin: "http://other.invalid",
+            "content-type": "application/json",
+            "x-voidplayer-action": "bitstream-analysis",
+          },
+          body,
+        })
+      ).status,
+      403,
+    );
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        origin: base,
+        "content-type": "application/json",
+        "x-voidplayer-action": "bitstream-analysis",
+      },
+      body,
+    });
+    assert.equal(response.status, 202);
+    const request = await response.json();
+    for (let i = 0; i < 100; i++) {
+      const state = await (
+        await fetch(
+          `${base}/api/bitstream-analysis/requests/${request.requestId}`,
+        )
+      ).json();
+      if (state.state === "complete") {
+        assert.equal(
+          (await (await fetch(base + state.resultUrl)).json()).confidence,
+          "exact",
+        );
+        return;
+      }
+      assert.notEqual(state.state, "error", state.error);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    assert.fail("HTTP analysis did not finish");
+  } finally {
+    await new Promise<void>((r) => server.close(() => r()));
+    await f.close();
+  }
+});
+
+test("result transport reservations are bounded and shutdown refuses queued demand", async () => {
+  const f = await fixture(),
+    scheduler = new AnalysisScheduler(
+      f.library,
+      coreDir,
+      join(f.folder, "analysis"),
+    );
+  try {
+    const a = scheduler.reserveResultRead()!,
+      b = scheduler.reserveResultRead()!;
+    assert.equal(scheduler.reserveResultRead(), null);
+    a();
+    a();
+    const c = scheduler.reserveResultRead();
+    assert.ok(c);
+    b();
+    c();
+    await scheduler.close();
+    await assert.rejects(
+      scheduler.submit(f.entry.id, f.entry.version!, target(f.entry), "owner"),
+      /queue full|closed/,
+    );
+  } finally {
+    await scheduler.close();
+    await f.close();
+  }
 });
