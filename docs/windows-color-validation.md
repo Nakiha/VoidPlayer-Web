@@ -4,7 +4,7 @@
 
 ## 运行
 
-需要 Node 24+、`npm ci`、含 libx264/libx265 的 ffmpeg 和 ffprobe，以及 Windows 上的 Chrome/Edge。默认有窗口运行，记录实际浏览器版本、GPU/驱动和系统 HDR 状态。
+需要 Node 24+、`npm ci`、含 libx264/libx265 的 ffmpeg 和 ffprobe，以及 Windows 上的 Chrome/Edge。默认有窗口运行；脚本记录实际浏览器版本、OS 与 WebGPU adapter 字段，不自动查询驱动版本或系统 HDR 开关。驱动版本和用户手动确认的 HDR 状态需另行记录，并标明来源。
 
 ```powershell
 npm run test:webgpu:browser -- chrome msedge
