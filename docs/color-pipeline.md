@@ -23,14 +23,9 @@ review 导出继续使用 `voidplayer-web-review` version 1，保留 media、mar
 
 `comparisonScope=export-time` 明确 comparison/color 是生成导出时的当前条件；`markComparisonConditions=not-recorded` 明确既有及新标注都没有逐条历史色彩条件。切换模式或导入旧工作区不会改写标注、不会把当前模式回填为创建时模式。导出依然是 detached snapshot，修改 JSON 不影响会话。UI 和 Agent 的 export_review 共用此行为。
 
-Windows 验证：`npm run test:color:modes`（需先运行本地服务，默认 5193）在 Chrome/Edge 上用真实 HEVC 完成 reference → browser → reference、UI 再切换、刷新记忆；检查实际 decoder、时间、ID 和标注。session 单测验证偏移/标注保持及失败回滚。两浏览器两模式 4K 双轨基准均通过：reference 约 57–58 fps、browser 约 59 fps，短片结果不是长期性能保证。匹配模式只保证被选择和执行，未将之前失败的跨路径像素验收改成通过。
+Windows 模式切换验证使用 `npm run test:color:modes`（需先运行本地服务，默认 5193）：检查 reference → browser → reference、UI 切换、刷新记忆，以及实际 decoder、时间、媒体 ID 和标注。session 单测覆盖偏移、标注保持和失败回滚。吞吐与颜色一致性需分别验证，不能将模式切换成功当作跨路径逐像素一致或实时播放通过。
 
-2026-09-11 解码设置补测：上述 reference 57–58 fps 指软件路径。新增硬件选项在 Chrome/Edge 上通过深度 1/2/4/8、反复 seek、实际 NV12 输出、WebCodecs 不可用时回退、UI 与刷新保存检查；原片首帧全平面核对通过。相关 66 项单测（含真实 core）及 Chromium UI 回归、构建通过。全量 npm test 为 348 通过、30 失败、1 跳过：28 项缺少本机回归样片，2 项 Windows SIGTERM 退出码断言失败，不能宣称全量通过。
-
-真实应用深度 2、每场景两轮：Chrome 原片单轨 38.38–38.71 fps、双轨每轨 21.02–21.17 fps；Edge 单轨 52.61–53.25 fps、双轨每轨 30.62–31.08 fps。8 次仅 Edge 单轨一次达到现有基准阈值，其余未达实时，Chrome 双轨另有呈现停顿。与独立 960×540 吞吐实验不同，本次使用真实应用调度和 3840×2160 呈现画布。当时保留软件默认；v0.3.0 改为硬件优先默认后，这些历史性能限制仍需复测，不能宣称实时性能，也不按浏览器名字改矩阵或绕过首帧核对。报告位于 `artifacts/color/reference-hardware-{chrome,edge}-bench-final.json`。
-
-当前实测结果与边界见 [WebGPU 修复记录](webgpu-color-pipeline-status.md)。
-Windows 后续已验证一条显式、不依赖平台 profile 的 `?colorPipeline=unified` 共同平面路径；设计取舍、未解决资源与性能限制见 [设计审查](color-pipeline-design-review.md)。它尚未替换默认路径。
+2026-09-10/11 的 Windows 实验、吞吐与失败结果属于历史环境，见 [Windows 验证记录](windows-color-validation.md)及 [当时的完整色彩契约](https://github.com/Nakiha/VoidPlayer-Web/blob/f62ca247128cac6a1b9cb8850f2ed603e97709a7/docs/color-pipeline.md)。其中列出的 `artifacts/color/` 本地产物未随仓库提交，无法从当前 checkout 复核。原始阶段记录仍可从 Git 历史读取；当前转换与能力边界以下文及 [HDR 支持](hdr-support.md)为准。
 
 ## 信息与责任
 
@@ -138,7 +133,7 @@ packet 和 FFmpeg 容器统一调用 `readWasmFrame`，同一 ArrayBuffer 跨 wo
 
 支持无 alpha 的 planar YUV（420/422/444，8–16 位）、NV12、P010 等描述符能够明确表示的布局。
 不通过 swscale 降为 RGBA 后伪称保留高精度；不支持的布局/色彩才走标明的 RGBA 回退。
-锁定 core `f9a41c7baf7031a65279b14a55803380f90128f4` 支持明确 BT.2020 NCL、BT.2020 primaries、至少 10-bit 的 PQ/HLG 原始平面；前端还要求实际 range 明确。HDR 使用独立传递函数，不套 SDR gamma。布局/色彩不满足条件仍显式 RGBA 回退，不将其标为已管理 HDR。
+当前锁定版本以 [`scripts/release-core.json`](../scripts/release-core.json) 为准（HDR 解码说明见 [HDR 支持](hdr-support.md)）。core 支持明确 BT.2020 NCL、BT.2020 primaries、至少 10-bit 的 PQ/HLG 原始平面；前端还要求实际 range 明确。HDR 使用独立传递函数，不套 SDR gamma。布局/色彩不满足条件仍显式 RGBA 回退，不将其标为已管理 HDR。
 
 core 每行复制有效字节，去掉 padding，支持负 linesize。descriptor 与缓冲只在下次输出/reset/destroy 前有效。
 Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深及平面非重叠；字符串 ccall 可能增长 heap，描述必须先读完，再刷新像素 heap 视图。

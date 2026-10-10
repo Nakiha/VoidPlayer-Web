@@ -205,7 +205,7 @@ HEVC 竖屏：从 hvcC 的 SPS 数组读取编码尺寸、按色度采样单位�
 
 软件解码预滚：逐个探测负时间前缀，仅将返回时间不匹配的不可输出包移出显示索引，原始包仍留在 core 中用于解码参考。最多探测 128 个，非负时间包及其他错误不跳过。`test/preroll.test.ts` 使用真实 HEVC open-GOP 裁切文件验证首次及重复定位；浏览器回归同时覆盖原生与可用的软件回退路径。
 
-HDR 上屏一致性：自有色彩模式明确拒绝 HLG/PQ；浏览器色彩模式下，原生 HDR 资源经 sRGB Canvas 2D 路径呈现，避免 external texture 缺少 tone mapping。首帧、播放、定位应使用相同路径。以实际资源 transfer 为准，不用容器标签覆盖可能已经转换的资源。具体准入、回退与日志以 [色彩链路契约](color-pipeline.md) 为准，相关检查不认证 HDR 显示输出。
+HDR 上屏一致性：自有色彩模式接收满足契约的高位深 PQ/HLG 平面；浏览器原生 HDR 在浮点桥接与扩展画布能力满足时输出 HDR，其余环境走 SDR 兼容预览。首帧、播放、定位应使用同一路径，截图与缩略图保持 SDR。以实际资源 transfer 为准，不用容器标签覆盖已转换资源。具体准入、降级原因与真实屏幕测试入口见 [HDR 支持](hdr-support.md)及 [色彩链路契约](color-pipeline.md)；普通呈现回归不认证物理 HDR 显示。
 
 `check-presentation-browser.mjs` 使用相同 PQ/HLG 像素的真实 VideoFrame 和 VideoSample，验证 clone/toVideoFrame 元数据、展示层创建前后、连续帧、回到首帧的像素完全一致，并检查随后 SDR 恢复直接上传；保留旋转、像素提取、无 WebGL 回退和资源释放检查。
 
@@ -253,3 +253,9 @@ npm run test:fate:browser
 `node scripts/check-track-metadata-browser.mjs chromium`（登记在 `ci-audio`）用真实 MP4、FLV、TS、Matroska/WebM 比较信息面板关闭/打开时的 HTTP Range 与本地 Blob offset/length 序列；视频执行相同完整遍历、往返 seek，音频保持静音。包含确认无音频、未支持编码、多声道、重复开关、中文/英文切换和实际面板截图；不得用媒体读取重试补全元数据。源逻辑测试另覆盖缺缓存、查询预算、取消和过期回包。
 
 轨道信息是缓存证据，不是完整 ffprobe：仅检查已读的 FLV header/tag、MP4 moov、EBML Tracks 和 TS PAT/PMT（以及已有 AAC 配置）。每次查询最多 4 MiB、256 个不超过 64 KiB 的缓存 peek，2 秒软截止；顶层遍历和轨道数另有上限。TS 限制为启动 64 KiB 内完整且 CRC 有效的单节 PAT/PMT，未知私有流不推断为无音频。EBML 不扫描 Cluster；超预算、缓存空洞、复杂或缺失元数据保留“尚未确认”。只在信息面板请求时查询，最多每秒一次；正常视频读取带来新证据后可更新，关闭/换片/释放会取消旧查询。不会创建 AudioContext/AudioDecoder、额外元数据 worker 或修改服务端索引及 WASM ABI。
+
+## 历史证据的读取边界
+
+历史帧契约验收见 [frame-contract-acceptance.json](frame-contract-acceptance.json)，其中包含未达门槛的性能结果。界面重做基准保留在 [2026-09-06 原始报告](../.design/2026-09-06/)，均不代表当前版本验收。
+
+2026-09-12 本机编码矩阵的原始产物位于 `artifacts/local-codecs-2026-09-12/`（`report.json`、`chromium-4k-recheck.json`、`exact-recheck/report.json`）；这些产物未提交，当前 checkout 无法直接复核。历史记录中的载入/定位通过不等于首次播放全部通过，后续 4K 软件复测也不能抹去首次失败或推广为稳定性能保证。需要重新取证时使用 `scripts/check-local-codec-matrix.mjs`，按其 `CODEC_FILES`、`CODEC_BROWSER`、`CODEC_MODE` 和 `CODEC_REPEATS` 配置明确输入与环境。

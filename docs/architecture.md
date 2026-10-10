@@ -23,7 +23,7 @@ FFmpeg 容器回退原本就调用 `vp_index_build` 扫描包建立 PTS/时长�
 | FFmpeg 解封装回退 | `src/ffmpeg-media.ts`、`src/ffmpeg-worker.ts` | 仅用于尚不能用 TS 压缩包路径处理的文件；本地 Blob AVIO、远程 Range AVIO，不在浏览器整文件下载或写入 MEMFS；Node 本地文件测试仍有 512 MiB 上限 |
 | FLV | `src/flv-media.ts`、`src/flv-engine.ts`、`src/flv-demux.ts`、`src/flv-decoder.ts` | Worker 内分块/Range 解封装，WebCodecs 或 packet-only WASM 解码；不使用整文件 MEMFS |
 
-FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV 的 avc1/hvc1/av01/vvc1。重复配置头可接受，编码配置变化、多轨 Enhanced FLV 和不支持的编码会返回诊断。它是可定位的文件播放器，不是 HTTP-FLV/RTMP 直播客户端。
+FLV 支持标准 AVC、legacy HEVC、private AV1/VVC，以及单轨 Enhanced FLV 的 avc1/hvc1/av01/vvc1。重复配置头可接受；支持从关键帧开始的同编码配置与分辨率切换，按配置段解码、drain 和定位，显示帧提交时才更新尺寸。中途更换编码种类、切换缺少关键帧、多轨 Enhanced FLV 和不支持的编码会返回诊断。它是可定位的文件播放器，不是 HTTP-FLV/RTMP 直播客户端。
 
 普通 MP4 的 sample table 已给出包大小、时间戳和关键帧位置，因此读取索引不需要遍历 `mdat`。VVC 的 `vvcC` 配置由小范围 box 读取补充，包表、B 帧排序和 edit list 由 Mediabunny 的公开接口处理。分片 MP4 可能仍需遍历 fragment 头。FLV 缺少完整 sample table，由 TS 扫描 tag 头构建索引；64 KiB 预读可能覆盖部分载荷，小包密集文件仍可能读到大部分文件，但不会整文件驻留。
 
@@ -35,7 +35,7 @@ WASM core 的源码、裁剪和构建位于独立 `VoidPlayer-FFmpeg-Build` 仓�
 
 `presenter.ts` 是上屏入口，解码器不直接绘制。呈现层优先使用 WebGPU，回退由 `presentation-surface.ts` 使用视口大小的 WebGL 表面或 Canvas 2D；缩小时 LINEAR、放大时 NEAREST。源帧 canvas 在像素工具和缩略图请求 presenter.captureFrame 时才生成。500× 缩放不会分配 500× 的显示缓冲。
 
-当前没有原生 HDR 输出管线。WASM ABI v2 交付原精度 YUV，由呈现层转换，兼容资源仍可使用 RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。实际资源、源标签与转换责任见 [色彩链路契约](color-pipeline.md)。
+HDR 显示目标为显式选择：合法高位深 PQ/HLG 平面可使用自有 HDR 转换；浏览器原生帧仅在 float16 Display-P3、无限 HDR headroom 和扩展 WebGPU 画布能力满足时使用浮点桥接，其余环境明确降级为 SDR 预览。截图与缩略图始终为 SDR。能力与验证边界见 [HDR 支持](hdr-support.md)。WASM ABI v2 交付原精度 YUV，由呈现层转换，兼容资源仍可使用 RGBA；浏览器色彩管理、真实显示扫描和不同设备性能需要分别验证，解码成功不是显示准确性的证明。实际资源、源标签与转换责任见 [色彩链路契约](color-pipeline.md)。
 
 ## 标注与界面
 
@@ -69,8 +69,8 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 ## 输出帧、包时间线与元数据变更
 
 - `frame-description.ts` 定义像素/显示几何、裁剪、长度、格式和色彩；
-  `wasm-frame.ts` 核验 core 帧 ABI v1 并只拷贝该输出帧的有效字节。
-  WASM 源色彩与转换后的 RGBA 描述分开；没有新增 HDR tone mapping。
+  `wasm-frame.ts` 核验 core 帧 ABI v2 的 160 字节描述，并只拷贝该输出帧的有效字节。
+  WASM 源色彩、实际 YUV/RGBA 资源与呈现转换分开；HDR 预览和输出遵循 [色彩链路契约](color-pipeline.md)。
 - `packet-timeline.ts` 是 MP4/FLV 的配置和显示游标。压缩包表用于找随机访问
   起点，实际 receive 输出决定显示 PTS；顺序读取到 drain 结束，不按包数量
   截断显示帧。定位保留一帧前瞻并返回目标时刻之前最近的实际帧。

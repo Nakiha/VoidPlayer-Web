@@ -63,7 +63,7 @@ npm run serve
 - [架构与行为边界](docs/architecture.md)：会话、解码、呈现、标注与 Agent 接口。
 - [验证说明](docs/testing.md)：统一测试套件、单项筛选、准备条件、CI 门禁与结果报告。
 - [主题与 UI 约定](src/themes/README.md)：颜色、材质、密度及主题适配边界。
-- [首版交付记录](docs/roadmap.md)：部署、媒体库和管理后台的原始计划与阶段验收。
+- [HDR 支持](docs/hdr-support.md)、[本地化维护](docs/localization.md)、[容器恢复边界](docs/container-recovery.md)。
 - [媒体库演进方案](docs/media-library-evolution.md)：媒体库配置、索引、缓存及存储边界。
 - [AGENTS.md](AGENTS.md)：仓库工作约束。
 
