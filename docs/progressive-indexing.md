@@ -8,6 +8,11 @@ estimate of the full file's duration.
 
 ## Producer and consumer
 
+The incremental scanner behavior below applies to local Blob files and arbitrary
+remote URLs without a library index endpoint. Version-pinned library URLs use
+the server-owned scanner described below. Both paths share the packet timeline
+and the distinction between presentation readiness and index finality.
+
 - Startup reads and decodes one packet for prompt presentation.
 - The scanner resumes from that checkpoint. Every 500 ms it publishes the last
   validated tag boundary, even while a subsequent network read is blocked.
@@ -33,9 +38,16 @@ estimate of the full file's duration.
   framesAfter consume the growing timeline. Explicit ensureIndexed(Infinity)
   remains available for callers that actually require a finished index.
 
-Full indexes are still built on the client and optionally uploaded to the
-existing server cache. This change does not add server-generated indexes or
-remove scanning cost. The final duration is only known after scanning finishes.
+For library URLs, the browser reads a short startup prefix while a server Worker
+runs the same scanner against the local library file and persists the complete
+index. Progress streams during that scan; resumable chunks transfer the complete
+document afterward. The server does not yet publish playable FLV prefixes during
+scanning, so targets beyond startup coverage wait for the completed index. Warm
+opens reuse the cache. Failed server builds or incompatible prefixes are explicit
+errors, not permission to silently rescan the whole file in the browser. Local
+files and arbitrary URLs continue to scan progressively on the client. The final
+duration is only known after scanning finishes. See [FLV timeline](flv-timeline.md)
+and [unified index](unified-indexing.md) for ownership and transport.
 
 ## Multi-track clock and visible states
 

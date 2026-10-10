@@ -21,17 +21,18 @@
 
 外观偏好属于接收者的浏览器，不随工作区覆盖。媒体库管理、服务端工作区存储和在线协作不在当前格式的实现范围内。
 
-## v0.3.0：比较条件与本机恢复
+## 比较条件与本机恢复
 
-新工作区在 `version: 1` 内增加可选块（旧文件继续可读）：
+工作区外层仍为 `version: 1`。新导出包含可选的 `comparison` 块，其当前版本为 2：
 
-```json
-{"comparison":{"version":1,"colorMode":"reference","referenceDecode":{"decoder":"software","depth":2},"presentation":"voidplayer-sdr-v1","outputColorSpace":"srgb"}}
-```
+- `version: 2`、`presentation: "voidplayer-color-v2"`。
+- `colorMode` 为 reference / browser；`referenceDecode.decoder` 为 software / hardware，depth 为 1/2/4/8。
+- `colorOutput` 保存请求目标 target（sdr / hdr）、HDR 参考白 hdrWhiteNits（80–400）和完整 preview 策略参数。默认值与验证在 `src/color-output.ts` / `src/hdr-policy.ts`。
+- `outputColorSpace` 必须与请求目标一致：sdr 为 srgb，hdr 为 display-p3。它记录请求条件，不证明接收设备已实际输出 HDR。
 
-`colorMode` 为 reference / browser；解码偏好为 software / hardware，depth 为 1/2/4/8。导入在打开片源前应用这些条件，并使用现有呈现重建钩子；事务取消或严格恢复失败会回滚。通道、缩放、布局等仍由 viewport / layout 保存。旧文件缺少 comparison 时沿用当前设置并提示；不认识的版本/契约拒绝导入，避免悄悄更换比较条件。
+导入在打开片源前应用这些条件，并使用现有呈现重建钩子；事务取消或严格恢复失败会回滚。通道、缩放、布局等仍由 viewport / layout 保存。旧 version 1 比较块（`voidplayer-sdr-v1` / srgb）恢复默认 SDR 输出条件；没有 comparison 的旧文件沿用当前设置并提示。不认识的版本/契约、非法参数或不一致的目标/色域拒绝导入，避免悄悄更换比较条件。
 
-这些条件表达要求的路径，不保证接收机器采用同一硬件解码器、显示器校准或逐像素一致结果；实际回退和混合路径继续由现有 UI 展示。browser 是近似兼容；reference 的准入仍仅覆盖已定义的 SDR 范围，见 [色彩契约](color-pipeline.md)。
+这些条件表达要求的路径，不保证接收机器采用同一硬件解码器、显示器校准或逐像素一致结果；实际回退和混合路径继续由现有 UI 展示。reference 支持满足准入条件的 SDR 和高位深 PQ/HLG 平面；浏览器原生 HDR 需要浮点桥接与扩展画布能力，其余环境明确降级为 SDR 预览并保留请求目标。截图与缩略图始终是 SDR。实际资源准入与显示能力边界见 [色彩契约](color-pipeline.md)和 [HDR 支持](hdr-support.md)。
 
 本机自动检查点使用独立 IndexedDB。稳定会话变更后约 500ms 合并保存，播放位置/布局约每 5 秒采样；pagehide/后台切换为尽力补写，无法保证崩溃前最后瞬间的改变。每页有独立记录、按用户分隔，刷新与返回复用该页面的记录 ID，新窗口使用独立 ID，刷新优先恢复此前页面记录，否则提供该用户最近记录；不会自动替换正在使用的工作区。检查点不包含 JPEG 标注预览，但保留矢量标注，不属于可再生缓存清理范围。存储失败明确提示手动导出或服务器保存。设置 → 工作区中的「本机恢复记录」按时间分页提供恢复、JSON 备份导出和显式删除；当前页面正在自动保存的记录不能在列表中删除，删除会核对用户与更新时间，避免移除其他窗口刚更新的内容。每用户最多 100 份、JSON UTF-8 估算总大小 64 MiB；达到上限后拒绝超限写入并提示导出或清理历史，已有记录不自动删除。旧库升级后保留全部历史；若迁移时已经超限，仅允许不增加用量的更新，直至用户显式清理。跨窗口同时写入也必须满足同一事务预算。浏览器自身配额仍可能更小，实际存储失败仍会提示。
 

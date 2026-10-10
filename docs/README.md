@@ -1,6 +1,6 @@
 # 文档导航
 
-先查当前行为契约，再按 [验证说明](testing.md) 选择测试。历史记录保留当时的环境、分支、失败和证据，不把旧结果视为当前版本通过。测试范围与命令以 [统一清单](../scripts/testing/manifest.json) 为准。
+先查当前行为契约，再按 [验证说明](testing.md) 选择测试。测试范围与命令以 [统一清单](../scripts/testing/manifest.json) 为准；历史结果不代表当前版本通过。
 
 ## 当前行为与开发入口
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 开发启动与仓库约束 | [项目首页](../README.md)、[AGENTS.md](../AGENTS.md) |
 | 架构与失败边界 | [架构](architecture.md)、[失败隔离](failure-isolation.md)、[容器恢复](container-recovery.md) |
-| 测试、CI 与报告 | [验证说明](testing.md)、[迁移验收](testing-coverage.md)、[脚本索引](../scripts/README.md) |
+| 测试、CI 与报告 | [验证说明](testing.md)、[脚本索引](../scripts/README.md) |
 | 独立程序运行与 HTTPS | [便携运行](../deploy/standalone.md) |
 | 用户、访客、分享与工作区 | [身份与分享](identity-and-sharing.md)、[工作区格式](workspace-format.md) |
 | 媒体库与存储 | [媒体库索引](media-library-evolution.md)、[存储位置](library-location.md) |
@@ -17,17 +17,17 @@
 | 默认静音与单轨出声 | [顺带音频边界](opportunistic-audio.md) |
 | 外观与界面 | [主题约定](../src/themes/README.md)、[本地化维护](localization.md) |
 
-## 发布历史与保留证据
+## 专项验证与诊断
 
-- [最新版本 0.7.0](releases/0.7.0.md)；全部发布说明按版本保留在 [releases/](releases/)。对应版本的限制与验收结果不随当前代码重写。
-- [帧契约验收数据](frame-contract-acceptance.json)、[合成媒体库验收](generated-library-acceptance.md)、[FATE 审计](fate-audit.md)。这些是历史环境的记录，当前测试数量和通过状态以实际报告为准。
-- [本地化证据及解释](localization.md#historical-evidence-and-limitations)、[HDR 证据](hdr-support.md#验证)以及 [evidence/](evidence/) 保留通过与失败样本，不因整理文档删除。
+- [合成媒体库验收](generated-library-acceptance.md)：生成夹具、执行矩阵与恢复基准；不以合成吞吐替代真实网络存储。
+- [Windows 色彩验证](windows-color-validation.md)：独立 FFmpeg 平面对照与明确的验收边界。
+- [SDR 本地取证](sdr-color-evidence.md)：同片同 PTS 诊断、报告字段与隐私边界。
+- [Edge 原生 YUV 复现](edge-native-yuv-repro.md)：独立合成复现、固定上游源码定位与未确认根因；可重跑，不代表当前浏览器已经通过或失败。
 
-## 色彩研究与历史证据
+## 发布历史与原始证据
 
-这些记录解释实现取舍和未通过的实验；当前准入、转换和回退规则统一查 [色彩链路契约](color-pipeline.md)与 [HDR 支持](hdr-support.md)。
+- [最新版本 0.7.0](releases/0.7.0.md)；全部发布说明按版本保留在 [releases/](releases/)，不随当前代码重写。
+- [帧契约验收数据](frame-contract-acceptance.json)与 [evidence/](evidence/) 保留原始通过和失败产物。解释入口见 [本地化证据边界](localization.md#historical-evidence-and-limitations)、[HDR 验证](hdr-support.md#验证)、[测试证据边界](testing.md#历史证据的读取边界)。
+- 不可丢失的旧色彩失败结论及固定版本来源集中在 [色彩证据边界](color-pipeline.md#历史负面证据的边界)。未提交的本地产物不能在当前 checkout 中复核。
 
-- 原始资源与对照：[SDR 证据](sdr-color-evidence.md)、[Chromium 源码调查](chromium-color-source-investigation.md)、[Edge 原生 YUV 复现](edge-native-yuv-repro.md)、[原生 YUV 读回性能](native-yuv-readback-performance.md)。
-- 平台与审计：[Windows 色彩验证](windows-color-validation.md)、[设计审查](color-pipeline-design-review.md)、[2026-09-12 链路审计](color-path-audit-2026-09-12.md)。
-
-维护时直接更新负责该行为的契约文档，并在验证说明登记可重复执行的检查。已完成计划、过期交接和重复阶段报告不再留副本，可通过 Git 历史查询。带日期、设备或分支的保留证据仍按原始上下文解读，不滚动改写成最新结果。
+已完成计划、过期审计、设计过程和重复阶段报告直接删除，不建归档副本；细节通过 Git 历史查询。当前约束并入负责该行为的文档，可重复执行的入口归入验证说明，不因整理而改变门限或把旧失败改写成通过。

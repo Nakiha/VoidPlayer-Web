@@ -52,6 +52,6 @@ AUDIO_CONTAINER=mkv AUDIO_INPUT=local node scripts/check-opportunistic-audio-bro
 
 `AUDIO_CONTAINER` 支持 `flv`、`mp4`、`faststart`、`fragmented`、`ts`、`mkv`、`webm`；`AUDIO_INPUT=local` 验证本地文件。浏览器回归用 ffmpeg 生成 3 秒 320×180 合成音视频，检查真实 PCM、默认无音频设备、按钮位置、定位清空声音、单轨切换、排序/移除/刷新，以及关闭/开启声音采用相同播放和 seek 操作时完全相同的媒体 Range 请求与字节数、本地 Blob 读取序列。用例注册在统一测试清单，支持 `CHROME_EXECUTABLE_PATH` 指定 Chromium。
 
-Linux Chromium 153 验证了七种远程素材（FLV、普通 MP4、faststart、fMP4、TS、MKV、WebM）和五种本地素材（普通 MP4、fMP4、TS、MKV、WebM），开关声音的媒体读取逐条一致。12 秒 320×180 素材的 MP4、远程 TS、本地 TS 分别比较原版、默认静音、开启声音各三轮现有 `benchmark_review`，共 27 轮通过，门限不变。TS 对照使用相同 1280×800 视口、展开的子轨道窗格及 Chromium `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader` 参数；远程 TS 的三组 P95 帧间隔分别为 44.36–46.09 / 44.17–46.20 / 45.67–49.61 ms。未指定这些 GPU 参数的原 CLI 基准中，原版和默认静音版远程 TS 均未达门限，不能把该环境失败归为音频回归。
+小型合成素材回归不能代表高分辨率、多轨或 WebKit 音频输出已验收。性能比较必须固定输入、视口、展开面板、浏览器 GPU 参数和原有门限；历史 Linux Chromium 远程 TS 对照中，原版与默认静音版都曾未达门限，不能仅凭单次失败归因于音频回归，也不能用不同 GPU 配置下的通过结果覆盖它。完整对照只保留在 [Git 历史](https://github.com/Nakiha/VoidPlayer-Web/blob/1d94ddb81be4800d60a852b4c210a494bfedead4/docs/opportunistic-audio.md)。
 
-这些小型合成素材回归不能代表高分辨率、多轨或 WebKit 音频输出已验收。静音轨道信息另有 Chromium/WebKit 的本地/远程矩阵，覆盖读取序列、未支持编码、多声道、静音、seek 和中英文切换。通用 WebKit UI 与契约回归已通过；最终必需门禁由 PR 的完整 CI 核验。
+静音轨道信息另有 Chromium/WebKit 的本地/远程矩阵，覆盖读取序列、未支持编码、多声道、静音、seek 和中英文切换。当前通过状态以对应版本的完整执行报告为准。

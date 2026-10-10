@@ -49,16 +49,6 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 
 `MediaIndexClient` is a compatibility facade over `IndexStreamTransport` and the index consumers. For FFmpeg, it now runs in the main-thread container session, never in the decoder worker. The transport owns HTTP, bounded NDJSON parsing, idle timeout, reconnect, abort, and generic `after`/`buildId` cursor handling. `FfmpegIndexConsumer` validates FFmpeg manifest identity, record layout, ordering, watermark, byte/frame limits, and build ID, then emits accepted records through callbacks; it does not own HTTP or WASM. The decoder worker receives only already-accepted record events, checks that their metadata matches the opened stream, imports them, and decodes frames. The compatibility document consumer retains the FLV and older FFmpeg JSON payload behavior. A transient disconnect resumes from the last accepted sequence. If the server build identity changes after a prefix has been imported, the source fails beyond its existing stable coverage; it does not claim completion or splice in a different scan.
 
-## Rollout and remaining work
-
-1. Preserve the software reference source after failed native first-frame verification.
-2. Pin and check FFmpeg index ABI v3 and stable-prefix/append-import ABI v2.
-3. Add identity-keyed server persistence, bounded build coordination, and first-frame readiness.
-4. Stream and append FFmpeg record batches; publish the complete MPEG-TS record set after the demux scan reaches EOF, and use stable-prefix publication only for producers that can prove it.
-5. Move FFmpeg HTTP ownership into a main-thread `ContainerSession`/`MediaIndexSession`; keep worker messages limited to import, append, and decode.
-6. Keep FLV's packet-offset record semantics while converging its progressive lifecycle with the common index session contract. Browser playback, reference/hardware admission, and reference/software playback must reuse one `FlvEngine`, packet index, reader, and timeline. A temporary software witness decodes from that engine's existing index; failed admission swaps the decoder in place instead of opening a second `MediaSource`.
-7. Evaluate server indexing for the separate MP4 packet path without changing its sample/edit-list record contract.
-
 ## Acceptance
 
 - For representative 350 MB and 691 MB MPEG-TS files, measure cold build, in-progress join, and warm-cache startup separately: first-frame time, browser Range count, server scan throughput, and browser `vp_index_build` calls. Large local benchmark inputs can be generated reproducibly from the checked-in fixtures (assuming FFmpeg is installed):
@@ -78,51 +68,31 @@ The FFmpeg worker opens the media and primes the first frame independently of th
 - Cover duplicate concurrent requests, batch resume, build restart, cache clear, file replacement during build, truncated input, worker failure, and failed-prefix behavior.
 - Preserve atomic workspace restore, cancellation without late commit, immutable annotation PTS, FLV progressive-index tests, multi-track index waiting, and Node 24/Bun standalone CI.
 
-## M0 diagnostics
+## Diagnostics and profiling
 
 The development log records `媒体管线追踪` at container selection, first-frame readiness, the first streamed index batch, and index completion. Each event includes the selected demux/index/decoder backends and, when available, the versioned media ID, index identity, build ID, request count, first PTS, duration, stable coverage, and timing milestones. These events are diagnostic only and do not select a media path.
 
 Server cold builds emit one JSON `frame-index-build-profile` record after completion. It separates WASM open/prime/scan time, scan calls and packet/byte progress, CPU time, local AVIO reads and copies, record export, SQLite progress/batch/finish work, and time to first presentable frame and first persisted batch. Run `npm run bench:index -- /path/to/media.ts [video-stream-index]` to compare a cold build with a warm index-store lookup on the same machine and core. The benchmark reports server indexing timings; browser first-frame latency and Range counts remain browser integration measurements.
 
-## M1 timeout and job lifecycle
+## Lifecycle verification
 
 `test/frame-index-build-policy.test.ts` checks defaults and environment overrides. Client stream regression tests cover build-ID resume after disconnect and a continuously active stream that lasts longer than its idle timeout. A stream subscriber can be dropped by its 90-second lease or by client cancellation without terminating the server job.
 
-## M2 transport separation
-
-`src/index-stream-transport.ts` contains the HTTP/NDJSON reconnect loop. `src/ffmpeg-index-consumer.ts` validates and publishes container-specific FFmpeg records, while `src/media-index-client.ts` remains the FLV/FFmpeg compatibility facade. At this milestone FFmpeg still constructs the facade inside its decoder worker; M3 moves that ownership to the main-thread container session.
-
-## M3 FFmpeg container session
-
-`src/media-index-session.ts` adds the first `ContainerSession` and `MediaIndexSession` implementation. `src/ffmpeg-media.ts` owns the HTTP subscriber on the main thread and sends validated record events to the FFmpeg worker. The worker no longer imports `MediaIndexClient` or performs HTTP/reconnect work. Local files and server-unavailable cases still ask the worker to build a local fallback index through the same session sink. `test/media-index-session.test.ts` covers local fallback, coverage/finality, subscriber abort on dispose, and the worker's lack of transport dependencies.
-
-## M4 FLV decoder admission
+## FLV decoder admission
 
 `FlvEngine` keeps ownership of the reader, packet index, progressive scan, and `PacketTimeline` across browser and reference modes. Reference/hardware admission decodes a temporary software witness through that existing index; if native output does not match, `switchToSoftware()` replaces the decoder inside the same engine. The witness no longer opens a second complete FLV `MediaSource`. `scripts/check-media-open-matrix.mjs` verifies one FLV index GET per open, shared `flv-engine` selection, no software-source open during reference/hardware witness admission, and matching browser/reference timelines for FLV H.264 and HEVC.
 
 Library FLV cold builds now run in the server index worker through a bounded disk reader; warm opens reuse the completed document cache. Local Blob files use the same scanner through the client reader. The startup prefix and complete index belong to one engine. Failed library builds are reported explicitly instead of falling back to a browser full-file scan.
 
-## M5 MP4 container plan and decoder switching
+## MP4 container plan and decoder switching
 
 `chooseMp4DemuxPlan()` runs after container probing and before reading color or decoder preferences. It selects the packet sample-table path only when the MP4 has a zero-rotation primary video track, a packet-supported codec, and one validated sample description; other MP4 structures use the FFmpeg container/index plan. MPEG-TS and other non-FLV/non-MP4 inputs also use FFmpeg independent of color or decoder preference. The selected plan is recorded in the pipeline trace. For packet-plan MP4, WebCodecs and WASM use the same `Mp4Engine` sample table, byte reader, and timeline. A temporary reference witness decodes from that same sample table, and a failed native check switches only the decoder. FFmpeg sources keep the same index session during color changes and validate YUV output in reference mode.
 
 Packet and FFmpeg sources expose `reconfigureColorMode()` so `ReviewSession` can change browser/reference mode without invoking the saved opener. The packet worker can replace WebCodecs with WASM or restore WebCodecs while retaining the MP4 or FLV index. FFmpeg stays on its current decoder and index session because its worker currently exposes only the WASM decoder. Matrix regression asserts one container-open trace across browser → reference → browser for MP4 and MPEG-TS, and one demux backend across all fixture modes.
 
-## M6 server index profiling
+## Demux-only equivalence and stream finality
 
-The original build profile measured the decoder-backed progressive WASM FFmpeg scan on this machine. A synthetic 347,742,284-byte MPEG-2 TS completed cold indexing in 9.7 s (34.15 MiB/s); synthetic 337,538,772-byte and 694,932,788-byte H.264 TS files completed in 51.3 s (6.27 MiB/s) and 105.8 s (6.26 MiB/s), respectively. The larger run spent 105.6 s in `vp_index_scan_step` with 105.7 s CPU user time. It produced the first frame in 140 ms and the first persisted stable batch in 5.2 s; warm manifest lookup took 25 ms.
-
-For the 694.9 MB run, local AVIO read, allocation, and ArrayBuffer copy totaled about 115 ms; SQLite batch writes totaled 39 ms. These were negligible beside that scan. M6.1 compares the scan modes directly and measures the current demux-only default below.
-
-## M6.1 MPEG-TS demux-only scan
-
-`scripts/compare-index-scan-modes.mjs` compares the same file/core using `vp_index_scan_stream_begin()` and `vp_index_scan_begin()`, including exact exported record bytes and random-seek pixel hashes. On a 367.6 MB, 350-second HEVC TS synthesized by looping the checked-in 10-second HEVC fixture, decoder-backed scanning took 97.8 s (3.58 MiB/s; 96.8 s CPU user time). Demux-only scanning took 352 ms (996 MiB/s). Both produced 21,000 records with the same SHA-256, 350 seek anchors, identical first PTS/duration, and matching pixels for five distributed random seeks. First-frame output also matched. The WASM scan API's progressive-supported flag was false by EOF, after it had already decoded and exposed the stable prefix during nearly the entire scan.
-
-The server now uses `vp_index_scan_begin()` and sends the completed index after EOF. On the same file, end-to-end cold build took 642 ms; the build profile reported 607 ms total, 399 ms in scan steps, 165 ms to first presentation, and 577 ms to the first persisted batch. Warm manifest lookup was 31 ms. This removes packet-index construction's dependency on playback decode throughput while keeping first-frame readiness separate. The small MPEG-TS regression compares the two modes' record bytes and random-seek pixels. This result uses a synthetic repeated fixture, not the original large HEVC TS.
-
-## M7 demux-only equivalence and stream finality
-
-`test/frame-index-scan-modes.test.ts` runs the decoder-backed scan and demux-only scan against H.264 TS, MPEG-2 TS, and a generated HEVC TS containing B-frames and CRA pictures from open GOPs. It compares exported record bytes (including PTS/DTS, duration, packet position/size, and flags), record count/hash, seek-anchor count, first PTS, duration, first-frame pixels, and five distributed random-seek pixel hashes. The test no longer requires the old progressive scan API to expose stable coverage for every codec; it proves the two complete indexes and their seek outputs are equivalent.
+`test/frame-index-scan-modes.test.ts` runs the decoder-backed scan and demux-only scan against H.264 TS, MPEG-2 TS, and a generated HEVC TS containing B-frames and CRA pictures from open GOPs. It compares exported record bytes (including PTS/DTS, duration, packet position/size, and flags), record count/hash, seek-anchor count, first PTS, duration, first-frame pixels, and five distributed random-seek pixel hashes. The test compares the two complete indexes and their seek outputs; it does not require the decoder-backed scan API to expose stable coverage for every codec.
 
 `scripts/check-container-browser.mjs` verifies the server stream lifecycle separately: a first frame is available before index finality, scan progress events precede every record batch, the batch sequence is contiguous under one build ID, safe coverage is monotonic while the full index imports, all records arrive before `complete`, and a warm reopen reuses the server index. It does not interpret `indexState: building` as proof that the server is still scanning.
 

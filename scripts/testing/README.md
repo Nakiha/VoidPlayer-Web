@@ -17,4 +17,4 @@
 
 公共 fixture 的 `ready` 等待播放器 API 可用，`phase` 为有界操作记录阶段，`artifact` 将产物放进该 case 的目录。额外 context 使用 `newContext`，服务扩展在监听和 ready 前用 `defer` 登记部分资源；这些资源在断言失败、超时和取消后仍属于当前 case。Range、可信 HTTPS、重启与专用媒体环境保留专用扩展，逐批迁移后跑实际引擎回归。
 
-127 个 Node 实现已按职责分域，旧入口保留兼容且不单独维护断言。工具分类见 [脚本职责索引](../README.md)，覆盖下限与保留专用场景见 [迁移验收](../../docs/testing-coverage.md)。
+127 个 Node 实现已按职责分域，旧入口保留兼容且不单独维护断言。工具分类见 [脚本职责索引](../README.md)，覆盖下限与保留专用场景见 [验证说明](../../docs/testing.md)。
