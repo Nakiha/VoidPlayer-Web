@@ -67,9 +67,9 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 `node scripts/check-bitstream-analysis-browser.mjs chromium|webkit` 执行矩阵，检查 disabled 不加载 worker/core/canvas、local 无上传、library 不下载分析 decoder、真实 token/key、QP/mode、DPR 2、缓存、区间、offset、换帧和迟到响应。`node scripts/check-analysis-release.mjs` 从解压原生包、无 Node/Bun/ffmpeg 的 PATH、无关 cwd 实际执行三种分析并验证重启缓存。三平台 release workflow 均运行该验收，产物汇总另外验证相同 analysis provenance 与字节。
 
-`ANALYSIS_BASELINE_DIR=/path/to/built/main/dist node scripts/bench-bitstream-analysis.mjs webkit` 保留原播放 bench 的场景和阈值，并记录关闭、暂停分析、缓存播放、后台区间分析的本地/媒体库、hardware/software、单/双轨对照。持续缓存场景先覆盖所有显示轨道的 120 ms 窗口，再在窗口内进行 30 次短段播放（累计至少 1.5 秒实际播放），使用 QP 热图；要求真实命中比例至少 98%、实际绘制至少 30 次、恒定几何不重设 canvas。窗口回放的 seek/start 总成本单列，不能把它写成连续 1.5 秒唯一画面的遮罩验收。原有连续播放 bench 和阈值另行保留；CI 矩阵也含本地/媒体库的持续命中回归。
+`ANALYSIS_BASELINE_DIR=/path/to/built/main/dist node scripts/bench-bitstream-analysis.mjs webkit` 保留原播放 bench 的场景和阈值，并记录关闭、暂停分析、缓存播放、后台区间分析的本地/媒体库、hardware/software、单/双轨对照。持续缓存场景先覆盖所有显示轨道的 120 ms 窗口，再在窗口内进行 30 次短段播放（累计至少 1.5 秒实际播放，并在每段等到实际换帧后再结束），使用 QP 热图；要求真实命中比例至少 98%、实际绘制至少 30 次、恒定几何不重设 canvas。窗口回放的 seek/start 总成本单列，不能把它写成连续 1.5 秒唯一画面的遮罩验收。原有连续播放 bench 和阈值另行保留；CI 矩阵也含本地/媒体库的持续命中回归。
 
-后台分析使用未完成需求期间的连续 1024-byte Range 探测，记录数量和 p50/p95/p99/max、实际请求时段和分析耗时，分析结束后不再启动探测。输出记录首选配置和实际 decoder、播放吞吐/失败、每帧遮罩绘制耗时、缓存命中率、主线程 timer lag 分位数/long tasks、服务端 CPU/RSS、并发 Range 延迟和分析 heap/records/输入量。CPU/RSS 为观测值，不是任意负载下零竞争承诺。
+后台分析连续提交不同的 450 ms 有界区间，至少三次且跨越前台播放，累计需求至少 1.5 秒；同时使用未完成需求期间的连续 1024-byte Range 探测，同时记录独立 HTTP 探测和浏览器端感知延迟的数量与 p50/p95/p99/max、实际请求时段和分析耗时；浏览器回调受主线程阻塞影响，不能当成纯服务响应耗时，分析结束后不再启动探测。输出记录首选配置和实际 decoder、播放吞吐/失败、每帧遮罩绘制耗时、缓存命中率、主线程 timer lag 分位数/long tasks、服务端 CPU/RSS、并发 Range 延迟和分析 heap/records/输入量。CPU/RSS 为观测值，不是任意负载下零竞争承诺。
 
 ### 2026-10-10 初始本机测量（阶段 A 之前）
 
@@ -84,3 +84,5 @@ Chromium 功能矩阵通过，但本机 headless + reference 色彩路径低于�
 三种 codec 的持续生命周期证据保存在 `.run/analysis-lifecycle/`，CI 上传该目录。每种样片均输出并释放 600 个 picture，源 AU 与原始 PTS 一一匹配，显示顺序严格递增；AU 104/232/584 的随机结果与连续解码逐块相同。AVC/HEVC/VVC 的峰值记录内存分别为 294912/589824/786432 字节，heap 分别为 67108864/67108864/115998720 字节。随机起点分别覆盖三个已验证闭合 GOP，不提高 300 packet 预算。
 
 冻结只读结果仅在入缓存时复制；公共请求仍返回隔离的数据，遮罩命中不深拷贝整份结果。画布仅尺寸变化时重设，帧、几何、样式均未变化时跳过绘制。命中提示由单个按需 output 显示，并验证其经过全局 tooltip 处理后仍可见。
+
+核心 PR #4 已于 2026-10-10 合入；消费锁定最终 merge revision `e9ad3e9eab9810442701ce6416b62b7527117c20`，保留 instrumented FFmpeg `59196ee` 与 Emscripten 6.0.9。合入后重新构建并校验产物，不跟随浮动分支。

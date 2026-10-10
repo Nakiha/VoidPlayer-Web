@@ -18,6 +18,26 @@ const distribution = (values) => ({
   p99Ms: percentile(values, 0.99),
   maxMs: values.length ? Math.max(...values) : null,
 });
+async function probeRanges(url, active) {
+  const rows = [];
+  while (active()) {
+    const started = performance.now(),
+      r = await fetch(url, {
+        headers: { range: "bytes=0-1023" },
+        cache: "no-store",
+      });
+    const bytes = await r.arrayBuffer();
+    assert.equal(r.status, 206);
+    assert.equal(bytes.byteLength, 1024);
+    rows.push({
+      startMs: started,
+      endMs: performance.now(),
+      durationMs: performance.now() - started,
+    });
+    await new Promise((r) => setTimeout(r, 10));
+  }
+  return rows;
+}
 const engine = process.argv[2] ?? "webkit",
   baseline = process.env.ANALYSIS_BASELINE_DIR;
 for (const variant of process.env.ANALYSIS_ONLY_BASELINE
@@ -207,8 +227,16 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                     await api.seek(0);
                     await api.play();
                     const playing = performance.now();
-                    while (performance.now() - playing < 60)
+                    while (
+                      performance.now() - playing < 60 ||
+                      !api.getState().tracks.every((t) => t.frame?.ptsUs > 0)
+                    ) {
+                      if (performance.now() - playing > 2000)
+                        throw new Error(
+                          "No real advancing presentation within the cached-load sampling budget",
+                        );
                       await new Promise((r) => setTimeout(r, 5));
+                    }
                     const pause = performance.now();
                     await api.pause();
                     pauseMaxMs = Math.max(
@@ -287,17 +315,49 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   window.analysisProbeActive = true;
                 });
                 const analysisStarted = performance.now();
-                let analysisWindowMs = 0;
-                const pending = call("request_bitstream_range", {
-                  slot: "A",
-                  startUs: 3000000 + combination * 350000,
-                  endUs: 3450000 + combination * 350000,
+                let analysisWindowMs = 0,
+                  playbackDone = false,
+                  rangeActive = true;
+                const playing = call("benchmark_review", {
+                  durationMs: 1500,
                 }).finally(() => {
+                  playbackDone = true;
+                });
+                const pending = (async () => {
+                  const jobs = [];
+                  for (
+                    let job = 0;
+                    job < 32 && (!playbackDone || job < 3);
+                    job++
+                  ) {
+                    const startUs =
+                        500000 +
+                        ((combination * 12347 + job * 451013) % 8500000),
+                      started = performance.now();
+                    const result = await call("request_bitstream_range", {
+                      slot: "A",
+                      startUs,
+                      endUs: startUs + 450000,
+                    });
+                    jobs.push({
+                      startUs,
+                      endUs: startUs + 450000,
+                      elapsedMs: performance.now() - started,
+                      result,
+                    });
+                  }
+                  return jobs;
+                })().finally(() => {
+                  rangeActive = false;
                   analysisWindowMs = performance.now() - analysisStarted;
                   return page.evaluate(() => {
                     window.analysisProbeActive = false;
                   });
                 });
+                const serverProbes = probeRanges(
+                  new URL(`/api/media/${entry.id}?v=${entry.version}`, url),
+                  () => rangeActive,
+                );
                 const probes = page.evaluate(async (item) => {
                   const rows = [];
                   while (window.analysisProbeActive) {
@@ -318,9 +378,17 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   }
                   return rows;
                 }, entry);
-                const playing = call("benchmark_review", { durationMs: 1500 });
                 [analysis, playback] = await Promise.all([pending, playing]);
-                const ranges = await probes;
+                const ranges = await probes,
+                  serverRanges = await serverProbes;
+                assert.ok(
+                  serverRanges.length >= 3,
+                  "independent HTTP samples during analysis",
+                );
+                assert.ok(
+                  analysisWindowMs >= 1500,
+                  "background demand spans >=1.5 s alongside foreground playback",
+                );
                 assert.ok(
                   ranges.length >= 3,
                   "Range latency has concurrent samples, not a post-analysis probe",
@@ -328,10 +396,34 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                 concurrentRange = {
                   ...distribution(ranges.map((r) => r.durationMs)),
                   samples: ranges,
+                  server: {
+                    ...distribution(serverRanges.map((r) => r.durationMs)),
+                    samples: serverRanges,
+                  },
                   analysisWindowMs,
                 };
-              } else
-                playback = await call("benchmark_review", { durationMs: 1500 });
+              } else {
+                let active = true;
+                const probes = probeRanges(
+                  new URL(`/api/media/${entry.id}?v=${entry.version}`, url),
+                  () => active,
+                );
+                try {
+                  playback = await call("benchmark_review", {
+                    durationMs: 1500,
+                  });
+                } finally {
+                  active = false;
+                }
+                const rows = await probes;
+                concurrentRange = {
+                  phase: "foreground-playback",
+                  server: {
+                    ...distribution(rows.map((r) => r.durationMs)),
+                    samples: rows,
+                  },
+                };
+              }
               const elapsedMs = performance.now() - start,
                 cpuMs = process.cpuUsage(cpu);
               const lag = await page.evaluate(() => window.analysisPerf);

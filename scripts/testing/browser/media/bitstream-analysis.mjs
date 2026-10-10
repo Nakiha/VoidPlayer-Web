@@ -285,7 +285,14 @@ await withBrowserFixture(
                 await api.seek(0);
                 await api.play();
                 const start = performance.now();
-                await new Promise((r) => setTimeout(r, 60));
+                while (
+                  performance.now() - start < 60 ||
+                  !api.getState().tracks.every((t) => t.frame?.ptsUs > 0)
+                ) {
+                  if (performance.now() - start > 2000)
+                    throw new Error("No advancing cached presentation");
+                  await new Promise((r) => setTimeout(r, 5));
+                }
                 playingWallMs += performance.now() - start;
                 await api.pause();
               }
