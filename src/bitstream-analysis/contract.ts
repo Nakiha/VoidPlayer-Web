@@ -1,4 +1,6 @@
 import type { FrameDescription } from "../frame-description.ts";
+import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
+import type { AnalysisReasonCode } from "./failure.ts";
 export const ANALYSIS_SCHEMA = 1;
 export const ANALYSIS_RECIPE = "blocks-basic-v1";
 export const ANALYZER_VERSION = "0.1.0";
@@ -49,6 +51,7 @@ export interface AnalysisResult {
   height: number;
   confidence: "exact" | "partial";
   reasons: string[];
+  reasonCodes?: AnalysisReasonCode[];
   capabilities: {
     blocks: "ready" | "unsupported";
     qp: "ready" | "unsupported";
@@ -71,6 +74,10 @@ export interface AnalysisResult {
     heapBytes: number;
   };
 }
+export type DeepReadonly<T> = T extends object
+  ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+  : T;
+export type ReadonlyAnalysisResult = DeepReadonly<AnalysisResult>;
 export interface AnalysisTarget {
   sourceVersion: string;
   sourcePtsUs: number;
@@ -93,10 +100,17 @@ export function validateRange(target: AnalysisRangeTarget) {
       Number.isSafeInteger,
     ) ||
     target.startUs < 0 ||
-    target.endUs <= target.startUs ||
-    target.endUs - target.startUs > 1000000
+    target.endUs <= target.startUs
   )
-    throw new Error("Invalid bounded analysis range");
+    throw new AnalysisFailure(
+      "invalid-request",
+      "Invalid bounded analysis range",
+    );
+  if (target.endUs - target.startUs > 1000000)
+    throw new AnalysisFailure(
+      "resource-limit",
+      "Analysis interval budget exceeded",
+    );
 }
 export const BUDGET = Object.freeze({
   packets: 300,
@@ -129,7 +143,7 @@ export function validateTarget(target: AnalysisTarget): void {
     !Number.isSafeInteger(target.normalizedMediaUs) ||
     target.normalizedMediaUs < 0
   )
-    throw new Error("Invalid analysis target");
+    throw new AnalysisFailure("invalid-request", "Invalid analysis target");
   if (
     target.picture &&
     (target.picture.sourceVersion !== target.sourceVersion ||
@@ -145,7 +159,7 @@ export function validateTarget(target: AnalysisTarget): void {
       typeof target.picture.stream !== "string" ||
       target.picture.stream.length > 64)
   )
-    throw new Error("Invalid picture identity");
+    throw new AnalysisFailure("invalid-request", "Invalid picture identity");
 }
 /** Validate before renderer/cache use, including count, geometry and overlap.
  * 4px grid is an explicit MVP admission limit, not a guessed completion flag. */
@@ -161,7 +175,13 @@ export function validateResult(result: AnalysisResult): void {
     !["exact", "partial"].includes(result.confidence) ||
     !Array.isArray(result.reasons) ||
     result.reasons.length > 32 ||
-    result.reasons.some((r) => typeof r !== "string" || r.length > 256)
+    result.reasons.some((r) => typeof r !== "string" || r.length > 256) ||
+    (result.reasonCodes !== undefined &&
+      (!Array.isArray(result.reasonCodes) ||
+        result.reasonCodes.length > 32 ||
+        result.reasonCodes.some(
+          (code) => !ANALYSIS_REASON_CODES.includes(code),
+        )))
   )
     throw new Error("Invalid analysis result");
   validateTarget({
@@ -178,7 +198,7 @@ export function validateResult(result: AnalysisResult): void {
     !Array.isArray(blocks) ||
     blocks.length > BUDGET.blocks
   )
-    throw new Error("Analysis resource limit");
+    throw new AnalysisFailure("resource-limit", "Analysis resource limit");
   if (result.confidence !== "exact") return;
   if (
     !blocks.length ||
@@ -188,7 +208,10 @@ export function validateResult(result: AnalysisResult): void {
     !result.capabilities ||
     result.capabilities.blocks !== "ready"
   )
-    throw new Error("Incomplete picture");
+    throw new AnalysisFailure(
+      "unsupported-picture-layout",
+      "Incomplete picture",
+    );
   const cells = new Uint8Array((w * h) / 16);
   let area = 0;
   for (const b of blocks) {
@@ -213,9 +236,17 @@ export function validateResult(result: AnalysisResult): void {
     for (let y = b.y / 4; y < (b.y + b.height) / 4; y++)
       for (let x = b.x / 4; x < (b.x + b.width) / 4; x++) {
         const i = y * (w / 4) + x;
-        if (cells[i]) throw new Error("Overlapping analysis blocks");
+        if (cells[i])
+          throw new AnalysisFailure(
+            "unsupported-picture-layout",
+            "Overlapping analysis blocks",
+          );
         cells[i] = 1;
       }
   }
-  if (area !== w * h) throw new Error("Incomplete block coverage");
+  if (area !== w * h)
+    throw new AnalysisFailure(
+      "unsupported-picture-layout",
+      "Incomplete block coverage",
+    );
 }

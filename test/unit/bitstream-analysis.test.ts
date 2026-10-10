@@ -111,6 +111,17 @@ test("cache uses persistent picture identity and releases detached copies", () =
   const cache = new AnalysisCache(),
     r = result();
   cache.put(r);
+  const shared = cache.peek(r.picture)!;
+  assert.equal(
+    cache.peek(r.picture),
+    shared,
+    "presentation hits share a stable owned view",
+  );
+  assert.ok(Object.isFrozen(shared.blocks));
+  assert.ok(Object.isFrozen(shared.blocks[0]));
+  assert.throws(() => {
+    (shared.blocks[0] as any).qp = 0;
+  }, TypeError);
   r.blocks[0].qp = 2;
   const hit = cache.get(r.picture)!;
   assert.equal(hit.blocks[0].qp, 23);
@@ -189,5 +200,47 @@ test("VVC 8-bit luma QP extends to 63 while AVC and HEVC stop at 51", () => {
   r.codec = "vvc";
   validateResult(r);
   r.blocks[0].qp = 64;
+  assert.throws(() => validateResult(r));
+});
+
+test("failure transport preserves stable categories and never classifies by message text", async () => {
+  const { AnalysisFailure, failureInfo, restoreFailure, coreFailure } =
+    await import("../../src/bitstream-analysis/failure.ts");
+  const { MediaOpenError } = await import("../../src/media-errors.ts");
+  for (const [code, kind] of [
+    ["unsupported-container", "unsupported"],
+    ["no-safe-anchor-within-budget", "unsupported"],
+    ["resource-limit", "limited"],
+    ["source-changed", "error"],
+    ["internal-error", "error"],
+  ] as const) {
+    const reason = new AnalysisFailure(code, "source diagnosis").info;
+    assert.equal(reason.kind, kind);
+    assert.deepEqual(
+      failureInfo(restoreFailure(JSON.parse(JSON.stringify(reason)))),
+      reason,
+    );
+  }
+  assert.equal(
+    failureInfo(new Error("unsupported container resource limit")).code,
+    "internal-error",
+  );
+  assert.equal(
+    failureInfo(new MediaOpenError("resource", "anything")).code,
+    "resource-limit",
+  );
+  assert.equal(coreFailure(-48, "allocation").info.kind, "limited");
+  assert.equal(
+    restoreFailure({ code: "unknown", message: "bad" }).code,
+    "internal-error",
+  );
+  const r = result();
+  r.reasonCodes = ["unsupported-qp-depth"];
+  r.qp.bitDepth = 10;
+  r.qp.mean = null;
+  r.blocks[0].qp = null;
+  r.capabilities.qp = "unsupported";
+  validateResult(r);
+  r.reasonCodes = ["unknown" as any];
   assert.throws(() => validateResult(r));
 });

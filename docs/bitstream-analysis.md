@@ -51,20 +51,36 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 结果 JSON、JS 对象、WASM heap、viewport canvas 属于不同的内存开销；JSON 计量缓存配额不宣称是浏览器总 RSS 限额。预算超限只结束分析，不能改变播放 decoder、轨道 failure、时长或索引。逻辑 bytesRead 不是 RangeReader 物理网络字节；服务端无 Range 下载，测试另外记录 Range 响应时间。
 
+## 失败分类与首批交付边界
+
+本地 worker、服务端队列、HTTP 与会话共用结构化 `reason: {code, kind, message}`。稳定码包括 `unsupported-container`、`unsupported-codec`、`unsupported-picture-layout`、`no-safe-anchor-within-budget`、`unsupported-qp-depth`、`incomplete-reference-state`、`ambiguous-picture-identity`、`resource-limit`、`source-changed`、`invalid-request`、`cancelled`、`internal-error`。分类不匹配人类可读异常文本；未知异常仍是实现错误。`resource-limit` 是 limited，合法但未支持的组合是 unsupported，源变更和内部错误是 error。界面显示对应反馈，Agent 可以直接读取原因码。
+
+服务端不再把所有 partial 输出归为内部错误；经过身份校验、无块且最多 16 KiB 的 unsupported 摘要只保留在 consumer 租约内，不写 exact chunk 或完整 manifest。10-bit HEVC 实测 blocks/modes 保持 exact、QP 为 null/unsupported；QP 选项禁用。损坏和 unsupported 输入不放宽身份、预滚预算或完整覆盖校验。
+
+第一阶段交付仍是普通 MP4 MVP；#56 保持开放。后续依次追踪 FLV、高位深 QP、复杂随机访问（包括非闭合 IDR 起点）、更多 slice/工具的独立验证，以及按 picture/能力补缺口和只读定位描述复用。现有本地缓存和服务端 manifest 复用不等于完整跨区间稀疏覆盖；已缓存的目标也不代表可以跳过后续缺失结果所需的参考解码。
+
 ## 验证与证据
 
-`node --test test/bitstream-analysis*.test.ts` 覆盖三种真实核心、选定已知记录、随机/顺序逐块一致、后段闭合 IDR、600 帧持续 drain、暂停 consumer、单帧超预算、双 consumer、lease、原子缓存损坏/配额和重启。H.264/HEVC 额外使用固定编码器 CU/MB 大小与 QP 17 的全黑输入，独立检查完整网格、QP 和 intra；不只检查非空。
+`node --test test/bitstream-analysis*.test.ts` 覆盖三种真实核心、选定已知记录、随机/顺序逐块一致、后段闭合 IDR、H.264/HEVC/VVC 各 600 帧持续 drain、B 帧重排、各三个后段闭合 GOP 的随机/顺序逐块对照、记录/heap 稳态、暂停 consumer、单帧超预算、双 consumer、lease、原子缓存损坏/配额和重启。H.264/HEVC 额外使用固定编码器 CU/MB 大小与 QP 17 的全黑输入，独立检查完整网格、QP 和 intra；不只检查非空。
 
 `docs/fixtures/bitstream-analysis-answers.json` 固定原样片 SHA-256 和旧原生 analyzer 的选定 CU/MB 记录，用于三种 codec 的迁移对照。该原生参考运行使用旧 writer，和新流式 writer 独立，但两者共享 instrumented codec hook。它不是独立证明所有 VVC 复杂工具语义的 oracle；MVP 不声明那些工具。VVC 更全面的独立语法/参考实现核对仍应持续补充。
 
 `node scripts/check-bitstream-analysis-browser.mjs chromium|webkit` 执行矩阵，检查 disabled 不加载 worker/core/canvas、local 无上传、library 不下载分析 decoder、真实 token/key、QP/mode、DPR 2、缓存、区间、offset、换帧和迟到响应。`node scripts/check-analysis-release.mjs` 从解压原生包、无 Node/Bun/ffmpeg 的 PATH、无关 cwd 实际执行三种分析并验证重启缓存。三平台 release workflow 均运行该验收，产物汇总另外验证相同 analysis provenance 与字节。
 
-`ANALYSIS_BASELINE_DIR=/path/to/built/main/dist node scripts/bench-bitstream-analysis.mjs webkit` 保留原播放 bench 的场景和阈值，并记录关闭、暂停分析、缓存播放、后台区间分析的本地/媒体库、hardware/software、单/双轨对照。输出记录硬件、实际 decoder、播放吞吐/失败、主线程 timer lag/long tasks、服务端 CPU/RSS、Range 延迟和分析 heap/records/输入量。CPU/RSS 为观测值，不是任意负载下零竞争承诺。
+`ANALYSIS_BASELINE_DIR=/path/to/built/main/dist node scripts/bench-bitstream-analysis.mjs webkit` 保留原播放 bench 的场景和阈值，并记录关闭、暂停分析、缓存播放、后台区间分析的本地/媒体库、hardware/software、单/双轨对照。持续缓存场景先覆盖所有显示轨道的 120 ms 窗口，再在窗口内进行 30 次短段播放（累计至少 1.5 秒实际播放），使用 QP 热图；要求真实命中比例至少 98%、实际绘制至少 30 次、恒定几何不重设 canvas。窗口回放的 seek/start 总成本单列，不能把它写成连续 1.5 秒唯一画面的遮罩验收。原有连续播放 bench 和阈值另行保留；CI 矩阵也含本地/媒体库的持续命中回归。
 
-### 2026-10-10 本机测量
+后台分析使用未完成需求期间的连续 1024-byte Range 探测，记录数量和 p50/p95/p99/max、实际请求时段和分析耗时，分析结束后不再启动探测。输出记录首选配置和实际 decoder、播放吞吐/失败、每帧遮罩绘制耗时、缓存命中率、主线程 timer lag 分位数/long tasks、服务端 CPU/RSS、并发 Range 延迟和分析 heap/records/输入量。CPU/RSS 为观测值，不是任意负载下零竞争承诺。
+
+### 2026-10-10 初始本机测量（阶段 A 之前）
 
 固定 main `d87fda7`、同一播放 core `1e68e6c`，Apple M5 / 10 CPU / 32 GiB / macOS / Node 24.15.0；原有四场景 WebKit bench 在 main 与功能分支均通过。WebKit 32 个争用场景中，8 个暂停分析及 24 个播放场景完成，24 个播放判定全部通过；暂停请求总耗时 131–333 ms，Range 约 4–7 ms，主线程 timer lag 最大约 26 ms。不同场景存在冷启动/缓存命中差异，这些耗时不作为恒定 SLA。
 
 Chromium 功能矩阵通过，但本机 headless + reference 色彩路径低于实时：关闭分析时 main 与功能分支速度均约 0.31–0.39，所有这些 reference 性能判定仍按原阈值记为失败。它们没有被改成验收成功；不能从这些结果推断可见窗口或真实 GPU 硬解的性能。硬件只是首选配置，报告同时保留实际 decoder。
 
 测量汇总：`docs/fixtures/bitstream-analysis-validation.json`，包含两种浏览器 64 个场景、Chromium 的 8 个 main 同条件对照、CPU/RSS/主线程/Range 指标及原始播放 measurements。解压原生包的真实分析已在 macOS ARM64 本机通过；Linux/Windows 与 CI 构建/完整发布验收由 PR workflow 执行，运行状态以远端报告为准。
+
+### 阶段 A 收口
+
+三种 codec 的持续生命周期证据保存在 `.run/analysis-lifecycle/`，CI 上传该目录。每种样片均输出并释放 600 个 picture，源 AU 与原始 PTS 一一匹配，显示顺序严格递增；AU 104/232/584 的随机结果与连续解码逐块相同。AVC/HEVC/VVC 的峰值记录内存分别为 294912/589824/786432 字节，heap 分别为 67108864/67108864/115998720 字节。随机起点分别覆盖三个已验证闭合 GOP，不提高 300 packet 预算。
+
+冻结只读结果仅在入缓存时复制；公共请求仍返回隔离的数据，遮罩命中不深拷贝整份结果。画布仅尺寸变化时重设，帧、几何、样式均未变化时跳过绘制。命中提示由单个按需 output 显示，并验证其经过全局 tooltip 处理后仍可见。

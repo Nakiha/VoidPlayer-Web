@@ -4,6 +4,10 @@ import { sendJson } from "../http-utils.ts";
 import { encryptedRequest } from "../tls.ts";
 import type { AnalysisScheduler } from "./scheduler.ts";
 import {
+  AnalysisFailure,
+  failureInfo,
+} from "../../src/bitstream-analysis/failure.ts";
+import {
   ANALYSIS_RECIPE,
   ANALYZER_VERSION,
 } from "../../src/bitstream-analysis/contract.ts";
@@ -56,7 +60,13 @@ export async function handleAnalysisRoutes(
       !/^[a-f0-9]{24}$/.test(version) ||
       !(await ctx.library.resolve(media![1], version))
     ) {
-      sendJson(res, 409, { error: "Analysis media version changed" });
+      sendJson(res, 409, {
+        error: "Analysis media version changed",
+        reason: new AnalysisFailure(
+          "source-changed",
+          "Analysis media version changed",
+        ).info,
+      });
       return true;
     }
     if (media![2] === "capabilities" && req.method === "GET") {
@@ -81,7 +91,13 @@ export async function handleAnalysisRoutes(
     if (media![3] && req.method === "GET") {
       const release = scheduler.reserveResultRead();
       if (!release) {
-        sendJson(res, 429, { error: "Analysis result transport busy" });
+        sendJson(res, 429, {
+          error: "Analysis result transport busy",
+          reason: new AnalysisFailure(
+            "resource-limit",
+            "Analysis result transport busy",
+          ).info,
+        });
         return true;
       }
       res.once("finish", release);
@@ -107,18 +123,35 @@ export async function handleAnalysisRoutes(
     if (media![2] === "requests" && req.method === "POST") {
       const length = Number(req.headers["content-length"]);
       if (!Number.isSafeInteger(length) || length <= 0 || length > 4096) {
-        sendJson(res, 413, { error: "Analysis request too large" });
+        sendJson(res, 413, {
+          error: "Analysis request too large",
+          reason: new AnalysisFailure(
+            "resource-limit",
+            "Analysis request too large",
+          ).info,
+        });
         return true;
       }
       let body = Buffer.alloc(0);
       for await (const chunk of req) {
         if (body.length + chunk.length > 4096)
-          throw new Error("Analysis request too large");
+          throw new AnalysisFailure(
+            "resource-limit",
+            "Analysis request too large",
+          );
         body = Buffer.concat([body, chunk]);
       }
-      const input = JSON.parse(body.toString());
+      let input;
+      try {
+        input = JSON.parse(body.toString());
+      } catch {
+        throw new AnalysisFailure("invalid-request", "Invalid analysis JSON");
+      }
       if (input.version !== version)
-        throw new Error("Analysis version mismatch");
+        throw new AnalysisFailure(
+          "source-changed",
+          "Analysis version mismatch",
+        );
       const value = await scheduler.submit(
         media![1],
         version,
@@ -130,13 +163,19 @@ export async function handleAnalysisRoutes(
     }
     sendJson(res, 405, { error: "Method not allowed" });
   } catch (error) {
+    const reason = failureInfo(error);
     sendJson(
       res,
-      error instanceof Error && error.message.includes("queue full")
+      reason.kind === "limited"
         ? 429
-        : 400,
+        : reason.code === "source-changed"
+          ? 409
+          : reason.code === "internal-error"
+            ? 500
+            : 400,
       {
         error: error instanceof Error ? error.message : String(error),
+        reason,
       },
     );
   }

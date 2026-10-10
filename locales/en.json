@@ -1551,6 +1551,10 @@
     "source": "青色",
     "translation": "Teal"
   },
+  "bitstream.ambiguousIdentity": {
+    "source": "无法唯一确定源画面，已隐藏精确遮罩。",
+    "translation": "The source picture cannot be uniquely identified; the exact overlay is hidden."
+  },
   "bitstream.analyze": {
     "source": "分析当前帧",
     "translation": "Analyze current frame"
@@ -1563,9 +1567,29 @@
     "source": "块边界",
     "translation": "Block boundaries"
   },
+  "bitstream.cancelled": {
+    "source": "分析已取消。",
+    "translation": "Analysis cancelled."
+  },
+  "bitstream.incompleteReferences": {
+    "source": "参考状态不完整，无法生成精确遮罩。",
+    "translation": "Incomplete reference state prevents an exact overlay."
+  },
+  "bitstream.internalError": {
+    "source": "分析执行出错，请重试。",
+    "translation": "Analysis execution failed; please try again."
+  },
+  "bitstream.invalidRequest": {
+    "source": "分析目标或区间无效。",
+    "translation": "The analysis target or interval is invalid."
+  },
   "bitstream.mode": {
     "source": "分析遮罩",
     "translation": "Analysis overlay"
+  },
+  "bitstream.noSafeAnchor": {
+    "source": "预滚预算内没有可验证的闭合 IDR 起点。",
+    "translation": "No verified closed IDR anchor was found within the preroll budget."
   },
   "bitstream.pending": {
     "source": "正在分析当前帧…",
@@ -1578,6 +1602,30 @@
   "bitstream.qp": {
     "source": "QP 热图",
     "translation": "QP heatmap"
+  },
+  "bitstream.resourceLimit": {
+    "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
+    "translation": "Analysis reached a resource limit. Shorten the interval or choose a closer anchor."
+  },
+  "bitstream.sourceChanged": {
+    "source": "片源已变更，请重新载入后分析。",
+    "translation": "The source has changed. Reload it before analyzing."
+  },
+  "bitstream.unsupportedCodec": {
+    "source": "此编码暂不支持码流分析。",
+    "translation": "This codec is not yet supported for bitstream analysis."
+  },
+  "bitstream.unsupportedContainer": {
+    "source": "此封装暂不支持分析；首批仅支持普通 MP4。",
+    "translation": "This container is not yet supported for analysis; the initial scope is progressive MP4."
+  },
+  "bitstream.unsupportedLayout": {
+    "source": "此画面布局或编码工具暂不支持精确遮罩。",
+    "translation": "This picture layout or coding tool is not yet supported for an exact overlay."
+  },
+  "bitstream.unsupportedQpDepth": {
+    "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
+    "translation": "QP is not yet supported at this bit depth; blocks and modes remain available."
   },
   "bootstrap.reload": {
     "source": "重新加载",

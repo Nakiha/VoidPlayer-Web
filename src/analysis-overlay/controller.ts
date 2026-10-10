@@ -1,6 +1,6 @@
 import { pictureId } from "../bitstream-analysis/contract.ts";
 import type {
-  AnalysisResult,
+  ReadonlyAnalysisResult,
   PresentedFrameToken,
 } from "../bitstream-analysis/contract.ts";
 import { codedToViewport, viewportToCoded } from "./geometry.ts";
@@ -21,14 +21,30 @@ export function createAnalysisOverlay(
   canvas.hidden = true;
   source.closest(".frame-stage")!.append(canvas);
   let token: PresentedFrameToken | null = session.getPresentedFrame(slot),
-    result: AnalysisResult | null = null,
+    result: ReadonlyAnalysisResult | null = null,
     geometry: PresentationGeometry | null = null,
     mode: "blocks" | "qp" | "modes" = "blocks";
+  let lastDraw: {
+    result: ReadonlyAnalysisResult;
+    geometry: string;
+    mode: "blocks" | "qp" | "modes";
+  } | null = null;
+  const metrics = {
+    presentations: 0,
+    cacheHits: 0,
+    draws: 0,
+    skippedDraws: 0,
+    resizes: 0,
+    drawTimesMs: [] as number[],
+  };
+  // Bounded diagnostics, read only on explicit inspection by the perf harness.
+  Object.defineProperty(canvas, "analysisMetrics", {
+    get: () => ({ ...metrics, drawTimesMs: [...metrics.drawTimesMs] }),
+  });
   const clear = () => {
     result = null;
+    lastDraw = null;
     canvas.hidden = true;
-    const ctx = canvas.getContext("2d");
-    ctx?.clearRect(0, 0, canvas.width, canvas.height);
     delete canvas.dataset.picture;
   };
   const draw = () => {
@@ -44,6 +60,16 @@ export function createAnalysisOverlay(
     }
     const g = geometry,
       rect = presentationRect(g);
+    const signature = JSON.stringify([g, token.geometry]);
+    if (
+      lastDraw?.result === result &&
+      lastDraw.geometry === signature &&
+      lastDraw.mode === mode
+    ) {
+      metrics.skippedDraws++;
+      canvas.dataset.commit = String(token.commit);
+      return;
+    }
     if (
       g.width * g.height * g.dpr * g.dpr > 32 * 1024 * 1024 ||
       g.width * g.dpr > 8192 ||
@@ -52,10 +78,18 @@ export function createAnalysisOverlay(
       clear();
       return;
     }
-    canvas.width = Math.max(1, Math.round(g.width * g.dpr));
-    canvas.height = Math.max(1, Math.round(g.height * g.dpr));
+    const started = performance.now();
+    const width = Math.max(1, Math.round(g.width * g.dpr));
+    const height = Math.max(1, Math.round(g.height * g.dpr));
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      metrics.resizes++;
+    }
     const ctx = canvas.getContext("2d")!;
-    ctx.scale(g.dpr, g.dpr);
+    ctx.setTransform(g.dpr, 0, 0, g.dpr, 0, 0);
+    ctx.clearRect(0, 0, g.width, g.height);
+    ctx.save();
     ctx.beginPath();
     ctx.rect(rect.x, rect.y, rect.width, rect.height);
     ctx.clip();
@@ -85,10 +119,15 @@ export function createAnalysisOverlay(
       if (w >= 2 && h >= 2) ctx.rect(x, y, w, h);
     }
     ctx.stroke();
+    ctx.restore();
     canvas.hidden = false;
     canvas.dataset.picture = pictureId(result.picture);
     canvas.dataset.commit = String(token.commit);
     canvas.dataset.blocks = String(result.blocks.length);
+    lastDraw = { result, geometry: signature, mode };
+    metrics.draws++;
+    if (metrics.drawTimesMs.length >= 2048) metrics.drawTimesMs.shift();
+    metrics.drawTimesMs.push(performance.now() - started);
   };
   const offGeometry = observePresentationGeometry(source, (g) => {
     geometry = g;
@@ -96,13 +135,20 @@ export function createAnalysisOverlay(
   });
   const offFrame = session.subscribePresentedFrames((changed, next) => {
     if (changed !== slot) return;
-    clear();
+    const samePicture =
+      token?.generation === next.generation &&
+      token?.picture &&
+      next.picture &&
+      pictureId(token.picture) === pictureId(next.picture);
+    if (!samePicture) clear();
     token = next;
+    metrics.presentations++;
     const hit = session.cachedBitstreamAnalysis(slot, next);
     if (hit) {
+      metrics.cacheHits++;
       result = hit;
       draw();
-    }
+    } else clear();
   });
   const offState = session.subscribe(() => {
     const next = session.getPresentedFrame(slot);
@@ -123,7 +169,7 @@ export function createAnalysisOverlay(
     }
   });
   return {
-    setResult(value: AnalysisResult) {
+    setResult(value: ReadonlyAnalysisResult) {
       const current = session.getPresentedFrame(slot);
       if (
         !current ||
@@ -133,7 +179,7 @@ export function createAnalysisOverlay(
         pictureId(current.picture) !== pictureId(value.picture)
       )
         return;
-      result = value;
+      result = session.cachedBitstreamAnalysis(slot, current) ?? value;
       draw();
     },
     setMode(value: typeof mode) {

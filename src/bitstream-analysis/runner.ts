@@ -15,6 +15,7 @@ import type {
 import { inspectPacketPicture } from "../packet-picture.ts";
 import { openAnalysisInput } from "./input.ts";
 import type { AnalysisReader } from "./input.ts";
+import { AnalysisFailure, coreFailure } from "./failure.ts";
 export async function analyzePicture(
   reader: AnalysisReader,
   target: AnalysisTarget,
@@ -38,7 +39,11 @@ export async function analyzePicture(
     if (options.sequential) plan.start = 0;
     const description = input.configurations[plan.target.configuration];
     let pointer = core._malloc(description.length);
-    if (!pointer) throw new Error("Analysis heap budget exceeded");
+    if (!pointer)
+      throw new AnalysisFailure(
+        "resource-limit",
+        "Analysis heap budget exceeded",
+      );
     try {
       core.HEAPU8.set(description, pointer);
       const ret = core._vpa_open(
@@ -46,7 +51,7 @@ export async function analyzePicture(
         pointer,
         description.length,
       );
-      if (ret < 0) throw new Error(`Analysis open failed (${ret})`);
+      if (ret < 0) throw coreFailure(ret, "Analysis open failed");
       opened = true;
     } finally {
       core._free(pointer);
@@ -61,13 +66,19 @@ export async function analyzePicture(
         .map((p) => p.au),
     );
     if (!desired.size || desired.size > 32)
-      throw new Error("Analysis range result count budget exceeded");
+      throw new AnalysisFailure(
+        "resource-limit",
+        "Analysis range result count budget exceeded",
+      );
     if (
       [...desired].some(
         (au) => input.packets[au].configuration !== plan.target.configuration,
       )
     )
-      throw new Error("Analysis range crosses a configuration segment");
+      throw new AnalysisFailure(
+        "unsupported-picture-layout",
+        "Analysis range crosses a configuration segment",
+      );
     let count = 0,
       packetBytes = 0,
       drained = false;
@@ -82,7 +93,10 @@ export async function analyzePicture(
         bytes > BUDGET.resultBytes ||
         n * 128 + 4096 > BUDGET.resultBytes
       )
-        throw new Error("Analysis output budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis output budget exceeded",
+        );
       let result: AnalysisResult | null = null;
       if (desired.has(au)) {
         const selected = input.packets[au];
@@ -126,6 +140,11 @@ export async function analyzePicture(
           height,
           confidence: invalid ? "partial" : "exact",
           reasons: invalid ? ["invalid-field-depth-or-decoder-output"] : [],
+          reasonCodes: invalid
+            ? ["incomplete-reference-state"]
+            : depth !== 8
+              ? ["unsupported-qp-depth"]
+              : [],
           capabilities: {
             blocks: invalid ? "unsupported" : "ready",
             qp: invalid || depth !== 8 ? "unsupported" : "ready",
@@ -153,10 +172,16 @@ export async function analyzePicture(
         try {
           validateResult(result);
         } catch (error) {
+          if (
+            !(error instanceof AnalysisFailure) ||
+            error.code !== "unsupported-picture-layout"
+          )
+            throw error;
           result = {
             ...result,
             confidence: "partial",
             reasons: [error instanceof Error ? error.message : String(error)],
+            reasonCodes: ["unsupported-picture-layout"],
             blocks: [],
             capabilities: {
               blocks: "unsupported",
@@ -168,7 +193,10 @@ export async function analyzePicture(
         }
       }
       if (core._vpa_take(BUDGET.resultBytes) < 0)
-        throw new Error("Analysis take budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis take budget exceeded",
+        );
       return result;
     };
     for (let cursor = plan.start; ; ) {
@@ -184,15 +212,26 @@ export async function analyzePicture(
         continue;
       }
       if (ret !== 0 && ret !== 2)
-        throw new Error(`Analysis decoder failed (${ret})`);
-      if (ret === 2) throw new Error("Target picture was not output");
+        throw coreFailure(ret, "Analysis decoder failed");
+      if (ret === 2)
+        throw new AnalysisFailure(
+          "incomplete-reference-state",
+          "Target picture was not output",
+        );
       if (count >= BUDGET.packets || packetBytes >= BUDGET.inputBytes)
-        throw new Error("Analysis preroll budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis preroll budget exceeded",
+        );
       const packet = input.packets[cursor];
       if (!packet || packet.configuration !== plan.target.configuration) {
-        if (drained) throw new Error("Incomplete analysis output");
+        if (drained)
+          throw new AnalysisFailure(
+            "incomplete-reference-state",
+            "Incomplete analysis output",
+          );
         const ret = core._vpa_drain();
-        if (ret < 0) throw new Error(`Analysis drain failed (${ret})`);
+        if (ret < 0) throw coreFailure(ret, "Analysis drain failed");
         drained = true;
         continue;
       }
@@ -200,13 +239,23 @@ export async function analyzePicture(
         packet.size > BUDGET.packetBytes ||
         packetBytes + packet.size > BUDGET.inputBytes
       )
-        throw new Error("Analysis input budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis input budget exceeded",
+        );
       const bytes = await input.read(packet.offset, packet.size),
         evidence = inspectPacketPicture(input.codec, description, bytes);
       if (!evidence.singlePicture)
-        throw new Error(`Unsupported picture layout: ${evidence.reason}`);
+        throw new AnalysisFailure(
+          "unsupported-picture-layout",
+          `Unsupported picture layout: ${evidence.reason}`,
+        );
       pointer = core._malloc(bytes.length);
-      if (!pointer) throw new Error("Analysis heap budget exceeded");
+      if (!pointer)
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis heap budget exceeded",
+        );
       try {
         core.HEAPU8.set(bytes, pointer);
         const ret = core._vpa_feed(
@@ -217,7 +266,7 @@ export async function analyzePicture(
           packet.au,
         );
         if (ret === 2) continue;
-        if (ret < 0) throw new Error(`Analysis packet failed (${ret})`);
+        if (ret < 0) throw coreFailure(ret, "Analysis packet failed");
       } finally {
         core._free(pointer);
       }
@@ -262,7 +311,10 @@ export async function analyzeRange(
       matches.length > 32 ||
       new Set(matches.map((p) => p.pts)).size !== matches.length
     )
-      throw new Error("Missing, ambiguous or oversized analysis range");
+      throw new AnalysisFailure(
+        matches.length > 32 ? "resource-limit" : "ambiguous-picture-identity",
+        "Missing, ambiguous or oversized analysis range",
+      );
     first = matches[0].pts;
   } catch (error) {
     input.close();

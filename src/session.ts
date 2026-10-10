@@ -1,5 +1,6 @@
 import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
 import type { BitstreamAnalysisService } from './bitstream-analysis/service.ts';
+import { AnalysisFailure } from './bitstream-analysis/failure.ts';
 import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
@@ -291,7 +292,7 @@ export class ReviewSession {
     };
   }
   async requestBitstreamRange(slot:Slot,startUs:number,endUs:number,signal?:AbortSignal){
-    slotValue(slot);const track=this.tracks.get(slot);if(!track||track.failure)throw new Error('Track unavailable');
+    slotValue(slot);const track=this.tracks.get(slot);if(!track||track.failure)throw new AnalysisFailure('invalid-request','Track unavailable');
     const sourceVersion=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;
     if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
     const service=await this.bitstreamLoading;if(this.tracks.get(slot)!==track)throw new DOMException('Analysis source removed','AbortError');signal?.throwIfAborted();return service.requestRange(track.source,{sourceVersion,firstPtsUs:track.source.info.firstPtsUs,startUs:startUs-track.offsetUs,endUs:endUs-track.offsetUs},signal);
@@ -308,10 +309,11 @@ export class ReviewSession {
   cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream?.cached(token)??null:null;}
   async requestBitstreamAnalysis(slot:Slot,signal?:AbortSignal){
     slotValue(slot);const track=this.tracks.get(slot),token=this.getPresentedFrame(slot);
-    if(!track||track.failure||!token?.picture)throw new Error('This playback picture cannot be precisely identified');
-    if(this.playing)throw new Error('Pause playback before requesting deep analysis');
+    if(!track||track.failure)throw new AnalysisFailure('invalid-request','Track unavailable');
     if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
     const service=await this.bitstreamLoading;signal?.throwIfAborted();
+    if(!token?.picture)return service.fail(new AnalysisFailure(track.source.info.container !== 'isobmff' ? 'unsupported-container' : 'unsupported-picture-layout','This playback picture cannot be precisely identified'));
+    if(this.playing)return service.fail(new AnalysisFailure('invalid-request','Pause playback before requesting deep analysis'));
     const current=this.getPresentedFrame(slot);if(!current||current.commit!==token.commit||current.generation!==token.generation)throw new DOMException('Presented frame changed','AbortError');
     return service.request(track.source,token,signal);
   }

@@ -3,6 +3,11 @@ import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
 import {
+  AnalysisFailure,
+  failureInfo,
+  restoreFailure,
+} from "../../src/bitstream-analysis/failure.ts";
+import {
   analyzePicture,
   analyzeRange,
 } from "../../src/bitstream-analysis/runner.ts";
@@ -19,12 +24,19 @@ try {
         length > 32 * 1024 * 1024 ||
         offset + length > stat.size
       )
-        throw new Error("Analysis read budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis read budget exceeded",
+        );
       const bytes = new Uint8Array(length);
       let count = 0;
       while (count < length) {
         const r = await file.read(bytes, count, length - count, offset + count);
-        if (!r.bytesRead) throw new Error("Analysis source changed");
+        if (!r.bytesRead)
+          throw new AnalysisFailure(
+            "source-changed",
+            "Analysis source changed",
+          );
         count += r.bytesRead;
       }
       return bytes;
@@ -57,7 +69,12 @@ try {
         parentPort!.once("message", (message) =>
           message.ok
             ? resolve()
-            : reject(new Error(message.error ?? "Analysis consumer stopped")),
+            : reject(
+                restoreFailure(
+                  message.reason,
+                  message.error ?? "Analysis consumer stopped",
+                ),
+              ),
         );
       });
     };
@@ -88,5 +105,6 @@ try {
   parentPort!.postMessage({
     ok: false,
     error: error instanceof Error ? error.message : String(error),
+    reason: failureInfo(error),
   });
 }

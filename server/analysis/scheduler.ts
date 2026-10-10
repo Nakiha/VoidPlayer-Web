@@ -17,6 +17,12 @@ import type {
   AnalysisRangeTarget,
 } from "../../src/bitstream-analysis/contract.ts";
 import { AnalysisStore } from "./store.ts";
+import {
+  AnalysisFailure,
+  failureInfo,
+  restoreFailure,
+} from "../../src/bitstream-analysis/failure.ts";
+import type { AnalysisFailureInfo } from "../../src/bitstream-analysis/failure.ts";
 import type { MediaLibraryIndex } from "../library.ts";
 declare const VOIDPLAYER_COMPILED: boolean;
 type Work = {
@@ -27,8 +33,17 @@ type Work = {
   target: AnalysisTarget | AnalysisRangeTarget;
   chunks: string[];
   buildId: string;
-  state: "queued" | "running" | "complete" | "error" | "cancelled";
+  state:
+    | "queued"
+    | "running"
+    | "complete"
+    | "unsupported"
+    | "limited"
+    | "error"
+    | "cancelled";
   error?: string;
+  reason?: AnalysisFailureInfo;
+  unsupportedResult?: AnalysisResult;
   consumers: Set<string>;
   worker?: Worker;
   seq: number;
@@ -80,7 +95,9 @@ export class AnalysisScheduler {
     owner: string,
   ) {
     if (this.closed || this.pendingSubmissions >= BUDGET.requests)
-      return Promise.reject(new Error("Analysis request queue full"));
+      return Promise.reject(
+        new AnalysisFailure("resource-limit", "Analysis request queue full"),
+      );
     this.pendingSubmissions++;
     const task = this.submissions
       .then(() => this.submitInner(mediaId, version, target, owner))
@@ -100,11 +117,21 @@ export class AnalysisScheduler {
     if ("startUs" in target) validateRange(target);
     else validateTarget(target);
     if (target.sourceVersion !== `${mediaId}@${version}`)
-      throw new Error("Analysis source version mismatch");
+      throw new AnalysisFailure(
+        "source-changed",
+        "Analysis source version mismatch",
+      );
     if (this.consumers.size >= BUDGET.requests)
-      throw new Error("Analysis request queue full");
+      throw new AnalysisFailure(
+        "resource-limit",
+        "Analysis request queue full",
+      );
     const filePath = await this.library.resolve(mediaId, version);
-    if (!filePath) throw new Error("Analysis media version changed");
+    if (!filePath)
+      throw new AnalysisFailure(
+        "source-changed",
+        "Analysis media version changed",
+      );
     const manifest = JSON.parse(
       await readFile(path.join(this.coreDir, "manifest.json"), "utf8"),
     );
@@ -141,7 +168,10 @@ export class AnalysisScheduler {
         work = undefined;
       }
     }
-    if (!work || work.state === "cancelled" || work.state === "error") {
+    if (
+      !work ||
+      ["cancelled", "error", "unsupported", "limited"].includes(work.state)
+    ) {
       const chunks = "startUs" in target ? await this.store.manifest(id) : null;
       const cached = "startUs" in target ? null : await this.store.get(id);
       if (
@@ -194,6 +224,8 @@ export class AnalysisScheduler {
       state: w.state,
       seq: w.seq,
       error: w.error,
+      reason: w.reason,
+      ...(w.unsupportedResult ? { result: w.unsupportedResult } : {}),
       leaseMs: this.leaseMs,
       chunks: w.chunks.map((id) => ({
         id,
@@ -238,7 +270,10 @@ export class AnalysisScheduler {
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       if (!(await this.library.resolve(work.mediaId, work.version)))
-        throw new Error("Analysis media changed before execution");
+        throw new AnalysisFailure(
+          "source-changed",
+          "Analysis media changed before execution",
+        );
       if (this.closed || work.state !== "running" || !work.consumers.size)
         return;
       const worker = (work.worker = new Worker(
@@ -259,7 +294,12 @@ export class AnalysisScheduler {
       await new Promise<void>((resolve, reject) => {
         timer = setTimeout(() => {
           void worker.terminate();
-          reject(new Error("Analysis execution time budget exceeded"));
+          reject(
+            new AnalysisFailure(
+              "resource-limit",
+              "Analysis execution time budget exceeded",
+            ),
+          );
         }, 30000);
         const acknowledge = (value: unknown) => {
           try {
@@ -288,10 +328,40 @@ export class AnalysisScheduler {
                       pictureId(work.target.picture)))
               )
                 throw new Error("Analysis worker target mismatch");
+              if (
+                "startUs" in work.target &&
+                (result.sourcePtsUs <
+                  work.target.firstPtsUs + work.target.startUs ||
+                  result.sourcePtsUs >=
+                    work.target.firstPtsUs + work.target.endUs)
+              )
+                throw new Error("Analysis worker range identity mismatch");
               if (!(await this.library.resolve(work.mediaId, work.version)))
-                throw new Error("Analysis source changed during execution");
-              if (result.confidence !== "exact")
-                throw new Error(result.reasons.join("; "));
+                throw new AnalysisFailure(
+                  "source-changed",
+                  "Analysis source changed during execution",
+                );
+              if (result.confidence !== "exact") {
+                // Unsupported summaries are transient lease-scoped control data,
+                // never committed as exact chunks or complete range coverage.
+                if (
+                  result.blocks.length ||
+                  JSON.stringify(result).length > 16384
+                )
+                  throw new AnalysisFailure(
+                    "resource-limit",
+                    "Unsupported summary budget exceeded",
+                  );
+                work.unsupportedResult = result;
+                const reason = new AnalysisFailure(
+                  result.reasonCodes?.[0] ?? "incomplete-reference-state",
+                  result.reasons.join("; ") || "Exact analysis is unsupported",
+                );
+                work.reason = reason.info;
+                work.state = "unsupported";
+                work.seq++;
+                throw reason;
+              }
               const chunk =
                 "startUs" in work.target
                   ? createHash("sha256")
@@ -307,16 +377,23 @@ export class AnalysisScheduler {
                       .digest("hex")
                   : work.id;
               if (work.chunks.length >= 32)
-                throw new Error("Analysis chunk count budget exceeded");
+                throw new AnalysisFailure(
+                  "resource-limit",
+                  "Analysis chunk count budget exceeded",
+                );
               await this.store.put(chunk, result);
               work.chunks.push(chunk);
               work.seq++;
               acknowledge({ ok: true });
             } catch (error) {
-              acknowledge({ ok: false, error: String(error) });
+              acknowledge({
+                ok: false,
+                error: String(error),
+                reason: failureInfo(error),
+              });
               reject(error);
             }
-          } else m.ok ? resolve() : reject(new Error(m.error));
+          } else m.ok ? resolve() : reject(restoreFailure(m.reason, m.error));
         });
         worker.once("error", reject);
         worker.once("exit", () => reject(new Error("Analysis worker exited")));
@@ -328,7 +405,8 @@ export class AnalysisScheduler {
       work.seq++;
     } catch (error) {
       if (work.state === "running") {
-        work.state = "error";
+        work.reason = failureInfo(error);
+        work.state = work.reason.kind;
         work.error = error instanceof Error ? error.message : String(error);
         work.seq++;
       }

@@ -6,17 +6,18 @@ import { tmpdir } from "node:os";
 import { createMediaServer } from "../../server/app.ts";
 import { MediaLibraryIndex } from "../../server/library.ts";
 import { AnalysisScheduler } from "../../server/analysis/scheduler.ts";
-async function fixture() {
+async function fixture(
+  root = resolve("fixtures/video"),
+  name = "h264_9s_1920x1080.mp4",
+) {
   const folder = await mkdtemp(join(tmpdir(), "vp-deep-server-")),
-    library = new MediaLibraryIndex([resolve("fixtures/video")], {
+    library = new MediaLibraryIndex([root], {
       database: join(folder, "library.sqlite"),
       settleMs: 0,
       watch: false,
     });
   await library.refresh();
-  const entry = (await library.list()).entries.find(
-    (e) => e.name === "h264_9s_1920x1080.mp4",
-  )!;
+  const entry = (await library.list()).entries.find((e) => e.name === name)!;
   return {
     folder,
     library,
@@ -45,7 +46,13 @@ const target = (entry: any) => ({
 async function wait(scheduler: AnalysisScheduler, id: string, owner: string) {
   for (let i = 0; i < 200; i++) {
     const s = scheduler.status(id, owner)!;
-    if (s?.state === "complete" || s?.state === "error") return s;
+    if (
+      s &&
+      ["complete", "error", "unsupported", "limited", "cancelled"].includes(
+        s.state,
+      )
+    )
+      return s;
     await new Promise((r) => setTimeout(r, 20));
   }
   throw new Error("Analysis did not complete");
@@ -228,5 +235,144 @@ test("result transport reservations are bounded and shutdown refuses queued dema
   } finally {
     await scheduler.close();
     await f.close();
+  }
+});
+
+test("legal interlaced and high-depth inputs report the same capability reasons locally and remotely", async () => {
+  const { execFileSync } = await import("node:child_process");
+  const { open } = await import("node:fs/promises");
+  const { pathToFileURL } = await import("node:url");
+  const { analyzePicture } = await import(
+    "../../src/bitstream-analysis/runner.ts"
+  );
+  const media = await mkdtemp(join(tmpdir(), "vp-analysis-limit-input-"));
+  try {
+    for (const depth of [8, 10]) {
+      const name = `depth-${depth}.mp4`,
+        path = join(media, name);
+      execFileSync("ffmpeg", [
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=black:size=64x64:rate=1:duration=1",
+        "-an",
+        ...(depth === 8
+          ? [
+              "-c:v",
+              "libx264",
+              "-flags",
+              "+ilme+ildct",
+              "-x264-params",
+              "tff=1:bframes=0",
+            ]
+          : [
+              "-c:v",
+              "libx265",
+              "-x265-params",
+              "pools=1:frame-threads=1:log-level=error:bframes=0",
+            ]),
+        "-pix_fmt",
+        depth === 8 ? "yuv420p" : "yuv420p10le",
+        path,
+      ]);
+      const f = await fixture(media, name),
+        scheduler = new AnalysisScheduler(
+          f.library,
+          coreDir,
+          join(f.folder, "analysis"),
+        );
+      try {
+        const source = await open(path),
+          { size } = await source.stat();
+        const module = await (
+          await import(
+            pathToFileURL(join(coreDir, "voidplayer-analysis.js")).href
+          )
+        ).default();
+        const local = await analyzePicture(
+          {
+            size,
+            async read(offset: number, length: number) {
+              const bytes = new Uint8Array(length);
+              const r = await source.read(bytes, 0, length, offset);
+              assert.equal(r.bytesRead, length);
+              return bytes;
+            },
+            close() {
+              void source.close();
+            },
+          },
+          target(f.entry),
+          module,
+          "test",
+          new AbortController().signal,
+        );
+        assert.equal(module._vpa_record_bytes(), 0);
+        const req = await scheduler.submit(
+            f.entry.id,
+            f.entry.version!,
+            target(f.entry),
+            "owner",
+          ),
+          state = await wait(scheduler, req.requestId, "owner");
+        if (depth === 8) {
+          assert.equal(local.confidence, "partial");
+          assert.equal(state.state, "unsupported", JSON.stringify(state));
+          assert.equal(state.reason?.kind, "unsupported");
+          assert.deepEqual(state.result?.reasonCodes, local.reasonCodes);
+          assert.equal(state.result?.blocks.length, 0);
+          assert.equal(state.chunks.length, 0);
+          assert.equal(
+            state.resultUrl,
+            undefined,
+            "unsupported summaries have no exact chunk URL",
+          );
+          scheduler.release(req.requestId, "owner");
+          const again = await scheduler.submit(
+            f.entry.id,
+            f.entry.version!,
+            target(f.entry),
+            "owner",
+          );
+          assert.equal(
+            again.cacheHit,
+            false,
+            "unsupported is never committed as exact coverage",
+          );
+          assert.equal(
+            (await wait(scheduler, again.requestId, "owner")).state,
+            "unsupported",
+          );
+        } else {
+          assert.equal(local.confidence, "exact");
+          assert.equal(state.state, "complete", JSON.stringify(state));
+          const id = new URL(state.resultUrl!, "http://localhost").pathname
+            .split("/")
+            .at(-1)!;
+          const remote = await scheduler.store.get(id);
+          for (const r of [local, remote!]) {
+            assert.deepEqual(r.reasonCodes, ["unsupported-qp-depth"]);
+            assert.equal(r.qp.bitDepth, 10);
+            assert.equal(r.qp.mean, null);
+            assert.equal(r.capabilities.qp, "unsupported");
+            assert.ok(
+              r.blocks.length > 0 && r.blocks.every((b) => b.qp === null),
+            );
+            assert.equal(r.capabilities.blocks, "ready");
+            assert.equal(r.capabilities.modes, "ready");
+          }
+          assert.deepEqual(remote!.blocks, local.blocks);
+        }
+      } finally {
+        await scheduler.close();
+        await f.close();
+      }
+    }
+  } finally {
+    await rm(media, { recursive: true, force: true });
   }
 });

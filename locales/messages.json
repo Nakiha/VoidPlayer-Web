@@ -2936,6 +2936,13 @@
       "src/ui/appearance.ts:14"
     ]
   },
+  "bitstream.ambiguousIdentity": {
+    "source": "无法唯一确定源画面，已隐藏精确遮罩。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:41"
+    ]
+  },
   "bitstream.analyze": {
     "source": "分析当前帧",
     "params": {},
@@ -2947,7 +2954,7 @@
     "source": "块",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:32"
+      "src/ui/bitstream-controls.ts:35"
     ]
   },
   "bitstream.boundaries": {
@@ -2957,6 +2964,34 @@
       "src/ui/shell.ts:57"
     ]
   },
+  "bitstream.cancelled": {
+    "source": "分析已取消。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:60"
+    ]
+  },
+  "bitstream.incompleteReferences": {
+    "source": "参考状态不完整，无法生成精确遮罩。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:34"
+    ]
+  },
+  "bitstream.internalError": {
+    "source": "分析执行出错，请重试。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:62"
+    ]
+  },
+  "bitstream.invalidRequest": {
+    "source": "分析目标或区间无效。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:58"
+    ]
+  },
   "bitstream.mode": {
     "source": "分析遮罩",
     "params": {},
@@ -2964,11 +2999,18 @@
       "src/ui/shell.ts:57"
     ]
   },
+  "bitstream.noSafeAnchor": {
+    "source": "预滚预算内没有可验证的闭合 IDR 起点。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:23"
+    ]
+  },
   "bitstream.pending": {
     "source": "正在分析当前帧…",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:61"
+      "src/ui/bitstream-controls.ts:75"
     ]
   },
   "bitstream.prediction": {
@@ -2983,6 +3025,48 @@
     "params": {},
     "locations": [
       "src/ui/shell.ts:57"
+    ]
+  },
+  "bitstream.resourceLimit": {
+    "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:48"
+    ]
+  },
+  "bitstream.sourceChanged": {
+    "source": "片源已变更，请重新载入后分析。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:55"
+    ]
+  },
+  "bitstream.unsupportedCodec": {
+    "source": "此编码暂不支持码流分析。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:13"
+    ]
+  },
+  "bitstream.unsupportedContainer": {
+    "source": "此封装暂不支持分析；首批仅支持普通 MP4。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:7"
+    ]
+  },
+  "bitstream.unsupportedLayout": {
+    "source": "此画面布局或编码工具暂不支持精确遮罩。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:16"
+    ]
+  },
+  "bitstream.unsupportedQpDepth": {
+    "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
+    "params": {},
+    "locations": [
+      "src/ui/bitstream-reasons.ts:27"
     ]
   },
   "bootstrap.reload": {

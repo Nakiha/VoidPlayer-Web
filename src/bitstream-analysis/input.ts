@@ -4,6 +4,7 @@ import { readMp4Configurations } from "../mp4-config.ts";
 import { hevcDisplayOrder, recoveredHevcTimes } from "../hevc-timeline.ts";
 import { inspectPacketPicture } from "../packet-picture.ts";
 import { BUDGET } from "./contract.ts";
+import { AnalysisFailure } from "./failure.ts";
 import type { AnalysisTarget, SourcePictureKey } from "./contract.ts";
 export interface AnalysisReader {
   readonly size: number;
@@ -27,7 +28,10 @@ export async function openAnalysisInput(
   const read = async (offset: number, length: number) => {
     signal.throwIfAborted();
     if (length > BUDGET.inputBytes || bytesRead + length > 64 * 1024 * 1024)
-      throw new Error("Analysis input budget exceeded");
+      throw new AnalysisFailure(
+        "resource-limit",
+        "Analysis input budget exceeded",
+      );
     const b = await reader.read(offset, length);
     signal.throwIfAborted();
     bytesRead += b.length;
@@ -42,9 +46,18 @@ export async function openAnalysisInput(
     formats: [MP4, QTFF],
   });
   try {
-    await input.getFormat();
+    try {
+      await input.getFormat();
+    } catch (error) {
+      if (error instanceof AnalysisFailure || signal.aborted) throw error;
+      throw new AnalysisFailure(
+        "unsupported-container",
+        "Only progressive MP4 is admitted for bitstream analysis",
+      );
+    }
     const track = await input.getPrimaryVideoTrack();
-    if (!track) throw new Error("No video stream");
+    if (!track)
+      throw new AnalysisFailure("unsupported-codec", "No video stream");
     const id = await track.getInternalCodecId(),
       known = await track.getCodec();
     const codec: "h264" | "hevc" | "vvc" | null =
@@ -55,14 +68,21 @@ export async function openAnalysisInput(
           : known === "hevc"
             ? "hevc"
             : null;
-    if (!codec) throw new Error("Unsupported analysis codec");
+    if (!codec)
+      throw new AnalysisFailure(
+        "unsupported-codec",
+        "Unsupported analysis codec",
+      );
     const configurations = await readMp4Configurations(
       { size: reader.size, read } as RangeReader,
       track.id,
       250000,
     );
     if (configurations.indexIntegrity === "prefix")
-      throw new Error("Incomplete source: exact analysis unsupported");
+      throw new AnalysisFailure(
+        "incomplete-reference-state",
+        "Incomplete source: exact analysis unsupported",
+      );
     const packets: AnalysisPacket[] = [],
       durations: number[] = [],
       resolution = await track.getTimeResolution();
@@ -73,11 +93,17 @@ export async function openAnalysisInput(
       signal.throwIfAborted();
       const au = packets.length;
       if (au >= 250000)
-        throw new Error("Analysis packet index budget exceeded");
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis packet index budget exceeded",
+        );
       const offset = configurations.sampleOffsets?.[au],
         size = configurations.sampleSizes?.[au];
       if (offset === undefined || size !== packet.byteLength)
-        throw new Error("Unsupported packet/sample mapping");
+        throw new AnalysisFailure(
+          "unsupported-container",
+          "Unsupported packet/sample mapping",
+        );
       packets.push({
         au,
         configuration: configurations.sampleConfigurations?.[au] ?? 0,
@@ -96,7 +122,10 @@ export async function openAnalysisInput(
       !packets.length ||
       packets.length !== configurations.sampleSizes?.length
     )
-      throw new Error("Incomplete packet index");
+      throw new AnalysisFailure(
+        "incomplete-reference-state",
+        "Incomplete packet index",
+      );
     // Preserve the same verified POC repair as the existing MP4 playback path.
     if (codec === "hevc") {
       const display = await hevcDisplayOrder(
@@ -110,7 +139,11 @@ export async function openAnalysisInput(
           packets.map((p) => p.pts),
           durations,
         );
-      if (display && !times) throw new Error("Unsupported HEVC time mapping");
+      if (display && !times)
+        throw new AnalysisFailure(
+          "ambiguous-picture-identity",
+          "Unsupported HEVC time mapping",
+        );
       if (times)
         packets.forEach((p, i) => {
           p.pts = times[i];
@@ -139,14 +172,21 @@ export async function openAnalysisInput(
       picture,
       async plan(target: AnalysisTarget) {
         const p = byPts.get(target.sourcePtsUs);
-        if (!p) throw new Error("Missing or ambiguous source timestamp");
+        if (!p)
+          throw new AnalysisFailure(
+            "ambiguous-picture-identity",
+            "Missing or ambiguous source timestamp",
+          );
         if (
           target.picture &&
           (target.picture.au !== p.au ||
             target.picture.configuration !== p.configuration ||
             target.picture.stream !== "video")
         )
-          throw new Error("Picture identity mismatch");
+          throw new AnalysisFailure(
+            "ambiguous-picture-identity",
+            "Picture identity mismatch",
+          );
         let start = p.au,
           scanned = 0;
         for (; start >= 0 && p.au - start < BUDGET.packets; start--) {
@@ -155,11 +195,17 @@ export async function openAnalysisInput(
           if (candidate.configuration !== p.configuration) break;
           if (!candidate.key) continue;
           if (candidate.size > BUDGET.packetBytes)
-            throw new Error("Analysis packet budget exceeded");
+            throw new AnalysisFailure(
+              "resource-limit",
+              "Analysis packet budget exceeded",
+            );
           const bytes = await read(candidate.offset, candidate.size);
           scanned += bytes.length;
           if (scanned > BUDGET.inputBytes)
-            throw new Error("Analysis planning budget exceeded");
+            throw new AnalysisFailure(
+              "resource-limit",
+              "Analysis planning budget exceeded",
+            );
           const evidence = inspectPacketPicture(
             codec,
             configurations.descriptions[p.configuration],
@@ -172,7 +218,8 @@ export async function openAnalysisInput(
               identity: picture(p, target.sourceVersion),
             };
         }
-        throw new Error(
+        throw new AnalysisFailure(
+          "no-safe-anchor-within-budget",
           "No verified closed random access point within preroll budget",
         );
       },

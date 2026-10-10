@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { withBrowserFixture } from "../../browser-fixture.mjs";
 import { repositoryRoot } from "../../manifest.mjs";
 const matrix = JSON.parse(
@@ -10,9 +11,47 @@ const matrix = JSON.parse(
   ),
 );
 const engine = process.argv[2] ?? "webkit";
+const limitsDir = path.join(
+  repositoryRoot,
+  ".run",
+  "analysis-limit-fixtures",
+  engine,
+);
+await mkdir(limitsDir, { recursive: true });
+for (const depth of [8, 10])
+  execFileSync("ffmpeg", [
+    "-y",
+    "-hide_banner",
+    "-loglevel",
+    "error",
+    "-f",
+    "lavfi",
+    "-i",
+    "color=black:size=64x64:rate=1:duration=1",
+    "-an",
+    ...(depth === 8
+      ? [
+          "-c:v",
+          "libx264",
+          "-flags",
+          "+ilme+ildct",
+          "-x264-params",
+          "tff=1:bframes=0",
+        ]
+      : [
+          "-c:v",
+          "libx265",
+          "-x265-params",
+          "pools=1:frame-threads=1:log-level=error:bframes=0",
+        ]),
+    "-pix_fmt",
+    depth === 8 ? "yuv420p" : "yuv420p10le",
+    path.join(limitsDir, `depth-${depth}.mp4`),
+  ]);
 await withBrowserFixture(
   {
     caseName: "bitstream-analysis",
+    roots: [path.join(repositoryRoot, "fixtures/video"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: 600000,
@@ -172,7 +211,7 @@ await withBrowserFixture(
             "DPR 2 overlay",
           );
           const box = await overlay.boundingBox();
-          const tooltip = await page.evaluate(
+          await page.evaluate(
             ({ x, y }) => {
               const stage = document.getElementById("stage-A");
               stage.dispatchEvent(
@@ -182,14 +221,15 @@ await withBrowserFixture(
                   bubbles: true,
                 }),
               );
-              return stage.title;
             },
             { x: box.x + box.width / 2, y: box.y + box.height / 2 },
           );
+          const tooltip = page.locator("#stage-A .bitstream-hit-tooltip");
+          await tooltip.waitFor({ state: "visible" });
           assert.match(
-            tooltip,
+            await tooltip.innerText(),
             /QP/,
-            "block hit information is attached to the hovered picture stage",
+            "block hit information remains visible after UI tooltip migration",
           );
           await call("step_review", { direction: 1 });
           if (await overlay.isVisible()) {
@@ -226,6 +266,55 @@ await withBrowserFixture(
             range.pictures >= 5,
             "half-open range publishes picture chunks",
           );
+          if (decoding === "browser" && row.codec === "h264") {
+            await call("request_bitstream_range", {
+              slot: "A",
+              startUs: 0,
+              endUs: 120000,
+            });
+            await call("seek_review", { ptsUs: 0 });
+            await page.locator("#bitstream-A").click();
+            await overlay.waitFor({ state: "visible" });
+            await page.locator("#bitstream-mode-A").selectOption("qp");
+            const sustained = await page.evaluate(async () => {
+              const api = window.voidPlayer,
+                canvas = document.querySelector("#bitstream-overlay-A"),
+                before = canvas.analysisMetrics;
+              let playingWallMs = 0;
+              for (let i = 0; i < 20; i++) {
+                await api.seek(0);
+                await api.play();
+                const start = performance.now();
+                await new Promise((r) => setTimeout(r, 60));
+                playingWallMs += performance.now() - start;
+                await api.pause();
+              }
+              const after = canvas.analysisMetrics;
+              return {
+                playingWallMs,
+                presentations: after.presentations - before.presentations,
+                hits: after.cacheHits - before.cacheHits,
+                draws: after.draws - before.draws,
+                resizes: after.resizes - before.resizes,
+              };
+            });
+            assert.ok(
+              sustained.playingWallMs >= 1000 &&
+                sustained.presentations >= 20 &&
+                sustained.draws >= 20,
+            );
+            assert.ok(
+              sustained.hits / sustained.presentations >= 0.98,
+              "CI sustained cache-hit load",
+            );
+            assert.equal(
+              sustained.resizes,
+              0,
+              "constant geometry preserves canvas storage",
+            );
+            await page.locator("#bitstream-A").click();
+            rows.push({ kind: "sustained-cache", input, ...sustained });
+          }
           await call("set_review_track_offset", {
             slot: "A",
             offsetUs: 100000,
@@ -287,10 +376,73 @@ await withBrowserFixture(
     const healthy = await call("get_review_session");
     assert.equal(healthy.error, null);
     assert.ok(healthy.tracks.every((t) => !t.failure));
+
+    const limitations = [];
+    for (const input of ["local-file", "library"])
+      for (const depth of [8, 10]) {
+        await call("remove_review_track", { slot: "A" });
+        await call("set_review_color_mode", { mode: "reference" });
+        await call("set_reference_decode", { decoder: "software", depth: 2 });
+        const name = `depth-${depth}.mp4`;
+        if (input === "local-file")
+          await page
+            .locator("#file-A")
+            .setInputFiles(path.join(limitsDir, name));
+        else
+          await call("load_library_item", {
+            slot: "A",
+            id: library.entries.find((e) => e.name === name).id,
+          });
+        await stable();
+        const result = await call("request_bitstream_analysis", { slot: "A" });
+        const state = await call("get_bitstream_analysis_state");
+        assert.equal(state.state, depth === 8 ? "unsupported" : "ready");
+        assert.equal(
+          state.reason.code,
+          depth === 8 ? "incomplete-reference-state" : "unsupported-qp-depth",
+        );
+        await page.locator("#bitstream-A").click();
+        await page.waitForFunction(
+          () =>
+            !document
+              .querySelector("#bitstream-status-A")
+              .textContent.includes("正在分析当前帧"),
+        );
+        if (depth === 10) {
+          await page
+            .locator("#bitstream-overlay-A")
+            .waitFor({ state: "visible" });
+          assert.equal(
+            await page
+              .locator('#bitstream-mode-A option[value="qp"]')
+              .isDisabled(),
+            true,
+          );
+          assert.match(
+            await page.locator("#bitstream-status-A").innerText(),
+            /位深.*QP/,
+          );
+        } else {
+          await page
+            .locator("#bitstream-overlay-A")
+            .waitFor({ state: "hidden" });
+          assert.match(
+            await page.locator("#bitstream-status-A").innerText(),
+            /参考状态不完整/,
+          );
+        }
+        limitations.push({
+          input,
+          depth,
+          state,
+          confidence: result.confidence,
+        });
+        await page.locator("#bitstream-A").click();
+      }
     assert.deepEqual(errors, []);
     await writeFile(
       artifact("matrix.json"),
-      JSON.stringify({ engine, rows, errors }, null, 2),
+      JSON.stringify({ engine, rows, limitations, errors }, null, 2),
     );
     await page.screenshot({ path: artifact("final.png") });
     console.log(

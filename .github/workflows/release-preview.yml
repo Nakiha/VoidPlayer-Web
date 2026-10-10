@@ -251,6 +251,7 @@ jobs:
             .run/analysis-reports/${{ matrix.engine }}/
             .run/test-suites/ci-analysis-browser/
             .run/test-suites/selected/
+            .run/analysis-lifecycle/
             .run/browser-fixtures/bitstream-analysis-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
@@ -591,6 +592,7 @@ jobs:
           path: |
             .run/playback-reports/hevc-timeline-browser.json
             .run/test-suites/selected/
+            .run/analysis-lifecycle/
           if-no-files-found: error
 
   native-release:

@@ -1,5 +1,6 @@
 import { RangeReader } from "../range-reader.ts";
 import { analyzePicture, analyzeRange } from "./runner.ts";
+import { failureInfo } from "./failure.ts";
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent) => void;
   postMessage: (data: unknown) => void;
@@ -47,6 +48,7 @@ scope.onmessage = async ({ data }) => {
     scope.postMessage({
       ok: false,
       error: error instanceof Error ? error.message : String(error),
+      reason: failureInfo(error),
     });
   }
 };

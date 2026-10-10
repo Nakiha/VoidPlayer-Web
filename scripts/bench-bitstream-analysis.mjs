@@ -4,6 +4,20 @@ import { spawn } from "node:child_process";
 import { once } from "node:events";
 import path from "node:path";
 import os from "node:os";
+import assert from "node:assert/strict";
+const percentile = (values, p) =>
+  values.length
+    ? [...values].sort((a, b) => a - b)[
+        Math.min(values.length - 1, Math.floor(values.length * p))
+      ]
+    : null;
+const distribution = (values) => ({
+  count: values.length,
+  p50Ms: percentile(values, 0.5),
+  p95Ms: percentile(values, 0.95),
+  p99Ms: percentile(values, 0.99),
+  maxMs: values.length ? Math.max(...values) : null,
+});
 const engine = process.argv[2] ?? "webkit",
   baseline = process.env.ANALYSIS_BASELINE_DIR;
 for (const variant of process.env.ANALYSIS_ONLY_BASELINE
@@ -61,7 +75,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
           { name, params },
         );
       await page.evaluate(() => {
-        window.analysisPerf = { maxLagMs: 0, longTasks: 0 };
+        window.analysisPerf = { maxLagMs: 0, longTasks: 0, delays: [] };
         let last = performance.now();
         setInterval(() => {
           const now = performance.now();
@@ -69,6 +83,8 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
             window.analysisPerf.maxLagMs,
             now - last - 16,
           );
+          if (window.analysisPerf.delays.length < 4096)
+            window.analysisPerf.delays.push(Math.max(0, now - last - 16));
           last = now;
         }, 16);
         if (PerformanceObserver.supportedEntryTypes.includes("longtask"))
@@ -119,7 +135,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
             combination++;
             console.log(`contention ${input}/${decoder}/${tracks}`);
             for (const scenario of variant === "baseline"
-              ? ["disabled"]
+              ? ["disabled", "cached-playback"]
               : [
                   "disabled",
                   "paused-analysis",
@@ -128,64 +144,208 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                 ]) {
               await call("seek_review", { ptsUs: 0 });
               await page.evaluate(
-                () => (window.analysisPerf = { maxLagMs: 0, longTasks: 0 }),
+                () =>
+                  (window.analysisPerf = {
+                    maxLagMs: 0,
+                    longTasks: 0,
+                    delays: [],
+                  }),
               );
               const cpu = process.cpuUsage(),
                 start = performance.now();
               let analysis = null,
-                playback = null;
+                playback = null,
+                overlay = null,
+                concurrentRange = null;
               if (scenario === "paused-analysis")
                 analysis = await call("request_bitstream_analysis", {
                   slot: "A",
                 });
               else if (scenario === "cached-playback") {
-                await call("request_bitstream_range", {
-                  slot: "A",
-                  startUs: 0,
-                  endUs: 100000,
-                });
-                await page.locator("#bitstream-A").click();
-                await page
-                  .locator("#bitstream-overlay-A")
-                  .waitFor({ state: "visible" });
-                playback = await call("benchmark_review", { durationMs: 1500 });
-                await page.locator("#bitstream-A").click();
+                // All visible tracks fit a 120 ms prefix in the unchanged 32 MiB cache.
+                // Replay inside it for >=1.5 s of actual playing time. Seek/start costs
+                // are recorded separately; the ordinary continuous bench stays intact.
+                const slots = ["A", "B"].slice(0, tracks);
+                for (const slot of variant === "feature" ? slots : []) {
+                  await call("request_bitstream_range", {
+                    slot,
+                    startUs: 0,
+                    endUs: 120000,
+                  });
+                  await page.locator(`#bitstream-${slot}`).click();
+                  await page
+                    .locator(`#bitstream-overlay-${slot}`)
+                    .waitFor({ state: "visible" });
+                  await page
+                    .locator(`#bitstream-mode-${slot}`)
+                    .selectOption("qp");
+                }
+                await page.evaluate(
+                  () =>
+                    (window.analysisPerf = {
+                      maxLagMs: 0,
+                      longTasks: 0,
+                      delays: [],
+                    }),
+                );
+                const measured = await page.evaluate(async (slots) => {
+                  const api = window.voidPlayer,
+                    samples = [],
+                    metrics = () =>
+                      Object.fromEntries(
+                        slots.map((slot) => [
+                          slot,
+                          document.querySelector(`#bitstream-overlay-${slot}`)
+                            ?.analysisMetrics,
+                        ]),
+                      ),
+                    before = metrics();
+                  const started = performance.now();
+                  let playingWallMs = 0,
+                    pauseMaxMs = 0;
+                  for (let cycle = 0; cycle < 30; cycle++) {
+                    await api.seek(0);
+                    await api.play();
+                    const playing = performance.now();
+                    while (performance.now() - playing < 60)
+                      await new Promise((r) => setTimeout(r, 5));
+                    const pause = performance.now();
+                    await api.pause();
+                    pauseMaxMs = Math.max(
+                      pauseMaxMs,
+                      performance.now() - pause,
+                    );
+                    playingWallMs += pause - playing;
+                    samples.push(api.getState().playback);
+                  }
+                  return {
+                    before,
+                    after: metrics(),
+                    playingWallMs,
+                    pauseMaxMs,
+                    cycleCount: 30,
+                    totalWallMs: performance.now() - started,
+                    samples,
+                    tracks: api.getState().tracks,
+                  };
+                }, slots);
+                const metrics = Object.fromEntries(
+                  (variant === "feature" ? slots : []).map((slot) => {
+                    const a = measured.before[slot],
+                      b = measured.after[slot],
+                      presentations = b.presentations - a.presentations,
+                      hits = b.cacheHits - a.cacheHits;
+                    return [
+                      slot,
+                      {
+                        presentations,
+                        hits,
+                        hitRatio: hits / presentations,
+                        draws: b.draws - a.draws,
+                        skippedDraws: b.skippedDraws - a.skippedDraws,
+                        resizes: b.resizes - a.resizes,
+                        drawTime: distribution(
+                          b.drawTimesMs.slice(a.drawTimesMs.length),
+                        ),
+                      },
+                    ];
+                  }),
+                );
+                assert.ok(
+                  measured.playingWallMs >= 1500,
+                  "sustained cached load contains >=1.5 s of actual playback",
+                );
+                for (const [slot, m] of Object.entries(metrics)) {
+                  assert.ok(
+                    m.presentations >= 30 && m.draws >= 30,
+                    `${slot}: real repeated presentation/drawing`,
+                  );
+                  assert.ok(
+                    m.hitRatio >= 0.98,
+                    `${slot}: sustained cache hit ratio ${m.hitRatio}`,
+                  );
+                  assert.equal(
+                    m.resizes,
+                    0,
+                    `${slot}: constant geometry does not reset the canvas`,
+                  );
+                }
+                overlay = { windowUs: 120000, ...measured, metrics };
+                delete overlay.before;
+                delete overlay.after;
+                playback = {
+                  kind: "bounded-window-replay",
+                  hardwareUseVerified: false,
+                  measurements: measured.samples,
+                  tracks: measured.tracks,
+                };
+                for (const slot of variant === "feature" ? slots : [])
+                  await page.locator(`#bitstream-${slot}`).click();
               } else if (scenario === "background-range") {
-                // Begin an uncached rear range while the foreground presenter is active.
+                // Range probes start after submission and stop at analysis settlement.
+                await page.evaluate(() => {
+                  window.analysisProbeActive = true;
+                });
+                const analysisStarted = performance.now();
+                let analysisWindowMs = 0;
                 const pending = call("request_bitstream_range", {
                   slot: "A",
-                  startUs: 3000000 + combination * 150000,
-                  endUs: 3100000 + combination * 150000,
+                  startUs: 3000000 + combination * 350000,
+                  endUs: 3450000 + combination * 350000,
+                }).finally(() => {
+                  analysisWindowMs = performance.now() - analysisStarted;
+                  return page.evaluate(() => {
+                    window.analysisProbeActive = false;
+                  });
                 });
-                playback = await call("benchmark_review", { durationMs: 1500 });
-                analysis = await pending;
+                const probes = page.evaluate(async (item) => {
+                  const rows = [];
+                  while (window.analysisProbeActive) {
+                    const started = performance.now();
+                    const r = await fetch(
+                      `/api/media/${item.id}?v=${item.version}`,
+                      { headers: { range: "bytes=0-1023" }, cache: "no-store" },
+                    );
+                    const bytes = await r.arrayBuffer();
+                    if (r.status !== 206 || bytes.byteLength !== 1024)
+                      throw new Error("Concurrent Range response failed");
+                    rows.push({
+                      startMs: started,
+                      endMs: performance.now(),
+                      durationMs: performance.now() - started,
+                    });
+                    await new Promise((r) => setTimeout(r, 10));
+                  }
+                  return rows;
+                }, entry);
+                const playing = call("benchmark_review", { durationMs: 1500 });
+                [analysis, playback] = await Promise.all([pending, playing]);
+                const ranges = await probes;
+                assert.ok(
+                  ranges.length >= 3,
+                  "Range latency has concurrent samples, not a post-analysis probe",
+                );
+                concurrentRange = {
+                  ...distribution(ranges.map((r) => r.durationMs)),
+                  samples: ranges,
+                  analysisWindowMs,
+                };
               } else
                 playback = await call("benchmark_review", { durationMs: 1500 });
               const elapsedMs = performance.now() - start,
                 cpuMs = process.cpuUsage(cpu);
               const lag = await page.evaluate(() => window.analysisPerf);
-              const rangeStart = performance.now();
-              await page.evaluate(async (id) => {
-                const lib = await window.voidPlayer.tools
-                  .find((t) => t.name === "list_library")
-                  .execute({});
-                const item = lib.entries.find((e) => e.id === id);
-                const r = await fetch(
-                  `/api/media/${item.id}?v=${item.version}`,
-                  { headers: { range: "bytes=0-1023" } },
-                );
-                if (!r.ok) throw new Error("Range failed");
-                await r.arrayBuffer();
-              }, entry.id);
               rows.push({
                 input,
-                decoder,
+                decoderPreference: decoder,
+                hardwareUseVerified: false,
                 tracks,
                 scenario,
                 elapsedMs,
-                mainThread: lag,
+                mainThread: { ...lag, delays: distribution(lag.delays) },
+                overlay,
+                concurrentRange,
                 serverCpuMs: (cpuMs.user + cpuMs.system) / 1000,
-                rangeResponseMs: performance.now() - rangeStart,
                 serverRss: process.memoryUsage().rss,
                 analysis: analysis?.metrics ?? analysis,
                 playback,

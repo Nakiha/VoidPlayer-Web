@@ -1,8 +1,10 @@
 import { SLOTS } from "../model.ts";
 import type { Slot } from "../model.ts";
-import type { AnalysisResult } from "../bitstream-analysis/contract.ts";
+import type { ReadonlyAnalysisResult } from "../bitstream-analysis/contract.ts";
 import type { ReviewSession } from "../session.ts";
 import { t, msg } from "../i18n.ts";
+import { failureInfo } from "../bitstream-analysis/failure.ts";
+import { bitstreamReasonText } from "./bitstream-reasons.ts";
 export function installBitstreamControls(
   session: ReviewSession,
   canvases: Record<Slot, HTMLCanvasElement>,
@@ -12,6 +14,7 @@ export function installBitstreamControls(
     {
       controller: AbortController;
       overlay?: import("../analysis-overlay/controller.ts").ReturnOverlay;
+      tooltip?: HTMLOutputElement;
     }
   >();
   for (const slot of SLOTS) {
@@ -25,12 +28,21 @@ export function installBitstreamControls(
     const stage = canvases[slot].closest<HTMLElement>(".frame-stage")!;
     let hoverIdentity: string | null = null;
     stage.append(status);
-    const showResult = (result: AnalysisResult) => {
+    const showResult = (result: ReadonlyAnalysisResult) => {
       mode.hidden = result.confidence !== "exact";
       status.textContent =
         result.confidence === "exact"
           ? `${result.picture.stream} / AU ${result.picture.au} · ${result.blocks.length} ${t(msg("bitstream.blocks", "块"))}${result.qp.mean === null ? "" : ` · QP ${result.qp.mean.toFixed(1)}`}`
-          : result.reasons.join("; ");
+          : bitstreamReasonText(
+              result.reasonCodes?.[0] ?? "incomplete-reference-state",
+            );
+      if (result.confidence === "exact" && result.capabilities.qp !== "ready") {
+        status.textContent += ` · ${bitstreamReasonText("unsupported-qp-depth")}`;
+        if (mode.value === "qp") {
+          mode.value = "blocks";
+          active.get(slot)?.overlay?.setMode("blocks");
+        }
+      }
       mode.querySelector<HTMLOptionElement>('[value="qp"]')!.disabled =
         result.capabilities.qp !== "ready";
     };
@@ -38,6 +50,7 @@ export function installBitstreamControls(
       const entry = active.get(slot);
       entry?.controller.abort();
       entry?.overlay?.dispose();
+      entry?.tooltip?.remove();
       active.delete(slot);
       button.setAttribute("aria-pressed", "false");
       mode.hidden = true;
@@ -54,6 +67,7 @@ export function installBitstreamControls(
       const entry: {
         controller: AbortController;
         overlay?: import("../analysis-overlay/controller.ts").ReturnOverlay;
+        tooltip?: HTMLOutputElement;
       } = { controller: new AbortController() };
       active.set(slot, entry);
       button.setAttribute("aria-pressed", "true");
@@ -65,6 +79,10 @@ export function installBitstreamControls(
         );
         if (entry.controller.signal.aborted) return;
         entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
+        entry.tooltip = document.createElement("output");
+        entry.tooltip.className = "bitstream-status bitstream-hit-tooltip";
+        entry.tooltip.hidden = true;
+        stage.append(entry.tooltip);
         const requested = session.getPresentedFrame(slot);
         const result = await session.requestBitstreamAnalysis(
           slot,
@@ -81,8 +99,7 @@ export function installBitstreamControls(
         showResult(result);
       } catch (error) {
         if (!entry.controller.signal.aborted)
-          status.textContent =
-            error instanceof Error ? error.message : String(error);
+          status.textContent = bitstreamReasonText(failureInfo(error).code);
       }
     };
     session.subscribePresentedFrames((changed, next) => {
@@ -96,6 +113,8 @@ export function installBitstreamControls(
         status.title = "";
         if (hoverIdentity !== JSON.stringify([next.picture, next.generation])) {
           stage.removeAttribute("title");
+          const tooltip = active.get(slot)?.tooltip;
+          if (tooltip) tooltip.hidden = true;
           hoverIdentity = null;
         }
       }
@@ -112,13 +131,22 @@ export function installBitstreamControls(
           b = active
             .get(slot)
             ?.overlay?.hit(e.clientX - rect.left, e.clientY - rect.top);
-        stage.title = b
+        const tooltip = active.get(slot)?.tooltip;
+        if (!tooltip) return;
+        tooltip.hidden = !b;
+        tooltip.textContent = b
           ? `${b.x},${b.y} · ${b.width}×${b.height} · ${b.mode} · QP ${b.qp ?? "—"}`
           : "";
+        tooltip.style.left = `${Math.max(8, Math.min(e.clientX - rect.left + 12, rect.width - 260))}px`;
+        tooltip.style.top = `${Math.max(8, Math.min(e.clientY - rect.top + 12, rect.height - 40))}px`;
         const token = session.getPresentedFrame(slot);
         hoverIdentity =
           b && token ? JSON.stringify([token.picture, token.generation]) : null;
       });
+    stage.addEventListener("pointerleave", () => {
+      const tooltip = active.get(slot)?.tooltip;
+      if (tooltip) tooltip.hidden = true;
+    });
     session.subscribe(() => {
       const state = session.getState();
       const track = state.tracks.find((track) => track.slot === slot);
