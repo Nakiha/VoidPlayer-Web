@@ -232,6 +232,10 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - name: Install analysis fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/run-tests.mjs --case node-bitstream-analysis-core --case node-bitstream-analysis-server --prepared
@@ -246,6 +250,8 @@ jobs:
           path: |
             .run/analysis-reports/${{ matrix.engine }}/
             .run/test-suites/ci-analysis-browser/
+            .run/test-suites/selected/
+            .run/browser-fixtures/bitstream-analysis-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
 
@@ -632,6 +638,15 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
       - run: node scripts/run-tests.mjs --case release
+      - name: Checkout pinned analysis acceptance samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
       - run: node scripts/run-tests.mjs --case release-analysis
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
