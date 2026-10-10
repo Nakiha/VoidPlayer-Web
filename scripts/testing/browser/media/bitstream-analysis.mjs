@@ -143,6 +143,13 @@ await withBrowserFixture(
           for (const mode of ["qp", "modes", "blocks"]) {
             await page.locator("#bitstream-mode-A").selectOption(mode);
             assert.ok(await overlay.isVisible());
+            if (
+              input === "local-file" &&
+              decoding === "browser" &&
+              row.codec === "h264" &&
+              mode === "qp"
+            )
+              await page.screenshot({ path: artifact("qp-overlay.png") });
           }
           const dimensions = await overlay.evaluate((c) => ({
             width: c.width,
@@ -230,6 +237,25 @@ await withBrowserFixture(
       "late analysis never paints a superseded picture",
     );
     await page.locator("#bitstream-A").click();
+    await call("seek_review", { ptsUs: 6000000 });
+    const cancelled = await page.evaluate(async () => {
+      const tool = (name) =>
+        window.voidPlayer.tools.find((t) => t.name === name);
+      const pending = tool("request_bitstream_analysis").execute({ slot: "A" });
+      await Promise.resolve();
+      tool("cancel_bitstream_analysis").execute({});
+      try {
+        await pending;
+        return false;
+      } catch {
+        return true;
+      }
+    });
+    assert.equal(cancelled, true, "explicit cancellation settles the request");
+    await call("seek_review", { ptsUs: 0 });
+    const healthy = await call("get_review_session");
+    assert.equal(healthy.error, null);
+    assert.ok(healthy.tracks.every((t) => !t.failure));
     assert.deepEqual(errors, []);
     await writeFile(
       artifact("matrix.json"),

@@ -35,6 +35,10 @@ export class BitstreamAnalysisService {
     this.state = { state: "cancelled" };
     this.changed();
   }
+  dispose() {
+    this.cancel();
+    this.cache.clear();
+  }
   cached(token: PresentedFrameToken) {
     return token.picture ? this.cache.get(token.picture) : null;
   }

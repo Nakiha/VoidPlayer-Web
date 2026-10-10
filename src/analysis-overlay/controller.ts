@@ -142,6 +142,14 @@ export function createAnalysisOverlay(
     },
     hit(x: number, y: number) {
       if (!result || !token || !geometry) return null;
+      const rect = presentationRect(geometry);
+      if (
+        x < rect.x ||
+        y < rect.y ||
+        x >= rect.x + rect.width ||
+        y >= rect.y + rect.height
+      )
+        return null;
       const p = viewportToCoded(x, y, token, geometry);
       return (
         result.blocks.find(

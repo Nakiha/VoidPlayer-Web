@@ -6,7 +6,11 @@ import path from "node:path";
 import os from "node:os";
 const engine = process.argv[2] ?? "webkit",
   baseline = process.env.ANALYSIS_BASELINE_DIR;
-for (const variant of baseline ? ["baseline", "feature"] : ["feature"])
+for (const variant of process.env.ANALYSIS_ONLY_BASELINE
+  ? ["baseline"]
+  : baseline
+    ? ["baseline", "feature"]
+    : ["feature"])
   await withBrowserFixture(
     {
       caseName: `bitstream-perf-${variant}`,
@@ -46,7 +50,8 @@ for (const variant of baseline ? ["baseline", "feature"] : ["feature"])
         await writeFile(artifact("playback.log"), log);
         console.log(`${variant} playback bench exit ${code}`);
       }
-      if (variant === "baseline") return;
+      if (variant === "baseline" && !process.env.ANALYSIS_CONTENTION_BASELINE)
+        return;
       const call = (name, params = {}) =>
         page.evaluate(
           async ({ name, params }) =>
@@ -84,11 +89,17 @@ for (const variant of baseline ? ["baseline", "feature"] : ["feature"])
             await call("set_review_color_mode", { mode: "reference" });
             await call("set_reference_decode", { decoder, depth: 2 });
             for (const slot of ["A", "B"].slice(0, tracks)) {
+              const selected =
+                slot === "A"
+                  ? entry
+                  : library.entries.find(
+                      (e) => e.name === "h265_10s_1920x1080.mp4",
+                    );
               if (input === "local")
                 await page
                   .locator(`#file-${slot}`)
-                  .setInputFiles(path.resolve("fixtures/video", entry.name));
-              else await call("load_library_item", { slot, id: entry.id });
+                  .setInputFiles(path.resolve("fixtures/video", selected.name));
+              else await call("load_library_item", { slot, id: selected.id });
               await page.waitForFunction((slot) => {
                 const s = window.voidPlayer.getState();
                 return (
@@ -107,12 +118,14 @@ for (const variant of baseline ? ["baseline", "feature"] : ["feature"])
             }, tracks);
             combination++;
             console.log(`contention ${input}/${decoder}/${tracks}`);
-            for (const scenario of [
-              "disabled",
-              "paused-analysis",
-              "cached-playback",
-              "background-range",
-            ]) {
+            for (const scenario of variant === "baseline"
+              ? ["disabled"]
+              : [
+                  "disabled",
+                  "paused-analysis",
+                  "cached-playback",
+                  "background-range",
+                ]) {
               await call("seek_review", { ptsUs: 0 });
               await page.evaluate(
                 () => (window.analysisPerf = { maxLagMs: 0, longTasks: 0 }),
@@ -177,6 +190,10 @@ for (const variant of baseline ? ["baseline", "feature"] : ["feature"])
                 analysis: analysis?.metrics ?? analysis,
                 playback,
               });
+              await writeFile(
+                artifact("contention-progress.json"),
+                JSON.stringify(rows, null, 2),
+              );
             }
           }
       await writeFile(

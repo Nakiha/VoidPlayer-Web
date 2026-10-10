@@ -161,7 +161,11 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_review_color_output', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'request_bitstream_range', 'get_presented_frame', 'request_bitstream_analysis', 'cancel_bitstream_analysis', 'get_bitstream_analysis_state', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_review_color_output', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.equal(get('get_presented_frame').annotations.readOnlyHint,true);
+  assert.equal(get('get_bitstream_analysis_state').annotations.readOnlyHint,true);
+  assert.equal(get('get_presented_frame').execute({slot:'A'}),null,'fake draw without a presenter commit cannot invent a picture token');
+  assert.deepEqual(get('get_bitstream_analysis_state').execute({}),{state:'idle'});
   assert.equal(get('list_frame_indexes').annotations.readOnlyHint, true);
   assert.equal(get('clear_frame_indexes').annotations.readOnlyHint, false);
   for (const input of [{}, { scope: 'other' }, { scope: 'media' }, { scope: 'all', id: 'unexpected' }]) assert.throws(() => get('clear_frame_indexes').execute(input));

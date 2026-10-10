@@ -294,7 +294,7 @@ export class ReviewSession {
     slotValue(slot);const track=this.tracks.get(slot);if(!track||track.failure)throw new Error('Track unavailable');
     const sourceVersion=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;
     if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
-    const service=await this.bitstreamLoading;return service.requestRange(track.source,{sourceVersion,firstPtsUs:track.source.info.firstPtsUs,startUs:startUs-track.offsetUs,endUs:endUs-track.offsetUs},signal);
+    const service=await this.bitstreamLoading;if(this.tracks.get(slot)!==track)throw new DOMException('Analysis source removed','AbortError');signal?.throwIfAborted();return service.requestRange(track.source,{sourceVersion,firstPtsUs:track.source.info.firstPtsUs,startUs:startUs-track.offsetUs,endUs:endUs-track.offsetUs},signal);
   }
   subscribePresentedFrames(listener:(slot:Slot,token:PresentedFrameToken)=>void){this.frameListeners.add(listener);return()=>this.frameListeners.delete(listener);}
   getPresentedFrame(slot:Slot):PresentedFrameToken|null{
@@ -1348,7 +1348,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.cancelLoad(); this.pause();
+    this.cancelLoad(); this.pause();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
     this.releaseReaders('dispose');
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.

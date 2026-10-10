@@ -60,3 +60,11 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 `node scripts/check-bitstream-analysis-browser.mjs chromium|webkit` 执行矩阵，检查 disabled 不加载 worker/core/canvas、local 无上传、library 不下载分析 decoder、真实 token/key、QP/mode、DPR 2、缓存、区间、offset、换帧和迟到响应。`node scripts/check-analysis-release.mjs` 从解压原生包、无 Node/Bun/ffmpeg 的 PATH、无关 cwd 实际执行三种分析并验证重启缓存。三平台 release workflow 均运行该验收，产物汇总另外验证相同 analysis provenance 与字节。
 
 `ANALYSIS_BASELINE_DIR=/path/to/built/main/dist node scripts/bench-bitstream-analysis.mjs webkit` 保留原播放 bench 的场景和阈值，并记录关闭、暂停分析、缓存播放、后台区间分析的本地/媒体库、hardware/software、单/双轨对照。输出记录硬件、实际 decoder、播放吞吐/失败、主线程 timer lag/long tasks、服务端 CPU/RSS、Range 延迟和分析 heap/records/输入量。CPU/RSS 为观测值，不是任意负载下零竞争承诺。
+
+### 2026-10-10 本机测量
+
+固定 main `d87fda7`、同一播放 core `1e68e6c`，Apple M5 / 10 CPU / 32 GiB / macOS / Node 24.15.0；原有四场景 WebKit bench 在 main 与功能分支均通过。WebKit 32 个争用场景中，8 个暂停分析及 24 个播放场景完成，24 个播放判定全部通过；暂停请求总耗时 131–333 ms，Range 约 4–7 ms，主线程 timer lag 最大约 26 ms。不同场景存在冷启动/缓存命中差异，这些耗时不作为恒定 SLA。
+
+Chromium 功能矩阵通过，但本机 headless + reference 色彩路径低于实时：关闭分析时 main 与功能分支速度均约 0.31–0.39，所有这些 reference 性能判定仍按原阈值记为失败。它们没有被改成验收成功；不能从这些结果推断可见窗口或真实 GPU 硬解的性能。硬件只是首选配置，报告同时保留实际 decoder。
+
+测量汇总：`docs/fixtures/bitstream-analysis-validation.json`，包含两种浏览器 64 个场景、Chromium 的 8 个 main 同条件对照、CPU/RSS/主线程/Range 指标及原始播放 measurements。解压原生包的真实分析已在 macOS ARM64 本机通过；Linux/Windows 与 CI 构建/完整发布验收由 PR workflow 执行，运行状态以远端报告为准。

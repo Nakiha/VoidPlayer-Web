@@ -261,6 +261,13 @@ export class AnalysisScheduler {
           void worker.terminate();
           reject(new Error("Analysis execution time budget exceeded"));
         }, 30000);
+        const acknowledge = (value: unknown) => {
+          try {
+            worker.postMessage(value);
+          } catch {
+            /* A cancelled worker may already be gone. */
+          }
+        };
         worker.on("message", async (m) => {
           if (m.type === "chunk") {
             try {
@@ -304,9 +311,9 @@ export class AnalysisScheduler {
               await this.store.put(chunk, result);
               work.chunks.push(chunk);
               work.seq++;
-              worker.postMessage({ ok: true });
+              acknowledge({ ok: true });
             } catch (error) {
-              worker.postMessage({ ok: false, error: String(error) });
+              acknowledge({ ok: false, error: String(error) });
               reject(error);
             }
           } else m.ok ? resolve() : reject(new Error(m.error));
