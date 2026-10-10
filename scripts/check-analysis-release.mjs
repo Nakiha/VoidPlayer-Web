@@ -14,6 +14,9 @@ const archive = path.resolve(
       await readFile(path.join(root, "artifacts/latest-release.json"), "utf8"),
     ).archive,
 );
+const fixtures = path.resolve(
+  process.argv[3] ?? path.join(root, "fixtures/video"),
+);
 const temp = await mkdtemp(path.join(os.tmpdir(), "vp-analysis-release-"));
 let child,
   output = "";
@@ -53,9 +56,7 @@ try {
     JSON.stringify({
       host: "127.0.0.1",
       port,
-      mediaRoots: [
-        { id: "qa", name: "QA", path: path.join(root, "fixtures/video") },
-      ],
+      mediaRoots: [{ id: "qa", name: "QA", path: fixtures }],
       indexWatch: false,
       logsDir: null,
     }),
@@ -103,7 +104,7 @@ try {
             version,
             target: {
               sourceVersion: `${entry.id}@${version}`,
-              sourcePtsUs: entry.name.startsWith('h265_')?-50000:0,
+              sourcePtsUs: entry.name.startsWith("h265_") ? -50000 : 0,
               normalizedMediaUs: 0,
             },
           }),
@@ -131,8 +132,23 @@ try {
     assert.fail("Native analysis timed out");
   }
   await start();
-  const entries = (await (await fetch(base + "/api/library")).json()).entries,
-    rows = [];
+  let entries;
+  // Freshly checked-out files first enter the server's settling state.
+  for (let i = 0; i < 200; i++) {
+    entries = (await (await fetch(base + "/api/library")).json()).entries;
+    if (
+      [
+        "h264_9s_1920x1080.mp4",
+        "h265_10s_1920x1080.mp4",
+        "h266_10s_1920x1080.mp4",
+      ].every((name) =>
+        entries.some((entry) => entry.name === name && entry.state === "ready"),
+      )
+    )
+      break;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  const rows = [];
   for (const [codec, name] of [
     ["h264", "h264_9s_1920x1080.mp4"],
     ["hevc", "h265_10s_1920x1080.mp4"],

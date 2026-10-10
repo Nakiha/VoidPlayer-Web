@@ -171,6 +171,26 @@ await withBrowserFixture(
             dimensions.width >= dimensions.cssWidth * 1.9,
             "DPR 2 overlay",
           );
+          const box = await overlay.boundingBox();
+          const tooltip = await page.evaluate(
+            ({ x, y }) => {
+              const stage = document.getElementById("stage-A");
+              stage.dispatchEvent(
+                new PointerEvent("pointermove", {
+                  clientX: x,
+                  clientY: y,
+                  bubbles: true,
+                }),
+              );
+              return stage.title;
+            },
+            { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+          );
+          assert.match(
+            tooltip,
+            /QP/,
+            "block hit information is attached to the hovered picture stage",
+          );
           await call("step_review", { direction: 1 });
           if (await overlay.isVisible()) {
             const next = await call("get_presented_frame", { slot: "A" });

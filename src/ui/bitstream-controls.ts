@@ -22,7 +22,8 @@ export function installBitstreamControls(
       `bitstream-mode-${slot}`,
     ) as HTMLSelectElement;
     const status = document.getElementById(`bitstream-status-${slot}`)!;
-    const stage = canvases[slot].closest(".frame-stage")!;
+    const stage = canvases[slot].closest<HTMLElement>(".frame-stage")!;
+    let hoverIdentity: string | null = null;
     stage.append(status);
     const showResult = (result: AnalysisResult) => {
       mode.hidden = result.confidence !== "exact";
@@ -41,6 +42,8 @@ export function installBitstreamControls(
       button.setAttribute("aria-pressed", "false");
       mode.hidden = true;
       status.hidden = true;
+      stage.removeAttribute("title");
+      hoverIdentity = null;
       session.cancelBitstreamAnalysis();
     };
     button.onclick = async () => {
@@ -91,6 +94,10 @@ export function installBitstreamControls(
             ? `${next.picture.stream} / AU ${next.picture.au}`
             : (next.identityReason ?? "");
         status.title = "";
+        if (hoverIdentity !== JSON.stringify([next.picture, next.generation])) {
+          stage.removeAttribute("title");
+          hoverIdentity = null;
+        }
       }
     });
     mode.onchange = () =>
@@ -105,9 +112,12 @@ export function installBitstreamControls(
           b = active
             .get(slot)
             ?.overlay?.hit(e.clientX - rect.left, e.clientY - rect.top);
-        status.title = b
+        stage.title = b
           ? `${b.x},${b.y} · ${b.width}×${b.height} · ${b.mode} · QP ${b.qp ?? "—"}`
           : "";
+        const token = session.getPresentedFrame(slot);
+        hoverIdentity =
+          b && token ? JSON.stringify([token.picture, token.generation]) : null;
       });
     session.subscribe(() => {
       const state = session.getState();
