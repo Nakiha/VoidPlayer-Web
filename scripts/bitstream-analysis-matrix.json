@@ -1,0 +1,10 @@
+{
+ "schema":1,
+ "recipe":"blocks-basic-v1",
+ "rows":[
+  {"codec":"h264","container":"mp4","inputs":["local-file","library"],"playbackPaths":["webcodecs-packet","wasm-packet"],"features":["blocks","qp-luma8","basic-modes"],"fixture":"h264_9s_1920x1080.mp4","expected":"exact","oracle":"docs/fixtures/bitstream-analysis-answers.json"},
+  {"codec":"hevc","container":"mp4","inputs":["local-file","library"],"playbackPaths":["webcodecs-packet","wasm-packet"],"features":["blocks","qp-luma8","basic-modes"],"fixture":"h265_10s_1920x1080.mp4","expected":"exact","oracle":"docs/fixtures/bitstream-analysis-answers.json"},
+  {"codec":"vvc","container":"mp4","inputs":["local-file","library"],"playbackPaths":["wasm-packet"],"features":["blocks","qp-luma8","basic-modes"],"fixture":"h266_10s_1920x1080.mp4","expected":"exact","oracle":"docs/fixtures/bitstream-analysis-answers.json"}
+ ],
+ "excluded":["FLV/TS/MKV and other containers","native container decode without verified packet identity","fragmented MP4","multi-picture AU","VVC multi-slice AU","field pictures","nonzero NAL layers","palette mode semantics","motion/advanced VVC tool visualization","QP outside 8-bit luma","non-4px-aligned coded dimensions or partitions","unsafe random access without a closed IDR in the preroll budget","incomplete/corrupt/concealed output"]
+}

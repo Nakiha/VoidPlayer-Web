@@ -14,7 +14,7 @@ const bun = process.env.BUN_BIN || 'bun';
 const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
 const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).trim();
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
-const required = ['index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING'];
+const required = ['index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
 const identity = await readReleaseIdentity(root);
 const { revision, dirty, version, tag } = identity;
@@ -25,7 +25,7 @@ const out = path.join(root, 'artifacts', name);
 await mkdir(path.dirname(out), { recursive: true });
 await mkdir(out); // Never silently mix a previous package with a new build.
 const executable = target.includes('windows') ? 'voidplayer.exe' : 'voidplayer';
-execFileSync(bun, ['build', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
+execFileSync(bun, ['build', 'server/standalone.ts', 'server/frame-index-worker.ts', 'server/frame-index-build-worker.ts', 'server/analysis/worker.ts', '--compile', `--target=${target}`, '--minify', '--sourcemap', '--no-compile-autoload-dotenv', '--no-compile-autoload-bunfig', '--define', 'VOIDPLAYER_COMPILED=true', '--define', `VOIDPLAYER_VERSION=${JSON.stringify(version)}`, '--define', `VOIDPLAYER_REVISION=${JSON.stringify(revision + (dirty ? '-dirty' : ''))}`, '--outfile', path.join(out, executable)], { cwd: root, stdio: 'inherit' });
 await cp(path.join(root, 'dist'), path.join(out, 'dist'), { recursive: true });
 await cp(path.join(root, 'LICENSE'), path.join(out, 'LICENSE'));
 await writeFile(path.join(out, 'README.md'), (await readFile(path.join(root, 'deploy/standalone.md'), 'utf8')).replace('(operations.md)', '(deploy/operations.md)').replace('(admin.md)', '(deploy/admin.md)'));
@@ -55,6 +55,7 @@ execFileSync(tar, ['-czf', path.join(out, 'source.tar.gz'), '-C', sourceDir, '.'
 await rm(sourceDir, { recursive: true });
 const core = await readFile(path.join(out, 'dist/vendor/voidplayer-core/provenance.json'), 'utf8').then(JSON.parse).catch(error => { if (error.code !== 'ENOENT') throw error; return null; });
 if (process.env.CI && !core) throw new Error('CI releases require pinned decoder provenance.');
+const analysis = JSON.parse(await readFile(path.join(out, 'dist/vendor/voidplayer-analysis/provenance.json'), 'utf8'));
 const coreSources = core ? `WASM build source: https://github.com/${core.source.repository}/tree/${core.source.revision}
 FFmpeg source: https://github.com/${core.source.ffmpegRepository}/tree/${core.source.ffmpegRevision}
 dav1d source: https://github.com/${core.source.dav1dRepository}/tree/${core.source.dav1dRevision}
@@ -70,9 +71,13 @@ Exact application snapshot: source.tar.gz
 Bun: https://github.com/oven-sh/bun/tree/bun-v${bunVersion}
 Bun notices: deploy/licenses/Bun-${bunVersion}.md
 ${coreSources}
+Analysis build source: https://github.com/${analysis.source.repository}/tree/${analysis.source.revision}
+Analysis FFmpeg source: https://github.com/${analysis.source.ffmpegRepository}/tree/${analysis.source.ffmpegRevision}
+Analysis provenance: dist/vendor/voidplayer-analysis/provenance.json
+Analysis license: dist/vendor/voidplayer-analysis/LICENSE
 WASM licenses: dist/vendor/voidplayer-core/LICENSES
 `);
-const manifest = { schema: 'voidplayer-release', version: 2, appVersion: version, revision, dirty, tag, target, runtime: { name: 'bun', version: bunVersion }, decoder: core ? { source: core.source, buildRun: core.buildRun } : null, executable, createdAt: new Date().toISOString(), files: {} };
+const manifest = { schema: 'voidplayer-release', version: 2, appVersion: version, revision, dirty, tag, target, runtime: { name: 'bun', version: bunVersion }, decoder: core ? { source: core.source, buildRun: core.buildRun } : null, analysis: {source: analysis.source}, executable, createdAt: new Date().toISOString(), files: {} };
 async function hashFolder(folder, prefix = '') {
   for (const entry of (await readdir(folder, { withFileTypes: true })).sort((a,b) => a.name.localeCompare(b.name))) {
     const relative = prefix + entry.name, file = path.join(folder, entry.name);

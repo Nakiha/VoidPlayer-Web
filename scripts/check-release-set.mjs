@@ -10,13 +10,13 @@ import { readReleaseIdentity, readReleaseNotes } from './release-version.mjs';
 export const releasePlatforms = ['linux-x64', 'windows-x64', 'darwin-arm64'];
 export const sha256 = data => createHash('sha256').update(data).digest('hex');
 
-export async function verifyReleaseSet(directory, identity, { bunVersion, coreSource }) {
+export async function verifyReleaseSet(directory, identity, { bunVersion, coreSource, analysisSource }) {
   const files = (await readdir(directory)).sort();
   const archives = files.filter(name => name.endsWith('.tar.gz'));
   assert.equal(archives.length, releasePlatforms.length, 'one archive per supported platform');
   assert.equal(files.filter(name => name.endsWith('.sha256')).length, archives.length, 'one checksum per archive');
   const assets = [], platforms = new Set();
-  let sharedCore;
+  let sharedCore, sharedAnalysis;
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
   for (const name of archives) {
     assert.match(name, /^voidplayer-[0-9A-Za-z.-]+\.tar\.gz$/);
@@ -40,6 +40,10 @@ export async function verifyReleaseSet(directory, identity, { bunVersion, coreSo
     for (const file of ['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'provenance.json', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING']) assert.match(coreHashes[`dist/vendor/voidplayer-core/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
     if (sharedCore) assert.deepEqual(coreHashes, sharedCore, 'all platforms ship identical decoder bytes and provenance');
     else sharedCore = coreHashes;
+    assert.deepEqual(manifest.analysis?.source, analysisSource, 'analysis source matches lock');
+    const analysisHashes = Object.fromEntries(Object.entries(manifest.files).filter(([name]) => name.startsWith('dist/vendor/voidplayer-analysis/')).sort(([a], [b]) => a.localeCompare(b)));
+    for (const file of ['voidplayer-analysis.js','voidplayer-analysis.wasm','manifest.json','provenance.json','LICENSE']) assert.match(analysisHashes[`dist/vendor/voidplayer-analysis/${file}`] ?? '', /^[a-f0-9]{64}$/, file);
+    if(sharedAnalysis) assert.deepEqual(analysisHashes,sharedAnalysis,'all platforms ship identical analysis bytes and provenance');else sharedAnalysis=analysisHashes;
     for (const [assetName, contents] of [[name, bytes], [name + '.sha256', checksum]]) assets.push({ name: assetName, bytes: contents.length, sha256: sha256(contents) });
   }
   return { schema: 'voidplayer-release-set', version: 1, appVersion: identity.version, revision: identity.revision, tag: identity.tag, platforms: [...platforms].sort(), assets };
@@ -50,7 +54,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const identity = await readReleaseIdentity(root);
   assert.equal(identity.dirty, false, 'aggregate from a clean checkout');
   const directory = path.resolve(process.argv[2] || 'artifacts/release-set');
-  const report = await verifyReleaseSet(directory, identity, { bunVersion: (await readFile(path.join(root, '.bun-version'), 'utf8')).trim(), coreSource: JSON.parse(await readFile(path.join(root, 'scripts/release-core.json'), 'utf8')) });
+  const report = await verifyReleaseSet(directory, identity, { bunVersion: (await readFile(path.join(root, '.bun-version'), 'utf8')).trim(), coreSource: JSON.parse(await readFile(path.join(root, 'scripts/release-core.json'), 'utf8')), analysisSource: JSON.parse(await readFile(path.join(root, 'scripts/release-analysis.json'), 'utf8')) });
   await writeFile(path.join(directory, 'release-set.json'), JSON.stringify(report, null, 2) + '\n');
   const notes = await readReleaseNotes(root, identity);
   if (notes) await writeFile(path.join(directory, 'release-notes.md'), notes);

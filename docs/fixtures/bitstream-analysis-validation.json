@@ -1,0 +1,4156 @@
+{
+  "schema": 1,
+  "baseRevision": "d87fda70496a12114d638ca6c6764f6013c7c987",
+  "featureRevision": "9bde15b",
+  "analysisRevision": "351996966baa9f3985318d87c9dc8e7d233877ed",
+  "note": "Headless local measurements, requested hardware can fall back to software. Physical hardware use is not certified. Server RSS/CPU are process observations, not browser CPU.",
+  "playback": {
+    "baseline": [
+      {
+        "scenario": "hevc-4k-solo",
+        "passed": true,
+        "failures": [],
+        "startupMs": 1.9600000000000364,
+        "pauseMs": 1.180000000000291,
+        "measurements": {
+          "wallMs": 2025.1599999999999,
+          "mediaUs": 2024960,
+          "waitingMs": 6.538769525832322e-12,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 49766400,
+              "peakFrames": 4,
+              "peakBytes": 49766400,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9999012423709732,
+          "maxFrameLagUs": 23504,
+          "maxFrameSkewUs": 0,
+          "tracks": {
+            "A": {
+              "drawn": 118,
+              "dropped": 3,
+              "fps": 58.26700112583698,
+              "maxGapMs": 33.919999999999845,
+              "p95GapMs": 18.639999999999873
+            }
+          }
+        }
+      },
+      {
+        "scenario": "vvc-wasm-solo",
+        "passed": true,
+        "failures": [],
+        "startupMs": 1.8400000000000318,
+        "pauseMs": 1.240000000000009,
+        "measurements": {
+          "wallMs": 2009.2399999999998,
+          "mediaUs": 2008800,
+          "waitingMs": 6.3717919829286984e-12,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9997810117258268,
+          "maxFrameLagUs": 11133,
+          "maxFrameSkewUs": 0,
+          "tracks": {
+            "A": {
+              "drawn": 120,
+              "dropped": 0,
+              "fps": 59.72407477454163,
+              "maxGapMs": 27.340000000000032,
+              "p95GapMs": 18.539999999999964
+            }
+          }
+        }
+      },
+      {
+        "scenario": "vvc+hevc-4k",
+        "passed": true,
+        "failures": [],
+        "startupMs": 2.019999999999982,
+        "pauseMs": 1.3400000000000318,
+        "measurements": {
+          "wallMs": 2020.6799999999998,
+          "mediaUs": 2017360,
+          "waitingMs": 2.7400000000075675,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            },
+            "B": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 49766400,
+              "peakFrames": 4,
+              "peakBytes": 49766400,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9983569887364651,
+          "maxFrameLagUs": 18368,
+          "maxFrameSkewUs": 16417,
+          "tracks": {
+            "A": {
+              "drawn": 97,
+              "dropped": 24,
+              "fps": 48.00364233822278,
+              "maxGapMs": 35.34000000000003,
+              "p95GapMs": 32.92000000000007
+            },
+            "B": {
+              "drawn": 109,
+              "dropped": 12,
+              "fps": 53.942237266662715,
+              "maxGapMs": 35.66000000000008,
+              "p95GapMs": 33.279999999999745
+            }
+          }
+        }
+      },
+      {
+        "scenario": "mpeg2ts+h264",
+        "passed": true,
+        "failures": [],
+        "startupMs": 2.160000000000025,
+        "pauseMs": 1.5599999999999454,
+        "measurements": {
+          "wallMs": 2044.6200000000001,
+          "mediaUs": 2044300,
+          "waitingMs": 7.0325967271855916e-12,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 5529600,
+              "peakFrames": 4,
+              "peakBytes": 5529600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            },
+            "B": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9998434917001691,
+          "maxFrameLagUs": 12758,
+          "maxFrameSkewUs": 11,
+          "tracks": {
+            "A": {
+              "drawn": 122,
+              "dropped": 0,
+              "fps": 59.66878931048312,
+              "maxGapMs": 26.879999999999995,
+              "p95GapMs": 18.12000000000012
+            },
+            "B": {
+              "drawn": 122,
+              "dropped": 0,
+              "fps": 59.66878931048312,
+              "maxGapMs": 26.980000000000018,
+              "p95GapMs": 18.12000000000012
+            }
+          }
+        }
+      }
+    ],
+    "feature": [
+      {
+        "scenario": "hevc-4k-solo",
+        "passed": true,
+        "failures": [],
+        "startupMs": 1.9599999999999795,
+        "pauseMs": 1.7000000000000455,
+        "measurements": {
+          "wallMs": 2015.54,
+          "mediaUs": 2013140,
+          "waitingMs": 2.1800000000059168,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 49766400,
+              "peakFrames": 4,
+              "peakBytes": 49766400,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9988092521110967,
+          "maxFrameLagUs": 17464,
+          "maxFrameSkewUs": 0,
+          "tracks": {
+            "A": {
+              "drawn": 114,
+              "dropped": 6,
+              "fps": 56.56052472290305,
+              "maxGapMs": 33.36000000000013,
+              "p95GapMs": 31.67999999999995
+            }
+          }
+        }
+      },
+      {
+        "scenario": "vvc-wasm-solo",
+        "passed": true,
+        "failures": [],
+        "startupMs": 2.2000000000000455,
+        "pauseMs": 1.6000000000000227,
+        "measurements": {
+          "wallMs": 2030.1800000000003,
+          "mediaUs": 2029620,
+          "waitingMs": 7.602807272633072e-12,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9997241623895416,
+          "maxFrameLagUs": 14947,
+          "maxFrameSkewUs": 0,
+          "tracks": {
+            "A": {
+              "drawn": 121,
+              "dropped": 0,
+              "fps": 59.60062654542946,
+              "maxGapMs": 29.43999999999994,
+              "p95GapMs": 17.899999999999864
+            }
+          }
+        }
+      },
+      {
+        "scenario": "vvc+hevc-4k",
+        "passed": true,
+        "failures": [],
+        "startupMs": 2.2999999999999545,
+        "pauseMs": 1.7200000000000273,
+        "measurements": {
+          "wallMs": 2026.6399999999999,
+          "mediaUs": 2026080,
+          "waitingMs": 8.242295734817162e-12,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            },
+            "B": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 49766400,
+              "peakFrames": 4,
+              "peakBytes": 49766400,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9997236805747445,
+          "maxFrameLagUs": 15832,
+          "maxFrameSkewUs": 8737,
+          "tracks": {
+            "A": {
+              "drawn": 121,
+              "dropped": 0,
+              "fps": 59.704732957012595,
+              "maxGapMs": 27.799999999999955,
+              "p95GapMs": 18.740000000000236
+            },
+            "B": {
+              "drawn": 121,
+              "dropped": 0,
+              "fps": 59.704732957012595,
+              "maxGapMs": 27.960000000000036,
+              "p95GapMs": 18.740000000000236
+            }
+          }
+        }
+      },
+      {
+        "scenario": "mpeg2ts+h264",
+        "passed": true,
+        "failures": [],
+        "startupMs": 2.519999999999982,
+        "pauseMs": 2.3600000000001273,
+        "measurements": {
+          "wallMs": 2036.2200000000003,
+          "mediaUs": 2032000,
+          "waitingMs": 3.760000000006624,
+          "buffers": {
+            "A": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 5529600,
+              "peakFrames": 4,
+              "peakBytes": 5529600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            },
+            "B": {
+              "ended": false,
+              "suspended": false,
+              "stopped": false,
+              "error": null,
+              "frames": 4,
+              "bytes": 12441600,
+              "peakFrames": 4,
+              "peakBytes": 12441600,
+              "capacity": 4,
+              "budgetBytes": 67108864,
+              "effectiveBudgetBytes": 67108864
+            }
+          },
+          "speed": 0.9979275323884451,
+          "maxFrameLagUs": 16611,
+          "maxFrameSkewUs": 11,
+          "tracks": {
+            "A": {
+              "drawn": 95,
+              "dropped": 26,
+              "fps": 46.65507656343617,
+              "maxGapMs": 34.59999999999991,
+              "p95GapMs": 33.37999999999988
+            },
+            "B": {
+              "drawn": 95,
+              "dropped": 26,
+              "fps": 46.65507656343617,
+              "maxGapMs": 34.64000000000033,
+              "p95GapMs": 33.54000000000019
+            }
+          }
+        }
+      }
+    ]
+  },
+  "contention": {
+    "webkit": {
+      "environment": {
+        "cpu": "Apple M5",
+        "cores": 10,
+        "ram": 34359738368,
+        "platform": "darwin",
+        "node": "v24.15.0",
+        "engine": "webkit"
+      },
+      "rows": [
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2064.311625,
+          "mainThread": {
+            "maxLagMs": 6.199999999999932,
+            "longTasks": 0
+          },
+          "serverCpuMs": 11.682,
+          "rangeResponseMs": 7.367041999999856,
+          "serverRss": 218972160,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 2,
+            "pauseMs": 1.3799999999999955,
+            "measurements": {
+              "wallMs": 1536.3400000000001,
+              "mediaUs": 1535920,
+              "waitingMs": 5.007549930269306e-12,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.999726623013135,
+              "maxFrameLagUs": 4744,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 92,
+                  "dropped": 0,
+                  "fps": 59.88257807516565,
+                  "maxGapMs": 20.3599999999999,
+                  "p95GapMs": 18.440000000000055
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 222.45079199999964,
+          "mainThread": {
+            "maxLagMs": 25.940000000000055,
+            "longTasks": 0
+          },
+          "serverCpuMs": 204.135,
+          "rangeResponseMs": 3.962666999999783,
+          "serverRss": 352518144,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 55.2,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2305.4942499999997,
+          "mainThread": {
+            "maxLagMs": 9.7800000000002,
+            "longTasks": 0
+          },
+          "serverCpuMs": 20.84,
+          "rangeResponseMs": 5.561666999999943,
+          "serverRss": 352681984,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.0799999999999272,
+            "pauseMs": 1.2399999999997817,
+            "measurements": {
+              "wallMs": 1546.62,
+              "mediaUs": 1544100,
+              "waitingMs": 1.9800000000133924,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9983706404934631,
+              "maxFrameLagUs": 11778,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 92,
+                  "dropped": 0,
+                  "fps": 59.48455341324954,
+                  "maxGapMs": 31.740000000000236,
+                  "p95GapMs": 18.139999999999873
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2025.760542,
+          "mainThread": {
+            "maxLagMs": 7.8400000000001455,
+            "longTasks": 0
+          },
+          "serverCpuMs": 19.408,
+          "rangeResponseMs": 5.819958000000042,
+          "serverRss": 353714176,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.2400000000006912,
+            "pauseMs": 1.4200000000000728,
+            "measurements": {
+              "wallMs": 1503.8199999999997,
+              "mediaUs": 1503320,
+              "waitingMs": 1.4368950473908626e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996675133992101,
+              "maxFrameLagUs": 5391,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.84758814219788,
+                  "maxGapMs": 19.76000000000022,
+                  "p95GapMs": 18.579999999999927
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2019.8010419999991,
+          "mainThread": {
+            "maxLagMs": 6.900000000000546,
+            "longTasks": 0
+          },
+          "serverCpuMs": 15.312,
+          "rangeResponseMs": 5.407500000001164,
+          "serverRss": 355909632,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.4600000000000364,
+            "pauseMs": 1.5,
+            "measurements": {
+              "wallMs": 1500.7600000000002,
+              "mediaUs": 1497980,
+              "waitingMs": 2.0200000000248686,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9981476052133584,
+              "maxFrameLagUs": 16551,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.30328633492363,
+                  "maxGapMs": 32.36000000000058,
+                  "p95GapMs": 18.76000000000022
+                },
+                "B": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.30328633492363,
+                  "maxGapMs": 32.76000000000022,
+                  "p95GapMs": 18.76000000000022
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 233.94095800000105,
+          "mainThread": {
+            "maxLagMs": 18.639999999999418,
+            "longTasks": 0
+          },
+          "serverCpuMs": 228.096,
+          "rangeResponseMs": 3.8902079999988928,
+          "serverRss": 440909824,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 55.36,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2248.842375,
+          "mainThread": {
+            "maxLagMs": 8.959999999999127,
+            "longTasks": 0
+          },
+          "serverCpuMs": 17.579,
+          "rangeResponseMs": 5.442833999999493,
+          "serverRss": 440975360,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.3999999999996362,
+            "pauseMs": 1.5,
+            "measurements": {
+              "wallMs": 1506.2999999999993,
+              "mediaUs": 1505460,
+              "waitingMs": 2.4586555014138867e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9994423421629162,
+              "maxFrameLagUs": 7546,
+              "maxFrameSkewUs": 49,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.749053973312115,
+                  "maxGapMs": 25.279999999998836,
+                  "p95GapMs": 18.299999999999272
+                },
+                "B": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.749053973312115,
+                  "maxGapMs": 25.61999999999898,
+                  "p95GapMs": 18.340000000000146
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2029.470707999999,
+          "mainThread": {
+            "maxLagMs": 6.760000000000218,
+            "longTasks": 0
+          },
+          "serverCpuMs": 12.342,
+          "rangeResponseMs": 5.791791999999987,
+          "serverRss": 441057280,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.639999999999418,
+            "pauseMs": 1.4399999999986903,
+            "measurements": {
+              "wallMs": 1502.42,
+              "mediaUs": 1499440,
+              "waitingMs": 2.160000000029827,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9980165333262336,
+              "maxFrameLagUs": 16651,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 69,
+                  "dropped": 20,
+                  "fps": 45.925906204656485,
+                  "maxGapMs": 34.76000000000022,
+                  "p95GapMs": 33.45999999999913
+                },
+                "B": {
+                  "drawn": 69,
+                  "dropped": 20,
+                  "fps": 45.925906204656485,
+                  "maxGapMs": 34.81999999999971,
+                  "p95GapMs": 33.47999999999956
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2021.931875000002,
+          "mainThread": {
+            "maxLagMs": 6.039999999999054,
+            "longTasks": 0
+          },
+          "serverCpuMs": 9.495,
+          "rangeResponseMs": 6.039833999999246,
+          "serverRss": 441303040,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.1200000000008004,
+            "pauseMs": 1.360000000000582,
+            "measurements": {
+              "wallMs": 1506.1000000000004,
+              "mediaUs": 1505660,
+              "waitingMs": 3.062439191126032e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9997078547241216,
+              "maxFrameLagUs": 7864,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.7569882477923,
+                  "maxGapMs": 24.139999999999418,
+                  "p95GapMs": 18.11999999999898
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 226.34495799999786,
+          "mainThread": {
+            "maxLagMs": 7.580000000001746,
+            "longTasks": 0
+          },
+          "serverCpuMs": 208.94,
+          "rangeResponseMs": 3.6872500000026776,
+          "serverRss": 472645632,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 54.82,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2225.7237080000014,
+          "mainThread": {
+            "maxLagMs": 8.040000000000873,
+            "longTasks": 0
+          },
+          "serverCpuMs": 16.516,
+          "rangeResponseMs": 5.707500000000437,
+          "serverRss": 472678400,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.0800000000017462,
+            "pauseMs": 1.180000000000291,
+            "measurements": {
+              "wallMs": 1503.579999999998,
+              "mediaUs": 1503100,
+              "waitingMs": 5.064926256181934e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996807619148976,
+              "maxFrameLagUs": 5184,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.85714095691623,
+                  "maxGapMs": 23.299999999999272,
+                  "p95GapMs": 18.69999999999709
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2016.0820000000022,
+          "mainThread": {
+            "maxLagMs": 6.8400000000001455,
+            "longTasks": 0
+          },
+          "serverCpuMs": 14.021,
+          "rangeResponseMs": 6.72241700000086,
+          "serverRss": 474791936,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.2000000000007276,
+            "pauseMs": 1.3800000000010186,
+            "measurements": {
+              "wallMs": 1498.1399999999994,
+              "mediaUs": 1497660,
+              "waitingMs": 4.977529499683442e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996796027073575,
+              "maxFrameLagUs": 16431,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.40699801086683,
+                  "maxGapMs": 30.700000000000728,
+                  "p95GapMs": 18.68000000000029
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2028.8902500000004,
+          "mainThread": {
+            "maxLagMs": 7.540000000000873,
+            "longTasks": 0
+          },
+          "serverCpuMs": 11.796,
+          "rangeResponseMs": 5.320707999999286,
+          "serverRss": 475758592,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.5,
+            "pauseMs": 1.5799999999981083,
+            "measurements": {
+              "wallMs": 1498.5,
+              "mediaUs": 1495720,
+              "waitingMs": 1.9600000000507958,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9981448114781448,
+              "maxFrameLagUs": 15068,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.39272605939273,
+                  "maxGapMs": 30.56000000000131,
+                  "p95GapMs": 18.56000000000131
+                },
+                "B": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.39272605939273,
+                  "maxGapMs": 30.94000000000233,
+                  "p95GapMs": 18.539999999997235
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 196.2875419999982,
+          "mainThread": {
+            "maxLagMs": 22.760000000002037,
+            "longTasks": 0
+          },
+          "serverCpuMs": 122.502,
+          "rangeResponseMs": 3.614292000002024,
+          "serverRss": 478281728,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 55.42,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2245.3883749999986,
+          "mainThread": {
+            "maxLagMs": 10.959999999999127,
+            "longTasks": 0
+          },
+          "serverCpuMs": 14.163,
+          "rangeResponseMs": 5.815834000000905,
+          "serverRss": 478494720,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.360000000000582,
+            "pauseMs": 1.5,
+            "measurements": {
+              "wallMs": 1491.619999999999,
+              "mediaUs": 1490720,
+              "waitingMs": 5.981348749628523e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9993966291682874,
+              "maxFrameLagUs": 9554,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.666671136080275,
+                  "maxGapMs": 27.18000000000029,
+                  "p95GapMs": 18.700000000000728
+                },
+                "B": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.666671136080275,
+                  "maxGapMs": 27.520000000000437,
+                  "p95GapMs": 18.68000000000029
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2074.0293329999986,
+          "mainThread": {
+            "maxLagMs": 7.579999999998108,
+            "longTasks": 0
+          },
+          "serverCpuMs": 11.815,
+          "rangeResponseMs": 5.529084000001603,
+          "serverRss": 478740480,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.7599999999983993,
+            "pauseMs": 1.5400000000008731,
+            "measurements": {
+              "wallMs": 1549.3400000000001,
+              "mediaUs": 1546660,
+              "waitingMs": 1.8800000000592405,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9982702311952184,
+              "maxFrameLagUs": 15868,
+              "maxFrameSkewUs": 50,
+              "tracks": {
+                "A": {
+                  "drawn": 92,
+                  "dropped": 0,
+                  "fps": 59.38012314921192,
+                  "maxGapMs": 31.5,
+                  "p95GapMs": 18.760000000002037
+                },
+                "B": {
+                  "drawn": 92,
+                  "dropped": 0,
+                  "fps": 59.38012314921192,
+                  "maxGapMs": 31.88000000000102,
+                  "p95GapMs": 18.780000000002474
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2074.2207500000004,
+          "mainThread": {
+            "maxLagMs": 7.479999999999563,
+            "longTasks": 0
+          },
+          "serverCpuMs": 26.591,
+          "rangeResponseMs": 5.698083999999653,
+          "serverRss": 499433472,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.140000000003056,
+            "pauseMs": 1.2400000000016007,
+            "measurements": {
+              "wallMs": 1554.2200000000012,
+              "mediaUs": 1553780,
+              "waitingMs": 4.9052761852408366e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.999716899795395,
+              "maxFrameLagUs": 4898,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 93,
+                  "dropped": 0,
+                  "fps": 59.837088700441335,
+                  "maxGapMs": 19.279999999998836,
+                  "p95GapMs": 18.68000000000029
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 332.7503340000003,
+          "mainThread": {
+            "maxLagMs": 8.059999999997672,
+            "longTasks": 0
+          },
+          "serverCpuMs": 383.321,
+          "rangeResponseMs": 3.598999999998341,
+          "serverRss": 532398080,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 57.44254100000035,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2374.293916999999,
+          "mainThread": {
+            "maxLagMs": 12.180000000000291,
+            "longTasks": 0
+          },
+          "serverCpuMs": 371.237,
+          "rangeResponseMs": 6.559916999998677,
+          "serverRss": 568967168,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.0999999999985448,
+            "pauseMs": 1.2799999999988358,
+            "measurements": {
+              "wallMs": 1493.5,
+              "mediaUs": 1493060,
+              "waitingMs": 9.299050418576371e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9997053900234348,
+              "maxFrameLagUs": 11938,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.59156344158018,
+                  "maxGapMs": 30.080000000001746,
+                  "p95GapMs": 18.720000000001164
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2014.9165839999987,
+          "mainThread": {
+            "maxLagMs": 7.419999999998254,
+            "longTasks": 0
+          },
+          "serverCpuMs": 440.914,
+          "rangeResponseMs": 5.912749999995867,
+          "serverRss": 544063488,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.2399999999979627,
+            "pauseMs": 1.3400000000037835,
+            "measurements": {
+              "wallMs": 1499.199999999997,
+              "mediaUs": 1498680,
+              "waitingMs": 1.1147349709972332e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996531483457863,
+              "maxFrameLagUs": 16031,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 86,
+                  "dropped": 3,
+                  "fps": 57.36392742796169,
+                  "maxGapMs": 33.12000000000262,
+                  "p95GapMs": 20.81999999999971
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2033.607541999998,
+          "mainThread": {
+            "maxLagMs": 9.239999999997963,
+            "longTasks": 0
+          },
+          "serverCpuMs": 32.836,
+          "rangeResponseMs": 5.536916999997629,
+          "serverRss": 536264704,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.5999999999985448,
+            "pauseMs": 1.5800000000017462,
+            "measurements": {
+              "wallMs": 1501.1600000000035,
+              "mediaUs": 1498380,
+              "waitingMs": 1.9800000000974975,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9981480988035896,
+              "maxFrameLagUs": 16470,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 76,
+                  "dropped": 13,
+                  "fps": 50.627514721948245,
+                  "maxGapMs": 33.86000000000058,
+                  "p95GapMs": 32.31999999999971
+                },
+                "B": {
+                  "drawn": 76,
+                  "dropped": 13,
+                  "fps": 50.627514721948245,
+                  "maxGapMs": 34.23999999999796,
+                  "p95GapMs": 32.38000000000466
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 147.96791700000176,
+          "mainThread": {
+            "maxLagMs": 4.940000000002328,
+            "longTasks": 0
+          },
+          "serverCpuMs": 206.008,
+          "rangeResponseMs": 3.623749999998836,
+          "serverRss": 536461312,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 49.935833000003186,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2209.533292,
+          "mainThread": {
+            "maxLagMs": 11.139999999999418,
+            "longTasks": 0
+          },
+          "serverCpuMs": 51.461,
+          "rangeResponseMs": 4.797832999996899,
+          "serverRss": 564363264,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.4400000000023283,
+            "pauseMs": 1.5599999999976717,
+            "measurements": {
+              "wallMs": 1504.9199999999983,
+              "mediaUs": 1504040,
+              "waitingMs": 1.1381295905721345e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.999415251309041,
+              "maxFrameLagUs": 6044,
+              "maxFrameSkewUs": 49,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.803843393668835,
+                  "maxGapMs": 23.099999999998545,
+                  "p95GapMs": 18.31999999999971
+                },
+                "B": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.803843393668835,
+                  "maxGapMs": 23.459999999999127,
+                  "p95GapMs": 18.340000000003783
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2019.5596250000017,
+          "mainThread": {
+            "maxLagMs": 7.3400000000037835,
+            "longTasks": 0
+          },
+          "serverCpuMs": 463.526,
+          "rangeResponseMs": 5.604458000001614,
+          "serverRss": 561217536,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.5800000000017462,
+            "pauseMs": 1.5799999999944703,
+            "measurements": {
+              "wallMs": 1502.8400000000038,
+              "mediaUs": 1502040,
+              "waitingMs": 1.1438006097819198e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.999467674536209,
+              "maxFrameLagUs": 4258,
+              "maxFrameSkewUs": 49,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.886614676212886,
+                  "maxGapMs": 19.660000000003492,
+                  "p95GapMs": 18.340000000003783
+                },
+                "B": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.886614676212886,
+                  "maxGapMs": 19.700000000004366,
+                  "p95GapMs": 18.339999999996508
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2018.2623749999984,
+          "mainThread": {
+            "maxLagMs": 7.799999999995634,
+            "longTasks": 0
+          },
+          "serverCpuMs": 22.256,
+          "rangeResponseMs": 4.664915999994264,
+          "serverRss": 536346624,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.1599999999962165,
+            "pauseMs": 1.2600000000020373,
+            "measurements": {
+              "wallMs": 1504.2999999999956,
+              "mediaUs": 1503840,
+              "waitingMs": 9.488232421972498e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996942099315326,
+              "maxFrameLagUs": 7431,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.828491657249394,
+                  "maxGapMs": 22.360000000000582,
+                  "p95GapMs": 18.80000000000291
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 150.23962500000198,
+          "mainThread": {
+            "maxLagMs": 11.959999999999127,
+            "longTasks": 0
+          },
+          "serverCpuMs": 202.341,
+          "rangeResponseMs": 3.6636250000010477,
+          "serverRss": 536363008,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 49.935833000003186,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2191.786,
+          "mainThread": {
+            "maxLagMs": 7,
+            "longTasks": 0
+          },
+          "serverCpuMs": 47.372,
+          "rangeResponseMs": 6.164124999995693,
+          "serverRss": 564297728,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.0600000000049477,
+            "pauseMs": 1.2799999999988358,
+            "measurements": {
+              "wallMs": 1493.8799999999974,
+              "mediaUs": 1493360,
+              "waitingMs": 1.0448886200720153e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.999651913138942,
+              "maxFrameLagUs": 11711,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.57640506600273,
+                  "maxGapMs": 29.599999999998545,
+                  "p95GapMs": 18.400000000001455
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2015.926625,
+          "mainThread": {
+            "maxLagMs": 6.299999999995634,
+            "longTasks": 0
+          },
+          "serverCpuMs": 319.53,
+          "rangeResponseMs": 5.595625000001746,
+          "serverRss": 556302336,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.2599999999947613,
+            "pauseMs": 1.4000000000014552,
+            "measurements": {
+              "wallMs": 1495.3199999999997,
+              "mediaUs": 1494860,
+              "waitingMs": 1.1409362343783869e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9996923735387745,
+              "maxFrameLagUs": 15104,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.51903271540541,
+                  "maxGapMs": 27.919999999998254,
+                  "p95GapMs": 18.560000000004948
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2029.7810409999947,
+          "mainThread": {
+            "maxLagMs": 7.620000000002619,
+            "longTasks": 0
+          },
+          "serverCpuMs": 80.867,
+          "rangeResponseMs": 5.2363750000004075,
+          "serverRss": 548093952,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.4000000000014552,
+            "pauseMs": 1.4199999999982538,
+            "measurements": {
+              "wallMs": 1512.5599999999977,
+              "mediaUs": 1511780,
+              "waitingMs": 1.219362388837908e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9994843179774702,
+              "maxFrameLagUs": 15538,
+              "maxFrameSkewUs": 49,
+              "tracks": {
+                "A": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.50177183053905,
+                  "maxGapMs": 27.720000000001164,
+                  "p95GapMs": 18.400000000001455
+                },
+                "B": {
+                  "drawn": 90,
+                  "dropped": 0,
+                  "fps": 59.50177183053905,
+                  "maxGapMs": 28.080000000001746,
+                  "p95GapMs": 18.459999999999127
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 131.27966700000252,
+          "mainThread": {
+            "maxLagMs": 12.299999999995634,
+            "longTasks": 0
+          },
+          "serverCpuMs": 187.032,
+          "rangeResponseMs": 3.5789590000058524,
+          "serverRss": 548339712,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 49.935833000003186,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2188.195166999998,
+          "mainThread": {
+            "maxLagMs": 10.659999999996217,
+            "longTasks": 0
+          },
+          "serverCpuMs": 55.067,
+          "rangeResponseMs": 5.853709000002709,
+          "serverRss": 568360960,
+          "analysis": null,
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.4799999999959255,
+            "pauseMs": 1.5200000000040745,
+            "measurements": {
+              "wallMs": 1491.8400000000038,
+              "mediaUs": 1491020,
+              "waitingMs": 1.0274270323407109e-10,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9994503432003407,
+              "maxFrameLagUs": 11024,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.657872157872006,
+                  "maxGapMs": 27.81999999999971,
+                  "p95GapMs": 18.69999999999709
+                },
+                "B": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.657872157872006,
+                  "maxGapMs": 28.159999999996217,
+                  "p95GapMs": 18.700000000004366
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2020.9220829999977,
+          "mainThread": {
+            "maxLagMs": 8.040000000000873,
+            "longTasks": 0
+          },
+          "serverCpuMs": 406.102,
+          "rangeResponseMs": 5.298541999996814,
+          "serverRss": 551452672,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": true,
+            "failures": [],
+            "startupMs": 1.5800000000017462,
+            "pauseMs": 1.6200000000026193,
+            "measurements": {
+              "wallMs": 1491.8400000000038,
+              "mediaUs": 1490980,
+              "waitingMs": 9.43138900311169e-11,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 4,
+                  "bytes": 12441600,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.9994235306735282,
+              "maxFrameLagUs": 12378,
+              "maxFrameSkewUs": 48,
+              "tracks": {
+                "A": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.657872157872006,
+                  "maxGapMs": 25.540000000000873,
+                  "p95GapMs": 18.760000000002037
+                },
+                "B": {
+                  "drawn": 89,
+                  "dropped": 0,
+                  "fps": 59.657872157872006,
+                  "maxGapMs": 25.919999999998254,
+                  "p95GapMs": 18.779999999998836
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        }
+      ]
+    },
+    "chromium": {
+      "environment": {
+        "cpu": "Apple M5",
+        "cores": 10,
+        "ram": 34359738368,
+        "platform": "darwin",
+        "node": "v24.15.0",
+        "engine": "chromium"
+      },
+      "rows": [
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2695.4082909999997,
+          "mainThread": {
+            "maxLagMs": 552.1999999880791,
+            "longTasks": 7
+          },
+          "serverCpuMs": 3.812,
+          "rangeResponseMs": 3.632333000000017,
+          "serverRss": 212877312,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 1.024999976158142,
+            "pauseMs": 0.8050000071525574,
+            "measurements": {
+              "wallMs": 1529.0549999773502,
+              "mediaUs": 599989,
+              "waitingMs": 928.896000016689,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3923920329935075,
+              "maxFrameLagUs": 15090,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 31,
+                  "dropped": 5,
+                  "fps": 20.273960060599,
+                  "maxGapMs": 67.81000000238419,
+                  "p95GapMs": 53.91499999165535
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 234.21658399999978,
+          "mainThread": {
+            "maxLagMs": 43.13499999046326,
+            "longTasks": 1
+          },
+          "serverCpuMs": 199.305,
+          "rangeResponseMs": 2.5282080000006317,
+          "serverRss": 348848128,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 52.70500001311302,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2412.251625,
+          "mainThread": {
+            "maxLagMs": 105.52500000596046,
+            "longTasks": 15
+          },
+          "serverCpuMs": 18.957,
+          "rangeResponseMs": 14.664999999999964,
+          "serverRss": 350027776,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6299999952316284,
+            "pauseMs": 0.7450000047683716,
+            "measurements": {
+              "wallMs": 1517,
+              "mediaUs": 566656,
+              "waitingMs": 950.1439999821182,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3735372445616348,
+              "maxFrameLagUs": 8530,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 4,
+                  "fps": 19.77587343441002,
+                  "maxGapMs": 81.59000000357628,
+                  "p95GapMs": 59.189999997615814
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2166.2016670000003,
+          "mainThread": {
+            "maxLagMs": 103.46500000357628,
+            "longTasks": 10
+          },
+          "serverCpuMs": 20.542,
+          "rangeResponseMs": 3.379832999999053,
+          "serverRss": 350633984,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.7400000095367432,
+            "pauseMs": 0.8549999892711639,
+            "measurements": {
+              "wallMs": 1520.9850000143051,
+              "mediaUs": 549989,
+              "waitingMs": 970.8110000119203,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 3,
+                  "peakBytes": 9417600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.36160054175079126,
+              "maxFrameLagUs": 11120,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 31,
+                  "dropped": 2,
+                  "fps": 20.381529074717,
+                  "maxGapMs": 61.68000000715256,
+                  "p95GapMs": 52.06999999284744
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 3158.6296249999996,
+          "mainThread": {
+            "maxLagMs": 1086.4549999833107,
+            "longTasks": 9
+          },
+          "serverCpuMs": 1.864,
+          "rangeResponseMs": 3.2770830000008573,
+          "serverRss": 357842944,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8600000143051147,
+            "pauseMs": 1.074999988079071,
+            "measurements": {
+              "wallMs": 1487.6450000107288,
+              "mediaUs": 516656,
+              "waitingMs": 970.6390000166889,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 2,
+                  "peakBytes": 6278400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 3,
+                  "bytes": 9331200,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3472979104532828,
+              "maxFrameLagUs": 16665,
+              "maxFrameSkewUs": 16665,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 1,
+                  "fps": 20.166101455510987,
+                  "maxGapMs": 58.08499997854233,
+                  "p95GapMs": 53.66500002145767
+                },
+                "B": {
+                  "drawn": 30,
+                  "dropped": 1,
+                  "fps": 20.166101455510987,
+                  "maxGapMs": 58.2049999833107,
+                  "p95GapMs": 53.650000005960464
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 242.3809999999994,
+          "mainThread": {
+            "maxLagMs": 37.42500001192093,
+            "longTasks": 0
+          },
+          "serverCpuMs": 221.119,
+          "rangeResponseMs": 2.546834000000672,
+          "serverRss": 440287232,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 52.29999998211861,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2388.966666999999,
+          "mainThread": {
+            "maxLagMs": 96.74000000953674,
+            "longTasks": 16
+          },
+          "serverCpuMs": 13.763,
+          "rangeResponseMs": 15.021124999999302,
+          "serverRss": 440434688,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8599999845027924,
+            "pauseMs": 1.074999988079071,
+            "measurements": {
+              "wallMs": 1532.1050000190735,
+              "mediaUs": 566644,
+              "waitingMs": 965.1360000154971,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 3,
+                  "bytes": 9417600,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3698467141566314,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 3,
+                  "fps": 19.580903397369323,
+                  "maxGapMs": 75.45999997854233,
+                  "p95GapMs": 67.63499999046326
+                },
+                "B": {
+                  "drawn": 31,
+                  "dropped": 3,
+                  "fps": 20.23360017728163,
+                  "maxGapMs": 67.83499997854233,
+                  "p95GapMs": 55.08500000834465
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2182.8310840000013,
+          "mainThread": {
+            "maxLagMs": 99.43000000715256,
+            "longTasks": 11
+          },
+          "serverCpuMs": 10.455,
+          "rangeResponseMs": 3.5938749999986612,
+          "serverRss": 440483840,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.9650000035762787,
+            "pauseMs": 1.0250000059604645,
+            "measurements": {
+              "wallMs": 1517.8250000178814,
+              "mediaUs": 566644,
+              "waitingMs": 950.7660000262258,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6278400,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.37332630572913506,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 3,
+                  "fps": 19.76512443769642,
+                  "maxGapMs": 75.54000002145767,
+                  "p95GapMs": 61.974999994039536
+                },
+                "B": {
+                  "drawn": 31,
+                  "dropped": 3,
+                  "fps": 20.42396191895297,
+                  "maxGapMs": 62.125,
+                  "p95GapMs": 53.974999994039536
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2697.7461669999975,
+          "mainThread": {
+            "maxLagMs": 574.5,
+            "longTasks": 20
+          },
+          "serverCpuMs": 2.672,
+          "rangeResponseMs": 3.3429160000014235,
+          "serverRss": 441237504,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6349999904632568,
+            "pauseMs": 0.9350000023841858,
+            "measurements": {
+              "wallMs": 1502.4449999928474,
+              "mediaUs": 533322,
+              "waitingMs": 968.8979999988078,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 3,
+                  "peakBytes": 9331200,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3549693998798884,
+              "maxFrameLagUs": 2610,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 2,
+                  "fps": 19.96745305162107,
+                  "maxGapMs": 54.03000000119209,
+                  "p95GapMs": 53.19999998807907
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 257.6200830000016,
+          "mainThread": {
+            "maxLagMs": 53.30000001192093,
+            "longTasks": 1
+          },
+          "serverCpuMs": 212.99,
+          "rangeResponseMs": 2.5256660000013653,
+          "serverRss": 474857472,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 52.20500001311302,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2427.1477080000004,
+          "mainThread": {
+            "maxLagMs": 101.1550000011921,
+            "longTasks": 22
+          },
+          "serverCpuMs": 14.332,
+          "rangeResponseMs": 15.042875000002823,
+          "serverRss": 474873856,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6450000107288361,
+            "pauseMs": 0.7150000035762787,
+            "measurements": {
+              "wallMs": 1519.8950000107288,
+              "mediaUs": 499989,
+              "waitingMs": 1019.7309999988076,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 1,
+                  "peakBytes": 3110400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.32896285598444014,
+              "maxFrameLagUs": 0,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 0,
+                  "fps": 19.738205599589598,
+                  "maxGapMs": 55.74000000953674,
+                  "p95GapMs": 55.49000000953674
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2134.6773329999996,
+          "mainThread": {
+            "maxLagMs": 112.76500001549721,
+            "longTasks": 23
+          },
+          "serverCpuMs": 10.49,
+          "rangeResponseMs": 3.3565419999977166,
+          "serverRss": 474923008,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.7649999856948853,
+            "pauseMs": 0.7950000166893005,
+            "measurements": {
+              "wallMs": 1482.6350000202656,
+              "mediaUs": 516656,
+              "waitingMs": 965.8390000047682,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 3,
+                  "peakBytes": 9331200,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3484714713958176,
+              "maxFrameLagUs": 9985,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 29,
+                  "dropped": 2,
+                  "fps": 19.559770273603153,
+                  "maxGapMs": 60.54000002145767,
+                  "p95GapMs": 55.145000010728836
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2157.0494579999977,
+          "mainThread": {
+            "maxLagMs": 1096.8149999976158,
+            "longTasks": 18
+          },
+          "serverCpuMs": 6.689,
+          "rangeResponseMs": 2.876625000000786,
+          "serverRss": 475250688,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8499999940395355,
+            "pauseMs": 1.0449999868869781,
+            "measurements": {
+              "wallMs": 1547.669999986887,
+              "mediaUs": 533312,
+              "waitingMs": 1013.9179999976163,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.34459025503144636,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 1,
+                  "fps": 19.383977204607042,
+                  "maxGapMs": 76.33500000834465,
+                  "p95GapMs": 54.30500000715256
+                },
+                "B": {
+                  "drawn": 31,
+                  "dropped": 1,
+                  "fps": 20.030109778093944,
+                  "maxGapMs": 54.32499998807907,
+                  "p95GapMs": 54.24500000476837
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 252.55208299999867,
+          "mainThread": {
+            "maxLagMs": 100.0300000011921,
+            "longTasks": 1
+          },
+          "serverCpuMs": 210.293,
+          "rangeResponseMs": 2.564750000001368,
+          "serverRss": 483229696,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 54.54499998688698,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2415.185957999998,
+          "mainThread": {
+            "maxLagMs": 94.43000000715256,
+            "longTasks": 24
+          },
+          "serverCpuMs": 11.531,
+          "rangeResponseMs": 15.115624999998545,
+          "serverRss": 483393536,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8550000190734863,
+            "pauseMs": 1.0199999809265137,
+            "measurements": {
+              "wallMs": 1552.25,
+              "mediaUs": 516646,
+              "waitingMs": 1035.1940000035768,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3328368497342567,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 30,
+                  "dropped": 0,
+                  "fps": 19.32678370107908,
+                  "maxGapMs": 76.2199999988079,
+                  "p95GapMs": 58.05500000715256
+                },
+                "B": {
+                  "drawn": 30,
+                  "dropped": 1,
+                  "fps": 19.32678370107908,
+                  "maxGapMs": 87.40999999642372,
+                  "p95GapMs": 56.83500000834465
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "local",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2197.2750000000015,
+          "mainThread": {
+            "maxLagMs": 123.37000000476837,
+            "longTasks": 24
+          },
+          "serverCpuMs": 11.029,
+          "rangeResponseMs": 2.3841669999965234,
+          "serverRss": 484704256,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.9350000023841858,
+            "pauseMs": 1.0349999964237213,
+            "measurements": {
+              "wallMs": 1489.5349999964237,
+              "mediaUs": 533312,
+              "waitingMs": 955.8180000083453,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.35803925386196395,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 28,
+                  "dropped": 3,
+                  "fps": 18.797812740262717,
+                  "maxGapMs": 82.27999997138977,
+                  "p95GapMs": 63.70000001788139
+                },
+                "B": {
+                  "drawn": 29,
+                  "dropped": 3,
+                  "fps": 19.4691631952721,
+                  "maxGapMs": 63.84499999880791,
+                  "p95GapMs": 56.19499999284744
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2616.5942919999943,
+          "mainThread": {
+            "maxLagMs": 572.4850000143051,
+            "longTasks": 21
+          },
+          "serverCpuMs": 14.429,
+          "rangeResponseMs": 2.9696659999972326,
+          "serverRss": 487669760,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.679999977350235,
+            "pauseMs": 0.8650000095367432,
+            "measurements": {
+              "wallMs": 1450.4099999964237,
+              "mediaUs": 533322,
+              "waitingMs": 916.9280000274182,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.36770430430107004,
+              "maxFrameLagUs": 16529,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 28,
+                  "dropped": 4,
+                  "fps": 19.304886204638027,
+                  "maxGapMs": 83.38999998569489,
+                  "p95GapMs": 54.814999997615814
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 356.58270800000173,
+          "mainThread": {
+            "maxLagMs": 52.08000001311302,
+            "longTasks": 1
+          },
+          "serverCpuMs": 358.231,
+          "rangeResponseMs": 2.4072919999962323,
+          "serverRss": 514850816,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 56.65137500000128,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2538.1225420000046,
+          "mainThread": {
+            "maxLagMs": 102.56000000238419,
+            "longTasks": 26
+          },
+          "serverCpuMs": 317.285,
+          "rangeResponseMs": 17.580167000000074,
+          "serverRss": 533823488,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6399999856948853,
+            "pauseMs": 0.75,
+            "measurements": {
+              "wallMs": 1605.7899999916553,
+              "mediaUs": 533322,
+              "waitingMs": 1072.2429999976157,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 2,
+                  "peakBytes": 6278400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3321243749199905,
+              "maxFrameLagUs": 4405,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 31,
+                  "dropped": 1,
+                  "fps": 19.305139526439383,
+                  "maxGapMs": 56.894999980926514,
+                  "p95GapMs": 56.79999998211861
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2131.2872080000016,
+          "mainThread": {
+            "maxLagMs": 100.7000000178814,
+            "longTasks": 31
+          },
+          "serverCpuMs": 514.14,
+          "rangeResponseMs": 3.077208000002429,
+          "serverRss": 525320192,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.7899999916553497,
+            "pauseMs": 0.804999977350235,
+            "measurements": {
+              "wallMs": 1473.0999999940395,
+              "mediaUs": 483322,
+              "waitingMs": 989.6230000107289,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 2,
+                  "peakBytes": 6278400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3280985676477874,
+              "maxFrameLagUs": 1800,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 28,
+                  "dropped": 1,
+                  "fps": 19.00753513007487,
+                  "maxGapMs": 58.23499998450279,
+                  "p95GapMs": 57.50999999046326
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 3232.7653340000033,
+          "mainThread": {
+            "maxLagMs": 1117.1450000107288,
+            "longTasks": 25
+          },
+          "serverCpuMs": 15.746,
+          "rangeResponseMs": 3.237165999998979,
+          "serverRss": 518422528,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8799999952316284,
+            "pauseMs": 1.050000011920929,
+            "measurements": {
+              "wallMs": 1528.6650000214577,
+              "mediaUs": 549978,
+              "waitingMs": 978.4170000238423,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6278400,
+                  "peakFrames": 4,
+                  "peakBytes": 12556800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.35977666787182283,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 29,
+                  "dropped": 3,
+                  "fps": 18.970801319839815,
+                  "maxGapMs": 84.23499998450279,
+                  "p95GapMs": 59.31999999284744
+                },
+                "B": {
+                  "drawn": 30,
+                  "dropped": 3,
+                  "fps": 19.62496688259291,
+                  "maxGapMs": 59.514999985694885,
+                  "p95GapMs": 58.13499999046326
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 194.86120800000208,
+          "mainThread": {
+            "maxLagMs": 90.2800000011921,
+            "longTasks": 1
+          },
+          "serverCpuMs": 218.555,
+          "rangeResponseMs": 2.3517920000012964,
+          "serverRss": 518684672,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 50.88041599999997,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2305.623458000002,
+          "mainThread": {
+            "maxLagMs": 100.06499999761581,
+            "longTasks": 30
+          },
+          "serverCpuMs": 59.003,
+          "rangeResponseMs": 16.596624999998312,
+          "serverRss": 521666560,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.9749999940395355,
+            "pauseMs": 1.0899999737739563,
+            "measurements": {
+              "wallMs": 1471.9950000047684,
+              "mediaUs": 483314,
+              "waitingMs": 988.4159999892715,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6278400,
+                  "peakFrames": 2,
+                  "peakBytes": 6278400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3283394304997193,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 27,
+                  "dropped": 1,
+                  "fps": 18.342453608818328,
+                  "maxGapMs": 84.97499999403954,
+                  "p95GapMs": 60.62999999523163
+                },
+                "B": {
+                  "drawn": 28,
+                  "dropped": 1,
+                  "fps": 19.021803742478266,
+                  "maxGapMs": 60.625,
+                  "p95GapMs": 59.810000002384186
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "hardware",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2142.472667000002,
+          "mainThread": {
+            "maxLagMs": 109.5499999821186,
+            "longTasks": 28
+          },
+          "serverCpuMs": 577.611,
+          "rangeResponseMs": 3.202540999998746,
+          "serverRss": 523730944,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 1.0649999976158142,
+            "pauseMs": 1.1599999964237213,
+            "measurements": {
+              "wallMs": 1456.2349999845028,
+              "mediaUs": 466656,
+              "waitingMs": 989.3190000119209,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3139200,
+                  "peakFrames": 2,
+                  "peakBytes": 6278400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 3,
+                  "bytes": 9331200,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.32045377291780935,
+              "maxFrameLagUs": 16665,
+              "maxFrameSkewUs": 16665,
+              "tracks": {
+                "A": {
+                  "drawn": 27,
+                  "dropped": 1,
+                  "fps": 18.540963512267822,
+                  "maxGapMs": 61.00500002503395,
+                  "p95GapMs": 58.79999998211861
+                },
+                "B": {
+                  "drawn": 27,
+                  "dropped": 1,
+                  "fps": 18.540963512267822,
+                  "maxGapMs": 60.979999989271164,
+                  "p95GapMs": 58.929999977350235
+                }
+              }
+            },
+            "actualDecoders": [
+              "webcodecs",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "disabled",
+          "elapsedMs": 2704.942084000002,
+          "mainThread": {
+            "maxLagMs": 576.535000026226,
+            "longTasks": 33
+          },
+          "serverCpuMs": 10.044,
+          "rangeResponseMs": 3.172791999997571,
+          "serverRss": 524058624,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6399999856948853,
+            "pauseMs": 0.9099999964237213,
+            "measurements": {
+              "wallMs": 1545.6850000023842,
+              "mediaUs": 483322,
+              "waitingMs": 1062.1830000250338,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 1,
+                  "peakBytes": 3110400,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3126911369388035,
+              "maxFrameLagUs": 0,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 29,
+                  "dropped": 0,
+                  "fps": 18.761908150726228,
+                  "maxGapMs": 58.48999997973442,
+                  "p95GapMs": 57.95999997854233
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "paused-analysis",
+          "elapsedMs": 191.35949999999866,
+          "mainThread": {
+            "maxLagMs": 90.7049999833107,
+            "longTasks": 1
+          },
+          "serverCpuMs": 222.577,
+          "rangeResponseMs": 2.6280840000035823,
+          "serverRss": 497008640,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 50.88041599999997,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "cached-playback",
+          "elapsedMs": 2324.4503330000007,
+          "mainThread": {
+            "maxLagMs": 99.37999999523163,
+            "longTasks": 33
+          },
+          "serverCpuMs": 59.89,
+          "rangeResponseMs": 17.51954100000148,
+          "serverRss": 524959744,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.6400000154972076,
+            "pauseMs": 0.7349999845027924,
+            "measurements": {
+              "wallMs": 1466.530000001192,
+              "mediaUs": 499989,
+              "waitingMs": 966.3560000023841,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3409333596991494,
+              "maxFrameLagUs": 11816,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 27,
+                  "dropped": 3,
+                  "fps": 18.41080646149622,
+                  "maxGapMs": 64.5450000166893,
+                  "p95GapMs": 58.83500000834465
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 1,
+          "scenario": "background-range",
+          "elapsedMs": 2110.7255000000005,
+          "mainThread": {
+            "maxLagMs": 112.24500000476837,
+            "longTasks": 32
+          },
+          "serverCpuMs": 455.345,
+          "rangeResponseMs": 3.2770830000008573,
+          "serverRss": 525762560,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.7349999845027924,
+            "pauseMs": 0.7950000166893005,
+            "measurements": {
+              "wallMs": 1449.2049999833107,
+              "mediaUs": 483322,
+              "waitingMs": 965.7130000095367,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 3,
+                  "peakBytes": 9331200,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.33350837183529314,
+              "maxFrameLagUs": 6420,
+              "maxFrameSkewUs": 0,
+              "tracks": {
+                "A": {
+                  "drawn": 27,
+                  "dropped": 2,
+                  "fps": 18.630904530629508,
+                  "maxGapMs": 75.5300000011921,
+                  "p95GapMs": 60.43000000715256
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "disabled",
+          "elapsedMs": 2156.739333999998,
+          "mainThread": {
+            "maxLagMs": 1096.5399999916553,
+            "longTasks": 31
+          },
+          "serverCpuMs": 16.211,
+          "rangeResponseMs": 3.8114999999961583,
+          "serverRss": 512819200,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8949999809265137,
+            "pauseMs": 1.1500000059604645,
+            "measurements": {
+              "wallMs": 1533.6649999916553,
+              "mediaUs": 516656,
+              "waitingMs": 1016.754000001192,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 3,
+                  "peakBytes": 9331200,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.336876697324912,
+              "maxFrameLagUs": 16665,
+              "maxFrameSkewUs": 16665,
+              "tracks": {
+                "A": {
+                  "drawn": 29,
+                  "dropped": 2,
+                  "fps": 18.90895338953278,
+                  "maxGapMs": 61.195000022649765,
+                  "p95GapMs": 59.395000010728836
+                },
+                "B": {
+                  "drawn": 29,
+                  "dropped": 2,
+                  "fps": 18.90895338953278,
+                  "maxGapMs": 61.21999999880791,
+                  "p95GapMs": 59.58000001311302
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "paused-analysis",
+          "elapsedMs": 188.48883300001035,
+          "mainThread": {
+            "maxLagMs": 93.21499997377396,
+            "longTasks": 1
+          },
+          "serverCpuMs": 225.513,
+          "rangeResponseMs": 2.5749999999970896,
+          "serverRss": 512622592,
+          "analysis": {
+            "startAu": 0,
+            "packets": 3,
+            "bytesRead": 1072100,
+            "elapsedMs": 50.88041599999997,
+            "recordBytes": 294912,
+            "heapBytes": 67108864
+          },
+          "playback": null
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "cached-playback",
+          "elapsedMs": 2284.199292000005,
+          "mainThread": {
+            "maxLagMs": 96.56499999761581,
+            "longTasks": 33
+          },
+          "serverCpuMs": 54.527,
+          "rangeResponseMs": 15.908374999999069,
+          "serverRss": 534659072,
+          "analysis": null,
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 0.8700000047683716,
+            "pauseMs": 1.0450000166893005,
+            "measurements": {
+              "wallMs": 1500.9350000023842,
+              "mediaUs": 483314,
+              "waitingMs": 1017.3360000059608,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 2,
+                  "peakBytes": 6220800,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.3220086146297023,
+              "maxFrameLagUs": 16666,
+              "maxFrameSkewUs": 16666,
+              "tracks": {
+                "A": {
+                  "drawn": 28,
+                  "dropped": 0,
+                  "fps": 18.655038359392993,
+                  "maxGapMs": 85.2950000166893,
+                  "p95GapMs": 60.55000001192093
+                },
+                "B": {
+                  "drawn": 28,
+                  "dropped": 1,
+                  "fps": 18.655038359392993,
+                  "maxGapMs": 87.58500000834465,
+                  "p95GapMs": 60.485000014305115
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        },
+        {
+          "input": "library",
+          "decoder": "software",
+          "tracks": 2,
+          "scenario": "background-range",
+          "elapsedMs": 2127.788625000001,
+          "mainThread": {
+            "maxLagMs": 101.83499997854233,
+            "longTasks": 32
+          },
+          "serverCpuMs": 497.89,
+          "rangeResponseMs": 3.048540999996476,
+          "serverRss": 512786432,
+          "analysis": {
+            "pictures": 6
+          },
+          "playback": {
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "startupMs": 1.0400000214576721,
+            "pauseMs": 1.2000000178813934,
+            "measurements": {
+              "wallMs": 1472.2899999916553,
+              "mediaUs": 483322,
+              "waitingMs": 988.6980000107287,
+              "buffers": {
+                "A": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 1,
+                  "bytes": 3110400,
+                  "peakFrames": 3,
+                  "peakBytes": 9331200,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                },
+                "B": {
+                  "ended": false,
+                  "suspended": false,
+                  "stopped": false,
+                  "error": null,
+                  "frames": 2,
+                  "bytes": 6220800,
+                  "peakFrames": 4,
+                  "peakBytes": 12441600,
+                  "capacity": 4,
+                  "budgetBytes": 67108864,
+                  "effectiveBudgetBytes": 67108864
+                }
+              },
+              "speed": 0.32827907545574536,
+              "maxFrameLagUs": 16665,
+              "maxFrameSkewUs": 16665,
+              "tracks": {
+                "A": {
+                  "drawn": 27,
+                  "dropped": 2,
+                  "fps": 18.33877836577918,
+                  "maxGapMs": 60.75,
+                  "p95GapMs": 60.645000010728836
+                },
+                "B": {
+                  "drawn": 27,
+                  "dropped": 2,
+                  "fps": 18.33877836577918,
+                  "maxGapMs": 62.400000005960464,
+                  "p95GapMs": 60.74500000476837
+                }
+              }
+            },
+            "actualDecoders": [
+              "ffmpeg-wasm",
+              "ffmpeg-wasm"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "chromiumBaseline": {
+    "environment": {
+      "cpu": "Apple M5",
+      "cores": 10,
+      "ram": 34359738368,
+      "platform": "darwin",
+      "node": "v24.15.0",
+      "engine": "chromium"
+    },
+    "rows": [
+      {
+        "input": "local",
+        "requestedDecoder": "hardware",
+        "tracks": 1,
+        "speed": 0.36941020801983115,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "local",
+        "requestedDecoder": "hardware",
+        "tracks": 2,
+        "speed": 0.34870866080250856,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "local",
+        "requestedDecoder": "software",
+        "tracks": 1,
+        "speed": 0.35716122579824855,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "local",
+        "requestedDecoder": "software",
+        "tracks": 2,
+        "speed": 0.35155842496061224,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "library",
+        "requestedDecoder": "hardware",
+        "tracks": 1,
+        "speed": 0.34865371897844816,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "library",
+        "requestedDecoder": "hardware",
+        "tracks": 2,
+        "speed": 0.3656516000739244,
+        "failures": [
+          "below-realtime",
+          "A:presentation-stall"
+        ]
+      },
+      {
+        "input": "library",
+        "requestedDecoder": "software",
+        "tracks": 1,
+        "speed": 0.35379305908869213,
+        "failures": [
+          "below-realtime"
+        ]
+      },
+      {
+        "input": "library",
+        "requestedDecoder": "software",
+        "tracks": 2,
+        "speed": 0.337351899314067,
+        "failures": [
+          "below-realtime"
+        ]
+      }
+    ]
+  }
+}

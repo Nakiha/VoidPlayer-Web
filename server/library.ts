@@ -55,6 +55,7 @@ export class MediaLibraryIndex {
     this.initialized = !!this.store.db.prepare('SELECT 1 FROM roots WHERE active=1 AND scanned_at IS NOT NULL LIMIT 1').get();
     if (this.initialized) this.refreshedAt = this.now();
   }
+  get analysisDirectory() { return path.join(path.dirname(this.store.file), 'bitstream-analysis'); }
   get ready() { return this.initialized; }
   private now() { return (this.options.now ?? Date.now)(); }
   start() {

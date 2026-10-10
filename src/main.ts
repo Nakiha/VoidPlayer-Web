@@ -1,3 +1,4 @@
+import { installBitstreamControls } from './ui/bitstream-controls.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
@@ -92,6 +93,7 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+installBitstreamControls(session,canvases);
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
 const outputButtons=[...document.querySelectorAll<HTMLButtonElement>('[data-color-target]')];

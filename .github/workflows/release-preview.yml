@@ -31,6 +31,54 @@ jobs:
       - run: node scripts/release-version.mjs
       - run: node --test test/release-pipeline.test.mjs test/test-manifest.test.mjs
 
+  analysis-core:
+    name: Build pinned independent analysis WASM
+    runs-on: ubuntu-24.04
+    needs: identity
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+      - name: Read analysis lock
+        id: analysis-lock
+        run: |
+          node --input-type=module -e '
+          import {readFileSync,appendFileSync} from "node:fs";
+          const lock=JSON.parse(readFileSync("scripts/release-analysis.json","utf8"));
+          for(const [key,value]of Object.entries(lock))appendFileSync(process.env.GITHUB_OUTPUT,`${key}=${value}\n`);
+          '
+      - uses: actions/cache@v4
+        id: analysis-cache
+        with:
+          path: public/vendor/voidplayer-analysis
+          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs') }}
+      - uses: actions/checkout@v4
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        with:
+          repository: ${{ steps.analysis-lock.outputs.repository }}
+          ref: ${{ steps.analysis-lock.outputs.revision }}
+          path: .run/analysis-source
+      - uses: mymindstorm/setup-emsdk@v14
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        with:
+          version: ${{ steps.analysis-lock.outputs.emscripten }}
+          actions-cache-folder: .run/emsdk-analysis-cache
+      - name: Build independent analysis core
+        if: steps.analysis-cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p .run/analysis-source/.build
+          printf '{"type":"commonjs"}\n' > .run/analysis-source/.build/package.json
+          bash .run/analysis-source/scripts/build-analysis.sh
+          node scripts/prepare-analysis-core.mjs .run/analysis-source/dist/voidplayer-analysis
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis/
+          if-no-files-found: error
+          retention-days: 14
+
   decoder:
     name: Build pinned WASM decoder
     outputs:
@@ -150,7 +198,7 @@ jobs:
 
   analysis-browser:
     name: Verify analysis panel (${{ matrix.engine }})
-    needs: decoder
+    needs: [decoder, analysis-core]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -170,6 +218,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - run: npm ci
       - name: Checkout pinned codec QA samples
         uses: actions/checkout@v4
@@ -180,8 +232,13 @@ jobs:
           sparse-checkout: resources/video
           lfs: true
       - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - name: Install analysis fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
+      - run: node scripts/run-tests.mjs --case node-bitstream-analysis-core --case node-bitstream-analysis-server --prepared
       - name: Verify analysis panel on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-browser --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
@@ -193,13 +250,16 @@ jobs:
           path: |
             .run/analysis-reports/${{ matrix.engine }}/
             .run/test-suites/ci-analysis-browser/
+            .run/test-suites/selected/
+            .run/analysis-lifecycle/
+            .run/browser-fixtures/bitstream-analysis-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
 
   paired-https:
     name: Compare trusted HTTPS performance against PR base
     if: github.event_name == 'pull_request'
-    needs: decoder
+    needs: [decoder, analysis-core]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -216,6 +276,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - name: Checkout exact PR base in an isolated directory
         uses: actions/checkout@v4
         with:
@@ -261,7 +325,7 @@ jobs:
 
   playback:
     name: Verify trusted HTTPS, WebCodecs and source UI
-    needs: decoder
+    needs: [decoder, analysis-core]
     runs-on: ubuntu-24.04
     # Full unit/browser/FATE checks can reach 35 minutes before HTTPS starts.
     # Keep individual case deadlines; allow the serial job to finish reporting.
@@ -279,6 +343,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - run: npm ci
       - name: Checkout pinned codec QA samples
         uses: actions/checkout@v4
@@ -400,7 +468,7 @@ jobs:
 
   uncovered-regressions:
     name: Verify browser regressions no other job runs
-    needs: decoder
+    needs: [decoder, analysis-core]
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     strategy:
@@ -420,6 +488,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - run: npm ci
       - name: Checkout pinned codec QA samples
         uses: actions/checkout@v4
@@ -474,7 +546,7 @@ jobs:
 
   hevc-browser:
     name: Verify HEVC timeline (${{ matrix.engine }}, ${{ matrix.input }})
-    needs: decoder
+    needs: [decoder, analysis-core]
     runs-on: ubuntu-24.04
     # Chromium software graphics audits 1200 full-source captures. The case
     # has a separate no-progress watchdog; leave room for its 30-minute budget.
@@ -497,6 +569,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - run: npm ci
       - uses: actions/checkout@v4
         with:
@@ -516,11 +592,12 @@ jobs:
           path: |
             .run/playback-reports/hevc-timeline-browser.json
             .run/test-suites/selected/
+            .run/analysis-lifecycle/
           if-no-files-found: error
 
   native-release:
     name: Standalone ${{ matrix.platform }}
-    needs: decoder
+    needs: [decoder, analysis-core]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -549,6 +626,10 @@ jobs:
         with:
           name: release-core
           path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
       - run: npm ci
       - run: node scripts/run-tests.mjs --case release-core
       - name: Verify configuration and persistent index on Node
@@ -559,6 +640,16 @@ jobs:
       - run: node scripts/run-tests.mjs --prepare
       - run: node scripts/package-release.mjs --target bun-${{ matrix.platform }}
       - run: node scripts/run-tests.mjs --case release
+      - name: Checkout pinned analysis acceptance samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - run: node scripts/run-tests.mjs --case release-analysis
       - name: Install network playback browser
         if: runner.os == 'Linux' || runner.os == 'Windows'
         run: npx playwright install --with-deps chromium

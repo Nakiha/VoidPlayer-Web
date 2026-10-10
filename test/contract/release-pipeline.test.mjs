@@ -55,7 +55,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   // job remains required, including any newly added job not explicitly audited.
   const informational = jobs['paired-https'];
   assert.ok(informational, 'paired performance job exists');
-  assert.deepEqual(informational.needs, ['decoder']);
+  assert.deepEqual(informational.needs, ['decoder', 'analysis-core']);
   assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
   assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
   assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
@@ -148,14 +148,14 @@ test('packaging rejects stale frontend versions, revisions and release modes', (
   assert.throws(() => verifyFrontendIdentity(null, identity), /Frontend build version/);
 });
 
-const locked = { bunVersion: '1.4.2', coreSource: { revision: 'b'.repeat(40) } };
+const locked = { bunVersion: '1.4.2', coreSource: { revision: 'b'.repeat(40) }, analysisSource: {revision:'c'.repeat(40)} };
 async function makeSet(root        , mutate = (_     , __        ) => {}) {
   const directory = path.join(root, 'set'); await mkdir(directory, { recursive: true });
   const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot , 'System32', 'tar.exe') : 'tar';
   for (const platform of releasePlatforms) {
     const name = `voidplayer-0.1.0-${platform}`, folder = path.join(root, name);
     await mkdir(folder, { recursive: true });
-    const manifest = { schema: 'voidplayer-release', version: 2, appVersion: '0.1.0', revision, dirty: false, target: `bun-${platform}`, runtime: { name: 'bun', version: locked.bunVersion }, decoder: { source: locked.coreSource }, files: Object.fromEntries(['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'provenance.json', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING'].map(f => [`dist/vendor/voidplayer-core/${f}`, sha256(f)])) };
+    const manifest = { schema: 'voidplayer-release', version: 2, appVersion: '0.1.0', revision, dirty: false, target: `bun-${platform}`, runtime: { name: 'bun', version: locked.bunVersion }, decoder: { source: locked.coreSource }, analysis: {source:locked.analysisSource}, files: Object.fromEntries(['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'provenance.json', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING'].map(f => [`dist/vendor/voidplayer-core/${f}`, sha256(f)]).concat(['voidplayer-analysis.js','voidplayer-analysis.wasm','manifest.json','provenance.json','LICENSE'].map(f=>[`dist/vendor/voidplayer-analysis/${f}`,sha256(f)]))) };
     mutate(manifest, platform);
     await writeFile(path.join(folder, 'release.json'), JSON.stringify(manifest));
     const archive = path.join(directory, name + '.tar.gz');
@@ -178,6 +178,8 @@ test('release aggregation rejects corrupt, incomplete, duplicate and mixed-revis
       (m     ) => { m.dirty = true; },
       (m     ) => { m.target = 'bun-linux-x64'; },
       (m     ) => { m.decoder.source = {}; },
+      m => {m.analysis.source={};},
+      m => {delete m.files['dist/vendor/voidplayer-analysis/voidplayer-analysis.wasm'];},
       (m     ) => { m.files['dist/vendor/voidplayer-core/voidplayer-core.wasm'] = 'd'.repeat(64); },
     ]) {
       await makeSet(root, (m, platform) => { if (platform === 'windows-x64') mutate(m); });

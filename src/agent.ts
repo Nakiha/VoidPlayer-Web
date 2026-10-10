@@ -29,6 +29,11 @@ export function reviewTools(session: ReviewSession, workspace?: WorkspaceActions
   };
   return [
     ...frameIndexTools(),
+    tool('request_bitstream_range','Explicitly analyze a bounded half-open session-time range (up to 1 second and 32 pictures) independently of playback. Completed chunks are cached incrementally.',{slot:{enum:SLOTS},startUs:{type:'integer'},endUs:{type:'integer'}},['slot','startUs','endUs'],false,p=>session.requestBitstreamRange(slotValue(p.slot),p.startUs as number,p.endUs as number)),
+    tool('get_presented_frame','Read the actual successful presentation commit and verified source picture identity. No pixels or analysis IO.',{slot:{enum:SLOTS}},['slot'],true,p=>session.getPresentedFrame(slotValue(p.slot))),
+    tool('request_bitstream_analysis','Explicitly analyze the paused presented picture in an independent local worker or on its library server. No upload of local files.',{slot:{enum:SLOTS}},['slot'],false,p=>session.requestBitstreamAnalysis(slotValue(p.slot))),
+    tool('cancel_bitstream_analysis','Cancel independent deep analysis without changing playback.',{},[],false,()=>session.cancelBitstreamAnalysis()),
+    tool('get_bitstream_analysis_state','Read independent deep analysis status without starting work.',{},[],true,()=>session.getBitstreamAnalysisState()),
     ...(workspace ? [
       ...(workspace.shareWorkspace ? [tool('share_workspace', 'Save the current writable workspace and copy a link restoring its sources, position and layout. Recipients can edit and save the same workspace; annotations remain live. Requires library sources, no video upload.', {}, [], false, () => workspace.shareWorkspace!())] : []),
       tool('export_workspace', 'Export the current workspace, including absolute media service URLs, source references, marks, time and layout. No upload.', {}, [], true, () => workspace.exportWorkspace()),
