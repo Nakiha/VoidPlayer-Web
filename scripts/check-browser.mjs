@@ -363,31 +363,91 @@ try {
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'reduced motion hides the glow immediately');
   }, { reducedMotion: 'no-preference' });
 
-  await check('brand effects can leave the toolbar and keep the About button usable', async page => {
-    const brand = page.locator('#brand-about');
-    assert.equal(await brand.locator('.brand-ch').count(), 0, 'legacy rolling letters must not run alongside random effects');
-    await page.waitForTimeout(7400);
-    assert.equal(await page.locator('.brand-effect').count(), 0, 'brand must stay still without hover');
+  await check('brand cinema waits for a stationary hover and restores quickly', async page => {
+    const brand = page.locator('#brand-about'), cinema = page.locator('body > .brand-cinema');
+    const chunks = [];
+    page.on('request', request => { if (/brand-cinema.*\.(js|css)/.test(request.url())) chunks.push(request.url()); });
+    await page.waitForTimeout(1300);
     await brand.focus();
-    assert.equal(await page.locator('.brand-effect').count(), 0, 'focus alone must not play an effect');
+    assert.equal(await cinema.count(), 0, 'idle and keyboard focus must stay still');
+    assert.equal(chunks.length, 0, 'cinematic JS and CSS stay off the startup path');
     await brand.hover();
-    const effect = page.locator('body > .brand-effect');
-    await effect.waitFor();
-    assert.equal(await effect.evaluate(el => getComputedStyle(el).position), 'fixed');
-    assert.equal(await effect.evaluate(el => getComputedStyle(el).pointerEvents), 'none');
-    const first = (await effect.getAttribute('class')).split('--')[1];
-    assert.ok(['glitch', 'scramble', 'scatter', 'flip'].includes(first));
+    await page.waitForTimeout(450);
     await page.mouse.move(400, 90);
-    assert.equal(await effect.count(), 0, 'effect stops when the pointer leaves the brand');
-    await brand.hover();
-    assert.notEqual((await effect.getAttribute('class')).split('--')[1], first, 'consecutive effects should differ');
+    await page.waitForTimeout(800);
+    assert.equal(await cinema.count(), 0, 'a passing hover does not start an animation');
+    assert.equal(chunks.length, 0, 'a passing hover does not download the chunk');
+    const box = await brand.boundingBox();
+    await page.mouse.move(box.x + 8, box.y + box.height / 2);
+    await page.waitForTimeout(650);
+    await page.mouse.move(box.x + box.width - 8, box.y + box.height / 2);
+    await page.waitForTimeout(650);
+    assert.equal(await cinema.count(), 0, 'movement inside the title resets the dwell');
+    await cinema.waitFor();
+    assert.equal(await cinema.evaluate(el => getComputedStyle(el).pointerEvents), 'none');
+    assert.equal(await cinema.getAttribute('aria-hidden'), 'true');
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '0');
+    assert.ok(chunks.some(url => url.endsWith('.js')) && chunks.some(url => url.endsWith('.css')), 'both chunks load on demand');
+    await page.mouse.move(400, 90);
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1');
+    await brand.hover(); await cinema.waitFor();
+    await page.keyboard.press('Escape');
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+    await page.waitForTimeout(1300);
+    assert.equal(await cinema.count(), 0, 'Escape does not immediately replay while still hovering');
     await brand.click();
-    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true, 'click opens About directly');
+    assert.equal(await cinema.count(), 0);
   }, { reducedMotion: 'no-preference' });
 
-  await check('brand animation honors reduced motion', async page => {
+  await check('random brand stories keep playing and restore on cancellation', async page => {
+    const brand = page.locator('#brand-about'), cinema = page.locator('.brand-cinema');
+    // Deterministic randomness exercises both production branches without a UI setting.
+    await page.evaluate(() => { Math.random = () => .1; });
+    await brand.click();
+    assert.equal(await page.locator('[data-brand-cinema]').count(), 0, 'About has no animation configuration');
+    await page.locator('#settings-close').click();
+    await page.locator('#settings').waitFor({ state: 'hidden' });
+    for (const style of ['runaway', 'portal']) {
+      await page.evaluate(value => { Math.random = () => value; }, style === 'runaway' ? .1 : .9);
+      await page.mouse.move(400, 90); await brand.hover(); await cinema.waitFor();
+      assert.equal(await cinema.getAttribute('class'), 'brand-cinema brand-cinema--' + style);
+      assert.equal(await cinema.locator('.brand-cinema-letter').count(), 10);
+      assert.equal(await cinema.locator('.brand-cinema-dot').count(), 1);
+      await page.waitForTimeout(2800);
+      const poses = await cinema.locator('.brand-cinema-letter').evaluateAll(elements => elements.map(el => getComputedStyle(el).transform));
+      assert.equal(new Set(poses).size, 10, 'letters move independently');
+      await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'hero');
+      await page.screenshot({ path: path.join(screenshots, 'brand-cinema-' + style + '-' + browserName + '.png') });
+      if (style === 'runaway') {
+        await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'collision');
+        await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'tug');
+        await page.screenshot({ path: path.join(screenshots, 'brand-cinema-tug-' + browserName + '.png') });
+      }
+      await page.waitForFunction(() => Number(document.querySelector('.brand-cinema')?.dataset.lap) >= 1, null, { timeout: 25000 });
+      assert.equal(await cinema.count(), 1, 'continuous hover reuses a single stage');
+      const before = await cinema.locator('.brand-cinema-letter').first().getAttribute('style');
+      await page.waitForTimeout(600);
+      assert.notEqual(await cinema.locator('.brand-cinema-letter').first().getAttribute('style'), before, 'motion continues in the next lap');
+      await page.mouse.move(400, 90); await cinema.waitFor({ state: 'detached', timeout: 700 });
+      assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1', 'cancel restores each variant even after looping');
+    }
+    await brand.hover(); await cinema.waitFor();
+    await page.setViewportSize({ width: 816, height: 786 });
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1');
+    await page.mouse.move(400, 90); await brand.hover(); await cinema.waitFor();
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+  }, { reducedMotion: 'no-preference' });
+
+  await check('brand animation honors reduced motion and keeps About usable', async page => {
     await page.locator('#brand-about').hover();
-    assert.equal(await page.locator('.brand-effect').count(), 0);
+    await page.waitForTimeout(1300);
+    assert.equal(await page.locator('.brand-cinema').count(), 0);
+    await page.locator('#brand-about').click();
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
   });
 
   await check('shortcut help and button tooltips use this platform', async page => {

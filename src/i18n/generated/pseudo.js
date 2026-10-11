@@ -475,6 +475,8 @@ export default {
   "bootstrap.reload": () => "［R~e~l~o~a~d~ ········］",
   "bootstrap.startupFailed": () => "［T~h~e~ p~a~g~e~ f~a~i~l~e~d~ t~o~ l~o~a~d~. R~e~f~r~e~s~h~ a~n~d~ r~e~t~r~y~. ········］",
   "bootstrap.startupTitle": () => "［U~n~a~b~l~e~ t~o~ s~t~a~r~t~ ········］",
+  "brandCinema.detour": () => "［T~a~k~i~n~g~ a~ l~i~t~t~l~e~ d~e~t~o~u~r~. ········］",
+  "brandCinema.everyFrame": () => "［E~v~e~r~y~ f~r~a~m~e~ d~e~s~e~r~v~e~s~ t~o~ b~e~ s~e~e~n~. ········］",
   "colorFlow.approximateBrowserColors": () => "［A~p~p~r~o~x~i~m~a~t~e~ b~r~o~w~s~e~r~ c~o~l~o~r~s~ ········］",
   "colorFlow.browserColor": () => "［B~r~o~w~s~e~r~ c~o~l~o~r~ ········］",
   "colorFlow.browserColorConversion": () => "［B~r~o~w~s~e~r~ c~o~l~o~r~ c~o~n~v~e~r~s~i~o~n~ ········］",

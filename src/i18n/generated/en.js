@@ -475,6 +475,8 @@ export default {
   "bootstrap.reload": () => "Reload",
   "bootstrap.startupFailed": () => "The page failed to load. Refresh and retry.",
   "bootstrap.startupTitle": () => "Unable to start",
+  "brandCinema.detour": () => "Taking a little detour.",
+  "brandCinema.everyFrame": () => "Every frame deserves to be seen.",
   "colorFlow.approximateBrowserColors": () => "Approximate browser colors",
   "colorFlow.browserColor": () => "Browser color",
   "colorFlow.browserColorConversion": () => "Browser color conversion",

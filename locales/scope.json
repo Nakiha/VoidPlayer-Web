@@ -38,6 +38,7 @@
     "src/ui/appearance.ts",
     "src/ui/bitstream-controls.ts",
     "src/ui/bitstream-reasons.ts",
+    "src/ui/brand-cinema.ts",
     "src/ui/brand-effects.ts",
     "src/ui/chart-hover-style.ts",
     "src/ui/checkpoint-history.ts",

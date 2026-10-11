@@ -73,10 +73,10 @@ document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
-$('brand-about').onclick = () => settings.openPane('about', $<HTMLElement>('brand-about'));
 $<HTMLElement>('start-version-about').onclick = () => settings.openPane('about', $<HTMLElement>('start-version-about'));
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
-const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
+const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
+  () => settings.openPane('about', $<HTMLElement>('brand-about')));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
 const {setColorOutput,hdrDisplayAvailable}=await import('./color-output.ts');

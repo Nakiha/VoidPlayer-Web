@@ -3596,6 +3596,20 @@
       "src/bootstrap.ts:44"
     ]
   },
+  "brandCinema.detour": {
+    "source": "出去转一圈。",
+    "params": {},
+    "locations": [
+      "src/ui/brand-cinema.ts:45"
+    ]
+  },
+  "brandCinema.everyFrame": {
+    "source": "每一帧，都值得看见。",
+    "params": {},
+    "locations": [
+      "src/ui/brand-cinema.ts:47"
+    ]
+  },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
     "params": {},
