@@ -1,6 +1,6 @@
 {
  "schema":1,
- "recipe":"blocks-basic-v1",
+ "recipe":"blocks-basic-v2",
  "rows":[
   {"codec":"h264","container":"mp4","inputs":["local-file","library"],"playbackPaths":["webcodecs-packet","wasm-packet"],"features":["blocks","qp-luma8","basic-modes"],"fixture":"h264_9s_1920x1080.mp4","expected":"exact","oracle":"docs/fixtures/bitstream-analysis-answers.json"},
   {"codec":"hevc","container":"mp4","inputs":["local-file","library"],"playbackPaths":["webcodecs-packet","wasm-packet"],"features":["blocks","qp-luma8","basic-modes"],"fixture":"h265_10s_1920x1080.mp4","expected":"exact","oracle":"docs/fixtures/bitstream-analysis-answers.json"},

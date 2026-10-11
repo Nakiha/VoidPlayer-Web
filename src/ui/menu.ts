@@ -7,6 +7,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   selected?: () => HTMLButtonElement | undefined;
   bounds?: () => DOMRect | undefined;
   canOpen?: () => boolean;
+  closeOnSelect?: boolean;
 } = {}) {
   const lifecycle = new AbortController();
   const events = { signal: lifecycle.signal };
@@ -78,7 +79,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   }, events);
   // Close before the action, so a dialog opened by the action keeps its focus.
   menu.addEventListener('click', e => {
-    if ((e.target as Element).closest('button:not(:disabled)')) { close(); button.focus(); }
+    if (options.closeOnSelect !== false && (e.target as Element).closest('button:not(:disabled)')) { close(); button.focus(); }
   }, { ...events, capture: true });
   menu.addEventListener('toggle', () => button.setAttribute('aria-expanded', String(menu.matches(':popover-open'))), events);
   window.addEventListener('resize', () => { close(); clearExit(); }, events);

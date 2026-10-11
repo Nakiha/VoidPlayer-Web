@@ -42,7 +42,10 @@ export async function handleAnalysisRoutes(
     }
     if (request) {
       if (req.method === "GET") {
-        const value = scheduler.status(request[1], owner);
+        const after = url.searchParams.get('after');
+        if (after !== null && !/^(0|[1-9][0-9]{0,6})$/.test(after))
+          throw new AnalysisFailure('invalid-request', 'Invalid stream cursor');
+        const value = after === null ? scheduler.status(request[1], owner) : await scheduler.streamStatus(request[1], owner, Number(after));
         sendJson(
           res,
           value ? 200 : 404,
@@ -89,17 +92,13 @@ export async function handleAnalysisRoutes(
       return true;
     }
     if (media![3] && req.method === "GET") {
-      const release = scheduler.reserveResultRead();
-      if (!release) {
-        sendJson(res, 429, {
-          error: "Analysis result transport busy",
-          reason: new AnalysisFailure(
-            "resource-limit",
-            "Analysis result transport busy",
-          ).info,
-        });
-        return true;
-      }
+      const controller = new AbortController();
+      const abort = () => controller.abort(new AnalysisFailure('cancelled', 'Analysis result consumer disconnected'));
+      res.once('close', abort);
+      let release: () => void;
+      try { release = await scheduler.waitForResultRead(controller.signal); }
+      finally { res.off('close', abort); }
+      if (res.destroyed) { release(); return true; }
       res.once("finish", release);
       res.once("close", release);
 

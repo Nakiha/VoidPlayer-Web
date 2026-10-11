@@ -1,8 +1,9 @@
+import { validateDiagram, validateContainerHeader } from "./diagrams.ts";
 import type { FrameDescription } from "../frame-description.ts";
 import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
 import type { AnalysisReasonCode } from "./failure.ts";
 export const ANALYSIS_SCHEMA = 1;
-export const ANALYSIS_RECIPE = "blocks-basic-v1";
+export const ANALYSIS_RECIPE = "blocks-basic-v2";
 export const ANALYZER_VERSION = "0.1.0";
 export interface SourcePictureKey {
   sourceVersion: string;
@@ -39,7 +40,35 @@ export interface AnalysisBlock {
   qp: number | null;
   mode: "intra" | "inter" | "skip";
 }
+export interface AnalysisGop {
+  /** Half-open AU interval in stable decode order, matching packet index ordinals. */
+  startAu: number;
+  endAu: number;
+  configuration: number;
+  anchor: 'unknown' | 'closed' | 'dependent';
+}
+export interface AnalysisStreamTarget {
+  mode: 'stream';
+  indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
+  sourceVersion: string;
+  firstPtsUs: number;
+  durationUs: number;
+}
+export function validateStream(target: AnalysisStreamTarget) {
+  if (!target || target.mode !== 'stream') throw new AnalysisFailure('invalid-request', 'Invalid stream request');
+  validateTarget({ sourceVersion: target.sourceVersion, sourcePtsUs: target.firstPtsUs, normalizedMediaUs: 0 });
+  if (target.indexIdentity && (target.indexIdentity.kind !== 'ffmpeg' || !/^video:(?:0|[1-9][0-9]{0,2})$/.test(target.indexIdentity.streamKey) ||
+      target.indexIdentity.schemaVersion !== 3 || !/^[a-f0-9]{40}$/.test(target.indexIdentity.indexerBuild)))
+    throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity');
+  if (!Number.isSafeInteger(target.durationUs) || target.durationUs <= 0)
+    throw new AnalysisFailure('invalid-request', 'Invalid stream duration');
+}
 export interface AnalysisResult {
+  containerHeader?: import("./diagrams.ts").ContainerHeader;
+  nalus?: import("./diagrams.ts").NaluRecord[];
+  references?: import("./diagrams.ts").PictureReferences;
+  /** Optional storage grouping; independent of decoder/reference lifetime. */
+  gop?: AnalysisGop;
   schema: 1;
   codec: "h264" | "hevc" | "vvc";
   analyzerVersion: string;
@@ -47,6 +76,8 @@ export interface AnalysisResult {
   recipe: string;
   picture: SourcePictureKey;
   sourcePtsUs: number;
+  /** Source packet DTS; optional for older cached results, never inferred from PTS. */
+  sourceDtsUs?: number | null;
   width: number;
   height: number;
   confidence: "exact" | "partial";
@@ -190,6 +221,17 @@ export function validateResult(result: AnalysisResult): void {
     normalizedMediaUs: 0,
     picture: result.picture,
   });
+  if (result.gop) {
+    const g = result.gop;
+    if (![g.startAu, g.endAu, g.configuration].every(Number.isSafeInteger) ||
+        g.startAu < 0 || g.endAu <= g.startAu || g.endAu > 250000 ||
+        g.configuration !== result.picture.configuration ||
+        result.picture.au < g.startAu || result.picture.au >= g.endAu ||
+        !['unknown', 'closed', 'dependent'].includes(g.anchor)) throw new Error('Invalid analysis GOP');
+  }
+  if (result.containerHeader) validateContainerHeader(result.codec, result.containerHeader);
+  if (result.nalus) validateDiagram(result as import("./diagrams.ts").DiagramPicture);
+  else if (result.references) throw new Error("References require NAL metadata");
   const { width: w, height: h, blocks } = result;
   if (
     ![w, h].every((n) => Number.isInteger(n) && n > 0) ||

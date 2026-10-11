@@ -161,7 +161,7 @@ test('review export keeps original media lineage after replacement and returns a
 test('WebMCP tool contracts validate inputs and use the same session state', async () => {
   const session = new ReviewSession(() => {}); await session.load('A', async () => media().source);
   const tools = reviewTools(session); const get = (name: string) => tools.find(t => t.name === name)!;
-  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'request_bitstream_range', 'get_presented_frame', 'request_bitstream_analysis', 'cancel_bitstream_analysis', 'get_bitstream_analysis_state', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'query_analysis', 'set_review_color_mode', 'set_review_color_output', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
+  assert.deepEqual(tools.map(t => t.name), ['list_frame_indexes', 'clear_frame_indexes', 'request_bitstream_range', 'get_presented_frame', 'request_bitstream_analysis', 'cancel_bitstream_analysis', 'get_bitstream_analysis_state', 'benchmark_review', 'get_review_session', 'get_analysis_capabilities', 'request_bitstream_stream', 'query_bitstream_chart', 'query_bitstream_diagrams', 'query_analysis', 'set_review_color_mode', 'set_review_color_output', 'set_reference_decode', 'seek_review', 'step_review', 'reorder_review_tracks', 'remove_review_track', 'set_review_track_visibility', 'set_review_track_offset', 'pause_review', 'cancel_review_load', 'add_review_mark', 'update_review_mark', 'export_review', 'get_review_logs', 'list_review_log_sessions', 'list_library', 'load_library_item']); assert.equal(get('get_review_session').annotations.readOnlyHint, true);
   assert.equal(get('get_presented_frame').annotations.readOnlyHint,true);
   assert.equal(get('get_bitstream_analysis_state').annotations.readOnlyHint,true);
   assert.equal(get('get_presented_frame').execute({slot:'A'}),null,'fake draw without a presenter commit cannot invent a picture token');
@@ -1240,4 +1240,103 @@ test('HDR output changes share the session transaction, export conditions and ro
     fail=true;await assert.rejects(session.setColorOutput({...getColorOutput(),target:'sdr'}),/HDR replacement failed/);assert.deepEqual(session.getState().colorOutput,after.colorOutput);assert.deepEqual(session.getState().tracks,after.tracks);
     await assert.rejects(session.setColorOutput({...getColorOutput(),hdrWhiteNits:Infinity}));assert.equal(opens,3);
   }finally{await session.dispose();setColorMode(previous);setColorOutput(oldOutput);}
+});
+
+test('removing or replacing a streaming source terminates its independent worker without changing playback', async () => {
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+  const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  try {
+    for (const action of ['remove', 'replace']) {
+      const started = deferred<{ terminated: number }>();
+      class FakeWorker {
+        terminated = 0;
+        constructor() { started.resolve(this); }
+        postMessage() {}
+        terminate() { this.terminated++; }
+      }
+      Object.defineProperty(globalThis, 'Worker', { configurable: true, value: FakeWorker });
+      Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
+      const session = new ReviewSession(() => {}), initial = media('stream-source');
+      initial.source.bitstreamFile = new Blob(['test']);
+      try {
+        await session.load('A', async () => initial.source);
+        const pending = session.requestBitstreamStream('A');
+        const rejected = assert.rejects(pending, (error: any) => error.code === 'source-changed');
+        const worker = await started.promise;
+        assert.equal(session.getBitstreamAnalysisState().state, 'pending');
+        if (action === 'remove') await session.removeTrack('A');
+        else await session.load('A', async () => media('replacement').source);
+        await rejected;
+        assert.equal(worker.terminated, 1);
+        assert.equal(session.getBitstreamAnalysisState().reason?.code, 'source-changed');
+        assert.equal(session.getState().error, null); assert.equal(session.getState().playing, false);
+        assert.ok(session.getState().tracks.every(t => !t.failure));
+      } finally { await session.dispose(); }
+    }
+  } finally {
+    if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
+    if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
+  }
+});
+
+test('analysis admission defaults to two tracks; limits drain, queued cancellation and source replacement remain isolated', async () => {
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+  const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const workers: { terminated: number }[] = [];
+  class FakeWorker {
+    terminated = 0;
+    constructor() { workers.push(this); }
+    postMessage() {}
+    terminate() { this.terminated++; }
+  }
+  Object.defineProperty(globalThis, 'Worker', { configurable: true, value: FakeWorker });
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
+  const session = new ReviewSession(() => {});
+  const started = async (count: number) => {
+    for (let n = 0; workers.length < count; n++) {
+      assert.ok(n < 500, `expected ${count} independent workers`);
+      await new Promise(r => setTimeout(r, 2));
+    }
+  };
+  const request = (slot: 'A'|'B'|'C'|'D') => assert.rejects(session.requestBitstreamStream(slot));
+  try {
+    for (const slot of ['A','B','C','D'] as const) {
+      const item = media(`stream-${slot}`); item.source.bitstreamFile = new Blob(['test']);
+      await session.load(slot, async () => item.source);
+    }
+    assert.equal(session.getBitstreamAnalysisConcurrency(), 2);
+    assert.throws(() => session.setBitstreamAnalysisConcurrency(0));
+    assert.throws(() => session.setBitstreamAnalysisConcurrency(9));
+    session.setBitstreamAnalysisConcurrency(8);
+    assert.equal(session.getBitstreamAnalysisConcurrency(), 8);
+    session.setBitstreamAnalysisConcurrency(2);
+    const a = request('A'), b = request('B'), c = request('C');
+    await started(2);
+    assert.equal(session.getBitstreamAnalysisState('A').state, 'pending');
+    assert.equal(session.getBitstreamAnalysisState('B').state, 'pending');
+    assert.equal(session.getBitstreamAnalysisState('C').queued, true);
+    session.cancelBitstreamAnalysis('C'); await c;
+    assert.equal(workers.length, 2, 'cancelled queued task never constructs a worker');
+    const nextC = request('C');
+    session.cancelBitstreamAnalysis('B'); await b; await started(3);
+    assert.equal(workers[0].terminated, 0, 'cancelling B leaves A alive');
+    assert.equal(session.getBitstreamAnalysisState('A').state, 'pending');
+    assert.equal(session.getBitstreamAnalysisState('C').queued, undefined);
+    session.setBitstreamAnalysisConcurrency(1);
+    const d = request('D');
+    session.cancelBitstreamAnalysis('C'); await nextC;
+    assert.equal(session.getBitstreamAnalysisState('D').queued, true);
+    assert.equal(workers.length, 3, 'lower limit waits for existing A to finish');
+    session.setBitstreamAnalysisConcurrency(2); await started(4);
+    await session.load('A', async () => media('replaced-A').source); await a;
+    assert.equal(workers[0].terminated, 1);
+    assert.equal(workers[3].terminated, 0, 'replacing A leaves D alive');
+    assert.equal(session.getBitstreamAnalysisState('D').state, 'pending');
+    session.cancelBitstreamAnalysis('D'); await d;
+    assert.equal(workers[3].terminated, 1);
+  } finally {
+    await session.dispose();
+    if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
+    if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
+  }
 });

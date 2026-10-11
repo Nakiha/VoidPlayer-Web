@@ -1,4 +1,3 @@
-import { installBitstreamControls } from './ui/bitstream-controls.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
 import { diagnosticMessage } from './ui/diagnostic-message.ts';
@@ -16,6 +15,7 @@ import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
+import { analysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './ui/analysis-concurrency.ts';
 import { installSettings } from './ui/settings.ts';
 import { matchesShortcut, PANEL_SHORTCUTS } from './ui/shortcuts.ts';
 import { installFocusFeedback } from './ui/focus-feedback.ts';
@@ -93,7 +93,8 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
-installBitstreamControls(session,canvases);
+session.setBitstreamAnalysisConcurrency(analysisConcurrency());
+window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
 const outputButtons=[...document.querySelectorAll<HTMLButtonElement>('[data-color-target]')];

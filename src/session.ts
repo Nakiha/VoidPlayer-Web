@@ -1,6 +1,7 @@
 import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
-import type { BitstreamAnalysisService } from './bitstream-analysis/service.ts';
-import { AnalysisFailure } from './bitstream-analysis/failure.ts';
+import type { BitstreamAnalysisService, DeepAnalysisState } from './bitstream-analysis/service.ts';
+import { AnalysisFailure, failureInfo } from './bitstream-analysis/failure.ts';
+import { AnalysisTaskPool } from './bitstream-analysis/task-pool.ts';
 import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
@@ -280,6 +281,53 @@ export class ReviewSession {
   private frameListeners = new Set<(slot:Slot,token:PresentedFrameToken)=>void>();
   private bitstream?: BitstreamAnalysisService;
   private bitstreamLoading?: Promise<BitstreamAnalysisService>;
+  private bitstreamPool = new AnalysisTaskPool();
+  private bitstreamLastSlot?: Slot;
+  private bitstreamTasks = new Map<Slot, { generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState }>();
+  getBitstreamAnalysisConcurrency() { return this.bitstreamPool.concurrency; }
+  setBitstreamAnalysisConcurrency(value: number) { this.bitstreamPool.setConcurrency(value); this.emit(); }
+  private async runBitstreamTask<T>(slot: Slot, signal: AbortSignal | undefined,
+    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>): Promise<T> {
+    slotValue(slot);
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) throw new AnalysisFailure('invalid-request', 'Track unavailable');
+    signal?.throwIfAborted();
+    this.cancelBitstreamAnalysis(slot);
+    const controller = new AbortController();
+    const task: { generation: number; controller?: AbortController; state?: DeepAnalysisState; service?: BitstreamAnalysisService } =
+      { generation: track.sourceGen, controller, state: { ...initial, queued: true } };
+    this.bitstreamTasks.set(slot, task); this.bitstreamLastSlot = slot;
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    const off = this.subscribe(() => {
+      if (this.tracks.get(slot) !== track || track.failure)
+        controller.abort(new AnalysisFailure('source-changed', 'Analysis source changed'));
+    });
+    this.emit();
+    let release: (() => void) | undefined;
+    try {
+      release = await this.bitstreamPool.acquire(controller.signal);
+      if (!this.bitstreamLoading) this.bitstreamLoading = import('./bitstream-analysis/service.ts').then(({ BitstreamAnalysisService }) =>
+        this.bitstream = new BitstreamAnalysisService(() => this.emit()));
+      const root = await this.bitstreamLoading;
+      controller.signal.throwIfAborted();
+      task.service = root.fork(() => this.emit());
+      // From here the track service publishes its own running/terminal state.
+      task.state = undefined;
+      return await run(task.service, controller.signal);
+    } catch (error) {
+      if (!task.service || task.service.state.state === 'idle') {
+        const reason = failureInfo(controller.signal.aborted ? controller.signal.reason : error);
+        task.state = { ...initial, state: reason.kind, reason, message: reason.message };
+        this.emit();
+      }
+      throw error;
+    } finally {
+      off(); signal?.removeEventListener('abort', abort);
+      if (this.bitstreamTasks.get(slot) === task) task.controller = undefined;
+      release?.();
+    }
+  }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
       draw(slot,frame);
@@ -291,11 +339,13 @@ export class ReviewSession {
       for(const listener of this.frameListeners){try{listener(slot,structuredClone(token));}catch{}}
     };
   }
-  async requestBitstreamRange(slot:Slot,startUs:number,endUs:number,signal?:AbortSignal){
-    slotValue(slot);const track=this.tracks.get(slot);if(!track||track.failure)throw new AnalysisFailure('invalid-request','Track unavailable');
-    const sourceVersion=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;
-    if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
-    const service=await this.bitstreamLoading;if(this.tracks.get(slot)!==track)throw new DOMException('Analysis source removed','AbortError');signal?.throwIfAborted();return service.requestRange(track.source,{sourceVersion,firstPtsUs:track.source.info.firstPtsUs,startUs:startUs-track.offsetUs,endUs:endUs-track.offsetUs},signal);
+  async requestBitstreamRange(slot: Slot, startUs: number, endUs: number, signal?: AbortSignal) {
+    const track = this.tracks.get(slot);
+    return this.runBitstreamTask(slot, signal, { state: 'pending' }, (service, taskSignal) => {
+      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      return service.requestRange(track!.source, { sourceVersion, firstPtsUs: track!.source.info.firstPtsUs,
+        startUs: startUs - track!.offsetUs, endUs: endUs - track!.offsetUs }, taskSignal);
+    });
   }
   subscribePresentedFrames(listener:(slot:Slot,token:PresentedFrameToken)=>void){this.frameListeners.add(listener);return()=>this.frameListeners.delete(listener);}
   getPresentedFrame(slot:Slot):PresentedFrameToken|null{
@@ -304,18 +354,79 @@ export class ReviewSession {
     const version=track.source.info.source?`${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}`:track.source.info.id;if(token.picture&&token.picture.sourceVersion!==version)return null;
     return structuredClone({...token,generation:track.sourceGen});
   }
-  getBitstreamAnalysisState(){return this.bitstream?.state??{state:'idle' as const};}
-  cancelBitstreamAnalysis(){this.bitstream?.cancel();}
+  getBitstreamAnalysisState(slot?: Slot): DeepAnalysisState {
+    if (slot !== undefined) slotValue(slot);
+    const task = this.bitstreamTasks.get(slot ?? this.bitstreamLastSlot!);
+    if (!task || (slot !== undefined && task.generation !== this.tracks.get(slot)?.sourceGen)) return { state: 'idle' };
+    return structuredClone(task.state ?? task.service?.state ?? { state: 'idle' });
+  }
+  cancelBitstreamAnalysis(slot?: Slot) {
+    if (slot !== undefined) slotValue(slot);
+    for (const [key, task] of this.bitstreamTasks) {
+      if (slot !== undefined && key !== slot) continue;
+      if (!task.controller) continue;
+      const reason = new AnalysisFailure('cancelled', 'Analysis cancelled');
+      task.controller.abort(reason);
+      if (task.state?.queued) { task.state = { ...task.state, state: 'cancelled', queued: false, reason: reason.info }; this.emit(); }
+      task.service?.cancel();
+    }
+  }
+  async requestBitstreamStream(slot: Slot, signal?: AbortSignal) {
+    const track = this.tracks.get(slot);
+    return this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
+      totalUs: Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0 } }, (service, taskSignal) => {
+      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      return service.requestStream(track!.source, { mode: 'stream', sourceVersion,
+        firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs) }, slot, taskSignal);
+    });
+  }
+  queryBitstreamDiagrams(slot: Slot, startAu?: number, limit = 128) {
+    slotValue(slot);
+    if (startAu !== undefined && (!Number.isSafeInteger(startAu) || startAu < 0) || !Number.isInteger(limit) || limit < 1 || limit > 256) throw new AnalysisFailure('invalid-request', 'Invalid diagram window');
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return null;
+    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
+    const token = this.getPresentedFrame(slot);
+    const data = this.bitstream?.queryDiagrams(version, token?.picture?.au ?? null, token?.sourcePtsUs ?? track.source.info.firstPtsUs, startAu, limit);
+    return data ? { ...data, sourceVersion: version, firstPtsUs: track.source.info.firstPtsUs, offsetUs: track.offsetUs } : null;
+  }
+  bitstreamChartDomain(slot: Slot, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
+    slotValue(slot);
+    if (axis !== 'pts' && axis !== 'dts') throw new AnalysisFailure('invalid-request', 'Invalid chart time base');
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return null;
+    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
+    const bounds = this.bitstream?.chartBounds(version, axis);
+    const shift = track.offsetUs - track.source.info.firstPtsUs;
+    return { start: Math.min(track.offsetUs, bounds ? bounds.start + shift : track.offsetUs), end: Math.max(track.offsetUs + Math.max(1, track.source.info.durationUs), bounds ? bounds.end + shift : -Infinity) };
+  }
+  queryBitstreamChart(slot: Slot, startUs?: number, endUs?: number, pixelWidth = 512, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
+    slotValue(slot);
+    if ((axis !== 'pts' && axis !== 'dts') || !Number.isInteger(pixelWidth) || pixelWidth < 32 || pixelWidth > 4096 ||
+      (startUs !== undefined && !Number.isFinite(startUs)) || (endUs !== undefined && !Number.isFinite(endUs)))
+      throw new AnalysisFailure('invalid-request', 'Invalid diagram viewport');
+    const track = this.tracks.get(slot);
+    if (!track || track.failure) return null;
+    const domain = this.bitstreamChartDomain(slot, axis)!;
+    const start = Math.max(domain.start, startUs ?? domain.start), end = Math.min(domain.end, endUs ?? domain.end);
+    if (end <= start) throw new AnalysisFailure('invalid-request', 'Empty diagram viewport');
+    const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
+    const firstPtsUs = track.source.info.firstPtsUs, offsetUs = track.offsetUs;
+    const data = this.bitstream?.queryChart(version, start + firstPtsUs - offsetUs, end + firstPtsUs - offsetUs, pixelWidth, axis) ??
+      { revision: 0, count: 0, codec: null, containerHeaders: [], types: [], pictures: [], buckets: [], aggregated: false, detailMissing: false };
+    return { ...data, axis, sourceVersion: version, firstPtsUs, offsetUs, domain, startUs: start, endUs: end,
+      anchorAu: this.getPresentedFrame(slot)?.picture?.au ?? null };
+  }
   cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream?.cached(token)??null:null;}
-  async requestBitstreamAnalysis(slot:Slot,signal?:AbortSignal){
-    slotValue(slot);const track=this.tracks.get(slot),token=this.getPresentedFrame(slot);
-    if(!track||track.failure)throw new AnalysisFailure('invalid-request','Track unavailable');
-    if(!this.bitstreamLoading)this.bitstreamLoading=import('./bitstream-analysis/service.ts').then(({BitstreamAnalysisService})=>this.bitstream=new BitstreamAnalysisService(()=>this.emit()));
-    const service=await this.bitstreamLoading;signal?.throwIfAborted();
-    if(!token?.picture)return service.fail(new AnalysisFailure(track.source.info.container !== 'isobmff' ? 'unsupported-container' : 'unsupported-picture-layout','This playback picture cannot be precisely identified'));
-    if(this.playing)return service.fail(new AnalysisFailure('invalid-request','Pause playback before requesting deep analysis'));
-    const current=this.getPresentedFrame(slot);if(!current||current.commit!==token.commit||current.generation!==token.generation)throw new DOMException('Presented frame changed','AbortError');
-    return service.request(track.source,token,signal);
+  async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal) {
+    const track = this.tracks.get(slot), token = this.getPresentedFrame(slot);
+    return this.runBitstreamTask(slot, signal, { state: 'pending' }, (service, taskSignal) => {
+      if (!token?.picture) return service.fail(new AnalysisFailure(track!.source.info.container !== 'isobmff' ? 'unsupported-container' : 'unsupported-picture-layout', 'This playback picture cannot be precisely identified'));
+      if (this.playing) return service.fail(new AnalysisFailure('invalid-request', 'Pause playback before requesting deep analysis'));
+      const current = this.getPresentedFrame(slot);
+      if (!current || current.commit !== token.commit || current.generation !== token.generation) throw new DOMException('Presented frame changed', 'AbortError');
+      return service.request(track!.source, token, taskSignal);
+    });
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => this.listeners.delete(listener); }
   /** Presentation-clock updates, without cloning the full session or rerendering the workbench. */
@@ -1350,7 +1461,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.cancelLoad(); this.pause();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
+    this.cancelLoad(); this.pause();this.cancelBitstreamAnalysis();this.bitstreamTasks.clear();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
     this.releaseReaders('dispose');
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.

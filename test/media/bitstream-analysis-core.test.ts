@@ -203,6 +203,15 @@ for (const fixture of fixtures)
         if (state === 1) {
           const au = module._vpa_ordinal(),
             pts = module._vpa_pts();
+          assert.equal(module._vpa_reference_abi(), 1);
+          assert.equal(module._vpa_refs_invalid(), 0, `reference IDs ${fixture.codec} AU ${au}`);
+          const refCount = module._vpa_ref_count(), refView = new DataView(module.HEAPU8.buffer, module._vpa_refs(), refCount * 8);
+          for (let i = 0; i < refCount; i++) {
+            assert.ok(refView.getUint32(i * 8, true) < au, 'references use earlier source decode ordinals');
+            assert.ok(refView.getUint32(i * 8 + 4, true) <= 1);
+          }
+          if (module._vpa_picture_type() === 2) assert.equal(refCount, 0, 'I pictures have no active reference lists');
+
           assert.equal(
             module._vpa_invalid(),
             0,
@@ -520,4 +529,144 @@ test("corrupted AU is never marked exact and closes its isolated core", async ()
     /random access|picture layout/,
   );
   assert.equal(module._vpa_record_bytes(), 0);
+});
+
+for (const fixture of fixtures) test(`whole ${fixture.codec} stream keeps one decoder across GOP/chunks and drains every AU`, async () => {
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const module = await core(), originalOpen = module._vpa_open, originalFeed = module._vpa_feed;
+  let opens = 0, feeds = 0, pictures = 0;
+  module._vpa_open = (...args: any[]) => { opens++; return originalOpen(...args); };
+  module._vpa_feed = (...args: any[]) => { feeds++; return originalFeed(...args); };
+  const aus = new Set<number>(), groups = new Set<number>(), progress: any[] = [];
+  await analyzeStream(await reader(fixture.file), { mode: 'stream', sourceVersion: fixture.sha256,
+    firstPtsUs: 0, durationUs: 10000000 }, module, 'test', new AbortController().signal,
+    async result => {
+      assert.equal(result.confidence, 'exact'); assert.ok(result.gop);
+      assert.ok(result.nalus?.length); assert.equal(result.references?.state, 'ready');
+      assert.ok(result.references!.edges.every(e => e.au < result.picture.au));
+      assert.ok(result.picture.au >= result.gop.startAu && result.picture.au < result.gop.endAu);
+      assert.equal(aus.has(result.picture.au), false); aus.add(result.picture.au); groups.add(result.gop.startAu);
+      pictures++;
+      if (result.picture.au === fixture.pictureAu)
+        for (const block of fixture.firstBlocks) assert.deepEqual(result.blocks.find(b => b.x === block.x && b.y === block.y), block);
+      if (pictures === 40) {
+        const before = feeds;
+        await new Promise(resolve => setTimeout(resolve, 30));
+        assert.equal(feeds, before, 'consumer pause stops feeding the same decoder');
+      }
+    }, async value => { progress.push(value); });
+  assert.equal(opens, 1, 'no reopen at GOP or chunk boundary');
+  assert.equal(pictures, feeds); assert.ok(pictures >= 600 && groups.size > 1);
+  assert.equal(progress.at(-1).pictures, pictures); assert.equal(progress.at(-1).checkedUs, 10000000);
+  assert.equal(module._vpa_record_bytes(), 0);
+});
+
+test('cancelling a continuous stream preserves completed pictures and closes its reader/core', async () => {
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const controller = new AbortController(), module = await core(), input = await reader(fixtures[0].file);
+  const close = input.close; let closed = 0, pictures = 0;
+  input.close = () => { closed++; close(); };
+  await assert.rejects(analyzeStream(input, { mode: 'stream', sourceVersion: 'cancel-file', firstPtsUs: 0, durationUs: 10000000 },
+    module, 'test', controller.signal, async result => {
+      assert.equal(result.confidence, 'exact'); pictures++;
+      if (pictures === 40) controller.abort();
+    }, async () => {}), { name: 'AbortError' });
+  assert.equal(pictures, 40); assert.equal(closed, 1); assert.equal(module._vpa_record_bytes(), 0);
+});
+
+test('continuous execution reopens only on a verified configuration boundary and retains stable AU identity', async () => {
+  const { inspectPacketPicture } = await import('../../src/packet-picture.ts');
+  const { groupAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const signal = new AbortController().signal;
+  const input = await openAnalysisInput(await reader(fixtures[0].file), signal, true);
+  const groups = groupAnalysisGops(input.packets);
+  const boundary = groups[1].startAu, end = groups[2].startAu;
+  const packet = input.packets[boundary];
+  assert.equal(inspectPacketPicture(input.codec, input.configurations[0], await input.read(packet.offset, packet.size)).closedRandomAccess, true);
+  input.packets.splice(end); input.totalPackets = end;
+  input.configurations[1] = input.configurations[0];
+  for (const p of input.packets) if (p.au >= boundary) p.configuration = 1;
+  const module = await core(), original = module._vpa_open;
+  let opens = 0; module._vpa_open = (...args: any[]) => { opens++; return original(...args); };
+  const results = new Set<number>();
+  await analyzePicture(input.reader, { sourceVersion: 'configuration-fixture', sourcePtsUs: input.packets[0].pts, normalizedMediaUs: 0 },
+    module, 'test', signal, { input, sequential: true,
+      stream: { mode: 'stream', sourceVersion: 'configuration-fixture', firstPtsUs: 0, durationUs: 3000000 },
+      onResult: async result => {
+        assert.equal(result.confidence, 'exact'); assert.ok(result.gop);
+      assert.ok(result.nalus?.length); assert.equal(result.references?.state, 'ready');
+      assert.ok(result.references!.edges.every(e => e.au < result.picture.au));
+        assert.equal(result.picture.configuration, result.picture.au >= boundary ? 1 : 0); results.add(result.picture.au);
+      } });
+  assert.equal(opens, 2); assert.equal(results.size, end); assert.equal(module._vpa_record_bytes(), 0);
+});
+
+for (const fixture of fixtures) test(`incremental ${fixture.codec} index emits results before EOF and resumes the same decoder`, async () => {
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const { groupAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const plan = await openAnalysisInput(await reader(fixture.file), new AbortController().signal, true);
+  const groups = groupAnalysisGops(plan.packets), total = plan.packets.length;
+  const boundary = groups[1].startAu;
+  const expected = plan.packets.map(p => p.pts); plan.close();
+  let allowed = boundary + 1, complete = false, pictures = 0, opens = 0, drains = 0;
+  let waited!: () => void;
+  const waiting = new Promise<void>(resolve => { waited = resolve; });
+  const module = await core(), open = module._vpa_open, drain = module._vpa_drain;
+  module._vpa_open = (...args: any[]) => { opens++; return open(...args); };
+  module._vpa_drain = (...args: any[]) => { drains++; return drain(...args); };
+  const run = analyzeStream(await reader(fixture.file), { mode: 'stream', sourceVersion: fixture.sha256,
+    firstPtsUs: 0, durationUs: 10000000 }, module, 'test', new AbortController().signal,
+    async result => {
+      assert.equal(result.sourcePtsUs, expected[result.picture.au]);
+      assert.equal(result.confidence, 'exact'); pictures++;
+      if (!complete) assert.equal(result.gop!.endAu, boundary, 'only sealed first GOP is published');
+    }, async progress => { if (progress.waitingForIndex && pictures) waited(); },
+    async () => ({ packets: allowed, complete }));
+  await Promise.race([waiting, new Promise((_, reject) => { const t = setTimeout(() => reject(Error('No output before index EOF')), 15000); t.unref(); })]);
+  assert.ok(pictures > 0 && pictures < total); assert.equal(opens, 1); assert.equal(drains, 0, 'catching index never drains the decoder');
+  const before = pictures; await new Promise(resolve => setTimeout(resolve, 40)); assert.equal(pictures, before);
+  allowed = total; complete = true;
+  await run;
+  assert.equal(pictures, total); assert.equal(opens, 1); assert.equal(drains, 1);
+});
+
+test('cancellation while waiting for the first index GOP closes the reader without opening a decoder', async () => {
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const module = await core(), controller = new AbortController(), input = await reader(fixtures[0].file);
+  let closed = 0, opens = 0;
+  const close = input.close, open = module._vpa_open;
+  input.close = () => { closed++; close(); };
+  module._vpa_open = (...args: any[]) => { opens++; return open(...args); };
+  await assert.rejects(analyzeStream(input, { mode: 'stream', sourceVersion: 'waiting-source', firstPtsUs: 0, durationUs: 10000000 },
+    module, 'test', controller.signal, async () => { assert.fail('unindexed packet must not be checked'); },
+    async progress => { if (progress.waitingForIndex) controller.abort(); }, async () => ({ packets: 0, complete: false })), { name: 'AbortError' });
+  assert.equal(closed, 1); assert.equal(opens, 0);
+});
+
+test('native metadata adapter drives the analysis frontier without waiting for its full enumeration', async () => {
+  const { Input, BlobSource, MP4 } = await import('mediabunny');
+  const { NativeAnalysisAdapter } = await import('../../src/analysis/native-adapter.ts');
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const input = new Input({ source: new BlobSource(new Blob([await readFile(resolve('fixtures/video', fixtures[0].file))])), formats: [MP4] });
+  const track = (await input.getPrimaryVideoTrack())!;
+  const adapter = new NativeAnalysisAdapter(track, 'native-stream', 0, 10000000);
+  let release!: () => void, stored = 0, batches = 0, pictures = 0, continued = false;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  // Hold the metadata store ACK after its first bounded batch. The adapter must
+  // expose only committed records and continue its own indexing after release.
+  (adapter as any).client.call = async (type: string, { records }: { records: Float64Array }) => {
+    assert.equal(type, 'append'); if (++batches === 2) await gate;
+    stored += records.length / 3; return stored;
+  };
+  try {
+    await analyzeStream(await reader(fixtures[0].file), { mode: 'stream', sourceVersion: 'native-stream', firstPtsUs: 0, durationUs: 10000000 },
+      await core(), 'test', new AbortController().signal, async () => { pictures++; }, async progress => {
+        if (progress.waitingForIndex && pictures && !continued) {
+          assert.deepEqual(await adapter.bitstreamFrontier(), { packets: 128, complete: false });
+          assert.ok(pictures < 128); continued = true; release();
+        }
+      }, () => adapter.bitstreamFrontier());
+    assert.equal(continued, true); assert.equal(pictures, stored); assert.ok(pictures >= 600);
+    assert.equal((await adapter.bitstreamFrontier()).complete, true);
+  } finally { release(); adapter.close(); input.dispose(); }
 });

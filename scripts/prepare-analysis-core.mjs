@@ -26,6 +26,7 @@ assert.ok(
   manifest.emscripten.includes(` ${lock.emscripten} `),
   "Analysis toolchain version",
 );
+assert.ok(!manifest.dirty || process.env.ANALYSIS_ALLOW_LOCAL_BUILD === '1', 'Unpublished analysis core: use ANALYSIS_ALLOW_LOCAL_BUILD=1 for local preview only');
 await mkdir(target, { recursive: true });
 const hashes = {};
 for (const file of [
@@ -46,6 +47,9 @@ await writeFile(
       schema: "voidplayer-analysis-build",
       version: 1,
       source: lock,
+      buildId: manifest.buildId ?? manifest.revision,
+      dirty: manifest.dirty ?? false,
+      referenceAbi: manifest.referenceAbi ?? null,
       files: hashes,
     },
     null,

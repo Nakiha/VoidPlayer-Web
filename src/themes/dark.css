@@ -9,6 +9,7 @@
   --search-fill: #ffffff0b; --search-solid: #30343b;
   --text: #eceef2; --text-secondary: #b6b6b6; --text-subtle: #a3a3a3;
   --accent: #6aaeff; --accent-on: #102239;
+  --analysis-reference-l0: #ff9b52; --analysis-reference-l1: #63d88d;
   --border: #4e4e4e; --border-soft: #404040; --divider: #ffffff14;
   --viewport-chrome-fill: color-mix(in srgb, var(--surface) 70%, transparent);
   --transport-muted: #dce1e9;

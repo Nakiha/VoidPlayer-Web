@@ -13,7 +13,7 @@ import type { SourceQueryContext } from './adapters.ts';
 import type { AnalysisCapability, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
 
 const MAX_PACKETS = 2_000_000;
-const YIELD_EVERY = 2000;
+const YIELD_EVERY = 128;
 
 export class NativeAnalysisAdapter {
   private packetCount = 0;
@@ -65,6 +65,13 @@ export class NativeAnalysisAdapter {
         if (!this.closed) this.onAdvance?.();
       }
     })();
+  }
+
+  async bitstreamFrontier() {
+    if (this.closed) throw new Error('媒体已释放。');
+    this.ensureStarted();
+    if (this.buildError) throw this.buildError;
+    return { packets: this.packetCount, complete: this.done };
   }
 
   getCapability(): AnalysisCapability {

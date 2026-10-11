@@ -10,6 +10,7 @@ import {
 import {
   analyzePicture,
   analyzeRange,
+  analyzeStream,
 } from "../../src/bitstream-analysis/runner.ts";
 try {
   const file = await open(workerData.filePath, "r");
@@ -63,27 +64,36 @@ try {
         ),
       ),
     });
+    let acknowledgement: { resolve(): void; reject(error: unknown): void } | undefined;
+    let indexReply: { resolve(value: import('../../src/bitstream-analysis/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
+    parentPort!.on('message', message => {
+      if (message.type === 'index') {
+        const reply = indexReply; indexReply = undefined;
+        if (message.error) reply?.reject(restoreFailure(message.reason, message.error)); else reply?.resolve(message.index);
+      } else {
+        const ack = acknowledgement; acknowledgement = undefined;
+        if (message.ok) ack?.resolve(); else ack?.reject(restoreFailure(message.reason, message.error ?? 'Analysis consumer stopped'));
+      }
+    });
     const publish = async (result: unknown) => {
       parentPort!.postMessage({ type: "chunk", result });
       await new Promise<void>((resolve, reject) => {
-        parentPort!.once("message", (message) =>
-          message.ok
-            ? resolve()
-            : reject(
-                restoreFailure(
-                  message.reason,
-                  message.error ?? "Analysis consumer stopped",
-                ),
-              ),
-        );
+        acknowledgement = { resolve, reject };
       });
     };
-    if ("startUs" in workerData.target)
+    if (workerData.target.mode === 'stream')
+      await analyzeStream(reader, workerData.target, core, (manifest.buildId ?? manifest.revision),
+        new AbortController().signal, publish,
+        async progress => parentPort!.postMessage({ type: 'progress', progress }),
+        workerData.externalIndex ? () => new Promise((resolve, reject) => {
+          indexReply = { resolve, reject }; parentPort!.postMessage({ type: 'index' });
+        }) : undefined);
+    else if ("startUs" in workerData.target)
       await analyzeRange(
         reader,
         workerData.target,
         core,
-        manifest.revision,
+        (manifest.buildId ?? manifest.revision),
         new AbortController().signal,
         publish,
       );
@@ -93,7 +103,7 @@ try {
           reader,
           workerData.target,
           core,
-          manifest.revision,
+          (manifest.buildId ?? manifest.revision),
           new AbortController().signal,
         ),
       );

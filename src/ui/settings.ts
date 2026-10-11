@@ -1,6 +1,10 @@
 import { t, onLanguageChange, msg } from '../i18n.ts';
 import { settingsPanes } from './settings-shell.ts';
 import { matchesShortcut } from './shortcuts.ts';
+import { chartHoverStyle, setChartHoverStyle, CHART_HOVER_STYLE_EVENT, type ChartHoverStyle } from './chart-hover-style.ts';
+import { analysisConcurrency, setAnalysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './analysis-concurrency.ts';
+import { MAX_ANALYSIS_CONCURRENCY } from '../bitstream-analysis/task-pool.ts';
+import { installChoiceMenu } from './choice-menu.ts';
 import { installSourceScrollbar } from './source-scrollbar.ts';
 
 /** One persistent window, with independent scrolling panes and one close/focus lifecycle. */
@@ -14,6 +18,22 @@ export function installSettings() {
   const contentChanges = new MutationObserver(scrollbar.update);
   for (const pane of dialog.querySelectorAll('[role=tabpanel]')) contentChanges.observe(pane, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['hidden'] });
   life.signal.addEventListener('abort', () => contentChanges.disconnect(), { once: true });
+  const hoverChoices = () => [
+    { value: 'separate', label: t(msg('settings.chartHoverSeparate', '各图独立显示')) },
+    { value: 'combined', label: t(msg('settings.chartHoverCombined', '合并显示')) },
+  ];
+  const hoverMenu = installChoiceMenu('chart-hover-style', hoverChoices, value => setChartHoverStyle(value as ChartHoverStyle));
+  const syncHoverMenu = () => hoverMenu.sync(chartHoverStyle(), hoverChoices().find(choice => choice.value === chartHoverStyle())!.label, true);
+  window.addEventListener(CHART_HOVER_STYLE_EVENT, syncHoverMenu, { signal: life.signal });
+  onLanguageChange(syncHoverMenu, life.signal); syncHoverMenu();
+  life.signal.addEventListener('abort', () => hoverMenu.dispose(), { once: true });
+  const concurrencyChoices = () => Array.from({ length: MAX_ANALYSIS_CONCURRENCY }, (_, i) => ({ value: String(i + 1),
+    label: t(msg('settings.analysisConcurrencyCount', '{count, plural, other {# 路}}'), { count: i + 1 }) }));
+  const concurrencyMenu = installChoiceMenu('analysis-concurrency', concurrencyChoices, value => setAnalysisConcurrency(Number(value)));
+  const syncConcurrencyMenu = () => concurrencyMenu.sync(String(analysisConcurrency()), concurrencyChoices().find(c => Number(c.value) === analysisConcurrency())!.label, true);
+  window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, syncConcurrencyMenu, { signal: life.signal });
+  onLanguageChange(syncConcurrencyMenu, life.signal); syncConcurrencyMenu();
+  life.signal.addEventListener('abort', () => concurrencyMenu.dispose(), { once: true });
   const narrow = matchMedia('(max-width: 600px)');
   const revealTab = () => {
     if (narrow.matches && dialog.open) dialog.querySelector('[role=tab][aria-selected=true]')!.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });

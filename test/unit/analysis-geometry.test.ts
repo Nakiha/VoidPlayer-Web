@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { groupSamples } from '../../src/analysis/grouping.ts';
-import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth } from '../../src/ui/analysis-geometry.ts';
+import { canLayoutRaw, layoutMergedSamples, layoutMergedBuckets, pickGlyph, valueToY, sampleBarWidth, chartBarWidth, referenceNodeRadius, paddedChartDomain, containerChartColumn, layoutAnalysisCards } from '../../src/ui/analysis-geometry.ts';
 import type { Slot } from '../../src/model.ts';
 
 const mediaBySlot = new Map<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>([
@@ -125,14 +125,14 @@ test('视口边缘组锚点在外、成员在内仍保留且可命中', () => {
   assert.equal(picked.slot, 'B');
 });
 
-test('同一视口柱宽一致：稀疏不撑宽、缺席留空', () => {
+test('同一视口柱宽一致：缺席留空', () => {
   // 样本全部取视口内部，避免边缘裁剪干扰宽度断言（边缘行为由专门用例覆盖）。
   const groups = groupSamples([
     { slot: 'A', samples: refs('A', [200_000, 1_000_000]) },
     { slot: 'B', samples: refs('B', [500_000]) },
   ], 2000);
   const glyphs = layoutMergedSamples(groups, {
-    trackOrder: ['A', 'B'], viewStart: 0, viewEnd: 2_000_000,
+    trackOrder: ['A', 'B'], viewStart: -500_000, viewEnd: 1_500_000,
     gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot,
   });
   const widths = new Set(glyphs.map(g => Math.round(g.rect.width)));
@@ -224,11 +224,11 @@ test('双轨连续缩放跨过旧 7px 容量阈值，柱宽连续、身份与命
     { slot: 'A', samples: refs('A', times) },
     { slot: 'B', samples: refs('B', times.map(t => t + 5000)) },
   ], 2000);
-  let previous = 7;
+  let previous = Number.POSITIVE_INFINITY;
   for (let span = 150_000; span <= 700_000; span += 1000) {
     const start = 1_000_000 - span / 2, end = start + span;
     const width = sampleBarWidth(groups, start, end, 600, 2);
-    assert.ok(width <= previous && previous - width < 0.05, `span=${span}, ${previous}->${width}`);
+    assert.ok(width <= previous, `span=${span}, ${previous}->${width}`);
     assert.equal(canLayoutRaw(groups, start, end, 46, 600, 2), true);
     const glyphs = layoutMergedSamples(groups, { trackOrder: ['A', 'B'], viewStart: start, viewEnd: end,
       gutter: 46, plotW: 600, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot });
@@ -238,5 +238,85 @@ test('双轨连续缩放跨过旧 7px 容量阈值，柱宽连续、身份与命
     assert.equal(pickGlyph(glyphs, sample.rect.x + width / 2, 30)?.slot, 'B');
     previous = width;
   }
-  assert.ok(previous < 2);
+  assert.ok(previous > 9, `cross-track timestamp skew must not shrink bars: ${previous}`);
+});
+
+test('第 0 帧的整柱和参考节点在全片与放大后的左边界完整保留', () => {
+  for (const frameUs of [33_333, 1_000_000]) {
+    const domain = paddedChartDomain({start:0,end:10_000_000},frameUs,600);
+    const groups = groupSamples([{slot:'A',samples:refs('A',[0,frameUs,frameUs*2])}],2000);
+    for (const end of [domain.end, Math.max(frameUs,100_000)]) {
+      const first = layoutMergedSamples(groups,{trackOrder:['A'],viewStart:domain.start,viewEnd:end,gutter:46,plotW:600,
+        rowY:0,rowH:60,yMaxSize:2000,mediaBySlot})[0];
+      assert.ok(Math.abs(first.rect.width-chartBarWidth(frameUs/(end-domain.start)*600)) < 1e-9,'first bar retains its full width');
+      const center = 46 + (0-domain.start)/(end-domain.start)*600;
+      assert.ok(center >= 54,'reference node has at least 8 pixels before time zero');
+    }
+    const zoomed=paddedChartDomain({start:0,end:10_000_000},frameUs,600,1_000_000);
+    assert.ok(-zoomed.start <= Math.max(frameUs/2,1_000_000*8/592)+1,'zooming keeps a half-cell margin instead of magnifying the full-film margin');
+  }
+});
+
+
+test('双轨 30fps 的时间戳偏差不压窄柱体，不丢失身份且命中几何互不覆盖', () => {
+  for (const skew of [0, 500, 5000, -5000]) {
+    const times = Array.from({ length: 30 }, (_, i) => i * 33_333);
+    const groups = groupSamples([{ slot: 'A', samples: refs('A', times) }, { slot: 'B', samples: refs('B', times.map(t => t + skew)) }], 2000);
+    const width = sampleBarWidth(groups, -50_000, 1_050_000, 1100, 2);
+    assert.ok(Math.abs(width - chartBarWidth(33_333 / 2000)) < 1e-6);
+    assert.equal(canLayoutRaw(groups, -50_000, 1_050_000, 46, 1100, 2), true);
+    const glyphs = layoutMergedSamples(groups, { trackOrder: ['A', 'B'], viewStart: -50_000, viewEnd: 1_050_000, gutter: 46, plotW: 1100, rowY: 0, rowH: 60, yMaxSize: 2000, mediaBySlot });
+    assert.equal(glyphs.length, 60);
+    const sorted = [...glyphs].sort((a, b) => a.interactionRect.x - b.interactionRect.x);
+    for (const [i, glyph] of sorted.entries()) {
+      assert.equal(glyph.stackedCount, 1);
+      assert.equal(pickGlyph(glyphs, glyph.rect.x + glyph.rect.width / 2, 30)?.slot, glyph.slot);
+      if (i) assert.ok(glyph.interactionRect.x >= sorted[i-1].interactionRect.x + sorted[i-1].interactionRect.width - 1e-6);
+    }
+  }
+});
+
+
+test('reference nodes grow gently and preserve readable layer spacing', () => {
+  const small = referenceNodeRadius(12), zoomed = referenceNodeRadius(40), enlarged = referenceNodeRadius(80);
+  assert.equal(small, 6, 'overview diameter stays modest at 12px');
+  assert.ok(zoomed > small && enlarged > zoomed, 'zooming gradually enlarges nodes');
+  assert.ok(enlarged < zoomed * 1.5, 'doubling frame spacing does not double circle size');
+  assert.ok(enlarged * 2 < chartBarWidth(80), 'circles remain smaller than wide bars');
+  assert.equal(referenceNodeRadius(400), 12, 'extreme zoom caps the diameter at 24px');
+});
+
+test('configuration cell precedes frame zero and reserves common empty geometry', () => {
+  for (const span of [100_000, 10_000_000, 3_600_000_000]) {
+    const raw = { start:0, end:span }, frameUs = 33_333, width = 800;
+    const column = containerChartColumn(raw, frameUs);
+    const domain = paddedChartDomain({ start:column.timeUs, end:raw.end }, frameUs, width, span);
+    const x = (t: number) => (t-domain.start)/(domain.end-domain.start)*width;
+    const barWidth = chartBarWidth(column.widthUs/(domain.end-domain.start)*width);
+    assert.equal(column.timeUs + column.widthUs, 0);
+    assert.equal(column.widthUs, frameUs, 'configuration uses one ordinary frame cell at every zoom');
+    assert.equal(barWidth, chartBarWidth(frameUs/(domain.end-domain.start)*width), 'configuration and frame bars have equal widths');
+    assert.ok(x(column.timeUs)-barWidth/2 >= 0, 'configuration column is not cropped');
+    assert.ok(Math.abs(x(0)-x(column.timeUs)-frameUs/(domain.end-domain.start)*width) < 1e-6, 'configuration sits one frame interval before zero');
+    assert.equal(domain.end, span, 'media end is unchanged');
+  }
+});
+
+
+test('complete tooltip cards push neighbours and avoid viewport edges', () => {
+  const cards = [{ height: 180, preferredTop: 30 }, { height: 120, preferredTop: 160 }, { height: 70, preferredTop: 360 }];
+  const layout = layoutAnalysisCards(cards, 8, 500);
+  assert.equal(layout.scroll, false);
+  assert.equal(layout.tops[0], 30);
+  assert.equal(layout.tops[1], 218, 'taller first card pushes the next card down');
+  for (const [i, card] of cards.entries()) {
+    assert.ok(layout.tops[i] >= 8 && layout.tops[i] + card.height <= 500);
+    if (i) assert.ok(layout.tops[i] >= layout.tops[i - 1] + cards[i - 1].height + 8);
+  }
+  const edge = layoutAnalysisCards(cards.map(c => ({ ...c, preferredTop: 450 })), 8, 500);
+  assert.equal(edge.tops[2] + cards[2].height, 500, 'bottom edge moves the stack upwards');
+  assert.ok(edge.tops[0] >= 8);
+  const short = layoutAnalysisCards(cards, 8, 260);
+  assert.equal(short.scroll, true);
+  assert.deepEqual(short.tops, [8, 196, 324], 'oversized stack scrolls without cropping any card');
 });

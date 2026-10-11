@@ -6,6 +6,7 @@ import { discussionValue } from './mark-discussion.ts';
 import { regionValue, slotValue, timeUs, SLOTS } from './model.ts';
 import type { FrameInfo, Mark, MediaInfo, Slot } from './model.ts';
 import { BITRATE_WINDOW_OPTIONS_US } from './analysis/statistics.ts';
+import { ANALYSIS_DIAGRAMS, type AnalysisDiagram } from './analysis/types.ts';
 import { Viewport } from './viewport.ts';
 import type { ViewportSnapshot } from './viewport.ts';
 
@@ -20,9 +21,12 @@ export type AnalysisViewState = {
   selected: Slot[];
   /** 状态区帧号顺序：缺省（老工作区）为 pts。 */
   numAxis: 'pts' | 'dts';
+  diagrams?: AnalysisDiagram[];
+  diagram?: 'overview' | 'nalu' | 'nalu-size' | 'nalu-types' | 'references';
 };
 export type WorkspaceLayout = {
   panels: { inspector: boolean; subtracks: boolean; sources: boolean; analysis?: boolean };
+  inspectorTab?: 'info' | 'analysis';
   selected: Slot; dockHeight: number; marksExpanded: boolean;
   filenameWidth?: number; marksWidth?: number;
   sources?: { tab: 'available' | 'recent'; query: string; root: string; directory: string; search: string; all: boolean };
@@ -108,6 +112,10 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
   if (d.layout) {
     const l = object(d.layout), p = object(l.panels);
     layout = { panels: { inspector: boolean(p.inspector), subtracks: boolean(p.subtracks), sources: boolean(p.sources), ...(p.analysis === undefined ? {} : { analysis: boolean(p.analysis) }) }, selected: slotValue(l.selected), dockHeight: timeUs(l.dockHeight), marksExpanded: boolean(l.marksExpanded) };
+    if (l.inspectorTab !== undefined) {
+      if (!['info', 'analysis'].includes(l.inspectorTab)) throw new Error('Invalid inspector tab');
+      layout.inspectorTab = l.inspectorTab;
+    }
     for (const key of ['filenameWidth', 'marksWidth'] as const) if (l[key] !== undefined) layout[key] = timeUs(l[key]);
     if (l.sources !== undefined) {
       const s = object(l.sources);
@@ -126,11 +134,15 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       if (a.axis !== 'pts' && a.axis !== 'dts') throw new Error('分析时间基准无效。');
       if (typeof a.windowUs !== 'number' || !BITRATE_WINDOW_OPTIONS_US.includes(a.windowUs)) throw new Error('分析码率窗口无效。');
       if (a.layoutMode !== 'merged' && a.layoutMode !== 'rows') throw new Error('分析布局无效。');
+      if (a.diagram !== undefined && !['overview', 'nalu', 'nalu-size', 'nalu-types', 'references'].includes(a.diagram)) throw new Error('Invalid analysis diagram');
+      if (a.diagrams !== undefined && (!Array.isArray(a.diagrams) || a.diagrams.length > ANALYSIS_DIAGRAMS.length || a.diagrams.some((value: unknown) => !ANALYSIS_DIAGRAMS.includes(value as AnalysisDiagram)) || new Set(a.diagrams).size !== a.diagrams.length)) throw new Error('Invalid analysis diagrams');
       layout.analysisView = {
         view, axis: a.axis, windowUs: a.windowUs, layoutMode: a.layoutMode,
         showBitrate: boolean(a.showBitrate), showSize: boolean(a.showSize),
         follow: boolean(a.follow), selected: array(a.selected, SLOTS.length).map(slotValue),
         numAxis: a.numAxis === 'dts' ? 'dts' : 'pts',
+        ...(a.diagrams === undefined ? {} : { diagrams: [...a.diagrams] }),
+        ...(a.diagram === undefined ? {} : { diagram: a.diagram }),
       };
     }
   }

@@ -1,11 +1,15 @@
 import { RangeReader } from "../range-reader.ts";
-import { analyzePicture, analyzeRange } from "./runner.ts";
+import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
 import { failureInfo } from "./failure.ts";
+let acknowledgement: (() => void) | undefined;
+let indexReply: ((index: import('./stream.ts').AnalysisIndexFrontier) => void) | undefined;
 const scope = globalThis as unknown as {
   onmessage: (event: MessageEvent) => void;
   postMessage: (data: unknown) => void;
 };
 scope.onmessage = async ({ data }) => {
+  if (data.event === 'index') { const reply = indexReply; indexReply = undefined; reply?.(data.index); return; }
+  if (data.ok) { const ack = acknowledgement; acknowledgement = undefined; ack?.(); return; }
   try {
     const response = await fetch(
       new URL("/vendor/voidplayer-analysis/manifest.json", data.base),
@@ -19,19 +23,23 @@ scope.onmessage = async ({ data }) => {
       ).href
     );
     const core = await module.default();
-    if ("startUs" in data.target) {
-      await analyzeRange(
+    if (data.target.mode === 'stream' || 'startUs' in data.target) {
+      await (data.target.mode === "stream" ? analyzeStream : analyzeRange)(
         new RangeReader({ file: data.file }),
         data.target,
         core,
-        manifest.revision,
+        (manifest.buildId ?? manifest.revision),
         new AbortController().signal,
         async (result) => {
           scope.postMessage({ event: "chunk", result });
           await new Promise<void>((resolve) => {
-            scope.onmessage = () => resolve();
+            acknowledgement = resolve;
           });
         },
+        async (progress: unknown) => scope.postMessage({ event: 'progress', progress }),
+        data.externalIndex ? () => new Promise(resolve => {
+          indexReply = resolve; scope.postMessage({ event: 'index' });
+        }) : undefined,
       );
       scope.postMessage({ ok: true, range: true });
       return;
@@ -40,7 +48,7 @@ scope.onmessage = async ({ data }) => {
       new RangeReader({ file: data.file }),
       data.target,
       core,
-      manifest.revision,
+      (manifest.buildId ?? manifest.revision),
       new AbortController().signal,
     );
     scope.postMessage({ ok: true, result });

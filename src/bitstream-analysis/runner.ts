@@ -1,3 +1,4 @@
+import { readNalus, readContainerHeader } from "./diagrams.ts";
 import {
   ANALYSIS_RECIPE,
   ANALYZER_VERSION,
@@ -5,17 +6,21 @@ import {
   validateResult,
   validateTarget,
   validateRange,
+  validateStream,
 } from "./contract.ts";
 import type {
   AnalysisResult,
   AnalysisTarget,
   AnalysisBlock,
   AnalysisRangeTarget,
+  AnalysisStreamTarget,
 } from "./contract.ts";
 import { inspectPacketPicture } from "../packet-picture.ts";
 import { openAnalysisInput } from "./input.ts";
 import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, coreFailure } from "./failure.ts";
+import { groupAnalysisGops, gopForAu } from './stream.ts';
+import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
 export async function analyzePicture(
   reader: AnalysisReader,
   target: AnalysisTarget,
@@ -27,35 +32,54 @@ export async function analyzePicture(
     sequential?: boolean;
     endSourcePtsUs?: number;
     onResult?: (result: AnalysisResult) => Promise<void>;
+    stream?: AnalysisStreamTarget;
+    onProgress?: (progress: StreamProgress) => Promise<void>;
   } = {},
 ): Promise<AnalysisResult> {
   validateTarget(target);
-  if (core._vpa_abi() !== 1) throw new Error("Analysis ABI mismatch");
   const started = performance.now(),
-    input = options.input ?? (await openAnalysisInput(reader, signal));
+    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream));
   let opened = false;
   try {
+    if (core._vpa_abi() !== 1) throw new Error("Analysis ABI mismatch");
     const plan = await input.plan(target);
     if (options.sequential) plan.start = 0;
-    const description = input.configurations[plan.target.configuration];
-    let pointer = core._malloc(description.length);
-    if (!pointer)
-      throw new AnalysisFailure(
-        "resource-limit",
-        "Analysis heap budget exceeded",
-      );
-    try {
-      core.HEAPU8.set(description, pointer);
-      const ret = core._vpa_open(
-        { h264: 1, hevc: 2, vvc: 3 }[input.codec],
-        pointer,
-        description.length,
-      );
-      if (ret < 0) throw coreFailure(ret, "Analysis open failed");
-      opened = true;
-    } finally {
-      core._free(pointer);
-    }
+    let groups = options.stream ? groupAnalysisGops(input.packets.slice(0, input.sealedEnd)) : [];
+    const extend = async (cursor: number) => {
+      if (!input.ensure || cursor < input.sealedEnd) return;
+      const previousEnd = input.sealedEnd;
+      await input.ensure(cursor);
+      groups.push(...groupAnalysisGops(input.packets.slice(previousEnd, input.sealedEnd)));
+    };
+    const seen = options.stream ? new Uint8Array(input.totalPackets) : undefined;
+    if (options.stream && new Set(input.packets.map(p => p.pts)).size !== input.packets.length)
+      throw new AnalysisFailure('ambiguous-picture-identity', 'Duplicate picture timestamps');
+    let configuration = plan.target.configuration;
+    let description = input.configurations[configuration];
+    const containerHeaders = new Map<number, ReturnType<typeof readContainerHeader>>();
+    let pointer = 0;
+    const open = () => {
+      if (!containerHeaders.has(configuration)) containerHeaders.set(configuration, readContainerHeader(input.codec, description));
+      pointer = core._malloc(description.length);
+      if (!pointer)
+        throw new AnalysisFailure(
+          "resource-limit",
+          "Analysis heap budget exceeded",
+        );
+      try {
+        core.HEAPU8.set(description, pointer);
+        const ret = core._vpa_open(
+          { h264: 1, hevc: 2, vvc: 3 }[input.codec],
+          pointer,
+          description.length,
+        );
+        if (ret < 0) throw coreFailure(ret, "Analysis open failed");
+        opened = true;
+      } finally {
+        core._free(pointer);
+      }
+    };
+    open();
     const desired = new Set(
       input.packets
         .filter((p) =>
@@ -65,13 +89,13 @@ export async function analyzePicture(
         )
         .map((p) => p.au),
     );
-    if (!desired.size || desired.size > 32)
+    if (!options.stream && (!desired.size || desired.size > 32))
       throw new AnalysisFailure(
         "resource-limit",
         "Analysis range result count budget exceeded",
       );
     if (
-      [...desired].some(
+      !options.stream && [...desired].some(
         (au) => input.packets[au].configuration !== plan.target.configuration,
       )
     )
@@ -81,7 +105,19 @@ export async function analyzePicture(
       );
     let count = 0,
       packetBytes = 0,
-      drained = false;
+      drained = false,
+      sinceOutputPackets = 0,
+      sinceOutputBytes = 0,
+      outputPictures = 0;
+    const nalus = new Map<number, import("./diagrams.ts").NaluRecord[]>();
+    let last: AnalysisResult | undefined;
+    const progress = async (complete = false) => {
+      if (!options.stream) return;
+      await options.onProgress?.({ pictures: outputPictures, totalPictures: input.totalPackets, indexComplete: input.indexComplete, waitingForIndex: false,
+        checkedUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : Math.min(options.stream.durationUs - 1, Math.floor(options.stream.durationUs * outputPictures / input.totalPackets)),
+        totalUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : options.stream.durationUs, gopStartAu: last?.gop?.startAu });
+    };
+    await progress();
     const take = (): AnalysisResult | null => {
       const au = core._vpa_ordinal(),
         n = core._vpa_count(),
@@ -98,7 +134,9 @@ export async function analyzePicture(
           "Analysis output budget exceeded",
         );
       let result: AnalysisResult | null = null;
-      if (desired.has(au)) {
+      if (options.stream || desired.has(au)) {
+        if (!Number.isSafeInteger(au) || au < 0 || au >= input.packets.length || seen?.[au])
+          throw new Error('Invalid or duplicate analyzer AU');
         const selected = input.packets[au];
         const invalid = core._vpa_invalid() !== 0,
           depth = core._vpa_depth(),
@@ -130,12 +168,25 @@ export async function analyzePicture(
           }
         result = {
           schema: 1,
+          nalus: nalus.get(au),
+          containerHeader: containerHeaders.get(selected.configuration),
+          ...(core._vpa_reference_abi?.() === 1 ? { references: (() => {
+            const count = core._vpa_ref_count(), ptr = core._vpa_refs();
+            if (!Number.isInteger(count) || count < 0 || count > 64 || ptr < 0 || ptr + count * 8 > core.HEAPU8.length) throw new Error('Invalid reference output');
+            const invalidRefs = core._vpa_refs_invalid() || invalid;
+            const view = new DataView(core.HEAPU8.buffer, ptr, count * 8);
+            return { kind: 'active-lists' as const, state: invalidRefs ? 'unsupported' as const : 'ready' as const,
+              poc: core._vpa_poc(), frameType: (['B', 'P', 'I'] as const)[core._vpa_picture_type()],
+              edges: invalidRefs ? [] : Array.from({ length: count }, (_, i) => ({ au: view.getUint32(i * 8, true), list: view.getUint32(i * 8 + 4, true) as 0 | 1 })) };
+          })() } : {}),
+          ...(options.stream ? { gop: { ...gopForAu(groups, au) } } : {}),
           codec: input.codec,
           analyzerVersion: ANALYZER_VERSION,
           buildId,
           recipe: ANALYSIS_RECIPE,
           picture: input.picture(selected, target.sourceVersion),
           sourcePtsUs: core._vpa_pts(),
+          sourceDtsUs: selected.dts,
           width,
           height,
           confidence: invalid ? "partial" : "exact",
@@ -167,6 +218,7 @@ export async function analyzePicture(
             heapBytes: core.HEAPU8.length,
           },
         };
+        nalus.delete(au);
         if (result.sourcePtsUs !== selected.pts)
           throw new Error("Analyzer output timestamp mismatch");
         try {
@@ -205,26 +257,52 @@ export async function analyzePicture(
       if (ret === 1) {
         const result = take();
         if (result) {
+          if (seen) seen[result.picture.au] = 1;
+          outputPictures++;
+          last = result;
           await options.onResult?.(result);
-          desired.delete(result.picture.au);
-          if (!desired.size) return result;
+          signal.throwIfAborted();
+          await progress();
+          if (!options.stream) {
+            desired.delete(result.picture.au);
+            if (!desired.size) return result;
+          }
         }
+        sinceOutputPackets = 0; sinceOutputBytes = 0;
         continue;
       }
       if (ret !== 0 && ret !== 2)
         throw coreFailure(ret, "Analysis decoder failed");
-      if (ret === 2)
+      if (ret === 2) {
+        if (options.stream && drained && cursor < input.packets.length && input.packets[cursor].configuration !== configuration) {
+          // Reopen only for an actual configuration change, never at a result/GOP boundary.
+          const packet = input.packets[cursor];
+          const bytes = await input.read(packet.offset, packet.size);
+          const nextDescription = input.configurations[packet.configuration];
+          if (!inspectPacketPicture(input.codec, nextDescription, bytes).closedRandomAccess)
+            throw new AnalysisFailure('no-safe-anchor-within-budget', 'Configuration change has no closed anchor');
+          core._vpa_close(); opened = false;
+          configuration = packet.configuration; description = nextDescription;
+          open(); drained = false; sinceOutputPackets = 0; sinceOutputBytes = 0;
+          continue;
+        }
+        if (options.stream && last && input.indexComplete && outputPictures === input.totalPackets) {
+          await progress(true); return last;
+        }
         throw new AnalysisFailure(
           "incomplete-reference-state",
           "Target picture was not output",
         );
-      if (count >= BUDGET.packets || packetBytes >= BUDGET.inputBytes)
+      }
+      if ((options.stream ? sinceOutputPackets : count) >= BUDGET.packets ||
+          (options.stream ? sinceOutputBytes : packetBytes) >= BUDGET.inputBytes)
         throw new AnalysisFailure(
           "resource-limit",
           "Analysis preroll budget exceeded",
         );
+      if (options.stream) await extend(cursor);
       const packet = input.packets[cursor];
-      if (!packet || packet.configuration !== plan.target.configuration) {
+      if (!packet || packet.configuration !== configuration) {
         if (drained)
           throw new AnalysisFailure(
             "incomplete-reference-state",
@@ -237,7 +315,7 @@ export async function analyzePicture(
       }
       if (
         packet.size > BUDGET.packetBytes ||
-        packetBytes + packet.size > BUDGET.inputBytes
+        (options.stream ? sinceOutputBytes : packetBytes) + packet.size > BUDGET.inputBytes
       )
         throw new AnalysisFailure(
           "resource-limit",
@@ -245,11 +323,16 @@ export async function analyzePicture(
         );
       const bytes = await input.read(packet.offset, packet.size),
         evidence = inspectPacketPicture(input.codec, description, bytes);
+      if (options.stream || desired.has(packet.au)) nalus.set(packet.au, readNalus(input.codec, description, bytes));
       if (!evidence.singlePicture)
         throw new AnalysisFailure(
           "unsupported-picture-layout",
           `Unsupported picture layout: ${evidence.reason}`,
         );
+      if (options.stream) {
+        const group = gopForAu(groups, packet.au);
+        if (packet.au === group.startAu) group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
+      }
       pointer = core._malloc(bytes.length);
       if (!pointer)
         throw new AnalysisFailure(
@@ -270,8 +353,8 @@ export async function analyzePicture(
       } finally {
         core._free(pointer);
       }
-      count++;
-      packetBytes += packet.size;
+      count++; sinceOutputPackets++;
+      packetBytes += packet.size; sinceOutputBytes += packet.size;
       cursor++;
       // Cooperative cancel/checkpoint outside synchronous WASM; hard cancellation
       // terminates the isolated worker. No producer advances while take is pending.
@@ -332,4 +415,23 @@ export async function analyzeRange(
     signal,
     { input, endSourcePtsUs: target.firstPtsUs + target.endUs, onResult },
   );
+}
+
+/** From-head continuous execution. Picture chunks are published immediately,
+ * grouped by stable AU/GOP metadata; no decoder reset at storage boundaries. */
+export async function analyzeStream(
+  reader: AnalysisReader, target: AnalysisStreamTarget, core: any, buildId: string,
+  signal: AbortSignal, onResult: (result: AnalysisResult) => Promise<void>,
+  onProgress: (progress: StreamProgress) => Promise<void>,
+  frontier?: () => Promise<AnalysisIndexFrontier>,
+) {
+  validateStream(target);
+  let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
+  const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
+  const input = await openAnalysisInput(reader, signal, true, { frontier,
+    waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
+  const first = input.packets[0];
+  return analyzePicture(reader, { sourceVersion: target.sourceVersion,
+    sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) },
+    core, buildId, signal, { input, sequential: true, stream: target, onResult, onProgress: report });
 }

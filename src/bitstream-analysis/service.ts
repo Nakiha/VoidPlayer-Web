@@ -1,3 +1,4 @@
+import { DiagramStore } from "./diagrams.ts";
 import { AnalysisCache } from "./cache.ts";
 import {
   BUDGET,
@@ -5,18 +6,24 @@ import {
   validateResult,
   validateTarget,
   validateRange,
+  validateStream,
 } from "./contract.ts";
 import type {
   AnalysisResult,
   AnalysisTarget,
   AnalysisRangeTarget,
+  AnalysisStreamTarget,
   PresentedFrameToken,
 } from "./contract.ts";
 import type { MediaSource } from "../media.ts";
 import { referenceVersion } from "../media-reference.ts";
 import { AnalysisFailure, failureInfo, restoreFailure } from "./failure.ts";
 import type { AnalysisFailureInfo } from "./failure.ts";
+import type { StreamProgress } from './stream.ts';
+import type { Slot } from '../model.ts';
 export type DeepAnalysisState = {
+  stream?: StreamProgress & { slot: Slot };
+  queued?: boolean;
   state:
     | "idle"
     | "pending"
@@ -31,23 +38,32 @@ export type DeepAnalysisState = {
 };
 export class BitstreamAnalysisService {
   private cache = new AnalysisCache();
+  private diagrams = new DiagramStore();
+  queryDiagrams(sourceVersion: string, au: number | null, sourcePtsUs: number, startAu?: number, limit?: number) { return this.diagrams.query(sourceVersion, au, sourcePtsUs, startAu, limit); }
+  queryChart(sourceVersion: string, startUs: number, endUs: number, pixelWidth: number, axis: import('../analysis/types.ts').AnalysisAxis = 'pts') { return this.diagrams.queryChart(sourceVersion, startUs, endUs, pixelWidth, axis); }
+  chartBounds(sourceVersion: string, axis: import('../analysis/types.ts').AnalysisAxis) { return this.diagrams.chartBounds(sourceVersion, axis); }
   private cancelActive?: () => void;
   private sequence = 0;
   state: DeepAnalysisState = { state: "idle" };
   private changed: () => void;
-  constructor(changed: () => void) {
+  constructor(changed: () => void, stores?: { cache: AnalysisCache; diagrams: DiagramStore }) {
     this.changed = changed;
+    if (stores) { this.cache = stores.cache; this.diagrams = stores.diagrams; }
+  }
+  /** Each track owns its task state; all tracks retain one bounded session cache. */
+  fork(changed: () => void) {
+    return new BitstreamAnalysisService(changed, { cache: this.cache, diagrams: this.diagrams });
   }
   cancel() {
     ++this.sequence;
     this.cancelActive?.();
     this.cancelActive = undefined;
-    this.state = { state: "cancelled" };
+    this.state = { state: "cancelled", ...(this.state.stream ? { stream: this.state.stream } : {}) };
     this.changed();
   }
   dispose() {
     this.cancel();
-    this.cache.clear();
+    this.cache.clear(); this.diagrams.clear();
   }
   fail(error: AnalysisFailure): never {
     this.cancel();
@@ -120,7 +136,7 @@ export class BitstreamAnalysisService {
         result.sourcePtsUs !== token.sourcePtsUs
       )
         throw new Error("Analysis result identity mismatch");
-      this.cache.put(result);
+      this.cache.put(result); this.diagrams.put(result);
       if (seq === this.sequence) {
         this.state = {
           state: result.confidence === "exact" ? "ready" : "unsupported",
@@ -184,8 +200,9 @@ export class BitstreamAnalysisService {
         result.sourcePtsUs >= target.firstPtsUs + target.endUs
       )
         throw new Error("Analysis range identity mismatch");
-      this.cache.put(result);
+      this.cache.put(result); this.diagrams.put(result);
       pictures++;
+      this.changed();
       if (result.confidence !== "exact")
         unsupported = new AnalysisFailure(
           result.reasonCodes?.[0] ?? "incomplete-reference-state",
@@ -233,25 +250,83 @@ export class BitstreamAnalysisService {
       if (seq === this.sequence) this.cancelActive = undefined;
     }
   }
+  async requestStream(source: MediaSource, target: AnalysisStreamTarget, slot: Slot, signal?: AbortSignal) {
+    target = { ...target, ...(source.bitstreamIndexIdentity ? { indexIdentity: source.bitstreamIndexIdentity } : {}) };
+    try { validateStream(target); } catch (error) { return this.fail(restoreFailure(failureInfo(error))); }
+    signal?.throwIfAborted();
+    this.cancel();
+    const seq = ++this.sequence, controller = new AbortController();
+    const abort = () => controller.abort(signal?.reason);
+    signal?.addEventListener('abort', abort, { once: true });
+    if (signal?.aborted) abort();
+    this.cancelActive = () => controller.abort();
+    let progress: StreamProgress = { checkedUs: 0, totalUs: target.durationUs, pictures: 0, totalPictures: 0 };
+    const update = () => {
+      controller.signal.throwIfAborted();
+      if (seq !== this.sequence) throw new DOMException('Superseded analysis', 'AbortError');
+      this.state = { state: 'pending', stream: { slot, ...progress } }; this.changed();
+    };
+    update();
+    let consumed = 0;
+    const consume = (result: AnalysisResult) => {
+      controller.signal.throwIfAborted(); validateResult(result);
+      if (seq !== this.sequence || result.picture.sourceVersion !== target.sourceVersion || !result.gop)
+        throw new Error('Stream result identity mismatch');
+      if (result.confidence !== 'exact') throw new AnalysisFailure(result.reasonCodes?.[0] ?? 'incomplete-reference-state', result.reasons.join('; '));
+      this.cache.put(result); this.diagrams.put(result); consumed++;
+      progress = { ...progress, pictures: consumed, gopStartAu: result.gop.startAu }; update();
+    };
+    const onProgress = (next: StreamProgress) => {
+      if (!next || typeof next.indexComplete !== 'boolean' || (next.waitingForIndex !== undefined && typeof next.waitingForIndex !== 'boolean') || ![next.pictures, next.totalPictures, next.checkedUs, next.totalUs].every(Number.isSafeInteger) ||
+          next.totalPictures < 0 || next.totalPictures > 250000 || next.pictures < 0 || next.pictures > next.totalPictures ||
+          next.totalUs <= 0 || next.checkedUs < 0 || next.checkedUs > next.totalUs)
+        throw new Error('Invalid stream progress');
+      // Remote producer may be ahead; displayed coverage counts consumed chunks.
+      progress = { ...next, pictures: consumed, checkedUs: next.totalPictures ? Math.min(next.totalUs - 1, Math.floor(next.totalUs * consumed / next.totalPictures)) : 0 }; update();
+    };
+    try {
+      if (source.info.source) await this.remoteRange(source, target, controller.signal, consume, onProgress);
+      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source));
+      else throw new AnalysisFailure('invalid-request', 'No stream input');
+      controller.signal.throwIfAborted();
+      if (!consumed || consumed !== progress.totalPictures || !progress.indexComplete) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete stream coverage');
+      progress = { ...progress, checkedUs: progress.totalUs, indexComplete: true, waitingForIndex: false };
+      if (seq === this.sequence) { this.state = { state: 'ready', stream: { slot, ...progress } }; this.changed(); }
+      return progress;
+    } catch (error) {
+      if (seq === this.sequence) {
+        const reason = failureInfo(controller.signal.aborted ? controller.signal.reason ?? new AnalysisFailure('cancelled', 'Analysis cancelled') : error);
+        this.state = { state: reason.kind, reason, message: reason.message, stream: { slot, ...progress } }; this.changed();
+      }
+      throw error;
+    } finally {
+      signal?.removeEventListener('abort', abort);
+      if (seq === this.sequence) this.cancelActive = undefined;
+    }
+  }
   private localRange(
     file: Blob,
-    target: AnalysisRangeTarget,
+    target: AnalysisRangeTarget | AnalysisStreamTarget,
     signal: AbortSignal,
     consume: (result: AnalysisResult) => void,
+    onProgress?: (progress: StreamProgress) => void,
+    frontier?: () => Promise<import('./stream.ts').AnalysisIndexFrontier>,
   ): Promise<void> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
       type: "module",
     });
     return new Promise((resolve, reject) => {
+      let settled = false;
       const done = (error?: unknown) => {
+        if (settled) return; settled = true;
         clearTimeout(timer);
         signal.removeEventListener("abort", abort);
         worker.terminate();
         error ? reject(error) : resolve();
       };
       const abort = () => done(signal.reason);
-      const timer = setTimeout(
+      let timer = setTimeout(
         () =>
           done(
             new AnalysisFailure(
@@ -264,7 +339,19 @@ export class BitstreamAnalysisService {
       signal.addEventListener("abort", abort, { once: true });
       worker.onerror = (e) => done(new Error(e.message));
       worker.onmessage = ({ data }) => {
-        if (data.event === "chunk") {
+        if (settled) return;
+        // A long stream has a stall budget rather than a 30-second total lifetime.
+        if ('mode' in target) {
+          clearTimeout(timer);
+          timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
+        }
+        if (data.event === 'index') {
+          void frontier!().then(index => {
+            if (!settled) worker.postMessage({ event: 'index', index });
+          }, error => done(error));
+        } else if (data.event === 'progress') {
+          try { onProgress?.(data.progress); } catch (error) { done(error); }
+        } else if (data.event === "chunk") {
           try {
             consume(data.result);
             worker.postMessage({ ok: true });
@@ -273,14 +360,15 @@ export class BitstreamAnalysisService {
           }
         } else data.ok ? done() : done(restoreFailure(data.reason, data.error));
       };
-      worker.postMessage({ file, target, base: location.href });
+      worker.postMessage({ file, target, externalIndex: !!frontier, base: location.href });
     });
   }
   private async remoteRange(
     source: MediaSource,
-    target: AnalysisRangeTarget,
+    target: AnalysisRangeTarget | AnalysisStreamTarget,
     signal: AbortSignal,
     consume: (result: AnalysisResult) => void,
+    onProgress?: (progress: StreamProgress) => void,
   ) {
     const base = new URL(source.info.source!.url, location.href);
     base.pathname += "/bitstream-analysis/requests";
@@ -308,17 +396,27 @@ export class BitstreamAnalysisService {
         base,
       ),
       seen = new Set<string>();
+    let cursor = 0, lastAdvance = performance.now(), lastSeq = -1;
+    const stream = 'mode' in target;
     try {
-      for (let poll = 0; poll < 150; poll++) {
+      for (let poll = 0; stream || poll < 150; poll++) {
+        if (performance.now() - lastAdvance > 30000) throw new AnalysisFailure('resource-limit', 'Analysis stream stalled');
+        if (stream) status.searchParams.set('after', String(cursor));
         signal.throwIfAborted();
         const response = await fetch(status, { signal, cache: "no-store" });
         if (!response.ok)
           throw new AnalysisFailure("cancelled", "Analysis lease expired");
         const state = await response.json();
+        if (state.progress) onProgress?.(state.progress);
+        // Only actual index/analysis progress renews the stall budget; repeated
+        // status reads cannot keep a stuck producer alive forever.
+        if (state.seq !== lastSeq) { lastSeq = state.seq; lastAdvance = performance.now(); }
         if (!Array.isArray(state.chunks) || state.chunks.length > 32)
           throw new Error("Invalid analysis chunk manifest");
         for (const chunk of state.chunks) {
-          if (seen.has(chunk.id)) continue;
+          if (stream) {
+            if (chunk.cursor !== cursor + 1) throw new Error('Invalid stream cursor');
+          } else if (seen.has(chunk.id)) continue;
           const url = new URL(chunk.url, base);
           if (url.origin !== base.origin)
             throw new Error("Invalid analysis chunk origin");
@@ -338,9 +436,10 @@ export class BitstreamAnalysisService {
           if (bytes.byteLength !== length)
             throw new Error("Incomplete analysis chunk");
           consume(JSON.parse(new TextDecoder().decode(bytes)));
-          seen.add(chunk.id);
+          if (stream) cursor = chunk.cursor; else seen.add(chunk.id);
+          lastAdvance = performance.now();
         }
-        if (state.state === "complete") return;
+        if (state.state === "complete" && (!stream || cursor === state.published)) return;
         if (state.state === "unsupported" && state.result) {
           consume(state.result);
           return;

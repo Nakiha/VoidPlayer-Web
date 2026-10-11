@@ -3,11 +3,12 @@ import { createSourceQuerier, toSample } from './adapters.ts';
 import type { PacketView, SourceQueryContext } from './adapters.ts';
 import type { AnalysisAxis, AnalysisQuery, AnalysisResult, AnalysisSample } from './types.ts';
 
-export interface FfmpegAnalysisSummary { packetCount: number; hasDts: boolean }
+export interface FfmpegAnalysisSummary { packetCount: number; hasDts: boolean; confirmedPackets: number }
 
 /** Read-only view of the same records imported by the playback core. No IO or decoding. */
 export class FfmpegPacketIndex {
   private packets: PacketView[] = [];
+  private confirmedPackets = 0;
   private byOrdinal = new Map<number, number>();
   private missingPts = { sampleCount: 0, totalBytes: 0 };
   private missingDts = { sampleCount: 0, totalBytes: 0 };
@@ -39,7 +40,8 @@ export class FfmpegPacketIndex {
   }
 
   get summary(): FfmpegAnalysisSummary {
-    return { packetCount: this.packets.length, hasDts: this.packets.length > 0 && this.missingDts.sampleCount === 0 };
+    while (this.byOrdinal.has(this.confirmedPackets)) this.confirmedPackets++;
+    return { confirmedPackets: this.confirmedPackets, packetCount: this.packets.length, hasDts: this.packets.length > 0 && this.missingDts.sampleCount === 0 };
   }
 
   query(ctx: SourceQueryContext, query: AnalysisQuery & { requestId: number }): AnalysisResult {

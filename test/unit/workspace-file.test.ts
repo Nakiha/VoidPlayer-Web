@@ -1,3 +1,4 @@
+import { selectedAnalysisDiagrams } from '../../src/ui/analysis/preferences.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { compressWorkspace, parseWorkspace, readWorkspaceFile } from '../../src/workspace-file.ts';
@@ -77,4 +78,42 @@ test('v2 HDR comparison retains all mapping conditions and rejects ambiguous tar
   assert.deepEqual((await readWorkspaceFile(await compressWorkspace(parsed),'http://localhost/')).comparison,comparison);
   output.preview.sourcePeakNits=1000;assert.equal(parsed.comparison?.version===2&&parsed.comparison.colorOutput.preview.sourcePeakNits,4000);
   for(const change of [{outputColorSpace:'srgb'},{presentation:'unknown'},{colorOutput:{...output,hdrWhiteNits:0}},{colorOutput:{...output,preview:{...output.preview,hlgSystemGamma:3}}},{colorOutput:{...output,target:'unknown'}}])assert.throws(()=>parseWorkspace({...document(),comparison:{...comparison,...change}}));
+});
+
+test('analysis inspection context round trips without task or overlay state', async () => {
+  const layout = { panels: { inspector: true, subtracks: false, sources: false, analysis: true }, selected: 'A', inspectorTab: 'analysis', dockHeight: 180, marksExpanded: false,
+    analysisView: { view: null, axis: 'pts', windowUs: 250000, layoutMode: 'merged', showBitrate: true, showSize: true, follow: true, selected: ['A'], numAxis: 'pts', diagram: 'references' } };
+  const value = parseWorkspace({ ...document(), layout });
+  const restored = await readWorkspaceFile(await compressWorkspace(value), 'http://localhost/');
+  assert.deepEqual(restored.layout, value.layout);
+  assert.equal(restored.layout?.inspectorTab, 'analysis');
+  assert.equal(restored.layout?.analysisView?.diagram, 'references');
+  assert.throws(() => parseWorkspace({ ...document(), layout: { ...layout, inspectorTab: 'tasks' } }));
+  assert.throws(() => parseWorkspace({ ...document(), layout: { ...layout, analysisView: { ...layout.analysisView, diagram: 'unknown' } } }));
+});
+
+test('NAL diagrams survive workspace round trips', () => {
+  for (const diagram of ['nalu-size', 'nalu-types'] as const) {
+    const d = { ...document(), layout: { panels: { inspector: true, subtracks: false, sources: false, analysis: true }, selected: 'A', dockHeight: 180, marksExpanded: false, analysisView: { view: null, axis: 'pts', windowUs: 1000000, layoutMode: 'merged', showBitrate: true, showSize: true, follow: false, selected: ['A'], numAxis: 'pts', diagram } } };
+    assert.equal(parseWorkspace(d).layout?.analysisView?.diagram, diagram);
+  }
+});
+
+test('multiple analysis diagrams round trip and reject invalid selections', async () => {
+  const analysisView = { view: { start: 1200000, end: 2400000 }, axis: 'pts', windowUs: 1000000, layoutMode: 'merged', showBitrate: true, showSize: false, follow: false, selected: ['A'], numAxis: 'pts', diagrams: ['bitrate', 'nalu-size', 'references'] };
+  const layout = { panels: { inspector: true, subtracks: false, sources: false, analysis: true }, selected: 'A', dockHeight: 180, marksExpanded: false, analysisView };
+  const value = parseWorkspace({ ...document(), layout });
+  const restored = await readWorkspaceFile(await compressWorkspace(value), 'http://localhost/');
+  assert.deepEqual(restored.layout?.analysisView, value.layout?.analysisView);
+  for (const diagrams of [['unknown'], ['size', 'size'], 'size']) assert.throws(() => parseWorkspace({ ...document(), layout: { ...layout, analysisView: { ...analysisView, diagrams } } }));
+  assert.deepEqual(parseWorkspace({ ...document(), layout: { ...layout, analysisView: { ...analysisView, diagrams: [] } } }).layout?.analysisView?.diagrams, []);
+});
+
+test('old analysis selections migrate to the same visible charts', () => {
+  const flags = { showBitrate: true, showSize: false };
+  assert.deepEqual(selectedAnalysisDiagrams(flags), ['bitrate']);
+  assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagram: 'nalu' }), ['nalu-size']);
+  assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagram: 'references' }), ['references']);
+  assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagrams: [] }), []);
+  assert.deepEqual(selectedAnalysisDiagrams({ ...flags, diagrams: ['references', 'size'] }), ['size', 'references']);
 });

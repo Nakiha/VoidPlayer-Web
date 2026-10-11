@@ -151,3 +151,7 @@ export interface AnalysisStatus {
   mediaId: string;
   capability: AnalysisCapability;
 }
+
+/** Display choices share one session-time viewport. */
+export const ANALYSIS_DIAGRAMS = ['bitrate', 'size', 'nalu-size', 'nalu-types', 'references'] as const;
+export type AnalysisDiagram = typeof ANALYSIS_DIAGRAMS[number];

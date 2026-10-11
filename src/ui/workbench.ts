@@ -1,3 +1,4 @@
+import { installBitstreamControls } from './bitstream-controls.ts';
 import { t, msg } from '../i18n.ts';
 import { installSourceActivity } from './source-activity.ts';
 import { installTrackColumnResize } from './track-column-resize.ts';
@@ -6,6 +7,7 @@ import { installResizeGesture } from './resize-gesture.ts';
 import { installPanelMotion, animatePanelLayout } from './panel-motion.ts';
 import { installPanelResize } from './panel-resize.ts';
 import type { ReviewSession } from '../session.ts';
+import { SLOTS } from '../model.ts';
 import type { Slot } from '../model.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
 import { installLazyAnalysisPanel } from './analysis/lazy-panel.ts';
@@ -52,15 +54,35 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderSources: () => sources.renderSources(),
     resize: value => resize(value), dockHeight: () => dockHeight, annotationHeightDelta,
   };
+  let inspectorTab: 'info' | 'analysis' = 'info';
+  function setInspectorTab(tab: 'info' | 'analysis') {
+    inspectorTab = tab;
+    $('track-properties').hidden = tab !== 'info';
+    $('bitstream-inspector').hidden = tab !== 'analysis';
+    $('inspector-info-tab').setAttribute('aria-pressed', String(tab === 'info'));
+    $('inspector-analysis-tab').setAttribute('aria-pressed', String(tab === 'analysis'));
+  }
+  const bitstream = installBitstreamControls(session,
+    Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>, {
+      selected: () => view.selected,
+      visible: () => view.panels.inspector && inspectorTab === 'analysis',
+      open(slot) { select(slot); setInspectorTab('analysis'); setPanel('inspector', true); },
+    });
+  for (const tab of ['info', 'analysis'] as const) $(`inspector-${tab}-tab`).onclick = () => {
+    setInspectorTab(tab); render(session.getState());
+  };
   const tracks = createTracksPane(shared);
   const sources = createSourcesPane(shared);
   sources.wireSourceControls();
-  const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis });
+  const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis,
+    selectedSlot: () => view.selected,
+  });
 
   function select(slot: Slot) {
     view.selected = slot;
     tracks.resetInspectorSignature();
     render(session.getState());
+    analysis.refreshTarget();
   }
   function syncPanels() {
     for (const panel of ['inspector', 'subtracks', 'sources', 'analysis'] as Panel[]) {
@@ -109,6 +131,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     if (!state.tracks.length && view.panels.analysis) { view.panels.analysis = false; syncPanels(); }
     session.inspectTrackMetadata(view.panels.inspector ? view.selected : null);
     if (view.panels.inspector) tracks.renderInspector(state);
+    bitstream.render(state);
     if (view.panels.subtracks) tracks.renderDock(state, annotations);
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
     addMarkButton.disabled = !state.tracks.length;
@@ -157,6 +180,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const applyAnalysisHeight = (value: number) => {
     const { min, max } = analysisBounds();
     analysisHeight = Math.round(Math.max(min, Math.min(max, value)));
+    workspace.style.setProperty('--analysis-min-height', `${min}px`);
     workspace.style.setProperty('--analysis-height', `${analysisHeight}px`);
     analysisResizer.setAttribute('aria-valuemin', String(min)); analysisResizer.setAttribute('aria-valuemax', String(max));
     analysisResizer.setAttribute('aria-valuenow', String(analysisHeight)); analysisResizer.setAttribute('aria-valuetext', t(msg("workbench.pixels", "{p0} 像素"), { p0: analysisHeight }));
@@ -178,14 +202,14 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   resize(dockHeight); syncPanels();
   void sources.refreshLibrary();
   return {
-    localize() { tracks.localize(session.getState()); sources.localize(); syncPanels();
+    localize() { tracks.localize(session.getState()); sources.localize(); bitstream.localize(); syncPanels();
       resizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:dockHeight}));
       analysisResizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:analysisHeight})); },
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, ...(inspectorTab === 'analysis' ? { inspectorTab } : {}), dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
     async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
-      view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
+      view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected; setInspectorTab(layout.inspectorTab ?? 'info');
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
       if (layout.analysisView) analysis.restoreAnalysisState(layout.analysisView);
@@ -196,6 +220,6 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       await sources.finishRestore(browsing);
       await analysis.ready();
     },
-    dispose() { sources.markDisposed(); annotations.dispose(); lifecyle.abort(); },
+    dispose() { sources.markDisposed(); annotations.dispose(); bitstream.dispose(); lifecyle.abort(); },
   };
 }

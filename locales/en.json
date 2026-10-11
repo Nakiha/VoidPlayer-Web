@@ -1175,14 +1175,6 @@
     "source": "码率",
     "translation": "Bitrate"
   },
-  "analysis.bitrateMbps": {
-    "source": "码率 · Mbps",
-    "translation": "Bitrate · Mbps"
-  },
-  "analysis.bitrateTitle": {
-    "source": "视频样本负载码率，按 PTS/DTS 归集的滑动时间窗",
-    "translation": "Payload bitrate of video samples, bucketed by PTS/DTS over a sliding window"
-  },
   "analysis.bitrateWindow": {
     "source": "码率窗口",
     "translation": "Bitrate window"
@@ -1191,13 +1183,49 @@
     "source": "码率窗口：视频样本负载码率的滑动时间窗（真实时间窗，非 N 帧窗）",
     "translation": "Bitrate window: sliding window for sample payload bitrate (a real time window, not an N-frame window)"
   },
+  "analysis.bucketFrames": {
+    "source": "汇总帧数",
+    "translation": "Frames in bin"
+  },
   "analysis.canvasLabel": {
     "source": "码流分析图：码率曲线与帧大小柱。方向键移动检查位置，回车定位，Escape 退出检查。",
     "translation": "Bitstream plot: bitrate curve and frame-size bars. Arrow keys move the inspection point, Enter seeks, Escape exits inspection."
   },
+  "analysis.chooseCharts": {
+    "source": "选择要显示的图表。",
+    "translation": "Choose the charts to display."
+  },
+  "analysis.codedFrame": {
+    "source": "编码帧",
+    "translation": "Coded frame"
+  },
   "analysis.compareTracks": {
     "source": "对比轨道",
     "translation": "Compared tracks"
+  },
+  "analysis.containerConfig": {
+    "source": "容器配置",
+    "translation": "Container configuration"
+  },
+  "analysis.containerConfigNumber": {
+    "source": "配置 {number}",
+    "translation": "Configuration {number}"
+  },
+  "analysis.containerMixedHint": {
+    "source": "也出现在逐帧 NALU 中",
+    "translation": "Also present in frame NALUs"
+  },
+  "analysis.containerNaluCount": {
+    "source": "{count} 个",
+    "translation": "{count} units"
+  },
+  "analysis.containerNaluHint": {
+    "source": "不计入逐帧 NALU 和帧大小。",
+    "translation": "Excluded from frame NALU and frame size totals."
+  },
+  "analysis.containerOrigin": {
+    "source": "来自容器头部",
+    "translation": "From container header"
   },
   "analysis.currentFrameNumbers": {
     "source": "当前上屏帧号",
@@ -1206,6 +1234,47 @@
   "analysis.currentFrameNumbersEmpty": {
     "source": "当前上屏帧号：尚未载入视频",
     "translation": "Current on-screen frame numbers: no video loaded"
+  },
+  "analysis.decodeBitrateWindowHint": {
+    "source": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。",
+    "translation": "Bitrate: compressed sample payload within a decode-time window; not network throughput."
+  },
+  "analysis.decodingTime": {
+    "source": "解码时间 DTS",
+    "translation": "Decode time DTS"
+  },
+  "analysis.diagramBucketDetail": {
+    "source": "{start}–{end} · {count} 帧 · {values}",
+    "translation": "{start}–{end} · {count} frames · {values}"
+  },
+  "analysis.diagramCurrent": {
+    "source": "当前帧",
+    "translation": "Current frame"
+  },
+  "analysis.diagramDetailEvicted": {
+    "source": "当前范围保留了汇总；重新检查可恢复逐帧细节。",
+    "translation": "This range retains summaries; check again to restore per-frame details."
+  },
+  "analysis.diagramNoTrack": {
+    "source": "先载入一条视频轨道。",
+    "translation": "Load a video track first."
+  },
+  "analysis.diagramReferencesUnsupported": {
+    "source": "这些帧没有可用的参考记录。需要支持参考列表的分析内核。",
+    "translation": "These pictures have no usable reference records. A core supporting reference lists is required."
+  },
+  "analysis.diagramSoloHint": {
+    "source": "点击切换；右键或长按单选，再次操作同一图表恢复之前的选择。",
+    "translation": "Click to toggle; right-click or long-press to show only this chart. Repeat on the same chart to restore your previous selection.",
+    "needsReview": false
+  },
+  "analysis.diagramUnanalyzed": {
+    "source": "此范围尚未收到检查结果。",
+    "translation": "No inspection results received for this range yet."
+  },
+  "analysis.diagrams": {
+    "source": "分析图示",
+    "translation": "Analysis views"
   },
   "analysis.dtsOrder": {
     "source": "DTS序",
@@ -1231,41 +1300,17 @@
     "source": "输入轨道 {slot} 的{axis}帧号后按回车跳转",
     "translation": "Type the {axis} frame number of track {slot}, then press Enter to seek"
   },
-  "analysis.followOff": {
-    "source": "跟随：关",
-    "translation": "Follow: off"
-  },
-  "analysis.followOn": {
-    "source": "跟随：开",
-    "translation": "Follow: on"
-  },
-  "analysis.followTitle": {
-    "source": "跟随播放范围；框选放大后自动关闭，不强制跳回播放位置",
-    "translation": "Follow the playback range; auto-disables after rubber-band zoom and never forces a jump back"
-  },
   "analysis.frameNumberMustBeNonNegativeInteger": {
     "source": "帧号必须是非负整数。",
     "translation": "The frame number must be a non-negative integer."
   },
-  "analysis.frameNumberOrder": {
-    "source": "帧号顺序",
-    "translation": "Frame number order"
-  },
-  "analysis.frameRateFps": {
-    "source": "帧率 · fps",
-    "translation": "Frame rate · fps"
+  "analysis.frameRate": {
+    "source": "帧率",
+    "translation": "Frame rate"
   },
   "analysis.frameSize": {
     "source": "帧大小",
     "translation": "Frame size"
-  },
-  "analysis.frameSizeKib": {
-    "source": "帧大小 · KiB",
-    "translation": "Frame size · KiB"
-  },
-  "analysis.frameSizeTitle": {
-    "source": "压缩样本字节（demux 负载），非解码内存",
-    "translation": "Compressed sample bytes (demux payload), not decoded memory"
   },
   "analysis.frameTitleBase": {
     "source": "轨道 {slot} 上屏帧：会话 PTS {pts}（{ptsUs} µs）",
@@ -1315,6 +1360,10 @@
     "source": "隐藏轨道 {slot}",
     "translation": "Hide track {slot}"
   },
+  "analysis.hoverDetailMissing": {
+    "source": "此时间没有逐帧检查记录。",
+    "translation": "No per-frame inspection record at this time."
+  },
   "analysis.indexFailed": {
     "source": "轨道 {slot} 索引失败：{error}",
     "translation": "Track {slot} index failed: {error}"
@@ -1323,21 +1372,86 @@
     "source": "帧索引尚未就绪",
     "translation": "Frame index not ready"
   },
+  "analysis.inferredLayer": {
+    "source": "推断层级",
+    "translation": "Inferred layer"
+  },
+  "analysis.inferredLayerHint": {
+    "source": "按相邻 I/P 锚帧间的局部参考关系推断，不代表码流标记的时间层。* 表示参考信息不完整。",
+    "translation": "Inferred from local references between consecutive I/P anchors, not a signaled temporal layer. * indicates incomplete reference information."
+  },
+  "analysis.inferredLayerPartial": {
+    "source": "推断层级（参考信息不完整）",
+    "translation": "Inferred layer (incomplete references)"
+  },
   "analysis.layoutMerged": {
-    "source": "合并",
-    "translation": "Merged"
+    "source": "码流合并",
+    "translation": "Merged streams"
   },
   "analysis.layoutRows": {
-    "source": "分轨",
-    "translation": "Rows"
+    "source": "码流分轨",
+    "translation": "Separate streams"
+  },
+  "analysis.meanNaluSize": {
+    "source": "平均每帧 · KiB",
+    "translation": "Mean per frame · KiB"
+  },
+  "analysis.missingDts": {
+    "source": "所选轨道缺少可靠 DTS，无法按解码时间显示。",
+    "translation": "The selected tracks lack reliable DTS and cannot be displayed by decode time."
   },
   "analysis.multiTrackLayout": {
     "source": "多轨布局",
     "translation": "Multi-track layout"
   },
   "analysis.multiTrackLayoutTitle": {
-    "source": "合并：多轨同一基线按时间交错；分轨：各轨独立行",
-    "translation": "Merged: tracks share one baseline interleaved by time; Rows: each track gets its own row"
+    "source": "只影响码率和帧大小；NALU 与帧参考始终按轨道分开显示。",
+    "translation": "Applies only to bitrate and frame size. NALU and frame references always use separate tracks."
+  },
+  "analysis.naluCountUnit": {
+    "source": "个",
+    "translation": "units"
+  },
+  "analysis.naluFilterAll": {
+    "source": "全部",
+    "translation": "All"
+  },
+  "analysis.naluFilterEmpty": {
+    "source": "没有选中 NALU 类型。点击图例或“全部”恢复显示。",
+    "translation": "No NALU types selected. Click a legend item or “All” to show them again."
+  },
+  "analysis.naluLegend": {
+    "source": "横轴为时间 · 大小不含长度前缀 · 点击图例筛选，点击帧定位。",
+    "translation": "Horizontal axis: time · Sizes exclude length prefixes · Click legend to filter, click frame to seek."
+  },
+  "analysis.naluOverview": {
+    "source": "汇总：每个时间段按选中类型显示平均帧大小与类型分布 · 放大查看逐帧细节。",
+    "translation": "Summary: average frame size by selected type and type distribution per time interval · Zoom in for individual frames."
+  },
+  "analysis.naluSelected": {
+    "source": "选中 NALU",
+    "translation": "Selected NALU"
+  },
+  "analysis.naluSize": {
+    "source": "NALU 大小",
+    "translation": "NALU size"
+  },
+  "analysis.naluSizeCanvas": {
+    "source": "NALU 大小图。横轴为整片时间；放大查看逐帧大小。点击图例筛选类型，方向键选择，回车查看。",
+    "translation": "NALU size chart. Horizontal axis: whole-source time; zoom in for per-frame sizes. Click legend to filter, arrow keys to select and Enter to inspect."
+  },
+  "analysis.naluSoloHint": {
+    "source": "点击切换筛选；右键或长按单选，再次操作恢复全部。",
+    "translation": "Click to toggle filtering; right-click or long-press to show only this type, then repeat to restore all.",
+    "needsReview": false
+  },
+  "analysis.naluTypeCanvas": {
+    "source": "NALU 类型图。横轴为整片时间；放大查看逐帧类型。点击图例筛选类型，方向键选择，回车查看。",
+    "translation": "NALU type chart. Horizontal axis: whole-source time; zoom in for per-frame types. Click legend to filter, arrow keys to select and Enter to inspect."
+  },
+  "analysis.naluTypes": {
+    "source": "NALU 类型",
+    "translation": "NALU types"
   },
   "analysis.noLocatablePeak": {
     "source": "轨道 {slot}：该区间没有可定位的峰值样本。",
@@ -1351,6 +1465,10 @@
     "source": "尚未载入视频",
     "translation": "No video loaded yet"
   },
+  "analysis.otherNaluTypes": {
+    "source": "其他类型",
+    "translation": "Other types"
+  },
   "analysis.peakSeekFailed": {
     "source": "轨道 {slot}：峰值样本定位失败。",
     "translation": "Track {slot}: peak sample seek failed."
@@ -1358,6 +1476,18 @@
   "analysis.pinnedSuffix": {
     "source": " · 已固定",
     "translation": " · pinned"
+  },
+  "analysis.presentationLoad": {
+    "source": "展示负载率",
+    "translation": "Presentation load"
+  },
+  "analysis.presentationLoadWindowHint": {
+    "source": "展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐。",
+    "translation": "Presentation load: compressed frame bytes within a presentation-time window; not network throughput."
+  },
+  "analysis.presentationTime": {
+    "source": "展示时间 PTS",
+    "translation": "Presentation time PTS"
   },
   "analysis.provisional": {
     "source": "暂定",
@@ -1371,9 +1501,33 @@
     "source": "轨道 {slot} 查询失败：{error}",
     "translation": "Track {slot} query failed: {error}"
   },
-  "analysis.sampleRate": {
-    "source": "样本率 /s",
-    "translation": "Sample rate /s"
+  "analysis.referenceCanvas": {
+    "source": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。",
+    "translation": "Frame reference chart. Horizontal axis: whole-source time. Overview shows frame types; zoom in for reference pyramids and connections. Arrow keys select, Enter inspects."
+  },
+  "analysis.referenceLegend": {
+    "source": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。",
+    "translation": "Solid L0 · Long-dashed L1 · Dotted lines lead to offscreen reference frames; active lists do not mean every block uses every reference."
+  },
+  "analysis.referenceMissing": {
+    "source": "参考记录不可用",
+    "translation": "Reference records unavailable"
+  },
+  "analysis.referenceOverview": {
+    "source": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。",
+    "translation": "Whole-source frame type distribution · Zoom in for reference pyramids and L0 / L1 connections."
+  },
+  "analysis.referencePyramid": {
+    "source": "帧参考金字塔",
+    "translation": "Reference pyramid"
+  },
+  "analysis.referenceSection": {
+    "source": "帧参考",
+    "translation": "Frame references"
+  },
+  "analysis.sampleRateLabel": {
+    "source": "样本率",
+    "translation": "Sample rate"
   },
   "analysis.seekReason": {
     "source": "轨道 {slot}：{reason}",
@@ -1398,6 +1552,50 @@
   "analysis.statusLabel": {
     "source": "当前上屏帧号（{axis}）：{summary}",
     "translation": "Current on-screen frame numbers ({axis}): {summary}"
+  },
+  "analysis.streamCancelled": {
+    "source": "已取消",
+    "translation": "Cancelled"
+  },
+  "analysis.streamDone": {
+    "source": "{slot} 已完成 · {count} 帧",
+    "translation": "{slot} completed · {count} frames"
+  },
+  "analysis.streamEmptyHint": {
+    "source": "正在准备分析，NALU 和帧参考结果会自动显示。",
+    "translation": "Preparing analysis. NALU and frame reference results appear automatically."
+  },
+  "analysis.streamLiveHint": {
+    "source": "结果会随分析进度逐步显示。",
+    "translation": "Results appear progressively as analysis proceeds."
+  },
+  "analysis.streamNotStarted": {
+    "source": "{slot} 尚未检查",
+    "translation": "{slot} has not been checked"
+  },
+  "analysis.streamProgress": {
+    "source": "{slot} {percent}% · {count} 帧",
+    "translation": "{slot} {percent}% · {count} frames"
+  },
+  "analysis.streamQueued": {
+    "source": "{slot} 排队中",
+    "translation": "{slot} queued"
+  },
+  "analysis.streamSection": {
+    "source": "码流",
+    "translation": "Bitstream"
+  },
+  "analysis.streamWaiting": {
+    "source": "{slot} 等待索引 · 已检查 {count} 帧",
+    "translation": "{slot} Waiting for index · {count} frames checked"
+  },
+  "analysis.temporalLayer": {
+    "source": "时间层级",
+    "translation": "Temporal layer"
+  },
+  "analysis.temporalLayerHint": {
+    "source": "层级来自图像 VCL NAL 的 Temporal ID。",
+    "translation": "Layer from the picture VCL NAL Temporal ID."
   },
   "analysis.timeBase": {
     "source": "时间基准",
@@ -1426,6 +1624,11 @@
   "analysis.trackHasNoFrame": {
     "source": "轨道 {slot}：暂无上屏帧",
     "translation": "Track {slot}: no on-screen frame"
+  },
+  "analysis.trackSoloHint": {
+    "source": "右键或长按单选此轨道，再次操作恢复全部。",
+    "translation": "Right-click or long-press to show only this track, then repeat to restore all.",
+    "needsReview": false
   },
   "analysis.trackUnsupported": {
     "source": "轨道 {slot}：当前片源路径暂不支持码流分析。",
@@ -1555,9 +1758,17 @@
     "source": "无法唯一确定源画面，已隐藏精确遮罩。",
     "translation": "The source picture cannot be uniquely identified; the exact overlay is hidden."
   },
-  "bitstream.analyze": {
-    "source": "分析当前帧",
-    "translation": "Analyze current frame"
+  "bitstream.analysisTab": {
+    "source": "分析",
+    "translation": "Analysis"
+  },
+  "bitstream.available": {
+    "source": "当前帧结果可用",
+    "translation": "Current frame results available"
+  },
+  "bitstream.block": {
+    "source": "选中块",
+    "translation": "Selected block"
   },
   "bitstream.blocks": {
     "source": "块",
@@ -1567,21 +1778,85 @@
     "source": "块边界",
     "translation": "Block boundaries"
   },
+  "bitstream.cacheOnly": {
+    "source": "换帧时仅显示精确匹配的缓存；没有结果则隐藏遮罩。",
+    "translation": "Frame changes show only an exact cached match. The overlay is hidden when no result is available."
+  },
+  "bitstream.cancel": {
+    "source": "取消分析",
+    "translation": "Cancel analysis"
+  },
   "bitstream.cancelled": {
     "source": "分析已取消。",
     "translation": "Analysis cancelled."
+  },
+  "bitstream.changedFrame": {
+    "source": "画面已切换，请分析新的当前帧。",
+    "translation": "The picture changed. Analyze the new current frame."
+  },
+  "bitstream.coordinates": {
+    "source": "坐标",
+    "translation": "Coordinates"
+  },
+  "bitstream.current": {
+    "source": "当前帧",
+    "translation": "Current frame"
+  },
+  "bitstream.display": {
+    "source": "画面遮罩",
+    "translation": "Picture overlay"
+  },
+  "bitstream.end": {
+    "source": "结束",
+    "translation": "End"
+  },
+  "bitstream.exact": {
+    "source": "精确",
+    "translation": "Exact"
+  },
+  "bitstream.explicit": {
+    "source": "仅点击分析按钮才执行分析；切换画面只读取已有结果。",
+    "translation": "Analysis runs only when you click an analysis button. Changing frames only reads existing results."
   },
   "bitstream.incompleteReferences": {
     "source": "参考状态不完整，无法生成精确遮罩。",
     "translation": "Incomplete reference state prevents an exact overlay."
   },
+  "bitstream.infoTab": {
+    "source": "信息",
+    "translation": "Info"
+  },
+  "bitstream.inspectorTabs": {
+    "source": "轨道检查内容",
+    "translation": "Track inspection content"
+  },
+  "bitstream.inter": {
+    "source": "帧间",
+    "translation": "Inter"
+  },
   "bitstream.internalError": {
     "source": "分析执行出错，请重试。",
     "translation": "Analysis execution failed; please try again."
   },
+  "bitstream.intra": {
+    "source": "帧内",
+    "translation": "Intra"
+  },
+  "bitstream.invalidRange": {
+    "source": "请选择片源范围内不超过 1 秒的区间。",
+    "translation": "Choose a range within the source, no longer than 1 second."
+  },
   "bitstream.invalidRequest": {
     "source": "分析目标或区间无效。",
     "translation": "The analysis target or interval is invalid."
+  },
+  "bitstream.invalidTime": {
+    "source": "请输入有效时间，例如 00:03.300。",
+    "translation": "Enter a valid time, such as 00:03.300."
+  },
+  "bitstream.meanQp": {
+    "source": "平均亮度 QP",
+    "translation": "Mean luma QP"
   },
   "bitstream.mode": {
     "source": "分析遮罩",
@@ -1591,9 +1866,37 @@
     "source": "预滚预算内没有可验证的闭合 IDR 起点。",
     "translation": "No verified closed IDR anchor was found within the preroll budget."
   },
+  "bitstream.notAnalyzed": {
+    "source": "此帧尚未分析",
+    "translation": "This frame has not been analyzed"
+  },
+  "bitstream.opacity": {
+    "source": "不透明度",
+    "translation": "Opacity"
+  },
+  "bitstream.open": {
+    "source": "打开轨道 {slot} 的分析检查",
+    "translation": "Open analysis inspection for track {slot}"
+  },
+  "bitstream.partial": {
+    "source": "部分结果",
+    "translation": "Partial result"
+  },
+  "bitstream.pauseFirst": {
+    "source": "暂停后可分析当前帧。",
+    "translation": "Pause to analyze the current frame."
+  },
   "bitstream.pending": {
     "source": "正在分析当前帧…",
     "translation": "Analyzing current frame…"
+  },
+  "bitstream.pick": {
+    "source": "在画面上点击一个块，将详情固定在这里。",
+    "translation": "Click a block in the picture to pin its details here."
+  },
+  "bitstream.precision": {
+    "source": "匹配",
+    "translation": "Match"
   },
   "bitstream.prediction": {
     "source": "预测模式",
@@ -1603,13 +1906,53 @@
     "source": "QP 热图",
     "translation": "QP heatmap"
   },
+  "bitstream.range": {
+    "source": "区间分析",
+    "translation": "Range analysis"
+  },
+  "bitstream.rangeCompleted": {
+    "source": "区间已完成 {count} 帧",
+    "translation": "Range completed: {count} pictures"
+  },
+  "bitstream.rangeHint": {
+    "source": "会话时间范围；每次最多 1 秒、32 帧。分析完成后逐帧查看缓存结果。",
+    "translation": "Session time range; up to 1 second and 32 pictures per request. Step through the cached results after analysis."
+  },
+  "bitstream.rangePending": {
+    "source": "正在分析区间…",
+    "translation": "Analyzing range…"
+  },
+  "bitstream.rangeRun": {
+    "source": "分析此区间",
+    "translation": "Analyze this range"
+  },
   "bitstream.resourceLimit": {
     "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
     "translation": "Analysis reached a resource limit. Shorten the interval or choose a closer anchor."
   },
+  "bitstream.run": {
+    "source": "分析此帧",
+    "translation": "Analyze this frame"
+  },
+  "bitstream.skip": {
+    "source": "跳过",
+    "translation": "Skip"
+  },
   "bitstream.sourceChanged": {
     "source": "片源已变更，请重新载入后分析。",
     "translation": "The source has changed. Reload it before analyzing."
+  },
+  "bitstream.start": {
+    "source": "开始",
+    "translation": "Start"
+  },
+  "bitstream.summary": {
+    "source": "帧摘要",
+    "translation": "Frame summary"
+  },
+  "bitstream.unpin": {
+    "source": "清除选择",
+    "translation": "Clear selection"
   },
   "bitstream.unsupportedCodec": {
     "source": "此编码暂不支持码流分析。",
@@ -1626,6 +1969,10 @@
   "bitstream.unsupportedQpDepth": {
     "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
     "translation": "QP is not yet supported at this bit depth; blocks and modes remain available."
+  },
+  "bitstream.visibility": {
+    "source": "显示遮罩",
+    "translation": "Show overlay"
   },
   "bootstrap.reload": {
     "source": "重新加载",
@@ -2924,6 +3271,18 @@
     "source": "工作区服务不可用。",
     "translation": "Workspace service unavailable."
   },
+  "settings.analysisConcurrencyCount": {
+    "source": "{count, plural, other {# 路}}",
+    "translation": "{count, plural, one {# task} other {# tasks}}"
+  },
+  "settings.chartHoverCombined": {
+    "source": "合并显示",
+    "translation": "Combined card"
+  },
+  "settings.chartHoverSeparate": {
+    "source": "各图独立显示",
+    "translation": "Separate cards"
+  },
   "settings.unknownSettingsPage": {
     "source": "未知设置页面。",
     "translation": "Unknown settings page."
@@ -2940,6 +3299,14 @@
     "source": "主题色 HEX",
     "translation": "Accent color HEX"
   },
+  "settingsShell.analysisConcurrency": {
+    "source": "分析并发数",
+    "translation": "Analysis concurrency"
+  },
+  "settingsShell.analysisConcurrencyHint": {
+    "source": "本窗口同时分析的轨道数，本地文件与媒体库共用。默认 2 路，更多轨道会排队；调低后已启动的任务继续完成。",
+    "translation": "Tracks analyzed simultaneously in this window, shared by local files and library media. Defaults to 2; extra tracks wait. Lowering the limit lets active tasks finish."
+  },
   "settingsShell.appearance": {
     "source": "外观",
     "translation": "Appearance"
@@ -2947,6 +3314,14 @@
   "settingsShell.av1Decoding": {
     "source": "AV1 解码",
     "translation": "AV1 decoding"
+  },
+  "settingsShell.chartHover": {
+    "source": "图表悬浮信息",
+    "translation": "Chart hover details"
+  },
+  "settingsShell.chartHoverHint": {
+    "source": "各图独立显示在悬浮线旁；合并显示在上面板下方。",
+    "translation": "Separate cards appear beside each inspection line; a combined card appears below the top panel."
   },
   "settingsShell.chooseAUserOrRenameYourself": {
     "source": "选择用户或修改当前名字",

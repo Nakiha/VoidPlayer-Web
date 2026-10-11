@@ -193,12 +193,12 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                     endUs: 120000,
                   });
                   await page.locator(`#bitstream-${slot}`).click();
+                  await page.locator("#bitstream-run").click();
                   await page
                     .locator(`#bitstream-overlay-${slot}`)
                     .waitFor({ state: "visible" });
-                  await page
-                    .locator(`#bitstream-mode-${slot}`)
-                    .selectOption("qp");
+                  await page.locator('#bitstream-mode').click();
+                  await page.locator('#bitstream-mode-menu [data-value="qp"]').click();
                 }
                 await page.evaluate(
                   () =>
@@ -309,6 +309,7 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                 };
                 for (const slot of variant === "feature" ? slots : [])
                   await page.locator(`#bitstream-${slot}`).click();
+                  await page.locator("#bitstream-visibility").uncheck();
               } else if (scenario === "background-range") {
                 // Range probes start after submission and stop at analysis settlement.
                 await page.evaluate(() => {

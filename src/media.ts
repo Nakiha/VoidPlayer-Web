@@ -49,6 +49,9 @@ export interface DecodedFrame extends FrameInfo {
 export interface MediaSource {
   /** Retained reference only; no analysis instance or IO until explicit request. */
   bitstreamFile?: Blob;
+  /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
+  getBitstreamIndex?(): Promise<import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
+  bitstreamIndexIdentity?: import('./media-index-identity.ts').MediaIndexIdentity;
   info: MediaInfo;
   /** Cache-only, bounded metadata inspection; never enables audio output. */
   requestCachedMetadata?(): void;
@@ -325,6 +328,7 @@ async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortS
     const source: MediaSource = {
       info,
       getAnalysisCapability: () => analysis.getCapability(),
+      getBitstreamIndex: () => analysis.bitstreamFrontier(),
       queryAnalysis: query => analysis.query(query),
       locateAnalysisSample: sampleId => analysis.locate(sampleId),
       rankAnalysisTime: (tUs, axis) => Promise.resolve(analysis.rank(tUs, axis)),

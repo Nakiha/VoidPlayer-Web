@@ -423,6 +423,11 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
 
   source = {
     info, ensureIndexed,
+    bitstreamIndexIdentity: init.indexIdentity,
+    async getBitstreamIndex() {
+      if (disposed || info.indexState === 'error') throw new Error(info.indexError ?? '索引不可用。');
+      return { packets: analysisSummary?.confirmedPackets ?? (info.indexState === 'complete' ? null : 0), complete: info.indexState === 'complete' };
+    },
     getAnalysisCapability: () => ({ hasSize: true, hasDts: analysisSummary?.hasDts ?? false, keySource: 'container',
       pictureType: 'key-only', qp: 'unsupported', indexState: info.indexState ?? 'complete',
       ...(info.indexError ? { indexError: info.indexError } : {}),

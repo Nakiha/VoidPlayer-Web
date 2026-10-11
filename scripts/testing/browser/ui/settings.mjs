@@ -95,6 +95,13 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
    }
   }
   if(pane==='performance') {
+   assert.equal(await page.locator('#analysis-concurrency').innerText(),'2 路');
+   for(const value of [1,3,4,8,2]) {
+    await page.locator('#analysis-concurrency').click();
+    await page.locator(`#analysis-concurrency-menu [data-value="${value}"]`).click();
+    assert.equal(await page.locator('#analysis-concurrency').innerText(),`${value} 路`);
+    assert.equal(await page.evaluate(()=>localStorage.getItem('voidplayer.analysis-concurrency')),String(value));
+   }
    const headings=await page.evaluate(()=>['performance','shortcuts'].map(pane=>{
     const el=document.querySelector(`#settings-pane-${pane} .settings-section-title`),style=getComputedStyle(el);
     return {fontSize:style.fontSize,color:style.color,fontWeight:style.fontWeight,paddingLeft:style.paddingLeft};

@@ -221,9 +221,16 @@ test("result transport reservations are bounded and shutdown refuses queued dema
     const a = scheduler.reserveResultRead()!,
       b = scheduler.reserveResultRead()!;
     assert.equal(scheduler.reserveResultRead(), null);
+    const cancelledReader = new AbortController();
+    const rejected = assert.rejects(scheduler.waitForResultRead(cancelledReader.signal), /disconnected/);
+    cancelledReader.abort(new Error('disconnected')); await rejected;
+    const abort = new AbortController();
+    const waiting = scheduler.waitForResultRead(abort.signal);
+    let admitted = false; void waiting.then(() => { admitted = true; });
+    await new Promise(r => setTimeout(r, 10)); assert.equal(admitted, false);
     a();
     a();
-    const c = scheduler.reserveResultRead();
+    const c = await waiting;
     assert.ok(c);
     b();
     c();
@@ -375,4 +382,167 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   } finally {
     await rm(media, { recursive: true, force: true });
   }
+});
+
+test('continuous server stream pages GOP chunks, backpressures each consumer and keeps committed cache on cancellation', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const media = await mkdtemp(join(tmpdir(), 'vp-gop-stream-'));
+  const name = 'stream.mp4';
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=128x64:rate=30:duration=4', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
+  const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  const streamTarget = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 4000000 };
+  try {
+    const a = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'one');
+    const b = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'two');
+    for (let n = 0; scheduler.status(a.requestId, 'one')!.published !== 32; n++) {
+      assert.ok(n < 500, 'stream reaches bounded pending window');
+      await new Promise(r => setTimeout(r, 10));
+    }
+    const first = await scheduler.streamStatus(a.requestId, 'one', 0);
+    assert.equal(first!.chunks.length, 32);
+    const firstId = first!.chunks[0].id;
+    assert.ok((await scheduler.store.get(firstId))?.gop);
+    await assert.rejects(scheduler.streamStatus(a.requestId, 'one', 33), /acknowledgement/);
+    await scheduler.streamStatus(a.requestId, 'one', 32);
+    await new Promise(r => setTimeout(r, 60));
+    assert.equal(scheduler.status(b.requestId, 'two')!.published, 32, 'slow second consumer prevents unbounded production');
+    scheduler.release(a.requestId, 'one');
+    const aus = new Set<number>(), groups = new Set<number>();
+    let cursor = 0;
+    for (let n = 0; ; n++) {
+      assert.ok(n < 1000);
+      const state = await scheduler.streamStatus(b.requestId, 'two', cursor);
+      assert.ok(state); assert.ok(state.chunks.length <= 32);
+      for (const ref of state.chunks) {
+        assert.equal(ref.cursor, cursor + 1);
+        const result = await scheduler.store.get(ref.id);
+        assert.ok(result && result.gop); assert.equal(result.confidence, 'exact');
+        assert.equal(aus.has(result.picture.au), false); aus.add(result.picture.au); groups.add(result.gop.startAu);
+        cursor = ref.cursor;
+      }
+      if (state.state === 'complete' && cursor === state.published) break;
+      assert.ok(['running', 'queued', 'complete'].includes(state.state), JSON.stringify(state));
+      await new Promise(r => setTimeout(r, 10));
+    }
+    assert.equal(aus.size, 120); assert.equal(groups.size, 4);
+    scheduler.release(b.requestId, 'two');
+    const hit = await scheduler.submit(f.entry.id, f.entry.version!, target(f.entry), 'hit');
+    assert.equal(hit.cacheHit, true, 'stream chunks reuse the same picture cache identity');
+    scheduler.release(hit.requestId, 'hit');
+    const cancelled = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'cancel');
+    for (let n = 0; scheduler.status(cancelled.requestId, 'cancel')!.published !== 32; n++) {
+      assert.ok(n < 500); await new Promise(r => setTimeout(r, 10));
+    }
+    const partial = await scheduler.streamStatus(cancelled.requestId, 'cancel', 0);
+    scheduler.release(cancelled.requestId, 'cancel');
+    assert.ok(await scheduler.store.get(partial!.chunks[0].id), 'cancel retains committed picture');
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
+});
+
+test('shared library index discovers GOPs before all batches arrive; cancel detaches only the analysis subscriber', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const media = await mkdtemp(join(tmpdir(), 'vp-incremental-analysis-')), name = 'incremental.mp4';
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
+  const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  const provenance = JSON.parse(await readFile(resolve('public/vendor/voidplayer-core/provenance.json'), 'utf8'));
+  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: provenance.source.revision };
+  const streamTarget = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 10000000, indexIdentity: identity };
+  const call = f.library.indexJobs.call.bind(f.library.indexJobs);
+  let release = false;
+  f.library.indexJobs.call = async (op, data = {}, ...args) => {
+    if (op === 'stream-batches' && Number(data.after) >= 0 && !release) return [];
+    const result = await call(op, data, ...args);
+    return op === 'stream-batches' && !release ? result.slice(0, 1) : result;
+  };
+  try {
+    const request = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'owner');
+    let cursor = 0, sawWaiting = false;
+    for (let n = 0; ; n++) {
+      assert.ok(n < 1500, 'first indexed GOP produces before EOF');
+      const state = await scheduler.streamStatus(request.requestId, 'owner', cursor);
+      assert.ok(state && ['queued', 'running'].includes(state.state), JSON.stringify(state));
+      for (const ref of state.chunks) {
+        assert.equal(ref.cursor, cursor + 1); cursor = ref.cursor;
+        const result = await scheduler.store.get(ref.id); assert.ok(result?.gop && result.picture.au < 128);
+      }
+      if (state.progress?.waitingForIndex && cursor > 0) { sawWaiting = true; assert.equal(state.progress.indexComplete, false); break; }
+      await new Promise(r => setTimeout(r, 10));
+    }
+    assert.equal(sawWaiting, true); assert.ok(cursor > 0 && cursor < 300);
+    release = true;
+    for (let n = 0; ; n++) {
+      assert.ok(n < 1500);
+      const state = await scheduler.streamStatus(request.requestId, 'owner', cursor);
+      assert.ok(state && ['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
+      cursor += state.chunks.length;
+      if (state.state === 'complete' && cursor === state.published) { assert.equal(state.progress?.indexComplete, true); break; }
+      await new Promise(r => setTimeout(r, 10));
+    }
+    assert.equal(cursor, 300); scheduler.release(request.requestId, 'owner');
+    const manifest = await call('stream-manifest', { id: f.entry.id, version: f.entry.version, identity });
+    assert.equal(manifest.manifest.complete, true, 'shared index survives analysis release');
+    release = false;
+    const cancelled = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'cancel');
+    for (let n = 0; ; n++) {
+      assert.ok(n < 1500);
+      const state = await scheduler.streamStatus(cancelled.requestId, 'cancel', 0);
+      assert.ok(state && ['queued', 'running'].includes(state.state), JSON.stringify(state));
+      if (state.chunks.length) { scheduler.release(cancelled.requestId, 'cancel'); break; }
+      await new Promise(r => setTimeout(r, 10));
+    }
+    assert.equal((await call('stream-manifest', { id: f.entry.id, version: f.entry.version, identity })).manifest.complete, true);
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
+});
+
+test('three users can stream six distinct library jobs together; cancelling one preserves the other five', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { copyFile } = await import('node:fs/promises');
+  const media = await mkdtemp(join(tmpdir(), 'vp-six-streams-'));
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=64x32:rate=30:duration=2', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, 'stream-0.mp4')]);
+  for (let n = 1; n < 6; n++) await copyFile(join(media, 'stream-0.mp4'), join(media, `stream-${n}.mp4`));
+  const f = await fixture(media, 'stream-0.mp4'), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  try {
+    const entries = (await f.library.list()).entries.filter(e => e.name.startsWith('stream-'));
+    assert.equal(entries.length, 6);
+    const jobs = await Promise.all(entries.map((entry, n) => scheduler.submit(entry.id, entry.version!, {
+      mode: 'stream', sourceVersion: `${entry.id}@${entry.version}`, firstPtsUs: 0, durationUs: 2000000,
+    }, `user-${Math.floor(n / 2)}`)));
+    const owner = (n: number) => `user-${Math.floor(n / 2)}`;
+    // Do not acknowledge chunks: all six workers must reach their own bounded
+    // window while the first job is still running, proving actual overlap.
+    for (let n = 0; ; n++) {
+      const states = jobs.map((job, i) => scheduler.status(job.requestId, owner(i))!);
+      if (states.every(state => state.published === 32)) {
+        assert.ok(states.every(state => state.state === 'running')); break;
+      }
+      assert.ok(n < 1000, JSON.stringify(states));
+      assert.ok(states.every(state => ['running', 'queued'].includes(state.state)), JSON.stringify(states));
+      await new Promise(r => setTimeout(r, 10));
+    }
+    scheduler.release(jobs[0].requestId, owner(0));
+    assert.ok(jobs.slice(1).every((job, i) => scheduler.status(job.requestId, owner(i + 1))!.state === 'running'));
+    await Promise.all(jobs.slice(1).map(async (job, j) => {
+      const i = j + 1; let cursor = 0;
+      for (let n = 0; ; n++) {
+        const state = await scheduler.streamStatus(job.requestId, owner(i), cursor);
+        assert.ok(state);
+        for (const ref of state.chunks) {
+          const result = await scheduler.store.get(ref.id);
+          assert.equal(result?.picture.sourceVersion, `${entries[i].id}@${entries[i].version}`);
+          cursor = ref.cursor;
+        }
+        if (state.state === 'complete' && cursor === state.published) break;
+        assert.ok(n < 1000 && ['running','complete'].includes(state.state), JSON.stringify(state));
+        await new Promise(r => setTimeout(r, 10));
+      }
+      assert.equal(cursor, 60);
+      scheduler.release(job.requestId, owner(i));
+    }));
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
 });
