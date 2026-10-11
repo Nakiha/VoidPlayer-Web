@@ -17,6 +17,7 @@ export type AnalysisViewState = {
   windowUs: number;
   layoutMode: 'merged' | 'rows';
   showBitrate: boolean; showSize: boolean;
+  loadMetrics?: ('bitrate' | 'qp')[];
   follow: boolean;
   selected: Slot[];
   /** 状态区帧号顺序：缺省（老工作区）为 pts。 */
@@ -136,7 +137,9 @@ export function parseWorkspace(value: unknown, baseUrl?: string): WorkspaceFile 
       if (a.layoutMode !== 'merged' && a.layoutMode !== 'rows') throw new Error('分析布局无效。');
       if (a.diagram !== undefined && !['overview', 'nalu', 'nalu-size', 'nalu-types', 'references'].includes(a.diagram)) throw new Error('Invalid analysis diagram');
       if (a.diagrams !== undefined && (!Array.isArray(a.diagrams) || a.diagrams.length > ANALYSIS_DIAGRAMS.length || a.diagrams.some((value: unknown) => !ANALYSIS_DIAGRAMS.includes(value as AnalysisDiagram)) || new Set(a.diagrams).size !== a.diagrams.length)) throw new Error('Invalid analysis diagrams');
+      if (a.loadMetrics !== undefined && (!Array.isArray(a.loadMetrics) || a.loadMetrics.length > 2 || a.loadMetrics.some((value: unknown) => value !== 'bitrate' && value !== 'qp') || new Set(a.loadMetrics).size !== a.loadMetrics.length)) throw new Error('Invalid load metrics');
       layout.analysisView = {
+        ...(a.loadMetrics === undefined ? {} : {loadMetrics: [...a.loadMetrics]}),
         view, axis: a.axis, windowUs: a.windowUs, layoutMode: a.layoutMode,
         showBitrate: boolean(a.showBitrate), showSize: boolean(a.showSize),
         follow: boolean(a.follow), selected: array(a.selected, SLOTS.length).map(slotValue),

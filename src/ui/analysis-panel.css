@@ -68,12 +68,6 @@
   flex: 0 0 auto;
   font-size: 12px;
 }
-.analysis-tracks {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
 .analysis-chip {
   display: inline-flex;
   align-items: center;
@@ -88,7 +82,6 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.analysis-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .analysis-chip[aria-pressed="true"] { background: var(--surface-selected); color: var(--text); }
 /* 右侧状态区：当前上屏帧 PTS + 帧号。平时与功能区同行右对齐；
    放不下时自动换到第二行（表头最多两行，仍在 64px 内）。 */
@@ -122,8 +115,6 @@
   gap: 4px;
   flex: 0 0 auto;
 }
-.analysis-status .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.analysis-status .st-slot { color: var(--text-secondary); }
 .analysis-status .st-num, .analysis-status .st-num-input {
   box-sizing: border-box;
   width: var(--frame-number-width, 4ch);
@@ -416,8 +407,9 @@
 /* Comparison visibility and explicit inspection belong to the same track pill. */
 .analysis-track-control { display:inline-flex; align-items:stretch; border-radius:7px; background:var(--surface-button); overflow:hidden; flex:0 0 auto; }
 .analysis-track-control[data-selected="true"] { background:var(--surface-selected); }
-.analysis-track-control .analysis-chip { border-radius:0; background:none; padding:3px 7px; gap:0; }
-.analysis-track-control .analysis-chip .dot { margin-right:5px; }
+.analysis-track-control .analysis-chip { border:0; border-radius:0; background:none; padding:3px; gap:0; min-height:28px; }
+.analysis-track-control .slot { width:22px; height:22px; font-size:12px; border-radius:5px; }
+.analysis-track-control[data-selected="false"] .slot { opacity:.4; }
 .bitstream-diagram-empty { gap:12px; padding:12px 20px; }
 .bitstream-empty-copy { display:flex; flex-direction:column; gap:5px; text-align:left; max-width:48ch; min-width:0; }
 .bitstream-empty-copy strong { font-size:12px; font-weight:600; color:var(--text); }
@@ -432,10 +424,6 @@
 .analysis-container-card .is-selected { color:var(--text); font-weight:600; }
 .analysis-container-card .analysis-card-note { color:var(--text-secondary); font-size:inherit; margin-top:6px; }
 
-.analysis-progress-ring { display:block; width:20px; height:20px; transform:rotate(-90deg); fill:none; stroke:currentColor; stroke-width:2; }
-.analysis-progress-ring .ring-track { opacity:.2; }
-.analysis-progress-ring .ring-value { stroke-dasharray:100; stroke-dashoffset:var(--inspection-progress,100); stroke-linecap:round; }
-@keyframes inspection-spin { to { transform:rotate(270deg); } }
 
 
 /* Deep diagrams and details carry an explicit track identity. */
@@ -453,13 +441,7 @@
 .analysis-card .analysis-card-track-badge { width:20px; height:20px; min-height:20px; font:600 12px/1 var(--font-ui); vertical-align:middle; }
 
 /* A passive progress circle expands inside the stable track button. */
-.analysis-track-progress { display:inline-flex; align-items:center; justify-content:flex-end; width:0; opacity:0; overflow:hidden; transition:width .24s ease, opacity .18s ease; }
 .analysis-track-control[data-state="pending"] .analysis-track-progress { width:26px; opacity:1; }
-.analysis-track-progress .analysis-progress-ring { flex:none; color:var(--accent); }
-.analysis-progress-ring .ring-value { transition:stroke-dashoffset .2s ease; }
-.analysis-track-progress.is-waiting .ring-value { stroke-dashoffset:75; }
-.analysis-track-progress.is-waiting .analysis-progress-ring { animation:inspection-spin 1.2s linear infinite; }
-@media (prefers-reduced-motion:reduce) { .analysis-track-progress, .analysis-progress-ring .ring-value { transition:none; } .analysis-track-progress.is-waiting .analysis-progress-ring { animation:none; } }
 
 /* Independent cards move as a complete stack; only an oversized stack scrolls. */
 .analysis-individual-layer { inset: 8px 0; }
@@ -480,3 +462,9 @@
 /* Embedded sections may wrap only when their full row really cannot fit. */
 .analysis-linked-card [data-kind="nalu"] tbody .analysis-card-frame { min-width: 0; }
 .analysis-linked-card [data-kind="nalu"] .analysis-card-frame td { flex: 0 1 auto; min-width: 0; height: auto; white-space: normal; overflow-wrap: normal; }
+.analysis-load-legend { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-height:25px; padding:2px 8px; font-size:12px; }
+.analysis-load-legend button { display:inline-flex; align-items:center; gap:5px; padding:2px 4px; min-height:22px; border:0; background:transparent; color:var(--text); font:inherit; }
+.analysis-load-legend button::before { content:''; width:12px; height:0; border-top:2px solid var(--accent); }
+.analysis-load-legend button[data-metric=qp]::before { border-top-style:dashed; }
+.analysis-load-legend button[aria-pressed=false] { opacity:.4; text-decoration:line-through; }
+.analysis-qp-notice { color:var(--text-secondary); }

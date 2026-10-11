@@ -192,8 +192,9 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                     startUs: 0,
                     endUs: 120000,
                   });
-                  await page.locator(`#bitstream-${slot}`).click();
-                  await page.locator("#bitstream-run").click();
+                  if(!await page.locator('#analysis-overlay-panel').isVisible()) await page.locator('#toggle-analysis-overlay').click();
+                  const trackButton=page.locator(`#bitstream-tracks [data-slot="${slot}"]`);
+                  if(await trackButton.getAttribute('aria-pressed')!=='true')await trackButton.click();
                   await page
                     .locator(`#bitstream-overlay-${slot}`)
                     .waitFor({ state: "visible" });
@@ -307,9 +308,10 @@ for (const variant of process.env.ANALYSIS_ONLY_BASELINE
                   measurements: measured.samples,
                   tracks: measured.tracks,
                 };
-                for (const slot of variant === "feature" ? slots : [])
-                  await page.locator(`#bitstream-${slot}`).click();
-                  await page.locator("#bitstream-visibility").uncheck();
+                for (const slot of variant === "feature" ? slots : []) {
+                  const trackButton=page.locator(`#bitstream-tracks [data-slot="${slot}"]`);
+                  if(await trackButton.getAttribute('aria-pressed')==='true')await trackButton.click();
+                }
               } else if (scenario === "background-range") {
                 // Range probes start after submission and stop at analysis settlement.
                 await page.evaluate(() => {

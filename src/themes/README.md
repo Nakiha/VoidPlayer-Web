@@ -63,7 +63,7 @@
 
 标题名称与子轨道名称共用点击和拖动区：轻点切换详情，移动 5px 开始排序并抑制点击；聚焦名称后 Alt+方向键也可排序。拖放使用 `--drag-preview-*`、`--drag-target-fill`、`--drag-insertion`，不重建解码器、不改变标注身份与时间。关闭轨道释放对应解码器，保留标注来源记录；关闭按钮悬停使用 `--action-danger/fill`。
 
-缩放和像素模式复用 `ui/menu.ts` 与 `.popup-menu`，采用 auto popover 顶层、边缘限位及统一材质，支持方向键、Home/End、Escape、Tab 和焦点返回。操作菜单执行前关闭，选项保留 radio 语义。右侧“文件＋ / 添加视频”入口位于连接灯之前。
+缩放和像素模式复用 `ui/menu.ts` 与 `.popup-menu`，采用 auto popover 顶层、边缘限位及统一材质，支持方向键、Home/End、Escape、Tab 和焦点返回。操作菜单执行前关闭，选项保留 radio 语义。右侧“文件＋ / 添加视频”入口位于连接灯之前。 媒体库文件的右键菜单通过 `ui/context-menu.ts` 委托列表事件，复用同一菜单交互与玻璃材质；业务操作在 `ui/library-file-menu.ts` 中。支持鼠标右键、Shift+F10、方向键、Home/End 和 Escape，执行后返回原列表项；滚动或列表项被替换时关闭，浮层始终限位在窗口内。
 
 `ui/tooltips.ts` 统一操作提示，优先显式提示；仅无文字图标回退到可访问名称，不把文件名或字段值当提示。原生 title 迁移到 data-tooltip，菜单和调整条不重复显示通用提示。标注与时间轴使用专用预览。鼠标悬停 350ms 后显示，键盘聚焦即时显示；点击或键盘激活后收起，鼠标移出再进入才重新触发，避免 pointerdown 隐藏后被 focusin 立即重新打开。同一提示文字不重复写入 DOM。
 

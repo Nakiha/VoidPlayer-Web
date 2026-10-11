@@ -29,7 +29,6 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
   const catalog = new SourceCatalog(readHistory());
   const lifecyle = new AbortController();
-  installSourceActivity(session, lifecyle.signal);
   const workspace = $('workspace');
   installStartPanelResize($('start-panel'), lifecyle.signal);
   const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
@@ -54,26 +53,14 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderSources: () => sources.renderSources(),
     resize: value => resize(value), dockHeight: () => dockHeight, annotationHeightDelta,
   };
-  let inspectorTab: 'info' | 'analysis' = 'info';
-  function setInspectorTab(tab: 'info' | 'analysis') {
-    inspectorTab = tab;
-    $('track-properties').hidden = tab !== 'info';
-    $('bitstream-inspector').hidden = tab !== 'analysis';
-    $('inspector-info-tab').setAttribute('aria-pressed', String(tab === 'info'));
-    $('inspector-analysis-tab').setAttribute('aria-pressed', String(tab === 'analysis'));
-  }
   const bitstream = installBitstreamControls(session,
     Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>, {
       selected: () => view.selected,
-      visible: () => view.panels.inspector && inspectorTab === 'analysis',
-      open(slot) { select(slot); setInspectorTab('analysis'); setPanel('inspector', true); },
     });
-  for (const tab of ['info', 'analysis'] as const) $(`inspector-${tab}-tab`).onclick = () => {
-    setInspectorTab(tab); render(session.getState());
-  };
   const tracks = createTracksPane(shared);
   const sources = createSourcesPane(shared);
   sources.wireSourceControls();
+  installSourceActivity(session, lifecyle.signal, slot => { void act(() => sources.locateTrack(slot as Slot), 'ui.locate-track-source', { slot }); });
   const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis,
     selectedSlot: () => view.selected,
   });
@@ -207,9 +194,9 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       analysisResizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:analysisHeight})); },
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
     rememberFile(file: File) { sources.rememberFile(file); },
-    getState: () => ({ panels: { ...view.panels }, selected: view.selected, ...(inspectorTab === 'analysis' ? { inspectorTab } : {}), dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
+    getState: () => ({ panels: { ...view.panels }, selected: view.selected, dockHeight, marksExpanded: annotations.expanded(), filenameWidth: trackColumns.width(), sources: sources.sourcesLayout(), analysisView: analysis.getAnalysisState() }),
     async restore(layout: import('../workspace-file.ts').WorkspaceLayout) {
-      view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected; setInspectorTab(layout.inspectorTab ?? 'info');
+      view.panels = { ...layout.panels, analysis: layout.panels.analysis ?? false }; view.selected = layout.selected;
       annotations.setExpanded(layout.marksExpanded); resize(layout.dockHeight);
       if (layout.filenameWidth !== undefined) trackColumns.resize(layout.filenameWidth);
       if (layout.analysisView) analysis.restoreAnalysisState(layout.analysisView);

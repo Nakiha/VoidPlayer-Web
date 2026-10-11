@@ -6,7 +6,12 @@ import { t, msg } from '../i18n.ts';
 import { failureInfo } from '../bitstream-analysis/failure.ts';
 import { bitstreamReasonText } from './bitstream-reasons.ts';
 import { installChoiceMenu } from './choice-menu.ts';
-import { parseTimeInput } from '../time-input.ts';
+import { installNumericChoice } from './numeric-choice.ts';
+import { analysisTrackBadge } from './analysis/card.ts';
+import { icon } from './icons.ts';
+import { progressRingMarkup } from './progress-ring.ts';
+import { installFilterGestures } from './analysis/filter-gestures.ts';
+import { installFloatingPanelAvoidance } from './floating-panels.ts';
 import './bitstream-controls.css';
 
 type State = ReturnType<ReviewSession['getState']>;
@@ -18,70 +23,90 @@ type Entry = {
   tooltip?: HTMLOutputElement;
   request?: AbortController;
   enabled: boolean;
-  mode: Mode;
-  opacity: number;
+  requestedKey?: string;
   result?: ReadonlyAnalysisResult;
   resultKey?: string;
-  selectedBlock?: AnalysisBlock;
-  selectedKey?: string;
+  capabilities?: ReadonlyAnalysisResult['capabilities'];
   message?: string;
-  completed?: number;
-  range?: { start: number; end: number };
 };
 const tokenKey = (token: PresentedFrameToken | null) => token?.picture ? JSON.stringify([token.generation, token.picture]) : null;
 const modeLabel = (mode: Mode) => mode === 'qp' ? t(msg('bitstream.qp','QP 热图')) : mode === 'modes' ? t(msg('bitstream.prediction','预测模式')) : t(msg('bitstream.boundaries','块边界'));
 const predictionLabel = (mode: AnalysisBlock['mode']) => mode === 'intra' ? t(msg('bitstream.intra','帧内')) : mode === 'inter' ? t(msg('bitstream.inter','帧间')) : t(msg('bitstream.skip','跳过'));
 
-/** Task execution and overlay visibility are independent. Opening this UI is read-only. */
+/** Shared automatic analysis, with viewport-only overlay controls. */
 export function installBitstreamControls(session: ReviewSession, canvases: Record<Slot, HTMLCanvasElement>, hooks: {
   selected(): Slot;
-  visible(): boolean;
-  open(slot: Slot): void;
 }) {
   const host = document.getElementById('bitstream-inspector')!;
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+  const panel = $('analysis-overlay-panel'), trigger = $('toggle-analysis-overlay');
+  let open = false, initialized = false, mode: Mode = 'blocks', opacity = 75;
   host.innerHTML = `
-    <section class="bitstream-section"><h3 data-copy="current"></h3>
-      <p id="bitstream-target" class="bitstream-target"></p>
-      <div class="bitstream-actions"><button id="bitstream-run" type="button" class="bitstream-primary" data-copy="run"></button><button id="bitstream-cancel" type="button" data-copy="cancel" hidden></button></div>
-      <output id="bitstream-state" class="bitstream-feedback" role="status" aria-live="polite"></output>
-      <p class="bitstream-hint" data-copy="explicit"></p>
-    </section>
-    <section class="bitstream-section"><h3 data-copy="display"></h3>
-      <label class="bitstream-display-row"><span data-copy="visibility"></span><input id="bitstream-visibility" type="checkbox"></label>
-      <div class="bitstream-display-row"><label for="bitstream-mode" data-copy="mode"></label><button id="bitstream-mode" class="choice-trigger" type="button"></button></div>
-      <label class="bitstream-display-row" for="bitstream-opacity"><span data-copy="opacity"></span><output id="bitstream-opacity-value"></output></label>
-      <input id="bitstream-opacity" class="bitstream-opacity" type="range" min="10" max="100" step="5" value="75">
-      <div id="bitstream-legend" class="bitstream-legend"></div>
-    </section>
-    <details class="bitstream-section bitstream-summary" id="bitstream-summary-section" hidden><summary data-copy="summary"></summary><dl id="bitstream-summary"></dl></details>
-    <section class="bitstream-section"><div class="bitstream-section-heading"><h3 data-copy="block"></h3><button id="bitstream-unpin" type="button" data-copy="unpin" hidden></button></div><p id="bitstream-block-hint" class="bitstream-hint" data-copy="pick"></p><dl id="bitstream-block" hidden></dl></section>
-    <details class="bitstream-section bitstream-range"><summary data-copy="range"></summary>
-      <p class="bitstream-hint" data-copy="rangeHint"></p>
-      <label for="bitstream-range-start" data-copy="start"></label><input id="bitstream-range-start" type="text" inputmode="decimal" autocomplete="off">
-      <label for="bitstream-range-end" data-copy="end"></label><input id="bitstream-range-end" type="text" inputmode="decimal" autocomplete="off">
-      <button id="bitstream-range-run" type="button" data-copy="rangeRun"></button>
-    </details>`;
+    <button id="bitstream-grip" class="icon-button viewport-tool-grip" data-floating-grip type="button">${icon('grip')}</button>
+    <strong class="bitstream-toolbar-title" data-copy="controls"></strong>
+    <div id="bitstream-tracks" class="bitstream-tracks" role="group"></div>
+    <span class="bitstream-toolbar-divider" aria-hidden="true"></span>
+    <button id="bitstream-mode" class="choice-trigger" type="button"></button>
+    <button id="bitstream-opacity" class="choice-trigger" type="button" aria-label="${t(msg('bitstream.opacity','不透明度'))}"></button>
+    <button id="bitstream-close" class="icon-button" type="button">${icon('close')}</button>`;
   const copy = () => ({
-    current: t(msg('bitstream.current','当前帧')), run: t(msg('bitstream.run','分析此帧')), cancel: t(msg('bitstream.cancel','取消分析')),
-    explicit: t(msg('bitstream.explicit','仅点击分析按钮才执行分析；切换画面只读取已有结果。')),
-    display: t(msg('bitstream.display','画面遮罩')), visibility: t(msg('bitstream.visibility','显示遮罩')), mode: t(msg('bitstream.mode','分析遮罩')),
-    opacity: t(msg('bitstream.opacity','不透明度')), summary: t(msg('bitstream.summary','帧摘要')), block: t(msg('bitstream.block','选中块')),
-    unpin: t(msg('bitstream.unpin','清除选择')), pick: t(msg('bitstream.pick','在画面上点击一个块，将详情固定在这里。')),
-    range: t(msg('bitstream.range','区间分析')), rangeHint: t(msg('bitstream.rangeHint','会话时间范围；每次最多 1 秒、32 帧。分析完成后逐帧查看缓存结果。')),
-    start: t(msg('bitstream.start','开始')), end: t(msg('bitstream.end','结束')), rangeRun: t(msg('bitstream.rangeRun','分析此区间')),
+    controls: t(msg('bitstream.overlayControls','分析遮罩')), opacity: t(msg('bitstream.opacity','不透明度')),
+    mode: t(msg('bitstream.overlayMode','显示内容')),
   });
   const entries = new Map<Slot, Entry>();
   let lastState = session.getState();
-  let uiIdentity: string | undefined;
   const life = new AbortController();
+  const opacityChoice = installNumericChoice('bitstream-opacity', { glyph: 'opacity', presets: [10, 25, 50, 75, 100], suffix: '%', min: 10, max: 100,
+    editLabel: () => t(msg('bitstream.editOpacity', '编辑不透明度')),
+    choose(value) {
+      opacity = value;
+      for (const slot of entries.keys()) { const canvas = document.getElementById(`bitstream-overlay-${slot}`); if (canvas) canvas.style.opacity = String(opacity / 100); }
+      render();
+    },
+  });
+  const automaticStreams = new Map<Slot, string>();
+  installFilterGestures($('bitstream-tracks'), life.signal, (button, solo) => {
+    const slot = button.dataset.slot as Slot;
+    const tracks = lastState.tracks.filter(track => !track.failure);
+    if (!tracks.some(track => track.slot === slot)) return;
+    if (solo) {
+      const restoreAll = tracks.every(track => !!entryFor(track.slot)?.enabled === (track.slot === slot));
+      for (const track of tracks) setVisibility(track.slot, restoreAll || track.slot === slot);
+    } else setVisibility(slot, !entryFor(slot)?.enabled);
+  });
+  const floating = installFloatingPanelAvoidance(panel, $('annotation-toolbar'), life.signal);
+  function setOpen(value: boolean) {
+    open = value && lastState.tracks.some(track=>!track.failure);
+    panel.hidden = !open; trigger.setAttribute('aria-expanded', String(open));
+    if (!open) { opacityChoice.close(); menu.close(); }
+    if (open && !initialized) { initialized = true; setVisibility(hooks.selected(), true); }
+    render(); floating.update();
+  }
+  trigger.onclick = () => setOpen(!open);
+  $('bitstream-close').onclick = () => { setOpen(false); trigger.focus(); };
+  panel.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !(event.target as Element).closest('[popover]:popover-open')) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.focus(); }
+  }, {signal:life.signal});
+  function automatic(slot: Slot, entry: Entry) {
+    if (!entry.enabled || cached(slot,entry)) return;
+    const state = session.getBitstreamAnalysisState(slot);
+    if (state.state === 'pending' || entry.request) return;
+    if (automaticStreams.get(slot) !== entry.sourceId && !(state.state === 'ready' && state.stream)) {
+      automaticStreams.set(slot, entry.sourceId);
+      queueMicrotask(()=> { if (entries.get(slot)===entry && entry.enabled && session.getBitstreamAnalysisState(slot).state!=='pending') void session.requestBitstreamStream(slot).catch(()=>{}); });
+    } else if (state.state === 'ready' && state.stream && !cached(slot,entry) && !lastState.playing) {
+      const key = tokenKey(session.getPresentedFrame(slot));
+      if (key && key !== entry.requestedKey) { entry.requestedKey=key; queueMicrotask(()=> { if(entry.enabled && entries.get(slot)===entry) void run(slot); }); }
+    }
+  }
+
   function entryFor(slot: Slot): Entry | undefined {
     const track = lastState.tracks.find(track => track.slot === slot);
     if (!track) return undefined;
     let entry = entries.get(slot);
-    if (!entry || entry.sourceId !== track.id) {
+    if (!entry || entry.sourceId !== `${track.id}:${track.sourceGen}`) {
       destroy(slot);
-      entry = { sourceId: track.id, enabled: false, mode: 'blocks', opacity: 75 };
+      entry = { sourceId: `${track.id}:${track.sourceGen}`, enabled: false };
       entries.set(slot, entry);
     }
     return entry;
@@ -100,11 +125,11 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (!entry.loading) entry.loading = import('../analysis-overlay/controller.ts').then(({ createAnalysisOverlay }) => {
       if (entries.get(slot) !== entry || !entry.enabled || life.signal.aborted) return;
       entry.overlay = createAnalysisOverlay(session, slot, canvases[slot]);
-      entry.overlay.setMode(entry.mode);
-      const canvas = $(`bitstream-overlay-${slot}`); canvas.style.opacity = String(entry.opacity / 100);
+      entry.overlay.setMode(mode);
+      const canvas = $(`bitstream-overlay-${slot}`); canvas.style.opacity = String(opacity / 100);
       const result = cached(slot, entry); if (result) entry.overlay.setResult(result);
       const tooltip = document.createElement('output'); tooltip.className = 'bitstream-hit-tooltip'; tooltip.hidden = true;
-      canvases[slot].closest('.frame-stage')!.append(tooltip); entry.tooltip = tooltip;
+      panel.closest('.viewport-surface')!.append(tooltip); entry.tooltip = tooltip;
     }).finally(() => { entry.loading = undefined; });
     await entry.loading;
   }
@@ -115,124 +140,91 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     else { entry.overlay?.dispose(); entry.overlay = undefined; entry.tooltip?.remove(); entry.tooltip = undefined; }
     render();
   }
-  function rows(element: HTMLElement, values: [string, string][]) {
-    element.replaceChildren(...values.flatMap(([label, value]) => {
-      const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = label; dd.textContent = value; return [dt, dd];
-    }));
-  }
   const choices = () => {
-    const slot = hooks.selected(), entry = entries.get(slot), result = entry && cached(slot, entry);
-    return (['blocks', 'qp', 'modes'] as Mode[]).filter(mode => mode === 'blocks' || (mode === 'qp' ? result?.capabilities.qp === 'ready' : result?.capabilities.modes === 'ready')).map(value => ({ value, label: modeLabel(value) }));
+    const capabilities = [...entries.values()].filter(entry=>entry.enabled && entry.capabilities).map(entry=>entry.capabilities!);
+    return (['blocks','qp','modes'] as Mode[]).filter(value=>value==='blocks' || capabilities.length>0 && capabilities.every(result=>value==='qp'?result.qp==='ready':result.modes==='ready')).map(value=>({value,label:modeLabel(value)}));
   };
   const menu = installChoiceMenu('bitstream-mode', choices, value => {
-    const entry = entryFor(hooks.selected()); if (!entry) return;
-    entry.mode = value as Mode; entry.overlay?.setMode(entry.mode); render();
+    mode = value as Mode;
+    for(const entry of entries.values()) entry.overlay?.setMode(mode);
+    render();
   });
   function localize() {
     const labels = copy();
     for (const node of host.querySelectorAll<HTMLElement>('[data-copy]')) node.textContent = labels[node.dataset.copy as keyof typeof labels];
-    $('inspector-info-tab').textContent = t(msg('bitstream.infoTab','信息'));
-    $('inspector-analysis-tab').textContent = t(msg('bitstream.analysisTab','分析'));
+    $('bitstream-grip').setAttribute('aria-label', t(msg('shell.dragToolbar','拖动工具条')));
+    $('bitstream-grip').setAttribute('data-tooltip', t(msg('shell.dragToolbar','拖动工具条')));
+    $('bitstream-close').setAttribute('aria-label', t(msg('bitstream.closeOverlay', '关闭分析遮罩')));
+    trigger.setAttribute('aria-label', t(msg('bitstream.overlayControls','分析遮罩')));
+    $('bitstream-tracks').setAttribute('aria-label', t(msg('analysis.compareTracks','对比轨道')));
     $('bitstream-mode').setAttribute('aria-label', labels.mode);
     $('bitstream-opacity').setAttribute('aria-label', labels.opacity);
-    for (const slot of SLOTS) {
-      $(`bitstream-${slot}`).textContent = t(msg('bitstream.analysisTab','分析'));
-      $(`bitstream-${slot}`).setAttribute('aria-label', t(msg('bitstream.open','打开轨道 {slot} 的分析检查'), { slot }));
-    }
     render();
   }
   function render(state: State = lastState) {
     lastState = state;
     for (const slot of SLOTS) {
       const track = state.tracks.find(track => track.slot === slot);
-      ($(`bitstream-${slot}`) as HTMLButtonElement).disabled = !track || !!track.failure;
-      if (!track || entries.get(slot)?.sourceId !== track.id) destroy(slot);
+      if (!track || entries.get(slot)?.sourceId !== `${track.id}:${track.sourceGen}`) destroy(slot);
     }
-    if (!hooks.visible()) return;
-    const slot = hooks.selected(), track = state.tracks.find(track => track.slot === slot), entry = entryFor(slot);
-    const token = track && session.getPresentedFrame(slot), result = entry && cached(slot, entry), key = tokenKey(token || null);
-    if (entry?.selectedKey !== key) { if (entry) { entry.selectedBlock = undefined; entry.selectedKey = undefined; } }
-    $('bitstream-target').textContent = track ? `${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)}${token?.picture ? ` · AU ${token.picture.au}` : ''}` : t(msg('tracks.noTracksLoaded','尚未载入轨道'));
-    const streamState = session.getBitstreamAnalysisState(hooks.selected());
-    const stream = streamState.stream?.slot === slot ? streamState.stream : undefined;
-    const busy = !!entry?.request || !!stream && streamState.state === 'pending';
-    ($('bitstream-run') as HTMLButtonElement).disabled = !track || !!track.failure || state.playing || busy;
-    $('bitstream-cancel').hidden = !busy;
-    const feedback = $('bitstream-state');
-    feedback.textContent = busy ? entry?.range ? t(msg('bitstream.rangePending','正在分析区间…')) : t(msg('bitstream.pending','正在分析当前帧…')) : entry?.message ?? (state.playing ? t(msg('bitstream.pauseFirst','暂停后可分析当前帧。')) : result ? result.confidence === 'exact' ? t(msg('bitstream.available','当前帧结果可用')) : bitstreamReasonText(result.reasonCodes?.[0] ?? 'incomplete-reference-state') : t(msg('bitstream.notAnalyzed','此帧尚未分析')));
-    if (stream) {
-      const percent = stream.totalUs > 0 ? Math.min(100, Math.floor(stream.checkedUs / stream.totalUs * 100)) : 0;
-      feedback.textContent = streamState.state === 'ready' ? t(msg('analysis.streamDone','{slot} 已完成 · {count} 帧'), { slot, count: stream.pictures })
-        : stream.waitingForIndex ? t(msg('analysis.streamWaiting','{slot} 等待索引 · 已检查 {count} 帧'), { slot, count: stream.pictures })
-        : t(msg('analysis.streamProgress','{slot} {percent}% · {count} 帧'), { slot, percent, count: stream.pictures });
-      if (streamState.reason) feedback.textContent += ` · ${bitstreamReasonText(streamState.reason.code)}`;
+    trigger.toggleAttribute('disabled', !state.tracks.some(track=>!track.failure));
+    if (!state.tracks.length) { initialized=false; if(open) setOpen(false); }
+    for(const [slot,entry] of entries) {
+      automatic(slot,entry);
+      const result=cached(slot,entry);
+      if(result?.confidence==='exact') entry.capabilities=result.capabilities;
+      if(result && entry.enabled) entry.overlay?.setResult(result);
     }
-    if (result && entry?.enabled) entry.overlay?.setResult(result);
-    if (result?.confidence === 'exact' && result.capabilities.qp !== 'ready') feedback.textContent += ` · ${bitstreamReasonText('unsupported-qp-depth')}`;
-    if (entry?.completed !== undefined && !busy) feedback.textContent += ` · ${t(msg('bitstream.rangeCompleted','区间已完成 {count} 帧'), { count: entry.completed })}`;
-    if (entry && result && ((entry.mode === 'qp' && result.capabilities.qp !== 'ready') || (entry.mode === 'modes' && result.capabilities.modes !== 'ready'))) {
-      entry.mode = 'blocks'; entry.overlay?.setMode('blocks');
+    if (!open) return;
+    const tracks = $('bitstream-tracks');
+    const signature = state.tracks.filter(track=>!track.failure).map(track=>`${track.slot}:${track.id}:${track.sourceGen}`).join(',');
+    if (tracks.dataset.tracks !== signature) {
+      tracks.dataset.tracks = signature;
+      tracks.replaceChildren(...state.tracks.filter(track=>!track.failure).map(track=>{
+        const button=document.createElement('button'); button.type='button'; button.dataset.slot=track.slot; button.className='bitstream-track-control';
+        button.append(analysisTrackBadge(track.slot));
+        const progress=document.createElement('span'); progress.className='bitstream-track-progress'; progress.setAttribute('role','progressbar'); progress.setAttribute('aria-valuemin','0'); progress.setAttribute('aria-valuemax','100');
+        progress.innerHTML=progressRingMarkup;
+        button.append(progress);
+        return button;
+      }));
     }
-    const visibility = $('bitstream-visibility') as HTMLInputElement;
-    visibility.checked = entry?.enabled ?? false; visibility.disabled = !track;
-    menu.setOptions(choices); menu.sync(entry?.mode ?? 'blocks', modeLabel(entry?.mode ?? 'blocks'), !!result && result.confidence === 'exact');
-    const opacity = $('bitstream-opacity') as HTMLInputElement; opacity.disabled = !entry?.enabled;
-    if (document.activeElement !== opacity) opacity.value = String(entry?.opacity ?? 75);
-    $('bitstream-opacity-value').textContent = `${entry?.opacity ?? 75}%`;
-    const legend = $('bitstream-legend');
-    legend.replaceChildren();
-    if (result?.confidence === 'exact' && entry?.mode === 'qp') {
-      const gradient = document.createElement('div'); gradient.className = 'bitstream-qp-gradient';
-      const labels = document.createElement('div'); labels.className = 'bitstream-display-row';
-      const max = result.codec === 'vvc' ? 63 : 51; labels.textContent = `QP 0 — ${max}`; legend.append(gradient, labels);
-    } else if (result?.confidence === 'exact' && entry?.mode === 'modes') {
-      for (const mode of ['intra', 'inter', 'skip'] as const) {
-        const item = document.createElement('span'); item.className = `bitstream-mode-key ${mode}`; item.textContent = predictionLabel(mode); legend.append(item);
-      }
-    } else legend.textContent = t(msg('bitstream.cacheOnly','换帧时仅显示精确匹配的缓存；没有结果则隐藏遮罩。'));
-    $('bitstream-summary-section').hidden = !result;
-    if (result) rows($('bitstream-summary'), [
-      [t(msg('bitstream.blocks','块')), String(result.blocks.length)],
-      [t(msg('bitstream.meanQp','平均亮度 QP')), result.qp.mean?.toFixed(1) ?? '—'],
-      [t(msg('bitstream.precision','匹配')), result.confidence === 'exact' ? t(msg('bitstream.exact','精确')) : t(msg('bitstream.partial','部分结果'))],
-    ]);
-    const block = entry?.selectedBlock;
-    $('bitstream-block').hidden = !block; $('bitstream-block-hint').hidden = !!block; $('bitstream-unpin').hidden = !block;
-    if (block) rows($('bitstream-block'), [
-      [t(msg('bitstream.coordinates','坐标')), `${block.x}, ${block.y}`], [t(msg('tracks.dimensions','尺寸')), `${block.width} × ${block.height}`],
-      [t(msg('bitstream.prediction','预测模式')), predictionLabel(block.mode)], ['QP', block.qp === null ? '—' : String(block.qp)],
-    ]);
-    const rangeButton = $('bitstream-range-run') as HTMLButtonElement; rangeButton.disabled = !track || !!track.failure || busy;
-    if (uiIdentity !== `${slot}:${entry?.sourceId}`) {
-      uiIdentity = `${slot}:${entry?.sourceId}`;
-      const start = entry?.range?.start ?? Math.max(0, (token?.normalizedMediaUs ?? 0) + (track?.offsetUs ?? 0));
-      const end = entry?.range?.end ?? Math.min(start + 500000, (track?.durationUs ?? start + 500000) + (track?.offsetUs ?? 0));
-      ($('bitstream-range-start') as HTMLInputElement).value = formatTime(start);
-      ($('bitstream-range-end') as HTMLInputElement).value = formatTime(end);
+    for(const button of tracks.querySelectorAll<HTMLButtonElement>('button')) {
+      const slot=button.dataset.slot as Slot, entry=entryFor(slot)!, track=state.tracks.find(track=>track.slot===slot)!;
+      const analysis=session.getBitstreamAnalysisState(slot), stream=analysis.stream, pending=analysis.state==='pending' || !!entry.request;
+      const percent=!entry.request && !analysis.queued && stream && stream.totalUs>0 ? Math.min(100,Math.floor(stream.checkedUs/stream.totalUs*100)):0;
+      const status=pending ? t(msg('analysis.streamProgress','{slot} {percent}% · {count} 帧'),{slot,percent,count:stream?.pictures ?? 0}) : entry.message ?? (analysis.reason ? bitstreamReasonText(analysis.reason.code) : '');
+      button.setAttribute('aria-pressed',String(entry.enabled)); button.dataset.state=pending?'pending':analysis.state;
+      const label=t(entry.enabled ? msg('bitstream.hideTrackOverlay','隐藏轨道 {slot} 的遮罩') : msg('bitstream.showTrackOverlay','显示轨道 {slot} 的遮罩'),{slot});
+      button.setAttribute('aria-label',label); button.title=`${label} · ${track.name}${status?' · '+status:''}\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部。'))}`; button.setAttribute('aria-description',status);
+      const progress=button.querySelector<HTMLElement>('.bitstream-track-progress')!;
+      progress.setAttribute('aria-label',t(msg('bitstream.analysisProgress','分析进度')));progress.setAttribute('aria-valuenow',String(percent));progress.setAttribute('aria-hidden',String(!pending));
+      progress.style.setProperty('--inspection-progress',String(100-percent));progress.classList.toggle('is-waiting',percent===0);
     }
+    const available=choices();
+    if([...entries.values()].some(entry=>entry.enabled && entry.capabilities) && !available.some(option=>option.value===mode)) {mode='blocks';for(const entry of entries.values())entry.overlay?.setMode(mode);}
+    menu.setOptions(choices); menu.sync(mode,modeLabel(mode),available.length>1);
+    opacityChoice.sync(String(opacity), `${+opacity.toFixed(1)}%`, entries.size > 0);
   }
-  async function run(range?: { start: number; end: number }) {
-    const slot = hooks.selected(), entry = entryFor(slot); if (!entry || entry.request) return;
+  async function run(slot: Slot) {
+    const entry = entryFor(slot); if (!entry) return;
+    if (cached(slot, entry)?.confidence === 'exact') { setVisibility(slot, true); return; }
+    if (entry.request) return;
     const requested = session.getPresentedFrame(slot), controller = new AbortController();
-    entry.request = controller; entry.message = undefined; entry.completed = undefined; entry.range = range;
+    entry.request = controller; entry.message = undefined;
     render();
     try {
-      if (range) {
-        const completed = await session.requestBitstreamRange(slot, range.start, range.end, controller.signal);
-        entry.completed = completed.pictures;
-      } else {
-        entry.enabled = true;
-        await ensureOverlay(slot, entry);
-        controller.signal.throwIfAborted();
-        const current = session.getPresentedFrame(slot);
-        if (!requested || current?.commit !== requested.commit || current.generation !== requested.generation) {
-          entry.message = t(msg('bitstream.changedFrame','画面已切换，请分析新的当前帧。')); return;
-        }
-        const result = await session.requestBitstreamAnalysis(slot, controller.signal);
-        controller.signal.throwIfAborted();
-        entry.result = result; entry.resultKey = tokenKey(requested) ?? undefined;
-        if (tokenKey(session.getPresentedFrame(slot)) === entry.resultKey) entry.overlay?.setResult(result);
+      entry.enabled = true;
+      await ensureOverlay(slot, entry);
+      controller.signal.throwIfAborted();
+      const current = session.getPresentedFrame(slot);
+      if (!requested || current?.commit !== requested.commit || current.generation !== requested.generation) {
+        return;
       }
+      const result = await session.requestBitstreamAnalysis(slot, controller.signal);
+      controller.signal.throwIfAborted();
+      entry.result = result; entry.resultKey = tokenKey(requested) ?? undefined;
+      if (tokenKey(session.getPresentedFrame(slot)) === entry.resultKey) entry.overlay?.setResult(result);
     } catch (error) {
       if (entries.get(slot) === entry) entry.message = bitstreamReasonText(controller.signal.aborted ? 'cancelled' : failureInfo(error).code);
     } finally {
@@ -241,58 +233,31 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     }
   }
   for (const slot of SLOTS) {
-    $(`bitstream-${slot}`).onclick = () => hooks.open(slot);
     const stage = canvases[slot].closest<HTMLElement>('.frame-stage')!;
-    const hit = (event: PointerEvent | MouseEvent) => {
-      const entry = entries.get(slot);
-      if (!entry?.enabled || !entry.overlay || !stage.querySelector('.drawing-layer')?.hasAttribute('hidden') || (event.target as Element).closest('button,input,select')) return null;
-      const rect = stage.getBoundingClientRect(); return entry.overlay.hit(event.clientX - rect.left, event.clientY - rect.top);
-    };
     stage.addEventListener('pointermove', event => {
-      const entry = entries.get(slot), block = hit(event); if (!entry?.tooltip) return;
-      entry.tooltip.hidden = !block;
-      if (!block) return;
-      const rect = stage.getBoundingClientRect();
-      entry.tooltip.textContent = `${block.x},${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
-      entry.tooltip.style.left = `${Math.max(8, Math.min(event.clientX - rect.left + 12, rect.width - 260))}px`;
-      entry.tooltip.style.top = `${Math.max(8, Math.min(event.clientY - rect.top + 12, rect.height - 40))}px`;
-    }, { signal: life.signal });
-    stage.addEventListener('pointerleave', () => { const entry = entries.get(slot); if (entry?.tooltip) entry.tooltip.hidden = true; }, { signal: life.signal });
-    stage.addEventListener('click', event => {
-      const block = hit(event), entry = entries.get(slot); if (!block || !entry) return;
-      entry.selectedBlock = { ...block }; entry.selectedKey = tokenKey(session.getPresentedFrame(slot)) ?? undefined; hooks.open(slot);
-    }, { signal: life.signal });
+      const entry=entries.get(slot); if(!entry?.tooltip)return;
+      const rect=stage.getBoundingClientRect();
+      const block=entry.enabled && stage.querySelector('.drawing-layer')?.hasAttribute('hidden') && !(event.target as Element).closest('button,input,select') ? entry.overlay?.hit(event.clientX-rect.left,event.clientY-rect.top):null;
+      entry.tooltip.hidden=!block; if(!block)return;
+      const token=session.getPresentedFrame(slot);
+      entry.tooltip.textContent=`${slot} · ${formatTime(token?.normalizedMediaUs ?? 0)} · PTS\n${block.x}, ${block.y} · ${block.width}×${block.height} · ${predictionLabel(block.mode)} · QP ${block.qp ?? '—'}`;
+      const viewport=panel.closest('.viewport-surface')!.getBoundingClientRect(), tip=entry.tooltip.getBoundingClientRect();
+      let x=event.clientX-viewport.left+12, y=event.clientY-viewport.top+12;
+      if(x+tip.width>viewport.width-8)x=event.clientX-viewport.left-tip.width-12;
+      if(y+tip.height>viewport.height-8)y=event.clientY-viewport.top-tip.height-12;
+      entry.tooltip.style.left=`${Math.max(8,Math.min(x,viewport.width-tip.width-8))}px`;
+      entry.tooltip.style.top=`${Math.max(8,Math.min(y,viewport.height-tip.height-8))}px`;
+    }, {signal:life.signal});
+    stage.addEventListener('pointerleave',()=>{const entry=entries.get(slot);if(entry?.tooltip)entry.tooltip.hidden=true;},{signal:life.signal});
   }
-  $('bitstream-run').onclick = () => void run();
-  $('bitstream-cancel').onclick = () => { const state = session.getBitstreamAnalysisState(hooks.selected()); if (state.stream?.slot === hooks.selected() && state.state === 'pending') session.cancelBitstreamAnalysis(hooks.selected()); else entries.get(hooks.selected())?.request?.abort(); };
-  $('bitstream-visibility').onchange = () => setVisibility(hooks.selected(), ($('bitstream-visibility') as HTMLInputElement).checked);
-  $('bitstream-opacity').oninput = () => {
-    const slot = hooks.selected(), entry = entryFor(slot); if (!entry) return;
-    entry.opacity = Number(($('bitstream-opacity') as HTMLInputElement).value);
-    const canvas = document.getElementById(`bitstream-overlay-${slot}`); if (canvas) canvas.style.opacity = String(entry.opacity / 100); render();
-  };
-  $('bitstream-unpin').onclick = () => { const entry = entries.get(hooks.selected()); if (entry) entry.selectedBlock = undefined; render(); };
-  $('bitstream-range-run').onclick = () => {
-    const entry = entryFor(hooks.selected()); if (!entry) return;
-    try {
-      const start = parseTimeInput(($('bitstream-range-start') as HTMLInputElement).value), end = parseTimeInput(($('bitstream-range-end') as HTMLInputElement).value);
-      const track = lastState.tracks.find(track => track.slot === hooks.selected())!;
-      if (end <= start || end - start > 1000000 || start < Math.max(0, track.offsetUs ?? 0) || end > track.durationUs + (track.offsetUs ?? 0)) {
-        entry.message = t(msg('bitstream.invalidRange','请选择片源范围内不超过 1 秒的区间。')); render(); return;
-      }
-      void run({ start, end });
-    } catch { entry.message = t(msg('bitstream.invalidTime','请输入有效时间，例如 00:03.300。')); render(); }
-  };
-  const offFrames = session.subscribePresentedFrames((slot, token) => {
-    const entry = entries.get(slot); if (!entry) return;
-    entry.message = undefined;
-    if (entry.selectedKey !== tokenKey(token)) { entry.selectedBlock = undefined; entry.selectedKey = undefined; }
-    if (entry.tooltip) entry.tooltip.hidden = true;
-    if (hooks.visible() && hooks.selected() === slot) render();
+  const offFrames=session.subscribePresentedFrames(slot=>{
+    const entry=entries.get(slot);if(!entry)return;
+    entry.message=undefined;if(entry.tooltip)entry.tooltip.hidden=true;
+    render();
   });
   localize();
   return {
-    render, localize,
-    dispose() { offFrames(); life.abort(); menu.dispose(); for (const slot of SLOTS) destroy(slot); },
+    render, localize, setOpen,
+    dispose() { offFrames(); floating.dispose(); life.abort(); menu.dispose(); opacityChoice.dispose(); for (const slot of SLOTS) destroy(slot); },
   };
 }

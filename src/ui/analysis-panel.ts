@@ -79,7 +79,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     <header class="analysis-head">
       <div class="analysis-primary"><div id="analysis-diagrams" class="analysis-diagram-toggles" role="group" aria-label="${th(msg('analysis.diagrams','分析图示'))}"></div></div>
       <div class="analysis-tools" role="group" aria-label="${th(msg("analysis.tools", "分析选项"))}">
-        <span id="analysis-tracks" class="analysis-tracks" role="group" aria-label="${th(msg("analysis.compareTracks", "对比轨道"))}"></span>
         <div class="segmented" id="analysis-axis" role="group" aria-label="${th(msg("analysis.timeBase", "时间基准"))}" title="${th(msg("analysis.timeBaseTitle", "PTS 为展示时间，DTS 为解码时间；无可靠 DTS 的轨道不支持 DTS 视图"))}">
           <button type="button" data-axis="pts">PTS</button>
           <button type="button" data-axis="dts">DTS</button>
@@ -111,7 +110,19 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const overviewVisible = () => diagrams.has('bitrate') || diagrams.has('size');
   const charts = document.createElement('div'); charts.className = 'analysis-charts';
   const overviewHost = document.createElement('div'); overviewHost.className = 'analysis-overview';
-  overviewHost.append($<HTMLElement>('.analysis-notice'), $<HTMLElement>('.analysis-body'));
+  const loadLegend = document.createElement('div'); loadLegend.className='analysis-load-legend'; loadLegend.id='analysis-load-metrics'; loadLegend.setAttribute('role','group');
+  const qpNotice = document.createElement('span'); qpNotice.className='analysis-qp-notice';
+  for(const metric of ['bitrate','qp']) { const button=document.createElement('button');button.type='button';button.dataset.metric=metric; loadLegend.append(button); }
+  const loadLabel=document.createElement('strong'); loadLegend.prepend(loadLabel); loadLegend.append(qpNotice);
+  let loadMetrics = new Set<'bitrate'|'qp'>(prefs.loadMetrics ?? ['bitrate']);
+  let loadSolo: {metric:'bitrate'|'qp'; previous:Set<'bitrate'|'qp'>}|undefined;
+  installFilterGestures(loadLegend, signal, (button,solo)=> {
+    const metric=button.dataset.metric as 'bitrate'|'qp'; if(!metric)return;
+    if(solo) { if(loadSolo?.metric===metric && loadMetrics.size===1 && loadMetrics.has(metric)) {loadMetrics=new Set(loadSolo.previous);loadSolo=undefined;} else {const previous=loadSolo?.previous ?? new Set(loadMetrics);loadSolo={metric,previous};loadMetrics=new Set([metric]);} }
+    else {loadSolo=undefined;if(loadMetrics.has(metric))loadMetrics.delete(metric);else loadMetrics.add(metric);}
+    prefs.loadMetrics=[...loadMetrics]; save(); refreshTools(); refreshStream(); requestRender();
+  });
+  overviewHost.append(loadLegend, $<HTMLElement>('.analysis-notice'), $<HTMLElement>('.analysis-body'));
   const none = document.createElement('div'); none.className = 'analysis-no-charts';
   const noneCopy = document.createElement('p'); none.append(noneCopy);
   const diagramHost = $<HTMLElement>('#analysis-diagrams');
@@ -221,8 +232,16 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     });
     const overview = overviewVisible();
     overviewHost.hidden = !overview;
-    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && control.id !== 'analysis-tracks' && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
-    $<HTMLElement>('#analysis-window').hidden = !prefs.showBitrate;
+    for (const control of $<HTMLElement>('.analysis-tools').children) (control as HTMLElement).hidden = !overview && control.id !== 'analysis-axis' && (control as HTMLElement).dataset.seg !== 'full';
+    $<HTMLElement>('#analysis-window').hidden = !prefs.showBitrate || !loadMetrics.has('bitrate');
+    loadLegend.hidden = !prefs.showBitrate;
+    loadLabel.textContent=t(prefs.axis==='pts'?msg('analysis.presentationLoad','展示负载率'):msg('analysis.streamSection','码流'));
+    loadLegend.setAttribute('aria-label', t(msg('analysis.loadMetrics','负载率指标')));
+    for(const button of loadLegend.querySelectorAll<HTMLButtonElement>('button')) {
+      button.textContent=button.dataset.metric==='qp'?'QP':t(msg('analysis.bitrate','码率'));
+      button.setAttribute('aria-pressed', String(loadMetrics.has(button.dataset.metric as 'bitrate'|'qp')));
+      button.dataset.tooltip = button.dataset.metric==='qp' ? t(msg('analysis.qpLegendHint','平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复。')) : t(msg('analysis.bitrateLegendHint','码率 · 实线；点击切换，右键或长按单选，再次操作恢复。'));
+    }
     const current = $<HTMLButtonElement>('#analysis-current'); current.hidden = ![...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size');
     current.textContent = t(msg('analysis.diagramCurrent', '当前帧')); current.disabled = !tracks.length;
     const selected = selectedTracks();
@@ -273,17 +292,17 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     // The time axis belongs to the panel, even when its only view is the overview.
     sharedAxisHost.hidden = diagrams.size === 0;
     overviewHost.style.setProperty('--overview-weight', String(Math.max(1, overviewRows)));
-    overviewHost.style.setProperty('--overview-min-height', `calc(max(36px, var(--analysis-view-min-height)) * ${Math.max(1, overviewRows)})`);
+    overviewHost.style.setProperty('--overview-min-height', `calc(max(36px, var(--analysis-view-min-height)) * ${Math.max(1, overviewRows)} + ${prefs.showBitrate ? 25 : 0}px)`);
     none.hidden = diagrams.size > 0; noneCopy.textContent = t(msg('analysis.chooseCharts', '选择要显示的图表。'));
     if (!overview) { cardEl.hidden = true; queries.suspend(); }
     else scheduleQuery();
     refreshStream();
   }
   const tools = $<HTMLElement>('.analysis-tools');
-  const tracksEl = $<HTMLElement>('#analysis-tracks');
   const statusEl = $<HTMLElement>('#analysis-status');
   const axisEl = $<HTMLElement>('#analysis-axis');
   const itemsEl = $<HTMLElement>('#analysis-status-items');
+  const tracksEl = itemsEl;
   const body = $<HTMLElement>('.analysis-body');
   const plot = $<HTMLElement>('#analysis-plot');
   const canvas = $<HTMLCanvasElement>('#analysis-canvas');
@@ -297,7 +316,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   // 悬浮卡片挂在 body 顶层（fixed），彻底脱离分析面板的 overflow 裁剪；
   // abort 时移除，平时 pointer-events:none 不拦截输入。
   const card = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
-    visibleRows: () => ({ bitrate: prefs.showBitrate, size: prefs.showSize }),
+    visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
+    qpValue: (slot,time)=>qpAt(slot,time),
     panelBounds: () => section.getBoundingClientRect() });
   const cardEl = card.element;
   cardEl.classList.add('analysis-linked-card');
@@ -319,7 +339,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   const overviewCard = installAnalysisCard(canvas, { signal, colors: () => slotColors, pinned: () => inspection.state.pinned != null,
-    visibleRows: () => ({ bitrate: prefs.showBitrate, size: prefs.showSize }),
+    visibleRows: () => ({ bitrate: prefs.showBitrate && loadMetrics.has('bitrate'), size: prefs.showSize, qp: prefs.showBitrate && loadMetrics.has('qp') }),
+    qpValue: (slot,time)=>qpAt(slot,time),
     panelBounds: () => cardGroupBounds('overview') ?? canvas.getBoundingClientRect(), beside: true });
   overviewCard.element.classList.add('analysis-view-card'); overviewCard.element.dataset.diagram = 'overview';
   overviewCard.managePosition(individualLayer);
@@ -681,7 +702,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     automaticScheduled = true;
     queueMicrotask(() => {
       automaticScheduled = false;
-      if (signal.aborted || !open || ![...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size')) return;
+      if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return;
       for (const track of selectedTracks()) {
         const identity = `${track.mediaId}:${track.sourceGen}`, state = session.getBitstreamAnalysisState(track.slot);
         if (automaticStreams.get(track.slot) === identity || state.state === 'pending' ||
@@ -707,6 +728,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       progress.classList.toggle('is-waiting', ui.percent === 0);
     }
     refreshDeep(); queueAutomaticStreams();
+    if(open && prefs.showBitrate && loadMetrics.has('qp')) requestRender();
   }
 
   // ---- 工具条：静态控件一次装配，动态部分（轨道、菜单标签）按需刷新 ----
@@ -744,7 +766,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       prefs.layoutMode = value as Prefs['layoutMode']; save(); refreshTools(); render();
     });
 
-  let toolsSig = '';
   installFilterGestures(tracksEl, signal, (button, solo) => {
     const slot = button.dataset.slot as Slot;
     if (!tracks.some(track => track.slot === slot)) return;
@@ -756,43 +777,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     else if (diagramSlot === slot) diagramSlot = undefined;
     if (prefs.axis === 'dts' && !allHaveDts()) prefs.axis = 'pts';
     save(); refreshTools(); scheduleQuery(true);
-  });
+  }, '.analysis-chip');
   function refreshTools() {
     const dtsOk = allHaveDts();
     const hasTracks = selectedTracks().length > 0;
     if (hasTracks && prefs.axis === 'dts' && !dtsOk) { prefs.axis = 'pts'; save(); }
     refreshDiagram();
-    // 高频手势每 tick 都经过这里：DOM 重建只在签名变化时做，label 同步很便宜。
-    const sig = JSON.stringify(tracks.map(t => [t.slot, t.mediaId, t.sourceGen, slotColors.get(t.slot)]));
-    if (sig !== toolsSig) {
-      toolsSig = sig;
-      tracksEl.replaceChildren();
-      for (const entry of tracks) {
-        const chip = document.createElement('span'); chip.className = 'analysis-track-control';
-        const b = document.createElement('button');
-        b.type = 'button'; b.className = 'analysis-chip';
-        const on = prefs.selected.includes(entry.slot);
-        b.dataset.slot = entry.slot;
-        b.setAttribute('aria-pressed', String(on));
-        chip.dataset.selected = String(on);
-        b.title = on ? t(msg("analysis.hideTrack", "隐藏轨道 {slot}"), { slot: entry.slot }) : t(msg("analysis.showTrack", "显示轨道 {slot}（{name}）"), { slot: entry.slot, name: entry.name });
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        dot.style.background = slotColors.get(entry.slot) ?? '#888';
-        b.append(dot, document.createTextNode(entry.slot));
-        chip.dataset.slot = entry.slot;
-        const progress = document.createElement('span'); progress.className = 'analysis-track-progress';
-        progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-valuemin', '0'); progress.setAttribute('aria-valuemax', '100');
-        progress.innerHTML = '<svg class="analysis-progress-ring" viewBox="0 0 20 20" aria-hidden="true"><circle class="ring-track" cx="10" cy="10" r="7"/><circle class="ring-value" cx="10" cy="10" r="7" pathLength="100"/></svg>';
-        b.append(progress); chip.append(b); tracksEl.append(chip);
-      }
-    }
-    for (const chip of tracksEl.querySelectorAll<HTMLElement>('.analysis-track-control')) {
-      const slot = chip.dataset.slot as Slot, on = prefs.selected.includes(slot), button = chip.querySelector<HTMLButtonElement>('.analysis-chip')!;
-      chip.dataset.selected = String(on); button.setAttribute('aria-pressed', String(on));
-      button.title = on ? t(msg("analysis.hideTrack", "隐藏轨道 {slot}"), { slot }) : t(msg("analysis.showTrack", "显示轨道 {slot}（{name}）"), { slot, name: tracks.find(track => track.slot === slot)?.name ?? '' });
-      button.title += `\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部。'))}`;
-    }
+    updateStatus();
     refreshStream();
     // 单一时间基准同时控制图表、当前帧号和按帧号跳转。
     for (const button of axisButtons) {
@@ -804,7 +795,6 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     }
     const windowButton = $<HTMLButtonElement>('#analysis-window');
     windowButton.title = t(prefs.axis === 'pts' ? msg('analysis.presentationLoadWindowHint', '展示负载率：按展示时间窗口统计帧的压缩字节量，不表示网络吞吐。') : msg('analysis.decodeBitrateWindowHint', '码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。'));
-    updateStatus();
     windowMenu.sync(String(prefs.windowUs), WINDOW_LABELS[prefs.windowUs] ?? '', selectedTracks().length > 0);
     layoutMenu.sync(prefs.layoutMode, layoutLabel(prefs.layoutMode), true);
     $<HTMLElement>('#analysis-layout').hidden = !overviewVisible() || selectedTracks().length < 2;
@@ -835,7 +825,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
 
   function localize() {
-    toolsSig = ''; status.invalidate();
+    status.invalidate();
     card.reset();
     localizeChrome();
     refreshTools();
@@ -869,9 +859,39 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     sharedAxis.dataset.timeAxis = 'true';
   }
 
+  function qpChart(slot: Slot) {
+    const range=viewRange();
+    return session.queryBitstreamChart(slot,range.start,range.end,Math.max(32,Math.min(4096,plotWidthCss())),prefs.axis);
+  }
+  function qpAt(slot: Slot,time: number): number|null {
+    const data=qpChart(slot); if(!data)return null;
+    if(data.aggregated) {const bin=data.buckets.find(b=>time>=b.startUs+data.offsetUs-data.firstPtsUs && time<b.endUs+data.offsetUs-data.firstPtsUs);return bin?.qpCount?(bin.qpSum ?? 0)/bin.qpCount:null;}
+    const shift=data.offsetUs-data.firstPtsUs;
+    let nearest:typeof data.pictures[number]|undefined, distance=Infinity;
+    for(const p of data.pictures) {const at=(prefs.axis==='pts'?p.sourcePtsUs:p.sourceDtsUs); if(at==null)continue;const d=Math.abs(at+shift-time);if(d<distance){distance=d;nearest=p;}}
+    const track=tracks.find(t=>t.slot===slot);
+    return distance <= (track?.frameIntervalUs ?? 33333)/2+2000 ? nearest?.qpMean ?? null : null;
+  }
   function buildModel() {
-    return buildAnalysisModel({ sel: selectedTracks(), results, prefs, range: viewRange(), width: plotWidthCss(),
+    const model=buildAnalysisModel({ sel: selectedTracks(), results, prefs, range: viewRange(), width: plotWidthCss(),
       availableHeight: body.clientHeight, compact: true, showTimeAxis: !!sharedAxisHost.hidden, slotColors, colors, rubber });
+    if(!model)return null;
+    model.loadMetrics=[...loadMetrics]; model.qpMax=51;
+    if(prefs.showBitrate && loadMetrics.has('qp')) {
+      let available=false;
+      for(const track of model.tracks) {
+        const data=qpChart(track.slot as Slot); if(!data)continue;
+        if(data.codec==='vvc')model.qpMax=63;
+        const shift=data.offsetUs-data.firstPtsUs;
+        track.qp=data.aggregated? data.buckets.map(b=>({t:(b.startUs+b.endUs)/2+shift,value:b.qpCount?(b.qpSum ?? 0)/b.qpCount:null}))
+          :data.pictures.map(p=>({t:(prefs.axis==='pts'?p.sourcePtsUs:p.sourceDtsUs ?? NaN)+shift,value:p.qpMean ?? null})).sort((a,b)=>a.t-b.t);
+        available ||= track.qp.some(p=>p.value!=null);
+      }
+      qpNotice.hidden=available;
+      const pending=selectedTracks().some(track=>session.getBitstreamAnalysisState(track.slot).state==='pending');
+      qpNotice.textContent=t(pending?msg('analysis.qpPending','QP 分析中…'):msg('analysis.qpUnavailable','QP 暂无可用结果'));
+    } else qpNotice.hidden=true;
+    return model;
   }
 
   function render() {
@@ -934,6 +954,8 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (overlay.height !== h) overlay.height = h;
     ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
     const drawn: CanvasModel = { ...model, height: cssH };
+    canvas.dataset.loadMetrics = JSON.stringify([...loadMetrics]);
+    canvas.dataset.qpPoints = String(drawn.tracks.reduce((sum,track)=>sum+(track.qp?.filter(p=>p.value!=null).length ?? 0),0));
     canvas.dataset.axisStart = String(drawn.viewStart);
     canvas.dataset.axisEnd = String(drawn.viewEnd);
     canvas.dataset.timeAxis = String(drawn.showTimeAxis !== false);
@@ -1171,7 +1193,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     return {
       view: view == null ? null : { start: Math.floor(view.start), end: Math.ceil(view.end) },
       axis: prefs.axis, windowUs: prefs.windowUs, layoutMode: prefs.layoutMode,
-      showBitrate: prefs.showBitrate, showSize: prefs.showSize,
+      showBitrate: prefs.showBitrate, showSize: prefs.showSize, loadMetrics: [...loadMetrics],
       follow: false, selected: [...prefs.selected],
       numAxis: prefs.axis, diagrams: [...(prefs.diagrams ?? [])],
     };
@@ -1188,6 +1210,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   }
   function restoreAnalysisState(s: AnalysisViewState) {
     diagramSolo = undefined;
+    loadSolo=undefined; loadMetrics=new Set(s.loadMetrics ?? ['bitrate']); prefs.loadMetrics=[...loadMetrics];
     diagrams = new Set(selectedAnalysisDiagrams(s));
     prefs.axis = s.axis === 'dts' ? 'dts' : 'pts';
     prefs.windowUs = BITRATE_WINDOW_OPTIONS_US.includes(s.windowUs) ? s.windowUs : DEFAULT_BITRATE_WINDOW_US;

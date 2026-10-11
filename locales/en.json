@@ -1,7 +1,11 @@
 {
-  "activity.buildingIndexes": {
-    "source": "已上屏 · {count, plural, other {# 条轨道正在建立索引}}",
-    "translation": "On screen · {count, plural, one {# track building indexes} other {# tracks building indexes}}"
+  "activity.cancelTrack": {
+    "source": "取消载入轨道 {slot}",
+    "translation": "Cancel loading track {slot}"
+  },
+  "activity.collapseDetails": {
+    "source": "折叠上屏详情",
+    "translation": "Collapse presentation details"
   },
   "activity.durationMinutesSeconds": {
     "source": "{m} 分 {s} 秒",
@@ -19,6 +23,10 @@
     "source": "已等待",
     "translation": "Waiting"
   },
+  "activity.expandDetails": {
+    "source": "展开上屏详情",
+    "translation": "Expand presentation details"
+  },
   "activity.loadCancelled": {
     "source": "已取消载入",
     "translation": "Load cancelled"
@@ -31,29 +39,33 @@
     "source": "载入失败",
     "translation": "Load failed"
   },
+  "activity.presentationFailed": {
+    "source": "上屏失败",
+    "translation": "Presentation failed"
+  },
   "activity.presented": {
     "source": "已上屏",
     "translation": "On screen"
+  },
+  "activity.presentedTracks": {
+    "source": "上屏轨道",
+    "translation": "Presented tracks"
   },
   "activity.retryOrPickAnother": {
     "source": "请重试或选择其他片源",
     "translation": "Retry or pick another source"
   },
-  "activity.scanProgress": {
-    "source": "帧索引扫描进度",
-    "translation": "Frame-index scan progress"
-  },
-  "activity.sourceTrack": {
-    "source": "{name} · 轨道 {slot}",
-    "translation": "{name} · track {slot}"
-  },
   "activity.stillWorking": {
     "source": "仍在处理，可取消或选择其他视频",
     "translation": "Still working; you can cancel or pick another video"
   },
-  "activity.trackIndexProgress": {
-    "source": "轨道 {slot}：{progress}",
-    "translation": "Track {slot}: {progress}"
+  "activity.trackDetails": {
+    "source": "查看轨道 {slot} 的上屏信息",
+    "translation": "Show presentation details for track {slot}"
+  },
+  "activity.trackHidden": {
+    "source": "已隐藏",
+    "translation": "Hidden"
   },
   "activity.waitingForSource": {
     "source": "等待添加片源",
@@ -1175,6 +1187,11 @@
     "source": "码率",
     "translation": "Bitrate"
   },
+  "analysis.bitrateLegendHint": {
+    "source": "码率 · 实线；点击切换，右键或长按单选，再次操作恢复。",
+    "translation": "Bitrate · solid line; click to toggle, right-click or hold to solo, repeat to restore.",
+    "needsReview": false
+  },
   "analysis.bitrateWindow": {
     "source": "码率窗口",
     "translation": "Bitrate window"
@@ -1392,6 +1409,11 @@
     "source": "码流分轨",
     "translation": "Separate streams"
   },
+  "analysis.loadMetrics": {
+    "source": "负载率指标",
+    "translation": "Load chart metrics",
+    "needsReview": false
+  },
   "analysis.meanNaluSize": {
     "source": "平均每帧 · KiB",
     "translation": "Mean per frame · KiB"
@@ -1496,6 +1518,21 @@
   "analysis.ptsOrder": {
     "source": "PTS序",
     "translation": "PTS order"
+  },
+  "analysis.qpLegendHint": {
+    "source": "平均亮度 QP · 虚线；点击切换，右键或长按单选，再次操作恢复。",
+    "translation": "Mean luma QP · dashed line; click to toggle, right-click or hold to solo, repeat to restore.",
+    "needsReview": false
+  },
+  "analysis.qpPending": {
+    "source": "QP 分析中…",
+    "translation": "Analyzing QP…",
+    "needsReview": false
+  },
+  "analysis.qpUnavailable": {
+    "source": "QP 暂无可用结果",
+    "translation": "No QP results available",
+    "needsReview": false
   },
   "analysis.queryFailed": {
     "source": "轨道 {slot} 查询失败：{error}",
@@ -1758,77 +1795,36 @@
     "source": "无法唯一确定源画面，已隐藏精确遮罩。",
     "translation": "The source picture cannot be uniquely identified; the exact overlay is hidden."
   },
-  "bitstream.analysisTab": {
-    "source": "分析",
-    "translation": "Analysis"
-  },
-  "bitstream.available": {
-    "source": "当前帧结果可用",
-    "translation": "Current frame results available"
-  },
-  "bitstream.block": {
-    "source": "选中块",
-    "translation": "Selected block"
-  },
-  "bitstream.blocks": {
-    "source": "块",
-    "translation": "blocks"
+  "bitstream.analysisProgress": {
+    "source": "分析进度",
+    "translation": "Analysis progress",
+    "needsReview": false
   },
   "bitstream.boundaries": {
     "source": "块边界",
     "translation": "Block boundaries"
   },
-  "bitstream.cacheOnly": {
-    "source": "换帧时仅显示精确匹配的缓存；没有结果则隐藏遮罩。",
-    "translation": "Frame changes show only an exact cached match. The overlay is hidden when no result is available."
-  },
-  "bitstream.cancel": {
-    "source": "取消分析",
-    "translation": "Cancel analysis"
-  },
   "bitstream.cancelled": {
     "source": "分析已取消。",
     "translation": "Analysis cancelled."
   },
-  "bitstream.changedFrame": {
-    "source": "画面已切换，请分析新的当前帧。",
-    "translation": "The picture changed. Analyze the new current frame."
+  "bitstream.closeOverlay": {
+    "source": "关闭分析遮罩",
+    "translation": "Close analysis overlay controls",
+    "needsReview": false
   },
-  "bitstream.coordinates": {
-    "source": "坐标",
-    "translation": "Coordinates"
+  "bitstream.editOpacity": {
+    "source": "编辑不透明度",
+    "translation": "Edit opacity"
   },
-  "bitstream.current": {
-    "source": "当前帧",
-    "translation": "Current frame"
-  },
-  "bitstream.display": {
-    "source": "画面遮罩",
-    "translation": "Picture overlay"
-  },
-  "bitstream.end": {
-    "source": "结束",
-    "translation": "End"
-  },
-  "bitstream.exact": {
-    "source": "精确",
-    "translation": "Exact"
-  },
-  "bitstream.explicit": {
-    "source": "仅点击分析按钮才执行分析；切换画面只读取已有结果。",
-    "translation": "Analysis runs only when you click an analysis button. Changing frames only reads existing results."
+  "bitstream.hideTrackOverlay": {
+    "source": "隐藏轨道 {slot} 的遮罩",
+    "translation": "Hide overlay for track {slot}",
+    "needsReview": false
   },
   "bitstream.incompleteReferences": {
     "source": "参考状态不完整，无法生成精确遮罩。",
     "translation": "Incomplete reference state prevents an exact overlay."
-  },
-  "bitstream.infoTab": {
-    "source": "信息",
-    "translation": "Info"
-  },
-  "bitstream.inspectorTabs": {
-    "source": "轨道检查内容",
-    "translation": "Track inspection content"
   },
   "bitstream.inter": {
     "source": "帧间",
@@ -1842,61 +1838,27 @@
     "source": "帧内",
     "translation": "Intra"
   },
-  "bitstream.invalidRange": {
-    "source": "请选择片源范围内不超过 1 秒的区间。",
-    "translation": "Choose a range within the source, no longer than 1 second."
-  },
   "bitstream.invalidRequest": {
     "source": "分析目标或区间无效。",
     "translation": "The analysis target or interval is invalid."
-  },
-  "bitstream.invalidTime": {
-    "source": "请输入有效时间，例如 00:03.300。",
-    "translation": "Enter a valid time, such as 00:03.300."
-  },
-  "bitstream.meanQp": {
-    "source": "平均亮度 QP",
-    "translation": "Mean luma QP"
-  },
-  "bitstream.mode": {
-    "source": "分析遮罩",
-    "translation": "Analysis overlay"
   },
   "bitstream.noSafeAnchor": {
     "source": "预滚预算内没有可验证的闭合 IDR 起点。",
     "translation": "No verified closed IDR anchor was found within the preroll budget."
   },
-  "bitstream.notAnalyzed": {
-    "source": "此帧尚未分析",
-    "translation": "This frame has not been analyzed"
-  },
   "bitstream.opacity": {
     "source": "不透明度",
     "translation": "Opacity"
   },
-  "bitstream.open": {
-    "source": "打开轨道 {slot} 的分析检查",
-    "translation": "Open analysis inspection for track {slot}"
+  "bitstream.overlayControls": {
+    "source": "分析遮罩",
+    "translation": "Analysis overlay",
+    "needsReview": false
   },
-  "bitstream.partial": {
-    "source": "部分结果",
-    "translation": "Partial result"
-  },
-  "bitstream.pauseFirst": {
-    "source": "暂停后可分析当前帧。",
-    "translation": "Pause to analyze the current frame."
-  },
-  "bitstream.pending": {
-    "source": "正在分析当前帧…",
-    "translation": "Analyzing current frame…"
-  },
-  "bitstream.pick": {
-    "source": "在画面上点击一个块，将详情固定在这里。",
-    "translation": "Click a block in the picture to pin its details here."
-  },
-  "bitstream.precision": {
-    "source": "匹配",
-    "translation": "Match"
+  "bitstream.overlayMode": {
+    "source": "显示内容",
+    "translation": "Display",
+    "needsReview": false
   },
   "bitstream.prediction": {
     "source": "预测模式",
@@ -1906,33 +1868,14 @@
     "source": "QP 热图",
     "translation": "QP heatmap"
   },
-  "bitstream.range": {
-    "source": "区间分析",
-    "translation": "Range analysis"
-  },
-  "bitstream.rangeCompleted": {
-    "source": "区间已完成 {count} 帧",
-    "translation": "Range completed: {count} pictures"
-  },
-  "bitstream.rangeHint": {
-    "source": "会话时间范围；每次最多 1 秒、32 帧。分析完成后逐帧查看缓存结果。",
-    "translation": "Session time range; up to 1 second and 32 pictures per request. Step through the cached results after analysis."
-  },
-  "bitstream.rangePending": {
-    "source": "正在分析区间…",
-    "translation": "Analyzing range…"
-  },
-  "bitstream.rangeRun": {
-    "source": "分析此区间",
-    "translation": "Analyze this range"
-  },
   "bitstream.resourceLimit": {
     "source": "分析达到资源上限，请缩短区间或选择更近的起点。",
     "translation": "Analysis reached a resource limit. Shorten the interval or choose a closer anchor."
   },
-  "bitstream.run": {
-    "source": "分析此帧",
-    "translation": "Analyze this frame"
+  "bitstream.showTrackOverlay": {
+    "source": "显示轨道 {slot} 的遮罩",
+    "translation": "Show overlay for track {slot}",
+    "needsReview": false
   },
   "bitstream.skip": {
     "source": "跳过",
@@ -1941,18 +1884,6 @@
   "bitstream.sourceChanged": {
     "source": "片源已变更，请重新载入后分析。",
     "translation": "The source has changed. Reload it before analyzing."
-  },
-  "bitstream.start": {
-    "source": "开始",
-    "translation": "Start"
-  },
-  "bitstream.summary": {
-    "source": "帧摘要",
-    "translation": "Frame summary"
-  },
-  "bitstream.unpin": {
-    "source": "清除选择",
-    "translation": "Clear selection"
   },
   "bitstream.unsupportedCodec": {
     "source": "此编码暂不支持码流分析。",
@@ -1970,9 +1901,9 @@
     "source": "此位深的 QP 暂不支持，块和模式仍可查看。",
     "translation": "QP is not yet supported at this bit depth; blocks and modes remain available."
   },
-  "bitstream.visibility": {
-    "source": "显示遮罩",
-    "translation": "Show overlay"
+  "bootstrap.brandDescription": {
+    "source": "· 视频对比",
+    "translation": "· Video comparison"
   },
   "bootstrap.reload": {
     "source": "重新加载",
@@ -1981,6 +1912,10 @@
   "bootstrap.startupFailed": {
     "source": "页面未能加载，请刷新重试。",
     "translation": "The page failed to load. Refresh and retry."
+  },
+  "bootstrap.startupTitle": {
+    "source": "启动未完成",
+    "translation": "Unable to start"
   },
   "colorFlow.approximateBrowserColors": {
     "source": "近似浏览器颜色",
@@ -2001,14 +1936,6 @@
   "colorFlow.browserHardwarePreference": {
     "source": "浏览器优先请求",
     "translation": "Browser hardware preference"
-  },
-  "colorFlow.buffer": {
-    "source": "缓冲",
-    "translation": "Buffer"
-  },
-  "colorFlow.checkResults": {
-    "source": "检查结果",
-    "translation": "Check results"
   },
   "colorFlow.colorConversion": {
     "source": "色彩转换",
@@ -2066,18 +1993,6 @@
     "source": "路径示意",
     "translation": "Path overview"
   },
-  "colorFlow.playFromTheStartThenPauseAfter": {
-    "source": "从头播放，检查后暂停。",
-    "translation": "Play from the start, then pause after checking."
-  },
-  "colorFlow.playbackPerformanceReportJson": {
-    "source": "播放性能报告 JSON",
-    "translation": "Playback performance report JSON"
-  },
-  "colorFlow.playbackSmoothness": {
-    "source": "播放流畅度",
-    "translation": "Playback smoothness"
-  },
   "colorFlow.preferHardware": {
     "source": "优先请求硬件",
     "translation": "Prefer hardware"
@@ -2097,10 +2012,6 @@
   "colorFlow.readBack": {
     "source": "读回",
     "translation": "Read back"
-  },
-  "colorFlow.runCheck": {
-    "source": "开始检查",
-    "translation": "Run check"
   },
   "colorFlow.screen": {
     "source": "屏幕",
@@ -2134,11 +2045,6 @@
     "source": "HDR 假定峰值",
     "translation": "Assumed HDR peak"
   },
-  "colorOutput.browserHdr": {
-    "source": "原生 HDR 由浏览器转换为浮点画面后上屏；截图和缩略图为 SDR。假定峰值仅用于软件回退。",
-    "translation": "The browser converts native HDR to floating-point pixels for display. Captures and thumbnails are SDR. The assumed peak only applies to software fallback.",
-    "needsReview": false
-  },
   "colorOutput.browserPreview": {
     "source": "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。",
     "translation": "The browser does not expose native HDR float conversion. Using an SDR preview; select managed color for HDR output.",
@@ -2162,10 +2068,6 @@
     "translation": " · HDR presentation requirements not met",
     "needsReview": false
   },
-  "colorOutput.hdrDescription": {
-    "source": "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。",
-    "translation": "Uses a supported HDR display and floating-point output. Captures and thumbnails are SDR previews."
-  },
   "colorOutput.managedConversion": {
     "source": "统一 SDR / HDR 转换",
     "translation": "Unified SDR / HDR conversion"
@@ -2179,10 +2081,6 @@
     "source": " · 原生帧未通过 HDR 资源验证",
     "translation": " · Native frame HDR resource unverified",
     "needsReview": false
-  },
-  "colorOutput.sdrDescription": {
-    "source": "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。",
-    "translation": "HDR sources are mapped to SDR previews. The assumed peak is used by managed conversion and is not a measured mastering or display luminance."
   },
   "connection.cantInstall": {
     "source": "无法安装或找不到证书？",
@@ -2549,6 +2447,22 @@
     "source": "此媒体库在当前服务中不存在。",
     "translation": "This library does not exist on the current service."
   },
+  "libraryFileMenu.copied": {
+    "source": "已拷贝",
+    "translation": "Copied"
+  },
+  "libraryFileMenu.copyLibraryPath": {
+    "source": "拷贝媒体库路径",
+    "translation": "Copy library path"
+  },
+  "libraryFileMenu.copyName": {
+    "source": "拷贝文件名",
+    "translation": "Copy filename"
+  },
+  "libraryFileMenu.pathUnavailable": {
+    "source": "无法获取文件绝对路径",
+    "translation": "Unable to get the absolute file path"
+  },
   "libraryLink.incompletePath": {
     "source": "媒体库路径不完整。",
     "translation": "Incomplete library path."
@@ -2861,14 +2775,6 @@
     "source": "正在追赶播放位置",
     "translation": "Catching up to playback"
   },
-  "player.checkInterrupted": {
-    "source": "测试被中断",
-    "translation": "Check interrupted"
-  },
-  "player.checkingPlaybackPerformance": {
-    "source": "正在检查播放性能…",
-    "translation": "Checking playback performance…"
-  },
   "player.comparisonVideo": {
     "source": "对比视频",
     "translation": "Comparison video"
@@ -2877,13 +2783,13 @@
     "source": "正在解码…",
     "translation": "Decoding…"
   },
+  "player.editZoom": {
+    "source": "编辑缩放倍数",
+    "translation": "Edit zoom factor"
+  },
   "player.exitFullscreen": {
     "source": "退出全屏",
     "translation": "Exit fullscreen"
-  },
-  "player.failed": {
-    "source": "未通过：{p0}",
-    "translation": "Failed: {p0}"
   },
   "player.fallback": {
     "source": "（已回退）",
@@ -2901,17 +2807,9 @@
     "source": "填满视图",
     "translation": "Fill view"
   },
-  "player.frameChangedAfterPausing": {
-    "source": "暂停后画面改变",
-    "translation": "Frame changed after pausing"
-  },
   "player.frames": {
     "source": "{count, plural, other {# 帧}}",
     "translation": "{count, plural, one {# frame} other {# frames}}"
-  },
-  "player.framesLagging": {
-    "source": "画面落后",
-    "translation": "Frames lagging"
   },
   "player.hdrDisplay": {
     "source": " · HDR 输出",
@@ -2947,10 +2845,6 @@
     "source": "浏览器色彩下软件帧与原生帧混合上屏，色彩可能不准，建议切换色彩模式。",
     "translation": "Mixing software and native frames in Browser color may produce inconsistent colors. Consider switching color modes."
   },
-  "player.noFramesPresented": {
-    "source": "没有输出画面",
-    "translation": "No frames presented"
-  },
   "player.noReadableFrameInThisTrack": {
     "source": "轨道没有可读取的画面。",
     "translation": "No readable frame in this track."
@@ -2967,14 +2861,6 @@
     "source": "每次请打开一个工作区文件。",
     "translation": "Open one workspace file at a time."
   },
-  "player.pageHiddenDuringCheck": {
-    "source": "测试期间页面不可见",
-    "translation": "Page hidden during check"
-  },
-  "player.passed": {
-    "source": "通过",
-    "translation": "Passed"
-  },
   "player.pause": {
     "source": "暂停",
     "translation": "Pause"
@@ -2982,18 +2868,6 @@
   "player.paused": {
     "source": "已暂停",
     "translation": "Paused"
-  },
-  "player.playbackDidNotFinish": {
-    "source": "画面未播完",
-    "translation": "Playback did not finish"
-  },
-  "player.playbackError": {
-    "source": "播放出错",
-    "translation": "Playback error"
-  },
-  "player.playbackTooSlow": {
-    "source": "播放速度不足",
-    "translation": "Playback too slow"
   },
   "player.playingMuted": {
     "source": "播放中 · 静音",
@@ -3011,17 +2885,9 @@
     "source": "参考视频",
     "translation": "Reference video"
   },
-  "player.sampleTooShort": {
-    "source": "样本时长不足",
-    "translation": "Sample too short"
-  },
   "player.showAllTracksSeparately": {
     "source": "独立显示所有轨道",
     "translation": "Show all tracks separately"
-  },
-  "player.slowPauseResponse": {
-    "source": "暂停响应慢",
-    "translation": "Slow pause response"
   },
   "player.softwareFallbackIsAnApproximationColorsMay": {
     "source": "软件回退仅近似匹配，颜色可能与原生帧不同。",
@@ -3051,17 +2917,9 @@
     "source": "轨道 {p0} {p1} · 当前画面暂未同步，其他轨道继续播放。",
     "translation": "Track {p0}: {p1} · Frame not synchronized; other tracks continue playing."
   },
-  "player.trackStalled": {
-    "source": "{p0} 轨画面卡顿",
-    "translation": "Track {p0} stalled"
-  },
   "player.tracks": {
     "source": "{p0, plural, other {# 条轨道}}",
     "translation": "{p0, plural, one {# track} other {# tracks}}"
-  },
-  "player.tracksOutOfSync": {
-    "source": "双轨不同步",
-    "translation": "Tracks out of sync"
   },
   "player.uChannel": {
     "source": "U 通道",
@@ -3074,10 +2932,6 @@
   "player.vChannel": {
     "source": "V 通道",
     "translation": "V channel"
-  },
-  "player.videoReplacedDuringCheck": {
-    "source": "测试期间视频被替换",
-    "translation": "Video replaced during check"
   },
   "player.waitingForFrame": {
     "source": "等待帧",
@@ -3151,10 +3005,6 @@
     "source": "正在定位到当前播放位置",
     "translation": "Seeking to the current position"
   },
-  "recovery.capacity": {
-    "source": "已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。",
-    "translation": "Saved {count}/{limit} records · Estimated {used} / {budget} MiB. At capacity, export and delete old records first. Existing records are never removed automatically."
-  },
   "recovery.capacityReached": {
     "source": "本机恢复记录已达容量上限，请在设置 → 工作区中导出并删除旧记录。当前工作区可手动导出或保存到服务器。",
     "translation": "Local recovery storage has reached its limit. Export and delete old records in Settings → Workspace. You can export the current workspace or save it to the server."
@@ -3179,10 +3029,6 @@
     "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}}",
     "translation": "{tracks, plural, one {# track} other {# tracks}} · {marks, plural, one {# annotation} other {# annotations}}"
   },
-  "recovery.historyHelp": {
-    "source": "记录仅存于此浏览器。可导出备份或删除不再需要的历史记录，当前页面的记录会继续自动保存。",
-    "translation": "Records are stored only in this browser. Export backups or delete history you no longer need. This page continues to save automatically."
-  },
   "recovery.noHistory": {
     "source": "暂无本机恢复记录",
     "translation": "No local recovery records"
@@ -3190,6 +3036,10 @@
   "recovery.readFailed": {
     "source": "无法读取本机工作区恢复记录，请检查浏览器存储。",
     "translation": "Cannot read local workspace recovery. Check browser storage."
+  },
+  "recovery.recordCount": {
+    "source": "恢复记录数量",
+    "translation": "Recovery record count"
   },
   "recovery.restore": {
     "source": "恢复工作区",
@@ -3206,6 +3056,10 @@
   "recovery.savingResumed": {
     "source": "工作区本机自动恢复已恢复保存。",
     "translation": "Local workspace recovery saving has resumed."
+  },
+  "recovery.storageEstimate": {
+    "source": "估算占用空间",
+    "translation": "Estimated storage usage"
   },
   "recovery.summary": {
     "source": "{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}} · {time}",
@@ -3226,6 +3080,10 @@
   "savedWorkspaces.currentWorkspace": {
     "source": "当前工作区",
     "translation": "Current workspace"
+  },
+  "savedWorkspaces.emptySaveHint": {
+    "source": "保存当前工作区后，可在这里打开或复制链接。",
+    "translation": "Save the current workspace to open it here or copy its link."
   },
   "savedWorkspaces.guest": {
     "source": "访客",
@@ -3254,6 +3112,10 @@
   "savedWorkspaces.searchWorkspaceOrUserName": {
     "source": "搜索工作区名或用户名",
     "translation": "Search workspace or user name"
+  },
+  "savedWorkspaces.tryAnotherSearch": {
+    "source": "试试其他工作区名或用户名。",
+    "translation": "Try another workspace name or user name."
   },
   "savedWorkspaces.untitledWorkspace": {
     "source": "未命名工作区",
@@ -3303,10 +3165,6 @@
     "source": "分析并发数",
     "translation": "Analysis concurrency"
   },
-  "settingsShell.analysisConcurrencyHint": {
-    "source": "本窗口同时分析的轨道数，本地文件与媒体库共用。默认 2 路，更多轨道会排队；调低后已启动的任务继续完成。",
-    "translation": "Tracks analyzed simultaneously in this window, shared by local files and library media. Defaults to 2; extra tracks wait. Lowering the limit lets active tasks finish."
-  },
   "settingsShell.appearance": {
     "source": "外观",
     "translation": "Appearance"
@@ -3316,8 +3174,8 @@
     "translation": "AV1 decoding"
   },
   "settingsShell.chartHover": {
-    "source": "图表悬浮信息",
-    "translation": "Chart hover details"
+    "source": "码流分析悬浮面板显示方式",
+    "translation": "Bitstream analysis hover panel layout"
   },
   "settingsShell.chartHoverHint": {
     "source": "各图独立显示在悬浮线旁；合并显示在上面板下方。",
@@ -3410,6 +3268,10 @@
   "settingsShell.openSourceCredits": {
     "source": "开源致谢",
     "translation": "Open-source credits"
+  },
+  "settingsShell.other": {
+    "source": "其他",
+    "translation": "Other"
   },
   "settingsShell.playbackView": {
     "source": "播放与视图",
@@ -3546,10 +3408,6 @@
   "shell.browseLibrary": {
     "source": "浏览媒体库",
     "translation": "Browse library"
-  },
-  "shell.cancel": {
-    "source": "取消",
-    "translation": "Cancel"
   },
   "shell.cancelAdding": {
     "source": "取消添加",
@@ -3883,6 +3741,10 @@
     "source": "视图布局",
     "translation": "View layout"
   },
+  "shell.viewportTools": {
+    "source": "画面工具",
+    "translation": "Viewport tools"
+  },
   "shell.waitingForASource": {
     "source": "等待添加片源",
     "translation": "Waiting for a source"
@@ -4019,10 +3881,6 @@
     "source": "媒体库",
     "translation": "Library"
   },
-  "sources.inUse": {
-    "source": "使用中",
-    "translation": "In use"
-  },
   "sources.lastOpened": {
     "source": " · 上次打开 {date}",
     "translation": " · last opened {date}"
@@ -4030,6 +3888,10 @@
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
     "translation": "Load failed: {reason}"
+  },
+  "sources.loadedTracks": {
+    "source": "已上屏轨道：{slots}",
+    "translation": "Presented tracks: {slots}"
   },
   "sources.loading": {
     "source": "正在载入",
@@ -4050,6 +3912,10 @@
   "sources.localNoUpload": {
     "source": "本机（不上传）",
     "translation": "Local (no upload)"
+  },
+  "sources.locateUnavailable": {
+    "source": "片源已不在媒体库中。",
+    "translation": "This source is no longer in the media library."
   },
   "sources.noMatch": {
     "source": "没有匹配的片源",

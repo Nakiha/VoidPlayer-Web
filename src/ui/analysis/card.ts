@@ -48,7 +48,7 @@ export function analysisMetricValue(cell: HTMLElement, value: string, unit?: str
 /** Floating card owns only DOM and formatting, never analysis/seek state. */
 export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
   signal: AbortSignal; colors(): ReadonlyMap<Slot, string>; pinned(): boolean;
-  visibleRows?(): { bitrate: boolean; size: boolean }; panelBounds?(): DOMRect; beside?: boolean;
+  visibleRows?(): { bitrate: boolean; size: boolean; qp?: boolean }; qpValue?(slot: Slot, time: number): number|null; panelBounds?(): DOMRect; beside?: boolean;
 }) {
   const floating = installFloatingAnalysisCard(canvas, options.signal, options.panelBounds, options.beside);
   const cardEl = floating.element;
@@ -139,6 +139,7 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
       { key: 'bitrate', label: t(msg("analysis.bitrate", "码率")) },
       { key: 'rate', label: t(msg("analysis.frameRate", "帧率")) },
       { key: 'size', label: t(msg("analysis.frameSize", "帧大小")) },
+      { key: 'qp', label: 'QP' },
     ] as const;
     for (const { key, label } of rows) {
       const tr = document.createElement('tr'); tr.dataset.metric = key;
@@ -169,7 +170,7 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
     ensureFloatStructure(insp.tracks.map(t => t.slot));
     cardEl.hidden = false;
     const rows = options.visibleRows?.();
-    for (const row of cardEl.querySelectorAll<HTMLElement>('[data-metric]')) row.hidden = !!rows && (row.dataset.metric === 'size' ? !rows.size : !rows.bitrate);
+    for (const row of cardEl.querySelectorAll<HTMLElement>('[data-metric]')) row.hidden = !!rows && (row.dataset.metric === 'qp' ? !rows.qp : row.dataset.metric === 'size' ? !rows.size : !rows.bitrate);
     if (flTime) {
       flTime.textContent = `${formatAxis(insp.inspectionTimeUs)} · ${insp.axis.toUpperCase()}${options.pinned() ? t(msg("analysis.pinnedSuffix", " · 已固定")) : ''}`;
     }
@@ -179,12 +180,13 @@ export function installAnalysisCard(canvas: HTMLCanvasElement, options: {
     for (const [slot, dot] of flBadges) dot.style.background = options.colors().get(slot) ?? '#888';
     for (const tr of insp.tracks) {
       const [b, f, s] = formatCells(tr);
-      const vals: Record<string, string> = { bitrate: b, rate: f, size: s };
+      const qp=options.qpValue?.(tr.slot,tr.reference?.axisUs ?? insp.inspectionTimeUs);
+      const vals: Record<string, string> = { bitrate: b, rate: f, size: s, qp:qp==null?'—':qp.toFixed(1) };
       for (const [m, text] of Object.entries(vals)) {
         const el = flCells.get(`${m}:${tr.slot}`);
         if (el) {
           const known = text !== '—' && (tr.coverageState === 'known' || (m === 'bitrate' ? tr.bitrate.value : m === 'rate' ? tr.localRate.value : null) != null);
-          analysisMetricValue(el, text, known ? m === 'bitrate' ? 'Mbps' : m === 'size' ? 'KiB' : insp.axis === 'dts' ? '/s' : 'fps' : undefined);
+          analysisMetricValue(el, text, known ? m === 'bitrate' ? 'Mbps' : m === 'size' ? 'KiB' : m === 'qp' ? undefined : insp.axis === 'dts' ? '/s' : 'fps' : undefined);
         }
       }
     }

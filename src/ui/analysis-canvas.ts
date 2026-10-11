@@ -9,6 +9,7 @@ export interface CanvasTrack {
   slot: string;
   color: string;
   bitrate: CanvasBitrate[];
+  qp?: {t:number; value:number|null}[];
   provisional: boolean;
 }
 export interface CanvasColors {
@@ -24,6 +25,8 @@ export interface CanvasModel {
   viewStart: number;
   viewEnd: number;
   showBitrate: boolean;
+  loadMetrics?: ('bitrate'|'qp')[];
+  qpMax?: number;
   showSize: boolean;
   colorByType: boolean;
   tracks: CanvasTrack[];
@@ -159,15 +162,16 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
   if (geom.bitrate && model.showBitrate) {
     const { y, h } = geom.bitrate;
     ctx.fillStyle = model.colors.axisText;
-    if (model.yMaxBitrate > 0) {
+    const showRate = !model.loadMetrics || model.loadMetrics.includes('bitrate');
+    if (showRate && model.yMaxBitrate > 0) {
       ctx.fillText(`${trimNum(model.yMaxBitrate)} Mbps`, 4, y + 10);
       ctx.fillText('0', 4, y + h - 10);
-    } else {
+    } else if (showRate) {
       ctx.fillText('Mbps', 4, y + 10);
     }
     ctx.strokeStyle = model.colors.grid;
     ctx.strokeRect(geom.gutter + 0.5, y + 0.5, geom.plotW - 1, Math.max(1, h - 1));
-    for (const track of model.tracks) {
+    for (const track of showRate ? model.tracks : []) {
       ctx.strokeStyle = track.color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -182,6 +186,24 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
       ctx.stroke();
     }
     ctx.lineWidth = 1;
+  }
+  if (geom.bitrate && model.loadMetrics?.includes('qp')) {
+    const {y,h}=geom.bitrate, max=model.qpMax ?? 51;
+    const together=model.loadMetrics.includes('bitrate');
+    ctx.fillStyle=model.colors.axisText; ctx.textAlign=together?'right':'left';
+    const labelX=together?model.width-4:4;
+    ctx.fillText(`QP ${max}`,labelX,y+10); ctx.fillText('0',labelX,y+h-10); ctx.textAlign='left';
+    ctx.save(); ctx.setLineDash([4,3]);
+    for (const track of model.tracks) {
+      ctx.strokeStyle=track.color; ctx.lineWidth=1.5; ctx.beginPath(); let pen=false;
+      for (const point of track.qp ?? []) {
+        if (point.value == null || point.t<model.viewStart || point.t>model.viewEnd) {pen=false;continue;}
+        const x=xOf(model,geom,point.t), yy=y+h-4-point.value/max*(h-8);
+        if(pen)ctx.lineTo(x,yy);else ctx.moveTo(x,yy); pen=true;
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   // 大小行：只画统一几何 glyph，绘图与命中共用同一份 rect（无第二套绘制路径）。
   if (model.showSize) {

@@ -51,13 +51,15 @@ export function createAnalysisOverlay(
     if (
       !result ||
       !token?.picture ||
-      !geometry ||
       result.confidence !== "exact" ||
       pictureId(result.picture) !== pictureId(token.picture)
     ) {
       clear();
       return;
     }
+    // Cached results may arrive before the initial geometry observation.
+    // Retain the verified picture so that observation can draw it directly.
+    if (!geometry) { canvas.hidden = true; return; }
     const g = geometry,
       rect = presentationRect(g);
     const signature = JSON.stringify([g, token.geometry]);

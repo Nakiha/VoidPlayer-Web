@@ -3,5 +3,19 @@
 :root[data-theme=dark] { color-scheme: dark; }
 #app[data-initializing] { visibility: hidden; }
 #app[hidden], #startup-fallback[hidden] { display: none; }
-.startup-error { max-width: 32rem; margin: 20vh auto; padding: 24px; line-height: 1.6; }
-.startup-error a { color: var(--accent); }
+/* This view must remain usable when no application module can load. */
+.startup-error { position: fixed; inset: 0; display: grid; place-items: center; overflow: auto; padding: 24px; box-sizing: border-box; background: var(--surface); color: var(--text); font: var(--text-ui)/1.5 var(--font-ui); }
+.startup-card { width: 100%; max-width: 420px; padding: 28px; box-sizing: border-box; border-radius: var(--radius-panel); background: var(--surface-panel); box-shadow: var(--glass-shadow); }
+.startup-brand { display: flex; align-items: center; gap: 6px; font-size: var(--text-brand); font-weight: 600; }
+.startup-brand span { color: var(--text-secondary); font-size: var(--text-sm); font-weight: 400; }
+.startup-message { display: flex; align-items: flex-start; gap: 14px; margin: 28px 0 24px; }
+.startup-symbol { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: var(--radius-control); background: var(--surface-control); color: var(--text-secondary); }
+.startup-symbol svg { width: 28px; height: 28px; }
+.startup-card h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; line-height: 1.3; }
+.startup-card p { margin: 0; color: var(--text-secondary); }
+#startup-reload { display: inline-flex; justify-content: center; align-items: center; gap: 8px; min-height: 36px; padding: 8px 14px; border: 0; border-radius: var(--radius-control); background: var(--accent); color: var(--accent-on); font: inherit; font-weight: 600; cursor: pointer; box-shadow: var(--control-shadow); }
+#startup-reload svg { width: 18px; height: 18px; }
+#startup-reload:hover { filter: brightness(.95); }
+#startup-reload:active { filter: brightness(.9); }
+#startup-reload:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 400px) { .startup-error { padding: 16px; } .startup-card { padding: 24px; } }

@@ -10,6 +10,8 @@ await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions
  await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
  assert.equal(await page.locator('#settings-tab-performance').innerText(),'色彩与解码');
  assert.equal(await pane.locator('select,details,summary').count(),0);
+ assert.equal(await page.locator('#hdr-source-peak-row').isVisible(),false,'SDR hides the HDR peak setting');
+ assert.equal(await page.locator('.settings-choice').evaluateAll(controls=>controls.every(el=>getComputedStyle(el).borderTopWidth==='0px')),true,'all settings choices use filled controls');
  assert.equal(await page.locator('#color-mode').evaluate(el=>getComputedStyle(el).backgroundColor),await page.locator('#layout-mode').evaluate(el=>getComputedStyle(el).backgroundColor),'color choices use the toolbar segment group surface');
  assert.equal(await page.locator('[data-color-mode=browser]').getAttribute('aria-pressed'),'true','fresh profiles default to browser color');
  assert.equal(await page.locator('[data-color-mode=browser]').evaluate(el=>getComputedStyle(el).backgroundColor),await page.locator('#layout-mode [aria-pressed=true]').evaluate(el=>getComputedStyle(el).backgroundColor),'selected color mode uses the toolbar segment fill');
@@ -32,7 +34,8 @@ await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions
  assert.match(await page.locator('#color-flow-diagram').innerText(),/读回/);
  assert.equal(await stable.evaluate(e=>e.isConnected),true,'decoder switch preserves the lane');
  assert.equal(await memory.evaluate(e=>e.isConnected),true,'unchanged units stay mounted');
- assert.deepEqual(await page.locator('.color-settings-card').boundingBox(),before,'decoder switch preserves card geometry');
+ assert.equal((await page.locator('.color-settings-card').boundingBox()).width,before.width,'decoder switch preserves card width');
+ assert.equal(await page.locator('#hardware-depth-row').isVisible(),true,'hardware decoding reveals its buffer control');
  assert.equal(await stable.evaluate(e=>getComputedStyle(e).opacity),'1','lane never fades');
  const stroke=await page.locator('.color-flow-connector path').first().evaluate(e=>({stroke:getComputedStyle(e).stroke,width:getComputedStyle(e).strokeWidth,vectorEffect:getComputedStyle(e).vectorEffect,parent:getComputedStyle(e.closest('.color-flow-link')).color}));
  // The responsive connector redesign uses a fixed 1.25px non-scaling stroke,
@@ -75,7 +78,14 @@ await withBrowserFixture({ caseName: 'color-settings', engine: name, pageOptions
    for(const a of alignment){assert.equal(a.visible,true);assert.equal(a.inactive,'none');assert.equal(a.stroke,'1.25px');assert.ok(a.x<1,JSON.stringify(a));assert.ok(a.y<1,JSON.stringify(a));assert.equal(a.between,true);assert.equal(a.label,true);}
  }
  await page.locator('[data-color-target=hdr]').click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).target==='hdr');
+ assert.equal(await page.locator('#hdr-source-peak-row').isVisible(),true,'HDR reveals the peak setting');
+ assert.equal(await page.locator('#hdr-source-peak-row').evaluate(el=>getComputedStyle(el).borderTopWidth),'0px','peak and target controls share no divider');
  await page.locator('#hdr-source-peak').click();await page.locator('#hdr-source-peak-menu').getByRole('menuitemradio',{name:'4000 nits',exact:true}).click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).preview.sourcePeakNits===4000);
+ await page.locator('[data-color-target=sdr]').click();
+ await page.waitForFunction(()=>document.querySelector('#hdr-source-peak-row').hidden&&!window.voidPlayer.getState().busy&&JSON.parse(localStorage.getItem('voidplayer.color-output')).target==='sdr');
+ await page.locator('[data-color-target=hdr]').click();
+ await page.waitForFunction(()=>JSON.parse(localStorage.getItem('voidplayer.color-output')).target==='hdr'&&!window.voidPlayer.getState().busy);
+ assert.match(await page.locator('#hdr-source-peak').innerText(),/4000/,'hiding the control retains the chosen peak');
  await page.reload();await page.waitForFunction(()=>window.voidPlayer);
  assert.equal(await page.evaluate(()=>window.voidPlayer.tools.find(t=>t.name==='get_review_session').execute({}).colorMode),'reference','saved explicit choice survives reload');
  assert.equal(await page.locator('[data-color-target=hdr]').getAttribute('aria-pressed'),'true');assert.match(await page.locator('#hdr-source-peak').innerText(),/4000/);

@@ -25,7 +25,7 @@ export function assessPlayback(m: Measurements | null, pauseMs: number, staleAft
 }
 const running = new WeakSet<ReviewSession>();
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
-/** Used unchanged by the visible app, WebMCP, and the browser matrix runner. */
+/** Shared by WebMCP and the automated browser matrix runner. */
 export async function benchmarkPlayback(session: ReviewSession, durationMs = 8000) {
   if (!Number.isInteger(durationMs) || durationMs < 1000 || durationMs > 30000) throw new Error('测试时长必须为 1000–30000 ms。');
   if (running.has(session)) throw new Error('性能检查正在运行。');

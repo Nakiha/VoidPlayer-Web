@@ -29,6 +29,18 @@ async function checkSettingsScrollbar(page, width, artifact) {
  const rail=await bar.boundingBox(), handle=await thumb.boundingBox(), header=await page.locator('.settings-floating-header').boundingBox();
  assert.ok(rail.y>=header.y+header.height,`${width}px scrollbar excludes the glass heading`);
  if(width<600) {const nav=await page.locator('.settings-navigation').boundingBox();assert.ok(rail.y>=nav.y+nav.height,'portrait scrollbar excludes the category rail');}
+ const material=await page.locator('.settings-floating-header').evaluate(el=>{
+  const heading=getComputedStyle(el), glass=getComputedStyle(el,'::before');
+  return {background:heading.backgroundColor,fill:glass.backgroundColor,blur:glass.backdropFilter||glass.webkitBackdropFilter,mask:glass.maskImage||glass.webkitMaskImage};
+ });
+ assert.equal(material.background,'rgba(0, 0, 0, 0)','the heading has no separate solid plate');
+ assert.ok(material.fill.includes('0.72')&&material.blur==='blur(16px)','heading glass uses a translucent reading-surface tint and blur');
+ assert.equal(material.mask,'none','heading glass has no fading edge');
+ await pane.evaluate(e=>{e.scrollTop=40;});
+ const headingAfter=await page.locator('.settings-floating-header').boundingBox(), sectionAfter=await pane.locator('.settings-section-title').first().boundingBox();
+ assert.ok(Math.abs(headingAfter.y-header.y)<1,'heading stays fixed above scrolling content');
+ assert.ok(sectionAfter.y<header.y+header.height&&sectionAfter.y+sectionAfter.height>header.y,'content actually passes behind the glass heading');
+ await pane.evaluate(e=>{e.scrollTop=0;});
  await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2);await page.mouse.down();
  await page.mouse.move(handle.x+handle.width/2,handle.y+handle.height/2+rail.height-handle.height+2,{steps:6});await page.mouse.up();
  const saved=await pane.evaluate(e=>({position:e.scrollTop,max:e.scrollHeight-e.clientHeight}));
@@ -81,7 +93,9 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   assert.equal(await page.locator(`#settings-tab-${pane}`).getAttribute('aria-selected'),'true');
   assert.equal(await page.locator(`#settings-pane-${pane}`).isVisible(),true);
   const sectionSpacing = await page.locator(`#settings-pane-${pane} .settings-section`).evaluateAll(sections => sections.flatMap(section => {
-   const checks = [], next = section.nextElementSibling;
+   if(section.hidden) return [];
+   const checks = []; let next = section.nextElementSibling;
+   while(next?.hidden) next=next.nextElementSibling;
    if(next?.classList.contains('settings-section')) checks.push({kind:'section',gap:next.getBoundingClientRect().top-section.getBoundingClientRect().bottom});
    const heading = section.firstElementChild, body = heading?.nextElementSibling;
    if(heading && body) checks.push({kind:'heading',gap:body.getBoundingClientRect().top-heading.getBoundingClientRect().bottom});
@@ -271,7 +285,12 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   const first=await page.locator('#settings-tab-appearance').boundingBox();
   assert.ok(first.x>=rail.x&&first.x+first.width<=rail.x+rail.width+1,'Home reveals the first category');
   const header=await page.locator('.settings-floating-header').boundingBox(), pane=await page.locator('#settings-pane-appearance').boundingBox();
-  assert.ok(header.y+header.height<=rail.y+1&&rail.y+rail.height<=pane.y+1,'title, category rail and content occupy independent rows');
+  assert.ok(rail.y+rail.height<=header.y+1,'portrait categories precede the page heading');
+  assert.ok(Math.abs(header.y-pane.y)<1,'the floating heading overlays the scroll pane in portrait too');
+  const firstSection=await page.locator('#settings-pane-appearance .settings-section-title').first().boundingBox();
+  assert.ok(firstSection.y>=header.y+header.height,'initial content clears the floating heading');
+  const close=await page.locator('#settings-close').boundingBox();
+  assert.ok(rail.x+rail.width<=close.x,'category scrolling leaves the close button accessible');
   assert.equal(await page.locator('#settings-tab-appearance').evaluate(el=>el.matches(':focus-visible')),true,'keyboard navigation keeps a visible focus cue');
   assert.notEqual(await page.locator('#settings-tab-appearance').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)','keyboard focus uses a light background');
   await page.locator('#settings-tab-about').click();await page.locator('#settings-tab-appearance').click();
@@ -289,8 +308,8 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
  await page.locator('#settings-tab-logs').click();await page.locator('#settings').screenshot({path:artifact(`voidplayer-settings-unified-mobile-${name}.png`)});
  assert.equal(await page.locator('#settings-current-title').textContent(),'反馈');
  const headerBefore=await page.locator('.settings-floating-header').boundingBox();
- const closeBefore=await page.locator('#settings-close').boundingBox();
- assert.ok(Math.abs((closeBefore.y-headerBefore.y)-(headerBefore.x+headerBefore.width-closeBefore.x-closeBefore.width))<1,'mobile close button has equal top and right inset');
+ const closeBefore=await page.locator('#settings-close').boundingBox(), mobileDialog=await page.locator('#settings').boundingBox();
+ assert.ok(Math.abs((closeBefore.y-mobileDialog.y)-(mobileDialog.x+mobileDialog.width-closeBefore.x-closeBefore.width))<1,'mobile close button stays in the window corner');
  await page.locator('#settings-pane-logs').evaluate(el=>{el.scrollTop=el.scrollHeight;});
  const headerAfter=await page.locator('.settings-floating-header').boundingBox();
  assert.ok(Math.abs(headerBefore.y-headerAfter.y)<1,'feedback glass header stays fixed while content scrolls');
@@ -319,11 +338,7 @@ await withBrowserFixture({ caseName: 'settings', engine: name, pageOptions: { vi
   assert.ok(runtime.decodeRight<=runtime.rowRight-13,`${width}px runtime seek fits the card`);
  }
  await page.setViewportSize({width:1280,height:700});
- await page.locator('#benchmark').click();
- await page.waitForFunction(()=>document.querySelector('#benchmark-json').value.includes('voidplayer-playback-benchmark'),{},{timeout:20000});
- assert.equal(await page.locator('dialog[open]').count(),1);assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);
- assert.equal(await page.evaluate(()=>window.voidPlayer.getState().playing),false);
- assert.equal(await page.locator('#benchmark').isDisabled(),false);
+ assert.equal(await page.locator('#benchmark, #benchmark-result, #benchmark-json').count(),0,'settings no longer expose playback benchmarking');
  }
  await page.locator('#settings').evaluate(e=>Promise.all(e.getAnimations().map(a=>a.finished)));
  // A drag starting inside the window must not dismiss it when released outside.

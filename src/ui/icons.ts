@@ -2,6 +2,8 @@ import appearance from '@phosphor-icons/core/assets/regular/palette.svg?raw';
 import keyboard from '@phosphor-icons/core/assets/regular/keyboard.svg?raw';
 import diagnostics from '@phosphor-icons/core/assets/regular/pulse.svg?raw';
 import info from '@phosphor-icons/core/assets/regular/info.svg?raw';
+import clock from '@phosphor-icons/core/assets/regular/clock.svg?raw';
+import opacity from '@phosphor-icons/core/assets/regular/circle-half.svg?raw';
 import user from '@phosphor-icons/core/assets/regular/user.svg?raw';
 import check from '@phosphor-icons/core/assets/regular/check.svg?raw';
 // Phosphor's regular weight matches the compact optical-glass chrome. Plus,
@@ -31,7 +33,7 @@ import refresh from '@phosphor-icons/core/assets/bold/arrow-clockwise-bold.svg?r
 import search from '@phosphor-icons/core/assets/regular/magnifying-glass.svg?raw';
 import down from '@phosphor-icons/core/assets/regular/caret-down.svg?raw';
 import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw';
-import arrowRight from '@phosphor-icons/core/assets/regular/arrow-right.svg?raw';
+import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw';
 import film from '@phosphor-icons/core/assets/regular/film-strip.svg?raw';
 import fit from '@phosphor-icons/core/assets/regular/arrows-out.svg?raw';
 import marker from '@phosphor-icons/core/assets/regular/diamond.svg?raw';
@@ -54,6 +56,7 @@ import chart from '@phosphor-icons/core/assets/regular/chart-line.svg?raw';
 import columns from '@phosphor-icons/core/assets/regular/columns.svg?raw';
 import cpu from '@phosphor-icons/core/assets/regular/cpu.svg?raw';
 import memory from '@phosphor-icons/core/assets/regular/memory.svg?raw';
+import storage from '@phosphor-icons/core/assets/regular/hard-drive.svg?raw';
 import gpu from '@phosphor-icons/core/assets/regular/graphics-card.svg?raw';
 import monitor from '@phosphor-icons/core/assets/regular/monitor.svg?raw';
 
@@ -61,7 +64,9 @@ import select from '@phosphor-icons/core/assets/regular/cursor.svg?raw';
 import eraser from '@phosphor-icons/core/assets/regular/eraser.svg?raw';
 import redo from '@phosphor-icons/core/assets/regular/arrow-clockwise.svg?raw';
 import trash from '@phosphor-icons/core/assets/regular/trash.svg?raw';
-const icons = { speaker, speakerMuted, cpu, memory, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, caretLeft, arrowRight, film, fit, marker };
+// Partitioned source frame: the analysis overlay exposes coding blocks.
+const analysisOverlay = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2" fill="none"/><path fill="none" d="M2 10h20M10 2v20M10 16h12M16 10v12"/><path d="M16 10h6v6h-6z" fill="currentColor" fill-opacity=".22" stroke="none"/></svg>';
+const icons = { opacity, clock, analysisOverlay, speaker, speakerMuted, cpu, memory, storage, gpu, monitor, appearance, keyboard, diagnostics, info, user, check, settings, plusRegular, select, eraser, redo, trash, filePlus, focus, eye, eyeClosed, grid, chart, columns, pen, ellipse, rect, line, text: lettering, undo, center, grip, copy, download, sidebar, rows, open, export: share, play, pause, previous, next, plus, close, more, note, refresh, search, down, caretLeft, caretRight, film, fit, marker };
 export function icon(name: keyof typeof icons, extraClass = '') {
   return icons[name].replace('<svg ', `<svg class="icon ${extraClass}" data-icon="${name}" aria-hidden="true" focusable="false" `);
 }

@@ -43,6 +43,7 @@ export function installChoiceMenu(id:string, choices:Choice[] | (() => Choice[])
   dialog?.addEventListener('close', controller.close);
   dialog?.addEventListener('settings-pane-change', controller.close);
   return {
+    close: controller.close,
     setOptions(next: Choice[] | (() => Choice[])) { choices = next; updateOptions(typeof next === 'function' ? next() : next); },
     sync(next:string,text:string,enabled:boolean) { menu.setAttribute('aria-label',button.getAttribute('aria-label') ?? ''); value=next;label.textContent=text; if (sample && next) { const current = preview!(next); sample.replaceChildren(...current.childNodes); sample.style.cssText = current.style.cssText; }button.disabled=!enabled; if(!enabled)controller.close();buttons.forEach((b,i)=>{if(!options[i].action)b.setAttribute('aria-checked',String(options[i].value===value));}); },
     dispose() { stopLanguage(); dialog?.removeEventListener('close', controller.close); dialog?.removeEventListener('settings-pane-change', controller.close); controller.dispose(); menu.remove(); },

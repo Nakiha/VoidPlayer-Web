@@ -1,6 +1,6 @@
 /** Shared click / right-click / touch long-press input for chart and track filters. */
-export function installFilterGestures(host: HTMLElement, signal: AbortSignal, apply: (button: HTMLButtonElement, solo: boolean) => void) {
-  const buttonFor = (target: EventTarget | null) => target instanceof Element ? target.closest<HTMLButtonElement>('button') : null;
+export function installFilterGestures(host: HTMLElement, signal: AbortSignal, apply: (button: HTMLButtonElement, solo: boolean) => void, selector = 'button') {
+  const buttonFor = (target: EventTarget | null) => target instanceof Element ? target.closest<HTMLButtonElement>(selector) : null;
   let timer: ReturnType<typeof setTimeout> | undefined, touchStart: { id: number; x: number; y: number } | undefined, suppressClick = false;
   const cancel = () => { clearTimeout(timer); timer = undefined; touchStart = undefined; };
   host.addEventListener('click', event => {

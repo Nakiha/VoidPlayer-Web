@@ -535,7 +535,8 @@ try {
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5);
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 15000 });
   const t0 = await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent();
-  await page.mouse.wheel(0, 400);
+  // Horizontal wheel pans time even when the chart stack can scroll vertically.
+  await page.mouse.wheel(400, 0);
   await page.waitForFunction(prev => document.querySelector('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])')?.textContent !== prev, t0, undefined, { timeout: 10000 });
   assert.equal(await page.locator('[data-seg="follow"]').count(), 0, 'removed follow control stays absent');
   // Ctrl+滚轮（触摸板捏合）：以 hover 为中心缩放，不报错且悬停可用。

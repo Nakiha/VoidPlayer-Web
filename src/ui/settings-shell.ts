@@ -35,13 +35,17 @@ export function settingsShell() {
           </div>
         </div>
         <p class="settings-caption" id="accent-input-hint" role="status"></p></div>
-        <div class="settings-section"><h4 class="settings-section-title" id="chart-hover-label">${th(msg('settingsShell.chartHover', '图表悬浮信息'))}</h4>
-          <div class="settings-group"><div class="settings-action-row"><button id="chart-hover-style" type="button" class="settings-choice" aria-label="${th(msg('settingsShell.chartHover', '图表悬浮信息'))}"></button></div></div>
-          <p class="settings-caption">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方。'))}</p>
-        </div>
-        <div class="settings-section"><h4 class="settings-section-title" id="language-label">${th(msg("language.label", "语言 / Language"))}</h4>
-          <div class="settings-group"><div class="settings-action-row language-settings"><button id="language-choice" type="button" class="settings-choice" aria-label="${th(msg("language.label", "语言 / Language"))}"></button></div></div>
-          <p id="language-status" class="settings-caption" role="status"></p>
+        <div class="settings-section"><h4 class="settings-section-title" id="appearance-other-label">${th(msg('settingsShell.other', '其他'))}</h4>
+          <div class="settings-group" role="group" aria-labelledby="appearance-other-label">
+            <div class="settings-action-row appearance-other-row">
+              <div><h4 id="language-label">${th(msg('language.label', '语言 / Language'))}</h4><p id="language-status" role="status"></p></div>
+              <button id="language-choice" type="button" class="settings-choice" aria-labelledby="language-label"></button>
+            </div>
+            <div class="settings-action-row appearance-other-row">
+              <div><h4 id="chart-hover-label" class="settings-icon-label">${icon('chart')}<span>${th(msg('settingsShell.chartHover', '码流分析悬浮面板显示方式'))}</span></h4><p id="chart-hover-hint">${th(msg('settingsShell.chartHoverHint', '各图独立显示在悬浮线旁；合并显示在上面板下方。'))}</p></div>
+              <button id="chart-hover-style" type="button" class="settings-choice" aria-labelledby="chart-hover-label" aria-describedby="chart-hover-hint"></button>
+            </div>
+          </div>
         </div>
 
       </section>
@@ -71,9 +75,8 @@ export function settingsShell() {
       <section id="settings-pane-performance" role="tabpanel" aria-labelledby="settings-tab-performance" tabindex="0" hidden>
         ${paneTitle(t(msg("settingsShell.colorDecoding", "色彩与解码")))}
         ${colorSettingsShell()}
-        <div class="settings-section"><h4 class="settings-section-title">${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}</h4>
-          <div class="settings-group"><div class="settings-action-row"><button id="analysis-concurrency" type="button" class="settings-choice" aria-label="${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}"></button></div></div>
-          <p class="settings-caption">${th(msg('settingsShell.analysisConcurrencyHint', '本窗口同时分析的轨道数，本地文件与媒体库共用。默认 2 路，更多轨道会排队；调低后已启动的任务继续完成。'))}</p>
+        <div class="settings-section">
+          <div class="settings-group"><div class="settings-action-row settings-key-value-row"><h4 id="analysis-concurrency-label">${th(msg('settingsShell.analysisConcurrency', '分析并发数'))}</h4><button id="analysis-concurrency" type="button" class="settings-choice" aria-labelledby="analysis-concurrency-label"></button></div></div>
         </div>
       </section>
       <section id="settings-pane-about" role="tabpanel" aria-labelledby="settings-tab-about" tabindex="0" hidden>

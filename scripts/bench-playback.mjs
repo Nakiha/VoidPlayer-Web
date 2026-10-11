@@ -1,4 +1,4 @@
-// Runs the SAME benchmark exposed by the app's Help dialog and WebMCP.
+// Runs the shared playback benchmark through WebMCP.
 // Default: visible browser, 3 repetitions, 8 seconds or clip end per run.
 // Usage: node scripts/bench-playback.mjs [chromium|webkit] [--headless]
 // BASE_URL, BENCH_REPEATS, BENCH_DURATION_MS override the defaults.

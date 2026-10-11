@@ -9,6 +9,7 @@ const LEGACY_PREF_KEY = 'voidplayer.analysis.v1';
 export interface AnalysisPreferences {
   diagrams?: AnalysisDiagram[];
   showBitrate: boolean; showSize: boolean;
+  loadMetrics?: ('bitrate' | 'qp')[];
   axis: 'pts' | 'dts'; windowUs: number; layoutMode: 'merged' | 'rows';
   selected: Slot[];
 }
@@ -23,6 +24,7 @@ function sanitizeAnalysisPreferences(p: Partial<AnalysisPreferences> & { layoutM
   const diagrams = Array.isArray(p.diagrams) ? ANALYSIS_DIAGRAMS.filter(value => p.diagrams!.includes(value)) : undefined;
   return {
     ...fallback,
+    loadMetrics: Array.isArray(p.loadMetrics) ? ['bitrate', 'qp'].filter(value=>p.loadMetrics!.includes(value as 'bitrate'|'qp')) as ('bitrate'|'qp')[] : ['bitrate'],
     ...(diagrams ? { diagrams } : {}),
     showBitrate: diagrams ? diagrams.includes('bitrate') : typeof p.showBitrate === 'boolean' ? p.showBitrate : fallback.showBitrate,
     showSize: diagrams ? diagrams.includes('size') : typeof p.showSize === 'boolean' ? p.showSize : fallback.showSize,

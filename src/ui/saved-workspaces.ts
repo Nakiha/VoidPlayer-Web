@@ -14,13 +14,14 @@ export function savedWorkspaceShell() {
     </div>
     </div><div class="workspace-saved-section settings-section"><div class="settings-section-heading"><h4 class="settings-section-title">${th(msg("savedWorkspaces.savedWorkspaces", "已保存的工作区"))}</h4></div>
     <div class="saved-workspace-search">${icon('search')}<input id="saved-workspace-search" type="search" aria-label="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" placeholder="${th(msg("savedWorkspaces.searchWorkspaceOrUserName", "搜索工作区名或用户名"))}" maxlength="200"><button id="saved-workspace-search-button" class="icon-button" aria-label="${th(msg("savedWorkspaces.clearSearch", "清除搜索"))}" hidden>${icon('close')}</button></div>
-    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true"><span>${th(msg("workspace.columns", "名称 / 用户 · 最近更新 ↓"))}</span><span>${th(msg("sharing.link", "链接"))}</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
+    <div class="workspace-list-wrapper settings-card"><div class="workspace-list-columns" aria-hidden="true" hidden><span>${th(msg("workspace.columns", "名称 / 用户 · 最近更新 ↓"))}</span><span>${th(msg("sharing.link", "链接"))}</span></div><div id="saved-workspace-list" class="saved-workspace-list"></div></div>
     <div class="saved-workspace-pages" hidden><button id="saved-workspace-first" disabled>${th(msg("savedWorkspaces.backToLatest", "返回最新"))}</button><button id="saved-workspace-next" disabled>${th(msg("savedWorkspaces.nextPage", "下一页"))}</button></div></div>${checkpointHistoryShell()}`;
 }
 
 export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(): WorkspaceFile; open(document: WorkspaceFile, space?: string): Promise<boolean>; copyLink(id: string, trigger: HTMLElement): Promise<void>; canSave(): boolean; report(error: Error): void; changed?(): void }) {
   const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(`saved-workspace-${id}`) as T;
   const client = new SavedWorkspaceClient(options.signal);
+  const columns = document.querySelector<HTMLElement>('.workspace-list-columns')!;
   let binding: SavedWorkspace | undefined, busy = false, available = false, before = '', next: string | null = null, search = '', sequence = 0;
   let refreshAfterBusy = false, bindingEpoch = 0;
   let opening = false;
@@ -30,6 +31,14 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   let messageText: string | (() => string) = '';
   const message = (value: string | (() => string), error = false) => { messageText = value; const text = typeof value === 'function' ? value() : value; $('message').hidden = !text; $('message').textContent = text; $('message').dataset.error = String(error); };
   const title = () => $<HTMLInputElement>('name').value.trim() || '未命名工作区';
+  function localizeEmpty() {
+    const empty = $('list').querySelector('.saved-workspace-empty');
+    if (!empty) return;
+    empty.querySelector('strong')!.textContent = search ? t(msg('savedWorkspaces.noMatchingWorkspaces', '没有匹配的工作区')) : t(msg('savedWorkspaces.noWorkspacesYet', '暂无工作区'));
+    empty.querySelector('p')!.textContent = search ? t(msg('savedWorkspaces.tryAnotherSearch', '试试其他工作区名或用户名。')) : t(msg('savedWorkspaces.emptySaveHint', '保存当前工作区后，可在这里打开或复制链接。'));
+    const clear = empty.querySelector('button');
+    if (clear) clear.textContent = t(msg('savedWorkspaces.clearSearch', '清除搜索'));
+  }
   function controls() {
     $('name').toggleAttribute('disabled', busy);
     $('save').toggleAttribute('disabled',busy || !options.canSave());
@@ -67,8 +76,15 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
       copy.onclick = () => { copy.disabled = true; void options.copyLink(record.id, copy).catch(error => { message((error as Error).message, true); options.report(error as Error); }).finally(() => { copy.disabled = false; }); };
       row.append(open, copy); return row;
     });
-    if (!rows.length) { const empty = document.createElement('p'); empty.className = 'settings-caption'; empty.textContent = search ? t(msg("savedWorkspaces.noMatchingWorkspaces", "没有匹配的工作区")) : t(msg("savedWorkspaces.noWorkspacesYet", "暂无工作区")); $('list').replaceChildren(empty); }
-    else $('list').replaceChildren(...rows);
+    columns.hidden = !rows.length;
+    if (!rows.length) {
+      const empty = document.createElement('div'); empty.className = 'saved-workspace-empty'; empty.setAttribute('role', 'status');
+      empty.innerHTML = `<span class="saved-workspace-empty-icon">${icon(search ? 'search' : 'open')}</span><div class="saved-workspace-empty-body"><strong></strong><p></p></div>`;
+      if (search) {
+        const clear = document.createElement('button'); clear.type = 'button'; clear.onclick = clearSearch; empty.append(clear);
+      }
+      $('list').replaceChildren(empty); localizeEmpty();
+    } else $('list').replaceChildren(...rows);
     controls();
   }
   onLanguageChange(() => {
@@ -80,7 +96,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
       const guest=row.querySelector<HTMLElement>('[data-locale-guest=true]'); if(guest)guest.textContent=t(msg('sources.guest','访客'));
       const time=row.querySelector('time')!;time.textContent=formatDate(time.dateTime);
     }
-    const empty=$('list').querySelector('p'); if(empty)empty.textContent=search?t(msg('savedWorkspaces.noMatchingWorkspaces','没有匹配的工作区')):t(msg('savedWorkspaces.noWorkspacesYet','暂无工作区'));
+    localizeEmpty();
   },options.signal);
   async function load(id: string) {
     opening = true; controls();
@@ -139,7 +155,13 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
   document.addEventListener('visibilitychange', () => { if (!document.hidden) syncVisibleList(); }, { signal: options.signal });
   const syncTimer = window.setInterval(syncVisibleList, 30_000);
   options.signal.addEventListener('abort', () => clearInterval(syncTimer), { once: true });
-  $('search-button').onclick = () => { $<HTMLInputElement>('search').value = ''; $('search-button').hidden = true; if (busy) refreshAfterBusy = true; else refresh(); $('search').focus(); };
+  function clearSearch() {
+    clearTimeout(searchTimer);
+    $<HTMLInputElement>('search').value = ''; $('search-button').hidden = true;
+    if (busy) refreshAfterBusy = true; else refresh();
+    $('search').focus();
+  }
+  $('search-button').onclick = clearSearch;
   $('search').addEventListener('input', event => {
     $('search-button').hidden = !$<HTMLInputElement>('search').value;
     clearTimeout(searchTimer);
@@ -154,7 +176,7 @@ export function installSavedWorkspaces(options: { signal: AbortSignal; snapshot(
     const { actor, previous } = (event as CustomEvent).detail;
     if (actor?.id === previous?.id) return;
     ++sequence; ++bindingEpoch; binding = undefined; before = ''; next = null;
-    $('conflict').hidden = true; $('list').replaceChildren();
+    $('conflict').hidden = true; $('list').replaceChildren(); columns.hidden = true;
     search = ''; $('search-button').hidden = true; $<HTMLInputElement>('search').value = ''; message(''); controls();
     if (actor && !document.getElementById('settings-pane-workspace')!.hidden) { if (busy) refreshAfterBusy = true; else refresh(); }
   }, { signal: options.signal });

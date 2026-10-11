@@ -7,7 +7,7 @@ export interface PictureReferences {
   frameType: 'I' | 'P' | 'B'; edges: { au: number; list: 0 | 1 }[];
 }
 export type DiagramPicture = Pick<AnalysisResult, 'picture' | 'sourcePtsUs' | 'sourceDtsUs' | 'codec' | 'gop'> & {
-  nalus: NaluRecord[]; references?: PictureReferences; referenceLayer?: ReferenceLayer;
+  qpMean?: number | null; nalus: NaluRecord[]; references?: PictureReferences; referenceLayer?: ReferenceLayer;
 };
 export interface ReferenceLayer { level: number; source: 'temporal-id' | 'inferred'; provisional?: boolean }
 
@@ -136,6 +136,7 @@ export function validateContainerHeader(codec: AnalysisResult['codec'], header: 
   }
 }
 export function validateDiagram(result: DiagramPicture) {
+  if (result.qpMean != null && (!Number.isFinite(result.qpMean) || result.qpMean < 0 || result.qpMean > (result.codec === 'vvc' ? 63 : 51))) throw new Error('Invalid mean QP');
   if (result.sourceDtsUs != null && !Number.isSafeInteger(result.sourceDtsUs)) throw new Error('Invalid source DTS');
   if (!Array.isArray(result.nalus) || !result.nalus.length || result.nalus.length > 4096) throw new Error('Invalid NAL records');
   let end = 0;
@@ -158,23 +159,24 @@ export function validateDiagram(result: DiagramPicture) {
 }
 export interface DiagramBucket {
   startUs: number; endUs: number; pictures: number; naluBytes: number[]; naluCounts: number[];
-  maxPictureBytes: number; frames: { I: number; P: number; B: number }; references: number;
+  qpSum?: number; qpCount?: number; maxPictureBytes: number; frames: { I: number; P: number; B: number }; references: number;
 }
 interface DiagramAxisSummary {
-  width: number; count: number; seen: Uint8Array; bins: Map<number, DiagramBucket>;
+  width: number; count: number; seen: Uint8Array; qpSeen: Uint8Array; bins: Map<number, DiagramBucket>;
   min: number; max: number;
 }
 interface DiagramSummary {
   codec: AnalysisResult['codec']; axes: Record<AnalysisAxis, DiagramAxisSummary>;
   containerHeaders: Map<number, ContainerHeader>;
 }
-const emptyAxisSummary = (): DiagramAxisSummary => ({ width: 1000, count: 0, seen: new Uint8Array(250001), bins: new Map(), min: Infinity, max: -Infinity });
+const emptyAxisSummary = (): DiagramAxisSummary => ({ width: 1000, count: 0, seen: new Uint8Array(250001), qpSeen: new Uint8Array(250001), bins: new Map(), min: Infinity, max: -Infinity });
 export const diagramTime = (picture: DiagramPicture, axis: AnalysisAxis): number | null => axis === 'pts' ? picture.sourcePtsUs : picture.sourceDtsUs ?? null;
 const emptyBucket = (startUs: number, endUs: number): DiagramBucket => ({ startUs, endUs, pictures: 0,
-  naluBytes: Array(64).fill(0), naluCounts: Array(64).fill(0), maxPictureBytes: 0, frames: { I: 0, P: 0, B: 0 }, references: 0 });
+  naluBytes: Array(64).fill(0), naluCounts: Array(64).fill(0), qpSum: 0, qpCount: 0, maxPictureBytes: 0, frames: { I: 0, P: 0, B: 0 }, references: 0 });
 function mergeBucket(target: DiagramBucket, input: DiagramBucket) {
   target.pictures += input.pictures; target.maxPictureBytes = Math.max(target.maxPictureBytes, input.maxPictureBytes);
   target.references += input.references;
+  target.qpSum = (target.qpSum ?? 0) + (input.qpSum ?? 0); target.qpCount = (target.qpCount ?? 0) + (input.qpCount ?? 0);
   for (const type of ['I', 'P', 'B'] as const) target.frames[type] += input.frames[type];
   for (let i = 0; i < 64; i++) { target.naluBytes[i] += input.naluBytes[i]; target.naluCounts[i] += input.naluCounts[i]; }
 }
@@ -205,7 +207,7 @@ export class DiagramStore {
     if (!result.nalus) return;
     validateDiagram(result as DiagramPicture);
     if (result.containerHeader) validateContainerHeader(result.codec, result.containerHeader);
-    const value: DiagramPicture = structuredClone({ picture: result.picture, sourcePtsUs: result.sourcePtsUs, sourceDtsUs: result.sourceDtsUs, codec: result.codec, gop: result.gop, nalus: result.nalus, references: result.references });
+    const value: DiagramPicture = structuredClone({ picture: result.picture, sourcePtsUs: result.sourcePtsUs, sourceDtsUs: result.sourceDtsUs, codec: result.codec, gop: result.gop, qpMean: result.confidence === 'exact' && result.capabilities.qp === 'ready' ? result.qp.mean : null, nalus: result.nalus, references: result.references });
     // Reserve space for derived layout metadata without retaining another source-sized map.
     const source = value.picture.sourceVersion, au = value.picture.au, id = pictureId(value.picture), bytes = JSON.stringify(value).length * 2 + 256;
     let entries = this.sources.get(source);
@@ -243,13 +245,21 @@ export class DiagramStore {
     // Same immutable source/AU can arrive again through single-frame analysis,
     // rechecking or cache hits; its compressed NAL records do not change.
     const mask = 1 << (au % 8), index = Math.floor(au / 8);
-    if (summary.seen[index] & mask) return;
+    if (summary.seen[index] & mask) {
+      // A later exact result may fill QP missing from an earlier partial record.
+      if (value.qpMean != null && !(summary.qpSeen[index] & mask)) {
+        const bucket=summary.bins.get(Math.floor(time/summary.width));
+        if(bucket) {bucket.qpSum=(bucket.qpSum ?? 0)+value.qpMean;bucket.qpCount=(bucket.qpCount ?? 0)+1;summary.qpSeen[index]|=mask;}
+      }
+      return;
+    }
     summary.seen[index] |= mask; summary.count++;
     summary.min = Math.min(summary.min, time); summary.max = Math.max(summary.max, time);
     const key = Math.floor(time / summary.width);
     let bucket = summary.bins.get(key);
     if (!bucket) { bucket = emptyBucket(key * summary.width, (key + 1) * summary.width); summary.bins.set(key, bucket); }
     bucket.pictures++;
+    if (value.qpMean != null) { summary.qpSeen[index]|=mask; bucket.qpSum = (bucket.qpSum ?? 0) + value.qpMean; bucket.qpCount = (bucket.qpCount ?? 0) + 1; }
     let bytes = 0;
     for (const n of value.nalus) { bucket.naluBytes[n.type] += n.size; bucket.naluCounts[n.type]++; bytes += n.size; }
     bucket.maxPictureBytes = Math.max(bucket.maxPictureBytes, bytes);

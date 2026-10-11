@@ -142,7 +142,7 @@ node scripts/bench-playback.mjs chromium
 
 `BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/benchmark.ts` 为准。
 
-应用内“设置 → 色彩与解码 → 播放流畅度”的检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
+播放基准通过 Agent `benchmark_review` 和脚本运行，设置页不提供手动检查入口。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
 远程 HTTP 现在进入连接准备页，不再启动播放器或 WASM。对应检查为：
 

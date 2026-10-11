@@ -82,11 +82,13 @@ test('v2 HDR comparison retains all mapping conditions and rejects ambiguous tar
 
 test('analysis inspection context round trips without task or overlay state', async () => {
   const layout = { panels: { inspector: true, subtracks: false, sources: false, analysis: true }, selected: 'A', inspectorTab: 'analysis', dockHeight: 180, marksExpanded: false,
-    analysisView: { view: null, axis: 'pts', windowUs: 250000, layoutMode: 'merged', showBitrate: true, showSize: true, follow: true, selected: ['A'], numAxis: 'pts', diagram: 'references' } };
+    analysisView: { loadMetrics: ['bitrate','qp'], view: null, axis: 'pts', windowUs: 250000, layoutMode: 'merged', showBitrate: true, showSize: true, follow: true, selected: ['A'], numAxis: 'pts', diagram: 'references' } };
   const value = parseWorkspace({ ...document(), layout });
   const restored = await readWorkspaceFile(await compressWorkspace(value), 'http://localhost/');
   assert.deepEqual(restored.layout, value.layout);
   assert.equal(restored.layout?.inspectorTab, 'analysis');
+  assert.deepEqual(restored.layout?.analysisView?.loadMetrics,['bitrate','qp']);
+  assert.throws(()=>parseWorkspace({...document(),layout:{...layout,analysisView:{...layout.analysisView,loadMetrics:['qp','qp']}}}));
   assert.equal(restored.layout?.analysisView?.diagram, 'references');
   assert.throws(() => parseWorkspace({ ...document(), layout: { ...layout, inspectorTab: 'tasks' } }));
   assert.throws(() => parseWorkspace({ ...document(), layout: { ...layout, analysisView: { ...layout.analysisView, diagram: 'unknown' } } }));

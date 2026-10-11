@@ -348,6 +348,21 @@ test('NAL charts keep exact payload offsets, header types and byte accounting', 
   assert.deepEqual(readNalus('hevc', hevc, new Uint8Array([3,0x28,3,0x80]))[0], {offset:1,size:3,type:20,temporalId:2,layer:0});
   assert.equal(readNalus('vvc', new Uint8Array([0]), new Uint8Array([3,0,0x39,0x80]))[0].type, 7);
 });
+test('mean QP is retained in chart records and whole-source summaries without inventing unsupported values', () => {
+  const store=new DiagramStore(2000);
+  for(let au=0;au<400;au++) {const r=result();r.picture.au=au;r.sourcePtsUs=au*1000;r.sourceDtsUs=au*1000;r.nalus=[{offset:4,size:2,type:1,temporalId:0,layer:0}];r.qp.mean=au%2?30:20;store.put(r);store.put(r);}
+  const chart=store.queryChart('local:uuid',0,400000,32);
+  assert.ok(chart.aggregated);
+  const count=chart.buckets.reduce((sum,b)=>sum+(b.qpCount ?? 0),0), total=chart.buckets.reduce((sum,b)=>sum+(b.qpSum ?? 0),0);
+  assert.equal(count,400);assert.equal(total/count,25,'repeated source/AU results are not counted twice');
+  const r=result();r.picture.au=401;r.sourcePtsUs=401000;r.sourceDtsUs=401000;r.nalus=[{offset:4,size:2,type:1,temporalId:0,layer:0}];r.capabilities.qp='unsupported';r.qp.mean=null;store.put(r);
+  assert.equal(store.query('local:uuid',401,401000,401,1).pictures[0].qpMean,null);
+  r.capabilities.qp='ready';r.qp.mean=33;store.put(r);store.put(r);
+  const filled=store.queryChart('local:uuid',0,402000,32);
+  assert.equal(filled.buckets.reduce((sum,b)=>sum+(b.qpCount ?? 0),0),401,'a later exact QP fills a previously missing result once');
+  assert.equal(filled.buckets.reduce((sum,b)=>sum+(b.qpSum ?? 0),0),10033);
+});
+
 test('diagram metadata is detached, source-owned, bounded and retains cross-GOP reference identities', () => {
   const store = new DiagramStore(), r = result();
   r.nalus = [{offset:4,size:2,type:1,temporalId:0,layer:0}];

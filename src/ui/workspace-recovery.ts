@@ -23,7 +23,7 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
   const arrow = document.createElement('span');
   arrow.className = 'start-workspace-go';
   arrow.setAttribute('aria-hidden', 'true');
-  arrow.innerHTML = icon('arrowRight');
+  arrow.innerHTML = icon('caretRight');
   const tracks = document.createElement('span');
   tracks.className = 'start-workspace-tracks';
   for (const track of checkpoint.tracks) {
@@ -39,9 +39,9 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
     img.onload = () => { img.style.opacity = ''; thumb.replaceChildren(img); };
     thumb.append(img);
     const name = document.createElement('span'); name.className = 'start-workspace-track-name';
-    const slot = document.createElement('b'); slot.textContent = `${track.slot} · `;
-    name.append(slot, document.createTextNode(info.name));
-    row.append(thumb, name); tracks.append(row);
+    const slot = document.createElement('span'); slot.className = `slot slot-${track.slot}`; slot.textContent = track.slot;
+    name.textContent = info.name;
+    row.append(thumb, slot, name); tracks.append(row);
     fillThumbnailImage(img, key, info.source && version ? new URL(serverThumbnailImageUrl(info.source.id, version), checkpoint.serverUrl).href : undefined);
   }
   const meta = document.createElement('span'); meta.className = 'start-workspace-meta';
@@ -52,9 +52,9 @@ function recoveryCard(checkpoint: WorkspaceFile, restore: () => Promise<void>, s
     meta.textContent=t(msg('recovery.summary', '{tracks, plural, other {# 轨道}} · {marks, plural, other {# 标注}} · {time}'),{tracks:checkpoint.tracks.length,marks:checkpoint.marks.length,time});
   };
   localize();onLanguageChange(localize,signal);
-  footer.append(meta, arrow);
+  footer.append(meta);
   body.append(tracks, footer);
-  button.append(body);
+  button.append(body, arrow);
   button.onclick = () => { button.disabled = true; void restore().finally(() => { if (button.isConnected) button.disabled = false; }); };
   return button;
 }

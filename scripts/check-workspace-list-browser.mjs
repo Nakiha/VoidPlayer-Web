@@ -20,6 +20,11 @@ try {
   await page.locator('#identity-welcome').waitFor({ state: 'hidden' });
   const document = { schema: 'voidplayer-workspace', version: 1, generatedAt: new Date().toISOString(), serverUrl: page.url(), positionUs: 0, tracks: [{ slot: 'A', mediaId: 'sample', offsetUs: 0 }], media: [{ id: 'sample', name: 'sample.mp4', size: 100, lastModified: 10, codec: 'h264', decoder: 'webcodecs', width: 100, height: 100, durationUs: 1000, firstPtsUs: 0 }], marks: [], viewport: new Viewport().snapshot(), layout: { panels: { inspector: true, subtracks: true, sources: true }, selected: 'A', dockHeight: 260, marksExpanded: true } };
   const save = name => page.evaluate(async ({name, document}) => { const r = await fetch('/api/workspaces', { method: 'POST', headers: { 'content-type': 'application/json', 'x-voidplayer-action': 'workspace' }, body: JSON.stringify({ name, document }) }); if (!r.ok) throw new Error(await r.text()); }, { name, document });
+  await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
+  await page.locator('.saved-workspace-empty').waitFor();
+  assert.equal(await page.locator('.workspace-list-columns').isVisible(), false, 'empty workspaces have no table headings');
+  assert.match(await page.locator('.saved-workspace-empty').innerText(), /保存当前工作区/);
+  await page.locator('#settings-close').click();
   await save('第一轮评审');
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-identity').click();
   await page.locator('#identity-name').fill('小红'); await page.locator('#identity-save').click();
@@ -67,6 +72,12 @@ try {
   await page.locator('#saved-workspace-search').fill('交付');
   await page.locator('.saved-workspace-open strong').filter({ hasText: '交付检查' }).waitFor();
   await page.locator('#saved-workspace-search-button').click(); await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 3);
+  await page.locator('#saved-workspace-search').fill('不会匹配的工作区');
+  await page.locator('.saved-workspace-empty').getByText('没有匹配的工作区', {exact:true}).waitFor();
+  assert.equal(await page.locator('.workspace-list-columns').isVisible(), false);
+  await page.locator('.saved-workspace-empty').getByRole('button', {name:'清除搜索',exact:true}).click();
+  await page.waitForFunction(() => document.querySelectorAll('.saved-workspace-row').length === 3);
+  assert.equal(await page.locator('.workspace-list-columns').isVisible(), true, 'clearing the empty search restores the list and headings');
   await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ colorScheme: 'light' });
   for(const width of [390,320]) {
     await page.setViewportSize({width,height:844});

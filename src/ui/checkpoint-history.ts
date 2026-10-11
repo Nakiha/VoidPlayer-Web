@@ -2,11 +2,14 @@ import { currentActor } from '../identity.ts';
 import { t, th, msg, formatDate, onLanguageChange } from '../i18n.ts';
 import type { WorkspaceCheckpoints, CheckpointSummary, CheckpointUsage } from '../workspace-checkpoint.ts';
 import type { WorkspaceFile } from '../workspace-file.ts';
+import { icon } from './icons.ts';
 
 export function checkpointHistoryShell() {
   return `<div class="settings-section"><h4 class="settings-section-title">${th(msg('recovery.history', '本机恢复记录'))}</h4>
-    <p class="settings-caption">${th(msg('recovery.historyHelp', '记录仅存于此浏览器。可导出备份或删除不再需要的历史记录，当前页面的记录会继续自动保存。'))}</p>
-    <p id="checkpoint-history-usage" class="settings-caption" role="status"></p>
+    <div id="checkpoint-history-usage" class="settings-card checkpoint-capacity" role="status" hidden>
+      <div class="checkpoint-capacity-item" data-capacity="count">${icon('copy')}<span class="checkpoint-capacity-label"></span><span class="checkpoint-capacity-value"></span><div class="checkpoint-capacity-meter" role="meter" aria-valuemin="0"><span></span></div></div>
+      <div class="checkpoint-capacity-item" data-capacity="bytes">${icon('storage')}<span class="checkpoint-capacity-label"></span><span class="checkpoint-capacity-value"></span><div class="checkpoint-capacity-meter" role="meter" aria-valuemin="0"><span></span></div></div>
+    </div>
     <div id="checkpoint-history-list" class="settings-card"></div>
     <p id="checkpoint-history-message" class="settings-caption" role="status" hidden></p>
     <div class="checkpoint-history-pages"><button id="checkpoint-history-first">${th(msg('savedWorkspaces.backToLatest', '返回最新'))}</button><button id="checkpoint-history-next">${th(msg('savedWorkspaces.nextPage', '下一页'))}</button></div></div>`;
@@ -26,8 +29,25 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   const current = (owner: string) => !options.signal.aborted && actor() === owner;
   const labels = () => ({ restore: t(msg('recovery.restore', '恢复工作区')), export: t(msg('recovery.export', '导出备份')), delete: t(msg('marks.delete', '删除')) });
   function localize() {
-    if (usageInfo) usage.textContent = t(msg('recovery.capacity', '已保存 {count}/{limit} 份 · 估算 {used} / {budget} MiB。达到上限后请先导出并删除旧记录，已有记录不会自动删除。'),
-      { count: usageInfo.count, limit: usageInfo.limits.count, used: (usageInfo.bytes / 1048576).toFixed(1), budget: (usageInfo.limits.bytes / 1048576).toFixed(0) });
+    if (usageInfo) {
+      usage.hidden = false;
+      for (const kind of ['count', 'bytes'] as const) {
+        const item = usage.querySelector<HTMLElement>(`[data-capacity=${kind}]`)!;
+        const value = usageInfo[kind], limit = usageInfo.limits[kind];
+        const label = kind === 'count' ? t(msg('recovery.recordCount', '恢复记录数量')) : t(msg('recovery.storageEstimate', '估算占用空间'));
+        const text = kind === 'count' ? `${value} / ${limit}` : `${(value / 1048576).toFixed(1)} / ${(limit / 1048576).toFixed(0)} MiB`;
+        item.title = `${label} · ${text}`;
+        item.querySelector('.checkpoint-capacity-label')!.textContent = label;
+        item.querySelector('.checkpoint-capacity-value')!.textContent = text;
+        const meter = item.querySelector<HTMLElement>('[role=meter]')!;
+        meter.setAttribute('aria-label', label);
+        meter.setAttribute('aria-valuenow', String(Math.min(value, limit)));
+        meter.setAttribute('aria-valuemax', String(limit));
+        meter.setAttribute('aria-valuetext', text);
+        item.dataset.full = String(value >= limit);
+        meter.style.setProperty('--capacity-fill', `${Math.min(100, value / limit * 100)}%`);
+      }
+    }
     const translated = labels();
     for (const row of list.querySelectorAll<HTMLElement>('.checkpoint-history-row')) {
       const entry = page.find(entry => entry.id === row.dataset.checkpointId);
@@ -118,7 +138,7 @@ export function installCheckpointHistory(store: WorkspaceCheckpoints, options: {
   const refreshVisible = () => { if (!busy && (settings as HTMLDialogElement).open && !document.getElementById('settings-pane-workspace')!.hidden) void refresh(); };
   settings.addEventListener('settings-pane-change', event => { if ((event as CustomEvent).detail === 'workspace') refreshVisible(); }, { signal: options.signal });
   window.addEventListener('focus', refreshVisible, { signal: options.signal });
-  window.addEventListener('voidplayer-identity-change', () => { ++sequence; before = undefined; page = []; list.replaceChildren(); refreshVisible(); }, { signal: options.signal });
+  window.addEventListener('voidplayer-identity-change', () => { ++sequence; before = undefined; page = []; usageInfo = undefined; usage.hidden = true; list.replaceChildren(); refreshVisible(); }, { signal: options.signal });
   // Locale commits update rendered (including hidden) labels synchronously,
   // preserving row nodes, focus and user-entered checkpoint names.
   onLanguageChange(localize, options.signal);

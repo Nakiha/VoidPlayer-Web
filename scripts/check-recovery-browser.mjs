@@ -47,6 +47,8 @@ try {
   const card = page.locator('#start-workspace-card');
   await card.waitFor();
   assert.match(await card.textContent(), /clip\.mp4/);
+  assert.deepEqual(await card.locator('.start-workspace-track > .slot').allTextContents(), ['A']);
+  assert.equal(await card.locator('.start-workspace-track > .slot').getAttribute('class'), 'slot slot-A');
   assert.match(await card.textContent(), /1 轨道 · 1 标注 · 00:00/);
   assert.doesNotMatch(await card.textContent(), /上次的工作区/);
   assert.equal(await card.evaluate(el => {
@@ -59,15 +61,27 @@ try {
     const footer = el.querySelector('.start-workspace-footer').getBoundingClientRect();
     const arrow = el.querySelector('.start-workspace-go').getBoundingClientRect();
     return Math.abs(body.left - card.left - parseFloat(padding.paddingLeft)) < 1
-      && Math.abs(body.right - card.right + parseFloat(padding.paddingRight)) < 1
-      && footer.top >= tracks.bottom && arrow.left > footer.left && arrow.right <= footer.right;
+      && body.right < arrow.left && footer.top >= tracks.bottom
+      && Math.abs(arrow.right - card.right + parseFloat(padding.paddingRight)) < 1
+      && Math.abs((arrow.top + arrow.bottom) / 2 - (card.top + card.bottom) / 2) < 1;
   }), true);
+  await page.locator('.start-recent-row').first().waitFor();
+  for (const width of [1280, 600, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    const workspaceGo = await card.locator('.start-workspace-go').boundingBox();
+    const recentGo = await page.locator('.start-recent-go').first().boundingBox();
+    assert.ok(Math.abs(workspaceGo.x - recentGo.x) < 1 && workspaceGo.width === recentGo.width,
+      `${width}px workspace and recent-file chevrons share one aligned column`);
+    assert.equal(await card.locator('.start-workspace-go .icon').getAttribute('data-icon'), 'caretRight');
+    assert.equal(await page.locator('.start-recent-go .icon').first().getAttribute('data-icon'), 'caretRight');
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.waitForFunction(() => document.querySelector('#start-workspace-card .start-workspace-thumb img')?.naturalWidth > 0, null, { timeout: 5000 });
   assert.equal(await page.locator('.toast').filter({ hasText: '发现上次的工作区' }).count(), 0);
   assert.equal(await card.evaluate(el => getComputedStyle(el).borderTopWidth), '0px');
   if (process.env.RECOVERY_SCREENSHOTS) {
     await card.hover();
-    await card.screenshot({ path: process.env.RECOVERY_SCREENSHOTS });
+    await page.locator('#start-panel').screenshot({ path: process.env.RECOVERY_SCREENSHOTS });
   }
   await card.click();
   await page.getByText('工作区已恢复。', { exact: true }).waitFor();
@@ -90,8 +104,10 @@ try {
     };
   }), snapshot);
   await page.locator('#settings-open').click(); await page.locator('#settings-tab-workspace').click();
-  await page.waitForFunction(() => document.querySelector('#checkpoint-history-usage')?.textContent.includes('2/100'));
-  assert.match(await page.locator('#checkpoint-history-usage').textContent(), /2\/100/);
+  const countMeter = page.locator('#checkpoint-history-usage [data-capacity=count] [role=meter]');
+  await page.waitForFunction(() => document.querySelector('#checkpoint-history-usage [data-capacity=count] [role=meter]')?.getAttribute('aria-valuenow') === '2');
+  assert.equal(await countMeter.getAttribute('aria-valuemax'), '100');
+  assert.equal(await page.locator('#checkpoint-history-usage [data-capacity=bytes] [role=meter]').getAttribute('aria-valuemax'), String(64 * 1048576));
   assert.equal(await page.locator('.saved-workspace-pages').count(),1,'cloud pagination keeps its own selector');
   const historical = page.locator('.checkpoint-history-row[data-checkpoint-id="history-old"]');
   await historical.waitFor(); assert.match(await historical.textContent(), /历史备份/);
@@ -136,7 +152,8 @@ try {
   const storedCount=()=>page.evaluate(()=>new Promise(resolve=>{const req=indexedDB.open('voidplayer-workspace-checkpoints');req.onsuccess=()=>{const db=req.result,count=db.transaction('checkpoints').objectStore('checkpoints').count();count.onsuccess=()=>{resolve(count.result);db.close();};};}));
   assert.equal(await storedCount(),100,'capacity failure preserves every existing record');
   await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();
-  await page.waitForFunction(()=>document.querySelector('#checkpoint-history-usage').textContent.includes('100/100'));
+  await page.waitForFunction(()=>document.querySelector('#checkpoint-history-usage [data-capacity=count]')?.dataset.full === 'true');
+  assert.equal(await countMeter.getAttribute('aria-valuenow'), '100');
   const oldCapacity=page.locator('.checkpoint-history-row[data-checkpoint-id="capacity-98"]');
   await oldCapacity.getByRole('button',{name:'删除',exact:true}).click();
   await oldCapacity.locator('.annotation-confirm').getByRole('button',{name:'删除',exact:true}).click();
