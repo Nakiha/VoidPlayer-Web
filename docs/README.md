@@ -26,7 +26,7 @@
 
 ## 发布历史与原始证据
 
-- [最新版本 0.7.0](releases/0.7.0.md)；全部发布说明按版本保留在 [releases/](releases/)，不随当前代码重写。
+- [稳定版 0.7.0](releases/0.7.0.md)、[1.0.0-alpha.1 预览版](releases/1.0.0-alpha.1.md)；全部发布说明按版本保留在 [releases/](releases/)，不随当前代码重写。
 - [帧契约验收数据](frame-contract-acceptance.json)与 [evidence/](evidence/) 保留原始通过和失败产物。解释入口见 [本地化证据边界](localization.md#historical-evidence-and-limitations)、[HDR 验证](hdr-support.md#验证)、[测试证据边界](testing.md#历史证据的读取边界)。
 - 不可丢失的旧色彩失败结论及固定版本来源集中在 [色彩证据边界](color-pipeline.md#历史负面证据的边界)。未提交的本地产物不能在当前 checkout 中复核。
 

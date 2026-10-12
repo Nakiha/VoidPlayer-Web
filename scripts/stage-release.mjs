@@ -7,6 +7,14 @@ import { fileURLToPath } from 'node:url';
 import { readReleaseIdentity, readReleaseNotes } from './release-version.mjs';
 import { sha256, verifyReleaseSet } from './check-release-set.mjs';
 
+export async function verifyDraftReleaseSet(root, directory, identity) {
+  return verifyReleaseSet(directory, identity, {
+    bunVersion: (await readFile(path.join(root, '.bun-version'), 'utf8')).trim(),
+    coreSource: JSON.parse(await readFile(path.join(root, 'scripts/release-core.json'), 'utf8')),
+    analysisSource: JSON.parse(await readFile(path.join(root, 'scripts/release-analysis.json'), 'utf8')),
+  });
+}
+
 export async function stageRelease({ identity, notes, report, readAsset, api }) {
   assert.ok(identity.tag, 'only a verified tag can create a release draft');
   let object = (await api(`git/ref/tags/${encodeURIComponent(identity.tag)}`)).object;
@@ -64,7 +72,7 @@ export async function stageRelease({ identity, notes, report, readAsset, api }) 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const root = path.resolve(import.meta.dirname, '..'), directory = path.resolve(process.argv[2] || 'artifacts/release-set');
   const identity = await readReleaseIdentity(root), notes = await readReleaseNotes(root, identity);
-  const report = await verifyReleaseSet(directory, identity, { bunVersion: (await readFile(path.join(root, '.bun-version'), 'utf8')).trim(), coreSource: JSON.parse(await readFile(path.join(root, 'scripts/release-core.json'), 'utf8')) });
+  const report = await verifyDraftReleaseSet(root, directory, identity);
   const repository = process.env.GITHUB_REPOSITORY;
   assert.match(repository || '', /^[\w.-]+\/[\w.-]+$/);
   assert.ok(process.env.GH_TOKEN, 'GH_TOKEN is required');

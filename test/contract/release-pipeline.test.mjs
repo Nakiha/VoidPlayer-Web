@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
-import { stageRelease } from '../../scripts/stage-release.mjs';
+import { stageRelease, verifyDraftReleaseSet } from '../../scripts/stage-release.mjs';
 import { blockingFlvBenchmarkFailures } from '../../scripts/testing/flv-benchmark-policy.mjs';
 
 test('virtual FLV timing reports retain negative verdicts and never waive functional failures', () => {
@@ -188,6 +188,21 @@ test('release aggregation rejects corrupt, incomplete, duplicate and mixed-revis
       await makeSet(root, (m, platform) => { if (platform === 'windows-x64') mutate(m); });
       await assert.rejects(verifyReleaseSet(directory, identity, locked));
     }
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test('draft preflight reads both committed core locks and rejects mismatched analysis provenance', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'voidplayer-draft-locks-'));
+  try {
+    await mkdir(path.join(root, 'scripts'));
+    await writeFile(path.join(root, '.bun-version'), locked.bunVersion + '\n');
+    await writeFile(path.join(root, 'scripts/release-core.json'), JSON.stringify(locked.coreSource));
+    const analysisLock = path.join(root, 'scripts/release-analysis.json');
+    await writeFile(analysisLock, JSON.stringify(locked.analysisSource));
+    const directory = await makeSet(root);
+    assert.equal((await verifyDraftReleaseSet(root, directory, identity)).assets.length, 6);
+    await writeFile(analysisLock, JSON.stringify({ revision: 'd'.repeat(40) }));
+    await assert.rejects(verifyDraftReleaseSet(root, directory, identity), /analysis source matches lock/);
   } finally { await rm(root, { recursive: true, force: true }); }
 });
 
