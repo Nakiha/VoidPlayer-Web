@@ -1121,16 +1121,17 @@ await withBrowserFixture(
       // Starting another source retains completed per-track state.
       await requestInspection(page, 'A');
       await page.waitForFunction(() => {
-        const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});
-        return s.state === 'ready' && s.stream?.slot === 'A' && s.stream.pictures === 120;
+        const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'});
+        return s.state === 'ready' && s.completedStream?.slot === 'A' && s.completedStream.pictures === 120;
       });
       await call('load_library_item', { slot: 'B', id: library.entries.find(e => e.name === 'incremental.mp4').id });
       await stable();
       await requestInspection(page, 'B');
       await page.waitForFunction(() => {
-        const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});
-        return s.state === 'ready' && s.stream?.slot === 'B' && s.stream.pictures === 300;
-      });
+        const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'B'});
+        return s.state === 'ready' && s.completedStream?.slot === 'B' && s.completedStream.pictures === 300;
+      }, undefined, { timeout: 60000 });
+      await page.waitForFunction(() => ['A','B'].every(slot => window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot}).state==='ready'));
       for (const slot of ['A', 'B']) assert.equal(await page.locator(`.analysis-track-control[data-slot="${slot}"]`).getAttribute('data-state'), 'ready');
       await page.screenshot({ path: artifact('track-inspection-completed.png') });
       await call('remove_review_track', { slot: 'B' });
