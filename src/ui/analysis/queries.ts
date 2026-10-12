@@ -38,6 +38,7 @@ export function createAnalysisQueries(hooks: {
   const seqBySlot = new Map<Slot, number>();
   const abortBySlot = new Map<Slot, AbortController>();
   let sequence = 0;
+  let refreshGeneration = 0;
   let disposed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   let lastQueryMs = 0;
@@ -62,6 +63,7 @@ export function createAnalysisQueries(hooks: {
   }
 
   function suspend() {
+    refreshGeneration++;
     clearTimeout(timer);
     timer = undefined;
     for (const [slot, controller] of abortBySlot) {
@@ -127,6 +129,8 @@ export function createAnalysisQueries(hooks: {
 
   function refresh() {
     if (!active()) return;
+    const generation = ++refreshGeneration;
+    const pending: Promise<(() => boolean) | undefined>[] = [];
     const state = snapshot();
     const { range, domain: db, axis, windowUs } = state;
     const pixelWidth = clampPixelWidth(state.pixelWidth);
@@ -179,7 +183,7 @@ export function createAnalysisQueries(hooks: {
       const mediaId = track.mediaId;
       const queryStart = now();
       hooks.onQueryStart?.();
-      hooks.query(track.slot, {
+      pending.push(hooks.query(track.slot, {
         startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
         axis, pixelWidth: qPix, bitrateWindowUs: windowUs, maxSamples: MAX_SAMPLES,
         bucketOriginUs: 0,
@@ -194,39 +198,51 @@ export function createAnalysisQueries(hooks: {
         // session 盖章的 generation 校验；内层 mediaId 由 adapter 在打开时
         // 铸造，可能早于身份钉定（updateMediaInfo），不得参与比较。
         if (!result.sourceVersion.startsWith(`${current.sourceGen}#`)) return;
-        errors.delete(track.slot);
-        results.set(track.slot, result);
-        // 索引进展可能使暂定排名转正，按当前帧重估状态区。
-        hooks.onResult?.();
-        // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
-        // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
-        if (result.capability?.indexState === 'complete') {
-          const detailMode = !result.truncated && result.samples.length > 0 ? 'raw' : 'buckets';
-          coverage.set(track.slot, {
-            slot: track.slot, sourceVersion: result.sourceVersion, indexRevision: result.indexRevision,
-            axis: result.axis, windowUs,
-            startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
-            pixelWidth: qPix, offsetUs: track.offsetUs,
-            detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
-            truncated: result.truncated, sampleCount: result.samples.length,
-            curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
-          });
-          // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
-        } else {
-          coverage.delete(track.slot);
-        }
-        hooks.onQueryComplete?.(now() - queryStart);
-        hooks.onChange();
+        const elapsedMs = now() - queryStart;
+        return () => {
+          errors.delete(track.slot);
+          results.set(track.slot, result);
+          // 索引进展可能使暂定排名转正，按当前帧重估状态区。
+          // 只有完整索引的结果才建立覆盖：构建中的空/稀疏结果不得缓存覆盖，
+          // 否则索引完成后 revision 对比的是快照自身，永远跳过重查。
+          if (result.capability?.indexState === 'complete') {
+            const detailMode = !result.truncated && result.samples.length > 0 ? 'raw' : 'buckets';
+            coverage.set(track.slot, {
+              slot: track.slot, sourceVersion: result.sourceVersion, indexRevision: result.indexRevision,
+              axis: result.axis, windowUs,
+              startUs: Math.floor(qStart), endUs: Math.ceil(qEnd),
+              pixelWidth: qPix, offsetUs: track.offsetUs,
+              detailMode, bucketWidthUs: bucketWidthFor(Math.floor(qStart), Math.ceil(qEnd), qPix),
+              truncated: result.truncated, sampleCount: result.samples.length,
+              curveStartUs: cStart, curveEndUs: cEnd, curvePixelWidth: cPix,
+            });
+            // 派生索引按快照身份由 WeakMap 持有，新对象自动隔离，无需手动失效。
+          } else {
+            coverage.delete(track.slot);
+          }
+          hooks.onQueryComplete?.(elapsedMs);
+          return true;
+        };
       }).catch(error => {
         if (abortBySlot.get(track.slot) === controller) abortBySlot.delete(track.slot);
         if (!active() || controller.signal.aborted || seqBySlot.get(track.slot) !== mySeq) return;
         if (error instanceof Error && error.name === 'AbortError') return;
-        errors.set(track.slot, error instanceof Error ? error.message : String(error));
-        hooks.onChange();
-      });
+        return () => { errors.set(track.slot, error instanceof Error ? error.message : String(error)); return false; };
+      }));
     }
+    // A merged chart must never observe one track's new bucket grid beside
+    // another track's old grid. Keep the last complete view until this query
+    // cohort settles; cancellation/source changes invalidate the whole cohort.
+    if (pending.length) void Promise.all(pending).then(commits => {
+      if (!active() || refreshGeneration !== generation) return;
+      let accepted = 0;
+      for (const commit of commits) if (commit?.()) accepted++;
+      for (let i = 0; i < accepted; i++) hooks.onResult?.();
+      hooks.onChange();
+    });
     hooks.onChange();
   }
 
-  return { results, errors, schedule, refresh, reconcile, suspend, dispose };
+  return { results, errors, schedule, refresh, reconcile, suspend, dispose,
+    get pendingSlots() { return [...abortBySlot.keys()]; } };
 }

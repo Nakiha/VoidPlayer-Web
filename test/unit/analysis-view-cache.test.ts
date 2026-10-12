@@ -138,7 +138,7 @@ function queryHarness(t: { after(fn: () => void): void }) {
     truncated: false, buckets: null, bitrate: null, capability: complete,
     coverageUs: { start: 0, end: 10_000_000 }, ...patch,
   });
-  const flush = async () => { await Promise.resolve(); await Promise.resolve(); };
+  const flush = () => new Promise<void>(resolve => setImmediate(resolve));
   const replace = (patch: Partial<AnalysisQueryTrack>) => {
     const previous = state.tracks;
     state.tracks = state.selected = [{ ...state.tracks[0], ...patch }];
@@ -158,6 +158,43 @@ test('查询复用完整覆盖，放大时重新获取更细数据，并保留�
   assert.equal(query.curveStartUs, 3_975_000); assert.equal(query.curveEndUs, 4_125_000);
   assert.equal(query.pixelWidth, 4096, 'halo query remains bounded');
   assert.equal(query.curvePixelWidth, 1500, 'curve keeps the visible density');
+});
+
+test('交错返回的多轨查询一起提交，不将新旧桶网格混合绘制', async t => {
+  const h = queryHarness(t);
+  const a = h.state.tracks[0];
+  const b = { ...a, slot: 'B' as const, mediaId: 'second' };
+  h.state.tracks = h.state.selected = [a, b];
+  h.state.capabilities = new Map([['A', complete], ['B', complete]]);
+  h.state.pixelWidth = 2000;
+  h.controller.refresh();
+  for (let i = 0; i < 2; i++) h.requests[i].resolve(h.result(i, { bucketGrid: { originUs: 0, widthUs: 5000 } }));
+  await h.flush();
+  h.state.pixelWidth = 1900; h.state.windowUs = 250_000;
+  h.controller.refresh();
+  h.requests[2].resolve(h.result(2, { bucketGrid: { originUs: 0, widthUs: 5263 } }));
+  await h.flush();
+  assert.deepEqual([...h.controller.results.values()].map(r => r.bucketGrid?.widthUs), [5000, 5000], 'partial reply retains the previous coherent view');
+  h.requests[3].resolve(h.result(3, { bucketGrid: { originUs: 0, widthUs: 5263 } }));
+  await h.flush();
+  assert.deepEqual([...h.controller.results.values()].map(r => r.bucketGrid?.widthUs), [5263, 5263]);
+  assert.equal(h.requests.length, 4, 'coherent commit does not add queries');
+});
+
+test('部分结果等待同轮其他轨道时，换源也丢弃已返回的旧结果', async t => {
+  const h = queryHarness(t);
+  const a = h.state.tracks[0];
+  h.state.tracks = h.state.selected = [a, { ...a, slot: 'B', mediaId: 'second' }];
+  h.state.capabilities = new Map([['A', complete], ['B', complete]]);
+  h.controller.refresh();
+  h.requests[0].resolve(h.result(0)); await h.flush();
+  assert.equal(h.controller.results.size, 0);
+  h.replace({ sourceGen: 2 }); h.controller.refresh();
+  h.requests[2].resolve(h.result(2)); await h.flush();
+  h.requests[1].resolve(h.result(1, { sourceVersion: '1#old' })); await h.flush();
+  assert.equal(h.controller.results.size, 1);
+  assert.equal(h.controller.results.get('A')?.sourceVersion, '2#adapter');
+  assert.equal(h.counts().accepted, 1, 'staged old A and late old B never publish');
 });
 
 test('覆盖使用请求发出时的码率窗口，迟到结果不能冒充新的窗口', async t => {

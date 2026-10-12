@@ -1102,6 +1102,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       w.__vpAnalysis = {
         view: viewRange(),
         axis: prefs.axis,
+        queryPending: queries.pendingSlots,
+        queryResults: [...results].map(([slot, result]) => ({ slot, requestId: result.requestId,
+          bucketGrid: result.bucketGrid, samples: result.samples.length, truncated: result.truncated })),
         pinned: inspection.state.pinned != null,
         plot: { x: plotRect.x, y: plotRect.y, width: plotRect.width, height: plotRect.height },
         float: flRect ? { x: flRect.x, y: flRect.y, width: flRect.width, height: flRect.height } : null,

@@ -36,7 +36,14 @@ try {
   // Returning to an existing player must retain its in-memory review and tab.
   await player.evaluate(() => { window.adminReturnMarker = 'preserve-review'; });
   assert.equal(await page.evaluate(() => !!window.opener), true);
-  await Promise.all([page.waitForEvent('close'), page.getByRole('link', { name: '返回播放器', exact: true }).click()]);
+  // The synchronous handler closes the tab before click's protocol reply can
+  // arrive. Accept only that expected close error; still require the close
+  // event and the original live player with its unchanged in-memory marker.
+  const returned = page.waitForEvent('close');
+  await Promise.all([returned, page.getByRole('link', { name: '返回播放器', exact: true }).click().catch(async error => {
+    if (!String(error).includes('Target page, context or browser has been closed')) throw error;
+    await returned;
+  })]);
   assert.equal(context.pages().length, 1);
   assert.equal(await player.evaluate(() => window.adminReturnMarker), 'preserve-review');
   const direct = await context.newPage(); await direct.goto(base + '/admin');

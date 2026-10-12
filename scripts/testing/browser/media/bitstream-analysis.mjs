@@ -1144,7 +1144,10 @@ await withBrowserFixture(
       await stable(); await call('seek_review', { ptsUs: 5_000_000 });
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
       await selectDiagrams(page, 'nalu-size');
-      await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({}); return s.state === 'ready' && s.stream?.pictures === 300; }, undefined, { timeout: 30000 });
+      // Streams have a no-progress budget, not a 30 s total lifetime. CI may
+      // continuously consume all 300 HTTP chunks beyond that old total limit.
+      // Keep the same terminal/coverage gate and the existing 60 s stream wait.
+      await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'}); return s.state === 'ready' && s.stream?.pictures === 300 && s.completedStream?.pictures === 300; }, undefined, { timeout: 60000 });
       for (const close of await page.locator('.toast-close').all()) await close.click();
       await page.locator('.toast-stack .toast').waitFor({ state: 'hidden' });
       const playback = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));

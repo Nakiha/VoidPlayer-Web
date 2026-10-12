@@ -462,7 +462,14 @@ try {
   // 缩窄绘图区使全览低于 1px 柱 + 间隔容量，验证聚合桶仍按峰值定位。
   await page.locator('[data-seg="full"]').click();
   await page.setViewportSize({ width: 640, height: 800 });
-  await page.waitForFunction(() => window.__vpAnalysis?.glyphs.some(g => g.kind === 'bucket'));
+  // Buckets may already exist at 1280px. Wait for the resized drawing, whose
+  // full-domain padding depends on width, before capturing the click baseline.
+  await page.waitForFunction(() => {
+    const canvas = document.getElementById('analysis-canvas'), qa = window.__vpAnalysis;
+    return qa?.glyphs.some(g => g.kind === 'bucket')
+      && Math.abs(canvas.width / Math.min(2, devicePixelRatio || 1) - canvas.getBoundingClientRect().width) <= 1
+      && +canvas.dataset.axisStart === qa.view.start && +canvas.dataset.axisEnd === qa.view.end;
+  });
   const bucketBox = await page.locator('#analysis-canvas').boundingBox();
   const bucket = await page.evaluate(() => {
     const bs = window.__vpAnalysis.glyphs.filter(g => g.kind === 'bucket');

@@ -2432,7 +2432,7 @@
     "locations": [
       "src/ui/analysis-panel.ts:81",
       "src/ui/analysis-panel.ts:225",
-      "src/ui/analysis-panel.ts:1341"
+      "src/ui/analysis-panel.ts:1344"
     ]
   },
   "analysis.dtsOrder": {
