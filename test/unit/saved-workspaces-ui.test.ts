@@ -26,6 +26,7 @@ class Element extends EventTarget {
   onkeydown?: (event: KeyboardEvent) => void;
   toggleAttribute(name: string, value: boolean) { if (name === 'disabled') this.disabled = value; }
   setAttribute() {}
+  querySelector() { return null; }
   querySelectorAll() { return []; }
   append(...children: Element[]) { this.children.push(...children); }
   replaceChildren(...children: Element[]) { this.children = children; }

@@ -506,3 +506,95 @@ test('parallel cache writers share quota and protect other jobs unread chunks', 
     assert.equal(await store.get(a), null); assert.ok(await store.get(b));
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
+
+test('required reference ABI rejects old or incomplete cores before analysis', async () => {
+  const { validateAnalysisCore, REFERENCE_EXPORTS } = await import('../../src/bitstream-analysis/core-abi.ts');
+  const current = Object.fromEntries(REFERENCE_EXPORTS.map(name => [name, () => name === '_vpa_reference_abi' ? 1 : 0]));
+  current._vpa_abi = () => 1;
+  assert.doesNotThrow(() => validateAnalysisCore(current));
+  assert.throws(() => validateAnalysisCore({ _vpa_abi: () => 1 }), /reference ABI 1/);
+  for (const name of REFERENCE_EXPORTS) {
+    const broken = {...current}; delete broken[name];
+    assert.throws(() => validateAnalysisCore(broken), /ABI mismatch/);
+  }
+  assert.throws(() => validateAnalysisCore({...current, _vpa_reference_abi: () => 2}), /ABI mismatch/);
+});
+
+test('retry admission distinguishes transient failures from unsupported capabilities', async () => {
+  const { canRetryAnalysis, AnalysisFailure } = await import('../../src/bitstream-analysis/failure.ts');
+  for (const code of ['internal-error', 'resource-limit', 'cancelled'] as const) {
+    const reason = new AnalysisFailure(code, code).info;
+    assert.equal(canRetryAnalysis({state:reason.kind, reason}), true);
+  }
+  for (const code of ['unsupported-codec', 'unsupported-container', 'unsupported-qp-depth', 'invalid-request', 'source-changed'] as const) {
+    const reason = new AnalysisFailure(code, code).info;
+    assert.equal(canRetryAnalysis({state:reason.kind, reason}), false);
+  }
+  for (const state of ['idle', 'pending', 'ready']) assert.equal(canRetryAnalysis({state}), false);
+});
+
+test('session preserves source completion across eviction, multiple picture tasks, failure and replacement', async () => {
+  const { ReviewSession } = await import('../../src/session.ts');
+  const { rgbaDescription } = await import('../../src/frame-description.ts');
+  const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+  const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const requests: any[] = [];
+  let failPicture = false, commit = 0;
+  class FakeWorker {
+    onmessage?: (event: {data: unknown}) => void;
+    onerror?: (event: unknown) => void;
+    postMessage(data: any) {
+      if (!data.target) return;
+      requests.push(data.target);
+      const picture = (au: number) => ({...result(), picture:{...result().picture, au}, sourcePtsUs:100+au*100, gop:{startAu:0,endAu:3,configuration:0,anchor:'closed'}});
+      queueMicrotask(() => {
+        if (data.target.mode === 'stream') {
+          this.onmessage?.({data:{event:'progress',progress:{pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true}}});
+          for (let au=0;au<3;au++) this.onmessage?.({data:{event:'chunk',result:picture(au)}});
+          this.onmessage?.({data:{ok:true}});
+        } else this.onmessage?.({data:failPicture ? {ok:false,error:'network',reason:{code:'internal-error',message:'network'}} : {ok:true,result:picture(data.target.picture.au)}});
+      });
+    }
+    terminate() {}
+  }
+  Object.defineProperty(globalThis,'Worker',{configurable:true,value:FakeWorker});
+  Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
+  const source = {
+    info:{id:'local:uuid',name:'coverage.mp4',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},
+    bitstreamFile:new Blob(['fixture']),
+    async frameAt(time: number) { const au=Math.min(2,Math.floor(time/100)); return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:{...result().picture,au},close(){}}; },
+    async framesAfter(){return[];}, async *framesFrom(){}, dispose(){},
+  } as unknown as import('../../src/media.ts').MediaSource;
+  const session = new ReviewSession((_slot,frame)=>{frame.presentedCommit=++commit;});
+  try {
+    await session.load('A',async()=>source);
+    await session.requestBitstreamStream('A');
+    const completed=session.getBitstreamAnalysisState('A').completedStream!;
+    assert.equal(completed.sourceVersion,'local:uuid'); assert.equal(completed.pictures,3);
+    // Remove full frame records exactly as the bounded cache does; completion is independent.
+    (session as any).bitstream.cache.clear();
+    for (const time of [100,200]) {
+      await session.seek(time);
+      assert.equal(session.cachedBitstreamAnalysis('A'),null);
+      await session.requestBitstreamAnalysis('A');
+      assert.equal(session.getBitstreamAnalysisState('A').stream,undefined,'latest picture task is not whole-stream coverage');
+      assert.deepEqual(session.getBitstreamAnalysisState('A').completedStream,completed);
+    }
+    assert.equal(requests.filter(target=>target.mode==='stream').length,1);
+    assert.equal(requests.filter(target=>target.picture).length,2);
+    (session as any).bitstream.cache.clear(); failPicture=true;
+    await assert.rejects(session.requestBitstreamAnalysis('A'));
+    assert.equal(session.getBitstreamAnalysisState('A').state,'error');
+    assert.deepEqual(session.getBitstreamAnalysisState('A').completedStream,completed);
+    failPicture=false; await session.requestBitstreamAnalysis('A');
+    assert.equal(session.getBitstreamAnalysisState('A').state,'ready');
+    await session.removeTrack('A');
+    assert.equal(session.getBitstreamAnalysisState('A').completedStream,undefined);
+    await session.load('A',async()=>source);
+    assert.equal(session.getBitstreamAnalysisState('A').completedStream,undefined,'replacement generation cannot inherit coverage');
+  } finally {
+    await session.dispose();
+    if(workerDescriptor)Object.defineProperty(globalThis,'Worker',workerDescriptor);else Reflect.deleteProperty(globalThis,'Worker');
+    if(locationDescriptor)Object.defineProperty(globalThis,'location',locationDescriptor);else Reflect.deleteProperty(globalThis,'location');
+  }
+});

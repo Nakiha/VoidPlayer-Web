@@ -21,3 +21,5 @@
 #toggle-analysis-overlay[aria-expanded=true] { color:var(--accent); background:var(--annotation-toolbar-selected); }
 @keyframes overlay-panel-enter { from { opacity:0; } to { opacity:1; } }
 @media (prefers-reduced-motion:reduce) { .analysis-overlay-panel,.bitstream-track-progress { transition:none; animation:none; } .bitstream-track-progress.is-waiting .analysis-progress-ring { animation:none; } }
+
+.bitstream-track-item { display:inline-flex; align-items:center; gap:2px; }

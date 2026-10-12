@@ -97,7 +97,7 @@ Chromium 功能矩阵通过，但本机 headless + reference 色彩路径低于�
 
 冻结只读结果仅在入缓存时复制；公共请求仍返回隔离的数据，遮罩命中不深拷贝整份结果。画布仅尺寸变化时重设，帧、几何、样式均未变化时跳过绘制。命中提示由单个按需 output 显示，并验证其经过全局 tooltip 处理后仍可见。
 
-核心 PR #4 已于 2026-10-10 合入；消费锁定最终 merge revision `e9ad3e9eab9810442701ce6416b62b7527117c20`，保留 instrumented FFmpeg `59196ee` 与 Emscripten 6.0.9。合入后重新构建并校验产物，不跟随浮动分支。
+阶段 A 的核心 PR #4 已于 2026-10-10 合入；当时消费锁定最终 merge revision `e9ad3e9eab9810442701ce6416b62b7527117c20`，保留 instrumented FFmpeg `59196ee` 与 Emscripten 6.0.9。合入后重新构建并校验产物，不跟随浮动分支。
 
 阶段 A 测量汇总为 `docs/fixtures/bitstream-analysis-stage-a.json`：两种浏览器各 16 个 main 对照与 32 个功能场景，共 96 个场景。16 个持续缓存场景、所有显示轨道均为 100% 命中，恒定几何的 canvas 重设为 0。WebKit 单轨/双轨的遮罩绘制 p95 为约 3.2–6.2 ms、主线程 timer lag p95 为约 7.6–12.2 ms；Chromium 遮罩绘制 p95 为约 1.7–3.6 ms，但主线程 timer lag p95 仍有约 105–122 ms，保留其主线和功能分支的非实时限制。
 
@@ -123,7 +123,7 @@ GOP 按源包表的 AU/解码 ordinal 与配置段划分；容器 key 标记仅�
 
 轻量图示元数据独立于块 LRU 保存（另有 32 MiB 上限），避免块结果淘汰后整片图消失；按 sourceVersion/configuration/AU 隔离，取消保留已收到结果。NAL 每帧最多 4096 条，参考边最多 64 条；导入先验证类型、长度、前向解码身份及重复边，再进入缓存。图示查询保留可见窗口，禁止把全片块数组放进 UI/Agent 会话状态。新增 query_bitstream_chart / session.queryBitstreamChart 以会话时间和像素宽度查询：最多 256 个 raw picture / 2 MiB，或按像素分辨率汇总的桶。另有最多 8 个片源、每源 1024 个自适应时间桶与 2M AU 去重位图，整片汇总独立于原始记录淘汰，重复检查不会累计两遍。若详细缓存被淘汰，缩放仍保留汇总并明确提示重新检查可恢复细节，禁止把缓存尾段伪装成全片。工作区只保存图示选择，不保存任务、核心或结果。
 
-参考 ABI 1 的修改位于独立 VoidPlayer-FFmpeg-Build 的 `analysis/stream.c`、`analysis/reference-patch.py`、`scripts/build-analysis.sh`。源帧标识直接取参考 AVFrame 的 COPY_OPAQUE，不用 POC 猜测身份。可选出口包括 reference ABI/count/pointer/invalid/type/POC，记录为 u32 AU + u32 list，take 后失效。网页兼容没有这些出口的既有 ABI 1 产物。当前本地预览使用带 dirty 标记、WASM 摘要 buildId 的开发产物；发布锁定未改，本地同步须显式设置 `ANALYSIS_ALLOW_LOCAL_BUILD=1`，发布打包拒绝 dirty 开发产物。正式发布须先提交并推送独立核心源码，再更新 release-analysis.json 与同步产物。服务缓存使用 buildId，避免旧块结果遮掉新图示字段。
+参考 ABI 1 的修改位于独立 VoidPlayer-FFmpeg-Build 的 `analysis/stream.c`、`analysis/reference-patch.py`、`scripts/build-analysis.sh`。源帧标识直接取参考 AVFrame 的 COPY_OPAQUE，不用 POC 猜测身份。必需出口包括 reference ABI/count/pointer/invalid/type/POC，记录为 u32 AU + u32 list，take 后失效。发布锁固定已提交并推送的 `cc4fb4334cdcd238eacd1a57c40831393fb2499a`，声明 block ABI 1 与 reference ABI 1。Worker 初始化、runner 和准备发布核心均检查实际 WASM 接口，缺失任一参考出口直接拒绝；CI 缓存恢复也必须执行相同检查。打包拒绝 dirty 核心，原生包验收要求三种 codec 的 `references.state` 均为 `ready`。服务缓存使用 buildId，避免旧块结果遮掉新图示字段。
 
 NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配置柱，柱宽与普通逐帧柱共用计算，不额外保留最小列宽：分别在大小与类型分区显示 avcC、hvcC、vvcC 内的 SPS/PPS/VPS、扩展参数集和配置 SEI，悬浮或 Home 键显示“来自容器头部”以及真实 NAL 数量和 payload 字节数。没有独立配置栏；所有图共用同一前置空间，码率、帧大小与参考图在该位置留空。−1 不是媒体帧或负时间，不定位、不进入逐帧帧数、大小、时间桶或参考层级；容器配置类型与逐帧类型合并到共用图例，图例使用“容器头部”来源徽标（双来源标明“容器头部 + 逐帧”），−1 柱使用同色斜纹与逐帧实色柱区分，点击类型同时筛选大小、类型分区及悬浮内容，配置柱仍标明“来自容器头部”；配置类型筛选不改变逐帧统计。缩放到其他区段时配置柱离开可见范围。配置摘要随流式检查结果进入会话缓存，逐帧记录淘汰后仍保留；源版本及 configuration 独立，返回值脱离内部缓存。分析 recipe 更新为 blocks-basic-v2，防止复用缺少配置元数据的旧分析缓存。选择 NALU 或帧参考图时按窗口并发设置自动开始可见轨道的流式分析。轨道按钮平滑展宽显示只读圈形进度，完成后缩回；没有开始或重新检查按钮，悬浮和键盘聚焦不再展开。当前片源自动检查只执行一次，图示/显隐/时间基准切换不会重启。
 
@@ -137,3 +137,5 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 服务端不设置独立的 worker 并发上限：三个用户各提交两个不同任务时可以同时运行六个 worker；同一源版本/目标仍合并为一个 work 并按 owner 租约分别消费。原有 32 consumer/提交与每任务资源预算继续生效。并行任务的原子写入串行提交至同一个配额存储，所有任务的未消费及正在提交的结果共同受保护，不能被其他任务淘汰；下载缓冲保持两路，繁忙读请求等待空位，断连或服务关闭释放等待。
 
 遮罩控制条与标注工具条共用背板、内边距和控件高度，左侧把手可拖动，重叠时动画避让。彩色轨道按钮点击切换遮罩；右键或触摸长按单选，再次操作同一轨道恢复全部。
+
+全流完成记录由会话按轨道及片源世代独立保存，`completedStream` 含 sourceVersion 和已确认的覆盖进度；当前任务的 `state/stream` 不代表历史全流覆盖。单帧补算、失败或取消不抹掉完成记录，换源不得继承旧世代。遮罩在暂停且视图事务结束后为连续的缓存缺失帧补算。每个 UI 自动尝试一次；错误、取消和资源限制时，轨道旁显示明确的「重新分析」按钮。确定不支持的能力不自动循环重试，也不显示反复启动同一能力的按钮。源码测试及实际控件浏览器回归覆盖全流完成、连续两个缺失帧、失败后手动恢复与换源隔离。

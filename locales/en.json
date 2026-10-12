@@ -1562,6 +1562,10 @@
     "source": "帧参考",
     "translation": "Frame references"
   },
+  "analysis.retryTrack": {
+    "source": "重新分析轨道 {slot}",
+    "translation": "Retry analysis for track {slot}"
+  },
   "analysis.sampleRateLabel": {
     "source": "样本率",
     "translation": "Sample rate"

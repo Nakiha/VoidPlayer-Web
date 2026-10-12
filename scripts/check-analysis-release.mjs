@@ -125,6 +125,7 @@ try {
         const result = await (await fetch(base + state.resultUrl)).json();
         validateResult(result);
         assert.equal(result.confidence, "exact");
+        assert.equal(result.references?.state, "ready", "packaged core provides verified reference lists");
         return result;
       }
       await new Promise((r) => setTimeout(r, 50));

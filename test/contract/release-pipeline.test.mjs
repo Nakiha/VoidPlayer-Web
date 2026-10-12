@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { releaseVersion, readReleaseIdentity, readBuildIdentity, verifyFrontendIdentity, readReleaseNotes } from '../../scripts/release-version.mjs';
 import { verifyReleaseSet, sha256, releasePlatforms } from '../../scripts/check-release-set.mjs';
 import { stageRelease } from '../../scripts/stage-release.mjs';
@@ -45,6 +46,7 @@ function workflowJobs(source) {
 test('release workflow gates verified artifacts and draft staging on every verification job', async () => {
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
+  assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
   const required = ['native-release', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
@@ -58,6 +60,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.deepEqual(informational.needs, ['decoder', 'analysis-core']);
   assert.match(informational.body, /^    if: github.event_name == 'pull_request'$/m);
   assert.match(informational.body, /id: paired-performance\n        continue-on-error: true/);
+  assert.match(informational.body, /cp scripts\/check-http-playback.mjs scripts\/bench-playback.mjs scripts\/test-certificate-trust.mjs/);
   assert.match(informational.body, /run: node scripts\/run-tests\.mjs ci-perf-pair --prepared/);
   assert.match(informational.body, /if: always\(\)[\s\S]*name: paired-https-performance-reports/);
   assert.doesNotMatch(informational.body, /stage-release|check-release-set|verified-release-set/);
@@ -241,4 +244,19 @@ test('draft staging refuses moved tags, published versions, changed notes and re
     const count = state.mutations.length;
     await assert.rejects(stageRelease(args)); assert.equal(state.mutations.length, count);
   }
+});
+
+
+test('analysis preparation rejects provenance claiming references when actual exports are absent', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-analysis-abi-'));
+  try {
+    const lock = JSON.parse(await readFile(new URL('../../scripts/release-analysis.json', import.meta.url), 'utf8'));
+    await writeFile(path.join(root, 'package.json'), '{"type":"module"}');
+    await writeFile(path.join(root, 'manifest.json'), JSON.stringify({...lock, dirty:false, emscripten:`emcc ${lock.emscripten} verified`}));
+    await writeFile(path.join(root, 'voidplayer-analysis.js'), 'export default async () => ({_vpa_abi: () => 1});');
+    await writeFile(path.join(root, 'voidplayer-analysis.wasm'), new Uint8Array([0]));
+    assert.throws(() => execFileSync(process.execPath, [fileURLToPath(new URL('../../scripts/prepare-analysis-core.mjs', import.meta.url)), root, path.join(root, 'output')], {stdio:'pipe'}),
+      error => error.status === 1 && String(error.stderr).includes('reference ABI 1'));
+    await assert.rejects(readFile(path.join(root, 'output/provenance.json')), {code:'ENOENT'});
+  } finally { await rm(root, {recursive:true,force:true}); }
 });

@@ -1,3 +1,4 @@
+import { validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
 import {
   ANALYSIS_RECIPE,
@@ -41,7 +42,7 @@ export async function analyzePicture(
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream));
   let opened = false;
   try {
-    if (core._vpa_abi() !== 1) throw new Error("Analysis ABI mismatch");
+    validateAnalysisCore(core);
     const plan = await input.plan(target);
     if (options.sequential) plan.start = 0;
     let groups = options.stream ? groupAnalysisGops(input.packets.slice(0, input.sealedEnd)) : [];
@@ -170,7 +171,7 @@ export async function analyzePicture(
           schema: 1,
           nalus: nalus.get(au),
           containerHeader: containerHeaders.get(selected.configuration),
-          ...(core._vpa_reference_abi?.() === 1 ? { references: (() => {
+          references: (() => {
             const count = core._vpa_ref_count(), ptr = core._vpa_refs();
             if (!Number.isInteger(count) || count < 0 || count > 64 || ptr < 0 || ptr + count * 8 > core.HEAPU8.length) throw new Error('Invalid reference output');
             const invalidRefs = core._vpa_refs_invalid() || invalid;
@@ -178,7 +179,7 @@ export async function analyzePicture(
             return { kind: 'active-lists' as const, state: invalidRefs ? 'unsupported' as const : 'ready' as const,
               poc: core._vpa_poc(), frameType: (['B', 'P', 'I'] as const)[core._vpa_picture_type()],
               edges: invalidRefs ? [] : Array.from({ length: count }, (_, i) => ({ au: view.getUint32(i * 8, true), list: view.getUint32(i * 8 + 4, true) as 0 | 1 })) };
-          })() } : {}),
+          })(),
           ...(options.stream ? { gop: { ...gopForAu(groups, au) } } : {}),
           codec: input.codec,
           analyzerVersion: ANALYZER_VERSION,

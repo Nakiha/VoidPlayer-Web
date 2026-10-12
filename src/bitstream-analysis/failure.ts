@@ -86,3 +86,9 @@ export function restoreFailure(
   }
   return new AnalysisFailure("internal-error", fallback);
 }
+
+/** Deterministic unsupported capabilities do not expose a repeated request. */
+export function canRetryAnalysis(state: { state: string; reason?: AnalysisFailureInfo }) {
+  return state.state === 'cancelled' || state.state === 'limited' ||
+    state.state === 'error' && !['source-changed', 'invalid-request'].includes(state.reason?.code ?? '');
+}

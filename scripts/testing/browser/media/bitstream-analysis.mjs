@@ -243,13 +243,13 @@ await withBrowserFixture(
         for(const slot of ['A','B']) await openAnalysis(slot);
         const overlayTracks=page.locator('#bitstream-tracks');
         const overlayA=overlayTracks.locator('[data-slot="A"]'),overlayB=overlayTracks.locator('[data-slot="B"]');
-        const visibility=()=>overlayTracks.locator('button').evaluateAll(buttons=>buttons.map(b=>b.getAttribute('aria-pressed')));
+        const visibility=()=>overlayTracks.locator('.bitstream-track-control').evaluateAll(buttons=>buttons.map(b=>b.getAttribute('aria-pressed')));
         await overlayA.click({button:'right'});assert.deepEqual(await visibility(),['true','false'],'right click isolates an overlay track');
         await overlayB.click({button:'right'});assert.deepEqual(await visibility(),['false','true'],'right click changes the solo track');
         await overlayB.click({button:'right'});assert.deepEqual(await visibility(),['true','true'],'repeating right click restores all overlay tracks');
         for(const expected of [['true','false'],['true','true']]) {
           await overlayA.dispatchEvent('pointerdown',{pointerType:'touch',pointerId:9,clientX:20,clientY:20});
-          await page.waitForFunction(expected=>JSON.stringify([...document.querySelectorAll('#bitstream-tracks button')].map(b=>b.getAttribute('aria-pressed')))===JSON.stringify(expected),expected);
+          await page.waitForFunction(expected=>JSON.stringify([...document.querySelectorAll('#bitstream-tracks .bitstream-track-control')].map(b=>b.getAttribute('aria-pressed')))===JSON.stringify(expected),expected);
           await overlayA.dispatchEvent('pointerup',{pointerType:'touch',pointerId:9});
           await overlayA.dispatchEvent('contextmenu');await overlayA.dispatchEvent('click');
           assert.deepEqual(await visibility(),expected,'touch release and native context menu apply the long press only once');
@@ -493,7 +493,8 @@ await withBrowserFixture(
             await selectDiagrams(page, 'nalu-size');
             await page.locator('.bitstream-diagram-empty').waitFor({ state: 'visible' });
             await selectDiagrams(page, 'references');
-            assert.notEqual((await call('get_bitstream_analysis_state')).state,'pending','unsupported automatic analysis does not remain active');
+            await page.waitForFunction(() => window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'}).state!=='pending', undefined, {timeout:60000});
+            assert.notEqual((await call('get_bitstream_analysis_state')).state,'pending','automatic analysis reaches a terminal state before the next inspection');
             assert.equal(await page.locator('.analysis-picture-overlay').count(), 0);
             await selectDiagrams(page, 'overview');
             await page.locator('#toggle-analysis').click();
@@ -820,7 +821,7 @@ await withBrowserFixture(
       assert.equal(await page.locator('.bitstream-diagram-navigation [data-page]').count(), 0);
       assert.equal(await page.locator('#analysis-inspect-range').count(), 0);
       const playback = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));
-      assert.equal(await page.locator('#analysis-stream, #analysis-stream-progress, .analysis-track-action').count(), 0, 'analysis has no manual start or restart button');
+      assert.equal(await page.locator('#analysis-stream, #analysis-stream-progress, .analysis-track-action').count(), 0, 'analysis has no persistent start or range controls');
       await page.waitForFunction(() => {
         const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});
         return s.state === 'ready' && s.stream?.pictures === 120;
@@ -833,7 +834,8 @@ await withBrowserFixture(
       const completedWidth=(await completedPill.boundingBox()).width;
       await completedPill.hover(); await page.waitForTimeout(300);
       assert.equal((await completedPill.boundingBox()).width,completedWidth,'hover never expands a completed analysis control');
-      assert.equal(await completedPill.locator('button').count(),1,'track visibility is the only button');
+      assert.equal(await completedPill.locator('button:visible').count(),1,'completed track only shows its visibility button');
+      assert.equal(await completedPill.locator('.analysis-retry').isVisible(),false,'completed analysis hides retry');
       await selectDiagrams(page,'references'); await selectDiagrams(page,'nalu-size');
       assert.equal(await completedPill.getAttribute('data-state'),'ready','chart toggles retain completion');
       const configQuery = await call('query_bitstream_chart', { slot: 'A' });
@@ -1732,7 +1734,7 @@ await withBrowserFixture(
           - document.querySelector('.analysis-shared-axis').getBoundingClientRect().height
           - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
         const rowHeights=JSON.parse(document.querySelector('#analysis-canvas').dataset.rowHeights);
-        return { available, overviewMinimum:rowHeights.length*Math.max(36,available), height: charts.clientHeight, overview: document.querySelector('.analysis-overview').getBoundingClientRect().height,
+        return { available, overviewMinimum:rowHeights.length*Math.max(36,available)+document.querySelector('#analysis-load-metrics').getBoundingClientRect().height, height: charts.clientHeight, overview: document.querySelector('.analysis-overview').getBoundingClientRect().height,
           deep: [...charts.querySelectorAll(':scope > .bitstream-diagrams')].map(el => el.getBoundingClientRect().height) };
       });
       assert.ok(Math.abs(minimumGeometry.height - minimumGeometry.available) <= 1, 'minimum panel exposes exactly the available chart area');

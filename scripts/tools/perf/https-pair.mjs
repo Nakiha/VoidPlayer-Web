@@ -27,12 +27,14 @@ for (const file of ['voidplayer-core.wasm', 'voidplayer-core-mt.wasm']) {
   assert.equal(await hash(path.join(baseline, 'public/vendor/voidplayer-core', file)), core[file], 'paired core bytes');
 }
 // Both checkouts must run the same canonical harness, rather than a new relaxed benchmark.
+const harness = {};
 for (const file of ['scripts/check-http-playback.mjs', 'scripts/bench-playback.mjs', 'scripts/test-certificate-trust.mjs']) {
-  assert.equal(await hash(path.join(baseline, file)), await hash(path.join(feature, file)), `unchanged ${file}`);
+  harness[file] = await hash(path.join(feature, file));
+  assert.equal(await hash(path.join(baseline, file)), harness[file], `unchanged ${file}`);
 }
 const revisions = Object.fromEntries([['baseline', baseline], ['feature', feature]].map(([name, root]) =>
   [name, execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim()]));
-const summary = { order: ['baseline', 'feature', 'feature', 'baseline'], revisions, media, core,
+const summary = { order: ['baseline', 'feature', 'feature', 'baseline'], revisions, media, core, harness,
   device: { platform: process.platform, arch: process.arch, cpu: os.cpus()[0].model, node: process.version },
   transport: 'trusted HTTPS via the existing disposable-runner NSS certificate lifecycle', sessions: [] };
 let valid = true;

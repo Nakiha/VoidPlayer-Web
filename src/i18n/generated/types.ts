@@ -389,6 +389,7 @@ export interface Sources {
   "analysis.referenceOverview": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。";
   "analysis.referencePyramid": "帧参考金字塔";
   "analysis.referenceSection": "帧参考";
+  "analysis.retryTrack": "重新分析轨道 {slot}";
   "analysis.sampleRateLabel": "样本率";
   "analysis.seekReason": "轨道 {slot}：{reason}";
   "analysis.showTrack": "显示轨道 {slot}（{name}）";
@@ -1501,6 +1502,7 @@ export interface MessageParameters {
   "analysis.referenceOverview": {  };
   "analysis.referencePyramid": {  };
   "analysis.referenceSection": {  };
+  "analysis.retryTrack": { "slot": string | number };
   "analysis.sampleRateLabel": {  };
   "analysis.seekReason": { "reason": string | number; "slot": string | number };
   "analysis.showTrack": { "name": string | number; "slot": string | number };

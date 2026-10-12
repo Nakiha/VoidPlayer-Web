@@ -22,6 +22,8 @@ import type { AnalysisFailureInfo } from "./failure.ts";
 import type { StreamProgress } from './stream.ts';
 import type { Slot } from '../model.ts';
 export type DeepAnalysisState = {
+  /** Source coverage survives later picture tasks; current task is state/stream. */
+  completedStream?: StreamProgress & { slot: Slot; sourceVersion: string };
   stream?: StreamProgress & { slot: Slot };
   queued?: boolean;
   state:

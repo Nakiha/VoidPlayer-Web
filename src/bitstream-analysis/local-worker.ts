@@ -1,3 +1,4 @@
+import { validateAnalysisCore } from './core-abi.ts';
 import { RangeReader } from "../range-reader.ts";
 import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
 import { failureInfo } from "./failure.ts";
@@ -23,6 +24,7 @@ scope.onmessage = async ({ data }) => {
       ).href
     );
     const core = await module.default();
+    validateAnalysisCore(core);
     if (data.target.mode === 'stream' || 'startUs' in data.target) {
       await (data.target.mode === "stream" ? analyzeStream : analyzeRange)(
         new RangeReader({ file: data.file }),

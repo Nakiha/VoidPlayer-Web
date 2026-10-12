@@ -1,3 +1,4 @@
+import { analysisRetryButton } from './analysis/retry.ts';
 import { installBitstreamDiagrams, type BitstreamDiagram } from "./analysis/bitstream-diagrams.ts";
 // 顶部码流分析面板：工具条 + Canvas + 覆盖层 + 会话共用查询。
 // 数据全部走 ReviewSession.queryAnalysis（与 Agent 同一入口）；悬停只读
@@ -681,10 +682,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function inspectionUi(slot?: Slot) {
     const track = tracks.find(entry => entry.slot === slot);
     const state = slot ? session.getBitstreamAnalysisState(slot) : undefined;
-    const stream = state?.stream;
+    const stream = state?.stream ?? state?.completedStream;
     const pending = state?.state === 'pending';
-    const percent = stream && stream.totalUs > 0 ? Math.min(100, Math.floor(stream.checkedUs / stream.totalUs * 100)) : 0;
-    let status = stream ? state?.state === 'ready' ? t(msg('analysis.streamDone','{slot} 已完成 · {count} 帧'), { slot: slot ?? '—', count: stream.pictures })
+    const percent = (!pending || state?.stream) && stream && stream.totalUs > 0 ? Math.min(100, Math.floor(stream.checkedUs / stream.totalUs * 100)) : 0;
+    let status = stream ? (state?.state === 'ready' || !pending && state?.completedStream) ? t(msg('analysis.streamDone','{slot} 已完成 · {count} 帧'), { slot: slot ?? '—', count: stream.pictures })
       : stream.waitingForIndex && pending ? t(msg('analysis.streamWaiting','{slot} 等待索引 · 已检查 {count} 帧'), { slot: slot ?? '—', count: stream.pictures })
       : t(msg('analysis.streamProgress','{slot} {percent}% · {count} 帧'), { slot: slot ?? '—', percent, count: stream.pictures })
       : t(msg('analysis.streamNotStarted','{slot} 尚未检查'), { slot: slot ?? '—' });
@@ -706,7 +707,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       for (const track of selectedTracks()) {
         const identity = `${track.mediaId}:${track.sourceGen}`, state = session.getBitstreamAnalysisState(track.slot);
         if (automaticStreams.get(track.slot) === identity || state.state === 'pending' ||
-          (state.state === 'ready' && state.stream) || caps.get(track.slot)?.indexState === 'error') continue;
+          state.completedStream || (state.state === 'ready' && state.stream) || caps.get(track.slot)?.indexState === 'error') continue;
         automaticStreams.set(track.slot, identity);
         void session.requestBitstreamStream(track.slot).catch(() => { /* The facade publishes errors; never retry automatically. */ })
           .finally(() => { if (!signal.aborted) refreshStream(); });
@@ -714,10 +715,15 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     });
   }
 
+  const retryButtons = new Map<Slot, ReturnType<typeof analysisRetryButton>>();
   function refreshStream() {
     for (const chip of tracksEl.querySelectorAll<HTMLElement>('.analysis-track-control')) {
       const slot = chip.dataset.slot as Slot, ui = inspectionUi(slot);
       chip.dataset.state = ui.state;
+      let retry = retryButtons.get(slot);
+      if (!retry) { retry = analysisRetryButton(slot, () => act(() => session.requestBitstreamStream(slot), 'ui.retry-analysis', { slot })); retry.button.id = `analysis-retry-${slot}`; retryButtons.set(slot, retry); }
+      if (retry.button.parentElement !== chip) chip.append(retry.button);
+      retry.update(session.getBitstreamAnalysisState(slot));
       const button = chip.querySelector<HTMLButtonElement>('.analysis-chip')!;
       button.setAttribute('aria-description', ui.status);
       const progress = chip.querySelector<HTMLElement>('.analysis-track-progress')!;

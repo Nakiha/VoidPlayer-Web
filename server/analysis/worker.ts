@@ -1,3 +1,4 @@
+import { validateAnalysisCore } from '../../src/bitstream-analysis/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
 import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
@@ -64,6 +65,7 @@ try {
         ),
       ),
     });
+    validateAnalysisCore(core);
     let acknowledgement: { resolve(): void; reject(error: unknown): void } | undefined;
     let indexReply: { resolve(value: import('../../src/bitstream-analysis/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
     parentPort!.on('message', message => {

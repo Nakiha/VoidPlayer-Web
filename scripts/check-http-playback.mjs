@@ -92,7 +92,7 @@ try {
     if (!secure) assert.equal(requests.length, 1, 'repeated + clicks must start exactly one file download');
     assert.equal(ffmpegWorkerStarts, 0, 'WebCodecs must not open FFmpeg workers');
     assert.equal(await row.getAttribute('aria-busy'), 'false');
-    assert.match(await row.innerText(), /使用中/);
+    assert.deepEqual(await row.locator('.source-meta .source-track-badges .slot').allTextContents(), ['A']);
     console.log(`PASS ${protocol} + button: immediate pending state, repeated clicks, first frame, correct decoder`);
 
     // Observe the real WebCodecs lifecycle: warm resume must neither seek nor

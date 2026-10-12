@@ -29,6 +29,7 @@
     "src/ui/analysis/overlay.ts",
     "src/ui/analysis/preferences.ts",
     "src/ui/analysis/queries.ts",
+    "src/ui/analysis/retry.ts",
     "src/ui/analysis/shared.ts",
     "src/ui/analysis/status.ts",
     "src/ui/annotation-panel.ts",

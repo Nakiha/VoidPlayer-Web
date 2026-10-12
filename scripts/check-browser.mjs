@@ -1,7 +1,7 @@
 // UI regressions against a fresh build, with an isolated local server and browser.
 // Usage: npm run test:browser -- [webkit|chromium]
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
@@ -856,6 +856,89 @@ try {
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
   });
 
+  await check('analysis recovery preserves coverage and retries through production controls', async page => {
+    const media = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    await page.evaluate(id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({id,slot:'A'}), media.id);
+    await page.locator('#toggle-analysis').click();
+    await page.locator('#analysis-status-items').waitFor();
+    const sheets=await page.locator('link[rel=stylesheet]').evaluateAll(nodes=>nodes.map(node=>node.href));
+    const markup=await page.locator('body').innerHTML();
+    const entry=path.join(temporary,'analysis-recovery.ts');
+    await writeFile(entry, `export {ReviewSession} from ${JSON.stringify(path.join(root,'src/session.ts'))};
+      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/service.ts'))};
+      export {AnalysisFailure} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/failure.ts'))};
+      export {installBitstreamControls} from ${JSON.stringify(path.join(root,'src/ui/bitstream-controls.ts'))};
+      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis-panel.ts'))};
+      export {rgbaDescription} from ${JSON.stringify(path.join(root,'src/frame-description.ts'))};`);
+    const fixture=await buildFixture({configFile:false,logLevel:'silent',build:{write:false,minify:false,
+      lib:{entry,formats:['iife'],name:'RecoveryFixture'},rolldownOptions:{output:{codeSplitting:false}}}});
+    const script=[fixture].flat().flatMap(output=>output.output).find(output=>output.type==='chunk').code;
+    await page.route('**/recovery-fixture',route=>route.fulfill({contentType:'text/html',body:
+      `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${sheets.map(href=>`<link rel="stylesheet" href="${href}">`).join('')}</head><body>${markup}</body></html>`}));
+    await page.goto(`${base}/recovery-fixture`); await page.addScriptTag({content:script});
+    await page.evaluate(async()=>{
+      const {ReviewSession,BitstreamAnalysisService,AnalysisFailure,installBitstreamControls,installAnalysisPanel,rgbaDescription}=RecoveryFixture;
+      const sourceVersion='recovery-source';
+      window.recovery={streams:0,pictures:0,failure:'error',commit:0};
+      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId:'fixture',recipe:'blocks-basic-v2',
+        picture:{sourceVersion,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},sourcePtsUs:100+au*100,
+        width:16,height:16,confidence:'exact',reasons:[],capabilities:{blocks:'ready',qp:'ready',modes:'ready',motion:'unsupported'},
+        qp:{component:'luma',bitDepth:8,weighting:'pixel-area',mean:23},blocks:[{x:0,y:0,width:16,height:16,qp:23,mode:'intra'}],
+        metrics:{startAu:0,packets:au+1,bytesRead:100,elapsedMs:1,recordBytes:12,heapBytes:67108864},gop:{startAu:0,endAu:3,configuration:0,anchor:'closed'}});
+      const fail=()=>{if(recovery.failure==='error')throw Error('Temporary network error');if(recovery.failure==='unsupported')throw new AnalysisFailure('unsupported-codec','Unsupported codec');};
+      BitstreamAnalysisService.prototype.localRange=async function(_file,_target,_signal,consume,progress){
+        recovery.streams++; fail();
+        progress({pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true});
+        for(let au=0;au<3;au++)consume(result(au));
+      };
+      BitstreamAnalysisService.prototype.local=async function(_file,target){recovery.pictures++;(recovery.targets??=[]).push(target.picture.au);fail();return result(target.picture.au);};
+      const root=new BitstreamAnalysisService(()=>{}), session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++recovery.commit;});
+      session.bitstream=root;session.bitstreamLoading=Promise.resolve(root);recovery.session=session;recovery.root=root;
+      document.getElementById('analysis-panel').replaceChildren();document.getElementById('analysis-panel').hidden=false;
+      const life=new AbortController();
+      const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'});
+      const canvases=Object.fromEntries(['A','B','C','D','E','F','G','H'].map(slot=>[slot,document.getElementById(`canvas-${slot}`)]));
+      const overlay=installBitstreamControls(session,canvases,{selected:()=> 'A'});
+      const offOverlay=session.subscribe(()=>overlay.render(session.getState()));
+      recovery.dispose=async()=>{offOverlay();life.abort();overlay.dispose();await session.dispose();};
+      const source={info:{id:sourceVersion,name:'recovery.mp4',container:'isobmff',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['fixture']),
+        async frameAt(time){const au=Math.min(2,Math.floor(time/100));return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:result(au).picture,close(){}};},
+        async framesAfter(){return[];},async *framesFrom(){},dispose(){}};
+      await session.load('A',async()=>source);chart.setOpen(true);overlay.setOpen(true);
+    });
+    await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
+    await page.locator('#analysis-retry-A').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>recovery.streams),1,'failed source is automatically attempted once');
+    await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();
+    assert.equal(await page.evaluate(()=>recovery.streams),1,'closing and reopening does not loop failed requests');
+    await page.screenshot({path:path.join(screenshots,`${browserName}-analysis-retry.png`)});
+    await page.evaluate(()=>{recovery.failure='';});
+    await page.locator('#analysis-retry-A').click();
+    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').completedStream?.pictures===3);
+    assert.equal(await page.evaluate(()=>recovery.streams),2,'chart retry explicitly restarts the stream');
+    assert.equal(await page.locator('#analysis-retry-A').isVisible(),false);
+    for(const time of [100,200]){
+      await page.evaluate(async time=>{recovery.root.cache.clear();await recovery.session.seek(time);},time);
+      await page.waitForFunction(au=>recovery.session.cachedBitstreamAnalysis('A')?.picture.au===au,time/100);
+    }
+    assert.deepEqual(await page.evaluate(()=>recovery.targets),[1,2],'only newly presented missing frames are requested');
+    assert.equal(await page.evaluate(()=>recovery.pictures),2,'both evicted frames are automatically replenished');
+    assert.equal(await page.evaluate(()=>recovery.streams),2,'picture replenishment does not restart whole-stream analysis');
+    await page.evaluate(async()=>{recovery.failure='error';recovery.root.cache.clear();await recovery.session.seek(0);});
+    await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>recovery.session.getBitstreamAnalysisState('A').completedStream.pictures),3);
+    await page.evaluate(()=>{recovery.failure='';});await page.locator('#bitstream-retry-A').click();
+    await page.waitForFunction(()=>recovery.session.cachedBitstreamAnalysis('A')?.picture.au===0 && recovery.session.getBitstreamAnalysisState('A').state==='ready');
+    assert.equal(await page.evaluate(()=>recovery.pictures),4,'overlay retry recovers the failed picture');
+    await page.evaluate(async()=>{recovery.failure='unsupported';await recovery.session.requestBitstreamStream('A').catch(()=>{});});
+    assert.equal(await page.locator('#analysis-retry-A').isVisible(),false);
+    assert.equal(await page.locator('#bitstream-retry-A').isVisible(),false);
+    const attempts=await page.evaluate(()=>recovery.streams);
+    await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();await settle(page);
+    assert.equal(await page.evaluate(()=>recovery.streams),attempts,'unsupported capability is never retried automatically');
+    await page.evaluate(()=>recovery.dispose());
+  });
+
   await check('library file context menu copies exact paths, downloads and follows shared menu behavior', async page => {
     const entry = listing.entries.find(entry => entry.name === 'review/shots/path-tooltip.mp4');
     assert.ok(entry);
@@ -988,7 +1071,7 @@ try {
     const markup = await page.locator('#source-foot').evaluate(element => element.outerHTML);
     const sheets = await page.locator('link[rel=stylesheet]').evaluateAll(elements => elements.map(element => element.href));
     await page.route('**/activity-fixture', route => route.fulfill({ contentType: 'text/html', body:
-      `<!doctype html><html lang="zh-CN"><head>${sheets.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body><aside id="sources-panel" class="sources-panel side-panel glass" style="position:relative;width:250px;height:500px"><div id="source-list" class="source-list"></div>${markup}</aside></body></html>` }));
+      `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${sheets.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body><aside id="sources-panel" class="sources-panel side-panel glass" style="position:relative;width:250px;height:500px"><div id="source-list" class="source-list"></div>${markup}</aside></body></html>` }));
     await page.goto(`${base}/activity-fixture`);
     await page.addScriptTag({ content: script });
     await page.evaluate(() => {

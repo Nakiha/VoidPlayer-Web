@@ -391,6 +391,7 @@ export default {
   "analysis.referenceOverview": () => "Whole-source frame type distribution · Zoom in for reference pyramids and L0 / L1 connections.",
   "analysis.referencePyramid": () => "Reference pyramid",
   "analysis.referenceSection": () => "Frame references",
+  "analysis.retryTrack": (d) => "Retry analysis for track " + d.slot,
   "analysis.sampleRateLabel": () => "Sample rate",
   "analysis.seekReason": (d) => "Track " + d.slot + ": " + d.reason,
   "analysis.showTrack": (d) => "Show track " + d.slot + " (" + d.name + ")",

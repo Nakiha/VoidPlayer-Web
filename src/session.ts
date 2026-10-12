@@ -283,6 +283,7 @@ export class ReviewSession {
   private bitstreamLoading?: Promise<BitstreamAnalysisService>;
   private bitstreamPool = new AnalysisTaskPool();
   private bitstreamLastSlot?: Slot;
+  private bitstreamCompleted = new Map<Slot, { generation: number; progress: NonNullable<DeepAnalysisState['completedStream']> }>();
   private bitstreamTasks = new Map<Slot, { generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState }>();
   getBitstreamAnalysisConcurrency() { return this.bitstreamPool.concurrency; }
   setBitstreamAnalysisConcurrency(value: number) { this.bitstreamPool.setConcurrency(value); this.emit(); }
@@ -356,9 +357,12 @@ export class ReviewSession {
   }
   getBitstreamAnalysisState(slot?: Slot): DeepAnalysisState {
     if (slot !== undefined) slotValue(slot);
-    const task = this.bitstreamTasks.get(slot ?? this.bitstreamLastSlot!);
-    if (!task || (slot !== undefined && task.generation !== this.tracks.get(slot)?.sourceGen)) return { state: 'idle' };
-    return structuredClone(task.state ?? task.service?.state ?? { state: 'idle' });
+    const selected = slot ?? this.bitstreamLastSlot!;
+    const generation = this.tracks.get(selected)?.sourceGen;
+    const task = this.bitstreamTasks.get(selected);
+    const completion = this.bitstreamCompleted.get(selected);
+    const state = task && (slot === undefined || task.generation === generation) ? task.state ?? task.service?.state ?? { state: 'idle' as const } : { state: 'idle' as const };
+    return structuredClone({ ...state, ...(completion && completion.generation === generation ? { completedStream: completion.progress } : {}) });
   }
   cancelBitstreamAnalysis(slot?: Slot) {
     if (slot !== undefined) slotValue(slot);
@@ -373,12 +377,18 @@ export class ReviewSession {
   }
   async requestBitstreamStream(slot: Slot, signal?: AbortSignal) {
     const track = this.tracks.get(slot);
-    return this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
+    const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
       totalUs: Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0 } }, (service, taskSignal) => {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
       return service.requestStream(track!.source, { mode: 'stream', sourceVersion,
         firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs) }, slot, taskSignal);
     });
+    if (this.tracks.get(slot) === track) {
+      const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
+      this.bitstreamCompleted.set(slot, { generation: track!.sourceGen, progress: { slot, sourceVersion, ...progress } });
+      this.emit();
+    }
+    return progress;
   }
   queryBitstreamDiagrams(slot: Slot, startAu?: number, limit = 128) {
     slotValue(slot);
@@ -1461,7 +1471,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.cancelLoad(); this.pause();this.cancelBitstreamAnalysis();this.bitstreamTasks.clear();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
+    this.cancelLoad(); this.pause();this.cancelBitstreamAnalysis();this.bitstreamTasks.clear();this.bitstreamCompleted.clear();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
     this.releaseReaders('dispose');
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.

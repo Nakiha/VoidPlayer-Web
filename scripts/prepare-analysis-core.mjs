@@ -1,3 +1,5 @@
+import { pathToFileURL } from 'node:url';
+import { validateAnalysisCore } from '../src/bitstream-analysis/core-abi.ts';
 import { readFile, mkdir, cp, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import path from "node:path";
@@ -20,6 +22,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
+  "referenceAbi",
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(
@@ -27,6 +30,8 @@ assert.ok(
   "Analysis toolchain version",
 );
 assert.ok(!manifest.dirty || process.env.ANALYSIS_ALLOW_LOCAL_BUILD === '1', 'Unpublished analysis core: use ANALYSIS_ALLOW_LOCAL_BUILD=1 for local preview only');
+const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis.js')).href)).default;
+validateAnalysisCore(await create({ wasmBinary: await readFile(path.join(source, 'voidplayer-analysis.wasm')) }));
 await mkdir(target, { recursive: true });
 const hashes = {};
 for (const file of [

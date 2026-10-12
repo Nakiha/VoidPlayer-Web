@@ -391,6 +391,7 @@ export default {
   "analysis.referenceOverview": () => "［W~h~o~l~e~-s~o~u~r~c~e~ f~r~a~m~e~ t~y~p~e~ d~i~s~t~r~i~b~u~t~i~o~n~ · Z~o~o~m~ i~n~ f~o~r~ r~e~f~e~r~e~n~c~e~ p~y~r~a~m~i~d~s~ a~n~d~ L~0 / L~1 c~o~n~n~e~c~t~i~o~n~s~. ········］",
   "analysis.referencePyramid": () => "［R~e~f~e~r~e~n~c~e~ p~y~r~a~m~i~d~ ········］",
   "analysis.referenceSection": () => "［F~r~a~m~e~ r~e~f~e~r~e~n~c~e~s~ ········］",
+  "analysis.retryTrack": (d) => "［R~e~t~r~y~ a~n~a~l~y~s~i~s~ f~o~r~ t~r~a~c~k~ " + d.slot + " ········］",
   "analysis.sampleRateLabel": () => "［S~a~m~p~l~e~ r~a~t~e~ ········］",
   "analysis.seekReason": (d) => "［T~r~a~c~k~ " + d.slot + ": " + d.reason + " ········］",
   "analysis.showTrack": (d) => "［S~h~o~w~ t~r~a~c~k~ " + d.slot + " (" + d.name + ") ········］",

@@ -391,6 +391,7 @@ export default {
   "analysis.referenceOverview": () => "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。",
   "analysis.referencePyramid": () => "帧参考金字塔",
   "analysis.referenceSection": () => "帧参考",
+  "analysis.retryTrack": (d) => "重新分析轨道 " + d.slot,
   "analysis.sampleRateLabel": () => "样本率",
   "analysis.seekReason": (d) => "轨道 " + d.slot + "：" + d.reason,
   "analysis.showTrack": (d) => "显示轨道 " + d.slot + "（" + d.name + "）",

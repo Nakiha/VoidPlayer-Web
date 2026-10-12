@@ -81,7 +81,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await page.keyboard.press('Escape');await page.locator('#mark-close').click();
  await page.emulateMedia({contrast:'more'});
  await settleAppearance();
- const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport')).backdropFilter || getComputedStyle(document.querySelector('.transport')).webkitBackdropFilter}));
+ const high=await page.locator('#position').evaluate(e=>({text:getComputedStyle(e).color,bg:getComputedStyle(document.querySelector('.transport-dock.glass')).backgroundColor,filter:getComputedStyle(document.querySelector('.transport-dock.glass')).backdropFilter || getComputedStyle(document.querySelector('.transport-dock.glass')).webkitBackdropFilter}));
  // prefers-contrast: more pins --viewport-chrome-fill to --surface and drops the blur
  // (themes/accessibility.css), so the transport paints the opaque dark surface:
  // themes/dark.css --surface #212121.
@@ -176,7 +176,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await peer.reload();await peer.waitForFunction(()=>window.voidPlayer);assert.equal(await peer.locator('[data-theme-choice=custom]').getAttribute('aria-checked'),'true');assert.equal(await peer.locator('#theme-base-hex').inputValue(),'#204032');
  const admin=await context.newPage();await admin.goto(new URL('/admin',base).href);await admin.waitForFunction(()=>document.documentElement.hasAttribute('data-custom-theme'));assert.equal(await admin.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--surface').trim()),await page.locator('html').evaluate(e=>getComputedStyle(e).getPropertyValue('--surface').trim()));await admin.close();
  await page.emulateMedia({contrast:'more'});
- const readable=await page.locator('.transport').evaluate(e=>({fill:getComputedStyle(e).backgroundColor,filter:getComputedStyle(e).backdropFilter||getComputedStyle(e).webkitBackdropFilter,solid:getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()}));
+ const readable=await page.locator('.transport-dock.glass').evaluate(e=>({fill:getComputedStyle(e).backgroundColor,filter:getComputedStyle(e).backdropFilter||getComputedStyle(e).webkitBackdropFilter,solid:getComputedStyle(document.documentElement).getPropertyValue('--surface').trim()}));
  assert.equal(readable.filter,'none');assert.ok(readable.solid.startsWith('#'));
  await page.emulateMedia({contrast:'no-preference'});await page.locator('[data-theme-choice=system]').click();
  assert.equal(await page.locator('html').getAttribute('data-custom-theme'),null);await page.locator('#settings-close').click();
