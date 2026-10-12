@@ -2,6 +2,8 @@
 
 套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
 
+码流分析的 `ci-analysis-browser` 将每种引擎的编码/遮罩矩阵、流式图表生命周期和增量索引分别登记为必需用例（`--matrix-only`、`--diagrams-only`、`--incremental-only`），各自拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消、身份与性能断言保持不变；布局和普通分析面板继续单独执行。直接调用 `node scripts/check-bitstream-analysis-browser.mjs <engine>` 仍运行完整兼容流程。拆分避免正常持续进展的整个组合在 600 秒被强制终止，不代表实时播放门槛变化。
+
 ## 统一套件与单项筛选
 
 | 入口 | 范围与准备 | CI 对应 |

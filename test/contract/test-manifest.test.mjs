@@ -115,6 +115,17 @@ test('identity source checks require no downloaded core, media or browser build'
 });
 
 
+test('analysis matrix, streaming diagrams and incremental indexing are independently required in CI with unchanged case budgets', () => {
+  for (const engine of ['chromium', 'webkit']) {
+    const cases = selectCases({ suite: 'ci-analysis-browser', engine, platform: 'linux' }).selected;
+    const parts = cases.filter(row => row.script === 'scripts/check-bitstream-analysis-browser.mjs' && !row.command.includes('--layout-only'));
+    assert.equal(parts.length, 3);
+    assert.deepEqual(parts.map(row => row.command.at(-1)).sort(), ['--diagrams-only', '--incremental-only', '--matrix-only']);
+    assert.ok(parts.every(row => row.required && row.timeoutMs === 600000));
+    assert.equal(new Set(parts.flatMap(row => row.artifacts)).size, 3, 'each case owns separate evidence');
+  }
+});
+
 test('every required browser cell is selected by an actual CI suite or expanded engine/input matrix', () => {
   const workflows = ['release-preview.yml', 'identity.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
   assert.equal(validateCiBrowserCoverage(workflows), true);

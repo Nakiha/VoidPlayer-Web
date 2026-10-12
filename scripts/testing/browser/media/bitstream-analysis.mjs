@@ -32,12 +32,14 @@ const overlayOnly = process.argv.includes('--overlay-only');
 const layoutOnly = overlayOnly || process.argv.includes('--layout-only');
 const diagramsOnly = process.argv.includes('--diagrams-only');
 const incrementalOnly = process.argv.includes('--incremental-only');
+const matrixOnly = process.argv.includes('--matrix-only');
+assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
 let gatedId, releaseIndexGate = true, heldBatches = 0;
 const limitsDir = path.join(
   repositoryRoot,
   ".run",
   "analysis-limit-fixtures",
-  layoutOnly ? `${engine}-layout` : engine,
+  layoutOnly ? `${engine}-layout` : matrixOnly ? `${engine}-matrix` : diagramsOnly ? `${engine}-diagrams` : incrementalOnly ? `${engine}-index` : engine,
 );
 await mkdir(limitsDir, { recursive: true });
 for (const depth of [8, 10])
@@ -81,7 +83,7 @@ for (const action of ['continue', 'cancel']) execFileSync('ffmpeg', ['-y', '-hid
   '-display_rotation', '90', '-i', path.join(limitsDir, 'incremental.mp4'), '-c', 'copy', path.join(limitsDir, `incremental-${action}.mp4`)]);
 await withBrowserFixture(
   {
-    caseName: layoutOnly ? 'bitstream-analysis-layout' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
+    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? 'bitstream-analysis-matrix' : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
     roots: [path.join(repositoryRoot, "fixtures/video"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
@@ -805,6 +807,14 @@ await withBrowserFixture(
     assert.equal(healthy.error, null);
     assert.ok(healthy.tracks.every((t) => !t.failure));
 
+    }
+    if (matrixOnly) {
+      assert.equal(rows.filter(row => row.codec).length, matrix.rows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
+      assert.deepEqual(errors, []);
+      await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
+      await page.screenshot({ path: artifact('final.png') });
+      console.log(`PASS ${engine}: isolated codec/overlay matrix, cache, range, sustained load and cancellation`);
+      return;
     }
     // Choosing a deep diagram starts whole-file execution automatically,
     // uses one local worker or one remote task, and never enables an overlay.
@@ -2011,13 +2021,18 @@ await withBrowserFixture(
         await hideOverlay();
       }
     assert.deepEqual(errors, []);
+    if (diagramsOnly) {
+      assert.equal(rows.filter(row => row.kind === 'whole-stream').length, 2, 'both local and library stream lifecycles are checked');
+      assert.equal(limitations.length, 4, 'both inputs and bit-depth limitation cases are checked');
+    }
+    if (incrementalOnly) assert.equal(rows.filter(row => row.kind === 'incremental-index').length, 2, 'both continuation and cancellation are checked');
     await writeFile(
       artifact("matrix.json"),
       JSON.stringify({ engine, rows, limitations, errors }, null, 2),
     );
     await page.screenshot({ path: artifact("final.png") });
-    console.log(
-      `PASS ${engine}: ${rows.filter((r) => r.codec).length} real local/library decode combinations plus sustained-load and capability regressions, picture/offset/cache/range/overlay/cancel isolation`,
-    );
+    console.log(diagramsOnly || incrementalOnly
+      ? `PASS ${engine}: isolated ${incrementalOnly ? 'incremental index continuation/cancellation' : 'stream/diagram lifecycle and capability limits'}; all assertions passed`
+      : `PASS ${engine}: ${rows.filter((r) => r.codec).length} real local/library decode combinations plus sustained-load and capability regressions, picture/offset/cache/range/overlay/cancel isolation`);
   },
 );
