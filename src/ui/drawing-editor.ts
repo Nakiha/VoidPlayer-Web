@@ -171,7 +171,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     if (!active || closing) return;
     closing = true; finishText(); clearTimeout(thumbTimer); refreshThumbnails(); active = false; gesture = undefined; drafts.clear(); undo.length = redo.length = 0; selectedId = undefined;
     styleMenus.forEach(menu => menu.sync('', '', false));
-    bar.hidden = true; document.body.classList.remove('annotating'); redraw(); savedSignature = ''; render(session.getState()); closing = false;
+    bar.hidden = true; $('toggle-annotations').setAttribute('aria-expanded','false'); document.body.classList.remove('annotating'); redraw(); savedSignature = ''; render(session.getState()); closing = false;
   }
   function positionBar() {
     if (!active) return;
@@ -310,7 +310,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
   };
   window.addEventListener('resize', () => { positionBar(); if (active && !text) redraw(); }, { signal: life.signal });
   document.addEventListener('keydown', e => {
-    if (!active || (e.target as Element)?.closest?.('[popover]:popover-open') || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || (e.target as HTMLElement)?.isContentEditable) return;
+    if (!active || (e.target as Element)?.closest?.('#analysis-overlay-panel') || (e.target as Element)?.closest?.('[popover]:popover-open') || e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || (e.target as HTMLElement)?.isContentEditable) return;
     if (matchesShortcut(e, 'close')) { e.preventDefault(); e.stopImmediatePropagation(); close(); }
     else if (matchesShortcut(e, 'undo') || matchesShortcut(e, 'redo')) { e.preventDefault(); $(matchesShortcut(e, 'redo') ? 'drawing-redo' : 'drawing-undo').click(); }
     else if (matchesShortcut(e, 'delete') || e.key === 'Backspace') { e.preventDefault(); $('drawing-delete').click(); }
@@ -320,6 +320,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
     }
   }, { capture: true, signal: life.signal });
   function render(state: ReturnType<ReviewSession['getState']>) {
+    $('toggle-annotations').toggleAttribute('disabled', state.busy || !state.tracks.some(track=>track.frame && !track.failure));
     if (active && !saving && !closing && (state.playing || !annotationAnchorsCurrent([...drafts].map(([slot, d]) => ({ slot, ...d })), state.tracks))) { close(); }
     const marksSignature = JSON.stringify(state.marks);
     if (active && !saving && !closing && observedMarks && marksSignature !== observedMarks) {
@@ -364,7 +365,7 @@ export function installDrawingEditor(session: ReviewSession, sources: Record<Slo
       const state = session.getState(); if (!state.tracks.some(t => t.slot === slot && t.frame)) return;
       for (const track of state.tracks) ensure(track.slot);
       $<HTMLInputElement>('drawing-color').value = DEFAULT_ANNOTATION_COLOR;
-      active = true; syncStyleMenus(); selectedSlot = slot; selectedId = undefined; positioned = false; bar.hidden = false; error.hidden = true; document.body.classList.add('annotating');
+      active = true; syncStyleMenus(); selectedSlot = slot; selectedId = undefined; positioned = false; bar.hidden = false; $('toggle-annotations').setAttribute('aria-expanded','true'); error.hidden = true; document.body.classList.add('annotating');
       if (markId) {
         const group = drafts.get(slot)?.groups.find(g => g.markId === markId);
         selectedId = group?.drawings.find(d => d.id === drawingId)?.id ?? group?.drawings[0]?.id;

@@ -1,0 +1,155 @@
+[
+  {
+    "codec": "h264",
+    "file": "h264_9s_1920x1080.mp4",
+    "sha256": "fb41bae79c6dc65d22cf7e4e8657be0fce45f38a3206def6b535d6d9d32dfcb2",
+    "pictureAu": 0,
+    "firstBlocks": [
+      {
+        "x": 0,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 16,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 27,
+        "mode": "intra"
+      },
+      {
+        "x": 32,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 48,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 25,
+        "mode": "intra"
+      },
+      {
+        "x": 64,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 25,
+        "mode": "intra"
+      }
+    ],
+    "referenceBlockCount": 8160,
+    "referenceRevision": "59196ee81d09cd5312acf7d3b3896ad530d1248b",
+    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only."
+  },
+  {
+    "codec": "hevc",
+    "file": "h265_10s_1920x1080.mp4",
+    "sha256": "c7e6480ec6be4b49595e1f229552ca6107606f649f0e5b142247dcba30fc4a4c",
+    "pictureAu": 0,
+    "firstBlocks": [
+      {
+        "x": 0,
+        "y": 0,
+        "width": 8,
+        "height": 8,
+        "qp": 33,
+        "mode": "intra"
+      },
+      {
+        "x": 8,
+        "y": 0,
+        "width": 8,
+        "height": 8,
+        "qp": 33,
+        "mode": "intra"
+      },
+      {
+        "x": 16,
+        "y": 0,
+        "width": 16,
+        "height": 16,
+        "qp": 33,
+        "mode": "intra"
+      },
+      {
+        "x": 0,
+        "y": 8,
+        "width": 8,
+        "height": 8,
+        "qp": 33,
+        "mode": "intra"
+      },
+      {
+        "x": 8,
+        "y": 8,
+        "width": 8,
+        "height": 8,
+        "qp": 33,
+        "mode": "intra"
+      }
+    ],
+    "referenceBlockCount": 20658,
+    "referenceRevision": "59196ee81d09cd5312acf7d3b3896ad530d1248b",
+    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only."
+  },
+  {
+    "codec": "vvc",
+    "file": "h266_10s_1920x1080.mp4",
+    "sha256": "088a1b66b61bd23ceebe863720e80c6bac62ad379ae633c510326678de7954fd",
+    "pictureAu": 0,
+    "firstBlocks": [
+      {
+        "x": 0,
+        "y": 0,
+        "width": 64,
+        "height": 64,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 64,
+        "y": 0,
+        "width": 64,
+        "height": 64,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 128,
+        "y": 0,
+        "width": 64,
+        "height": 64,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 0,
+        "y": 64,
+        "width": 64,
+        "height": 64,
+        "qp": 26,
+        "mode": "intra"
+      },
+      {
+        "x": 64,
+        "y": 64,
+        "width": 64,
+        "height": 64,
+        "qp": 26,
+        "mode": "intra"
+      }
+    ],
+    "referenceBlockCount": 27584,
+    "referenceRevision": "59196ee81d09cd5312acf7d3b3896ad530d1248b",
+    "reference": "Independent preexisting macOS native void_ffmpeg_analyzer, VCK1 CU4R; first displayed picture. Geometry clipped to visible edges by the old writer; compare interior records only."
+  }
+]

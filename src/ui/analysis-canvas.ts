@@ -9,6 +9,7 @@ export interface CanvasTrack {
   slot: string;
   color: string;
   bitrate: CanvasBitrate[];
+  qp?: {t:number; value:number|null}[];
   provisional: boolean;
 }
 export interface CanvasColors {
@@ -18,9 +19,14 @@ export interface CanvasColors {
 export interface CanvasModel {
   width: number;
   height: number;
+  compact?: boolean;
+  /** Multi-chart plots leave labels and their reserved height to the shared axis. */
+  showTimeAxis?: boolean;
   viewStart: number;
   viewEnd: number;
   showBitrate: boolean;
+  loadMetrics?: ('bitrate'|'qp')[];
+  qpMax?: number;
   showSize: boolean;
   colorByType: boolean;
   tracks: CanvasTrack[];
@@ -56,14 +62,15 @@ export function plotGeometry(widthCss: number): { gutter: number; plotW: number;
 }
 
 export function computeLayout(model: CanvasModel): CanvasGeom {
-  const axisY = model.height - AXIS_H;
+  const axisH = model.showTimeAxis === false ? 0 : AXIS_H;
+  const axisY = model.height - axisH;
   const plotH = Math.max(0, axisY);
   const merged = model.merged;
   const sizeRowCount = model.showSize ? (merged ? 1 : Math.max(1, model.tracks.length)) : 0;
   let bitrateH = 0;
   if (model.showBitrate) {
-    bitrateH = sizeRowCount ? Math.round(plotH * 0.42) : plotH;
-    bitrateH = Math.max(sizeRowCount ? 48 : 0, Math.min(bitrateH, 140));
+    bitrateH = sizeRowCount ? Math.round(model.compact ? plotH / (sizeRowCount + 1) : plotH * 0.42) : plotH;
+    if (sizeRowCount && !model.compact) bitrateH = Math.max(48, Math.min(bitrateH, 140));
   }
   const sizeH = sizeRowCount ? Math.max(0, plotH - bitrateH) : 0;
   const perRow = sizeRowCount ? sizeH / sizeRowCount : 0;
@@ -76,14 +83,14 @@ export function computeLayout(model: CanvasModel): CanvasGeom {
   return {
     gutter: GUTTER, plotW: Math.max(1, model.width - GUTTER),
     bitrate: model.showBitrate ? { y: 0, h: bitrateH } : null,
-    sizeRows, axisY, axisH: AXIS_H,
+    sizeRows, axisY, axisH,
   };
 }
 
 /** 本面板需要的最小内容高度（多轨分行时允许面板内滚动，不挤扁行）。 */
-export function desiredHeight(showBitrate: boolean, sizeRows: number): number {
-  const bitrate = showBitrate ? 72 : 0;
-  return bitrate + sizeRows * 52 + AXIS_H;
+export function desiredHeight(showBitrate: boolean, sizeRows: number, compact = false, showTimeAxis = true): number {
+  const bitrate = showBitrate ? compact ? 36 : 72 : 0;
+  return bitrate + sizeRows * (compact ? 36 : 52) + (showTimeAxis ? AXIS_H : 0);
 }
 
 export function xOf(model: CanvasModel, geom: CanvasGeom, t: number): number {
@@ -122,40 +129,49 @@ export function formatSize(bytes: number): string {
   return `${trimNum(bytes / 1024)} KiB`;
 }
 
+/** Shared time grid and labels keep every chart aligned with the original overview. */
+export function drawTimeAxis(ctx: CanvasRenderingContext2D, axis: Pick<CanvasModel, 'width' | 'height' | 'viewStart' | 'viewEnd' | 'colors' | 'showTimeAxis'>) {
+  const showTimeAxis = axis.showTimeAxis !== false;
+  const geom = plotGeometry(axis.width), axisY = axis.height - (showTimeAxis ? AXIS_H : 0);
+  ctx.save(); ctx.font = '10px system-ui, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  const step = niceStep(axis.viewEnd - axis.viewStart);
+  const firstTick = Math.ceil(axis.viewStart / step) * step;
+  ctx.strokeStyle = axis.colors.grid;
+  ctx.fillStyle = axis.colors.axisText;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let t = firstTick; t <= axis.viewEnd; t += step) {
+    const x = Math.round(geom.gutter + (t - axis.viewStart) / Math.max(1, axis.viewEnd - axis.viewStart) * geom.plotW) + 0.5;
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, axisY);
+    if (showTimeAxis) ctx.fillText(formatAxis(t), x + 4, axisY + AXIS_H / 2);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
 export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel): void {
   const geom = computeLayout(model);
   const { width, height } = model;
   ctx.clearRect(0, 0, width, height);
   ctx.font = '10px system-ui, sans-serif';
   ctx.textBaseline = 'middle';
-  // 网格 + 时间刻度
-  const step = niceStep(model.viewEnd - model.viewStart);
-  const firstTick = Math.ceil(model.viewStart / step) * step;
-  ctx.strokeStyle = model.colors.grid;
-  ctx.fillStyle = model.colors.axisText;
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (let t = firstTick; t <= model.viewEnd; t += step) {
-    const x = Math.round(xOf(model, geom, t)) + 0.5;
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, geom.axisY);
-    ctx.fillText(formatAxis(t), x + 4, geom.axisY + AXIS_H / 2);
-  }
-  ctx.stroke();
+  drawTimeAxis(ctx, model);
   // 码率行：折线（非贝塞尔），缺失区间断线。
   // 纵轴与数据共用 valueToY：上限在上、零在下，边缘内收防裁切。
   if (geom.bitrate && model.showBitrate) {
     const { y, h } = geom.bitrate;
     ctx.fillStyle = model.colors.axisText;
-    if (model.yMaxBitrate > 0) {
+    const showRate = !model.loadMetrics || model.loadMetrics.includes('bitrate');
+    if (showRate && model.yMaxBitrate > 0) {
       ctx.fillText(`${trimNum(model.yMaxBitrate)} Mbps`, 4, y + 10);
       ctx.fillText('0', 4, y + h - 10);
-    } else {
+    } else if (showRate) {
       ctx.fillText('Mbps', 4, y + 10);
     }
     ctx.strokeStyle = model.colors.grid;
     ctx.strokeRect(geom.gutter + 0.5, y + 0.5, geom.plotW - 1, Math.max(1, h - 1));
-    for (const track of model.tracks) {
+    for (const track of showRate ? model.tracks : []) {
       ctx.strokeStyle = track.color;
       ctx.lineWidth = 1.5;
       ctx.beginPath();
@@ -170,6 +186,24 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
       ctx.stroke();
     }
     ctx.lineWidth = 1;
+  }
+  if (geom.bitrate && model.loadMetrics?.includes('qp')) {
+    const {y,h}=geom.bitrate, max=model.qpMax ?? 51;
+    const together=model.loadMetrics.includes('bitrate');
+    ctx.fillStyle=model.colors.axisText; ctx.textAlign=together?'right':'left';
+    const labelX=together?model.width-4:4;
+    ctx.fillText(`QP ${max}`,labelX,y+10); ctx.fillText('0',labelX,y+h-10); ctx.textAlign='left';
+    ctx.save(); ctx.setLineDash([4,3]);
+    for (const track of model.tracks) {
+      ctx.strokeStyle=track.color; ctx.lineWidth=1.5; ctx.beginPath(); let pen=false;
+      for (const point of track.qp ?? []) {
+        if (point.value == null || point.t<model.viewStart || point.t>model.viewEnd) {pen=false;continue;}
+        const x=xOf(model,geom,point.t), yy=y+h-4-point.value/max*(h-8);
+        if(pen)ctx.lineTo(x,yy);else ctx.moveTo(x,yy); pen=true;
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
   // 大小行：只画统一几何 glyph，绘图与命中共用同一份 rect（无第二套绘制路径）。
   if (model.showSize) {
@@ -213,6 +247,23 @@ function trimNum(v: number): string {
   return v >= 100 ? String(Math.round(v)) : v >= 10 ? v.toFixed(1) : v.toFixed(2);
 }
 
+// Keep frame identity on the glyph; the cursor line remains free to follow the pointer.
+// Use the theme's foreground for contrast against both the plot and colored glyphs.
+export function drawHitRect(ctx: CanvasRenderingContext2D, rect: { x: number; y: number; width: number; height: number }, color: string): void {
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 2;
+  ctx.strokeRect(rect.x - .5, rect.y - .5, rect.width + 1, Math.max(1, rect.height) + 1);
+  ctx.restore();
+}
+
+export function drawHitPoint(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number, fill: string, outline: string): void {
+  ctx.save();
+  ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.fillStyle = fill; ctx.fill();
+  ctx.strokeStyle = outline; ctx.lineWidth = 2; ctx.stroke();
+  ctx.restore();
+}
+
 function drawKeyMarker(ctx: CanvasRenderingContext2D, model: CanvasModel, cx: number, topY: number): void {
   // 关键样本顶端菱形标记（未知保持未知，不标 I/P/B）。
   const s = 3;
@@ -239,15 +290,11 @@ function drawGlyphs(
     if (g.rect.y + g.rect.height < row.y || g.rect.y > row.y + row.h) continue;
     const slotColor = colorBySlot.get(g.slot) ?? '#888';
     ctx.globalAlpha = 1;
-    // 多轨默认主体轨道色（与曲线对应），类型用顶端 K/菱形标记；不再用底线猜身份。
+    // 多轨默认主体轨道色（与曲线对应），关键帧用顶端菱形标记。
     ctx.fillStyle = barColor(model, g.key, slotColor);
     ctx.fillRect(g.rect.x, g.rect.y, g.rect.width, g.rect.height);
     if (g.key === true) {
       drawKeyMarker(ctx, model, g.rect.x + g.rect.width / 2, g.rect.y);
-      if (g.rect.width >= 10) {
-        ctx.fillStyle = model.colors.key;
-        ctx.fillText('K', g.rect.x + 2, g.rect.y + 9);
-      }
     }
     if (g.stackedCount > 1) {
       ctx.fillStyle = model.colors.axisText;

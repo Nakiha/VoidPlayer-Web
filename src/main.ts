@@ -15,11 +15,13 @@ import { installIdentitySettings } from './ui/identity-settings.ts';
 import { installWorkspaceTransfer, isWorkspaceFile } from './ui/workspace-transfer.ts';
 import { installThemeControls } from './ui/theme.ts';
 import { parseTimeInput, installTimeInput } from './time-input.ts';
+import { analysisConcurrency, ANALYSIS_CONCURRENCY_EVENT } from './ui/analysis-concurrency.ts';
 import { installSettings } from './ui/settings.ts';
 import { matchesShortcut, PANEL_SHORTCUTS } from './ui/shortcuts.ts';
 import { installFocusFeedback } from './ui/focus-feedback.ts';
 import { createFrameTask } from './ui/frame-task.ts';
 import { installChoiceMenu } from './ui/choice-menu.ts';
+import { installNumericChoice } from './ui/numeric-choice.ts';
 import { installHeaderActions } from './ui/header-actions.ts';
 import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
@@ -29,7 +31,6 @@ import { installBrandEffects } from './ui/brand-effects.ts';
 import { animatePlaybackIcon } from './ui/playback-icon.ts';
 import { installDrawingEditor } from './ui/drawing-editor.ts';
 import { installMarkPreviewBackfill } from './ui/mark-preview-backfill.ts';
-import { benchmarkPlayback } from './benchmark.ts';
 // Feature styles in cascade order: accessibility overrides, component layout,
 // then the settings window (scoped so it never depends on import position).
 import './themes/accessibility.css';
@@ -58,7 +59,7 @@ import { startBrowserLogging } from './log-storage.ts';
 import { installLogPanel } from './log-panel.ts';
 import { paintFrame, captureFrame, disposePresentation, bindPresentationResources } from './presenter.ts';
 import { setPresentationChannel } from './presentation-channel.ts';
-import { Viewport, ZOOM_PRESETS } from './viewport.ts';
+import { Viewport, ZOOM_PRESETS, ZOOM_MIN, ZOOM_MAX } from './viewport.ts';
 import type { ChannelMode, PixelSizeMode, ViewportSnapshot } from './viewport.ts';
 
 const stopLogging = startBrowserLogging();
@@ -72,10 +73,10 @@ document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
 const removeThemeControls = installThemeControls();
 const removeHeaderActions = installHeaderActions();
 const settings = installSettings();
-$('brand-about').onclick = () => settings.openPane('about', $<HTMLElement>('brand-about'));
 $<HTMLElement>('start-version-about').onclick = () => settings.openPane('about', $<HTMLElement>('start-version-about'));
 $<HTMLButtonElement>('start-identity').onclick = () => settings.openPane('identity', $<HTMLButtonElement>('start-identity'));
-const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'));
+const removeBrandEffects = installBrandEffects($<HTMLButtonElement>('brand-about'),
+  () => settings.openPane('about', $<HTMLElement>('brand-about')));
 const canvases = Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>;
 const {setColorMode,setReferenceDecode}=await import('./color-mode.ts');
 const {setColorOutput,hdrDisplayAvailable}=await import('./color-output.ts');
@@ -92,6 +93,8 @@ const gpuReady=initializeGpuPresentation(Object.values(canvases)).catch(error =>
   log.warn('media', 'GPU 后台初始化失败，已保留现有呈现路径。', { error: error instanceof Error ? error.message : String(error) });
 });
 const session = new ReviewSession((slot, frame) => paintFrame(canvases[slot], frame));
+session.setBitstreamAnalysisConcurrency(analysisConcurrency());
+window.addEventListener(ANALYSIS_CONCURRENCY_EVENT, event => session.setBitstreamAnalysisConcurrency((event as CustomEvent<number>).detail), { signal: uiEvents.signal });
 session.onColorModeChange=async()=>{const {refreshGpuColorMode}=await import('./webgpu-presenter.ts');await refreshGpuColorMode();};
 const colorButtons = [...document.querySelectorAll<HTMLButtonElement>('[data-color-mode]')];
 const outputButtons=[...document.querySelectorAll<HTMLButtonElement>('[data-color-target]')];
@@ -109,15 +112,15 @@ const renderColorMode=()=>{
   for(const button of colorButtons){button.setAttribute('aria-pressed',String(button.dataset.colorMode===mode));button.setAttribute('aria-disabled',String(state.busy));}
   for(const button of decoderButtons){button.setAttribute('aria-pressed',String(button.dataset.referenceDecoder===decoder));button.setAttribute('aria-disabled',String(state.busy));}
   $('reference-decode-settings').hidden=mode!=='reference';
-  $('hardware-depth-row').style.visibility=decoder==='hardware'?'visible':'hidden';
-  $('hardware-depth-row').inert=decoder!=='hardware';
+  $('hardware-depth-row').hidden=mode!=='reference'||decoder!=='hardware';
   depthMenu.sync(String(state.referenceDecode.depth),tr(msg("player.frames", "{count, plural, other {# 帧}}"), { count: state.referenceDecode.depth }),!state.busy);
   $('color-mode').setAttribute('aria-busy',String(state.busy));
   for(const button of outputButtons){button.setAttribute('aria-pressed',String(button.dataset.colorTarget===state.colorOutput.target));button.setAttribute('aria-disabled',String(state.busy));}
+  $('hdr-source-peak-row').hidden=state.colorOutput.target!=='hdr';
   peakMenu.sync(String(state.colorOutput.preview.sourcePeakNits),`${state.colorOutput.preview.sourcePeakNits} nits`,!state.busy);
   const fallback=state.colorOutput.target==='hdr'&&state.tracks.length>0&&state.tracks.some(track=>track.presentation?.actualTarget!=='hdr');
   const nativeBlocked=state.tracks.some(track=>track.presentation?.fallbackReason?.startsWith('browser-hdr-'));
-  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):state.colorOutput.target==='hdr'&&mode==='browser'?tr(msg("colorOutput.browserHdr", "原生 HDR 由浏览器转换为浮点画面后上屏；截图和缩略图为 SDR。假定峰值仅用于软件回退。")):state.colorOutput.target==='hdr'?tr(msg("colorOutput.hdrDescription", "使用支持的 HDR 屏幕与浮点输出；截图和缩略图为 SDR 预览。")):tr(msg("colorOutput.sdrDescription", "HDR 片源映射为 SDR 预览；假定峰值用于自有转换，不代表母版或屏幕实测亮度。"));
+  $('color-output-description').textContent=nativeBlocked?tr(msg("colorOutput.browserPreview", "浏览器未开放原生 HDR 浮点转换，当前使用 SDR 预览；可切换自有色彩输出 HDR。")):fallback?tr(msg("colorOutput.fallbackDescription", "当前环境使用 SDR 预览；HDR 显示目标已保留。")):'';
   const key=`${getLocale()}/${mode}/${decoder}`;
   if(key!==flowKey){
     flowKey=key;updateColorFlow($('color-flow-diagram'),mode,decoder);
@@ -141,14 +144,13 @@ const removeTooltips = installTooltips();
 let inputTrigger = 'pointer';
 let warningMessage = '';
 let dismissWarning: (() => void) | null = null;
-let benchmarkRunning = false;
-let benchmarkSummary: (() => void) | undefined;
 let mixedColorToast: (() => void) | null = null;
 const identitySettings = installIdentitySettings(actor => session.setActor(actor));
 const drawingEditor = installDrawingEditor(session, canvases);
 const markPreviewBackfill = installMarkPreviewBackfill(session, canvases, () => drawingEditor.active());
 const notify = (message: string) => { toasts.show(message); };
 const workbench = installWorkbench(session, act, openMarkDialog, notify);
+$('toggle-annotations').onclick = () => { if (drawingEditor.active()) $('mark-close').click(); else drawingEditor.open(workbench.selected()); };
 const removeTrackDrag = installTrackDrag(session);
 const sourceActions = installSourceActions(session, act, () => { void workbench.refreshLibrary(); }, notify);
 bindTimelinePreview($<HTMLInputElement>('timeline'), $('timeline-preview'));
@@ -216,10 +218,11 @@ const { fittedTracks, applyViewTransform, syncSplitGeometry, fitAll } = viewBind
 const fitTask = createFrameTask(fitAll);
 const resizeObserver = new ResizeObserver(fitTask.schedule);
 for (const slot of SLOTS) resizeObserver.observe($(`stage-${slot}`));
-for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport')) resizeObserver.observe(el);
-const zoomMenu = installChoiceMenu('zoom-select',ZOOM_PRESETS.map(p=>({value:String(p),label:`${p}×`})),value=>{
-  viewport.setZoom(Number(value)); log.info('ui','缩放预设',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true);
-},'search');
+for (const el of document.querySelectorAll('.viewport-surface .card-heading, .viewport-surface .transport-dock')) resizeObserver.observe(el);
+const zoomMenu = installNumericChoice('zoom-select', { glyph: 'search', presets: ZOOM_PRESETS, suffix: '×', min: ZOOM_MIN, max: ZOOM_MAX,
+  editLabel: () => tr(msg('player.editZoom', '编辑缩放倍数')),
+  choose(value) { viewport.setZoom(value); log.info('ui','缩放数值',{zoom:viewport.zoom,trigger:inputTrigger}); applyViewTransform(); syncZoomSelect(true); },
+});
 const pixelMenu = installChoiceMenu('pixel-size',() => [{value:'uniform',label:tr(msg("player.uniformPixels", "统一像素"))},{value:'fill',label:tr(msg("player.fillView", "填满视图"))}],value=>{
   viewport.setPixelSize(value as PixelSizeMode); log.info('ui','切换像素尺寸模式',{pixelSize:viewport.pixelSize,trigger:inputTrigger}); fitTask.schedule();
   pixelMenu.sync(viewport.pixelSize,viewport.pixelSize==='uniform'?tr(msg("player.uniformPixels", "统一像素")):tr(msg("player.fillView", "填满视图")),true);
@@ -246,7 +249,7 @@ function render() {
   const loaded = state.tracks.length > 0;
   const visibleTracks = state.tracks.filter(t => t.visible);
   $('tracks-hidden').hidden = !loaded || visibleTracks.length > 0;
-  $('performance-current').hidden = !loaded;
+  $('color-runtime-section').hidden = !loaded;
   $('color-runtime-tracks').textContent=state.tracks.map(track=>{
     const native=track.decoder==='webcodecs', label=native?tr(msg("player.browserNativeDecoding", "浏览器原生解码")):tr(msg("colorFlow.softwareDecoding", "软件解码"));
     const presentation=track.presentation;
@@ -330,7 +333,6 @@ ${label}${fallback?tr(msg("player.fallback", "（已回退）")):''} · ${track.
   }
   document.querySelector('.transport')!.setAttribute('aria-busy', String(state.busy));
   $<HTMLInputElement>('position').disabled = !loaded;
-  $<HTMLButtonElement>('benchmark').disabled = benchmarkRunning || !loaded || state.busy || state.playing;
   if ($('play').dataset.playing !== String(state.playing)) {
     $('play').dataset.playing = String(state.playing);
     animatePlaybackIcon($('play'), state.playing);
@@ -568,7 +570,6 @@ for (const eventName of ['click', 'change', 'invalid'] as const) document.addEve
   log.info('ui', '界面操作', { event: eventName, control: control.id || control.dataset.action || control.tagName.toLowerCase(), trigger: inputTrigger, value });
 }, { capture: true, signal: uiEvents.signal });
 onLanguageChange(() => {
-  benchmarkSummary?.();
   document.title = tr(msg("page.title", "VoidPlayer · 视频对比"));
   delete $('arrangement').dataset.arrangement;
   flowKey = '';
@@ -634,26 +635,3 @@ render();
 // and the annotation deep-link restore (already async) are still outstanding,
 // so bootstrap can reveal without waiting for them.
 window.dispatchEvent(new Event('voidplayer:shell-ready'));
-
-$('benchmark').addEventListener('click', () => {
-  void act(async () => {
-    const button = $<HTMLButtonElement>('benchmark');
-    benchmarkRunning = true; button.disabled = true;
-    $('benchmark-result').removeAttribute('hidden');
-    benchmarkSummary = () => { $('benchmark-summary').textContent = tr(msg("player.checkingPlaybackPerformance", "正在检查播放性能…")); }; benchmarkSummary();
-    let report;
-    try { report = await benchmarkPlayback(session); }
-    catch (error) { $('benchmark-summary').textContent = error instanceof Error ? error.message : String(error); throw error; }
-    finally { benchmarkRunning = false; }
-    const result = report;
-    benchmarkSummary = () => {
-    const reasons: Record<string, string> = { 'below-realtime': tr(msg("player.playbackTooSlow", "播放速度不足")), 'frame-lag': tr(msg("player.framesLagging", "画面落后")),
-      'track-skew': tr(msg("player.tracksOutOfSync", "双轨不同步")), 'insufficient-sample': tr(msg("player.sampleTooShort", "样本时长不足")), 'page-not-visible': tr(msg("player.pageHiddenDuringCheck", "测试期间页面不可见")),
-      'pause-latency': tr(msg("player.slowPauseResponse", "暂停响应慢")), 'stale-frame-after-pause': tr(msg("player.frameChangedAfterPausing", "暂停后画面改变")), 'premature-end': tr(msg("player.playbackDidNotFinish", "画面未播完")),
-      'playback-error': tr(msg("player.playbackError", "播放出错")), 'interrupted': tr(msg("player.checkInterrupted", "测试被中断")), 'media-changed': tr(msg("player.videoReplacedDuringCheck", "测试期间视频被替换")), 'no-frames': tr(msg("player.noFramesPresented", "没有输出画面")) };
-    $('benchmark-summary').textContent = result.passed ? tr(msg("player.passed", "通过")) : tr(msg("player.failed", "未通过：{p0}"), { p0: result.failures.map(f => reasons[f] ?? (f.endsWith('presentation-stall') ? tr(msg("player.trackStalled", "{p0} 轨画面卡顿"), { p0: f[0] }) : f)).join('、') });
-    }; benchmarkSummary();
-    $<HTMLTextAreaElement>('benchmark-json').value = JSON.stringify(report, null, 2);
-
-  }, 'ui.benchmark');
-});

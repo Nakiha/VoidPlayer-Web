@@ -15,6 +15,7 @@ import { thumbnailState } from '../../thumbnails/state.ts';
 import { referenceVersion } from '../../media-reference.ts';
 import { openMedia } from '../../media.ts';
 import { installLibraryBrowser } from '../library-browser.ts';
+import { installLibraryFileMenu } from '../library-file-menu.ts';
 import { installSourceScrollbar } from '../source-scrollbar.ts';
 import { sourceInUse, sourceKey } from '../source-catalog.ts';
 import { FileHandleError, handleKey, hasFileHandle, pickVideoFiles, restoreHandleFile, saveFileHandle, supportsFileHandles } from '../../file-handles.ts';
@@ -35,6 +36,7 @@ const text = (tag: string, value: string, className = '') => {
 export function createSourcesPane(shared: WorkbenchShared) {
   const { session, act, view, catalog, lifecyle } = shared;
   const save = () => shared.save();
+  const fileMenu = installLibraryFileMenu($('source-list'), act, shared.notify, lifecyle.signal);
   let refreshing: Promise<void> | undefined;
   let libraryChecked = false;
   let disposed = false;
@@ -246,7 +248,8 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   function sourceRow(item: SourceItem, copyOnly = false) {
     const row = document.createElement('div'); row.className = 'source-row';
-    const used = sourceInUse(item, session.getState().tracks);
+    const slots = session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
+    const used = slots.length > 0;
     const loading = loadingSource?.key === item.key && loadingConfirmed ? loadingSource.status() : null;
     const failed = sourceLoadError?.key === item.key ? sourceLoadError.message : null;
     const blocked = !!loadingSource;
@@ -261,12 +264,20 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const isLocal = !!item.file && !item.library;
     const pending = item.library?.state === 'pending';
     const offline = libraryBrowser.page()?.roots.some(root => root.id === item.library?.rootId && root.state === 'offline');
-    const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : used ? t(msg("sources.inUse", "使用中")) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : isLocal ? t(msg("sources.localFile", "本地文件")) : t(msg("sources.inLibrary", "媒体库")));
+    const stateLabel = loading ?? (failed ? t(msg("sources.loadFailedWith", "载入失败：{reason}"), { reason: failed }) : offline ? t(msg("sources.storageOffline", "存储离线")) : pending ? t(msg("sources.writing", "写入中")) : isLocal ? t(msg("sources.localFile", "本地文件")) : t(msg("sources.inLibrary", "媒体库")));
     const opened = openedText(item.openedAt);
-    const status = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}${opened ? t(msg("sources.lastOpened", " · 上次打开 {date}"), { date: opened }) : ''}`, 'source-meta');
+    const status = text('span', '', 'source-meta');
+    const statusText = text('span', `${sizeText(item.size)} · ${stateLabel} · ${origin}${opened ? t(msg("sources.lastOpened", " · 上次打开 {date}"), { date: opened }) : ''}`, 'source-meta-copy');
     status.dataset.tooltip = row.dataset.tooltip;
     if (loading || failed) { status.setAttribute('role', 'status'); }
     const titleLine = document.createElement('span'); titleLine.className = 'source-title';
+    if (slots.length) {
+      const badges = document.createElement('span'); badges.className = 'source-track-badges';
+      badges.setAttribute('aria-label', t(msg('sources.loadedTracks', '已上屏轨道：{slots}'), { slots: slots.join(', ') }));
+      for (const slot of slots) { const badge = text('span', slot, `slot slot-${slot}`); badge.setAttribute('aria-hidden', 'true'); badges.append(badge); }
+      status.append(badges);
+    }
+    status.append(statusText);
     titleLine.append(name);
     name.dataset.tooltip = row.dataset.tooltip;
     info.append(titleLine, status);
@@ -325,6 +336,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     row.append(info, actions);
     row.dataset.sourceKey = item.key;
     if (!copyOnly) attachThumb(row, item);
+    if (item.library) fileMenu.register(row, item.library);
     return row;
   }
 
@@ -344,7 +356,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const origin = item.library ? [item.library.root, dir].filter(Boolean).join(' / ') : t(msg("sources.localNoUpload", "本机（不上传）"));
     const opened = openedText(item.openedAt);
     const meta = text('span', item.library ? `${sizeText(item.size)} · ${t(msg("sources.startMetaLibrary", "媒体库"))} · ${origin}${opened ? ` · ${opened}` : ''}` : `${sizeText(item.size)} · ${t(msg("sources.startMetaLocal", "本地文件"))}${staleLocal && !restorable ? t(msg("sources.reselectNeeded", " · 需重新选择")) : ''}${opened ? ` · ${opened}` : ''}`, 'source-meta');
-    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('arrowRight');
+    const go = document.createElement('span'); go.className = 'start-recent-go'; go.setAttribute('aria-hidden', 'true'); go.innerHTML = icon('caretRight');
     const info = document.createElement('span'); info.className = 'source-info'; info.append(name, meta);
     row.append(info, go);
     row.dataset.sourceKey = item.key;
@@ -482,13 +494,14 @@ export function createSourcesPane(shared: WorkbenchShared) {
     const failedKey = sourceLoadError?.key ?? null;
     // Only source and navigation state affect the list. A seek must not
     // disable every row or rebuild any of their action controls.
-    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)]), local.map(item => [item.key, item.openedAt ?? null, sourceInUse(item, session.getState().tracks)])]);
+    const sourceSlots = (item: SourceItem) => session.getState().tracks.filter(track => sourceInUse(item, [track])).map(track => track.slot);
+    const signature = JSON.stringify([recent, query, loadingKey, loadingConfirmed, loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey, sourceLoadError?.message ?? null, folders, page?.roots.map(root => [root.id, root.state]), items.map(item => [item.key, !!item.file, item.library?.version, item.library?.state, item.openedAt ?? null, sourceSlots(item)]), local.map(item => [item.key, item.openedAt ?? null, sourceSlots(item)])]);
     const list = $('source-list');
     // Stable per-row identity: thumbnail presence/URLs must NOT rebuild rows.
     // Volatile fields (scannedAt, thumbnail flag, full roots objects) are
     // excluded; completion patches the placeholder <img> via notify.
     const stableRoots = page?.roots.map(root => [root.id, root.state]);
-    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceInUse(item, session.getState().tracks), stableRoots]);
+    const fingerprintOf = (item: SourceItem) => JSON.stringify([!!item.file, item.library?.id ?? item.libraryId ?? null, item.library?.version ?? item.version ?? null, item.library?.state ?? null, item.library?.root ?? null, item.library?.rootId ?? null, item.name, item.size, item.lastModified, item.openedAt ?? null, loadingKey === item.key && loadingConfirmed ? loadingSource?.stage ?? 'loading' : null, failedKey === item.key ? sourceLoadError?.message : null, sourceSlots(item), stableRoots]);
     const syncActions = (container: HTMLElement, pool: SourceItem[]) => {
       const byKey = new Map(pool.map(entry => [entry.key, entry]));
       for (const row of container.querySelectorAll<HTMLElement>('.source-row')) {
@@ -528,6 +541,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
       while (list.children.length > rows.length) list.lastElementChild!.remove();
       syncActions(list, items);
       const localList = $('local-list');
+      $('local-sources').hidden = local.length === 0;
       $('local-sources-heading').textContent = local.length ? t(msg("sources.localFilesCount", "本地文件（{n}）"), { n: local.length }) : t(msg("sources.localFiles", "本地文件"));
       const localExisting = new Map([...localList.children].map(node => [(node as HTMLElement).dataset.sourceKey, node as HTMLElement]));
       const localRows: HTMLElement[] = [];
@@ -589,11 +603,48 @@ export function createSourcesPane(shared: WorkbenchShared) {
     if (libraryBrowser.isRecent()) await refreshRecent();
   }
 
+  let locateRequest: AbortController | undefined;
+  let locateHighlight: ReturnType<typeof setTimeout> | undefined;
+  async function locateTrack(slot: Slot) {
+    locateRequest?.abort(); locateRequest = new AbortController();
+    const request = locateRequest;
+    const signal = AbortSignal.any([lifecyle.signal, request.signal]);
+    const track = session.getState().tracks.find(track => track.slot === slot);
+    if (!track) return;
+    let key: string;
+    if (track.source) {
+      let entry: LibraryEntry | null;
+      try { entry = await fetchLibraryItem(track.source.id, signal); }
+      catch (error) { if (signal.aborted) return; throw error; }
+      if (signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
+      if (!entry || entry.state === 'missing') { shared.notify(t(msg('sources.locateUnavailable', '片源已不在媒体库中。'))); return; }
+      setSearching(false, false);
+      if (!await libraryBrowser.reveal(entry) || signal.aborted || session.getState().tracks.find(current => current.slot === slot)?.source?.id !== track.source.id) return;
+      key = sourceKey(entry, entry.id);
+    } else {
+      setSearching(false, false); renderSources(); key = sourceKey(track);
+    }
+    const row = [...document.querySelectorAll<HTMLElement>('#source-list .source-row, #local-list .source-row')].find(row => row.dataset.sourceKey === key);
+    if (!row || signal.aborted) return;
+    clearTimeout(locateHighlight);
+    document.querySelectorAll('.source-row.is-located').forEach(row => row.classList.remove('is-located'));
+    row.classList.add('is-located');
+    const list = row.closest<HTMLElement>('#source-list, .local-sources')!;
+    const box = row.getBoundingClientRect(), bounds = list.getBoundingClientRect();
+    const top = bounds.top + parseFloat(getComputedStyle(list).paddingTop || '0');
+    const bottom = list.id === 'source-list' ? $('source-foot').getBoundingClientRect().top : bounds.bottom;
+    if (box.top < top) list.scrollTop += box.top - top;
+    else if (box.bottom > bottom) list.scrollTop += box.bottom - bottom;
+    scrollbar.update();
+    locateHighlight = setTimeout(() => row.classList.remove('is-located'), 1800);
+  }
+  lifecyle.signal.addEventListener('abort', () => { locateRequest?.abort(); clearTimeout(locateHighlight); }, { once: true });
+
   function sourcesLayout() {
     return { ...libraryBrowser.snapshot(), tab: (libraryBrowser.isRecent() ? 'recent' : 'available') as 'recent' | 'available', query: $<HTMLInputElement>('source-search').value };
   }
 
-  function setSearching(open: boolean) {
+  function setSearching(open: boolean, restoreFocus = true) {
     const tools = $('source-tools');
     const field = $('source-search-field');
     const input = $<HTMLInputElement>('source-search');
@@ -609,7 +660,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
     tools.querySelector<HTMLElement>('.source-navigation-rail')!.inert = open;
     libraryBrowser.setSearchOpen(open);
     if (open) input.focus();
-    else toggle.focus();
+    else if (restoreFocus) toggle.focus();
   }
 
   const scrollbar = installSourceScrollbar($('source-list'), $('source-scrollbar'), $('source-scrollbar-thumb'), lifecyle.signal);
@@ -692,7 +743,7 @@ export function createSourcesPane(shared: WorkbenchShared) {
 
   return {
     renderSources, renderStartLibrary, refreshLibrary, ensureLibrary, rememberFile, localize,
-    syncCatalog, syncLoadVisuals, beginRestore, finishRestore, sourcesLayout, wireSourceControls,
+    syncCatalog, syncLoadVisuals, beginRestore, finishRestore, sourcesLayout, wireSourceControls, locateTrack,
     markDisposed() { disposed = true; },
   };
 }

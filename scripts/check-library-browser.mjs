@@ -106,7 +106,7 @@ try {
   assert.equal((await page.evaluate(()=>window.voidPlayer.exportWorkspace())).layout.sources.search,'');
   await page.reload();
   await page.locator('#start-library-list').getByRole('button', { name: '打开：实验一/clip-069.mp4', exact: true }).waitFor();
-  assert.equal(await page.locator('#start-library-list .start-recent-go svg[data-icon="arrowRight"]').count(),1,'recent item uses a stable SVG arrow');
+  assert.equal(await page.locator('#start-library-list .start-recent-go svg[data-icon="caretRight"]').count(),1,'recent item uses a stable SVG chevron');
   await page.locator('#toggle-sources').click(); await choose('项目归档');
   await page.getByRole('button', { name: '打开目录：实验一', exact: true }).click();
   await choose('全部媒体'); await openSearch(); await page.locator('#source-search').fill('deep');

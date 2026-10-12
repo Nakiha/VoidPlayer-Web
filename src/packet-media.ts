@@ -1,3 +1,4 @@
+import { referenceVersion } from './media-reference.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { WorkerRpc } from './worker-rpc.ts';
 import { attachCachedContainerAudio } from './cached-audio-client.ts';
@@ -155,6 +156,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
       const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+        ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,
         close() { if (closed) return; closed = true; sample?.close(); if (!disposed && pixels) spare = pixels.buffer as ArrayBuffer; },

@@ -68,12 +68,6 @@
   flex: 0 0 auto;
   font-size: 12px;
 }
-.analysis-tracks {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  flex: 0 0 auto;
-}
 .analysis-chip {
   display: inline-flex;
   align-items: center;
@@ -88,7 +82,6 @@
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.analysis-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .analysis-chip[aria-pressed="true"] { background: var(--surface-selected); color: var(--text); }
 /* 右侧状态区：当前上屏帧 PTS + 帧号。平时与功能区同行右对齐；
    放不下时自动换到第二行（表头最多两行，仍在 64px 内）。 */
@@ -122,8 +115,6 @@
   gap: 4px;
   flex: 0 0 auto;
 }
-.analysis-status .dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
-.analysis-status .st-slot { color: var(--text-secondary); }
 .analysis-status .st-num, .analysis-status .st-num-input {
   box-sizing: border-box;
   width: var(--frame-number-width, 4ch);
@@ -148,14 +139,13 @@
 /* 换行独占一行时左对齐（JS 按实际换行状态挂 .status-wrapped，同行仍靠右）。 */
 .analysis-head.status-wrapped .analysis-status { margin-left: 0; }
 .analysis-status .st-empty { color: var(--text-secondary); }
-/* 分析图占满面板宽度；横轴下方预留固定坞，卡片在坞内滑动，不占图表布局。 */
+/* 分析图占满面板宽度；悬浮卡片在整组图表下方跟随检查线，不占图表布局。 */
 .analysis-body {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 .analysis-notice {
   flex: 0 0 auto;
@@ -184,7 +174,7 @@
 .analysis-line {
   position: absolute;
   top: 0;
-  bottom: 22px;
+  bottom: 0;
   width: 1px;
   pointer-events: none;
 }
@@ -203,7 +193,7 @@
   position: fixed;
   width: max-content;
   max-width: calc(100vw - 16px);
-  background: var(--viewport-chrome-fill);
+  background: color-mix(in srgb, var(--surface) 96%, transparent);
   -webkit-backdrop-filter: var(--glass-filter);
   backdrop-filter: var(--glass-filter);
   border: 1px solid var(--border);
@@ -219,6 +209,7 @@
 }
 .analysis-card th.fl-time {
   color: var(--text);
+  font-size: 13px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
@@ -271,3 +262,209 @@
   text-align: center;
   padding: 0 16px;
 }
+
+.analysis-unavailable { flex:1; min-height:0; overflow:auto; padding:16px 24px; color:var(--text-secondary); font-size:12px; }
+.analysis-unavailable h3 { margin:0 0 8px; color:var(--text); font-size:14px; }
+.analysis-unavailable p { max-width:60ch; margin:0; line-height:1.7; }
+
+.analysis-diagram-toggles { display:inline-flex; flex:0 0 auto; gap:2px; padding:2px; border-radius:8px; background:var(--surface-button); }
+.analysis-diagram-toggles button { display:flex; align-items:center; justify-content:center; width:30px; height:28px; padding:3px; border:0; border-radius:6px; background:transparent; color:var(--text-secondary); cursor:pointer; transition:background .15s ease, color .15s ease; }
+.analysis-diagram-toggles button svg { display:block; width:22px; height:22px; flex:none; }
+.analysis-diagram-toggles button:hover { background:var(--surface-hover); color:var(--text); }
+.analysis-diagram-toggles button[aria-pressed="true"] { background:var(--surface-selected); color:var(--accent); }
+.analysis-diagram-toggles button:focus-visible { outline:2px solid var(--accent); outline-offset:1px; }
+@media (pointer:coarse) { .analysis-diagram-toggles button { width:36px; height:36px; } }
+@media (prefers-reduced-motion:reduce) { .analysis-diagram-toggles button { transition:none; } }
+.analysis-tools { flex-basis:0; }
+
+.analysis-tools #analysis-axis { flex: 0 0 auto; }
+
+.analysis-primary { display:flex; align-items:center; gap:4px; min-width:0; }
+.bitstream-diagrams { display:flex; flex-direction:column; min-height:0; flex:1; color:var(--text-secondary); font-size:11px; }
+.bitstream-diagram-head { display:flex; gap:8px 16px; align-items:center; padding:3px 8px; flex:0 0 auto; flex-wrap:wrap; }
+.bitstream-diagram-navigation { display:flex; align-items:center; gap:5px; white-space:nowrap; }
+.bitstream-diagram-navigation button { border:0; border-radius:5px; padding:3px 7px; color:var(--text-secondary); background:var(--surface-button); font:inherit; cursor:pointer; }
+.bitstream-diagram-navigation button:disabled { opacity:.4; cursor:default; }
+.bitstream-diagram-legend { max-height:32px; overflow:auto; display:flex; flex-wrap:wrap; gap:4px 10px; }
+.bitstream-diagram-legend span, .bitstream-diagram-legend button { display:inline-flex; align-items:center; gap:4px; }
+.bitstream-diagram-legend i { width:7px; height:7px; border-radius:2px; }
+.bitstream-diagram-legend .container-nalu-swatch { background-image:repeating-linear-gradient(135deg, transparent 0 2px, var(--text-secondary) 2px 3px); }
+.bitstream-diagram-legend [data-reference-list] i { width: 12px; height: 2px; border-radius: 1px; }
+.bitstream-layer-badge { font-size: 10px; padding: 1px 4px; border-radius: 4px; background: var(--surface-group); color: var(--text-secondary); white-space: nowrap; }
+.bitstream-diagram-plot { position:relative; flex:1; min-height:48px; overflow:hidden; }
+.bitstream-diagram-plot canvas { display:block; cursor:crosshair; }
+.bitstream-diagram-empty { height:100%; display:flex; align-items:center; justify-content:center; margin:0; padding:12px; box-sizing:border-box; text-align:center; }
+.bitstream-diagram-detail { padding:3px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; min-height:18px; flex:0 0 auto; }
+
+.bitstream-diagram-legend button { border:0; border-radius:4px; padding:2px 4px; background:transparent; color:inherit; font:inherit; cursor:pointer; }
+.bitstream-diagram-legend button:hover { background:var(--surface-button); }
+.bitstream-diagram-legend button[aria-pressed="false"][data-nalu-type] { opacity:.4; text-decoration:line-through; }
+.bitstream-diagram-legend button[data-filter="all"][aria-pressed="true"] { color:var(--text); background:var(--surface-button); }
+.bitstream-diagram-empty { position:absolute; inset:0; pointer-events:auto; }
+
+.multi-choice-menu .choice-check { width: 1em; flex: 0 0 auto; }
+.multi-choice-menu button[aria-checked="false"] .choice-check { visibility: hidden; }
+.analysis-charts { --analysis-chart-min-plot-height: 36px; --analysis-type-row-min-height: 10px; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.analysis-shared-axis { height: 22px; flex: 0 0 22px; overflow: hidden; }
+.analysis-shared-axis canvas { display: block; }
+.analysis-overview { display: flex; flex-direction: column; flex: var(--overview-weight, 2) 0 max(var(--overview-min-height, 72px), var(--analysis-view-min-height, 0px)); min-height: max(var(--overview-min-height, 72px), var(--analysis-view-min-height, 0px)); }
+.analysis-charts.multiple > .bitstream-diagrams { flex: 1 0 calc(var(--chart-min-plot-height, 36px) + 25px); min-height: calc(var(--chart-min-plot-height, 36px) + 25px); border-top: 1px solid var(--divider); box-sizing: border-box; }
+.analysis-charts.multiple .bitstream-diagram-head { height: 24px; box-sizing: border-box; flex-wrap: nowrap; padding: 1px 8px; overflow: hidden; }
+.analysis-charts.multiple .bitstream-diagram-navigation output { display: none; }
+.analysis-charts.multiple .bitstream-diagram-legend { min-width: 0; flex: 1; flex-wrap: nowrap; white-space: nowrap; max-height: none; scrollbar-width: none; }
+.analysis-charts.multiple .bitstream-diagram-legend::-webkit-scrollbar { display: none; }
+.analysis-charts.multiple .bitstream-diagram-legend > * { flex-shrink: 0; }
+.analysis-charts.multiple .bitstream-diagram-plot { min-height: var(--chart-min-plot-height, 36px); }
+/* Details remain announced to assistive technology and visible in the shared card. */
+.analysis-charts.multiple .bitstream-diagram-detail { position: absolute; width: 1px; height: 1px; min-height: 0; padding: 0; clip-path: inset(50%); }
+.analysis-no-charts { display:flex; flex-direction:column; align-items:center; gap:10px; margin:auto; padding:16px; color:var(--text-secondary); font-size:12px; text-align:center; }
+.analysis-no-charts p { margin:0; }
+.analysis-bitstream-card .fl-grid td { max-width: 36ch; text-overflow: ellipsis; }
+
+/* All plots scroll together; no overview-only inner clipping or scrollbar. */
+.analysis-body { overscroll-behavior: auto; }
+
+.analysis-linked-card { pointer-events: none; overflow: auto; max-width: min(900px, calc(100vw - 16px)); }
+.analysis-card-section { margin-top: 5px; padding-top: 4px; border-top: 1px solid var(--border); }
+.analysis-card-section:first-child { margin-top: 0; border-top: 0; }
+.analysis-card-section > strong { font-size: inherit; color: var(--text-secondary); }
+.analysis-card-section p { margin: 2px 4px; }
+.analysis-linked-card .fl-grid td { max-width: 32ch; text-overflow: ellipsis; }
+
+/* Combined sections share label and value columns instead of sizing each table independently. */
+.analysis-linked-card {
+  width: var(--combined-card-width, 300px);
+  min-width: min(240px, calc(100vw - 16px));
+  padding: 7px 9px; border: 0; line-height: 1.4;
+  scrollbar-width: thin;
+}
+.analysis-linked-card table.fl-grid { width: 100%; table-layout: fixed; margin: 0; }
+.analysis-linked-card .analysis-card-label-col { width: 72px; }
+.analysis-linked-card > .analysis-overview-grid .analysis-card-label-col { width: 174px; }
+.analysis-combined-grid { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin-top: 5px; }
+.analysis-combined-grid > .analysis-card-section { flex: 1 1 var(--section-width, 200px); min-width: 0; }
+.analysis-linked-card .fl-grid th, .analysis-linked-card .fl-grid td { height: 21px; padding: 1px 0; }
+.analysis-linked-card .fl-grid th { padding-right: 8px; }
+.analysis-linked-card .fl-grid td + td { padding-left: 6px; }
+.analysis-linked-card .fl-grid thead th { height: 25px; padding-bottom: 4px; border-bottom: 0; }
+.analysis-linked-card .fl-grid th.fl-time { font-size: 13px; font-weight: 600; color: var(--text); }
+.analysis-linked-card .fl-grid thead th:last-child { padding-right: 0; }
+.analysis-linked-card .analysis-card-unit { min-width: 3ch; text-align: right; }
+.analysis-linked-card .analysis-card-section { position: relative; margin: 0; padding: 0 3px; border: 0; border-radius: 0; }
+.analysis-linked-card .analysis-card-section:not([hidden]) ~ .analysis-card-section:not([hidden])::before { content: ''; position: absolute; left: -4px; top: 3px; bottom: 3px; width: 1px; background: var(--border); }
+.analysis-linked-card .analysis-card-section > strong { display: block; margin-bottom: 2px; }
+
+.analysis-linked-card.is-scrollable { pointer-events: auto; }
+
+/* Each chart group has a readable card beside the shared inspection line. */
+.analysis-view-card {
+  pointer-events: none; overflow: auto; overscroll-behavior: contain;
+  max-width: min(380px, calc(100vw - 16px));
+  padding: 7px 10px; border-radius: 10px; font-size: 12px; line-height: 1.35;
+  scrollbar-width: thin;
+}
+.analysis-view-card table.fl-grid { width: 100%; }
+.analysis-view-card .fl-grid th, .analysis-view-card .fl-grid td { height: 21px; padding: 1px 0; }
+.analysis-view-card .fl-grid th { padding-right: 14px; }
+.analysis-view-card .fl-grid td + td { padding-left: 12px; }
+.analysis-view-card .fl-grid thead th { height: 21px; padding-bottom: 2px; border-bottom: 0; }
+.analysis-view-card .fl-grid th.fl-time { font-weight: 600; color: var(--text); }
+.analysis-view-card .fl-grid thead th:last-child { padding-right: 0; }
+.analysis-card .fl-grid .dot { width: 7px; height: 7px; margin-right: 5px; }
+.analysis-card .metric-value { font-weight: 500; }
+.analysis-card-unit { display: inline-block; margin-left: 5px; color: var(--text-secondary); font-size: inherit; font-weight: 400; }
+.analysis-card .analysis-card-frame th, .analysis-card .analysis-card-frame td { color: var(--text-secondary); font-weight: 400; }
+.analysis-card .analysis-card-total th, .analysis-card .analysis-card-total td { border-top: 1px solid var(--border); padding-top: 4px; }
+/* Shared detail hierarchy for independent and embedded cards. */
+.analysis-card-depth { margin-left: 8px; padding: 1px 4px; border-radius: 4px; background: var(--surface-control); color: var(--text); }
+.analysis-card [data-kind="references"] { display: block; }
+.analysis-card [data-kind="references"] thead { display: table; width: 100%; }
+.analysis-card [data-kind="references"] tbody { display: grid; grid-template-columns: minmax(64px, 1fr) minmax(64px, 1fr); gap: 4px 16px; }
+.analysis-card [data-kind="references"] tbody tr { display: flex; flex-direction: row; align-items: baseline; gap: 8px; }
+.analysis-card [data-kind="references"] tbody .analysis-card-frame { grid-column: 1 / -1; flex-direction: row; justify-content: space-between; gap: 12px; }
+.analysis-card [data-kind="references"] tbody th, .analysis-card [data-kind="references"] tbody td { height: auto; padding: 0; text-align: left; white-space: normal; overflow-wrap: anywhere; }
+.analysis-card [data-kind="references"] tbody tr:not(.analysis-card-frame) th { flex: 0 0 auto; }
+.analysis-card [data-kind="references"][data-aggregated="true"] tbody { grid-template-columns: repeat(3, minmax(48px, 1fr)); }
+.analysis-card [data-kind="references"] tbody tr[data-list="0"] th { color: var(--analysis-reference-l0); }
+.analysis-card [data-kind="references"] tbody tr[data-list="1"] th { color: var(--analysis-reference-l1); }
+.analysis-card [data-kind="references"] tbody tr:not(.analysis-card-frame) td { max-width: 26ch; font-weight: 600; }
+.analysis-view-card p { margin: 3px 0; }
+.analysis-view-card.is-scrollable { pointer-events: auto; }
+.analysis-card-title { display: block; }
+.analysis-view-card p { margin: 2px 3px; }
+.analysis-view-card.is-scrollable { pointer-events: auto; }
+.analysis-card-title { display: block; padding: 2px 4px; font-size: inherit; color: var(--text-secondary); }
+
+/* One NALU chart group: one legend/filter, size above type rows. */
+.bitstream-nalu-group { display: flex; flex-direction: column; min-height: 0; }
+.bitstream-nalu-group[hidden] { display: none; }
+.analysis-charts.multiple > .bitstream-nalu-group { flex: 2 0 var(--nalu-min-height, 97px); min-height: var(--nalu-min-height, 97px); border-top: 1px solid var(--divider); box-sizing: border-box; }
+.bitstream-nalu-group > .bitstream-diagrams { flex: 1 0 var(--chart-min-plot-height, 36px); min-height: var(--chart-min-plot-height, 36px); }
+.bitstream-nalu-group > [data-diagram="nalu-size"] { flex-basis: calc(var(--chart-min-plot-height, 36px) + 24px); min-height: calc(var(--chart-min-plot-height, 36px) + 24px); }
+.bitstream-nalu-group > [data-diagram="nalu-types"] { border-top: 1px solid var(--divider); box-sizing: border-box; }
+.bitstream-nalu-group > [data-diagram="nalu-types"] .bitstream-diagram-head { display: none; }
+
+/* Comparison visibility and explicit inspection belong to the same track pill. */
+.analysis-track-control { display:inline-flex; align-items:stretch; border-radius:7px; background:var(--surface-button); overflow:hidden; flex:0 0 auto; }
+.analysis-track-control[data-selected="true"] { background:var(--surface-selected); }
+.analysis-track-control .analysis-chip { border:0; border-radius:0; background:none; padding:3px; gap:0; min-height:28px; }
+.analysis-track-control .slot { width:22px; height:22px; font-size:12px; border-radius:5px; }
+.analysis-track-control[data-selected="false"] .slot { opacity:.4; }
+.bitstream-diagram-empty { gap:12px; padding:12px 20px; }
+.bitstream-empty-copy { display:flex; flex-direction:column; gap:5px; text-align:left; max-width:48ch; min-width:0; }
+.bitstream-empty-copy strong { font-size:12px; font-weight:600; color:var(--text); }
+.bitstream-empty-copy span { line-height:1.5; }
+.bitstream-empty-action { border:0; border-radius:7px; background:var(--surface-selected); color:var(--accent); padding:7px 12px; white-space:nowrap; font:inherit; font-weight:600; cursor:pointer; flex:0 0 auto; }
+.bitstream-empty-action:disabled { opacity:.45; cursor:default; }
+.bitstream-nalu-group[data-empty="true"] > [data-diagram="nalu-types"] { display:none; }
+.bitstream-nalu-group[data-empty="true"] > [data-diagram="nalu-size"] { flex:1; }
+@media (max-width:600px) { .bitstream-diagram-empty { gap:8px; padding:8px 12px; } .bitstream-empty-copy span { font-size:10px; } }
+
+.analysis-container-card .analysis-card-origin { display:inline-block; margin-left:12px; font-size:12px; font-weight:400; color:var(--text-secondary); }
+.analysis-container-card .is-selected { color:var(--text); font-weight:600; }
+.analysis-container-card .analysis-card-note { color:var(--text-secondary); font-size:inherit; margin-top:6px; }
+
+
+
+/* Deep diagrams and details carry an explicit track identity. */
+.bitstream-track-badge { display:inline-flex; align-items:center; gap:4px; font-weight:600; color:var(--text); }
+.bitstream-track-badge .dot { width:7px; height:7px; border-radius:50%; flex:none; }
+.analysis-card-track { display:flex; align-items:center; gap:5px; font-weight:600; margin-top:4px; }
+.analysis-card-track-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-left:3px; font-weight:400; color:var(--text-secondary); }
+.analysis-card-track-time { flex-shrink:0; margin-left:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.analysis-track-details + .analysis-track-details { margin-top:7px; padding-top:5px; position:relative; }
+.analysis-track-details + .analysis-track-details::before { content:''; position:absolute; left:3px; right:3px; top:0; height:1px; background:var(--border); }
+.analysis-track-details .analysis-combined-grid { margin-top:3px; }
+.analysis-track-details .analysis-card-frame td { white-space:normal; overflow:visible; text-overflow:clip; overflow-wrap:anywhere; }
+.analysis-track-details .analysis-card-section p { white-space:normal; }
+
+.analysis-card .analysis-card-track-badge { width:20px; height:20px; min-height:20px; font:600 12px/1 var(--font-ui); vertical-align:middle; }
+
+/* A passive progress circle expands inside the stable track button. */
+.analysis-track-control[data-state="pending"] .analysis-track-progress { width:26px; opacity:1; }
+
+/* Independent cards move as a complete stack; only an oversized stack scrolls. */
+.analysis-individual-layer { inset: 8px 0; }
+.analysis-individual-layer > .analysis-card { position: absolute; overflow: visible; }
+.analysis-individual-layer.is-scrollable { overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
+.analysis-individual-layer.is-scrollable > .analysis-card { pointer-events: auto; }
+
+/* Header and frame metadata must not reserve width in the NALU metric columns. */
+.analysis-card [data-kind="nalu"] { display: block; }
+.analysis-card [data-kind="nalu"] thead { display: table; width: 100%; }
+.analysis-card [data-kind="nalu"] tbody { display: grid; grid-template-columns: max-content minmax(0, 1fr); }
+.analysis-card [data-kind="nalu"]:has(col[span="2"]) tbody { grid-template-columns: max-content auto minmax(0, 1fr); }
+.analysis-card [data-kind="nalu"] tbody tr { display: contents; }
+.analysis-card [data-kind="nalu"]:has(col[span="2"]) tbody td:only-of-type { grid-column: span 2; }
+.analysis-card [data-kind="nalu"] tbody .analysis-card-frame { display: flex; grid-column: 1 / -1; min-width: max-content; align-items: baseline; justify-content: space-between; gap: 8px; }
+.analysis-card [data-kind="nalu"] .analysis-card-frame th { flex: 0 0 auto; padding-right: 0; }
+.analysis-card [data-kind="nalu"] .analysis-card-frame td { flex: 0 0 auto; max-width: none; padding-left: 0; white-space: nowrap; overflow: visible; }
+/* Embedded sections may wrap only when their full row really cannot fit. */
+.analysis-linked-card [data-kind="nalu"] tbody .analysis-card-frame { min-width: 0; }
+.analysis-linked-card [data-kind="nalu"] .analysis-card-frame td { flex: 0 1 auto; min-width: 0; height: auto; white-space: normal; overflow-wrap: normal; }
+.analysis-load-legend { display:flex; align-items:center; flex-wrap:wrap; gap:8px; min-height:25px; padding:2px 8px; font-size:12px; }
+.analysis-load-legend button { display:inline-flex; align-items:center; gap:5px; padding:2px 4px; min-height:22px; border:0; background:transparent; color:var(--text); font:inherit; }
+.analysis-load-legend button::before { content:''; width:12px; height:0; border-top:2px solid var(--accent); }
+.analysis-load-legend button[data-metric=qp]::before { border-top-style:dashed; }
+.analysis-load-legend button[aria-pressed=false] { opacity:.4; text-decoration:line-through; }
+.analysis-qp-notice { color:var(--text-secondary); }

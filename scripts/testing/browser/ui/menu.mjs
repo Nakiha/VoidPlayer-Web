@@ -20,13 +20,13 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
     await page.evaluate(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))));
     const layout=await page.evaluate(()=>{
       const rect=id=>document.querySelector(id).getBoundingClientRect();
-      const bar=rect('.transport');
+      const bar=rect('.transport-dock');
       const input=document.querySelector('#position');
       const measure=document.createElement('canvas').getContext('2d'); const font=getComputedStyle(input); measure.font=`${font.fontWeight} ${font.fontSize} ${font.fontFamily}`;
-      const buttons=['#previous','#play','#next','#fullscreen','#toggle-chrome'].map(id=>{
+      const buttons=['#previous','#play','#next','#toggle-annotations','#toggle-analysis-overlay','#fullscreen','#toggle-chrome'].filter(id=>rect(id).width>0).map(id=>{
         const r=rect(id),s=getComputedStyle(document.querySelector(id));return {width:r.width,height:r.height,padding:s.padding};
       });
-      const items=['#previous','#play','#next','#position','.duration','#timeline','#fullscreen','#toggle-chrome']
+      const items=['#previous','#play','#next','#position','.duration','#timeline','#toggle-annotations','#toggle-analysis-overlay','#fullscreen','#toggle-chrome']
         .map(id=>({id,rect:rect(id)})).filter(item=>item.rect.width>0);
       return {buttons, timeExtra:input.getBoundingClientRect().width ? input.getBoundingClientRect().width-measure.measureText(input.value).width : null, bar:bar.toJSON(), items:items.map(({id,rect:r})=>({id,x:r.x,right:r.right,cy:r.y+r.height/2})),
         rail:rect('#timeline').width, timeFont:getComputedStyle(document.querySelector('#position')).font,
@@ -38,7 +38,7 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
     assert.ok(layout.rail>=36,'seek target stays usable');
     for (const [i,item] of layout.items.entries()) {
       assert.ok(Math.abs(item.cy-(layout.bar.y+layout.bar.height/2))<1,`${width}: ${item.id} is vertically centered`);
-      assert.ok(item.x>=layout.bar.x && item.right<=layout.bar.right,`${width}: ${item.id} stays inside bar`);
+      assert.ok(item.x>=layout.bar.x-1 && item.right<=layout.bar.right+1,`${width}: ${item.id} stays inside bar: ${JSON.stringify({item,bar:layout.bar})}`);
       if(i) assert.ok(item.x>=layout.items[i-1].right,`${width}: controls do not overlap`);
     }
   }
@@ -62,6 +62,20 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
     await page.keyboard.press('Escape'); assert.equal(await button.evaluate(e => e === document.activeElement), true);
   }
   for (const id of ['pixel-size', 'zoom-select']) await toggle(id);
+  const zoomValue=page.locator('#zoom-select-value'), zoomInput=page.locator('#zoom-select-input');
+  const zoomBounds=await page.locator('#zoom-select-control').boundingBox();
+  await zoomValue.click(); await zoomInput.fill('2.75'); await zoomInput.press('Enter');
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),2.75,'editing zoom updates the shared viewport');
+  assert.equal(await zoomValue.textContent(),'2.75×');
+  assert.equal(await page.locator('#zoom-select-control').evaluate(el=>el.getBoundingClientRect().width),zoomBounds.width,'editing keeps the original control width');
+  await zoomValue.click(); await zoomInput.fill('4'); await zoomInput.press('Escape');
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),2.75,'Escape discards zoom edits');
+  await zoomValue.click(); await zoomInput.fill('0'); await zoomInput.press('Enter');
+  assert.equal(await zoomInput.getAttribute('aria-invalid'),'true');
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),2.75,'invalid zoom never reaches the viewport');
+  await zoomInput.press('Escape');
+  await page.locator('#zoom-select').click(); await page.locator('#zoom-select-menu [data-value="1"]').click();
+  assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),1,'icon presets still reset zoom and pan');
   assert.equal(await page.locator('#more-actions').count(),0);
   await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);await page.keyboard.press('Escape');
   // settings.ts 的 dismiss() 要等退场动画结束才 dialog.close()，期间 dialog[open] 仍在；

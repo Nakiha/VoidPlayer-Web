@@ -49,6 +49,9 @@ try {
       assert.notEqual(await page.locator('#app').evaluate(el => getComputedStyle(el).visibility), 'hidden');
       assert.equal(await page.locator('#app').evaluate(el => el.inert), false);
       assert.equal(await page.locator('#startup-fallback').isVisible(), false);
+      const zoomWidth = await page.locator('#zoom-select-control').evaluate(el => el.getBoundingClientRect().width);
+      const buttonSize = await page.locator('html').evaluate(el => parseFloat(getComputedStyle(el).getPropertyValue('--button-size')));
+      assert.equal(zoomWidth, buttonSize, 'disabled zoom reserves only an icon button');
       await page.evaluate(() => window.releaseStartupGpu());
       await page.waitForFunction(() => window.startupFrames.length > 2);
       assert.ok((await page.evaluate(() => window.startupFrames)).every(frame => frame.ready && frame.single && !frame.inert));
@@ -65,13 +68,13 @@ try {
       let blocked = 0;
       await failed.route(target, route => { blocked++; return route.fulfill({ status: 504, body: 'Outdated Optimize Dep' }); });
       await failed.goto(base);
-      await failed.locator('#startup-fallback a').waitFor({state:'visible',timeout:5000});
+      await failed.locator('#startup-reload').waitFor({state:'visible',timeout:5000});
       // Dynamic imports can begin after the document's load event.
       assert.ok(blocked > 0, `failure injection must reach ${target}`);
       assert.equal(await failed.locator('#app').evaluate(el => el.inert), false);
       assert.equal(await failed.locator('#app').isVisible(), false);
       await failed.unroute(target);
-      await failed.locator('#startup-fallback a').click();
+      await failed.locator('#startup-reload').click();
       await failed.locator('#settings-open').waitFor({state:'visible'});
       assert.equal(await failed.locator('#startup-fallback').isVisible(), false);
       await failed.close();
@@ -82,11 +85,26 @@ try {
     built.on('pageerror', error => builtErrors.push(error.message));
     await built.route('**/assets/player-*.js', route => route.fulfill({status:504, headers:{'cache-control':'no-store'}, body:'Unavailable module'}));
     await built.goto(builtBase);
-    await built.locator('#startup-fallback a').waitFor({state:'visible', timeout:5000});
+    await built.locator('#startup-reload').waitFor({state:'visible', timeout:5000});
     assert.equal(await built.locator('#app').isVisible(), false);
-    await built.screenshot({path:`/tmp/voidplayer-startup-failure-${name}.png`});
+    for (const theme of ['dark', 'light']) {
+      await built.emulateMedia({ colorScheme: theme });
+      await built.reload();
+      await built.locator('#startup-reload').waitFor({state:'visible'});
+      assert.equal(await built.locator('html').getAttribute('data-theme'), theme);
+      for (const width of [320, 1280]) {
+        await built.setViewportSize({width, height:720});
+        const card = await built.locator('.startup-card').boundingBox();
+        assert.ok(card.x >= 0 && card.x + card.width <= width, 'failure card fits narrow and desktop widths');
+        assert.equal(await built.locator('#startup-title').textContent(), '启动未完成');
+        assert.equal(await built.locator('#startup-reload').evaluate(el => el.tagName), 'BUTTON');
+        await built.locator('#startup-reload').focus();
+        assert.equal(await built.locator('#startup-reload').evaluate(el => getComputedStyle(el).outlineStyle), 'solid');
+        await built.screenshot({path:`/tmp/voidplayer-startup-failure-${name}-${theme}-${width}.png`});
+      }
+    }
     await built.unroute('**/assets/player-*.js');
-    await built.locator('#startup-fallback a').click();
+    await built.locator('#startup-reload').click();
     await built.locator('#settings-open').waitFor({state:'visible'});
     assert.equal(await built.locator('#startup-fallback').isVisible(), false);
     assert.deepEqual(builtErrors, []);
@@ -101,7 +119,7 @@ try {
     await slow.goto(base, {waitUntil:'commit'});
     await slow.locator('#startup-fallback').waitFor({state:'attached'});
     await slow.clock.fastForward(15001);
-    await slow.locator('#startup-fallback a').waitFor({state:'visible'});
+    await slow.locator('#startup-reload').waitFor({state:'visible'});
     assert.equal(await slow.locator('#app').isVisible(), false);
     release();
     await slow.clock.resume();

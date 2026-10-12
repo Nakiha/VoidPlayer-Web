@@ -1,3 +1,4 @@
+import { installBitstreamControls } from './bitstream-controls.ts';
 import { t, msg } from '../i18n.ts';
 import { installSourceActivity } from './source-activity.ts';
 import { installTrackColumnResize } from './track-column-resize.ts';
@@ -6,6 +7,7 @@ import { installResizeGesture } from './resize-gesture.ts';
 import { installPanelMotion, animatePanelLayout } from './panel-motion.ts';
 import { installPanelResize } from './panel-resize.ts';
 import type { ReviewSession } from '../session.ts';
+import { SLOTS } from '../model.ts';
 import type { Slot } from '../model.ts';
 import { installAnnotationPanel } from './annotation-panel.ts';
 import { installLazyAnalysisPanel } from './analysis/lazy-panel.ts';
@@ -27,7 +29,6 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
   const catalog = new SourceCatalog(readHistory());
   const lifecyle = new AbortController();
-  installSourceActivity(session, lifecyle.signal);
   const workspace = $('workspace');
   installStartPanelResize($('start-panel'), lifecyle.signal);
   const trackColumns = installTrackColumnResize(document.querySelector<HTMLElement>('.subtrack-scroll')!, $('track-label-resize'), lifecyle.signal);
@@ -52,15 +53,23 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     renderSources: () => sources.renderSources(),
     resize: value => resize(value), dockHeight: () => dockHeight, annotationHeightDelta,
   };
+  const bitstream = installBitstreamControls(session,
+    Object.fromEntries(SLOTS.map(slot => [slot, $<HTMLCanvasElement>(`canvas-${slot}`)])) as Record<Slot, HTMLCanvasElement>, {
+      selected: () => view.selected,
+    });
   const tracks = createTracksPane(shared);
   const sources = createSourcesPane(shared);
   sources.wireSourceControls();
-  const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis });
+  installSourceActivity(session, lifecyle.signal, slot => { void act(() => sources.locateTrack(slot as Slot), 'ui.locate-track-source', { slot }); });
+  const analysis = installLazyAnalysisPanel(session, act, { signal: lifecyle.signal, isOpen: () => view.panels.analysis,
+    selectedSlot: () => view.selected,
+  });
 
   function select(slot: Slot) {
     view.selected = slot;
     tracks.resetInspectorSignature();
     render(session.getState());
+    analysis.refreshTarget();
   }
   function syncPanels() {
     for (const panel of ['inspector', 'subtracks', 'sources', 'analysis'] as Panel[]) {
@@ -109,6 +118,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
     if (!state.tracks.length && view.panels.analysis) { view.panels.analysis = false; syncPanels(); }
     session.inspectTrackMetadata(view.panels.inspector ? view.selected : null);
     if (view.panels.inspector) tracks.renderInspector(state);
+    bitstream.render(state);
     if (view.panels.subtracks) tracks.renderDock(state, annotations);
     const addMarkButton = $<HTMLButtonElement>('subtrack-add-mark');
     addMarkButton.disabled = !state.tracks.length;
@@ -157,6 +167,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   const applyAnalysisHeight = (value: number) => {
     const { min, max } = analysisBounds();
     analysisHeight = Math.round(Math.max(min, Math.min(max, value)));
+    workspace.style.setProperty('--analysis-min-height', `${min}px`);
     workspace.style.setProperty('--analysis-height', `${analysisHeight}px`);
     analysisResizer.setAttribute('aria-valuemin', String(min)); analysisResizer.setAttribute('aria-valuemax', String(max));
     analysisResizer.setAttribute('aria-valuenow', String(analysisHeight)); analysisResizer.setAttribute('aria-valuetext', t(msg("workbench.pixels", "{p0} 像素"), { p0: analysisHeight }));
@@ -178,7 +189,7 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
   resize(dockHeight); syncPanels();
   void sources.refreshLibrary();
   return {
-    localize() { tracks.localize(session.getState()); sources.localize(); syncPanels();
+    localize() { tracks.localize(session.getState()); sources.localize(); bitstream.localize(); syncPanels();
       resizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:dockHeight}));
       analysisResizer.setAttribute('aria-valuetext',t(msg('ui.pixelWidth','{width} 像素'),{width:analysisHeight})); },
     render, renderProgress, refreshLibrary: () => sources.refreshLibrary(), selected: () => view.selected,
@@ -196,6 +207,6 @@ export function installWorkbench(session: ReviewSession, act: Action, addMark: (
       await sources.finishRestore(browsing);
       await analysis.ready();
     },
-    dispose() { sources.markDisposed(); annotations.dispose(); lifecyle.abort(); },
+    dispose() { sources.markDisposed(); annotations.dispose(); bitstream.dispose(); lifecyle.abort(); },
   };
 }

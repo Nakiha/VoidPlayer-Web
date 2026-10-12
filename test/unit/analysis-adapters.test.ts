@@ -215,3 +215,17 @@ test('untimed FFmpeg packets remain addressable without inventing bitrate or tim
   assert.equal(ffmpegTicksToUs(-1n, 1, 2_000_000), 0);
   assert.equal(ffmpegTicksToUs(9_000_000_001n, 1, 90000), 100_000_000_011);
 });
+
+test('FFmpeg presentation batches expose only a contiguous decode-order frontier', async () => {
+  const { FfmpegPacketIndex } = await import('../../src/analysis/ffmpeg-adapter.ts');
+  const index = new FfmpegPacketIndex();
+  const batch = (ordinals: number[]) => {
+    const records = new Uint8Array(ordinals.length * 48), view = new DataView(records.buffer);
+    ordinals.forEach((au, i) => { view.setBigInt64(i * 48, BigInt(au * 100), true); view.setBigInt64(i * 48 + 8, BigInt(au * 100), true);
+      view.setInt32(i * 48 + 32, 100, true); view.setBigUint64(i * 48 + 40, BigInt(au), true); });
+    return records;
+  };
+  index.append(batch([0, 2, 3]), 1, 1000); assert.equal(index.summary.confirmedPackets, 1);
+  index.append(batch([1, 5]), 1, 1000); assert.equal(index.summary.confirmedPackets, 4);
+  index.append(batch([4]), 1, 1000); assert.equal(index.summary.confirmedPackets, 6);
+});

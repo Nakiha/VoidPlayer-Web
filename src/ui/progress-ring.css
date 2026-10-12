@@ -1,0 +1,10 @@
+/* Shared track progress: retain the SVG and animate only its stroke/rotation. */
+.analysis-progress-ring { display:block; width:20px; height:20px; transform:rotate(-90deg); fill:none; stroke:currentColor; stroke-width:2; }
+.analysis-progress-ring .ring-track { opacity:.2; }
+.analysis-progress-ring .ring-value { stroke-dasharray:100; stroke-dashoffset:var(--inspection-progress,100); stroke-linecap:round; transition:stroke-dashoffset .2s ease; }
+.analysis-track-progress { display:inline-flex; align-items:center; justify-content:flex-end; width:0; opacity:0; overflow:hidden; transition:width .24s ease,opacity .18s ease; }
+.analysis-track-progress .analysis-progress-ring { flex:none; color:var(--accent); }
+.analysis-track-progress.is-waiting .ring-value { stroke-dashoffset:75; }
+.analysis-track-progress.is-waiting .analysis-progress-ring { animation:inspection-spin 1.2s linear infinite; }
+@keyframes inspection-spin { to { transform:rotate(270deg); } }
+@media (prefers-reduced-motion:reduce) { .analysis-track-progress,.analysis-progress-ring .ring-value { transition:none; } .analysis-track-progress.is-waiting .analysis-progress-ring { animation:none; } }

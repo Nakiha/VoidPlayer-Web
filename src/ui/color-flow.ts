@@ -55,20 +55,18 @@ export function colorSettingsShell() {
         <button data-color-mode="reference" aria-pressed="false"><strong>${th(msg("colorFlow.managedColor", "自有色彩"))}</strong><span>${th(msg("colorOutput.managedConversion", "统一 SDR / HDR 转换"))}</span></button>
         <button data-color-mode="browser" aria-pressed="false"><strong>${th(msg("colorFlow.browserColor", "浏览器色彩"))}</strong><span>${th(msg("colorFlow.nativeFrameConversion", "沿用原生帧转换"))}</span></button>
       </div>
-      <div id="reference-decode-settings" class="color-decode-controls">
-        <span>${th(msg("colorFlow.decoder", "解码方式"))}</span><div id="reference-decoder" class="color-segmented segmented" role="group" aria-label="${th(msg("colorFlow.decoder", "解码方式"))}"><button data-reference-decoder="software" aria-pressed="false">${th(msg("colorFlow.software", "软件"))}</button><button data-reference-decoder="hardware" aria-pressed="false">${th(msg("colorFlow.preferHardware2", "硬件优先"))}</button></div>
-        <div id="hardware-depth-row"><label for="hardware-buffer-depth">${th(msg("colorFlow.buffer", "缓冲"))}</label><button id="hardware-buffer-depth" class="settings-choice" aria-label="${th(msg("colorFlow.hardwareBufferDepth", "硬件缓冲深度"))}"></button></div>
+      <div id="reference-decode-settings">
+        <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorFlow.decoder", "解码方式"))}</span><div id="reference-decoder" class="color-segmented segmented" role="group" aria-label="${th(msg("colorFlow.decoder", "解码方式"))}"><button data-reference-decoder="software" aria-pressed="false">${th(msg("colorFlow.software", "软件"))}</button><button data-reference-decoder="hardware" aria-pressed="false">${th(msg("colorFlow.preferHardware2", "硬件优先"))}</button></div></div>
       </div>
       <figure class="color-flow"><figcaption>${th(msg("colorFlow.frameDataFlow", "帧数据流"))} <span>${th(msg("colorFlow.pathOverview", "路径示意"))}</span></figcaption><div id="color-flow-diagram"></div></figure>
       <p id="color-mode-description" class="color-flow-note" role="status"></p>
-      <div class="color-decode-controls"><span>${th(msg("colorOutput.displayTarget", "显示目标"))}</span><div id="color-output-target" class="color-segmented segmented" role="group" aria-label="${th(msg("colorOutput.displayTarget", "显示目标"))}"><button data-color-target="sdr" aria-pressed="false">SDR</button><button data-color-target="hdr" aria-pressed="false">HDR</button></div></div>
-      <div class="color-decode-controls"><label for="hdr-source-peak">${th(msg("colorOutput.assumedPeak", "HDR 假定峰值"))}</label><button id="hdr-source-peak" class="settings-choice"></button></div>
+      <div id="hardware-depth-row" class="color-setting-row settings-key-value-row" hidden><label for="hardware-buffer-depth">${th(msg("colorFlow.hardwareBufferDepth", "硬件缓冲深度"))}</label><button id="hardware-buffer-depth" class="settings-choice"></button></div>
+      <div class="color-setting-row settings-key-value-row"><span>${th(msg("colorOutput.displayTarget", "显示目标"))}</span><div id="color-output-target" class="color-segmented segmented" role="group" aria-label="${th(msg("colorOutput.displayTarget", "显示目标"))}"><button data-color-target="sdr" aria-pressed="false">SDR</button><button data-color-target="hdr" aria-pressed="false">HDR</button></div></div>
+      <div id="hdr-source-peak-row" class="color-setting-row settings-key-value-row" hidden><label for="hdr-source-peak">${th(msg("colorOutput.assumedPeak", "HDR 假定峰值"))}</label><button id="hdr-source-peak" class="settings-choice"></button></div>
       <p id="color-output-description" class="color-flow-note" role="status"></p>
     </div>
   </div>
-  <div class="settings-section"><h4 class="settings-section-title">${th(msg("colorFlow.currentRuntime", "当前运行"))}</h4><div class="settings-group">
-    <div id="performance-current" class="color-runtime-row" hidden><div id="color-runtime-tracks"></div><p class="evidence"><span id="alignment"></span><span id="decode"></span></p></div>
-    <div class="settings-action-row"><div><h4>${th(msg("colorFlow.playbackSmoothness", "播放流畅度"))}</h4><p>${th(msg("colorFlow.playFromTheStartThenPauseAfter", "从头播放，检查后暂停。"))}</p></div><button id="benchmark">${th(msg("colorFlow.runCheck", "开始检查"))}</button></div>
-  </div></div>
-  <div id="benchmark-result" class="color-benchmark-result" hidden><p id="benchmark-summary" role="status"></p><section><h4 class="settings-section-title">${th(msg("colorFlow.checkResults", "检查结果"))}</h4><textarea id="benchmark-json" aria-label="${th(msg("colorFlow.playbackPerformanceReportJson", "播放性能报告 JSON"))}" readonly rows="8"></textarea></section></div>`;
+  <div id="color-runtime-section" class="settings-section" hidden><h4 class="settings-section-title">${th(msg("colorFlow.currentRuntime", "当前运行"))}</h4><div class="settings-group">
+    <div id="performance-current" class="color-runtime-row"><div id="color-runtime-tracks"></div><p class="evidence"><span id="alignment"></span><span id="decode"></span></p></div>
+  </div></div>`;
 }

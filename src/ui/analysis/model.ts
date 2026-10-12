@@ -4,7 +4,7 @@ import { niceCeiling, shouldBucketize } from '../../analysis/statistics.ts';
 import { groupSamples } from '../../analysis/grouping.ts';
 import type { GroupSampleRef, TimeGroup } from '../../analysis/grouping.ts';
 import { coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth } from '../../analysis/inspection.ts';
-import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples } from '../analysis-geometry.ts';
+import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, chartBarWidth } from '../analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from '../analysis-geometry.ts';
 import { computeLayout, desiredHeight } from '../analysis-canvas.ts';
 import type { CanvasColors, CanvasModel, CanvasTrack } from '../analysis-canvas.ts';
@@ -13,9 +13,9 @@ import type { AnalysisPreferences } from './preferences.ts';
 const GROUP_TOLERANCE_US = 2000;
 /** Pure chart model: statistics, LOD and glyph identity share one geometry.
  * DOM measurement and drawing stay in the panel. */
-export function buildAnalysisModel({ sel, results, prefs, range, width, availableHeight, slotColors, colors, rubber }: {
-  sel: { slot: Slot; mediaId: string }[]; results: Map<Slot, AnalysisResult>; prefs: AnalysisPreferences;
-  range: { start: number; end: number }; width: number; availableHeight: number;
+export function buildAnalysisModel({ sel, results, prefs, range, width, availableHeight, compact = false, showTimeAxis = true, slotColors, colors, rubber }: {
+  sel: { slot: Slot; mediaId: string; frameIntervalUs?: number }[]; results: Map<Slot, AnalysisResult>; prefs: AnalysisPreferences;
+  range: { start: number; end: number }; width: number; availableHeight: number; compact?: boolean; showTimeAxis?: boolean;
   slotColors: Map<Slot, string>; colors: CanvasColors; rubber: { a: number; b: number } | null;
 }): (CanvasModel & { glyphs: AnalysisGlyph[]; groups: TimeGroup[] }) | null {
   if (!sel.length) return null;
@@ -109,13 +109,13 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
   if (!canvasTracks.length) return null;
   const groups: TimeGroup[] = useRaw ? preGroups : [];
   const rows = prefs.showSize ? (merged ? 1 : canvasTracks.length) : 0;
-  const need = desiredHeight(prefs.showBitrate, rows);
+  const need = desiredHeight(prefs.showBitrate, rows, compact, showTimeAxis);
   const height = Math.max(availableHeight || 220, need);
   const viewEnd = Math.max(range.start + 1, range.end);
   // 统一几何：组宽来自公共时间组，缺席留空；绘图与命中共用。
   // 行高与绘制共用 computeLayout，不复制公式；先算布局，再按行生成 glyph。
   const layoutProbe: CanvasModel = {
-    width, height, viewStart: range.start, viewEnd,
+    width, height, compact, showTimeAxis, viewStart: range.start, viewEnd,
     showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,
     tracks: canvasTracks, merged,
     yMaxBitrate: 0, yMaxSize: 0, colors, rubber,
@@ -169,7 +169,9 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
         const bases = [...baseBySlot.values()];
         const baseMin = bases.length ? Math.min(...bases) : null;
         const timePerPx = span / Math.max(1, plotW);
-        const needed = timePerPx * 2 * lanes;
+        const cadenceUs = Math.min(...sel.map(track => track.frameIntervalUs ?? 33_333));
+        const cadenceWidth = chartBarWidth(cadenceUs / timePerPx / lanes);
+        const needed = Math.max(timePerPx * 2 * lanes, cadenceWidth / .7 * lanes * timePerPx);
         // 公共目标只定一次：找同时是所有 base 整数倍、>= needed 的最小宽度
         //（有界，避免 10ms/11ms 之类组合爆出巨桶）。找不到则整体回退。
         const coarseWidth = bases.length && baseMin != null && needed > baseMin
@@ -214,7 +216,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
         bucketGlyphs = layoutMergedBuckets(bucketsBySlot, {
           trackOrder: sel.map(t => t.slot),
           viewStart: range.start, viewEnd, gutter: layout.gutter, plotW: layout.plotW, rowY, rowH, yMaxSize: yMaxSizeNice,
-          scale: 'linear',
+          scale: 'linear', barWidthPx: cadenceWidth,
         });
       }
     } else {
@@ -248,7 +250,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
     }
   }
   return {
-    width, height,
+    width, height, compact, showTimeAxis,
     viewStart: range.start, viewEnd,
     // 多轨主体色恒为轨道色（与曲线/表头一致），关键只用顶端菱形/K 标记。
     showBitrate: prefs.showBitrate, showSize: prefs.showSize, colorByType: false,

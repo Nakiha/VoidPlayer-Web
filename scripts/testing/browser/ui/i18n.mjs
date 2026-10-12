@@ -193,7 +193,8 @@ await withBrowserFixture({caseName:'i18n-dialogs',engine,pageOptions:{viewport:{
  await cancel.evaluate(e=>{e.focus();window.__cancel=e;});await switchLanguage('en');
  assert.equal(await sampleRow.locator('[data-action=cancel-load]').getAttribute('aria-label'),'Cancel load: sample.mp4');
  assert.equal(await sampleRow.locator('[data-action=cancel-load]').evaluate(e=>e===window.__cancel&&e===document.activeElement),true);
- assert.match(await page.locator('#source-activity-stage').innerText(),/Reading video information/i);
+ assert.equal(await page.locator('#source-activity-details').isVisible(),false,'loading details remain collapsed by default');
+ assert.match(await page.locator('#source-activity-track-A').getAttribute('aria-description'),/Reading video information/i);
  await switchLanguage('zh-CN');assert.equal(await cancel.evaluate(e=>e===window.__cancel),true);await cancel.click();
  for(const route of stalled)await route.abort();await page.unroute(`**/api/media/${sample.id}?*`);
  await page.evaluate(async id=>{await window.voidPlayer.tools.find(t=>t.name==='load_library_item').execute({slot:'A',id});},library.entries.find(e=>e.name==='sample.mp4').id);

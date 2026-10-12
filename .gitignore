@@ -2,7 +2,8 @@ node_modules/
 dist/
 /fixtures/
 *.tsbuildinfo
-public/vendor/voidplayer-core/
+public/vendor/voidplayer-core
+public/vendor/voidplayer-analysis
 logs/
 
 voidplayer.config.json

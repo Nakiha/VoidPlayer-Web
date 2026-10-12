@@ -43,6 +43,7 @@ export function installChoiceMenu(id:string, choices:Choice[] | (() => Choice[])
   dialog?.addEventListener('close', controller.close);
   dialog?.addEventListener('settings-pane-change', controller.close);
   return {
+    close: controller.close,
     setOptions(next: Choice[] | (() => Choice[])) { choices = next; updateOptions(typeof next === 'function' ? next() : next); },
     sync(next:string,text:string,enabled:boolean) { menu.setAttribute('aria-label',button.getAttribute('aria-label') ?? ''); value=next;label.textContent=text; if (sample && next) { const current = preview!(next); sample.replaceChildren(...current.childNodes); sample.style.cssText = current.style.cssText; }button.disabled=!enabled; if(!enabled)controller.close();buttons.forEach((b,i)=>{if(!options[i].action)b.setAttribute('aria-checked',String(options[i].value===value));}); },
     dispose() { stopLanguage(); dialog?.removeEventListener('close', controller.close); dialog?.removeEventListener('settings-pane-change', controller.close); controller.dispose(); menu.remove(); },
@@ -54,4 +55,31 @@ export function strokePreview(value: string) {
   const line = document.createElement('span'); line.className = 'stroke-sample';
   line.setAttribute('aria-hidden', 'true'); line.style.height = `${Number(value)}px`;
   return line;
+}
+
+/** Checkbox choices stay open for several selections; Escape and light dismissal still close. */
+export function installMultiChoiceMenu(id: string, choices: () => Choice[], toggle: (value: string) => void) {
+  const button = document.getElementById(id) as HTMLButtonElement;
+  const menu = document.createElement('div'); menu.id = `${id}-menu`; menu.className = 'choice-menu multi-choice-menu';
+  document.body.append(menu);
+  const label = document.createElement('span'); button.replaceChildren(label); button.insertAdjacentHTML('beforeend', icon('down'));
+  let selected = new Set<string>();
+  const buttons = choices().map(option => {
+    const item = document.createElement('button'); item.type = 'button'; item.dataset.value = option.value;
+    item.setAttribute('role', 'menuitemcheckbox'); item.setAttribute('aria-checked', 'false');
+    const check = document.createElement('span'); check.className = 'choice-check'; check.setAttribute('aria-hidden', 'true'); check.textContent = '✓';
+    const text = document.createElement('span'); text.textContent = option.label; item.append(check, text);
+    item.onclick = () => toggle(option.value); menu.append(item); return item;
+  });
+  const controller = installMenu(button, menu, { closeOnSelect: false, selected: () => buttons.find(item => selected.has(item.dataset.value!)) });
+  const localize = () => { const options = choices(); buttons.forEach((item, i) => { item.lastElementChild!.textContent = options[i].label; }); };
+  const stopLanguage = onLanguageChange(localize);
+  return {
+    sync(values: Iterable<string>, text: string) {
+      selected = new Set(values); label.textContent = text; localize();
+      menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? '');
+      buttons.forEach(item => item.setAttribute('aria-checked', String(selected.has(item.dataset.value!))));
+    },
+    dispose() { stopLanguage(); controller.dispose(); menu.remove(); },
+  };
 }

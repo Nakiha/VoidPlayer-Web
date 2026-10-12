@@ -1,3 +1,4 @@
+import { inspectPacketPicture } from './packet-picture.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
@@ -6,6 +7,7 @@ import { packetDecodeError } from './flv-decoder.ts';
  * frame. Only receive() establishes display PTS; playback drains real outputs. */
 export class PacketTimeline {
   private cursor=0;
+  private pictures = new Map<number, import('./packet-picture.ts').PacketPicture>();
   private configuration=-1;
   private drained=false;
   private started=false;
@@ -22,14 +24,15 @@ export class PacketTimeline {
   index:FlvIndex;
   readonly decoder:PacketDecoder;
   readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
-  constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>){this.index=index;this.decoder=decoder;this.read=read;}
+  private identifyPictures:boolean;
+  constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>,identifyPictures=false){this.identifyPictures=identifyPictures;this.index=index;this.decoder=decoder;this.read=read;}
   replaceIndex(index:FlvIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
       if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,description:this.index.configurations?.[id]??this.index.description});
       this.configuration=id;
     }
-    this.decoder.reset();this.drained=false;
+    this.pictures.clear();this.decoder.reset();this.drained=false;
   }
   private async start(target:number){
     this.pending?.frame?.close();this.pending=null;
@@ -54,7 +57,8 @@ export class PacketTimeline {
       if(frame){
         if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
         if(frame.pts===this.lastPts){frame.frame?.close();continue;}
-        this.lastPts=frame.pts;return frame;
+        this.lastPts=frame.pts;
+        frame.packetPicture=this.pictures.get(frame.pts);this.pictures.delete(frame.pts);return frame;
       }
       const packet=this.index.packets[this.cursor];
       if (!packet && this.growth) { await this.growth(); continue; }
@@ -68,7 +72,15 @@ export class PacketTimeline {
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
       if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
-      if (await this.decoder.send(await this.read(packet),packet) !== false) this.cursor++;
+      const bytes=await this.read(packet);
+      if (this.identifyPictures && this.pictures.size < 512) {
+        const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);
+        let lo=0,hi=this.index.order.length;
+        while(lo<hi){const m=(lo+hi)>>>1;if(this.index.packets[this.index.order[m]].pts<packet.pts)lo=m+1;else hi=m;}const position=lo;
+        const unique=position>=0 && (position===0||this.index.packets[this.index.order[position-1]].pts!==packet.pts) && (position+1===this.index.order.length||this.index.packets[this.index.order[position+1]].pts!==packet.pts);
+        if(evidence.singlePicture&&unique)this.pictures.set(packet.pts,{au:packet.sequenceNumber??this.cursor,configuration:this.configuration,stream:'video'});
+      }
+      if (await this.decoder.send(bytes,packet) !== false) this.cursor++;
     }
   }
   private anchor=0;

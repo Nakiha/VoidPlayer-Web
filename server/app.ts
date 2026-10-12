@@ -1,3 +1,5 @@
+import { AnalysisScheduler } from './analysis/scheduler.ts';
+import { handleAnalysisRoutes } from './analysis/routes.ts';
 import { randomUUID } from 'node:crypto';
 import { guestActor, browserUserId } from './identity.ts';
 import { createServer } from 'node:http';
@@ -44,6 +46,7 @@ export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots);
   if (!options.library) library.start();
+  const analysis = new AnalysisScheduler(library, process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(),'public'),'vendor/voidplayer-analysis'), library.analysisDirectory);
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
@@ -82,6 +85,7 @@ export function createMediaServer(options: ServerOptions): Server {
       const url = new URL(req.url ?? '/', 'http://localhost');
       if (await handleConnectionRoutes(ctx, req, res, url)) return;
       if (await handleStateRoutes(ctx, req, res, url)) return;
+      if (await handleAnalysisRoutes(ctx,req,res,url,analysis)) return;
       if (await handleContentRoutes(ctx, req, res, url)) return;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
         sendJson(res, 405, { error: 'read only' }); return;
@@ -105,6 +109,7 @@ export function createMediaServer(options: ServerOptions): Server {
     }
   };
   const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
+  server.on('close',()=>{void analysis.close();});
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   if (!options.library) server.on('close', () => { void library.close(); });
   return server;

@@ -142,7 +142,7 @@ node scripts/bench-playback.mjs chromium
 
 `BASE_URL` 选择服务地址，`BENCH_REPEATS` 默认 3，`BENCH_DURATION_MS` 默认 8000。`--headless` 为离屏自动化运行。场景和阈值分别以 `scripts/bench-playback.mjs`、`src/benchmark.ts` 为准。
 
-应用内“设置 → 色彩与解码 → 播放流畅度”的检查、Agent `benchmark_review` 和脚本共用同一个实现。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
+播放基准通过 Agent `benchmark_review` 和脚本运行，设置页不提供手动检查入口。它检查呈现帧、速度、等待、卡顿、同步和暂停后的旧帧；失败场景使脚本返回非零退出码。
 
 远程 HTTP 现在进入连接准备页，不再启动播放器或 WASM。对应检查为：
 
@@ -261,3 +261,5 @@ npm run test:fate:browser
 历史帧契约验收见 [frame-contract-acceptance.json](frame-contract-acceptance.json)，其中包含未达门槛的性能结果。界面重做基准保留在 [2026-09-06 原始报告](../.design/2026-09-06/)，均不代表当前版本验收。
 
 2026-09-12 本机编码矩阵的原始产物位于 `artifacts/local-codecs-2026-09-12/`（`report.json`、`chromium-4k-recheck.json`、`exact-recheck/report.json`）；这些产物未提交，当前 checkout 无法直接复核。历史记录中的载入/定位通过不等于首次播放全部通过，后续 4K 软件复测也不能抹去首次失败或推广为稳定性能保证。需要重新取证时使用 `scripts/check-local-codec-matrix.mjs`，按其 `CODEC_FILES`、`CODEC_BROWSER`、`CODEC_MODE` 和 `CODEC_REPEATS` 配置明确输入与环境。
+
+配对 HTTPS 对照在隔离目录构建固定 PR base，并把 feature 的三个公共测试脚本同步到 baseline；两边的应用代码保持各自版本。执行前仍强制检查脚本、媒体及 WASM 的字节一致，报告保存实际 harness SHA-256，采用 baseline-feature-feature-baseline 次序。`perf-https-pair` 在自己的套件中为 required：启动或测量失败使套件 `passed=false`。CI job 保留性能测量的 informational 定位，但显式输出失败与原始证据，不能用绿色外层 job 推断无回归。

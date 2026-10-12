@@ -1,5 +1,5 @@
 import { fetchLibraryPage, LibraryChangedError } from '../library.ts';
-import type { LibraryPage } from '../library.ts';
+import type { LibraryPage, LibraryEntry } from '../library.ts';
 import { installChoiceMenu } from './choice-menu.ts';
 import { onLanguageChange, t, msg , th } from '../i18n.ts';
 import { createIconButton } from './controls.ts';
@@ -169,6 +169,25 @@ export function installLibraryBrowser(change: (page: LibraryPage | null) => void
       page = null; appliedScope = ''; appliedSearch = search; pendingSearch = false;
       render();
       await load(false, true);
+    },
+    async reveal(entry: LibraryEntry) {
+      clearTimeout(searchTimer); request?.abort(); sequence++;
+      root = entry.rootId ?? ''; directory = entry.name.includes('/') ? entry.name.slice(0, entry.name.lastIndexOf('/')) : '';
+      search = ''; all = false; recent = false;
+      input.value = ''; page = null; appliedScope = ''; appliedSearch = ''; pendingSearch = false; render();
+      let append = false;
+      do {
+        const previousOffset = (page as LibraryPage | null)?.nextOffset;
+        const pending = load(append, !append), ticket = sequence;
+        await pending;
+        // A newer navigation wins over this locate request.
+        if (signal.aborted || sequence !== ticket) return false;
+        const current = page as LibraryPage | null; // load publishes asynchronously.
+        if (current?.entries.some(item => item.id === entry.id)) return true;
+        if (append && current?.nextOffset === previousOffset) return false;
+        append = true;
+      } while ((page as LibraryPage | null)?.nextOffset != null);
+      return false;
     },
     navigate, page: () => page, filter: () => appliedSearch,
     load: () => load(),

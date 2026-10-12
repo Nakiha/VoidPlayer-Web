@@ -10,6 +10,11 @@ import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 
+
+async function toggleSize(page) {
+  await page.locator('#analysis-diagrams [data-value="size"]').click();
+}
+
 const engineName = process.argv[2] ?? 'webkit';
 assert.ok(['webkit', 'chromium'].includes(engineName), 'Expected webkit or chromium');
 const root = path.resolve(import.meta.dirname, '..');
@@ -53,7 +58,7 @@ try {
   browser = await (engineName === 'webkit' ? webkit : chromium).launch({ headless: true });
   page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 800 } });
   // 测试快照钩子只在 QA 显式启用时构建，生产 hover 不为测试付费。
-  await page.addInitScript(() => { window.__vpAnalysisQA = true; });
+  await page.addInitScript(() => { window.__vpAnalysisQA = true; localStorage.setItem('voidplayer.chart-hover-style', 'combined'); });
   page.setDefaultTimeout(30000);
   const errors = [];
   const decoderNotices = [];
@@ -208,6 +213,25 @@ try {
     `smooth zoom width jumped: ${JSON.stringify(smoothWidths)}`);
   await saveDiagnostics(page, 'smooth-width', { smoothWidths });
   await page.locator('[data-seg="full"]').click();
+  // Wait for the full-range render before using its span as the pinch baseline.
+  await page.waitForFunction(() => { const v = window.__vpAnalysis?.view; return v?.start < 0 && v?.end === window.voidPlayer.getState().durationUs; });
+  // Safari trackpad pinch uses native gesture events rather than Ctrl+wheel.
+  const pinchBefore = await page.evaluate(() => ({ view: window.__vpAnalysis.view, positionUs: window.voidPlayer.getState().positionUs }));
+  await page.evaluate(() => {
+    const c = document.getElementById('analysis-canvas'), rect = c.getBoundingClientRect();
+    for (const [type, scale] of [['gesturestart', 1], ['gesturechange', 2], ['gestureend', 2]]) {
+      const e = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(e, { scale, clientX: rect.x + rect.width * .5 }); c.dispatchEvent(e);
+      if (!e.defaultPrevented) throw new Error('native chart pinch was not handled');
+    }
+  });
+  await page.waitForFunction(before => {
+    const v = window.__vpAnalysis.view;
+    return Math.abs((v.end - v.start) / (before.end - before.start) - .5) < .001;
+  }, pinchBefore.view);
+  assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), pinchBefore.positionUs, 'native pinch does not seek');
+  await page.locator('[data-seg="full"]').click();
+
   await page.evaluate(async () => {
     const remove = window.voidPlayer.tools.find(t => t.name === 'remove_review_track');
     await remove.execute({ slot: 'A' }); await remove.execute({ slot: 'B' });
@@ -319,6 +343,34 @@ try {
     return item?.querySelector('.st-num')?.textContent === '#12';
   });
 
+  // A single left-hand time basis drives chart queries, numbering and frame-number seeks.
+  assert.equal(await page.locator('#analysis-axis').count(), 1);
+  assert.equal(await page.locator('.analysis-tools #analysis-axis').count(), 1);
+  assert.equal(await page.locator('#analysis-status [data-axis], #analysis-num-axis, #analysis-axis-menu').count(), 0);
+  const beforeAxisChange = await page.evaluate(() => window.voidPlayer.getState().positionUs);
+  await page.locator('#analysis-axis [data-axis="dts"]').click();
+  await page.waitForFunction(() => window.__vpAnalysis?.axis === 'dts');
+  assert.equal(await page.locator('#analysis-axis [data-axis="dts"]').getAttribute('aria-pressed'), 'true');
+  assert.match(await frameNumber.getAttribute('aria-label'), /DTS序帧号/);
+  assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), beforeAxisChange, 'changing basis does not seek');
+  const decodeTarget = await page.evaluate(async () => {
+    const result = await window.voidPlayer.tools.find(tool => tool.name === 'query_analysis').execute({ slot:'B', axis:'dts', startUs:-1000000, endUs:10000000, pixelWidth:2000 });
+    const sample = result.samples.find(sample => sample.decodeOrdinal >= 12 && sample.effectivePtsUs != null);
+    return sample ? { target:sample.effectivePtsUs, number:sample.decodeOrdinal } : null;
+  });
+  assert.ok(decodeTarget && Number.isFinite(decodeTarget.target), 'fixture has a presentable decode-order target');
+  await frameNumber.click();
+  const decodeInput = page.getByRole('textbox', { name:'轨道 B DTS序帧号' });
+  await decodeInput.fill(String(decodeTarget.number)); await decodeInput.press('Enter');
+  await page.waitForFunction(expected => window.voidPlayer.getState().tracks.find(track => track.slot === 'B')?.frame?.ptsUs === expected, decodeTarget.target);
+  await page.waitForFunction(number => [...document.querySelectorAll('#analysis-status-items .st-item')].find(item => item.querySelector('.st-slot')?.textContent === 'B')?.querySelector('.st-num')?.textContent === '#' + number, decodeTarget.number);
+  const unifiedSnapshot = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'export_workspace').execute({}));
+  assert.equal(unifiedSnapshot.layout.analysisView.axis, 'dts');
+  assert.equal(unifiedSnapshot.layout.analysisView.numAxis, 'dts');
+  await page.locator('#analysis-axis [data-axis="pts"]').click();
+  await page.waitForFunction(() => window.__vpAnalysis?.axis === 'pts');
+  assert.match(await frameNumber.getAttribute('aria-label'), /PTS序帧号/);
+
   // Agent 查询口径：压缩字节总数与文件大小一致（1752B 级小文件除外，按总和校验大文件）。
   const stats = await page.evaluate(async () => {
     const q = window.voidPlayer.tools.find(t => t.name === 'query_analysis');
@@ -357,8 +409,8 @@ try {
   assert.ok(Math.abs(bodyBox.width - box.width) <= 2, `图表应占满面板宽：body=${bodyBox.width} canvas=${box.width}`);
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5);
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 10000 });
-  const tip0 = await page.locator('.analysis-card').textContent();
-  assert.match(tip0, /码率/);
+  const tip0 = await page.locator('.analysis-linked-card').textContent();
+  assert.match(tip0, /展示负载率/);
   assert.match(tip0, /帧率|样本率/);
   assert.match(tip0, /帧大小/);
   // 单位常驻；无邻近说明、无直击摘要、无近似后缀。
@@ -376,7 +428,7 @@ try {
   await page.waitForTimeout(400);
   const fl = await page.evaluate(() => window.__vpAnalysis.float);
   assert.ok(fl, '悬停时卡片应可见');
-  assert.match(await page.locator('.analysis-card .fl-time').textContent(), /\d\d:\d\d\.\d\d\d/);
+  assert.match(await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent(), /\d\d:\d\d\.\d\d\d/);
   assert.ok(fl.x >= box.x - 1 && fl.x + fl.width <= box.x + box.width + 1, `卡片横向不出绘图区：${JSON.stringify(fl)}`);
   assert.ok(fl.y >= box.y + box.height - 4, `卡片应在横轴下方、不盖图表与轴数字：${JSON.stringify(fl)}`);
   assert.ok(Math.abs((fl.x + fl.width / 2) - mx) <= fl.width / 2 + 8, '卡片水平以鼠标为中心');
@@ -387,15 +439,15 @@ try {
   // 等待测试快照：布局 glyph 就绪。
   await page.waitForFunction(() => window.__vpAnalysis?.glyphs?.length > 0, undefined, { timeout: 30000 });
   // 只开码率图：隐藏帧大小行，鼠标在曲线上仍能读两轨码率。
-  const sizePressed = await page.locator('[data-seg="size"]').getAttribute('aria-pressed');
-  if (sizePressed === 'true') await page.locator('[data-seg="size"]').click();
+  const sizePressed = await page.locator('#analysis-diagrams [data-value="size"]').getAttribute('aria-pressed');
+  if (sizePressed === 'true') await toggleSize(page);
   // 取两轨重叠区（A 约 4s、B 约 10s，选 25% 宽度 ≈2.5s，两轨都在覆盖内）。
   await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.25);
   await page.waitForTimeout(400);
   const bitrateOnly = await page.evaluate(() => window.__vpAnalysis.inspection);
   assert.ok(bitrateOnly && bitrateOnly.tracks.length === 2, '两轨检查状态');
   assert.ok(bitrateOnly.tracks.every(t => t.bitrate != null), `只开码率图两轨码率可用：${JSON.stringify(bitrateOnly.tracks)}`);
-  if (sizePressed === 'true') await page.locator('[data-seg="size"]').click();
+  if (sizePressed === 'true') await toggleSize(page);
   // 同一 x 在码率行内上下移动（均不命中单样本柱）：公共时间与各轨码率不变。
   await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.15);
   await page.waitForTimeout(400);
@@ -431,7 +483,7 @@ try {
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
 
   // 放大到逐样本后，单击指定 B 柱：必须命中 B 的 sampleId 与可信展示 PTS。
   // 固定夹具、固定目标、固定操作；失败保留现场并直接断言，不换目标重试。
@@ -472,26 +524,27 @@ try {
   assert.equal(statePos, clicked.axisUs, `position=${statePos} axis=${clicked.axisUs}`);
 
   await page.locator('#analysis-canvas').dblclick();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：开', undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view === null, undefined, { timeout: 15000 });
 
   // 滚轮平移：先框选放大，再滚轮，同一像素下的时间变化，且跟随关闭。
   await page.mouse.move(box.x + box.width * 0.3, box.y + box.height * 0.5);
   await page.mouse.down();
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
   await page.mouse.move(box.x + box.width * 0.4, box.y + box.height * 0.5);
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 15000 });
-  const t0 = await page.locator('.analysis-card .fl-time').textContent();
-  await page.mouse.wheel(0, 400);
-  await page.waitForFunction(prev => document.querySelector('.analysis-card .fl-time')?.textContent !== prev, t0, undefined, { timeout: 10000 });
-  assert.equal(await page.locator('[data-seg="follow"]').textContent(), '跟随：关');
+  const t0 = await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent();
+  // Horizontal wheel pans time even when the chart stack can scroll vertically.
+  await page.mouse.wheel(400, 0);
+  await page.waitForFunction(prev => document.querySelector('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])')?.textContent !== prev, t0, undefined, { timeout: 10000 });
+  assert.equal(await page.locator('[data-seg="follow"]').count(), 0, 'removed follow control stays absent');
   // Ctrl+滚轮（触摸板捏合）：以 hover 为中心缩放，不报错且悬停可用。
   await page.keyboard.down('Control');
   await page.mouse.wheel(0, -400);
   await page.keyboard.up('Control');
   await page.waitForTimeout(1000);
-  assert.match(await page.locator('.analysis-card .fl-time').textContent(), /\d\d:\d\d\.\d\d\d/);
+  assert.match(await page.locator('.analysis-linked-card .analysis-card-track-time:not([data-hit-time=""])').first().textContent(), /\d\d:\d\d\.\d\d\d/);
   await page.locator('#analysis-canvas').dblclick();
   await page.waitForTimeout(500);
 
@@ -600,8 +653,8 @@ try {
   await page.mouse.down();
   await page.mouse.move(box2.x + box2.width * 0.55, box2.y + box2.height * 0.5, { steps: 8 });
   await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('[data-seg="follow"]').textContent === '跟随：关', undefined, { timeout: 15000 });
-  await page.locator('[data-seg="size"]').click();
+  await page.waitForFunction(async () => (await window.voidPlayer.tools.find(t => t.name === 'export_workspace').execute({})).layout.analysisView.view !== null, undefined, { timeout: 15000 });
+  await toggleSize(page);
   const exported = await page.evaluate(async () => {
     const t = window.voidPlayer.tools.find(t => t.name === 'export_workspace');
     return await t.execute({});
@@ -610,9 +663,11 @@ try {
   assert.ok(exported.layout.analysisView.view, '应记录放大的区间');
   assert.equal(exported.layout.analysisView.showSize, false);
   const savedView = exported.layout.analysisView.view;
+  // Old workspaces may have a separate number order; the chart axis now wins.
+  exported.layout.analysisView.numAxis = 'dts';
   // 改动面板后再导入：视图与开关状态应还原。
   await page.locator('#analysis-canvas').dblclick();
-  await page.locator('[data-seg="size"]').click();
+  await toggleSize(page);
   await page.evaluate(async (doc) => {
     await window.voidPlayer.tools.find(t => t.name === 'import_workspace').execute({ document: doc });
   }, exported);
@@ -641,7 +696,9 @@ try {
   await page.waitForFunction(() => window.__vpAnalysis?.inspection, undefined, { timeout: 60000 });
   const restoredView = await page.evaluate(() => window.__vpAnalysis.view);
   assert.deepEqual(restoredView, savedView, '导入后分析视图区间应还原');
-  assert.equal(await page.locator('[data-seg="size"]').getAttribute('aria-pressed'), 'false', '导入后帧大小开关应还原');
+  assert.equal(await page.locator('#analysis-diagrams [data-value="size"]').getAttribute('aria-pressed'), 'false', '导入后帧大小开关应还原');
+  assert.match(await page.locator('#analysis-status').getAttribute('aria-label'), /PTS序/);
+  assert.equal(await page.locator('#analysis-axis [data-axis="pts"]').getAttribute('aria-pressed'), 'true');
 
   assert.deepEqual(errors, []);
   // 成功截图写入固定诊断目录（CI 按目录上传），同时校验落盘存在。

@@ -10,6 +10,7 @@ import type { AnalysisGlyph, SampleGlyph, BucketGlyph } from '../analysis-geomet
 import type { createInspectionController } from './inspection-state.ts';
 import { MIN_ANALYSIS_SPAN_US as MIN_SPAN_US } from './shared.ts';
 import type { AnalysisAction } from './shared.ts';
+import { installChartNavigation } from './chart-navigation.ts';
 
 export interface AnalysisGestureScene {
   readonly open: boolean; readonly lastModel: CanvasModel | null;
@@ -24,8 +25,8 @@ export interface AnalysisGestureScene {
 export function installAnalysisGestures(options: {
   signal: AbortSignal; canvas: HTMLCanvasElement; session: ReviewSession; act: AnalysisAction;
   live: HTMLElement; hoverEl: HTMLElement; inspection: ReturnType<typeof createInspectionController>;
-  scene: AnalysisGestureScene;
-  setView(start: number | null, end?: number, follow?: boolean): void;
+  scene: AnalysisGestureScene; retainHoverOnLeave?(event: PointerEvent): boolean;
+  setView(start: number | null, end?: number): void;
   render(): void; renderRubber(): void; positionHover(): void;
   updateInspection(x: number, y: number): void; renderFloat(snapshot: InspectionState | null, x: number | null): void;
   refreshOverlay(): void; publishTestHook(): void; pickAt(x: number, y: number): AnalysisGlyph | null;
@@ -102,7 +103,7 @@ export function installAnalysisGestures(options: {
     if (wasSelecting && scene.rubber) {
       const a = Math.min(scene.rubber.a, scene.rubber.b), b = Math.max(scene.rubber.a, scene.rubber.b);
       scene.rubber = null;
-      if (b - a > MIN_SPAN_US) setView(Math.floor(a), Math.ceil(b), false);
+      if (b - a > MIN_SPAN_US) setView(Math.floor(a), Math.ceil(b));
       else render();
       // 框选拖拽藏起了悬浮条；冻结中恢复快照显示。
       if (inspection.state.pinned) renderFloat(inspection.state.pinned, inspection.state.lastClient?.x ?? null);
@@ -177,7 +178,13 @@ export function installAnalysisGestures(options: {
     refreshOverlay();
   }, { signal });
 
-  canvas.addEventListener('pointerleave', () => {
+  canvas.addEventListener('pointerleave', event => {
+    if (options.retainHoverOnLeave?.(event)) {
+      pendingHover = null;
+      if (hoverRaf) cancelAnimationFrame(hoverRaf);
+      hoverRaf = 0;
+      return;
+    }
     if (pressX != null) return;
     if (inspection.state.pinned) {
       // 冻结快照不随指针移出消失：卡片与检查线保持，只藏 hover 悬浮条。
@@ -196,37 +203,32 @@ export function installAnalysisGestures(options: {
     publishTestHook();
   }, { signal });
 
-  // 滚轮左右平移；Ctrl+滚轮（触摸板捏合）以 hover 点为中心缩放坐标轴。
-  // 触摸板双指滑动直接产生带 deltaX/Y 的 wheel 事件，走同一条平移路径。
-  canvas.addEventListener('wheel', event => {
-    if (!scene.open || !scene.selectedTracks().length) return;
-    event.preventDefault();
-    const range = scene.viewRange();
-    const span = Math.max(1, range.end - range.start);
-    const db = scene.domainBounds();
-    // Firefox 行/页模式换算为像素当量；页模式一页约 1/4 视图。
-    const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? span / 4 : 1;
-    if (event.ctrlKey) {
-      const factor = Math.exp((event.deltaY * unit) / 280);
-      const center = canvasT(event.clientX);
-      const z = zoomTimeRange(range.start, range.end, center, factor, MIN_SPAN_US, db);
-      setView(z.start, z.end, false);
-    } else {
-      const px = (scene.lastGeom && scene.lastGeom.plotW > 0 ? scene.lastGeom.plotW : plotGeometry(scene.plotWidthCss()).plotW) || 1;
-      const shift = Math.round((event.deltaX * unit + event.deltaY * unit) * (span / px));
+  installChartNavigation({
+    canvas, signal, enabled: () => scene.open && !!scene.selectedTracks().length,
+    plotWidth: () => (scene.lastGeom?.plotW || plotGeometry(scene.plotWidthCss()).plotW) || 1,
+    zoom(factor, clientX) {
+      const range = scene.viewRange();
+      const z = zoomTimeRange(range.start, range.end, canvasT(clientX), factor, MIN_SPAN_US, scene.domainBounds());
+      setView(z.start, z.end);
+    },
+    pan(pixels) {
+      const range = scene.viewRange();
+      const px = (scene.lastGeom?.plotW || plotGeometry(scene.plotWidthCss()).plotW) || 1;
+      const shift = Math.round(pixels * Math.max(1, range.end - range.start) / px);
       if (!shift) return;
-      const p = panTimeRange(range.start, range.end, shift, db);
-      setView(p.start, p.end, false);
-    }
-  }, { signal, passive: false });
+      const p = panTimeRange(range.start, range.end, shift, scene.domainBounds());
+      setView(p.start, p.end);
+    },
+  });
 
-  canvas.addEventListener('dblclick', () => setView(null, undefined, true), { signal });
+  canvas.addEventListener('dblclick', () => setView(null), { signal });
 
   canvas.addEventListener('keydown', event => {
     if (!scene.lastModel) return;
     const range = scene.viewRange();
     const sel = scene.selectedTracks();
     if (!sel.length) return;
+    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Enter', 'Escape'].includes(event.key)) event.stopPropagation();
     if (!inspection.state.kbTrack || !sel.some(t => t.slot === inspection.state.kbTrack)) inspection.state.kbTrack = sel[0].slot;
     const step = Math.max(1, Math.floor((range.end - range.start) / 100));
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {

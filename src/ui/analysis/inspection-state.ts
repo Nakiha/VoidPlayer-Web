@@ -25,7 +25,7 @@ export function createInspectionController(snapshot: () => {
     return { kind: 'bucket', slot: g.slot, bucketStartUs: g.startUs, bucketEndUs: g.endUs };
   }
 
-  /** 直接命中的样本及其真实轴时间（吸附用）。 */
+  /** 直接命中的样本及其真实轴时间（内容与标记用）。 */
   function resolveDirectSample(direct: DirectTarget | null): { axisUs: number; sampleId: string } | null {
     if (!direct || direct.kind !== 'sample' || !direct.sampleId) return null;
     const r = snapshot().results.get(direct.slot);
@@ -37,9 +37,9 @@ export function createInspectionController(snapshot: () => {
   }
 
   /**
-   * 统一检查状态：曲线/空白用公共 T；真正命中单样本柱时整次检查吸附到该样本
-   * 的真实轴时间，表头、检查线、码率圆点、参考样本一起更新，被命中轨道强制
-   * 使用该柱的准确 sampleId（相同 PTS 下不另选）。吸附只改变检查锚点。
+   * 曲线/空白用公共 T；命中单样本柱时，读数与标记用该样本的真实轴时间。
+   * 被命中轨道使用准确 sampleId（相同 PTS 下不另选）。指针位置由 hoverUs
+   * 独立保存，不随命中样本改变。
    */
   function inspectAt(tUs: number, direct: DirectTarget | null): InspectionState {
     const sel = snapshot().selected;
@@ -66,7 +66,6 @@ export function createInspectionController(snapshot: () => {
     if (state.pinned) { state.pinned = null; return; }
     if (state.hoverUs == null) return;
     state.pinned = state.lastInspection = inspectAt(state.hoverUs, direct);
-    state.hoverUs = state.pinned.inspectionTimeUs;
   }
   function invalidate() {
     state.hoverUs = null; state.lastInspection = null; state.pinned = null;

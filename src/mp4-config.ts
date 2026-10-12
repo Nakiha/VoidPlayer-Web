@@ -71,7 +71,7 @@ export interface Mp4Configurations { warning?: string; indexIntegrity?: import('
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
-export async function readMp4Configurations(reader: RangeReader, trackId: number): Promise<Mp4Configurations> {
+export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
@@ -106,7 +106,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
     if(8+count*12!==data.length||!count)return invalid('stsc 数量无效。');
     const oz=await reader.read(offsets.data,8),sz=await reader.read(stsz.data,12);
     const chunks=new DataView(oz.buffer,oz.byteOffset).getUint32(4),samples=new DataView(sz.buffer,sz.byteOffset).getUint32(8);
-    if(samples>2_000_000||chunks>2_000_000)throw new MediaOpenError('resource','MP4 配置映射超过上限。');
+    if(samples>maxSamples||chunks>maxSamples)throw new MediaOpenError('resource','MP4 配置映射超过上限。');
     const sampleConfigurations:number[]=[];
     for(let i=0;i<count;i++){
       const first=v.getUint32(8+i*12),perChunk=v.getUint32(12+i*12),id=v.getUint32(16+i*12)-1;

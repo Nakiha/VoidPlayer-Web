@@ -80,6 +80,7 @@ test('CI uses the catalog for required suites and keeps platform/input matrices 
   assert.match(workflow, /engine: \[chromium, webkit\][\s\S]*input: \[local, remote\]/);
   for (const platform of ['linux-x64','windows-x64','darwin-arm64']) assert.ok(workflow.includes(platform));
   assert.equal(testManifest.cases.find(row => row.id === 'https-playback-benchmark').required, false);
+  assert.equal(testManifest.cases.find(row => row.id === 'perf-https-pair').required, true, 'paired failures must remain failures in the suite report');
   assert.equal(testManifest.cases.find(row => row.id === 'https-playback-functional').required, true);
 });
 

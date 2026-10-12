@@ -1,13 +1,14 @@
 // UI regressions against a fresh build, with an isolated local server and browser.
 // Usage: npm run test:browser -- [webkit|chromium]
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, copyFile, utimes, rm, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, copyFile, utimes, rm, access, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 import { MediaLibraryIndex } from '../server/library.ts';
 import { checkScrollBoundary } from './testing/scroll-boundary.mjs';
+import { build as buildFixture } from 'vite';
 
 const root = path.resolve(import.meta.dirname, '..');
 const browserName = process.argv[2] ?? 'webkit';
@@ -38,6 +39,8 @@ try {
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,...(browserName==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}) });
 
   async function check(name, run, options = {}) {
+    const filter = process.argv.find(arg => arg.startsWith('--filter='))?.slice(9);
+    if (filter && !name.includes(filter)) return;
     const page = await browser.newPage({locale:'zh-CN',  viewport: { width: 1280, height: 800 }, reducedMotion: 'reduce', ...options });
     page.setDefaultTimeout(15000);
     const errors = [];
@@ -360,31 +363,50 @@ try {
     assert.equal(await right.evaluate(el => getComputedStyle(el, '::after').opacity), '0', 'reduced motion hides the glow immediately');
   }, { reducedMotion: 'no-preference' });
 
-  await check('brand effects can leave the toolbar and keep the About button usable', async page => {
-    const brand = page.locator('#brand-about');
-    assert.equal(await brand.locator('.brand-ch').count(), 0, 'legacy rolling letters must not run alongside random effects');
-    await page.waitForTimeout(7400);
-    assert.equal(await page.locator('.brand-effect').count(), 0, 'brand must stay still without hover');
+  await check('brand cinema waits for a stationary hover and restores quickly', async page => {
+    const brand = page.locator('#brand-about'), cinema = page.locator('body > .brand-cinema');
+    const chunks = [];
+    page.on('request', request => { if (/brand-cinema.*\.(js|css)/.test(request.url())) chunks.push(request.url()); });
+    await page.waitForTimeout(1300);
     await brand.focus();
-    assert.equal(await page.locator('.brand-effect').count(), 0, 'focus alone must not play an effect');
+    assert.equal(await cinema.count(), 0, 'idle and keyboard focus must stay still');
+    assert.equal(chunks.length, 0, 'cinematic JS and CSS stay off the startup path');
     await brand.hover();
-    const effect = page.locator('body > .brand-effect');
-    await effect.waitFor();
-    assert.equal(await effect.evaluate(el => getComputedStyle(el).position), 'fixed');
-    assert.equal(await effect.evaluate(el => getComputedStyle(el).pointerEvents), 'none');
-    const first = (await effect.getAttribute('class')).split('--')[1];
-    assert.ok(['glitch', 'scramble', 'scatter', 'flip'].includes(first));
+    await page.waitForTimeout(450);
     await page.mouse.move(400, 90);
-    assert.equal(await effect.count(), 0, 'effect stops when the pointer leaves the brand');
-    await brand.hover();
-    assert.notEqual((await effect.getAttribute('class')).split('--')[1], first, 'consecutive effects should differ');
+    await page.waitForTimeout(800);
+    assert.equal(await cinema.count(), 0, 'a passing hover does not start an animation');
+    assert.equal(chunks.length, 0, 'a passing hover does not download the chunk');
+    const box = await brand.boundingBox();
+    await page.mouse.move(box.x + 8, box.y + box.height / 2);
+    await page.waitForTimeout(650);
+    await page.mouse.move(box.x + box.width - 8, box.y + box.height / 2);
+    await page.waitForTimeout(650);
+    assert.equal(await cinema.count(), 0, 'movement inside the title resets the dwell');
+    await cinema.waitFor();
+    assert.equal(await cinema.evaluate(el => getComputedStyle(el).pointerEvents), 'none');
+    assert.equal(await cinema.getAttribute('aria-hidden'), 'true');
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '0');
+    assert.ok(chunks.some(url => url.endsWith('.js')) && chunks.some(url => url.endsWith('.css')), 'both chunks load on demand');
+    await page.mouse.move(400, 90);
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1');
+    await brand.hover(); await cinema.waitFor();
+    await page.keyboard.press('Escape');
+    await cinema.waitFor({ state: 'detached', timeout: 700 });
+    await page.waitForTimeout(1300);
+    assert.equal(await cinema.count(), 0, 'Escape does not immediately replay while still hovering');
     await brand.click();
-    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true, 'click opens About directly');
+    assert.equal(await cinema.count(), 0);
   }, { reducedMotion: 'no-preference' });
 
-  await check('brand animation honors reduced motion', async page => {
+  await check('brand animation honors reduced motion and keeps About usable', async page => {
     await page.locator('#brand-about').hover();
-    assert.equal(await page.locator('.brand-effect').count(), 0);
+    await page.waitForTimeout(1300);
+    assert.equal(await page.locator('.brand-cinema').count(), 0);
+    await page.locator('#brand-about').click();
+    assert.equal(await page.locator('#settings-pane-about').isVisible(), true);
   });
 
   await check('shortcut help and button tooltips use this platform', async page => {
@@ -604,6 +626,19 @@ try {
     await panels(page, true);
     await page.setViewportSize({ width: 791, height: 797 });
     const placeholder = page.locator('#tracks-hidden');
+    const activityA=page.locator('#source-activity-track-A'), activityB=page.locator('#source-activity-track-B');
+    assert.equal(await activityB.getAttribute('aria-selected'),'true','new loads initially reveal their own details');
+    assert.equal(await page.locator('#source-activity-details').isVisible(),false,'presentation details default to collapsed');
+    await page.locator('#source-activity-toggle').click();
+    await activityA.click();
+    assert.equal(await page.locator('#source-activity-name').textContent(),'ci_h264_smoke.mp4');
+    assert.equal(await page.locator('#source-activity-stage').textContent(),'已上屏');
+    assert.match(await page.locator('#source-activity-size').textContent(),/320×180/);
+    assert.equal(await page.locator('#source-activity-time').isVisible(),true,'earlier tracks retain their own load timing');
+    await activityA.press('ArrowRight');
+    assert.equal(await activityB.getAttribute('aria-selected'),'true');
+    assert.equal(await page.locator('#source-activity-name').textContent(),'h264_9s_1920x1080.mp4');
+    assert.match(await page.locator('#source-activity-size').textContent(),/1920×1080/);
     assert.equal(await placeholder.isVisible(), false);
     const eye = page.locator('[data-track-drag="A"] .track-visibility');
     const eyeBox = await eye.boundingBox(), laneBox = await page.locator('[data-track-drag="A"] .track-lane').boundingBox();
@@ -743,11 +778,383 @@ try {
     assert.deepEqual(await page.locator('#toggle-chrome').boundingBox(), focusButton, 'focus toggle stays in place');
     assert.equal(await page.locator('#toggle-chrome').getAttribute('data-tooltip'), '专注模式 (F)');
     await page.locator('#toggle-chrome').click();
+    await page.locator('#toggle-annotations').click();
+    assert.equal(await page.locator('#toggle-annotations').getAttribute('aria-expanded'),'true');
+    await page.locator('#annotation-toolbar').waitFor({state:'visible'});
+    await page.locator('#toggle-analysis-overlay').click();
+    await page.locator('#analysis-overlay-panel').waitFor({state:'visible'});
+    await page.locator('#toggle-annotations').click();
+    assert.equal(await page.locator('#toggle-annotations').getAttribute('aria-expanded'),'false');
+    assert.ok(await page.locator('#analysis-overlay-panel').isVisible(),'annotation activation does not close overlay controls');
+    await page.locator('#toggle-analysis-overlay').click();
+    for(const [width,time,stepping] of [[800,true,true],[500,false,true],[300,false,false],[220,false,false]]) {
+      await page.setViewportSize({width,height:800});await settle(page);
+      assert.equal(await page.locator('.transport-time').isVisible(),time,'time editing gives way first');
+      for(const id of ['previous','next'])assert.equal(await page.locator(`#${id}`).isVisible(),stepping,'frame stepping gives way second');
+      const boxes=[];
+      for(const id of ['play','timeline','toggle-annotations','toggle-analysis-overlay','fullscreen','toggle-chrome']) {
+        assert.ok(await page.locator(`#${id}`).isVisible(),`${id} remains visible at ${width}px`);
+        boxes.push(await page.locator(`#${id}`).boundingBox());
+      }
+      const bounds=await page.locator('.transport-dock').boundingBox();
+      for(let i=0;i<boxes.length;i++) {
+        const box=boxes[i];assert.ok(box.x>=bounds.x && box.x+box.width<=bounds.x+bounds.width+.1,'control remains inside the bar');
+        assert.ok(Math.abs(box.y+box.height/2-(bounds.y+bounds.height/2))<1,'controls align in one row');
+        if(i)assert.ok(box.x>=boxes[i-1].x+boxes[i-1].width-.1,'transport controls never overlap');
+      }
+      for(const box of boxes.slice(2))assert.equal(box.width,28,'viewport tool buttons never shrink');
+      await page.locator('#toggle-chrome').click();await settle(page);
+      assert.deepEqual(await page.locator('#toggle-chrome').boundingBox(),boxes.at(-1),'focus escape stays in the same row position');
+      await page.locator('#toggle-chrome').click();
+    }
+    await page.setViewportSize({width:1280,height:800});await settle(page);
     await page.locator('#remove-track-B').click();
     await page.waitForFunction(() => !window.voidPlayer.getState().tracks.some(track => track.slot === 'B'));
     assert.equal(await page.evaluate(() => document.activeElement?.dataset.dragSurface), 'A');
     for (const slot of ['C', 'D', 'E', 'F', 'G', 'H', 'A']) await page.locator(`#remove-track-${slot}`).click();
     assert.equal(await page.evaluate(() => document.activeElement?.id), 'open');
+  });
+
+  await check('analysis recovery preserves coverage and retries through production controls', async page => {
+    const media = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    await page.evaluate(id => window.voidPlayer.tools.find(tool => tool.name === 'load_library_item').execute({id,slot:'A'}), media.id);
+    await page.locator('#toggle-analysis').click();
+    await page.locator('#analysis-status-items').waitFor();
+    const sheets=await page.locator('link[rel=stylesheet]').evaluateAll(nodes=>nodes.map(node=>node.href));
+    const markup=await page.locator('body').innerHTML();
+    const entry=path.join(temporary,'analysis-recovery.ts');
+    await writeFile(entry, `export {ReviewSession} from ${JSON.stringify(path.join(root,'src/session.ts'))};
+      export {BitstreamAnalysisService} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/service.ts'))};
+      export {AnalysisFailure} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/failure.ts'))};
+      export {installBitstreamControls} from ${JSON.stringify(path.join(root,'src/ui/bitstream-controls.ts'))};
+      export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis-panel.ts'))};
+      export {rgbaDescription} from ${JSON.stringify(path.join(root,'src/frame-description.ts'))};`);
+    const fixture=await buildFixture({configFile:false,logLevel:'silent',build:{write:false,minify:false,
+      lib:{entry,formats:['iife'],name:'RecoveryFixture'},rolldownOptions:{output:{codeSplitting:false}}}});
+    const script=[fixture].flat().flatMap(output=>output.output).find(output=>output.type==='chunk').code;
+    await page.route('**/recovery-fixture',route=>route.fulfill({contentType:'text/html',body:
+      `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${sheets.map(href=>`<link rel="stylesheet" href="${href}">`).join('')}</head><body>${markup}</body></html>`}));
+    await page.goto(`${base}/recovery-fixture`); await page.addScriptTag({content:script});
+    await page.evaluate(async()=>{
+      const {ReviewSession,BitstreamAnalysisService,AnalysisFailure,installBitstreamControls,installAnalysisPanel,rgbaDescription}=RecoveryFixture;
+      const sourceVersion='recovery-source';
+      window.recovery={streams:0,pictures:0,failure:'error',commit:0};
+      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId:'fixture',recipe:'blocks-basic-v2',
+        picture:{sourceVersion,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},sourcePtsUs:100+au*100,
+        width:16,height:16,confidence:'exact',reasons:[],capabilities:{blocks:'ready',qp:'ready',modes:'ready',motion:'unsupported'},
+        qp:{component:'luma',bitDepth:8,weighting:'pixel-area',mean:23},blocks:[{x:0,y:0,width:16,height:16,qp:23,mode:'intra'}],
+        metrics:{startAu:0,packets:au+1,bytesRead:100,elapsedMs:1,recordBytes:12,heapBytes:67108864},gop:{startAu:0,endAu:3,configuration:0,anchor:'closed'}});
+      const fail=()=>{if(recovery.failure==='error')throw Error('Temporary network error');if(recovery.failure==='unsupported')throw new AnalysisFailure('unsupported-codec','Unsupported codec');};
+      BitstreamAnalysisService.prototype.localRange=async function(_file,_target,_signal,consume,progress){
+        recovery.streams++; fail();
+        progress({pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true});
+        for(let au=0;au<3;au++)consume(result(au));
+      };
+      BitstreamAnalysisService.prototype.local=async function(_file,target){recovery.pictures++;(recovery.targets??=[]).push(target.picture.au);fail();return result(target.picture.au);};
+      const root=new BitstreamAnalysisService(()=>{}), session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++recovery.commit;});
+      session.bitstream=root;session.bitstreamLoading=Promise.resolve(root);recovery.session=session;recovery.root=root;
+      document.getElementById('analysis-panel').replaceChildren();document.getElementById('analysis-panel').hidden=false;
+      const life=new AbortController();
+      const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'});
+      const canvases=Object.fromEntries(['A','B','C','D','E','F','G','H'].map(slot=>[slot,document.getElementById(`canvas-${slot}`)]));
+      const overlay=installBitstreamControls(session,canvases,{selected:()=> 'A'});
+      const offOverlay=session.subscribe(()=>overlay.render(session.getState()));
+      recovery.dispose=async()=>{offOverlay();life.abort();overlay.dispose();await session.dispose();};
+      const source={info:{id:sourceVersion,name:'recovery.mp4',container:'isobmff',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['fixture']),
+        async frameAt(time){const au=Math.min(2,Math.floor(time/100));return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:result(au).picture,close(){}};},
+        async framesAfter(){return[];},async *framesFrom(){},dispose(){}};
+      await session.load('A',async()=>source);chart.setOpen(true);overlay.setOpen(true);
+    });
+    await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
+    await page.locator('#analysis-retry-A').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>recovery.streams),1,'failed source is automatically attempted once');
+    await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();
+    assert.equal(await page.evaluate(()=>recovery.streams),1,'closing and reopening does not loop failed requests');
+    await page.screenshot({path:path.join(screenshots,`${browserName}-analysis-retry.png`)});
+    await page.evaluate(()=>{recovery.failure='';});
+    await page.locator('#analysis-retry-A').click();
+    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').completedStream?.pictures===3);
+    assert.equal(await page.evaluate(()=>recovery.streams),2,'chart retry explicitly restarts the stream');
+    assert.equal(await page.locator('#analysis-retry-A').isVisible(),false);
+    for(const time of [100,200]){
+      await page.evaluate(async time=>{recovery.root.cache.clear();await recovery.session.seek(time);},time);
+      await page.waitForFunction(au=>recovery.session.cachedBitstreamAnalysis('A')?.picture.au===au,time/100);
+    }
+    assert.deepEqual(await page.evaluate(()=>recovery.targets),[1,2],'only newly presented missing frames are requested');
+    assert.equal(await page.evaluate(()=>recovery.pictures),2,'both evicted frames are automatically replenished');
+    assert.equal(await page.evaluate(()=>recovery.streams),2,'picture replenishment does not restart whole-stream analysis');
+    await page.evaluate(async()=>{recovery.failure='error';recovery.root.cache.clear();await recovery.session.seek(0);});
+    await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
+    assert.equal(await page.evaluate(()=>recovery.session.getBitstreamAnalysisState('A').completedStream.pictures),3);
+    await page.evaluate(()=>{recovery.failure='';});await page.locator('#bitstream-retry-A').click();
+    await page.waitForFunction(()=>recovery.session.cachedBitstreamAnalysis('A')?.picture.au===0 && recovery.session.getBitstreamAnalysisState('A').state==='ready');
+    assert.equal(await page.evaluate(()=>recovery.pictures),4,'overlay retry recovers the failed picture');
+    await page.evaluate(async()=>{recovery.failure='unsupported';await recovery.session.requestBitstreamStream('A').catch(()=>{});});
+    assert.equal(await page.locator('#analysis-retry-A').isVisible(),false);
+    assert.equal(await page.locator('#bitstream-retry-A').isVisible(),false);
+    const attempts=await page.evaluate(()=>recovery.streams);
+    await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();await settle(page);
+    assert.equal(await page.evaluate(()=>recovery.streams),attempts,'unsupported capability is never retried automatically');
+    await page.evaluate(()=>recovery.dispose());
+  });
+
+  await check('library file context menu copies exact paths, downloads and follows shared menu behavior', async page => {
+    const entry = listing.entries.find(entry => entry.name === 'review/shots/path-tooltip.mp4');
+    assert.ok(entry);
+    await page.locator('#toggle-sources').click();
+    await page.locator('#library-location').fill(`library:${entry.rootId}/review/shots`);
+    await page.locator('#library-location').press('Enter');
+    const row = page.locator('#source-list .source-row').filter({has:page.locator('.filename', {hasText:'path-tooltip.mp4'})});
+    await row.waitFor();
+    const menu = page.locator('#library-file-menu');
+    assert.equal(await menu.count(), 1, 'one delegated menu serves the whole list');
+    const filmIcon = await page.locator('#toggle-sources svg').innerHTML();
+    assert.equal(await page.locator('#start-library-more svg').innerHTML(), filmIcon, 'welcome library entry uses the toolbar film icon');
+    await page.evaluate(() => {
+      window.contextCopies = [];
+      Object.defineProperty(navigator, 'clipboard', {configurable:true, value:{
+        writeText: async text => {window.contextCopies.push(text);},
+        write: async items => {window.contextCopies.push(await (await items[0].getType('text/plain')).text());},
+      }});
+    });
+    await row.click({button:'right'});
+    assert.deepEqual(await menu.locator('button').allTextContents(), ['拷贝文件名','拷贝绝对路径','拷贝媒体库路径','下载文件']);
+    assert.equal(await menu.locator('[data-action=copy-library-path] svg').innerHTML(), filmIcon, 'library path action uses the same film icon');
+    assert.equal(await menu.evaluate(el => getComputedStyle(el).backdropFilter || getComputedStyle(el).webkitBackdropFilter), 'blur(8px)');
+    await page.screenshot({path:path.join(screenshots, `${browserName}-library-context-menu.png`)});
+    await page.emulateMedia({colorScheme:'dark'});
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+    await page.screenshot({path:path.join(screenshots, `${browserName}-library-context-menu-dark.png`), clip:{x:1040,y:40,width:240,height:220}});
+    await page.emulateMedia({colorScheme:'light'});
+    await page.waitForFunction(() => document.documentElement.dataset.theme === 'light');
+    await menu.locator('[data-action=copy-name]').click();
+    await page.waitForFunction(() => window.contextCopies.length === 1);
+    await row.click({button:'right'});
+    await menu.locator('[data-action=copy-library-path]').click();
+    await page.waitForFunction(() => window.contextCopies.length === 2);
+    await row.click({button:'right'});
+    await menu.locator('[data-action=copy-path]').click();
+    await page.waitForFunction(() => window.contextCopies.length === 3);
+    assert.deepEqual(await page.evaluate(() => window.contextCopies), ['path-tooltip.mp4', `library:${entry.rootId}/review/shots/path-tooltip.mp4`, await realpath(path.join(roots[0], 'review/shots/path-tooltip.mp4'))]);
+    assert.equal(await row.evaluate(el => document.activeElement === el), true, 'actions return focus without loading the source');
+    assert.equal(await page.evaluate(() => window.voidPlayer.getState().tracks.length), 0);
+    await row.press('Shift+F10');
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), true);
+    await page.keyboard.press('End');
+    assert.equal(await menu.locator('[data-action=download]').evaluate(el => document.activeElement === el), true);
+    await page.keyboard.press('Home');
+    await page.keyboard.press('ArrowUp');
+    assert.equal(await menu.locator('[data-action=download]').evaluate(el => document.activeElement === el), true);
+    const downloading = page.waitForEvent('download');
+    await page.keyboard.press('Enter');
+    const download = await downloading;
+    assert.equal(download.suggestedFilename(), 'path-tooltip.mp4');
+    const url = new URL(download.url());
+    assert.equal(url.searchParams.get('v'), entry.version);
+    assert.equal(url.searchParams.get('download'), '1');
+    await download.delete();
+    await row.press('Shift+F10'); await page.keyboard.press('Escape');
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false);
+    assert.equal(await row.evaluate(el => document.activeElement === el), true);
+    await row.click({button:'right'}); await page.locator('#library-location').click();
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false, 'outside click dismisses');
+    await row.click({button:'right'});
+    await page.locator('#source-list').dispatchEvent('scroll');
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false, 'list scrolling dismisses');
+    for (const width of [1280, 390, 320]) {
+      await page.setViewportSize({width,height:800});
+      await settle(page);
+      await row.dispatchEvent('contextmenu', {clientX:width-2,clientY:798});
+      const bounds = await menu.boundingBox();
+      assert.ok(bounds.x >= 4 && bounds.y >= 4 && bounds.x + bounds.width <= width - 3 && bounds.y + bounds.height <= 797, 'menu stays inside the viewport');
+      await page.keyboard.press('Escape');
+    }
+    await row.click({button:'right'});
+    await page.locator('#library-location').fill('library:/'); await page.locator('#library-location').press('Enter');
+    await row.waitFor({state:'detached'});
+    assert.equal(await menu.evaluate(el => el.matches(':popover-open')), false, 'replacing rows dismisses stale actions');
+  });
+
+  await check('track source buttons reveal their exact library file and rows show track badges', async page => {
+    const nested = listing.entries.find(entry => entry.name === 'review/shots/path-tooltip.mp4');
+    assert.ok(nested);
+    const other = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    assert.ok(other);
+    await page.evaluate(async ids => {
+      const load = window.voidPlayer.tools.find(tool => tool.name === 'load_library_item');
+      await load.execute({ id: ids[0], slot: 'B' }); await load.execute({ id: ids[1], slot: 'C' });
+    }, [nested.id, other.id]);
+    await page.locator('#toggle-sources').click();
+    await page.locator('#sources-search-toggle').click();
+    await page.locator('#source-search').fill('no-file-matches-this');
+    await page.locator('#source-list .panel-empty').waitFor();
+    const offsets = [];
+    await page.route('**/api/library/browse?*', async route => {
+      const url = new URL(route.request().url());
+      if (url.searchParams.get('root') !== nested.rootId || url.searchParams.get('directory') !== 'review/shots') return route.continue();
+      const offset = Number(url.searchParams.get('offset') ?? 0); offsets.push(offset);
+      const response = await route.fetch(), data = await response.json();
+      const entries = offset === 0 ? Array.from({length:60}, (_, i) => ({...nested, id:`decoy-${i}`, name:`review/shots/decoy-${i}.mp4`})) : [nested];
+      await route.fulfill({response, json:{...data, entries, directories:[], total:61, offset, nextOffset:offset === 0 ? 60 : null}});
+    });
+    for (const slot of ['B', 'C']) {
+      await page.locator(`#source-activity-track-${slot}`).click();
+      await page.waitForFunction(name => document.querySelector('#source-list .source-row.is-located .filename')?.textContent === name, slot === 'B' ? 'path-tooltip.mp4' : 'ci_h264_smoke.mp4');
+      const row = page.locator('#source-list .source-row.is-located');
+      assert.equal(await row.locator('.filename').textContent(), slot === 'B' ? 'path-tooltip.mp4' : 'ci_h264_smoke.mp4');
+      assert.deepEqual(await row.locator('.source-track-badges .slot').allTextContents(), [slot]);
+      const badge = row.locator('.source-meta .source-track-badges .slot');
+      assert.equal(await badge.count(), 1, 'track badge lives in the metadata row');
+      const badgeBox = await badge.boundingBox();
+      assert.equal(badgeBox.width, badgeBox.height, 'track badge stays square');
+      assert.equal(await page.locator('#source-search').inputValue(), '');
+      assert.equal(await page.locator('#sources-search-toggle').getAttribute('aria-expanded'), 'false');
+      if (slot === 'B') assert.match(await page.locator('#library-location').inputValue(), /review\/shots/);
+      const box = await row.boundingBox(), list = await page.locator('#source-list').boundingBox(), foot = await page.locator('#source-foot').boundingBox();
+      assert.ok(box.y >= list.y && box.y + box.height <= foot.y + 1, 'located file is visible above the footer');
+      assert.equal(await page.locator('#source-activity-details').isVisible(), false, 'locating keeps the details folded');
+    }
+    assert.deepEqual(offsets, [0, 60], 'locate automatically reaches files beyond the first page');
+    await page.locator('#remove-track-B').click();
+    await page.waitForFunction(() => document.querySelector('#source-list .source-track-badges')?.textContent === 'C');
+    await page.screenshot({ path: path.join(screenshots, `${browserName}-source-locate-badges.png`) });
+  });
+
+  await check('eight-track presentation status keeps one row and stable load-stage geometry', async page => {
+    // Exercise the production view with deterministic session publications so
+    // brief decoder milestones and unknown-length reads are all observable.
+    const fixture = await buildFixture({ configFile: false, logLevel: 'silent', build: {
+      write: false, minify: false, lib: { entry: path.join(root, 'src/ui/source-activity.ts'), formats: ['iife'], name: 'SourceActivityFixture' },
+    } });
+    const script = [fixture].flat().flatMap(output => output.output).find(output => output.type === 'chunk').code;
+    const markup = await page.locator('#source-foot').evaluate(element => element.outerHTML);
+    const sheets = await page.locator('link[rel=stylesheet]').evaluateAll(elements => elements.map(element => element.href));
+    await page.route('**/activity-fixture', route => route.fulfill({ contentType: 'text/html', body:
+      `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${sheets.map(href => `<link rel="stylesheet" href="${href}">`).join('')}</head><body><aside id="sources-panel" class="sources-panel side-panel glass" style="position:relative;width:250px;height:500px"><div id="source-list" class="source-list"></div>${markup}</aside></body></html>` }));
+    await page.goto(`${base}/activity-fixture`);
+    await page.addScriptTag({ content: script });
+    await page.evaluate(() => {
+      let listener;
+      const tracks = [...'ABCDEFGH'].map(slot => ({ slot, id: `media-${slot}`, sourceGen: 1, name: `camera-${slot}-long-source-name.mp4`, width: 1920, height: 1080, size: 1000, visible: true, indexState: 'complete' }));
+      window.activityState = { tracks, mediaLoad: null };
+      window.activityStartedAt = Date.now() - 15000;
+      window.publishActivity = load => { window.activityState.mediaLoad = load; listener(); };
+      window.activityLife = new AbortController();
+      SourceActivityFixture.installSourceActivity({ getState: () => window.activityState, subscribe: cb => { listener = cb; return () => {}; }, cancelLoad: () => window.publishActivity({ ...window.activityState.mediaLoad, state: 'cancelled', finishedAt: Date.now() }) }, window.activityLife.signal);
+    });
+    const toggle = page.locator('#source-activity-toggle'), tabs = page.locator('#source-activity-tracks');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await page.locator('#source-activity-details').isVisible(), false);
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+    const foldSamples = await page.evaluate(async () => {
+      const details = document.querySelector('#source-activity-details'), foot = document.querySelector('#source-foot');
+      const samples = [];
+      for (const expanded of [true, false]) {
+        document.querySelector('#source-activity-toggle').click();
+        const frames = [], deadline = performance.now() + 350;
+        while (performance.now() < deadline) {
+          await new Promise(requestAnimationFrame);
+          frames.push({ height: details.getBoundingClientRect().height, foot: foot.getBoundingClientRect().height,
+            reserve: parseFloat(document.querySelector('#sources-panel').style.getPropertyValue('--foot-h')) });
+        }
+        samples.push({ expanded, frames });
+      }
+      return samples;
+    });
+    for (const { expanded, frames } of foldSamples) {
+      const heights = frames.map(frame => frame.height), low = Math.min(...heights), high = Math.max(...heights);
+      assert.ok(heights.some(height => height > low + 1 && height < high - 1), 'fold has intermediate heights');
+      assert.ok(expanded ? heights.at(-1) > heights[0] : heights.at(-1) < heights[0], 'fold animates in the chosen direction');
+      assert.ok(new Set(frames.map(frame => frame.reserve)).size > 3, 'list reserve moves throughout the animation');
+      assert.ok(Math.abs(frames.at(-1).reserve - frames.at(-1).foot) <= 1, 'list reserve settles at the actual footer height');
+    }
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    async function settleFold() {
+      await page.locator('#source-activity-details').evaluate(async element => {
+        await Promise.all(element.getAnimations().map(animation => animation.finished.catch(() => {})));
+      });
+      await settle(page);
+    }
+    for (const width of [160, 200, 250, 320, 400]) {
+      await page.locator('#sources-panel').evaluate((element, width) => { element.style.width = `${width}px`; }, width);
+      await settle(page);
+      const row = await page.locator('.source-activity-heading').boundingBox(), button = await toggle.boundingBox();
+      const list = await tabs.boundingBox();
+      assert.equal(await tabs.locator('button').count(), 8);
+      assert.equal(await tabs.locator('button').first().evaluate(element => element.getBoundingClientRect().width), 28, 'idle progress leaves no gap beside the track letter');
+      assert.equal(list.height, 28, `${width}: eight tracks never wrap`);
+      assert.equal(button.width, 28, `${width}: collapse target does not shrink`);
+      assert.ok(list.x + list.width <= button.x && button.x + button.width <= row.x + row.width + 1);
+      await page.locator('#source-activity-track-A').focus(); await page.keyboard.press('End'); await settle(page);
+      const last = await page.locator('#source-activity-track-H').boundingBox();
+      assert.ok(last.x >= list.x && last.x + last.width <= list.x + list.width + 1, `${width}: keyboard reveals the last track without moving the pane`);
+      assert.equal(await page.locator('#source-activity-track-H').getAttribute('aria-selected'), 'true');
+      for (const expanded of [false, true]) {
+        if ((await toggle.getAttribute('aria-expanded')) !== String(expanded)) { await toggle.click(); await settleFold(); }
+        await settle(page);
+        assert.equal(await page.locator('.source-activity-summary').isVisible(), expanded, 'collapsed state has no status text underneath');
+        const foot = await page.locator('#source-foot').boundingBox();
+        const reserve = await page.locator('#sources-panel').evaluate(element => parseFloat(element.style.getPropertyValue('--foot-h')));
+        assert.ok(Math.abs(reserve - foot.height) <= 1, 'list reserve follows the chosen fold state');
+        if ([160, 250, 400].includes(width)) await page.locator('#sources-panel').screenshot({ path: path.join(screenshots, `${browserName}-activity-eight-${width}-${expanded ? 'expanded' : 'collapsed'}.png`) });
+      }
+    }
+    await page.locator('#sources-panel').evaluate(element => { element.style.width = '200px'; });
+    const stages = ['queued', 'download', 'decode', 'inspect', 'index', 'decoder', 'first-frame', 'synchronize'];
+    for (const expanded of [false, true]) {
+      if ((await toggle.getAttribute('aria-expanded')) !== String(expanded)) { await toggle.click(); await settleFold(); }
+      let previous;
+      for (const [index, stage] of stages.entries()) {
+        await page.evaluate(stage => window.publishActivity({ slot: 'H', name: 'camera-H-long-source-name.mp4', state: 'loading', stage, startedAt: window.activityStartedAt, ...(stage === 'index' ? { indexProgress: { scannedBytes: 375, totalBytes: 1000, packets: 32 } } : {}) }), stage);
+        await settle(page);
+        const ring = page.locator('#source-activity-track-H [role=progressbar]');
+        assert.equal(await ring.getAttribute('aria-hidden'), 'false', `${stage}: progress visible while collapsed or expanded`);
+        assert.equal(await ring.getAttribute('aria-valuenow'), stage === 'index' ? '37.5' : null);
+        assert.equal(await ring.evaluate(element => element.classList.contains('is-waiting')), stage !== 'index');
+        const circle = await ring.locator('svg').boundingBox();
+        assert.equal(circle.width, 20, 'progress uses the shared compact circle');
+        assert.equal(circle.height, 20);
+        const geometry = await page.evaluate(() => {
+          const rect = id => { const r = document.querySelector(id).getBoundingClientRect(); return [r.y, r.height]; };
+          return { panel: rect('#source-activity'), row: rect('.source-activity-heading'), summary: rect('.source-activity-summary'), circle: rect('#source-activity-track-H .analysis-progress-ring') };
+        });
+        if (previous) assert.deepEqual(geometry, previous, `${stage}: progress never moves the footer or list during loading`);
+        previous = geometry;
+        assert.ok((await page.locator('#source-activity-stage').textContent()).length > 0);
+        await page.locator('#sources-panel').screenshot({ path: path.join(screenshots, `${browserName}-activity-${stage}-${expanded ? 'expanded' : 'collapsed'}.png`) });
+      }
+    }
+    await page.evaluate(() => {
+      const ring = document.querySelector('#source-activity-track-H .analysis-progress-ring');
+      window.activityRing = ring;
+      window.activityState.mediaLoad.indexProgress = { scannedBytes: 0, totalBytes: 1000, packets: 0 };
+      window.publishActivity(window.activityState.mediaLoad);
+    });
+    const ring = page.locator('#source-activity-track-H [role=progressbar]');
+    assert.equal(await ring.getAttribute('aria-valuenow'), '0', 'known zero progress remains determinate');
+    assert.equal(await ring.evaluate(element => element.classList.contains('is-waiting')), false);
+    await page.evaluate(() => {
+      for (let i = 1; i <= 100; i++) window.publishActivity({ ...window.activityState.mediaLoad, indexProgress: { scannedBytes: i * 10, totalBytes: 1000, packets: i } });
+    });
+    assert.equal(await page.evaluate(() => window.activityRing === document.querySelector('#source-activity-track-H .analysis-progress-ring')), true, 'progress publications retain the circle node');
+    assert.equal(await ring.getAttribute('aria-valuenow'), '100');
+    for (const state of ['complete', 'cancelled', 'error']) {
+      await page.evaluate(state => window.publishActivity({ ...window.activityState.mediaLoad, state, finishedAt: Date.now(), error: state === 'error' ? '测试片源读取失败' : undefined }), state);
+      await settle(page);
+      assert.equal(await ring.getAttribute('aria-hidden'), 'true');
+      assert.equal(await page.locator('#source-activity-cancel').isVisible(), false);
+      await page.locator('#sources-panel').screenshot({ path: path.join(screenshots, `${browserName}-activity-${state}.png`) });
+    }
+    await page.evaluate(() => {
+      const track = window.activityState.tracks.find(track => track.slot === 'A');
+      track.indexState = 'building'; track.indexProgress = { scannedBytes: 250, totalBytes: 1000, packets: 80 };
+      window.publishActivity(window.activityState.mediaLoad);
+    });
+    await page.locator('#source-activity-track-A').click();
+    assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'), '25', 'background indexing shares the progress circle after presentation');
+    assert.match(await page.locator('#source-activity-stage').textContent(), /25.0%/);
+    await page.locator('#sources-panel').screenshot({ path: path.join(screenshots, `${browserName}-activity-background-index.png`) });
+    await page.evaluate(() => window.activityLife.abort());
   });
 
   await check('stalled source loads can be cancelled or replaced without locking the add buttons', async page => {
@@ -766,6 +1173,10 @@ try {
       await cancel.waitFor();
       assert.equal(await page.locator('#source-activity-stage').textContent(), '正在读取视频信息');
       assert.match(await page.locator('#source-activity-name').textContent(), /same\.mp4/);
+      assert.equal(await page.locator('#source-activity-cancel').isVisible(), false, 'collapsed state only shows track controls');
+      assert.equal(await page.locator('#source-activity-details').isVisible(),false,'incoming load retains the collapsed preference');
+      assert.equal(await page.locator('#source-activity-track-A [role=progressbar]').getAttribute('aria-valuenow'),null,'stalled inspection has an indeterminate circle');
+      await page.locator('#source-activity-toggle').click();
       assert.equal(await page.locator('#source-activity-cancel').isVisible(), true);
       await page.waitForFunction(() => !document.getElementById('source-activity-time').textContent.includes('0 秒'));
       await page.setViewportSize({ width: 600, height: 800 });
@@ -782,7 +1193,8 @@ try {
       assert.ok(Math.abs((footBox.y + footBox.height) - (panelBox.y + panelBox.height)) <= 1, 'foot pinned to panel bottom');
       const localBox = await page.locator('#local-sources').boundingBox();
       const activityBox = await page.locator('#source-activity').boundingBox();
-      assert.ok(localBox.y + localBox.height <= activityBox.y + 1, 'local section stacks above activity inside the foot');
+      assert.equal(localBox, null, 'empty local section has no placeholder');
+      assert.equal(await page.locator('#source-activity').evaluate(el => getComputedStyle(el).borderTopWidth), '0px', 'empty local section leaves no orphan divider');
       const listPaddingTop = await page.locator('#source-list').evaluate(el => parseFloat(getComputedStyle(el).paddingTop));
       const toolsHeight = await page.locator('#source-tools').evaluate(el => el.getBoundingClientRect().height);
       assert.ok(Math.abs(listPaddingTop - toolsHeight) <= 1, 'list top padding reserves exactly the floating tools height');

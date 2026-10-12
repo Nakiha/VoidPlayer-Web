@@ -30,7 +30,7 @@ export function createViewBindings(deps: ViewBindingDeps) {
     // Measure actual bands: lower grid headings live at the bottom, and the
     // global transport overlaps only the grid cells it physically intersects.
     // Visibility-hidden focus chrome retains its geometry to avoid image jumps.
-    const overlays = [...document.querySelectorAll<HTMLElement>('.viewport-surface .card-heading, .viewport-surface .transport')]
+    const overlays = [...document.querySelectorAll<HTMLElement>('.viewport-surface .card-heading, .viewport-surface .transport-dock')]
       .filter(el => !el.hidden && getComputedStyle(el).display !== 'none')
       .map(el => { const box = el.getBoundingClientRect(); return { left: box.left - rect.left, right: box.right - rect.left, top: box.top - rect.top, bottom: box.bottom - rect.top }; });
     const area = unobscuredFitArea(rect.width, rect.height, overlays);

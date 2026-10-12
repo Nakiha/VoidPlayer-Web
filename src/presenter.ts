@@ -16,9 +16,10 @@ import { HDR_PREVIEW_POLICY } from './hdr-policy.ts';
 // canvas. Backends deliver timestamps plus a resource (WebCodecs sample or
 // RGBA8 pixels); they never paint. Native HDR uses browser-owned float
 // conversion when available, otherwise the sRGB compatibility preview.
+let presentedCommit = 0;
 const performanceSamples = new WeakMap<HTMLCanvasElement, { copy: number[]; submit: number[]; count: number }>();
 export function paintFrame(canvas: HTMLCanvasElement, frame: DecodedFrame) {
-  const record=()=>{const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
+  const record=()=>{frame.presentedCommit=++presentedCommit;const requestedTarget=getColorOutput().target,hdr=canvas.dataset.displayTarget==='hdr',displayHdr=hdrDisplayAvailable();frame.presentation={requestedTarget,actualTarget:hdr?'hdr':'sdr',captureTarget:'sdr',executor:canvas.dataset.colorExecutor??'unknown',contract:canvas.dataset.colorContract??'unknown',displayHdr,outputColorSpace:hdr?'display-p3':'srgb',outputFormat:hdr?'float16':'unorm8',toneMapping:hdr?'extended':'standard',...(requestedTarget==='hdr'&&!hdr?{fallbackReason:canvas.dataset.colorOutputReason??(!displayHdr?'hdr-display-unavailable':'webgpu-not-ready')}: {})};};
   if(gpuPaint(canvas,frame)){
     // GPU warmup may finish after a GL frame. Retire its viewport surface only
     // after successful GPU presentation; two visible surfaces retain stale pixels.
@@ -215,7 +216,11 @@ export function renderThumbnailCanvas(frame: DecodedFrame, maxEdge = THUMB_MAX_E
 }
 
 const surfaces = new Map<HTMLCanvasElement, NonNullable<ReturnType<typeof createPresentationSurface>>>();
+const geometryObservers=new WeakMap<HTMLCanvasElement,Set<(g:PresentationGeometry|null)=>void>>();
+const currentGeometry=new WeakMap<HTMLCanvasElement,PresentationGeometry|null>();
+export function observePresentationGeometry(canvas:HTMLCanvasElement,listener:(g:PresentationGeometry|null)=>void){const set=geometryObservers.get(canvas)??new Set();set.add(listener);geometryObservers.set(canvas,set);listener(currentGeometry.get(canvas)??null);return()=>{set.delete(listener);if(!set.size)geometryObservers.delete(canvas);};}
 export function setPresentationGeometry(canvas: HTMLCanvasElement, geometry: PresentationGeometry | null) {
+  currentGeometry.set(canvas,geometry);for(const listener of geometryObservers.get(canvas)??[]){try{listener(geometry);}catch{}}
   if (!geometry) { captureLeases.get(canvas)?.(); captureLeases.delete(canvas); }
   if(gpuGeometry(canvas,geometry))return;
   if (!geometry) {

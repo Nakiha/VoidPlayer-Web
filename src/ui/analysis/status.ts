@@ -5,14 +5,16 @@ import { formatAxis } from '../analysis-canvas.ts';
 import type { AnalysisPreferences } from './preferences.ts';
 import type { AnalysisQueryTrack } from './queries.ts';
 import type { AnalysisAction } from './shared.ts';
+import { analysisTrackBadge } from './card.ts';
+import { progressRingMarkup } from '../progress-ring.ts';
 
 /** Frame-number UI owns its pending ranks, editing and invalidation. */
 export function installAnalysisStatus(options: {
   session: ReviewSession; act: AnalysisAction; signal: AbortSignal; prefs: AnalysisPreferences;
-  statusEl: HTMLElement; numAxisEl: HTMLElement; itemsEl: HTMLElement; live: HTMLElement;
-  tracks(): readonly AnalysisQueryTrack[]; colors(): ReadonlyMap<Slot, string>; save(): void;
+  statusEl: HTMLElement; itemsEl: HTMLElement; live: HTMLElement;
+  tracks(): readonly (AnalysisQueryTrack & { name: string })[]; colors(): ReadonlyMap<Slot, string>;
 }) {
-  const { session, act, signal, prefs, statusEl, numAxisEl, itemsEl, live, save } = options;
+  const { session, act, signal, prefs, statusEl, itemsEl, live } = options;
   // ---- 右侧状态区：当前上屏帧 PTS + 双帧号（展示序 / 解码序） ----
   // PTS 取会话真实上屏帧（frame.ptsUs + offsetUs），与各视口 canvas 一致；
   // PTS序是展示序排名（PTS 严格小于该帧的样本数，0-based），DTS序是解码
@@ -22,7 +24,7 @@ export function installAnalysisStatus(options: {
   const framesBySlot = new Map<Slot, { ptsUs: number; sourcePtsUs: number } | null>();
   const rankCache = new Map<Slot, { pts: number; rank: number | null; total: number | null; ordinal: number | null; complete: boolean; note?: string }>();
   const rankSeq = new Map<Slot, number>();
-  const statusItems = new Map<Slot, { wrap: HTMLSpanElement; dot: HTMLSpanElement; num: HTMLButtonElement }>();
+  const statusItems = new Map<Slot, { wrap: HTMLSpanElement; badge: HTMLSpanElement; control: HTMLSpanElement; toggle: HTMLButtonElement; num: HTMLButtonElement }>();
   // Keep the source's reserved width while each new frame awaits its rank.
   // Pending placeholders and index invalidation must not shrink the toolbar.
   const numberWidths = new Map<Slot, { mediaId: string; sourceGen: number; chars: number }>();
@@ -53,17 +55,17 @@ export function installAnalysisStatus(options: {
     // Invalidation clears the cache, so a replacement source cannot inherit it.
     return { frame: f ?? null, sessionPts, hit, displayed: f ? hit ?? cached : undefined };
   }
-  /** 同步渲染：只显示主题色点 + 槽位 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
+  /** 同步渲染：只显示彩色槽位徽标 + 帧号（PTS序/解码序由切换决定），时间只进 tooltip。 */
   function renderStatus() {
     if (editingNumber) return;
-    const sig = [prefs.numAxis, ...options.tracks().map(t => {
+    const sig = [prefs.axis, ...options.tracks().map(t => {
       const { sessionPts, hit } = statusEntry(t.slot, t.offsetUs);
-      const num = hit ? (prefs.numAxis === 'pts' ? hit.rank : hit.ordinal) : undefined;
-      return `${t.slot}:${sessionPts ?? 'x'}:${num ?? (hit ? 'x' : '-')}${hit && !hit.complete ? '~' : ''}`;
+      const num = hit ? (prefs.axis === 'pts' ? hit.rank : hit.ordinal) : undefined;
+      return `${t.slot}:${t.mediaId}:${t.sourceGen}:${options.colors().get(t.slot)}:${prefs.selected.includes(t.slot)}:${sessionPts ?? 'x'}:${num ?? (hit ? 'x' : '-')}${hit && !hit.complete ? '~' : ''}`;
     })].join('|');
     if (sig === lastStatusSig) return;
     lastStatusSig = sig;
-    const axisLabel = prefs.numAxis === 'pts' ? t(msg("analysis.ptsOrder", "PTS序")) : t(msg("analysis.dtsOrder", "DTS序"));
+    const axisLabel = prefs.axis === 'pts' ? t(msg("analysis.ptsOrder", "PTS序")) : t(msg("analysis.dtsOrder", "DTS序"));
     if (!options.tracks().length) {
       statusItems.clear();
       const empty = document.createElement('span');
@@ -82,21 +84,28 @@ export function installAnalysisStatus(options: {
       if (!item) {
         const wrap = document.createElement('span');
         wrap.className = 'st-item';
-        const dot = document.createElement('span');
-        dot.className = 'dot';
-        const label = document.createElement('span');
-        label.className = 'st-slot';
-        label.textContent = entry.slot;
+        const badge = analysisTrackBadge(entry.slot);
+        badge.classList.add('st-slot');
         const num = document.createElement('button');
         num.type = 'button';
         num.className = 'st-num';
-        wrap.append(dot, label, num);
-        item = { wrap, dot, num };
+        const control = document.createElement('span'); control.className = 'analysis-track-control'; control.dataset.slot = entry.slot;
+        const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'analysis-chip'; toggle.dataset.slot = entry.slot;
+        const progress = document.createElement('span'); progress.className = 'analysis-track-progress';
+        progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-valuemin', '0'); progress.setAttribute('aria-valuemax', '100');
+        progress.innerHTML = progressRingMarkup;
+        toggle.append(badge, progress); control.append(toggle); wrap.append(control, num);
+        item = { wrap, badge, control, toggle, num };
         statusItems.set(entry.slot, item);
       }
-      const { wrap, dot, num } = item;
-      dot.style.background = options.colors().get(entry.slot) ?? '#888';
-      const value = displayed ? (prefs.numAxis === 'pts' ? displayed.rank : displayed.ordinal) : undefined;
+      const { wrap, badge, control, toggle, num } = item;
+      const selected = prefs.selected.includes(entry.slot);
+      control.dataset.selected = String(selected); toggle.setAttribute('aria-pressed', String(selected));
+      toggle.title = (selected ? t(msg('analysis.hideTrack', '隐藏轨道 {slot}'), { slot: entry.slot }) : t(msg('analysis.showTrack', '显示轨道 {slot}（{name}）'), { slot: entry.slot, name: entry.name }))
+        + `\n${t(msg('analysis.trackSoloHint', '右键或长按单选此轨道，再次操作恢复全部。'))}`;
+      toggle.setAttribute('aria-label', toggle.title.split('\n')[0]);
+      badge.style.background = options.colors().get(entry.slot) ?? '#888';
+      const value = displayed ? (prefs.axis === 'pts' ? displayed.rank : displayed.ordinal) : undefined;
       const previousWidth = numberWidths.get(entry.slot);
       const sameSource = previousWidth?.mediaId === entry.mediaId && previousWidth.sourceGen === entry.sourceGen;
       const maxFrame = Math.max(value ?? 0, (hit?.total ?? 1) - 1);
@@ -111,7 +120,7 @@ export function installAnalysisStatus(options: {
       num.setAttribute('aria-label', t(msg("analysis.editTrackFrameNumber", "轨道 {slot} {axis}帧号，点击编辑"), { slot: entry.slot, axis: axisLabel }));
       num.onclick = () => {
         if (value == null || !displayed?.complete) return;
-        const axis = prefs.numAxis;
+        const axis = prefs.axis;
         editingNumber = true;
         const input = document.createElement('input');
         input.className = 'st-num-input'; input.type = 'text'; input.inputMode = 'numeric';
@@ -173,18 +182,6 @@ export function installAnalysisStatus(options: {
     renderStatus();
   }
 
-  // ---- 帧号顺序切换（PTS序/解码序）：复用全局 .segmented 样式 ----
-  const numAxisButtons = [...numAxisEl.querySelectorAll<HTMLButtonElement>('[data-num-axis]')];
-  function refreshNumAxis() {
-    for (const b of numAxisButtons) b.setAttribute('aria-pressed', String(b.dataset.numAxis === prefs.numAxis));
-  }
-  for (const b of numAxisButtons) b.onclick = () => {
-    const v = b.dataset.numAxis as 'pts' | 'dts';
-    if (prefs.numAxis === v) return;
-    prefs.numAxis = v;
-    save(); refreshNumAxis(); renderStatus();
-  };
-
   function invalidate(slot?: Slot) {
     lastStatusSig = '';
     const slots = slot ? [slot] : [...rankCache.keys(), ...rankSeq.keys()];
@@ -194,5 +191,5 @@ export function installAnalysisStatus(options: {
     for (const track of frames) framesBySlot.set(track.slot as Slot, track.frame ?? null);
     for (const slot of framesBySlot.keys()) if (!frames.some(track => track.slot === slot)) { framesBySlot.delete(slot); numberWidths.delete(slot); invalidate(slot); }
   }
-  return { update: updateStatus, refreshAxis: refreshNumAxis, invalidate, syncFrames };
+  return { update: updateStatus, invalidate, syncFrames };
 }

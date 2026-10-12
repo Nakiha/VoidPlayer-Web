@@ -195,6 +195,7 @@ test('inspection controller preserves a directly hit duplicate timestamp and fro
   assert.equal(inspection.inspectionTimeUs,100_000);
   assert.equal(inspection.tracks[0].reference?.sample.sampleId,'m:v:1');
   controller.state.hoverUs = 150_000; controller.pin(target);
+  assert.equal(controller.state.hoverUs,150_000,'freezing preserves the cursor position independently of the sample time');
   const frozen = controller.state.pinned;
   results.set('A',makeResult([{t:300_000,size:40}]));
   assert.equal(controller.state.pinned,frozen); assert.equal(frozen?.tracks[0].reference?.sample.sampleId,'m:v:1');

@@ -1,12 +1,15 @@
 import { t, msg, onLanguageChange } from '../i18n.ts';
 /** Shared top-layer menu behavior for choices and actions. */
-export function installMenu(button: HTMLButtonElement, menu: HTMLElement, options: {
+export function installMenu(button: HTMLElement, menu: HTMLElement, options: {
   align?: 'start' | 'end';
+  trigger?: 'manual';
+  invoker?: () => HTMLElement | undefined;
   anchor?: () => DOMRect;
   columns?: number;
   selected?: () => HTMLButtonElement | undefined;
   bounds?: () => DOMRect | undefined;
   canOpen?: () => boolean;
+  closeOnSelect?: boolean;
 } = {}) {
   const lifecycle = new AbortController();
   const events = { signal: lifecycle.signal };
@@ -15,9 +18,13 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
   menu.setAttribute('role', 'menu');
   menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? t(msg('menu.actions', '操作')));
   onLanguageChange(() => menu.setAttribute('aria-label', button.getAttribute('aria-label') ?? t(msg('menu.actions', '操作'))), lifecycle.signal);
-  button.setAttribute('aria-controls', menu.id);
-  button.setAttribute('aria-haspopup', 'menu');
-  button.setAttribute('aria-expanded', 'false');
+  if (options.trigger !== 'manual') {
+    button.setAttribute('aria-controls', menu.id);
+    button.setAttribute('aria-haspopup', 'menu');
+    button.setAttribute('aria-expanded', 'false');
+  }
+  const expanded = (value: boolean) => { if (options.trigger !== 'manual') button.setAttribute('aria-expanded', String(value)); };
+  const returnFocus = () => (options.invoker?.() ?? button).focus({ preventScroll: true });
   // Safari versions without discrete top-layer transitions need a visual-only
   // copy while the real popover closes and returns focus immediately.
   const nativeExit = CSS.supports('overlay', 'auto') && CSS.supports('transition-behavior', 'allow-discrete');
@@ -46,14 +53,14 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
     });
   }, events);
   const items = () => [...menu.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
-  const close = () => { if (menu.matches(':popover-open')) menu.hidePopover(); button.setAttribute('aria-expanded', 'false'); };
+  const close = () => { if (menu.matches(':popover-open')) menu.hidePopover(); expanded(false); };
   const open = (last = false) => {
-    if (button.disabled || options.canOpen?.() === false) return;
+    if (button.matches(':disabled') || options.canOpen?.() === false) return;
     clearExit();
     const rect = options.anchor?.() ?? button.getBoundingClientRect();
     const bounds = options.bounds?.() ?? new DOMRect(0, 0, innerWidth, innerHeight);
     menu.style.setProperty('--menu-trigger-width', `${Math.max(0, Math.min(rect.width, bounds.width - 8))}px`);
-    button.setAttribute('aria-expanded', 'true');
+    expanded(true);
     menu.showPopover();
     const left = options.align === 'end' ? rect.right - menu.offsetWidth : rect.left;
     const top = rect.bottom + menu.offsetHeight + 8 <= bounds.bottom ? rect.bottom + 4 : rect.top - menu.offsetHeight - 4;
@@ -62,7 +69,7 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
     const enabled = items();
     (last ? enabled.at(-1) : options.selected?.() ?? enabled[0])?.focus();
   };
-  bindMenuTrigger(button, menu, open, close, lifecycle.signal);
+  if (options.trigger !== 'manual') bindMenuTrigger(button, menu, open, close, lifecycle.signal);
   menu.addEventListener('keydown', e => {
     const enabled = items();
     const index = enabled.indexOf(document.activeElement as HTMLButtonElement);
@@ -73,19 +80,19 @@ export function installMenu(button: HTMLButtonElement, menu: HTMLElement, option
       enabled[next]?.focus();
     } else if (e.key === 'Escape' || e.key === 'Tab') {
       if (e.key === 'Escape') e.preventDefault();
-      close(); button.focus();
+      close(); returnFocus();
     }
   }, events);
   // Close before the action, so a dialog opened by the action keeps its focus.
   menu.addEventListener('click', e => {
-    if ((e.target as Element).closest('button:not(:disabled)')) { close(); button.focus(); }
+    if (options.closeOnSelect !== false && (e.target as Element).closest('button:not(:disabled)')) { close(); returnFocus(); }
   }, { ...events, capture: true });
-  menu.addEventListener('toggle', () => button.setAttribute('aria-expanded', String(menu.matches(':popover-open'))), events);
+  menu.addEventListener('toggle', () => expanded(menu.matches(':popover-open')), events);
   window.addEventListener('resize', () => { close(); clearExit(); }, events);
   reducedMotion.addEventListener('change', clearExit, events);
   button.closest('dialog')?.addEventListener('close', clearExit, events);
   button.closest('dialog')?.addEventListener('settings-pane-change', clearExit, events);
-  return { close, dispose() { close(); clearExit(); lifecycle.abort(); } };
+  return { open, close, dispose() { close(); clearExit(); lifecycle.abort(); } };
 }
 
 /** Also used by compact track headers, which keep their inline layout. */

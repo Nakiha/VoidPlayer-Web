@@ -38,6 +38,7 @@
   --text: #242831; --text-secondary: #626973; --text-subtle: #747c87;
   --control-border-width: 0px; --divider: #25324b14;
   --accent: #007aff; --accent-on: #ffffff; --slot-text: #ffffff; --border: #cdd1d7; --border-soft: #dfe2e6;
+  --analysis-reference-l0: #d75d18; --analysis-reference-l1: #14813b;
   --glass-fill: color-mix(in srgb, var(--surface) 82%, transparent); --glass-highlight: #ffffffed;
   --glass-shadow: 0 1px 2px #1925390b, inset 0 1px 0 var(--glass-highlight);
   --glass-filter: blur(6px); --viewport-chrome-fill: color-mix(in srgb, var(--surface) 62%, transparent); --control-shadow: 0 1px 2px #1423380d, inset 0 1px 0 #ffffff;

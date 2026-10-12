@@ -1,5 +1,5 @@
 // 码流分析的统一柱形几何：时间分组 → 柱形几何 → 绘图与命中共同消费。
-// 组宽来自前后组的共同边界，不再依据各轨自己的帧间隔；缺席留空，不复制。
+// 各轨自身的帧间隔决定公共时间单元，跨轨的小幅错位不缩窄柱宽；缺席留空，不复制。
 // 所有交互几何保持 CSS 像素，DPR 只影响栅格化。
 
 import type { Slot } from '../model.ts';
@@ -75,9 +75,35 @@ export function barHeight(rowH: number, value: number, yMax: number, scale: Size
 }
 
 const MAX_CELL_PX = 56;
-/** 单帧柱宽上限（CSS px）；实际宽度随时间轴比例连续变化。 */
+/** 最小容量预算（CSS px），不是缩放后的柱宽上限。 */
 export const TARGET_BAR_PX = 7;
 const LANE_GAP_PX = 1;
+
+/** All chart bars occupy the same fraction of their time cell, including buckets. */
+export const chartBarWidth = (cellPx: number, minimum = 1): number => Math.max(minimum, cellPx * .7);
+/** Gentle zoom growth preserves the hierarchy instead of matching bar widths. */
+export const referenceNodeRadius = (cellPx: number): number => Math.min(12, Math.max(6, 5 + Math.log2(Math.max(1, cellPx / 12)) * 1.5));
+const sampleLaneWidth = (barWidth: number): number => Math.max(2, barWidth + Math.min(LANE_GAP_PX, barWidth * .3 / .7));
+
+export function representativeIntervalUs(times: readonly number[], fallback = 33_333, quantile = .5): number {
+  const sorted = [...times].sort((a, b) => a - b);
+  const intervals = sorted.slice(1).map((time, i) => time - sorted[i]).filter(n => n > 0).sort((a, b) => a - b);
+  return intervals[quantile === .5 ? Math.floor(intervals.length / 2) : intervals.length <= 2 ? 0 : Math.ceil((intervals.length - 1) * quantile)] ?? fallback;
+}
+
+/** Leave half a frame cell and at least 8 CSS pixels before the first timestamp. */
+export function paddedChartDomain(domain: { start: number; end: number }, frameUs: number, plotWidth: number, visibleSpan = domain.end - domain.start) {
+  const padding = Math.ceil(Math.max(frameUs / 2, visibleSpan * 8 / Math.max(1, plotWidth - 8)));
+  return { start: domain.start - padding, end: domain.end };
+}
+
+/** A synthetic configuration cell before media time; never a seekable frame. */
+export function containerChartColumn(domain: { start: number; end: number }, frameUs: number) {
+  return { timeUs: domain.start - frameUs, widthUs: frameUs };
+}
+
+/** Frame zero owns its left half-cell; the preceding configuration cell stays separate. */
+export const chartFrameHoverStart = (column: { timeUs: number; widthUs: number }): number => column.timeUs + column.widthUs / 2;
 
 export interface MergedLayoutOptions {
   trackOrder: readonly Slot[];
@@ -91,6 +117,8 @@ export interface MergedLayoutOptions {
   mediaBySlot: ReadonlyMap<Slot, { mediaId: string; sourceVersion: string; indexRevision: number }>;
   /** 稀疏样本的单元上限，避免横跨数秒的巨柱。 */
   maxCellPx?: number;
+  /** Shared cadence width keeps the bucket/raw seam visually continuous. */
+  barWidthPx?: number;
   /** 大小纵轴：默认线性；对数为共同 log10(1+v) 基准。 */
   scale?: SizeScale;
 }
@@ -105,23 +133,21 @@ export function cellTargetFor(lanes: number): number {
   return (TARGET_BAR_PX + LANE_GAP_PX) * Math.max(1, lanes);
 }
 
-/** Shared width from a representative group interval, including the viewport halo.
- * The lower quartile follows dense mixed-frame-rate groups without letting one
- * isolated close pair shrink every bar. Missing lanes retain their reserved space.
- */
+/** Shared width from the median time interval, matching NALU charts.
+ * Missing lanes retain their reserved space; zoom scales the entire time cell. */
 export function sampleBarWidth(
   groups: readonly TimeGroup[], viewStart: number, viewEnd: number, plotW: number, lanes: number,
 ): number {
-  const intervals: number[] = [];
-  for (let i = 1; i < groups.length; i++) {
-    const delta = groups[i].anchorUs - groups[i - 1].anchorUs;
-    if (delta > 0) intervals.push(delta);
+  const timesBySlot = new Map<Slot, number[]>();
+  for (const group of groups) for (const [slot, members] of group.membersByTrack) {
+    const times = timesBySlot.get(slot) ?? [];
+    for (const member of members) times.push(member.axisUs);
+    timesBySlot.set(slot, times);
   }
-  if (!intervals.length) return TARGET_BAR_PX;
-  intervals.sort((a, b) => a - b);
-  const intervalUs = intervals[Math.ceil((intervals.length - 1) / 4)];
+  const intervals = [...timesBySlot.values()].filter(times => new Set(times).size > 1).map(times => representativeIntervalUs(times));
+  const intervalUs = intervals.length ? Math.min(...intervals) : 33_333;
   const lanePx = intervalUs * plotW / Math.max(1, viewEnd - viewStart) / Math.max(1, lanes);
-  return Math.max(1, Math.min(TARGET_BAR_PX, lanePx - LANE_GAP_PX));
+  return chartBarWidth(lanePx);
 }
 
 /**
@@ -138,26 +164,37 @@ export function canLayoutRaw(
   lanes: number,
 ): boolean {
   if (!groups.length) return true;
-  const cellTarget = (sampleBarWidth(groups, viewStart, viewEnd, plotW, lanes) + LANE_GAP_PX) * Math.max(1, lanes);
-  const xs = groups.map(g => timeToX(viewStart, viewEnd, gutter, plotW, g.anchorUs)).sort((a, b) => a - b);
-  let runLen = 1;
-  let maxRun = 1;
-  let overlapGroups = 0;
-  for (let i = 1; i < xs.length; i++) {
-    if (xs[i] - xs[i - 1] < cellTarget - 1e-6) {
-      runLen++;
-      maxRun = Math.max(maxRun, runLen);
-    } else {
-      if (runLen > 1) overlapGroups += runLen;
-      runLen = 1;
+  const laneWidth = sampleLaneWidth(sampleBarWidth(groups, viewStart, viewEnd, plotW, lanes));
+  const order = [...new Set(groups.flatMap(group => [...group.membersByTrack.keys()]))];
+  const runs = collisionRuns(groups, order, viewStart, viewEnd, gutter, plotW, laneWidth);
+  let conflicting = 0;
+  for (const run of runs) {
+    const counts = new Map<Slot, number>();
+    for (const group of run) for (const slot of group.membersByTrack.keys()) counts.set(slot, (counts.get(slot) ?? 0) + 1);
+    // One frame per track can share a time cell without aggregation or identity loss.
+    if ([...counts.values()].some(count => count > 1)) {
+      conflicting += run.length;
+      if (run.length > 8) return false;
     }
   }
-  if (runLen > 1) overlapGroups += runLen;
-  if (overlapGroups === 0) return true;
-  // 大范围连续重叠（合成复现：600px/3s/双30fps 全链重叠）走共享桶；
-  // 孤立的 2~3 组冲突才做局部聚合，不把整幅图压成 1px。
-  if (maxRun > 8 || overlapGroups / xs.length > 0.25) return false;
-  return true;
+  return conflicting / groups.length <= .25;
+}
+
+/** Compare occupied lanes, rather than the empty reserved lanes of every event. */
+function collisionRuns(groups: readonly TimeGroup[], order: readonly Slot[], start: number, end: number, gutter: number, plotW: number, laneWidth: number): TimeGroup[][] {
+  const index = new Map(order.map((slot, i) => [slot, i]));
+  const occupied = groups.map(group => {
+    const lanes = [...group.membersByTrack.keys()].map(slot => index.get(slot)).filter((lane): lane is number => lane !== undefined);
+    const left = timeToX(start, end, gutter, plotW, group.anchorUs) - laneWidth * order.length / 2;
+    return { group, left: left + Math.min(...lanes) * laneWidth, right: left + (Math.max(...lanes) + 1) * laneWidth };
+  }).filter(item => Number.isFinite(item.left)).sort((a, b) => a.left - b.left);
+  const runs: TimeGroup[][] = [];
+  let right = -Infinity;
+  for (const item of occupied) {
+    if (item.left >= right - 1e-6) { runs.push([item.group]); right = item.right; }
+    else { runs[runs.length - 1].push(item.group); right = Math.max(right, item.right); }
+  }
+  return runs;
 }
 
 function clipX(x: number, w: number, lo: number, hi: number): { x: number; w: number } | null {
@@ -195,22 +232,13 @@ export function layoutMergedSamples(
     selected.push(g);
   }
   selected.sort((a, b) => a.anchorUs - b.anchorUs);
-  // 统一连续宽度：随缩放变细，稀疏不超过上限，缺席仍留空。
+  // 与 NALU 共用连续宽度：随缩放调整，缺席仍留空。
   const barWidth = sampleBarWidth(groups, viewStart, viewEnd, plotW, lanes);
-  const laneW = barWidth + LANE_GAP_PX;
+  const laneW = sampleLaneWidth(barWidth);
   const cellTarget = laneW * lanes;
   const plotLeft = gutter, plotRight = gutter + plotW;
   const anchorXOf = (g: TimeGroup) => timeToX(viewStart, viewEnd, gutter, plotW, g.anchorUs);
-  // 相邻单元重叠检测：重叠整段合并为局部聚合，不逐柱覆盖。
-  const runs: TimeGroup[][] = [];
-  for (const g of selected) {
-    const last = runs[runs.length - 1];
-    if (!last) { runs.push([g]); continue; }
-    const prevX = anchorXOf(last[last.length - 1]);
-    const curX = anchorXOf(g);
-    if (curX - prevX < cellTarget - 1e-6) last.push(g);
-    else runs.push([g]);
-  }
+  const runs = collisionRuns(selected, trackOrder, viewStart, viewEnd, gutter, plotW, laneW);
   const emitSingle = (
     slot: Slot, lane: number, cellLeftRaw: number,
     m: { sampleId: string; axisUs: number; sessionPtsUs: number | null; sizeBytes: number | null; key: boolean | null },
@@ -261,8 +289,8 @@ export function layoutMergedSamples(
         if (subW >= 1.5) {
           visible.forEach((m, k) => {
             const h = barHeight(rowH, m.sizeBytes ?? 0, yMaxSize, scale);
-            const barW = Math.max(1, subW - 1);
-            const bx = laneVis.x + k * subW;
+            const barW = chartBarWidth(subW);
+            const bx = laneVis.x + k * subW + (subW - barW) / 2;
             const clipped = clipX(bx, barW, plotLeft, plotRight);
             if (!clipped) return;
             glyphs.push({
@@ -296,7 +324,7 @@ export function layoutMergedSamples(
       continue;
     }
     // 局部聚合：重叠整段按轨道各出一根可展开标记，不互相覆盖。
-    const firstX = anchorXOf(run[0]);
+    const firstX = Math.min(...run.map(anchorXOf));
     const runLeftRaw = firstX - cellTarget / 2;
     const midAnchor = run[Math.floor(run.length / 2)].anchorUs;
     let lo = Infinity, hi = -Infinity;
@@ -319,6 +347,7 @@ export function layoutMergedSamples(
       const lane = slotIndex.get(slot);
       const media = mediaBySlot.get(slot);
       if (lane == null || !media || !arr.length) continue;
+      if (arr.length === 1) { emitSingle(slot, lane, runLeftRaw, arr[0]); continue; }
       const laneXRaw = runLeftRaw + lane * laneW;
       const maxSize = Math.max(...arr.map(m => m.sizeBytes ?? 0));
       const h = barHeight(rowH, maxSize, yMaxSize, scale);
@@ -345,7 +374,7 @@ export function layoutMergedSamples(
   return glyphs;
 }
 
-type GroupSampleRefLike = { sampleId: string; axisUs: number; sizeBytes: number | null; key: boolean | null };
+type GroupSampleRefLike = { sampleId: string; axisUs: number; sessionPtsUs: number | null; sizeBytes: number | null; key: boolean | null };
 
 export interface BucketInput {
   slot: Slot;
@@ -402,9 +431,9 @@ export function layoutMergedBuckets(
       const lane = slotIndex.get(slot);
       if (lane == null) continue;
       const x = x1 + lane * laneW;
-      const w = Math.max(1, laneW - 1);
+      const w = Math.min(chartBarWidth(laneW), opts.barWidthPx ?? Infinity);
       const h = barHeight(rowH, b.maxBytes, yMaxSize, scale);
-      const cx = Math.min(Math.max(x, plotLeft), plotRight - w);
+      const cx = Math.min(Math.max(x + (laneW - w) / 2, plotLeft), plotRight - w);
       glyphs.push({
         kind: 'bucket', slot, bucketIndex: b.bucketIndex,
         startUs: b.startUs, endUs: b.endUs,
@@ -460,4 +489,21 @@ export function pickGlyph(glyphs: readonly AnalysisGlyph[], x: number, y: number
     }
   }
   return best;
+}
+
+/** Keep complete tooltip contents in chart order, moving neighbours before scrolling the stack. */
+export function layoutAnalysisCards(cards: readonly { height: number; preferredTop: number }[], top: number, bottom: number, gap = 8) {
+  const totalHeight = cards.reduce((sum, card) => sum + card.height, 0) + Math.max(0, cards.length - 1) * gap;
+  const scroll = totalHeight > bottom - top;
+  const tops: number[] = [];
+  for (const [i, card] of cards.entries()) {
+    const preferred = scroll ? top : Math.max(top, Math.min(bottom - card.height, card.preferredTop));
+    tops.push(Math.max(preferred, i ? tops[i - 1] + cards[i - 1].height + gap : top));
+  }
+  if (!scroll && cards.length) {
+    const last = cards.length - 1;
+    tops[last] = Math.min(tops[last], bottom - cards[last].height);
+    for (let i = last - 1; i >= 0; i--) tops[i] = Math.min(tops[i], tops[i + 1] - gap - cards[i].height);
+  }
+  return { tops, scroll, totalHeight };
 }
