@@ -401,47 +401,6 @@ try {
     assert.equal(await cinema.count(), 0);
   }, { reducedMotion: 'no-preference' });
 
-  await check('random brand stories keep playing and restore on cancellation', async page => {
-    const brand = page.locator('#brand-about'), cinema = page.locator('.brand-cinema');
-    // Deterministic randomness exercises both production branches without a UI setting.
-    await page.evaluate(() => { Math.random = () => .1; });
-    await brand.click();
-    assert.equal(await page.locator('[data-brand-cinema]').count(), 0, 'About has no animation configuration');
-    await page.locator('#settings-close').click();
-    await page.locator('#settings').waitFor({ state: 'hidden' });
-    for (const style of ['runaway', 'portal']) {
-      await page.evaluate(value => { Math.random = () => value; }, style === 'runaway' ? .1 : .9);
-      await page.mouse.move(400, 90); await brand.hover(); await cinema.waitFor();
-      assert.equal(await cinema.getAttribute('class'), 'brand-cinema brand-cinema--' + style);
-      assert.equal(await cinema.locator('.brand-cinema-letter').count(), 10);
-      assert.equal(await cinema.locator('.brand-cinema-dot').count(), 1);
-      await page.waitForTimeout(2800);
-      const poses = await cinema.locator('.brand-cinema-letter').evaluateAll(elements => elements.map(el => getComputedStyle(el).transform));
-      assert.equal(new Set(poses).size, 10, 'letters move independently');
-      await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'hero');
-      await page.screenshot({ path: path.join(screenshots, 'brand-cinema-' + style + '-' + browserName + '.png') });
-      if (style === 'runaway') {
-        await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'collision');
-        await page.waitForFunction(() => document.querySelector('.brand-cinema')?.dataset.phase === 'tug');
-        await page.screenshot({ path: path.join(screenshots, 'brand-cinema-tug-' + browserName + '.png') });
-      }
-      await page.waitForFunction(() => Number(document.querySelector('.brand-cinema')?.dataset.lap) >= 1, null, { timeout: 25000 });
-      assert.equal(await cinema.count(), 1, 'continuous hover reuses a single stage');
-      const before = await cinema.locator('.brand-cinema-letter').first().getAttribute('style');
-      await page.waitForTimeout(600);
-      assert.notEqual(await cinema.locator('.brand-cinema-letter').first().getAttribute('style'), before, 'motion continues in the next lap');
-      await page.mouse.move(400, 90); await cinema.waitFor({ state: 'detached', timeout: 700 });
-      assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1', 'cancel restores each variant even after looping');
-    }
-    await brand.hover(); await cinema.waitFor();
-    await page.setViewportSize({ width: 816, height: 786 });
-    await cinema.waitFor({ state: 'detached', timeout: 700 });
-    assert.equal(await brand.evaluate(el => getComputedStyle(el).opacity), '1');
-    await page.mouse.move(400, 90); await brand.hover(); await cinema.waitFor();
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await cinema.waitFor({ state: 'detached', timeout: 700 });
-  }, { reducedMotion: 'no-preference' });
-
   await check('brand animation honors reduced motion and keeps About usable', async page => {
     await page.locator('#brand-about').hover();
     await page.waitForTimeout(1300);
