@@ -6,7 +6,7 @@ MP4/FLV 包索引仍走已有 TypeScript 路径。码流分析使用独立的
 
 ## 固定来源
 
-- 构建仓库：`Nakiha/VoidPlayer-FFmpeg-Build@0dbc60eca4c63d1fd87843e340165d93cf0ae25d`。
+- 构建仓库：`Nakiha/VoidPlayer-FFmpeg-Build@7c2f9b053e19961568b5ca4ecd5a23c123e2c73b`。
 - 播放/索引：`FFmpeg/FFmpeg@946fcce07b6dcd0331c8cc609192aeff5e1924f8`（n9.0.2）。
 - 分析：`Nakiha/FFmpeg@c160c1bb3f0faf3ac59b8fbf907a8e3fb604632e`，基于同一 n9.0.2，含有界采集、参考帧身份和几何补丁。
 - Emscripten 6.0.9、dav1d 1.5.1，未同时升级工具链或引入新解码功能。
@@ -21,14 +21,14 @@ MP4/FLV 包索引仍走已有 TypeScript 路径。码流分析使用独立的
 
 | 核心 | 原文件 | Brotli | gzip |
 | --- | ---: | ---: | ---: |
-| 播放/索引 ST | 6,299,063 | 1,611,312 | 1,963,421 |
-| 播放/索引 MT | 6,357,866 | 1,616,933 | 1,972,321 |
+| 播放/索引 ST | 6,299,063 | 1,611,815 | 1,963,397 |
+| 播放/索引 MT | 6,357,866 | 1,615,786 | 1,972,321 |
 | 分析 | 2,901,177 | 653,413 | 830,690 |
 
 Brotli 减少约 74%–77% 下载字节。这是 HTTP 传输收益，不是 WASM 解压后内存或原文件同比缩小。
 保留原文件与两种压缩表示会增加发布包磁盘占用。压缩在构建时完成，不占用请求处理 CPU。
 客户端按各文件 SHA-256 生成版本 URL；服务端校验实际字节后才提供不可变缓存和压缩表示。
-HTML 重新验证，视频 Range 语义不变。部署要求见 `deploy/operations.md`。
+HTML 重新验证，视频 Range 语义不变。Vite Worker 同样注入版本映射；Emscripten pthread 入口保留完整脚本 URL。部署要求见 `deploy/operations.md`。
 
 ## 编译实验
 
