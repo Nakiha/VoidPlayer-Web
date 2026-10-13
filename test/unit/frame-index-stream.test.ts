@@ -196,15 +196,22 @@ test('frame-index HTTP failures finish before the deadline and release request r
       client.on('error', () => {});
       try {
         client.write('{');
-        await ready;
+        let readinessTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([ready, new Promise<never>((_, reject) => {
+            readinessTimer = setTimeout(() => reject(new Error('upload slot was not acquired')), 1500);
+          })]);
+        } finally { clearTimeout(readinessTimer); }
         client.destroy();
         await new Promise<void>((resolve, reject) => {
-          const deadline = setTimeout(() => reject(new Error('upload abort was not released')), 1500);
-          const poll = () => {
-            if (Reflect.get(library.indexJobs, 'uploads') === 0) { clearTimeout(deadline); resolve(); }
-            else setTimeout(poll, 5);
-          };
-          poll();
+          const poll = setInterval(() => {
+            if (Reflect.get(library.indexJobs, 'uploads') === 0) {
+              clearInterval(poll); clearTimeout(deadline); resolve();
+            }
+          }, 5);
+          const deadline = setTimeout(() => {
+            clearInterval(poll); reject(new Error('upload abort was not released'));
+          }, 1500);
         });
       } finally { client.destroy(); mocked.mock.restore(); }
     });
