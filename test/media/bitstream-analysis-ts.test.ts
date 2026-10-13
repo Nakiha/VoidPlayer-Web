@@ -167,3 +167,26 @@ test('unconsumed whole IO remains bounded until a result is acknowledged',async(
   assert.equal(core._vpd_live_contexts(),0);
  }finally{f.close();}
 });
+test('library TS whole, cache restart and corrupt-hole repair use independent source-bound demux',async()=>{
+ const {MediaLibraryIndex}=await import('../../server/library.ts');const {AnalysisScheduler}=await import('../../server/analysis/scheduler.ts');
+ const {mkdtemp,rm,mkdir,copyFile,writeFile}=await import('node:fs/promises');const {tmpdir}=await import('node:os');const {join,resolve}=await import('node:path');const {execFileSync}=await import('node:child_process');
+ const temp=await mkdtemp(join(tmpdir(),'vp-ts-library-')),media=join(temp,'media');await mkdir(media);
+ execFileSync('ffmpeg',['-y','-v','error','-copyts','-i','fixtures/ts-analysis/h264-static.ts','-map','0:v:0','-an','-c:v','copy','-frames:v','120','-mpegts_copyts','1','-f','mpegts',join(media,'short.ts')]);
+ const library=new MediaLibraryIndex([media],{database:join(temp,'library.sqlite'),watch:false}),coreDir=resolve('public/vendor/voidplayer-analysis'),directory=join(temp,'analysis');let scheduler=new AnalysisScheduler(library,coreDir,directory);
+ await library.refresh();const entry=(await library.list()).entries.find(e=>e.name==='short.ts')!;const lock=JSON.parse(fs.readFileSync('scripts/release-core.json','utf8'));
+ const target={mode:'stream' as const,sourceVersion:`${entry.id}@${entry.version}`,firstPtsUs:1433333,durationUs:2000000,indexIdentity:{kind:'ffmpeg' as const,streamKey:'video:0',schemaVersion:3,indexerBuild:lock.revision}};
+ const consume=async(requestId:string,expected?:Map<number,any>)=>{
+  const results=new Map<number,any>();let cursor=0;const deadline=performance.now()+120000;
+  for(;;){assert.ok(performance.now()<deadline);const state=await scheduler.streamStatus(requestId,'owner',cursor);assert.ok(state && ['queued','running','complete'].includes(state.state),JSON.stringify(state));
+   for(const ref of state.chunks){const result=await scheduler.store.get(ref.id);assert.equal(result?.confidence,'exact');assert.ok(!results.has(result!.picture.au));if(expected)assert.deepEqual(result!.blocks,expected.get(result!.picture.au).result.blocks);results.set(result!.picture.au,{id:ref.id,result});cursor=ref.cursor;}
+   if(state.state==='complete' && cursor===state.published){assert.equal(state.progress!.indexComplete,true);break;}
+   await new Promise(resolve=>setTimeout(resolve,5));
+  }assert.equal(cursor,120);return results;
+ };
+ try {
+  const expected=await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId);await scheduler.close();
+  const manifestOnly=join(temp,'manifest-only');await mkdir(manifestOnly);await copyFile(join(coreDir,'manifest.json'),join(manifestOnly,'manifest.json'));scheduler=new AnalysisScheduler(library,manifestOnly,directory);
+  assert.deepEqual(await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId,expected),expected,'restart keeps all 120 finite-source records without JS/WASM');
+  await scheduler.close();scheduler=new AnalysisScheduler(library,coreDir,directory);await writeFile(scheduler.store.chunkFile(expected.get(60).id),'{broken');await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId,expected);
+ }finally{await scheduler.close();await library.close();await rm(temp,{recursive:true,force:true});}
+});

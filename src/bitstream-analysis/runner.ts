@@ -1,3 +1,4 @@
+import {isAnnexB} from '../nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
 import {
@@ -47,7 +48,19 @@ export async function analyzePicture(
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core}));
   let opened = false;
   try {
-    const plan = await input.plan(target);
+    const firstPacket=input.packets[0];
+    const cachedAnchor=(hit: AnalysisResult | null | undefined, packet: typeof firstPacket) =>
+      !!hit && input.codec==='h264' && isAnnexB(input.configurations[packet.configuration]) &&
+      reusableResult(hit,input.codec,buildId,input.picture(packet,target.sourceVersion),packet.pts) &&
+      hit.gop?.anchor==='closed' && hit.gop.startAu===packet.au && hit.gop.configuration===packet.configuration &&
+      !!hit.containerHeader && !!hit.references && hit.nalus?.filter(n=>n.type===1 || n.type===5).length===1 && hit.nalus.some(n=>n.type===5);
+    const firstHit=options.stream && options.cached ? await options.cached(input.picture(firstPacket,target.sourceVersion)) : null;
+    signal.throwIfAborted();
+    // A matching exact cached IDR already carries source-bound syntax proof.
+    // It may seed a cache-only TS stream without instantiating demux/decoder.
+    const plan = cachedAnchor(firstHit,firstPacket)
+      ? {start:0,target:firstPacket,identity:input.picture(firstPacket,target.sourceVersion)}
+      : await input.plan(target);
     if (options.sequential) plan.start = 0;
     let groups = options.stream ? groupAnalysisGops(input.packets.slice(0, input.sealedEnd)) : [];
     const extend = async (cursor: number) => {
@@ -158,7 +171,9 @@ export async function analyzePicture(
       prepared.add(cursor);
       const first = input.packets[cursor];
       if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
-      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
+      const anchorHit=await options.cached(input.picture(first,target.sourceVersion));
+      const evidence = cachedAnchor(anchorHit,first) ? {singlePicture:true,closedRandomAccess:true}
+        : inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
       if (!evidence.singlePicture) throw new AnalysisFailure('unsupported-picture-layout', `Unsupported picture layout: ${evidence.reason}`);
       group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
       if (evidence.closedRandomAccess) streamAnchor = cursor;
