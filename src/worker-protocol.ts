@@ -45,6 +45,7 @@ export interface FfmpegInitResult extends FfmpegIndexRecovery {
 }
 
 export interface FfmpegCommands {
+  'analysis-ffmpeg-index': Command<{ctx: number; size: number}, import('./ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'observe-audio': Command<{ ctx: number; enabled: boolean }, null>;
   analysis: Command<{ ctx: number } & AnalysisOrigin & Omit<AnalysisQuery, 'signal'> & { durationUs: number; coverageUs: { start: number; end: number } | null }, AnalysisResult>;

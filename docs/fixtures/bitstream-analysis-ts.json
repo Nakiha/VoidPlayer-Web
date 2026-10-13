@@ -1,0 +1,57 @@
+{
+  "schema": 1,
+  "stage": "static-h264-ts-checkpoint",
+  "webBaseline": "49152bdc6d9df591382670e419001cc8f2e691a5",
+  "coreRevision": "848c4507cf6a450990361b5fecfeaec34d196bd6",
+  "coreDraft": "https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/pull/6",
+  "corePRTarget": "wasm",
+  "demuxCompatibility": "ffmpeg-9.0.2-avformat-740392267b71-ts-nofill-v1",
+  "nodeTs": {
+    "passed": 6,
+    "total": 6,
+    "log": ".run/ts-prototype/node-ts-test.log"
+  },
+  "browsers": {
+    "webkit": {
+      "passed": 4,
+      "total": 4,
+      "evidence": ".run/browser-fixtures/bitstream-analysis-matrix-ts-webkit/matrix.json"
+    },
+    "chromium": {
+      "passed": 4,
+      "total": 4,
+      "evidence": ".run/browser-fixtures/bitstream-analysis-matrix-ts-chromium/matrix.json"
+    }
+  },
+  "coreSeek": {
+    "sourcePackets": 600,
+    "rearGops": [
+      540,
+      570
+    ],
+    "packetsPerSeek": 4,
+    "physicalBytesPerSeek": 524288,
+    "variants": [
+      "ST",
+      "MT"
+    ]
+  },
+  "remaining": [
+    "clean Web benchmark",
+    "original MP4/FLV/fMP4 final regression result",
+    "final-head CI and native release gates"
+  ],
+  "history": [
+    "Initial cached TS range unnecessarily loaded WASM; fixed through lazy demux and source-bound parameter-set metadata.",
+    "Primed startup frame replay hid post-index identity; use actual decoded output after full indexing.",
+    "Initial cancellation probe chose a cached TS interval; changed to a provably uncached interval without weakening pending/cancel gates.",
+    "Physical missing PES exposed timestamp seek dropping source origin; TS full scans now byte rewind.",
+    "Initial source/fast runs hit sandbox localhost limitations; affected fast tests passed with localhost permission.",
+    "Original container regression found TS-only demux options falsely selecting MP4 incremental mode; removed those options before dispatching existing adapters."
+  ],
+  "limitations": [
+    "Only finite static single-video progressive single-slice H264 TS.",
+    "MKV and other TS codecs remain outside this checkpoint.",
+    "Local checkpoints do not claim CI/native release completion."
+  ]
+}

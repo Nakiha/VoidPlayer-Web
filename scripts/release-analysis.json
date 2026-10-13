@@ -1,10 +1,12 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "7c2f9b053e19961568b5ca4ecd5a23c123e2c73b",
+  "revision": "848c4507cf6a450990361b5fecfeaec34d196bd6",
   "ffmpegRepository": "Nakiha/FFmpeg",
   "ffmpegRevision": "c160c1bb3f0faf3ac59b8fbf907a8e3fb604632e",
   "emscripten": "6.0.9",
   "abi": 1,
   "semanticVersion": "0.1.0",
-  "referenceAbi": 1
+  "referenceAbi": 1,
+  "demuxAbi": 1,
+  "demuxCompatibility": "ffmpeg-9.0.2-avformat-740392267b71-ts-nofill-v1"
 }

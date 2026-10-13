@@ -58,12 +58,7 @@ export interface AnalysisStreamTarget {
 export function validateStream(target: AnalysisStreamTarget) {
   if (!target || target.mode !== 'stream') throw new AnalysisFailure('invalid-request', 'Invalid stream request');
   validateTarget({ sourceVersion: target.sourceVersion, sourcePtsUs: target.firstPtsUs, normalizedMediaUs: 0 });
-  if (target.indexIdentity) {
-    const id = target.indexIdentity;
-    try { parseMediaIndexIdentity(id.kind, new URLSearchParams({stream: id.streamKey,
-      schema: String(id.schemaVersion), indexer: id.indexerBuild})); }
-    catch { throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity'); }
-  }
+  validateIndexIdentity(target.indexIdentity);
   if (!Number.isSafeInteger(target.durationUs) || target.durationUs <= 0)
     throw new AnalysisFailure('invalid-request', 'Invalid stream duration');
 }
@@ -114,18 +109,21 @@ export type DeepReadonly<T> = T extends object
   : T;
 export type ReadonlyAnalysisResult = DeepReadonly<AnalysisResult>;
 export interface AnalysisTarget {
+  indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
   sourcePtsUs: number;
   normalizedMediaUs: number;
   picture?: SourcePictureKey;
 }
 export interface AnalysisRangeTarget {
+  indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
   firstPtsUs: number;
   startUs: number;
   endUs: number;
 }
 export function validateRange(target: AnalysisRangeTarget) {
+  validateIndexIdentity(target?.indexIdentity);
   if (
     !target ||
     typeof target.sourceVersion !== "string" ||
@@ -294,4 +292,13 @@ export function validateResult(result: AnalysisResult): void {
       "unsupported-picture-layout",
       "Incomplete block coverage",
     );
+}
+
+function validateIndexIdentity(identity?: import('../media-index-identity.ts').MediaIndexIdentity) {
+  if (identity) {
+    const id = identity;
+    try { parseMediaIndexIdentity(id.kind, new URLSearchParams({stream: id.streamKey,
+      schema: String(id.schemaVersion), indexer: id.indexerBuild})); }
+    catch { throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity'); }
+  }
 }

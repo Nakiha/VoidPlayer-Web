@@ -3,7 +3,7 @@ import { validateAnalysisCore } from './core-abi.ts';
 import { RangeReader } from "../range-reader.ts";
 import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
 import { failureInfo } from "./failure.ts";
-let snapshotReply: ((value: import("../flv-index-cache.ts").FlvIndexDocument) => void) | undefined;
+let snapshotReply: ((value: import("./types.ts").AnalysisIndexSnapshot) => void) | undefined;
 let cacheReply: ((value: import('./contract.ts').AnalysisResult | null) => void) | undefined;
 let acknowledgement: (() => void) | undefined;
 let indexReply: ((index: import('./stream.ts').AnalysisIndexFrontier) => void) | undefined;
@@ -33,11 +33,17 @@ scope.onmessage = async ({ data }) => {
       validateAnalysisCore(core);
       return core;
     };
-    const makeReader = () => Object.assign(new RangeReader({ file: data.file }), data.externalSnapshot ? {
-      flvIndex: () => new Promise<import('../flv-index-cache.ts').FlvIndexDocument>(resolve => {
-        snapshotReply = resolve; scope.postMessage({ event: 'snapshot' });
-      }),
-    } : {});
+    const snapshot = () => new Promise<import('./types.ts').AnalysisIndexSnapshot>(resolve => {
+      snapshotReply = resolve; scope.postMessage({event:'snapshot'});
+    });
+    const makeReader = () => {
+      const sync = typeof FileReaderSync !== 'undefined' ? new FileReaderSync() : undefined;
+      return Object.assign(new RangeReader({file:data.file}), {
+        ...(sync ? {readSync: (offset: number, length: number) => new Uint8Array(sync.readAsArrayBuffer(data.file.slice(offset,offset+length)))} : {}),
+        ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../flv-index-cache.ts').FlvIndexDocument,
+          ffmpegIndex: async () => await snapshot() as import('../ffmpeg-index-cache.ts').FfmpegIndexDocument} : {}),
+      });
+    };
     if (data.target.mode === 'stream' || 'startUs' in data.target) {
       const publish = async (result: import('./contract.ts').AnalysisResult) => {
         scope.postMessage({ event: 'chunk', result });

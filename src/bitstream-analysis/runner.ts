@@ -44,7 +44,7 @@ export async function analyzePicture(
 ): Promise<AnalysisResult> {
   validateTarget(target);
   const started = performance.now(),
-    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream));
+    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core}));
   let opened = false;
   try {
     const plan = await input.plan(target);
@@ -74,6 +74,7 @@ export async function analyzePicture(
     const containerHeaders = new Map<number, ReturnType<typeof readContainerHeader>>();
     let pointer = 0;
     const open = async () => {
+      if (input.analysisCore) core = input.analysisCore;
       if (typeof core === 'function') core = await core();
       signal.throwIfAborted();
       validateAnalysisCore(core);
@@ -441,13 +442,10 @@ export async function analyzePicture(
         );
       try {
         core.HEAPU8.set(bytes, pointer);
-        const ret = core._vpa_feed(
-          pointer,
-          bytes.length,
-          packet.pts,
-          packet.dts,
-          packet.au,
-        );
+        const ret = input.analysisCore
+          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts,
+              (packet.timing?.pts != null ? 1 : 0) | (packet.timing?.dts != null ? 2 : 0), packet.au)
+          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts, packet.au);
         if (ret === 2) continue;
         if (ret < 0) throw coreFailure(ret, "Analysis packet failed");
       } finally {
@@ -490,7 +488,7 @@ export async function analyzeRange(
   validateRange(target);
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
-  const input = await openAnalysisInput(reader, signal);
+  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core});
   let first: number;
   const missing = new Set<number>();
   let lastCached: AnalysisResult | undefined;
@@ -569,7 +567,7 @@ export async function analyzeStream(
   validateStream(target);
   let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
   const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
-  const input = await openAnalysisInput(reader, signal, true, { frontier,
+  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
   return analyzePicture(reader, { sourceVersion: target.sourceVersion,

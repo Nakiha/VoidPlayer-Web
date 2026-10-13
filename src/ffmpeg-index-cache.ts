@@ -8,6 +8,8 @@ export const FFMPEG_INDEX_RECORD_LIMIT = 2_000_000;
 export const FFMPEG_INDEX_BYTES = 160 * 1024 * 1024;
 
 export interface FfmpegIndexDocument extends FfmpegIndexRecovery {
+  analysisConfiguration?: {framing: 'annexb'; source: 'in-band-nal'; data: string};
+
   schema: number;
   kind: string;
   size: number;
@@ -25,6 +27,8 @@ export interface FfmpegIndexDocument extends FfmpegIndexRecovery {
   records: string;
 }
 export interface FfmpegIndexMetadata extends FfmpegIndexRecovery {
+  analysisConfiguration?: {framing: 'annexb'; source: 'in-band-nal'; data: string};
+
   size: number;
   codec: string;
   timeBaseNum: number;
@@ -81,6 +85,9 @@ export function parseFfmpegIndex(value: unknown, size: number, expected?: Partia
     || typeof doc.records !== 'string' || doc.records.length > FFMPEG_INDEX_BYTES
     || doc.records.length % 4 !== 0
     || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(doc.records)) return null;
+  const config=doc.analysisConfiguration;
+  if(config && (config.framing!=='annexb' || config.source!=='in-band-nal' || typeof config.data!=='string' || config.data.length<4 || config.data.length>10936 ||
+    config.data.length%4 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(config.data)))return null;
   for (const key of ['codec', 'timeBaseNum', 'timeBaseDen', 'width', 'height', 'streamIndex', 'indexerBuild'] as const) {
     if (expected?.[key] !== undefined && expected[key] !== doc[key]) return null;
   }

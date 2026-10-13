@@ -72,3 +72,50 @@ Draft [PR #61](https://github.com/Nakiha/VoidPlayer-Web/pull/61)，Refs #59；�
 CI run `38391988066` 的非 fMP4 WebKit identity case 在最终 `errors=[]` 收集到 `/api/users` access-control pageerror；没有用错误消息过滤豁免。精确 `3e3b6770c5ad2e49191d871e0b62e2632ad7d62a` head 本机单跑该 case 通过。诊断版再跑两次也通过，捕获到启动列表取消和故意 stalled-list route abort，但均无 pageerror；这不证明 Linux CI 根因已修复。
 
 harness 现在为所有页面记录标签、URL、时间、phase、pageerror stack，以及 `/api/users` 请求/响应/完成/失败；仍保留 `errors=[]`，且额外页面也纳入该断言。报告写入 `.run/playback-reports/identity-webkit-localhost-diagnostics.json`（已在 CI artifact 上传范围），写证据失败也不跳过资源清理。身份生产代码未改。若 CI 再复现，应按带来源的事件修正实际导航/关闭或产品异步处理；不可把单纯重跑成功解释为修复。
+
+## 第三阶段：静态 H264 TS 检查点
+
+Web 从 PR61 合入后的 `49152bd` 独立检出；core 从既有播放 pin `36bd666`
+起步并保留其上的 FFmpeg 9.0.2、pthread URL、tag 校验和 crop 修复。共享
+实现已推送为 `848c4507cf6a450990361b5fecfeaec34d196bd6`，core draft
+[PR #6](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/pull/6) 的目标是 `wasm`。
+播放和 analysis 固定同一已推送 revision，FFmpeg 本体仍分别是 `946fcce` /
+`c160c1b`；两者 libavformat tree 完全相同。维持两个既有产物，analysis 只增加
+裁剪的 MPEG-TS libavformat，不加入第三套框架或 swscale。
+
+独立 `vpd_*` 持有自己的 format/AVIO/parser/packet 游标，提供有界读取、配置、
+known flags、原 ordinal、stream、raw PTS/DTS/timebase、position、size、key/corrupt
+及重组 payload。position 是 demux locator，不能按 position+size 直接读裸 AU。
+seek 用完整只读 v3 索引唯一核对 PTS/DTS/position/size，后续包必须连续匹配源
+ordinal。歧义、缺失/重复时间戳或时间断裂拒绝 exact，不按最近 PTS 配对，不隐式
+从头解封装。H264/TS 的 NOFILLIN 保留缺失 PES 时间；完整枚举字节重绕到 0，
+避免按时间 seek 跳过无时间戳的第一个 PES。原始 ticks 不修复；不同时间基量化可
+相差一 tick，duration 未知时仍明确为 0。demux compatibility ID 固定实现语义，
+同时继续严格核对 indexerBuild 为当前 core revision。
+
+播放以 COPY_OPAQUE 携带候选身份，从实际 receive 的 AVFrame 读取，通过独立
+picture ABI 1 accessor 贯通 Worker、wasm-frame、ffmpeg-media 和 presenter；160
+字节像素描述 ABI 不变。首版只有单视频、静态 SPS/PPS、progressive、单 VCL slice
+且 first_mb=0、完整唯一源索引及无损坏实际输出可提供 token；重复输出 token、
+field/MBAFF、layer/SVC/MVC、多 slice/picture、配置变化均关闭精确身份。容器 key
+仍只作候选；analysis 必须检查 IDR。相同参数集重复不增加 epoch。
+
+现有 metadata scan 记录静态 in-band SPS/PPS，明确标为归一化 Annex-B NAL
+配置，绝不伪称 avcC。local/library 的当前帧、range、whole 共用原 runner/core，
+各自持有独立 payload reader；全缓存 range 只枚举只读索引，不加载 analysis WASM。
+实际需要压缩包才打开 demux，probe、seek 和重复 IO 均计入真实读取成本。
+
+无转码 `h264-static.ts` 保留 600 个源 picture。原 QA MP4 最后一个长度前缀 VCL
+内嵌 `00 00 00 01 0a` 的 EOS marker，FFmpeg parser 在 TS 中将其分离；验收逐 AU
+核对所有实际 VCL SHA-256，并显式核对这一已知 5 字节边界，独立冻结 block 答案
+继续有效。两个后段 GOP AU 540/570 在两个 WASM 中各推进 4 个包、读取 512 KiB，
+ordinal/tuple/payload hash 一致。Node TS 6/6 已通过首帧独立答案、两个独立后段
+请求的真实 IO、顺序/局部一致、全缓存/缺口、600 个 distinct AU、一次 EOF drain、
+21 帧取消后释放重开，以及物理 PES 缺失/重复时间戳负例。ST/MT 接收 token 包含
+B 帧、后段、尾帧、反向 seek。WebKit/Chromium TS local/library × 两种色彩政策的
+真实可见遮罩、逐帧、seek、offset、cache/range、分析关闭不加载重任务、迟到与
+取消闭环均已通过，最终干净 Web 提交后的 bench/回归与 CI 状态另行记录。
+
+支持矩阵、独立 CI 分片与 fixture 准备已登记。TS 目前仅支持上述静态 H264 子集；
+HEVC/VVC TS、MKV、动态流和复杂恢复继续由 #59 跟踪，不关闭总 issue，不自行
+合入或发版。

@@ -128,7 +128,7 @@ export class BitstreamAnalysisService {
       const result = source.info.source
         ? await this.remote(source, target, controller.signal)
         : source.bitstreamFile
-          ? await this.local(source.bitstreamFile, target, controller.signal, source.getBitstreamFlvIndex?.bind(source))
+          ? await this.local(source.bitstreamFile, target, controller.signal, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source))
           : await Promise.reject(
               new Error("This source has no local File reference"),
             );
@@ -221,7 +221,7 @@ export class BitstreamAnalysisService {
           target,
           controller.signal,
           consume,
-          undefined, undefined, source.getBitstreamFlvIndex?.bind(source),
+          undefined, undefined, (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source),
         );
       else throw new Error("No local analysis source");
       controller.signal.throwIfAborted();
@@ -290,7 +290,7 @@ export class BitstreamAnalysisService {
     };
     try {
       if (source.info.source) await this.remoteRange(source, target, controller.signal, consume, onProgress);
-      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source));
+      else if (source.bitstreamFile) await this.localRange(source.bitstreamFile, target, controller.signal, consume, onProgress, source.getBitstreamIndex?.bind(source), (source.getBitstreamFfmpegIndex ?? source.getBitstreamFlvIndex)?.bind(source));
       else throw new AnalysisFailure('invalid-request', 'No stream input');
       controller.signal.throwIfAborted();
       if (!consumed || consumed !== progress.totalPictures || !progress.indexComplete) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete stream coverage');
@@ -315,7 +315,7 @@ export class BitstreamAnalysisService {
     consume: (result: AnalysisResult) => void,
     onProgress?: (progress: StreamProgress) => void,
     frontier?: () => Promise<import('./stream.ts').AnalysisIndexFrontier>,
-    snapshot?: () => Promise<import("../flv-index-cache.ts").FlvIndexDocument>,
+    snapshot?: () => Promise<import("./types.ts").AnalysisIndexSnapshot>,
   ): Promise<void> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -392,7 +392,7 @@ export class BitstreamAnalysisService {
       headers,
       body: JSON.stringify({
         version: referenceVersion(source.info.source!.url),
-        target,
+        target: {...target, ...(source.bitstreamIndexIdentity ? {indexIdentity: source.bitstreamIndexIdentity} : {})},
       }),
       signal,
     });
@@ -475,7 +475,7 @@ export class BitstreamAnalysisService {
     file: Blob,
     target: AnalysisTarget,
     signal: AbortSignal,
-    snapshot?: () => Promise<import("../flv-index-cache.ts").FlvIndexDocument>,
+    snapshot?: () => Promise<import("./types.ts").AnalysisIndexSnapshot>,
   ): Promise<AnalysisResult> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -533,7 +533,7 @@ export class BitstreamAnalysisService {
       headers,
       body: JSON.stringify({
         version: referenceVersion(source.info.source!.url),
-        target,
+        target: {...target, ...(source.bitstreamIndexIdentity ? {indexIdentity: source.bitstreamIndexIdentity} : {})},
       }),
       signal,
     });

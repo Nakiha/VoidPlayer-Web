@@ -1,6 +1,8 @@
 import type { AnalysisIndexFrontier } from "./stream.ts";
 export interface AnalysisReader {
   readonly size: number;
+  readSync?(offset: number, length: number): Uint8Array;
+  ffmpegIndex?(): Promise<import('../ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   /** Source-bound immutable metadata; payload IO remains independently owned. */
   flvIndex?(): Promise<import("../flv-index-cache.ts").FlvIndexDocument>;
   readMetadata?(offset: number, length: number): Promise<Uint8Array>;
@@ -20,11 +22,13 @@ export interface AnalysisPacket {
   timing?: { pts: number | null; dts: number | null; timebase: [number, number] };
 }
 export interface AnalysisInputOptions {
+  demuxCore?: any;
   frontier?: () => Promise<AnalysisIndexFrontier>;
   waiting?: (waiting: boolean) => Promise<void>;
 }
 
 export interface AnalysisInput {
+  analysisCore?: any;
   codec: 'h264' | 'hevc' | 'vvc';
   configurations: Uint8Array[];
   packets: AnalysisPacket[];
@@ -44,3 +48,5 @@ export interface AnalysisInput {
   plan(target: import('./contract.ts').AnalysisTarget): Promise<{ start: number; target: AnalysisPacket; identity: import('./contract.ts').SourcePictureKey }>;
   close(): void;
 }
+
+export type AnalysisIndexSnapshot = import('../flv-index-cache.ts').FlvIndexDocument | import('../ffmpeg-index-cache.ts').FfmpegIndexDocument;

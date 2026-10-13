@@ -380,18 +380,23 @@ export class AnalysisScheduler {
         );
       if (this.closed || work.state !== "running" || !work.consumers.size)
         return;
-      let flvSnapshot;
+      let flvSnapshot, ffmpegSnapshot;
       if ('mode' in work.target && work.target.indexIdentity)
         index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, work.target.indexIdentity);
-      if (!('mode' in work.target)) {
+      {
         const probe = await open(work.filePath, 'r');
-        let flv = false;
-        try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; }
+        let flv = false, ts = false;
+        try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; ts=header[0]===0x47; }
         finally { await probe.close(); }
-        if (flv) {
+        if (flv && !('mode' in work.target)) {
           index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, FLV_MEDIA_INDEX_IDENTITY);
           flvSnapshot = await index.snapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
           if (!await this.library.resolve(work.mediaId, work.version)) throw new AnalysisFailure('source-changed', 'Analysis source changed during indexing');
+        }
+        if(ts) {
+          if(work.target.indexIdentity?.kind!=='ffmpeg')throw new AnalysisFailure('ambiguous-picture-identity','TS requires the playback index identity');
+          index ??= await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);
+          ffmpegSnapshot=await index.ffmpegSnapshot(()=>!this.closed && work.state==='running' && !!work.consumers.size);
         }
       }
       if (this.closed || work.state !== 'running' || !work.consumers.size) return;
@@ -408,7 +413,7 @@ export class AnalysisScheduler {
             coreDir: this.coreDir,
             target: work.target,
             externalIndex: !!index,
-            flvSnapshot,
+            flvSnapshot, ffmpegSnapshot,
           },
         },
       ));

@@ -1,3 +1,4 @@
+import {ffmpegAnalysisConfiguration} from './ffmpeg-analysis-config.ts';
 import { FfmpegPacketIndex } from './analysis/ffmpeg-adapter.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from './worker-protocol.ts';
@@ -12,7 +13,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + first presentable frame), index-input (already
@@ -399,6 +400,20 @@ port.onmessage = async (event: { data: Request }) => {
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
       } else port.postMessage(reply(message, result));
+    } else if (type === 'analysis-ffmpeg-index') {
+      const ctx = message.ctx;
+      if (!contexts.get(ctx)?.indexComplete) throw new Error('Complete FFmpeg index required');
+      const len=core._vp_index_export_bytes(ctx),ptr=core._malloc(len);
+      if(len<=0 || !ptr) throw new Error('Invalid FFmpeg index export');
+      try {
+        const count=core._vp_index_export(ctx,ptr,len);
+        if(count*48!==len)throw new Error('Incomplete FFmpeg index export');
+        const index=serializeFfmpegIndex({size:message.size,codec:core.ccall('vp_codec_name','string',['number'],[ctx]),
+          timeBaseNum:core._vp_tb_num(ctx),timeBaseDen:core._vp_tb_den(ctx),width:core._vp_width(ctx),height:core._vp_height(ctx),
+          analysisConfiguration:ffmpegAnalysisConfiguration(core,heap,ctx),streamIndex:core._vp_stream_index(ctx),indexerBuild:core.ccall('vp_core_build_id','string',[],[]),
+          ...(core._vp_index_integrity(ctx)?{indexIntegrity:'prefix' as const,indexTruncatedAt:Number(core._vp_index_truncated_at(ctx)),indexEndDts:String(core._vp_index_end_dts(ctx))}:{})},heap().slice(ptr,ptr+len));
+        port.postMessage(reply(message,index));
+      } finally {core._free(ptr);}
     } else if (type === 'index-input') {
       const ctx = message.ctx;
       const sink = contexts.get(ctx)?.indexSink;

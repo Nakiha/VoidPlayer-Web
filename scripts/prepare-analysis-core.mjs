@@ -22,7 +22,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
-  "referenceAbi",
+  "referenceAbi", "demuxAbi", "demuxCompatibility",
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(
@@ -31,7 +31,10 @@ assert.ok(
 );
 assert.ok(!manifest.dirty || process.env.ANALYSIS_ALLOW_LOCAL_BUILD === '1', 'Unpublished analysis core: use ANALYSIS_ALLOW_LOCAL_BUILD=1 for local preview only');
 const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis.js')).href)).default;
-validateAnalysisCore(await create({ wasmBinary: await readFile(path.join(source, 'voidplayer-analysis.wasm')) }));
+const core=await create({wasmBinary:await readFile(path.join(source,'voidplayer-analysis.wasm'))});
+validateAnalysisCore(core);
+assert.equal(core._vpd_abi(),lock.demuxAbi,'Analysis demux ABI');
+assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');
 await mkdir(target, { recursive: true });
 const hashes = {};
 for (const file of [

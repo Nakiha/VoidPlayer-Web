@@ -266,7 +266,7 @@ jobs:
       fail-fast: false
       matrix:
         engine: [chromium, webkit]
-        part: [mp4, flv-legacy, flv-enhanced, fmp4]
+        part: [mp4, flv-legacy, flv-enhanced, fmp4, ts]
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
@@ -300,6 +300,9 @@ jobs:
           sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps ${{ matrix.engine }}
       - run: node scripts/run-tests.mjs --prepare
+      - name: Verify TS packet, raw timing, whole, cache and cancellation contracts
+        if: matrix.part == 'ts' && matrix.engine == 'chromium'
+        run: node scripts/run-tests.mjs --case node-bitstream-analysis-ts --prepared
       - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4

@@ -1,3 +1,4 @@
+import {ffmpegAnalysisConfiguration} from '../src/ffmpeg-analysis-config.ts';
 import { closeSync, existsSync, openSync, readSync, statSync } from 'node:fs';
 import type { Stats } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -240,6 +241,7 @@ export async function buildFfmpegIndexDocument(
     if (count <= 0) throw new Error('服务端 FFmpeg 无法建立媒体帧索引。');
     if (typeof core._vp_index_recovery_abi_version !== 'function' || core.ccall('vp_index_recovery_abi_version', 'number', [], []) !== 1)
       throw new Error('服务端 FFmpeg 损坏恢复接口版本不匹配。');
+    metadata.analysisConfiguration=ffmpegAnalysisConfiguration(core,heap,ctx);
     metadata.indexIntegrity = core.ccall('vp_index_integrity', 'number', ['number'], [ctx]) ? 'prefix' : 'complete';
     if (metadata.indexIntegrity === 'prefix') {
       metadata.indexTruncatedAt = Number(core.ccall('vp_index_truncated_at', 'i64', ['number'], [ctx]));
