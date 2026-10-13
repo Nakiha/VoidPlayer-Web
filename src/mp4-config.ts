@@ -2,14 +2,14 @@ import { avcGeometry } from './avc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import type { RangeReader } from './range-reader.ts';
 
-interface Box { type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; ignoredTail?: boolean; }
+interface Box { start: number; type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; ignoredTail?: boolean; }
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
 async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
   const result: Box[] = [];
   const ignoreTail = (type?: string) => {
     if (!root || !result.some(b => b.type === 'moov') || !result.some(b => b.type === 'mdat')
       || (type && ['moov', 'moof', 'mdat', 'mfra', 'sidx', 'ftyp', 'styp'].includes(type))) return false;
-    result.push({ type: 'ignored-tail', data: start, end, ignoredTail: true });
+    result.push({ start, type: 'ignored-tail', data: start, end, ignoredTail: true });
     return true;
   };
   while (start < end) {
@@ -26,7 +26,7 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
     const declaredEnd = start + length;
     if (!Number.isSafeInteger(declaredEnd)) invalid('box 末尾超出安全整数范围。');
     if (truncated) length = end - start;
-    result.push({ type, data: start + bytes, end: start + length, ...(truncated ? { truncated: true, declaredEnd } : {}) });
+    result.push({ start, type, data: start + bytes, end: start + length, ...(truncated ? { truncated: true, declaredEnd } : {}) });
     if (result.length > 100000) throw new MediaOpenError('resource', 'MP4 box 数量超过上限。');
     start += length;
   }
@@ -67,13 +67,14 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
   return invalid('未找到对应的 VVC 视频轨道。');
 }
 
-export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; decodeTimes?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
+export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; decodeTimes?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; fragmentSequenceNumbers?: number[]; sampleDurations?: number[]; sampleKeys?: boolean[]; }
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
 export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000, rawTiming = false): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
+  if(root.some(b=>b.type==='moof') && root.filter(b=>b.type==='moov'||b.type==='moof').reduce((n,b)=>n+b.end-b.start,0)>24*1024*1024)throw new MediaOpenError('resource','MP4 fragment metadata 超过上限。');
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
     let nested=await boxes(reader,track.data,track.end);
     const tkhd=nested.find(b=>b.type==='tkhd');if(!tkhd)continue;
@@ -96,9 +97,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       if(codec==='avcC'){const g=avcGeometry(description),header=await reader.read(entry.data,28),v=new DataView(header.buffer,header.byteOffset);if(entries.length===1&&g&&(g.width!==v.getUint16(24)||g.height!==v.getUint16(26)))return invalid('AVC 像素裁剪与 sample entry 不同，需要容器解码路径。');}
       descriptions.push(description);
     }
-    // Fragmented multi-description movies require tfhd/trex selection; reject
-    // at the container boundary until it can be represented without guessing.
-    if(root.some(b=>b.type==='moof'))return invalid('分片 MP4 的 DTS/配置映射需要容器解码路径。');
+    if(root.some(b=>b.type==='moof'))return readFragmentConfigurations(reader, root, moov, nested, trackId, descriptions, maxSamples, rawTiming);
     const stsc=nested.find(b=>b.type==='stsc'),stsz=nested.find(b=>b.type==='stsz'),offsets=nested.find(b=>b.type==='stco'||b.type==='co64');
     if(!stsc||!stsz||!offsets||stsc.end-stsc.data<8||stsz.end-stsz.data<12||offsets.end-offsets.data<8)return invalid('多配置样本表不完整。');
     if(stsc.end-stsc.data>24*1024*1024)throw new MediaOpenError('resource','MP4 配置映射超过上限。');
@@ -189,4 +188,113 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       : 'mdat 声明超出文件末尾；已确认视频样本完整，按实际文件范围读取。'} : {})};
   }
   return invalid('未找到对应的视频轨道。');
+}
+
+/** Finite, self-contained fragments only. This maps bytes/raw ticks; Mediabunny
+ * owns edit-list-adjusted packet timestamps. No codec payload inspection here. */
+async function readFragmentConfigurations(reader: RangeReader, root: Box[], moov: Box, stbl: Box[], trackId: number,
+  descriptions: Uint8Array[], maxSamples: number, rawTiming: boolean): Promise<Mp4Configurations> {
+  const safe = (n: number, label: string) => { if (!Number.isSafeInteger(n) || n < 0) invalid(`${label} 超出安全整数范围。`); return n; };
+  if (root.some(b => b.truncated || b.ignoredTail)) return invalid('分片 MP4 必须完整，不能恢复截断前缀。');
+  if (descriptions.length !== 1) return invalid('分片 MP4 仅支持单一 sample description。');
+  if (root.filter(b => b.type === 'moov').length !== 1 || root.find(b => b.type === 'moof')!.start < moov.end)
+    return invalid('分片 MP4 需要自包含且前置的 init。');
+  const metadata = [moov, ...root.filter(b => b.type === 'moof')].reduce((n, b) => n + b.end - b.start, 0);
+  if (metadata > 24 * 1024 * 1024) throw new MediaOpenError('resource', 'MP4 fragment metadata 超过上限。');
+  const fields = async (b: Box) => { const d = await reader.read(b.data, b.end - b.data); if (d.length !== b.end - b.data) invalid(`${b.type} 被截断。`); return new DataView(d.buffer, d.byteOffset, d.byteLength); };
+  const full = (v: DataView, length: number, version = 0) => { if (v.byteLength < length || v.getUint8(0) !== version) invalid('fragment FullBox 无效。'); };
+  const single = (list: Box[], type: string) => { const found = list.filter(b => b.type === type); if (found.length !== 1) invalid(`fragment 需要唯一 ${type}。`); return found[0]; };
+  const sz = stbl.find(b => b.type === 'stsz');
+  if (!sz) return invalid('分片 MP4 缺少空 stsz。');
+  const sizes = await fields(sz); full(sizes, 12);
+  if (sizes.byteLength !== 12 || sizes.getUint32(8) !== 0 || stbl.some(b => b.type === 'stz2')) return invalid('暂不支持普通 samples 与 fragments 混合。');
+  const children = await boxes(reader, moov.data, moov.end);
+  let videoTracks = 0;
+  for (const track of children.filter(b => b.type === 'trak')) {
+    const tc = await boxes(reader, track.data, track.end), mdia = tc.find(b => b.type === 'mdia');
+    if (!mdia) continue;
+    const mc = await boxes(reader, mdia.data, mdia.end), handler = mc.find(b => b.type === 'hdlr');
+    if (!handler || handler.end - handler.data < 12) return invalid('分片 MP4 track handler 无效。');
+    const h = await reader.read(handler.data + 8, 4);
+    if (String.fromCharCode(...h) === 'vide') videoTracks++;
+  }
+  if (videoTracks !== 1) return invalid('分片 MP4 需要唯一视频轨道。');
+  const mvex = single(children, 'mvex'), defaults = await boxes(reader, mvex.data, mvex.end);
+  let trex: DataView | undefined;
+  for (const b of defaults.filter(b => b.type === 'trex')) {
+    const v = await fields(b); full(v, 24);
+    if (v.byteLength !== 24 || v.getUint32(0) !== 0) return invalid('trex 长度或 flags 无效。');
+    if (v.getUint32(4) === trackId) { if (trex) return invalid('trex track 重复。'); trex = v; }
+  }
+  if (!trex) return invalid('分片 MP4 缺少视频 trex。');
+  const sampleOffsets: number[] = [], sampleSizes: number[] = [], compositionOffsets: number[] = [],
+    sampleDurations: number[] = [], sampleKeys: boolean[] = [], fragmentSequenceNumbers: number[] = [],
+    decodeTimes: number[] | undefined = rawTiming ? [] : undefined;
+  const media = root.filter(b => b.type === 'mdat');
+  let nextDecodeTime: number | undefined;
+  for (const moof of root.filter(b => b.type === 'moof')) {
+    let foundTrack = false, fragmentIndex = 0;
+    for (const traf of (await boxes(reader, moof.data, moof.end)).filter(b => b.type === 'traf')) {
+      const entries = await boxes(reader, traf.data, traf.end), tfhd = await fields(single(entries, 'tfhd'));
+      full(tfhd, 8);
+      if (tfhd.getUint32(4) !== trackId) continue; // Audio traf does not define a video base or ordinal.
+      if (foundTrack) return invalid('同一 moof 存在多个视频 traf。'); foundTrack = true;
+      if (entries.some(b => ['senc', 'saiz', 'saio', 'sgpd', 'sbgp'].includes(b.type))) return invalid('分片 MP4 加密/样本分组暂不支持。');
+      const flags = tfhd.getUint32(0) & 0xffffff;
+      if (flags & ~0x02003b || flags & 0x010000 || (!(flags & 1) && !(flags & 0x020000))) return invalid('tfhd 隐式跨 traf 基址或 flags 暂不支持。');
+      let at = 8;
+      const u32 = () => { if (at + 4 > tfhd.byteLength) return invalid('tfhd 被截断。'); const n = tfhd.getUint32(at); at += 4; return n; };
+      let base = moof.start;
+      if (flags & 1) { if (at + 8 > tfhd.byteLength) return invalid('tfhd base 被截断。'); base = safe(Number(tfhd.getBigUint64(at)), 'tfhd base'); at += 8; }
+      const description = flags & 2 ? u32() : trex.getUint32(8);
+      const duration = flags & 8 ? u32() : trex.getUint32(12), size = flags & 16 ? u32() : trex.getUint32(16), sampleFlags = flags & 32 ? u32() : trex.getUint32(20);
+      if (at !== tfhd.byteLength || description !== 1) return invalid('tfhd 长度或 description index 无效。');
+      const tfdt = await fields(single(entries, 'tfdt')); if (tfdt.byteLength < 8) return invalid('tfdt 被截断。'); const version = tfdt.getUint8(0);
+      if (![0, 1].includes(version) || tfdt.byteLength !== (version === 1 ? 12 : 8) || (tfdt.getUint32(0) & 0xffffff)) return invalid('tfdt 长度或版本无效。');
+      let ticks = safe(version === 1 ? Number(tfdt.getBigUint64(4)) : tfdt.getUint32(4), 'tfdt');
+      if (nextDecodeTime !== undefined && ticks !== nextDecodeTime) return invalid('分片 MP4 decode 时间断裂或回退。');
+      let offset = base;
+      const runs = entries.filter(b => b.type === 'trun'); if (!runs.length) return invalid('视频 traf 缺少 trun。');
+      for (const run of runs) {
+        const v = await fields(run); if (v.byteLength < 8) return invalid('trun 被截断。');
+        const version = v.getUint8(0), flags = v.getUint32(0) & 0xffffff, count = v.getUint32(4);
+        if (version > 1 || flags & ~0xf05 || (flags & 4 && flags & 0x400)) return invalid('trun flags 或版本无效。');
+        if (sampleSizes.length + count > maxSamples) throw new MediaOpenError('resource', 'MP4 fragment sample 数量超过上限。');
+        const stride = [0x100, 0x200, 0x400, 0x800].filter(f => flags & f).length * 4;
+        if (v.byteLength !== 8 + (flags & 1 ? 4 : 0) + (flags & 4 ? 4 : 0) + count * stride) return invalid('trun 数量或长度无效。');
+        let at = 8;
+        if (flags & 1) { offset = safe(base + v.getInt32(at), 'trun data offset'); at += 4; }
+        let firstFlags: number | undefined; if (flags & 4) { firstFlags = v.getUint32(at); at += 4; }
+        const value = (flag: number, fallback: number) => { if (!(flags & flag)) return fallback; const n = v.getUint32(at); at += 4; return n; };
+        for (let i = 0; i < count; i++) {
+          const d = value(0x100, duration), s = value(0x200, size), f = value(0x400, i === 0 && firstFlags !== undefined ? firstFlags : sampleFlags);
+          let cto = 0; if (flags & 0x800) { cto = version === 1 ? v.getInt32(at) : v.getUint32(at); at += 4; }
+          if (!d || !s) return invalid('fragment sample duration/size 必须非零。');
+          const end = safe(offset + s, 'fragment sample end');
+          let lo = 0, hi = media.length;
+          while (lo < hi) { const mid = (lo + hi) >>> 1; if (media[mid].data <= offset) lo = mid + 1; else hi = mid; }
+          if (!media[lo - 1] || end > media[lo - 1].end) return invalid('fragment sample 超出 mdat 范围。');
+          if (!Number.isSafeInteger(ticks + cto)) return invalid('fragment composition time 溢出。');
+          sampleOffsets.push(offset); sampleSizes.push(s); compositionOffsets.push(cto); decodeTimes?.push(ticks);
+          sampleDurations.push(d); sampleKeys.push(!(f & 0x10000)); fragmentSequenceNumbers.push(safe(moof.start + fragmentIndex++, 'fragment packet sequence'));
+          ticks = safe(ticks + d, 'fragment decode time'); offset = end;
+        }
+      }
+      nextDecodeTime = ticks;
+    }
+  }
+  if (!sampleSizes.length) return invalid('分片 MP4 没有完整视频 sample。');
+  const order = sampleOffsets.map((_, i) => i).sort((a, b) => sampleOffsets[a] - sampleOffsets[b]);
+  for (let i = 1; i < order.length; i++) if (sampleOffsets[order[i]] < sampleOffsets[order[i - 1]] + sampleSizes[order[i - 1]]) return invalid('fragment sample 重叠。');
+  return { descriptions, sampleConfigurations: Array(sampleSizes.length).fill(0), sampleOffsets, sampleSizes, compositionOffsets,
+    decodeTimes, sampleDurations, sampleKeys, fragmentSequenceNumbers, availableSamples: sampleSizes.length, indexIntegrity: 'complete' };
+}
+
+/** Verify the pinned demuxer's fragment locator before assigning our continuous
+ * decode-order AU. A fragment sequence number is never an analysis identity. */
+export function validateFragmentPacket(config: Mp4Configurations, au: number, packet: { sequenceNumber: number; byteLength: number; type: string }) {
+  if (!config.fragmentSequenceNumbers) return;
+  if (packet.sequenceNumber !== config.fragmentSequenceNumbers[au] || packet.byteLength !== config.sampleSizes![au]
+    || (packet.type === 'key') !== config.sampleKeys![au])
+    invalid('fragment packet 与 sample mapping 不一致。');
 }

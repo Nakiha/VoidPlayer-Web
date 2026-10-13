@@ -5,7 +5,7 @@ import { MediaOpenError } from './media-errors.ts';
 import { RangeReader } from './range-reader.ts';
 import { Mp4CachedMetadata } from './mp4-cached-metadata.ts';
 import type { RandomAccessInput } from './range-reader.ts';
-import { readMp4Configurations } from './mp4-config.ts';
+import { readMp4Configurations, validateFragmentPacket } from './mp4-config.ts';
 import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
 import type { PacketDecoder } from './flv-decoder.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
@@ -67,6 +67,7 @@ export class Mp4Engine {
       }
       const resolution=await track.getTimeResolution();
       const packets:FlvPacket[]=this.packets.map((p,i)=>{
+        validateFragmentPacket(configs, i, p);
         const configuration=configs.sampleConfigurations?.[i]??0;
         if(i>0&&configuration!==(configs.sampleConfigurations?.[i-1]??0)&&p.type!=='key')throw new MediaOpenError('container','MP4 配置切换缺少随机访问点。');
         if(configs.sampleSizes?.[i]!==p.byteLength)throw new MediaOpenError('container','MP4 sample 长度与包索引不一致。');
@@ -79,7 +80,7 @@ export class Mp4Engine {
       if(recovered)packets.forEach((p,i)=>{p.originalPts=p.pts;p.pts=recovered[i];});
       const order=packets.map((_,i)=>i).sort((a,b)=>packets[a].pts-packets[b].pts),pts=order.map(i=>packets[i].pts);
       if(pts.some((p,i)=>i>0&&p<=pts[i-1]))throw new MediaOpenError('container','MP4 包时间戳存在歧义，需要容器解码路径。');
-      const durations=order.map((p,i)=>recovered&&i+1<pts.length?pts[i+1]-pts[i]:Math.round(this.packets[p].duration*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
+      const durations=order.map((p,i)=>(recovered||configs.fragmentSequenceNumbers)&&i+1<pts.length?pts[i+1]-pts[i]:Math.round((configs.sampleDurations?.[p] !== undefined ? configs.sampleDurations[p]/resolution : this.packets[p].duration)*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
       this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
         ...(configs.indexIntegrity === 'prefix' ? { truncatedAt: configs.indexTruncatedAt } : {})};

@@ -43,3 +43,11 @@ FLV output gets a precise playback picture identity only after the source index 
 ### CI matrix partitions
 
 Chromium job [115206446227](https://github.com/Nakiha/VoidPlayer-Web/actions/runs/38370470947/job/115206446227) on `be4e7ad` was stopped by the unchanged 600-second case watchdog (`600091 ms`) while executing the library/browser Enhanced VVC cell of the enlarged 36-cell matrix; its geometry, diagrams, incremental-index and source-analysis panel cases all passed. The matrix is now three independently required cases: MP4, legacy FLV and Enhanced FLV, 12 combinations each. Both engines run all three, with the same assertions, per-operation limits and 600-second case budget. The unfiltered CLI still runs all 36 combinations. A contract checks that the partitions cover every original fixture exactly once and own distinct evidence directories; CI uploads those directories. No performance threshold or timeout was increased.
+
+## 第二阶段 fMP4 检查点
+
+从 FLV 合入后的 `68e44e2` 开始。共享 `mp4-config.ts` 已映射完整、自包含、未加密、单视频轨/单 stsd 的 init + moof/mdat，播放和分析共用整轨 decode-order AU。Mediabunny 1.55.7 的分片 sequenceNumber 为 moofOffset + 片内 index，仅用于交叉验证定位，不作为 AU。支持 trex/tfhd/trun 默认值优先级、多 run、显式 base_data_offset / default-base-is-moof、signed data_offset、tfdt v0/v1、CTO v0 unsigned / v1 signed；decode clock 必须连续。原始 ticks 与 edit-list 后微秒时间分离。Fragment 不定义 GOP；codec 安全锚和预滚预算沿用既有逻辑。
+
+初始检查点：H.264/HEVC/VVC 三个真实 QA 片源按 payload/config 原样 remux 为 30 个非 GOP 对齐 fragment、每片两个 trun；Node 逐 AU 字节核对、独立首帧/后段块答案、实际软件播放 AU 均通过。WebKit × 本地 H.264 × 软件偏好的当前帧 presented token、独立分析、可见遮罩精确身份、缓存/区间和取消闭环通过（`.run/browser-fixtures/bitstream-analysis-matrix-fmp4-webkit/matrix.json`）。`npm run build` 通过。下一步扩展解析负例、整片 drain、IO/缓存与完整浏览器矩阵；此检查点尚不代表最终验收。
+
+混合普通 samples + fragments、外部 init/.m4s、增长直播、多配置/多视频轨、加密/样本分组、decode 时间断裂或回退、隐式跨 traf 基址、损坏/截断分片不支持；继续容器 fallback 或明确拒绝精确分析。TS/MKV 仍由 #59 后续阶段跟踪。本阶段只开 draft PR，不合入、不发版，Refs #59。

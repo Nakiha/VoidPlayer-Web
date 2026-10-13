@@ -1,7 +1,7 @@
 import { Input, CustomSource, MP4, QTFF, EncodedPacketSink } from "mediabunny";
 import type { AnalysisReader, AnalysisPacket, AnalysisInputOptions } from "./types.ts";
 import { RangeReader } from "../range-reader.ts";
-import { readMp4Configurations } from "../mp4-config.ts";
+import { readMp4Configurations, validateFragmentPacket } from "../mp4-config.ts";
 import { hevcDisplayOrder, recoveredHevcTimes } from "../hevc-timeline.ts";
 import { inspectPacketPicture } from "../packet-picture.ts";
 import type { AnalysisIndexFrontier } from "./stream.ts";
@@ -42,7 +42,7 @@ export async function openMp4AnalysisInput(
       if (error instanceof AnalysisFailure || signal.aborted) throw error;
       throw new AnalysisFailure(
         "unsupported-container",
-        "Only progressive MP4 is admitted for bitstream analysis",
+        "Only self-contained MP4 is admitted for bitstream analysis",
       );
     }
     const track = await input.getPrimaryVideoTrack();
@@ -119,6 +119,7 @@ export async function openMp4AnalysisInput(
         return false;
       }
       const packet = next.value;
+      validateFragmentPacket(configurations, au, packet);
       if (au >= 250000) throw new AnalysisFailure('resource-limit', 'Analysis packet index budget exceeded');
       const offset = configurations.sampleOffsets?.[au], size = configurations.sampleSizes?.[au];
       if (offset === undefined || size !== packet.byteLength)
@@ -127,8 +128,9 @@ export async function openMp4AnalysisInput(
         pts: Math.round(packet.timestamp * 1e6),
         dts: Math.round(packet.timestamp * 1e6 - (configurations.compositionOffsets![au] / resolution) * 1e6), key: packet.type === 'key',
         timing: { pts: configurations.decodeTimes ? configurations.decodeTimes[au] + configurations.compositionOffsets![au] : null, dts: configurations.decodeTimes?.[au] ?? null, timebase: [1, resolution] } });
-      durations.push(Math.round(packet.duration * 1e6));
-      sourceEndUs = Math.max(sourceEndUs, Math.round((packet.timestamp + packet.duration) * 1e6));
+      const duration = configurations.sampleDurations?.[au] !== undefined ? configurations.sampleDurations[au] / resolution : packet.duration;
+      durations.push(Math.round(duration * 1e6));
+      sourceEndUs = Math.max(sourceEndUs, Math.round((packet.timestamp + duration) * 1e6));
       return true;
     };
     const canRepairHevc = codec === "hevc" && configurations.descriptions.length === 1 && !configurations.compositionOffsets!.some(n => n !== 0);
