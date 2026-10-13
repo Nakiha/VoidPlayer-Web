@@ -25,7 +25,7 @@ for (const item of manifest) {
     const observe = frame => {
       const layout = frame.description?.yuv;
       const yuv = frame.kind === 'yuv' && frame.pixels ? frame : null;
-      const planes = yuv && layout && layout.bitDepth === 8 && !layout.semiplanar ? planeSignature(yuv.pixels, layout) : undefined;
+      const planes = yuv && layout && layout.bitDepth === 8 && !layout.semiplanar ? planeSignature(yuv.pixels, layout, frame.description.visibleRect) : undefined;
       const pixels = yuv ? yuvToRgba(frame.description, yuv.pixels) : frame.pixels;
       return { ptsUs: frame.ptsUs, width: frame.width, height: frame.height, planeSignature: planes,
         bytes: pixels?.byteLength, signature: pixels && pixelSignature(pixels, frame.width, frame.height) };

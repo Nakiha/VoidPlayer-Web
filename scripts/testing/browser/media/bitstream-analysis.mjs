@@ -6,6 +6,7 @@ import { withBrowserFixture } from "../../browser-fixture.mjs";
 import { repositoryRoot } from "../../manifest.mjs";
 
 async function selectDiagrams(page, choice) {
+  if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
   const selected = Array.isArray(choice) ? choice : choice === 'overview' ? ['bitrate', 'size'] : [choice];
   for (const value of ['bitrate', 'size', 'nalu-size', 'nalu-types', 'references']) {
     const item = page.locator(`#analysis-diagrams [data-value="${value}"]`);
@@ -79,8 +80,28 @@ await copyFile(path.join(limitsDir, 'stream.mp4'), path.join(limitsDir, 'stream-
 execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
   'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
   '-x264-params', 'scenecut=0:open-gop=0', path.join(limitsDir, 'incremental.mp4')]);
-for (const action of ['continue', 'cancel']) execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error',
-  '-display_rotation', '90', '-i', path.join(limitsDir, 'incremental.mp4'), '-c', 'copy', path.join(limitsDir, `incremental-${action}.mp4`)]);
+// Two valid sample descriptions keep this fixture on the container index
+// adapter. Right-angle rotation now correctly uses the packet MP4 adapter.
+const incremental = await readFile(path.join(limitsDir, 'incremental.mp4'));
+const containers = new Set(['moov','trak','mdia','minf','stbl']);
+function duplicateDescription(bytes) {
+  const boxes=[];
+  for(let at=0;at<bytes.length;) {
+    const size=bytes.readUInt32BE(at),type=bytes.toString('ascii',at+4,at+8);
+    assert.ok(size>=8 && at+size<=bytes.length);
+    let payload=bytes.subarray(at+8,at+size);
+    if(containers.has(type))payload=duplicateDescription(payload);
+    if(type==='stsd') {
+      assert.equal(payload.readUInt32BE(4),1);
+      payload=Buffer.concat([payload,payload.subarray(8)]);payload.writeUInt32BE(2,4);
+    }
+    const header=Buffer.from(bytes.subarray(at,at+8));header.writeUInt32BE(payload.length+8);
+    boxes.push(Buffer.concat([header,payload]));at+=size;
+    if(type==='moov')assert.equal(at,bytes.length,'moov must follow mdat so sample offsets stay valid');
+  }
+  return Buffer.concat(boxes);
+}
+for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`incremental-${action}.mp4`),duplicateDescription(incremental));
 await withBrowserFixture(
   {
     caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? 'bitstream-analysis-matrix' : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
@@ -120,6 +141,7 @@ await withBrowserFixture(
     );
     await page.addInitScript(() => { window.__vpAnalysisQA = true; });
     await ready();
+    page.setDefaultTimeout(30000);
     if (
       await page
         .locator("#identity-welcome")
@@ -1075,10 +1097,23 @@ await withBrowserFixture(
       await page.screenshot({ path: artifact(`whole-stream-${input}.png`) });
       const cached = await call('request_bitstream_analysis', { slot: 'A' });
       assert.ok(cached.gop); assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true);
-      let release, entered;
-      const gate = new Promise(r => { release = r; }), requested = new Promise(r => { entered = r; });
-      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/voidplayer-analysis.wasm' : '**/bitstream-analysis/chunks/**';
-      await page.route(pattern, async route => { entered(); await gate; await route.continue().catch(() => {}); });
+      const cacheStart = requests.length;
+      await call('request_bitstream_stream', { slot: 'A' });
+      const restored = await call('get_bitstream_analysis_state', { slot: 'A' });
+      assert.equal(restored.state, 'ready'); assert.equal(restored.stream.pictures, 120);
+      const { revision: beforeRevision, ...beforeChart } = configQuery;
+      const { revision: afterRevision, ...afterChart } = await call('query_bitstream_chart', { slot: 'A' });
+      assert.ok(afterRevision >= beforeRevision);
+      assert.deepEqual(afterChart, beforeChart,
+        'cached stream preserves picture, NALU and reference records');
+      assert.equal(requests.slice(cacheStart).filter(r => new URL(r.url).pathname.endsWith('/voidplayer-analysis.wasm')).length, 0,
+        'complete cached stream never initializes the local analysis WASM');
+      let release;
+      const gate = new Promise(r => { release = r; });
+      // Cached local streams still read the manifest to verify build identity.
+      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/chunks/**';
+      await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
+      const requested = page.waitForRequest(pattern, { timeout: 30000 });
       try {
         await requestInspection(page, 'A');
         await requested;
@@ -1106,7 +1141,7 @@ await withBrowserFixture(
         await page.locator('#settings').waitFor({state:'hidden'});
       };
       for (const input of ['local-file','library']) {
-        await selectDiagrams(page, 'overview');
+        if ((await call('get_review_session')).tracks.length) await selectDiagrams(page, 'overview');
         for (const slot of ['A','B','C']) await call('remove_review_track',{slot});
         for (const [slot, name] of [['A','stream.mp4'],['B','incremental.mp4'],['C','stream-2.mp4']]) {
           if (input === 'local-file') await page.locator(`#file-${slot}`).setInputFiles(path.join(limitsDir,name));
@@ -1118,7 +1153,7 @@ await withBrowserFixture(
         if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
         await chooseConcurrency(1);
         let release; const gate = new Promise(resolve=>{release=resolve;});
-        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/voidplayer-analysis.wasm' : '**/api/bitstream-analysis/requests/*';
+        const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/voidplayer-analysis.wasm*' : '**/api/bitstream-analysis/requests/*';
         await page.route(pattern, async route => { await gate; await route.continue().catch(()=>{}); });
         try {
           await selectDiagrams(page,'nalu-size');
@@ -1955,7 +1990,7 @@ await withBrowserFixture(
       await page.setViewportSize(cardViewport);
     }
 
-    // Rotate MP4 to exercise the actual FFmpeg streaming index path. Gate
+    // Multiple sample descriptions exercise the FFmpeg streaming index path. Gate
     // shared persisted batches after the first 128 records for both playback
     // and analysis; neither subscriber can treat this prefix as index EOF.
     for (const cancel of diagramsOnly ? [] : [false, true]) {

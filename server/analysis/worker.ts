@@ -90,12 +90,14 @@ try {
       });
     };
     if (workerData.target.mode === 'stream')
-      await analyzeStream(reader, workerData.target, await loadCore(), (manifest.buildId ?? manifest.revision),
+      await analyzeStream(reader, workerData.target, loadCore, (manifest.buildId ?? manifest.revision),
         new AbortController().signal, publish,
         async progress => parentPort!.postMessage({ type: 'progress', progress }),
         workerData.externalIndex ? () => new Promise((resolve, reject) => {
           indexReply = { resolve, reject }; parentPort!.postMessage({ type: 'index' });
-        }) : undefined);
+        }) : undefined, picture => new Promise(resolve => {
+          cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+        }));
     else if ("startUs" in workerData.target)
       await analyzeRange(
         reader,

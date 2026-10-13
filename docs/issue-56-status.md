@@ -1,6 +1,6 @@
 # Issue #56 验收状态（2026-10-13）
 
-[Issue #56](https://github.com/Nakiha/VoidPlayer-Web/issues/56) 保持开放。本表区分已实现的 MP4 MVP、关闭前仍需补足的证据与明确排除的扩展能力。不能用随机/顺序或本地/服务端相互一致代替独立答案，也不能用短时测试声称默认 8 路持续运行没有资源争用。
+[Issue #56](https://github.com/Nakiha/VoidPlayer-Web/issues/56) 的首批交付范围是支持矩阵中的普通 MP4 MVP。本表记录已实现的闭环、独立正确性证据、持续负载测量及三平台发布门禁。功能完成不能代替发布门禁通过；测量结果由声明的机器和负载限定。
 
 ## 已实现及可运行证据
 
@@ -13,25 +13,28 @@
 | 服务端调度 | 全局默认 8 路，管理页 1–32；优先排队的当前帧；相同工作多 consumer 共享，租约失效回收 | server unit/media、admin browser 用例 |
 | 独立 VVC 答案 | VTM 原生内置统计，3 个 I/B picture 共 32983 个 CU 全量哈希、具体记录及 L0/L1 身份 | `docs/fixtures/bitstream-analysis-vtm.json`、core VTM 回归 |
 | 稀疏有界区间 | 枚举实际 picture，跨不同起止点复用；重启复用持久块；损坏/淘汰块补缺；完整命中不初始化 WASM | 本次新增三 codec core、服务重启/淘汰、12 格 browser matrix 断言 |
+| 整片恢复 | 按封口 GOP 复用；完整命中不初始化 WASM；缺口保留参考预滚；每 AU 只交付一次；新 lease 从 0 开始，拒绝旧任务游标 | 三 codec core、server restart/corruption、两浏览器 local/library 图示用例 |
 | 真实几何组合 | coded 64×64、非零 crop（8,4,48,48）、SAR 2:1、0/90/270°；两浏览器各 12 个输入/解码组合 × 并排/分屏 × 1/8 倍，逐像素及命中；另有 RGBA 三角度 | `testing/browser/media/bitstream-geometry.mjs`；两浏览器加入 CI |
 | 能力语义 | 固定 `blocks-basic-v2`，检查版本及 blocks/modes，8-bit luma QP；高位深 QP unsupported 不算完成该能力 | core 缓存拒绝用例、server 高位深用例 |
 | 发布来源 | FFmpeg 9.0.2；两个 core 源分支已推送；Web 固定源码/ABI/工具链与哈希 | `scripts/release-{core,analysis}.json`、[WASM 实验](wasm-refresh.md) |
 
-缓存查询仍做有界元数据读取；需要参考的缓存帧仍可能被解码。整片连续请求尚不跳过缓存覆盖的完整 GOP，也不恢复服务重启前的流式游标。当前补缺实现适用于单帧和不超过 1 秒/32 picture 的区间，不能声称整片恢复已经完成。
+缓存查询仍做有界元数据及 GOP 边界语法读取，需要重建参考的缓存帧仍可能被解码。整片缓存复用逐块推进、不累积 GOP 块数组；闭合起点或明确 EOF 允许跳过已完成段，dependent GOP 保持参考依赖。只为缺失/失效的 picture 发布新结果。重启不恢复 decoder 内存或运输游标，重新提交使用新 lease，并按持久 picture 缓存重建覆盖。
 
-## 关闭前剩余项
+## 收尾验收与发布门禁
 
-1. **持续争用与默认预算依据**：已有四类场景、本地/库、软硬解、单双轨的短时报告；补默认 8 路及配置变更下的长时分析，记录 CPU/RSS/I/O、Range、seek、掉帧/吞吐与取消延迟，沿用播放阈值。单靠 Worker 数量有界不能证明 RSS 或播放体验达标。
-2. **流式恢复与按需能力扩展**：明确并验证重新连接后的消费游标边界；跨服务重启当前只能按 picture/区间命中。若继续承诺整片缺口恢复，需按安全 GOP 补缺并保留所需参考解码。未来增加独立 recipe/能力请求时应扩展覆盖契约，不能把现有固定 recipe 当作任意能力集合已完成。
-3. **三平台本次源码验收**：本次 macOS ARM64 原生包已通过空 PATH 启动、三 codec 分析、重启后的重叠区间复用，以及独立发布包契约检查。Linux x64、Windows x64、macOS ARM64 的正式依据是 `release-preview.yml` 对当前提交的原生打包、真实分析与浏览器结果，本地通过不能替代 CI。
+1. **持续争用与默认预算依据已补足**：Apple M5 / 10 CPU / 32 GiB / Node 24.15.0 / 可见 WebKit，8 个独立媒体库 H.264 流持续实际消费 120 秒，60 秒时持久化调低至 4 路、90 秒恢复至 8 路；不终止已启动任务，各路恢复后继续推进。共消费 8642 picture、约 4.50 GB 逻辑结果，旁路原播放基准 12/12 通过。Node 服务及分析 Worker RSS 峰值 1.65 GiB，Range 1180 次探测 p95 4.73 ms / p99 7.69 ms，12 次 seek p95 82.40 ms，取消回收 7.39 ms。逐秒样本、原播放吞吐/掉帧/首帧、CPU、I/O 与原始数据哈希见 [持续负载报告](fixtures/bitstream-analysis-sustained.json)。页缓存下 OS 物理 I/O 计数为 0，不用逻辑字节冒充磁盘流量。保留单任务 512 MiB heap 和所有原播放阈值；默认 8 路不是任意硬件或更高分辨率的性能保证。
+2. **流式恢复与能力边界已验证**：三 codec 的完整缓存、缺口与 dependent 预滚和取消有真实核心对照；服务重启后用仅 manifest、无 js/wasm 的目录成功消费全部 120 帧，证明完整命中没有隐式解码；损坏/丢失 chunk 补缺后精确内容一致。旧 lease 失效、新 lease 游标从 0 开始，越界/倒退确认被拒绝。当前固定 `blocks-basic-v2` recipe 覆盖 blocks/modes 和 8-bit luma QP；任意独立 recipe/能力请求仍属扩展。
+3. **三平台发布仍由当前 PR 的必需 checks 裁定**：[PR #58](https://github.com/Nakiha/VoidPlayer-Web/pull/58) 必须通过 Linux x64、Windows x64、macOS ARM64 的原生打包、包内三 codec 分析/重启复用，以及全部必需 Node、浏览器与发布汇总检查，才满足关闭门槛。本机或前一提交通过不代替当前代码的 CI。
+
+收尾同时修复原有 CI：增量索引 fixture 用两个合法 sample description 触发容器适配器，避免旋转 MP4 改用精确 packet 路径后不再进入被测分支；网络拦截包含内容版本查询参数，等待请求有明确超时；FATE 指纹按 visible crop 比较全部有效样本，不把 coded padding 作为图像差异，也不放宽像素阈值或重生成答案。
 
 FLV/TS/MKV、fragmented MP4、field/layer、VVC 多 slice、复杂工具和 MV 可视化已排除在首批矩阵外。扩展这些功能无需阻塞声明范围内的 MVP，但不得把排除项勾成“已验证支持”。
 
 ## 本轮本地验证
 
-macOS ARM64 / Node 24.15 / Bun 1.4.2：fast 39/39、contract 12/12、Node 全套 960 项；WebKit 本地/媒体库 × browser/software × H.264/HEVC/VVC 的 12 格矩阵通过，包含缓存区间不加载 WASM 的网络断言。可见 WebKit 播放基准沿用默认 4 场景、每场景 3 次、每次 8 秒，12/12 通过，未改变原阈值。
+macOS ARM64 / Node 24.15 / Bun 1.4.2：fast 39/39、contract 12/12、Node 全套 966/966、build 通过；WebKit 本地/媒体库 × browser/software × H.264/HEVC/VVC 的 12 格矩阵通过，包含缓存区间不加载 WASM 的网络断言。两浏览器的图示与增量索引回归、基础 WebKit UI 通过；FATE 15 项正向通过、8 项预期拒绝，无失败。可见 WebKit 播放基准沿用默认 4 场景、每场景 3 次、请求每次 8 秒，12/12 通过；实际墙钟时长与正常 EOF 见逐项报告，未改变原阈值。
 
-新增原生包 gate 对三种 codec 均执行区间分析、服务重启、不同起止点的缓存重用，并比较包括原始分析 metrics 在内的完整记录；仅结果非空不能通过。测试仍在现有 `release-analysis` 清单项内，随三平台原生包 CI 运行。当前分支通过草稿 PR #58 提交，issue 仍保持开放。
+新增原生包 gate 对三种 codec 均执行区间分析、服务重启、不同起止点的缓存重用，并比较包括原始分析 metrics 在内的完整记录；仅结果非空不能通过。测试仍在现有 `release-analysis` 清单项内，随三平台原生包 CI 运行。原始代码与可运行验收通过 PR #58 提交。
 
 ## 真实几何补充验收
 

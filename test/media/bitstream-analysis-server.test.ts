@@ -599,3 +599,68 @@ test('overlapping ranges reuse atomic picture chunks after restart and repair ev
     }
   } finally { await scheduler.close(); await f.close(); }
 });
+
+test('whole stream restart rebuilds lease cursors from persistent pictures without WASM and repairs evicted or corrupt holes', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdir, copyFile, writeFile } = await import('node:fs/promises');
+  const media = await mkdtemp(join(tmpdir(), 'vp-stream-restart-')), name = 'restart.mp4';
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=128x64:rate=30:duration=4', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
+  const f = await fixture(media, name), directory = join(f.folder, 'analysis');
+  let scheduler = new AnalysisScheduler(f.library, coreDir, directory);
+  const demand = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 4000000 };
+  const consume = async (requestId: string) => {
+    const records = new Map<number, { id: string; result: any }>();
+    let cursor = 0;
+    for (let n = 0; ; n++) {
+      assert.ok(n < 1500, 'stream finishes within budget');
+      const state = await scheduler.streamStatus(requestId, 'owner', cursor);
+      assert.ok(state && ['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
+      for (const ref of state.chunks) {
+        assert.equal(ref.cursor, cursor + 1);
+        const result = await scheduler.store.get(ref.id);
+        assert.ok(result?.gop); assert.equal(records.has(result.picture.au), false);
+        records.set(result.picture.au, { id: ref.id, result }); cursor = ref.cursor;
+      }
+      if (state.state === 'complete' && cursor === state.published) break;
+      await new Promise(r => setTimeout(r, 5));
+    }
+    assert.equal(records.size, 120);
+    await scheduler.streamStatus(requestId, 'owner', cursor);
+    await assert.rejects(scheduler.streamStatus(requestId, 'owner', 0), /acknowledgement/);
+    return records;
+  };
+  try {
+    const first = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'owner');
+    const expected = await consume(first.requestId);
+    await scheduler.close();
+    // A manifest is enough to establish cache identity. No JS or WASM exists
+    // here: a hidden eager load or re-decode cannot accidentally pass.
+    const manifestOnly = join(f.folder, 'manifest-only'); await mkdir(manifestOnly);
+    await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+    scheduler = new AnalysisScheduler(f.library, manifestOnly, directory);
+    assert.equal(await scheduler.streamStatus(first.requestId, 'owner', 120), null);
+    const resumed = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'owner');
+    assert.notEqual(resumed.requestId, first.requestId);
+    await assert.rejects(scheduler.streamStatus(resumed.requestId, 'owner', 120), /acknowledgement/);
+    const cached = await consume(resumed.requestId);
+    assert.deepEqual(cached, expected, 'restart preserves every record including original metrics');
+    await scheduler.close();
+    scheduler = new AnalysisScheduler(f.library, coreDir, directory);
+    const holes = new Set([33, 63]);
+    await rm(scheduler.store.chunkFile(expected.get(33)!.id));
+    await writeFile(scheduler.store.chunkFile(expected.get(63)!.id), '{broken');
+    const repaired = await consume((await scheduler.submit(f.entry.id, f.entry.version!, demand, 'owner')).requestId);
+    for (const [au, record] of repaired) {
+      const original = expected.get(au)!;
+      assert.equal(record.id, original.id);
+      if (!holes.has(au)) assert.deepEqual(record.result, original.result);
+      else {
+        const { metrics: _before, ...before } = original.result;
+        const { metrics: _after, ...after } = record.result;
+        assert.deepEqual(after, before, 'regenerated hole retains exact picture content');
+      }
+    }
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
+});

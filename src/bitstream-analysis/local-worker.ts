@@ -40,11 +40,13 @@ scope.onmessage = async ({ data }) => {
       const signal = new AbortController().signal;
       const buildId = manifest.buildId ?? manifest.revision;
       if (data.target.mode === 'stream')
-        await analyzeStream(reader, data.target, await loadCore(), buildId, signal, publish,
+        await analyzeStream(reader, data.target, loadCore, buildId, signal, publish,
           async progress => scope.postMessage({ event: 'progress', progress }),
           data.externalIndex ? () => new Promise(resolve => {
             indexReply = resolve; scope.postMessage({ event: 'index' });
-          }) : undefined);
+          }) : undefined, picture => new Promise(resolve => {
+            cacheReply = resolve; scope.postMessage({ event: 'cache', picture });
+          }));
       else
         await analyzeRange(reader, data.target, loadCore, buildId, signal, publish,
           picture => new Promise(resolve => {

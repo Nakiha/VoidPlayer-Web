@@ -760,3 +760,56 @@ test('VVC geometry, QP, intra/inter/skip and L0/L1 agree with independent VTM bl
       { kind: 'active-lists', state: 'ready', poc: answer.poc, frameType: answer.frameType, edges: answer.references });
   }
 });
+
+for(const fixture of fixtures)test(`whole ${fixture.codec} cache resumes holes with bounded reference preroll and no duplicate pictures`,async()=>{
+  const {groupAnalysisGops}=await import('../../src/bitstream-analysis/stream.ts');
+  const {gzipSync,gunzipSync}=await import('node:zlib');
+  const signal=new AbortController().signal;
+  const makeInput=async()=>{
+    const input=await openAnalysisInput(await reader(fixture.file),signal,true);
+    const groups=groupAnalysisGops(input.packets);
+    input.packets.splice(groups[2].endAu);input.totalPackets=input.packets.length;
+    Object.defineProperty(input,'sealedEnd',{get:()=>input.packets.length});
+    return input;
+  };
+  const cache=new Map<number,Buffer>(),hashes=new Map<number,string>();
+  const hash=(value:any)=>createHash('sha256').update(JSON.stringify([value.picture,value.sourcePtsUs,value.blocks,value.references,value.nalus])).digest('hex');
+  const run=async(module:any,cached:any,consume:(r:any)=>Promise<void>)=>{
+    const input=await makeInput();
+    return analyzePicture(input.reader,{sourceVersion:fixture.sha256,sourcePtsUs:input.packets[0].pts,normalizedMediaUs:0},
+      module,'test',signal,{input,sequential:true,stream:{mode:'stream',sourceVersion:fixture.sha256,firstPtsUs:0,durationUs:10000000},cached,onResult:consume});
+  };
+  await run(await core(),undefined,async result=>{
+    hashes.set(result.picture.au,hash(result));cache.set(result.picture.au,gzipSync(JSON.stringify(result)));
+  });
+  const get=(au:number)=>JSON.parse(gunzipSync(cache.get(au)!).toString());
+  let seen=new Set<number>();
+  await run(()=>assert.fail('complete cached stream must not allocate WASM'),async(p:any)=>get(p.au),async result=>{
+    assert.ok(!seen.has(result.picture.au));seen.add(result.picture.au);assert.equal(hash(result),hashes.get(result.picture.au));
+  });
+  assert.equal(seen.size,cache.size);
+  const cancelledInput=await makeInput(),controller=new AbortController();
+  let closed=false,published=0;
+  const close=cancelledInput.close.bind(cancelledInput);
+  cancelledInput.close=()=>{closed=true;close();};
+  await assert.rejects(analyzePicture(cancelledInput.reader,
+    {sourceVersion:fixture.sha256,sourcePtsUs:cancelledInput.packets[0].pts,normalizedMediaUs:0},
+    ()=>assert.fail('cancelled cached stream must not allocate WASM'),'test',controller.signal,
+    {input:cancelledInput,sequential:true,stream:{mode:'stream',sourceVersion:fixture.sha256,firstPtsUs:0,durationUs:10000000},
+      cached:async p=>get(p.au),onResult:async()=>{if(++published===3)controller.abort();}}),{name:'AbortError'});
+  assert.equal(published,3);assert.equal(closed,true,'cached cancellation releases the reader');
+  const input=await makeInput(),groups=groupAnalysisGops(input.packets);input.close();
+  const hole=groups[1].startAu+3,module=await core(),originalFeed=module._vpa_feed;
+  const fed:number[]=[];
+  module._vpa_feed=(...args:any[])=>{fed.push(args[4]);return originalFeed(...args);};
+  seen=new Set();
+  await run(module,async(p:any)=>p.au===hole?null:get(p.au),async result=>{
+    assert.ok(!seen.has(result.picture.au));seen.add(result.picture.au);assert.equal(hash(result),hashes.get(result.picture.au));
+    const before=fed.length;await new Promise(resolve=>setTimeout(resolve,1));assert.equal(fed.length,before,'cache and decode both honor consumer backpressure');
+    if(result.picture.au!==hole)assert.deepEqual(result.metrics,get(result.picture.au).metrics,'cached records are reused');
+  });
+  assert.equal(seen.size,cache.size);assert.ok(fed.includes(hole));
+  if(get(groups[1].startAu).gop.anchor==='closed')assert.ok(fed.every(au=>au>=groups[1].startAu),'closed cached prefix is never decoded');
+  else assert.ok(fed.some(au=>au<groups[1].startAu),'dependent hole retains reference preroll');
+  assert.equal(module._vpa_record_bytes(),0);
+});
