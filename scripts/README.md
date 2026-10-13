@@ -29,3 +29,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 `sync-wasm-core.sh` 同时接受上游相邻 ST/MT 原始构建目录和扁平 release-core artifact。同步先准备完整目录，再替换目标；缺少 MT 的本地原始构建会移除旧 MT 和旧 provenance，避免单线程新版本与多线程旧版本混用。带 provenance 的 artifact 必须匹配 `release-core.json` 且通过逐文件 SHA-256 校验，失败保留原目标。正式打包必须包含 ST/MT 两套核心。
 
 `package-release.mjs` 在创建输出和编译独立程序之前，验证 `dist` 中播放/分析核心的来源锁、逐文件哈希、分析 manifest 和 build ID；本地打包与 CI 均适用。未固定来源的本地核心仍可开发调试，但不能打包为可追溯的发布产物。验证逻辑由 `core-artifacts.mjs` 共用，契约测试覆盖版本混用、篡改、原始单线程替换和失败回滚。
+
+码流遮罩真实几何回归：`node scripts/testing/browser/media/bitstream-geometry.mjs webkit`（或 `chromium`），生成独占的裁剪/SAR/旋转 MP4，验证实际视频、遮罩像素、命中、分屏截图及 RGBA 回退。已登记在 `browser` 和 `ci-analysis-browser`，需要 ffmpeg/libx264。

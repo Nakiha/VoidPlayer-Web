@@ -148,7 +148,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const toDecodedFrame = async (frame: FlvFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);
       if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
-      const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
+      const sample = frame.frame ? new VideoSample(frame.frame, { rotation: frame.rotation ?? 0 }) : undefined;
       const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
       try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
       let closed = false;
@@ -156,7 +156,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       // tags. A platform may return an SDR-tagged resource for an HDR source.
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
-      const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+      const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,

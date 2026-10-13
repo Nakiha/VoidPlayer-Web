@@ -3,14 +3,13 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { createHash } from 'node:crypto';
+import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import { RangeReader } from '../../src/range-reader.ts';
 import { openFFmpegMedia, openFFmpegMediaFromUrl } from '../../src/ffmpeg-media.ts';
 import { MediaOpenError } from '../../src/media-errors.ts';
 
 const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
 const deps = async () => ({ glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)) });
-const hash = (bytes: Uint8ClampedArray) => createHash('sha256').update(bytes).digest('hex');
 async function serve(bytes: Uint8Array, size = bytes.length) {
   const requests: { start: number; end: number }[] = [];
   const server = createServer((req, res) => {
@@ -74,7 +73,7 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
       }
       for (const pts of [0, 166667, Math.floor(source.info.durationUs * .6), 0, source.info.durationUs - 1]) {
         const expected = await reference.frameAt(pts), actual = await source.frameAt(pts);
-        try { assert.ok(Math.abs(actual.ptsUs - expected.ptsUs) <= 1); assert.equal(hash(actual.pixels!), hash(expected.pixels!), `pixels at ${pts}`); }
+        try { assert.ok(Math.abs(actual.ptsUs - expected.ptsUs) <= 1); assert.equal(visiblePixelHash(actual.description, actual.pixels!), visiblePixelHash(expected.description, expected.pixels!), `pixels at ${pts}`); }
         finally { actual.close(); expected.close(); }
       }
       const frames = await source.framesAfter(0, 3); assert.equal(frames.length, 3); frames.forEach(f => f.close());
