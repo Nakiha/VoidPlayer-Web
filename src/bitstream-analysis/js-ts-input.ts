@@ -1,4 +1,4 @@
-import { TsPacketSource, tsPictureStream, parseTsPacketIndex } from '../ts-packet-source.ts';
+import { TsPacketSource, tsPictureStream, parseTsPacketIndex, isVerifiedCompleteTsIndex } from '../ts-packet-source.ts';
 import { inspectPacketPicture } from '../packet-picture.ts';
 import { pictureId, BUDGET } from './contract.ts';
 import type { SourcePictureKey } from './contract.ts';
@@ -9,9 +9,12 @@ import { AnalysisFailure } from './failure.ts';
 export async function openJsTsAnalysisInput(reader: AnalysisReader, sourceVersion: string, signal: AbortSignal, cached?: unknown): Promise<AnalysisInput> {
   const source = new TsPacketSource(reader, sourceVersion, signal);
   try {
+    signal.throwIfAborted();
     const restored = parseTsPacketIndex(cached, sourceVersion, reader.size);
-    const index = restored ?? await source.open();
-    let opened = !restored;
+    const reusable = restored && isVerifiedCompleteTsIndex(restored) ? restored : undefined;
+    const index = reusable ?? await source.open();
+    signal.throwIfAborted();
+    let opened = !reusable;
     let opening: Promise<void> | undefined;
     const configuration = Uint8Array.from(index.configuration);
     const packets: AnalysisPacket[] = index.packets.map(packet => ({ au: packet.au, configuration: packet.configuration,

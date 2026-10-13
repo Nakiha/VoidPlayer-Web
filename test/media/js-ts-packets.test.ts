@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
+import { Worker as NodeWorker } from 'node:worker_threads';
 import { TsPacketSource, tsDecodeIndex, tsPictureStream, parseTsPacketIndex, TS_PACKET_BUILD } from '../../src/ts-packet-source.ts';
 import { RangeReader } from '../../src/range-reader.ts';
 import { PacketTimeline } from '../../src/packet-timeline.ts';
@@ -52,11 +53,62 @@ test('JS TS indexes stable decode ordinals, original PES clocks and opaque locat
       }
       const bad = structuredClone(index); bad.packets[560].timing.dts!++;
       const corrupted = source();
-      try { await corrupted.open(bad); await assert.rejects(corrupted.readUnit(560), /PES clock identity mismatch/); }
+      try { const rebuilt=await corrupted.open(bad);assert.equal(corrupted.indexReused,false);assert.deepEqual(rebuilt,index,'unverified metadata rebuilds from source'); }
       finally { corrupted.close(); }
     } finally { second.close(); }
     await assert.rejects(first.readUnit(-1), /out of bounds/);
   } finally { first.close(); }
+});
+
+test('missing, renumbered and fake-complete cache records cannot mint exact AU identities', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  try {
+    const index=await original.open();
+    for(const corruption of ['middle','tail','renumbered','partial'] as const){
+      const bad=structuredClone(index);
+      if(corruption==='middle'||corruption==='renumbered') {bad.packets.splice(1,1);bad.packets.forEach((p,i)=>{p.au=i;});}
+      if(corruption==='tail'||corruption==='partial')bad.packets.pop();
+      if(corruption==='renumbered'||corruption==='partial')bad.completeness.packets=bad.packets.length;
+      if(corruption==='middle'||corruption==='tail')assert.equal(parseTsPacketIndex(bad,version,bytes.length),undefined,'advertised coverage rejects dropped records');
+      assert.throws(()=>tsDecodeIndex(bad),/unverified complete index/,'raw documents cannot bypass source verification');
+      const playback=source();
+      try {
+        const rebuilt=await playback.open(bad);assert.equal(playback.indexReused,false);assert.deepEqual(rebuilt,index);
+        assert.equal(digest(await playback.readUnit(49)),digest(await original.readUnit(49)),'AU49 never becomes original AU50');
+      } finally {playback.close();}
+      const analysis=await openJsTsAnalysisInput({size:bytes.length,read:async(at,length)=>bytes.subarray(at,at+length),close(){}},version,signal(),bad);
+      try {
+        assert.equal(analysis.totalPackets,600,'fake complete prefix is rebuilt to actual EOF');
+        const p=analysis.packets[49], target={sourceVersion:version,sourcePtsUs:p.pts,normalizedMediaUs:0,picture:analysis.picture(p,version)};
+        assert.equal((await analysis.plan(target)).identity.au,49);
+        assert.equal(digest(await analysis.readUnit(p)),digest(await original.readUnit(49)));
+      } finally {analysis.close();}
+    }
+    assert.ok(Object.isFrozen(index));assert.ok(Object.isFrozen(index.packets[1].timing));
+  } finally {original.close();}
+});
+
+test('a serialized complete document in a fresh runtime rebuilds instead of trusting its own flags', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  let worker: NodeWorker | undefined, timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const index=await original.open();
+    worker=new NodeWorker(`
+      const {parentPort,workerData}=require('node:worker_threads');
+      (async()=>{
+        const {TsPacketSource}=await import(workerData.module);
+        const bytes=workerData.bytes;
+        const source=new TsPacketSource({size:bytes.length,read:async(at,len)=>bytes.subarray(at,at+len),close(){}},workerData.version,new AbortController().signal);
+        try {const index=await source.open(workerData.index);parentPort.postMessage({reused:source.indexReused,packets:index.packets.length,bytes:source.bytesRead});}
+        finally {source.close();parentPort.close();}
+      })().catch(error=>{throw error;});
+    `,{eval:true,workerData:{bytes,index,version,module:pathToFileURL(resolve('src/ts-packet-source.ts')).href}});
+    const result=await new Promise<{reused:boolean;packets:number;bytes:number}>((resolve,reject)=>{
+      timer=setTimeout(()=>reject(new Error('fresh-runtime verification timed out')),15000);
+      worker!.once('message',resolve);worker!.once('error',reject);
+    });
+    assert.equal(result.reused,false);assert.equal(result.packets,600);assert.ok(result.bytes>=bytes.length,'untrusted persisted metadata cannot produce exact results with a prefix-only verification');
+  } finally {clearTimeout(timer);await worker?.terminate();original.close();}
 });
 
 test('JS TS refuses broken transport clocks, short reads and cancelled ownership', async () => {
@@ -84,6 +136,47 @@ test('JS TS refuses broken transport clocks, short reads and cancelled ownership
   const cancelled = new TsPacketSource({size:bytes.length,read:async(at,length)=>bytes.subarray(at,at+length),close(){closed=true;}},version,controller.signal);
   closed=false;controller.abort();assert.ok(closed);
   await assert.rejects(cancelled.open(), {name:'AbortError'});
+});
+
+test('warm analysis pre-abort closes its reader before returning cached metadata', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  try {
+    const index=await original.open(), controller=new AbortController();controller.abort();
+    let closed=0,reads=0;
+    await assert.rejects(openJsTsAnalysisInput({size:bytes.length,read:async()=>{reads++;throw new Error('pre-abort must not read');},close(){closed++;}},version,controller.signal,index),{name:'AbortError'});
+    assert.equal(reads,0);assert.equal(closed,1);
+  } finally {original.close();}
+});
+
+test('hostile PES clock count is rejected before allocating beyond the index budget', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  let index;
+  try {index=await original.open();} finally {original.close();}
+  let lastCounter=0;
+  for(let at=0;at<bytes.length;at+=188){
+    if(((bytes[at+1]&31)*256+bytes[at+2])!==index.pid)continue;
+    const control=(bytes[at+3]>>4)&3;
+    const payload=at+4+(control&2?bytes[at+4]+1:0);
+    if((control&1)&&payload<at+188)lastCounter=bytes[at+3]&15;
+  }
+  const excess=300000,size=bytes.length+excess*188;
+  let highestRead=0,closed=0;
+  const hostile=new TsPacketSource({size,async read(offset,length){
+    highestRead=Math.max(highestRead,offset+length);
+    const result=new Uint8Array(length);
+    for(let at=offset;at<offset+length;){
+      if(at<bytes.length){const end=Math.min(bytes.length,offset+length);result.set(bytes.subarray(at,end),at-offset);at=end;continue;}
+      const number=Math.floor((at-bytes.length)/188),inside=(at-bytes.length)%188;
+      const packet=new Uint8Array(188).fill(0xff);
+      packet.set([0x47,0x40|(index.pid>>8),index.pid&255,0x10|((lastCounter+number+1)&15),0,0,1,0xe0,0,0,0x80,0x80,5,0x21,0,1,0,1]);
+      const count=Math.min(188-inside,offset+length-at);result.set(packet.subarray(inside,inside+count),at-offset);at+=count;
+    }
+    return result;
+  },close(){closed++;}},'hostile-ts-source',signal());
+  await assert.rejects(hostile.open(),/PES clock budget exceeded/);
+  assert.equal(closed,1);assert.equal(hostile.index,undefined);
+  assert.ok(highestRead<=bytes.length+250001*188+188*1024+1024*1024,'bounded scan stops before the hostile tail');
+  assert.ok(highestRead<size,'remaining hostile PES headers are never enumerated');
 });
 
 test('JS TS packet-fed WASM produces the same real pictures and stable source tokens as the independent container oracle', async () => {
