@@ -160,9 +160,24 @@ try {
   assert.equal(await other.locator('#identity-users').evaluate(e => e === document.activeElement), true);
   // Editing from another tab updates the name without replacing the user ID.
   const tab = await a.newPage(); observe(tab, 'peer-tab'); await tab.goto(base); await settings(tab);
+  phase = 'cross-tab-rename';
+  // The current-actor label changes before refreshUsers consumes the new list.
+  // Register fresh response barriers before Save; a previously reached
+  // networkidle lifecycle cannot prove that this rename's refresh has finished.
+  const renamedUsers = Promise.all([page, tab].map(p => p.waitForResponse(async response => {
+    if (response.url() !== base + '/api/users' || !response.ok()) return false;
+    return (await response.json()).users.some(user => user.id === id && user.name === '新名字');
+  }).then(async response => { assert.equal(await response.finished(), null); })));
+  // Keep early operation failures primary if fixture teardown closes a waiter.
+  void renamedUsers.catch(() => {});
   await tab.locator('#identity-name').fill('新名字'); await tab.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '新名字');
+  await renamedUsers;
+  for (const p of [page, tab]) await p.waitForFunction(id =>
+    document.querySelector(`#identity-users-menu [data-value="${id}"]`)?.textContent === '新名字', id);
+  phase = 'rename-refresh-complete';
   await settled(page, other, tab);
+  phase = 'reload-after-rename';
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await page.locator('#identity-name').fill('   '); assert.equal(await page.locator('#identity-save').isDisabled(), true);
   assert.equal(await page.locator('#identity-current').innerText(), '新名字');
