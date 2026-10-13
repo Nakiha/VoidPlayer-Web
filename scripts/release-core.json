@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "7c2f9b053e19961568b5ca4ecd5a23c123e2c73b",
+  "revision": "d25caa24e2e9a9272a197e98b04af721ee72e5fd",
   "ffmpegRepository": "FFmpeg/FFmpeg",
   "ffmpegRevision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
   "ffmpegRef": "n9.0.2",
