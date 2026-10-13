@@ -13,7 +13,7 @@ export interface AnalysisPacket {
   au: number;
   configuration: number;
   pts: number;
-  dts: number;
+  dts: number | null;
   offset: number;
   size: number;
   key: boolean;
@@ -29,6 +29,8 @@ export interface AnalysisInputOptions {
 
 export interface AnalysisInput {
   analysisCore?: any;
+  /** Packet clocks carry explicit missingness; feed_known must preserve it. */
+  rawTiming?: boolean;
   /** Reset only bounded unconsumed IO after the consumer acknowledges a result. */
   acknowledge?(): void;
   codec: 'h264' | 'hevc' | 'vvc';

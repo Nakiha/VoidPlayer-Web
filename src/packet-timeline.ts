@@ -1,6 +1,6 @@
+import type { PacketDecodeIndex, PacketDecodePacket } from './flv-decoder.ts';
 import { inspectPacketPicture } from './packet-picture.ts';
 import { MediaOpenError } from './media-errors.ts';
-import type { FlvIndex, FlvPacket } from './flv-demux.ts';
 import type { PacketDecoder, FlvFrame } from './flv-decoder.ts';
 import { packetDecodeError } from './flv-decoder.ts';
 /** Packet metadata chooses a decode anchor, never the identity of an output
@@ -16,31 +16,32 @@ export class PacketTimeline {
   private pending:FlvFrame|null=null;
   private failure:unknown;
   private operation=0;
-  private actualPacket:FlvPacket|undefined;
+  private actualPacket:PacketDecodePacket|undefined;
   private segmentStart=0;
   private growth?: () => Promise<void>;
   setGrowth(wait?: () => Promise<void>) { this.growth = wait; }
-  appendIndex(index: FlvIndex) {
+  appendIndex(index: PacketDecodeIndex) {
     this.index = index;
     for (const [pts, picture] of this.pictures) if (!this.validPicture(pts, picture)) this.pictures.delete(pts);
     if (this.pending?.packetPicture && !this.validPicture(this.pending.pts, this.pending.packetPicture)) this.pending.packetPicture = undefined;
   }
   private validPicture(pts: number, picture: import('./packet-picture.ts').PacketPicture) {
-    if (!this.identityStable()) return false;
+    if (!this.identityStable() || picture.stream !== this.pictureStream) return false;
     const { order, packets } = this.index;
     let lo = 0, hi = order.length;
     while (lo < hi) { const m = (lo + hi) >>> 1; if (packets[order[m]].pts < pts) lo = m + 1; else hi = m; }
     const packet = packets[order[lo]];
-    return !!packet && packet.pts === pts && (lo + 1 === order.length || packets[order[lo + 1]].pts !== pts)
+    return !!packet && packet.identityKnown !== false && packet.pts === pts && (lo + 1 === order.length || packets[order[lo + 1]].pts !== pts)
       && (packet.sequenceNumber ?? order[lo]) === picture.au && (packet.configuration ?? 0) === picture.configuration;
   }
-  index:FlvIndex;
+  index:PacketDecodeIndex;
   readonly decoder:PacketDecoder;
-  readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
+  readonly read:(packet:PacketDecodePacket)=>Promise<Uint8Array>;
   private identifyPictures:boolean;
   private identityStable:()=>boolean;
-  constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>,identifyPictures=false,identityStable:()=>boolean=()=>true){this.identityStable=identityStable;this.identifyPictures=identifyPictures;this.index=index;this.decoder=decoder;this.read=read;}
-  replaceIndex(index:FlvIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
+  private pictureStream:string;
+  constructor(index:PacketDecodeIndex,decoder:PacketDecoder,read:(packet:PacketDecodePacket)=>Promise<Uint8Array>,identifyPictures=false,identityStable:()=>boolean=()=>true,pictureStream='video'){this.pictureStream=pictureStream;this.identityStable=identityStable;this.identifyPictures=identifyPictures;this.index=index;this.decoder=decoder;this.read=read;}
+  replaceIndex(index:PacketDecodeIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
       if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,description:this.index.configurations?.[id]??this.index.description});
@@ -92,7 +93,7 @@ export class PacketTimeline {
         let lo=0,hi=this.index.order.length;
         while(lo<hi){const m=(lo+hi)>>>1;if(this.index.packets[this.index.order[m]].pts<packet.pts)lo=m+1;else hi=m;}const position=lo;
         const unique=position>=0 && (position===0||this.index.packets[this.index.order[position-1]].pts!==packet.pts) && (position+1===this.index.order.length||this.index.packets[this.index.order[position+1]].pts!==packet.pts);
-        if(evidence.singlePicture&&unique)this.pictures.set(packet.pts,{au:packet.sequenceNumber??this.cursor,configuration:this.configuration,stream:'video'});
+        if(evidence.singlePicture&&unique&&packet.identityKnown!==false)this.pictures.set(packet.pts,{au:packet.sequenceNumber??this.cursor,configuration:this.configuration,stream:this.pictureStream});
       }
       if (await this.decoder.send(bytes,packet) !== false) this.cursor++;
     }
