@@ -143,3 +143,23 @@ Web review 的三个生命周期问题也有实际回归：EM_JS/host callback �
 不再用 lifetime 64 MiB 截断全片；插入 null TS packets、压缩图片和时钟不变的
 79 MiB 片源完整消费 600 AU，保留每步/未产出/结果背压预算。修复后 Node TS 10/10
 通过；最终干净 head 的浏览器、原格式回归、bench 与 CI 仍需要复核。
+
+### 综合 CI 总时限修正
+
+功能 head `e279521` / core `3530886` 的最终本机验证已完成：source 116/116
+case、MP4/FLV/fMP4/TS 媒体 73/73 test、TS Node 12/12，WebKit/Chromium
+功能矩阵各 4/4，干净可见 WebKit 原场景 bench 12/12。额外可见 Chromium
+同压缩片源的 TS/MP4 强制 WASM 对照各三次，共 6/6，TS 约 60 fps、零丢帧。
+Headless Chromium 矩阵内的负性能遥测仍保留，不算作通过的性能验收。
+
+该 head 的最后综合 CI job 在 45 分钟总时限被 GitHub 取消；官方 annotation
+是 `The job has exceeded the maximum execution time of 45m0s`。完整 unit
+（13 分 21 秒）、播放/source UI（8 分 57 秒）、标注/缓存、FLV 和 FATE 帧契约
+均已成功，取消发生在后续时钟审计，HTTPS 尚未执行，不能宣称该 head CI 全过。
+
+完整 144-case Node unit 套件改为独立必须成功的 job，继续使用同一 pinned
+playback/analysis 产物、QA 片源和原生 oracle，并纳入 release-set 的直接依赖。
+Unit 与综合浏览器 job 都保留 45 分钟总预算，所有原 case 的断言、时限和性能
+门槛保持原值；unit 不过滤 case、也不与浏览器 job 重复执行。新的工作流契约
+验证失败、取消、pending 和 skipped 均阻止 release aggregation。最终以该拆分
+修正后的精确 Web head 的干净 build/bench、source 回归及 CI 重新报告。
