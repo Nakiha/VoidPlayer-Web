@@ -19,9 +19,9 @@ function fixture(options: { base?: bigint; implicit?: boolean; before?: boolean;
     const tfdt = box('tfdt', u32((options.version ?? 1) << 24), (options.version ?? 1) === 0 ? u32(Number(options.ticks ?? 100n)) : u64(first ? options.ticks ?? 100n : options.nextTicks ?? 124n));
     const offset = options.before ? -media.length + 8 : 0;
     const run1 = (offset: number) => box('trun', u32(0x1000000 | 1 | 4 | 0x100 | 0x800, options.count ?? 1, offset, 0x10000, 13, options.cto ?? -2));
-    const run2 = box('trun', u32(((options.ctoVersion ?? 1) << 24) | 0x800 | (options.overlap ? 1 : 0), 1), ...(options.overlap ? [u32(offset)] : []), u32(options.cto ?? 0));
+    const run2 = (offset: number) => box('trun', u32(((options.ctoVersion ?? 1) << 24) | 0x800 | (options.overlap ? 1 : 0), 1), ...(options.overlap ? [u32(offset)] : []), u32(options.cto ?? 0));
     const makeMoof = (offset: number) => box('moof', box('mfhd', u32(0, 1)), ...(options.audio ? [box('traf', box('tfhd', u32(0x20000, 2)))] : []),
-      box('traf', tfhd, ...(options.missingTfdt ? [] : [tfdt]), run1(offset), run2));
+      box('traf', tfhd, ...(options.missingTfdt ? [] : [tfdt]), run1(offset), run2(offset)));
     const temp = makeMoof(0);
     const moof = makeMoof(options.before ? offset : temp.length + 8);
     return options.before ? Buffer.concat([media, moof]) : Buffer.concat([moof, media]);
@@ -61,6 +61,7 @@ test('reject truncated mdat/moof and out-of-mdat offsets', async () => {
   const offset = bytes.indexOf(Buffer.from('trun')) + 12;
   const broken = Buffer.from(bytes); broken.writeInt32BE(0, offset); await assert.rejects(read(broken), /mdat/);
   await assert.rejects(read(bytes.subarray(0, bytes.indexOf(Buffer.from('mdat')) - 3)), /box|截断/);
+  await assert.rejects(read(fixture({ overlap: true })), /重叠/);
 });
 test('fragment metadata/sample budgets are enforced before allocating sample arrays', async () => {
   await assert.rejects(read(fixture(), 1), (e: any) => e.stage === 'resource');
