@@ -23,7 +23,7 @@ export default {
   "admin.addDir": () => "［A~d~d~ d~i~r~e~c~t~o~r~y~ ········］",
   "admin.analysisConcurrency": () => "［S~e~r~v~e~r~ a~n~a~l~y~s~i~s~ c~o~n~c~u~r~r~e~n~c~y~ ········］",
   "admin.analysisReload": () => "［L~o~a~d~ c~o~n~f~i~g~u~r~a~t~i~o~n~ ········］",
-  "admin.analysisResourceHelp": () => "［S~e~t~ s~e~r~v~e~r~ a~n~a~l~y~s~i~s~ c~o~n~c~u~r~r~e~n~c~y~ s~h~a~r~e~d~ b~y~ a~l~l~ u~s~e~r~s~. D~e~f~a~u~l~t~: 4; r~a~n~g~e~: 1–32. H~i~g~h~e~r~ c~o~n~c~u~r~r~e~n~c~y~ u~s~e~s~ m~o~r~e~ C~P~U~ a~n~d~ m~e~m~o~r~y~. C~h~a~n~g~e~s~ t~a~k~e~ e~f~f~e~c~t~ i~m~m~e~d~i~a~t~e~l~y~; l~o~w~e~r~i~n~g~ t~h~e~ l~i~m~i~t~ l~e~t~s~ r~u~n~n~i~n~g~ t~a~s~k~s~ f~i~n~i~s~h~. ········］",
+  "admin.analysisResourceHelp": () => "［S~e~t~ s~e~r~v~e~r~ a~n~a~l~y~s~i~s~ c~o~n~c~u~r~r~e~n~c~y~ s~h~a~r~e~d~ b~y~ a~l~l~ u~s~e~r~s~. D~e~f~a~u~l~t~: 8; r~a~n~g~e~: 1–32. H~i~g~h~e~r~ c~o~n~c~u~r~r~e~n~c~y~ u~s~e~s~ m~o~r~e~ C~P~U~ a~n~d~ m~e~m~o~r~y~. C~h~a~n~g~e~s~ t~a~k~e~ e~f~f~e~c~t~ i~m~m~e~d~i~a~t~e~l~y~; l~o~w~e~r~i~n~g~ t~h~e~ l~i~m~i~t~ l~e~t~s~ r~u~n~n~i~n~g~ t~a~s~k~s~ f~i~n~i~s~h~. ········］",
   "admin.analysisResourceStatus": (d) => "［L~i~m~i~t~: " + d.limit + " · " + d.running + " r~u~n~n~i~n~g~ · " + d.queued + " q~u~e~u~e~d~ ········］",
   "admin.analysisResources": () => "［A~n~a~l~y~s~i~s~ r~e~s~o~u~r~c~e~s~ ········］",
   "admin.analysisSave": () => "［S~a~v~e~ a~n~a~l~y~s~i~s~ s~e~t~t~i~n~g~s~ ········］",

@@ -23,7 +23,7 @@ export default {
   "admin.addDir": () => "Add directory",
   "admin.analysisConcurrency": () => "Server analysis concurrency",
   "admin.analysisReload": () => "Load configuration",
-  "admin.analysisResourceHelp": () => "Set server analysis concurrency shared by all users. Default: 4; range: 1–32. Higher concurrency uses more CPU and memory. Changes take effect immediately; lowering the limit lets running tasks finish.",
+  "admin.analysisResourceHelp": () => "Set server analysis concurrency shared by all users. Default: 8; range: 1–32. Higher concurrency uses more CPU and memory. Changes take effect immediately; lowering the limit lets running tasks finish.",
   "admin.analysisResourceStatus": (d) => "Limit: " + d.limit + " · " + d.running + " running · " + d.queued + " queued",
   "admin.analysisResources": () => "Analysis resources",
   "admin.analysisSave": () => "Save analysis settings",

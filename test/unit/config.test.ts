@@ -13,7 +13,7 @@ test('shared configuration resolves file-relative paths and explicit CLI overrid
     const config = await loadConfig(['--config', 'config/settings.json', '--port', '5191'], 'dev', root);
     assert.deepEqual(config.mediaRoots, [path.join(root, 'media')]);
     assert.equal(config.staticDir, path.join(root, 'web')); assert.equal(config.logsDir, null);
-    assert.equal(config.indexWatch, true); assert.equal(config.analysisConcurrency, 4);
+    assert.equal(config.indexWatch, true); assert.equal(config.analysisConcurrency, 8);
     assert.equal(config.port, 5190); assert.equal(config.devPort, 5191);
     const override = await loadConfig(['--config=config/settings.json', '--folder', 'another', '--port', '5192'], 'production', root);
     assert.deepEqual(override.mediaRoots, [path.join(root, 'another')]); assert.equal(override.port, 5192);

@@ -507,7 +507,7 @@ test('server bounds six multi-user demands, prioritizes queued pictures and recl
     '-x264-params', 'scenecut=0:open-gop=0', join(media, 'stream-0.mp4')]);
   for (let n = 1; n < 6; n++) await copyFile(join(media, 'stream-0.mp4'), join(media, `stream-${n}.mp4`));
   const f = await fixture(media, 'stream-0.mp4'), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
-  assert.equal(scheduler.resources().concurrency, 4);
+  assert.equal(scheduler.resources().concurrency, 8);
   scheduler.setConcurrency(2);
   try {
     const entries = (await f.library.list()).entries.filter(e => e.name.startsWith('stream-'));

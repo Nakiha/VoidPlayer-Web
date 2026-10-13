@@ -21,7 +21,7 @@ export interface Sources {
   "admin.addDir": "添加目录";
   "admin.analysisConcurrency": "服务端分析并发数";
   "admin.analysisReload": "载入配置";
-  "admin.analysisResourceHelp": "设置所有用户共享的服务端分析并发数。默认 4 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。";
+  "admin.analysisResourceHelp": "设置所有用户共享的服务端分析并发数。默认 8 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。";
   "admin.analysisResourceStatus": "当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队";
   "admin.analysisResources": "分析资源";
   "admin.analysisSave": "保存分析配置";

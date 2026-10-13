@@ -50,7 +50,7 @@ for (const [directory, dependency] of Object.entries(lock.packages)) {
   for (const license of licenses) notices += await readFile(path.join(root, directory, license), 'utf8') + '\n';
 }
 await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
-await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: 4, adminUsers: [] }, null, 2) + '\n');
+await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: 8, adminUsers: [] }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js', 'public/startup-guard.js']);

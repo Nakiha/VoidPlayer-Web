@@ -8,7 +8,7 @@ type Resources = ReturnType<AdminController['analysis']['resources']>;
 export function analysisSettingsShell() {
   return `<form id="analysis-resources" class="admin-panel">
     <h2>${th(msg('admin.analysisResources', '分析资源'))}</h2>
-    <p>${th(msg('admin.analysisResourceHelp', '设置所有用户共享的服务端分析并发数。默认 4 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。'))}</p>
+    <p>${th(msg('admin.analysisResourceHelp', '设置所有用户共享的服务端分析并发数。默认 8 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。'))}</p>
     <label for="analysis-concurrency">${th(msg('admin.analysisConcurrency', '服务端分析并发数'))}</label>
     <input id="analysis-concurrency" type="number" min="1" max="32" step="1" required disabled aria-describedby="analysis-resource-status">
     <p id="analysis-resource-status" class="admin-caption" role="status"></p>

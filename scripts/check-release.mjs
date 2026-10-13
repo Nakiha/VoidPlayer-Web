@@ -99,7 +99,7 @@ try {
   const portableCookie = portableIdentityResponse.headers.get('set-cookie').split(';')[0];
   assert.equal((await (await fetch(portableBase + '/api/admin/roots')).json()).writable, true);
   const analysisSettings = await (await fetch(portableBase + '/api/admin/analysis')).json();
-  assert.equal(analysisSettings.concurrency, 4);
+  assert.equal(analysisSettings.concurrency, 8);
   const savedAnalysis = await fetch(portableBase + '/api/admin/analysis', { method: 'PUT', headers: { origin: portableBase, 'x-voidplayer-action': 'admin', 'content-type': 'application/json' }, body: JSON.stringify({ revision: analysisSettings.revision, concurrency: 8 }) });
   assert.equal(savedAnalysis.status, 200);
   assert.equal((await (await fetch(portableBase + '/api/admin/status')).json()).analysis.concurrency, 8);

@@ -11,5 +11,5 @@
   "indexTtlMs": 30000,
   "indexWatch": true,
   "adminUsers": [],
-  "analysisConcurrency": 4
+  "analysisConcurrency": 8
 }
