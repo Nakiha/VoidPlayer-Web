@@ -66,3 +66,9 @@ Draft [PR #61](https://github.com/Nakiha/VoidPlayer-Web/pull/61)，Refs #59；�
 ### 独立 review 后的 harness 修正
 
 末尾 lifecycle probe 按实际最后一个 fixture 的容器选择未缓存目标，不依赖显式 `--matrix-part=fmp4`。无分区筛选入口 `node scripts/check-bitstream-analysis-browser.mjs webkit --matrix-only --matrix-fixture=fragmented-vvc.mp4 --checkpoint-only` 已通过，仍断言 pending、过期结果不显示和显式取消。三 codec whole 验收增加逐结果重复 AU 拒绝，并严格比较完整 AU 集合为 `0..599`；相关三个真实 whole/range/cache/IO 用例均通过。解析、manifest、release 契约 48/48 通过；本次只改测试与证据，生产代码及此前干净播放基准对应的代码不变。
+
+### 独立 WebKit identity CI 诊断
+
+CI run `38391988066` 的非 fMP4 WebKit identity case 在最终 `errors=[]` 收集到 `/api/users` access-control pageerror；没有用错误消息过滤豁免。精确 `3e3b6770c5ad2e49191d871e0b62e2632ad7d62a` head 本机单跑该 case 通过。诊断版再跑两次也通过，捕获到启动列表取消和故意 stalled-list route abort，但均无 pageerror；这不证明 Linux CI 根因已修复。
+
+harness 现在为所有页面记录标签、URL、时间、phase、pageerror stack，以及 `/api/users` 请求/响应/完成/失败；仍保留 `errors=[]`，且额外页面也纳入该断言。报告写入 `.run/playback-reports/identity-webkit-localhost-diagnostics.json`（已在 CI artifact 上传范围），写证据失败也不跳过资源清理。身份生产代码未改。若 CI 再复现，应按带来源的事件修正实际导航/关闭或产品异步处理；不可把单纯重跑成功解释为修复。
