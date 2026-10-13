@@ -1,3 +1,4 @@
+import { serializeFlvIndex } from './flv-index-cache.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
@@ -45,6 +46,11 @@ async function start() {
           send({ id: 0, type: 'cached-audio', generation: request.generation, data }, data.packets.map(p => p.data.buffer as ArrayBuffer));
         } catch { /* Optional audio cannot fail the video command chain. */ }
       }, 0);
+      return;
+    }
+    if (message.type === 'analysis-flv-index' && engine instanceof FlvEngine) {
+      if (!engine.indexComplete) { send({ id: message.id, ok: false, error: 'FLV index is incomplete' }); return; }
+      send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
     if (message.type === 'analysis-index' && engine) {

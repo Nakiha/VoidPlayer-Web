@@ -109,6 +109,7 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     setCachedAudioEnabled:source.setCachedAudioEnabled?.bind(source),
     get onCachedAudio(){return source.onCachedAudio;},set onCachedAudio(fn){source.onCachedAudio=fn;},
     getAnalysisCapability:source.getAnalysisCapability?.bind(source),
+    getBitstreamFlvIndex:source.getBitstreamFlvIndex?.bind(source),
     getBitstreamIndex:source.getBitstreamIndex?.bind(source),
     bitstreamIndexIdentity:source.bitstreamIndexIdentity,
     queryAnalysis:source.queryAnalysis?.bind(source),

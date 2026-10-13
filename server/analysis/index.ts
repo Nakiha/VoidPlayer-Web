@@ -13,6 +13,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
   const epoch = await library.indexJobs.call('epoch');
   let buildError: unknown;
   let flvPrefix = 0, flvComplete = false;
+  let flvDocument: import("../../src/flv-index-cache.ts").FlvIndexDocument | undefined;
   const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity }, {
     onProgress(progress) {
       // Shared FLV scanner publishes only append-only validated source packets.
@@ -56,6 +57,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
             const index = parseFlvIndex(envelope.index ?? envelope, metadata.size);
             if (index.packets.length < flvPrefix || index.packets.length > 250000)
               throw new AnalysisFailure('incomplete-reference-state', 'Invalid FLV index AU coverage');
+            flvDocument = envelope.index ?? envelope;
             flvPrefix = index.packets.length; flvComplete = true;
           }
         }
@@ -88,6 +90,16 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
       const complete = manifest.complete && seq === manifest.lastSeq;
       if (complete && (ordinals.size || frontier !== manifest.frames)) throw new Error('Incomplete index AU coverage');
       return { packets: frontier, complete };
+    },
+    async snapshot(active: () => boolean = () => true) {
+      if (identity.kind !== 'flv') throw new AnalysisFailure('unsupported-container', 'FLV snapshot required');
+      const started = performance.now();
+      while (!(await this.read()).complete) {
+        if (!active()) throw new AnalysisFailure('cancelled', 'Analysis demand expired during indexing');
+        if (performance.now() - started > 120000) throw new AnalysisFailure('resource-limit', 'FLV index snapshot stalled');
+        await new Promise(resolve => setTimeout(resolve, 20));
+      }
+      return flvDocument!;
     },
     close() { closed = true; build.unsubscribe(); },
   };

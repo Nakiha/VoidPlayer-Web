@@ -262,3 +262,46 @@ test('cancelled FLV adapter acquisition closes its independently owned reader ex
   }), { name: 'AbortError' });
   assert.equal(closes, 1);
 });
+
+test('source-bound FLV snapshot keeps two rear requests local at underlying Blob IO', async () => {
+  const { RangeReader } = await import('../../src/range-reader.ts');
+  const { demuxFlv } = await import('../../src/flv-demux.ts');
+  const { serializeFlvIndex } = await import('../../src/flv-index-cache.ts');
+  const bytes = await readFile('fixtures/flv-analysis/legacy-h264.flv');
+  const index = await demuxFlv(await reader('fixtures/flv-analysis/legacy-h264.flv'));
+  const document = serializeFlvIndex(index, bytes.length);
+  for (const au of [200, 400]) {
+    let physical = 0, logical = 0, snapshotCalls = 0;
+    const blob = new Blob([bytes]); const slice = blob.slice.bind(blob);
+    blob.slice = (start = 0, end = blob.size, type) => { physical += end - start; return slice(start, end, type); };
+    const independent = new RangeReader({ file: blob }); const read = independent.read.bind(independent);
+    independent.read = (offset, length) => { logical += length; return read(offset, length); };
+    const source = Object.assign(independent, { flvIndex: async () => { snapshotCalls++; return document; } });
+    const r = await analyzePicture(source, target(index.packets[au]), await core(), 'test', signal);
+    assert.equal(r.confidence, 'exact'); assert.equal(r.picture.au, au); assert.equal(snapshotCalls, 1);
+    assert.ok(physical < bytes.length / 2, `AU ${au}: physical ${physical}/${bytes.length}`);
+    assert.ok(physical >= logical, `block reads ${physical}, logical ${logical}`);
+    assert.equal(r.metrics!.bytesRead + 9, logical, 'adapter metric explicitly counts logical bytes, not cache blocks');
+  }
+  let reads = 0, closes = 0;
+  await assert.rejects(openAnalysisInput({ size: 65 * 1024 * 1024, read: async () => { reads++; return new Uint8Array([70, 76, 86, 1, 0, 0, 0, 0, 9]); }, close() { closes++; } }, signal), /shared index/);
+  assert.equal(reads, 1); assert.equal(closes, 1);
+});
+
+test('MP4 decode tick table is opt-in and ordinary playback config does not read STTS payload', async () => {
+  const { readMp4Configurations } = await import('../../src/mp4-config.ts');
+  const { Input, BufferSource, ALL_FORMATS } = await import('mediabunny');
+  const bytes = await readFile('fixtures/video/h264_9s_1920x1080.mp4');
+  const media = new Input({ source: new BufferSource(bytes), formats: ALL_FORMATS });
+  try {
+    const track = (await media.getPrimaryVideoTrack())!;
+    const stts = bytes.indexOf(Buffer.from('stts')) + 4; assert.ok(stts > 4);
+    const reads: [number, number][] = [];
+    const source: any = { size: bytes.length, read: async (offset: number, length: number) => { reads.push([offset, length]); return bytes.subarray(offset, offset + length); } };
+    const ordinary = await readMp4Configurations(source, track.id);
+    assert.equal(ordinary.decodeTimes, undefined);
+    assert.ok(!reads.some(([offset, length]) => offset <= stts + 8 && offset + length > stts + 8), 'no STTS data IO in default config path');
+    const analysis = await readMp4Configurations(source, track.id, 250000, true);
+    assert.equal(analysis.decodeTimes?.length, ordinary.sampleSizes!.length); assert.equal(analysis.decodeTimes?.[0], 0);
+  } finally { media.dispose(); }
+});

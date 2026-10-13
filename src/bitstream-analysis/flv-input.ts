@@ -1,3 +1,4 @@
+import { parseFlvIndex } from '../flv-index-cache.ts';
 import { scanFlv, flvIndexIntegrity } from '../flv-demux.ts';
 import type { FlvCheckpoint } from '../flv-demux.ts';
 import { inspectPacketPicture } from '../packet-picture.ts';
@@ -49,7 +50,18 @@ export async function openFlvAnalysisInput(reader: AnalysisReader, signal: Abort
   };
   const close = () => { if (!closed) { closed = true; reader.close(); } };
   try {
-    commit(await scanFlv({ size: reader.size, read }, undefined, undefined, true));
+    if (!continuous && reader.flvIndex) {
+      const document = await reader.flvIndex();
+      signal.throwIfAborted();
+      if (document.packets?.length > 250000) throw new AnalysisFailure('resource-limit', 'Analysis packet index budget exceeded');
+      commit({ index: parseFlvIndex(document, reader.size), complete: true, nextOffset: reader.size });
+    } else {
+      // Standalone readers without a shared index pay a full metadata scan.
+      // Bound underlying block IO too: a tiny logical scan can touch all bytes.
+      if (!continuous && reader.size > 64 * 1024 * 1024)
+        throw new AnalysisFailure('resource-limit', 'FLV metadata scan requires a shared index for sources over 64 MiB');
+      commit(await scanFlv({ size: reader.size, read }, undefined, undefined, true));
+    }
     if (checkpoint!.index.codec === 'av1')
       throw new AnalysisFailure('unsupported-codec', 'AV1 bitstream analysis is not supported');
     const codec = checkpoint!.index.codec as 'h264' | 'hevc' | 'vvc';

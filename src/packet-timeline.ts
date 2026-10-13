@@ -20,12 +20,26 @@ export class PacketTimeline {
   private segmentStart=0;
   private growth?: () => Promise<void>;
   setGrowth(wait?: () => Promise<void>) { this.growth = wait; }
-  appendIndex(index: FlvIndex) { this.index = index; }
+  appendIndex(index: FlvIndex) {
+    this.index = index;
+    for (const [pts, picture] of this.pictures) if (!this.validPicture(pts, picture)) this.pictures.delete(pts);
+    if (this.pending?.packetPicture && !this.validPicture(this.pending.pts, this.pending.packetPicture)) this.pending.packetPicture = undefined;
+  }
+  private validPicture(pts: number, picture: import('./packet-picture.ts').PacketPicture) {
+    if (!this.identityStable()) return false;
+    const { order, packets } = this.index;
+    let lo = 0, hi = order.length;
+    while (lo < hi) { const m = (lo + hi) >>> 1; if (packets[order[m]].pts < pts) lo = m + 1; else hi = m; }
+    const packet = packets[order[lo]];
+    return !!packet && packet.pts === pts && (lo + 1 === order.length || packets[order[lo + 1]].pts !== pts)
+      && (packet.sequenceNumber ?? order[lo]) === picture.au && (packet.configuration ?? 0) === picture.configuration;
+  }
   index:FlvIndex;
   readonly decoder:PacketDecoder;
   readonly read:(packet:FlvPacket)=>Promise<Uint8Array>;
   private identifyPictures:boolean;
-  constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>,identifyPictures=false){this.identifyPictures=identifyPictures;this.index=index;this.decoder=decoder;this.read=read;}
+  private identityStable:()=>boolean;
+  constructor(index:FlvIndex,decoder:PacketDecoder,read:(packet:FlvPacket)=>Promise<Uint8Array>,identifyPictures=false,identityStable:()=>boolean=()=>true){this.identityStable=identityStable;this.identifyPictures=identifyPictures;this.index=index;this.decoder=decoder;this.read=read;}
   replaceIndex(index:FlvIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
@@ -51,14 +65,14 @@ export class PacketTimeline {
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
   private async pull(recycle?:ArrayBuffer):Promise<FlvFrame|null>{
-    if(this.pending){const f=this.pending;this.pending=null;return f;}
+    if(this.pending){const f=this.pending;this.pending=null;if(f.packetPicture&&!this.validPicture(f.pts,f.packetPicture))f.packetPicture=undefined;return f;}
     for(;;){
       const frame=this.decoder.receive(Number.MIN_SAFE_INTEGER,recycle);
       if(frame){
         if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
         if(frame.pts===this.lastPts){frame.frame?.close();continue;}
         this.lastPts=frame.pts;
-        frame.packetPicture=this.pictures.get(frame.pts);this.pictures.delete(frame.pts);return frame;
+        const picture=this.pictures.get(frame.pts);frame.packetPicture=picture&&this.validPicture(frame.pts,picture)?picture:undefined;this.pictures.delete(frame.pts);return frame;
       }
       const packet=this.index.packets[this.cursor];
       if (!packet && this.growth) { await this.growth(); continue; }

@@ -264,7 +264,14 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
         await reconfigureColorMode('reference', { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] }, deps.signal);
         return source;
       },
-      ...(container === 'flv' ? { bitstreamIndexIdentity: FLV_MEDIA_INDEX_IDENTITY } : {}),
+      ...(container === 'flv' ? {
+        bitstreamIndexIdentity: FLV_MEDIA_INDEX_IDENTITY,
+        async getBitstreamFlvIndex() {
+          await completeIndex();
+          if (disposed) throw new Error('媒体已释放。');
+          return activeRpc.call('analysis-flv-index', {});
+        },
+      } : {}),
       async getBitstreamIndex() {
         if (disposed) throw new Error('媒体已释放。');
         if (info.indexState === 'error') throw new Error(info.indexError);

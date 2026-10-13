@@ -1,6 +1,8 @@
 import type { AnalysisIndexFrontier } from "./stream.ts";
 export interface AnalysisReader {
   readonly size: number;
+  /** Source-bound immutable metadata; payload IO remains independently owned. */
+  flvIndex?(): Promise<import("../flv-index-cache.ts").FlvIndexDocument>;
   read(offset: number, length: number): Promise<Uint8Array>;
   close(): void;
 }

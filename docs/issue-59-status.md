@@ -33,3 +33,9 @@ FLV 直接复用 `scanFlv` 的 decode-order 包序号、configuration 和 discon
 三 codec 本地流式用例实际消费 600 帧；服务器重启/损坏补缺用例各保存 120 帧，使用未改变的 128 MiB 缓存预算。初次用完整 600 帧测试“全部保留”时 H.264/HEVC 超出缓存保留范围，重启必须重新解码；这是实际淘汰行为，不能宣称任意整片都可永久命中。已有 quota/lease/backpressure 用例继续覆盖有界回收。
 
 最终验证结果与 PR 的精确提交和 CI 一起报告；本机验证不代表三平台发布门禁已经完成。
+
+### Review follow-up: local IO and growing identity
+
+Bounded local FLV requests obtain a source-bound, validated complete FLV index document from the existing metadata worker. Library picture/range requests subscribe to the same version/epoch-bound shared index and use its complete snapshot. Analysis never borrows the playback byte cache, reader, or decoder; each request reads only its verified target GOP independently. A standalone reader without a snapshot must scan metadata first; this may touch every 256 KiB block and is explicitly limited to sources at most 64 MiB. `metrics.bytesRead` measures logical bytes, not underlying cached block loads; regression tests separately count real `Blob.slice` bytes for two distinct rear requests.
+
+FLV output gets a precise playback picture identity only after the source index is complete: a growing prefix cannot promise global PTS uniqueness. A frame presented before completion remains unverified until a new presentation/seek, including a paused startup frame. The browser matrix verifies that boundary and then seeks after indexing to test exact first-frame overlays. At output reception and pending lookahead delivery, PacketTimeline rechecks identity against the current index; append invalidates pending duplicate identities. This prevents an identity emitted from an incomplete prefix from becoming stale when later packets collide. MP4 raw STTS decode timing is opt-in for analysis; ordinary playback adds no STTS payload read or per-sample decode-time allocation.

@@ -1,7 +1,8 @@
+import { FLV_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   ANALYSIS_RECIPE,
@@ -379,8 +380,20 @@ export class AnalysisScheduler {
         );
       if (this.closed || work.state !== "running" || !work.consumers.size)
         return;
+      let flvSnapshot;
       if ('mode' in work.target && work.target.indexIdentity)
         index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, work.target.indexIdentity);
+      if (!('mode' in work.target)) {
+        const probe = await open(work.filePath, 'r');
+        let flv = false;
+        try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; }
+        finally { await probe.close(); }
+        if (flv) {
+          index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, FLV_MEDIA_INDEX_IDENTITY);
+          flvSnapshot = await index.snapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
+          if (!await this.library.resolve(work.mediaId, work.version)) throw new AnalysisFailure('source-changed', 'Analysis source changed during indexing');
+        }
+      }
       if (this.closed || work.state !== 'running' || !work.consumers.size) return;
       const worker = (work.worker = new Worker(
         new URL(
@@ -395,6 +408,7 @@ export class AnalysisScheduler {
             coreDir: this.coreDir,
             target: work.target,
             externalIndex: !!index,
+            flvSnapshot,
           },
         },
       ));

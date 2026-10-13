@@ -545,6 +545,16 @@ await withBrowserFixture(
             await selectDiagrams(page, 'overview');
             await page.locator('#toggle-analysis').click();
           }
+          if (row.container === 'flv') {
+            const prefixToken = await call('get_presented_frame', { slot: 'A' });
+            const capability = (await call('get_analysis_capabilities'))[0].capability;
+            if (capability.indexState === 'building') assert.equal(prefixToken.picture, null, 'growing FLV index cannot promise global PTS uniqueness');
+            // An explicit indexed seek starts the shared metadata job. Analysis
+            // payloads still use their own reader and no playback decoder.
+            await call('seek_review', { ptsUs: 1000000 });
+            await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'complete');
+            await call('seek_review', { ptsUs: 0 }); await stable();
+          }
           const token = await call("get_presented_frame", { slot: "A" });
           assert.ok(
             token.picture,

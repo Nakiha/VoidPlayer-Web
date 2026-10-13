@@ -71,7 +71,7 @@ export interface Mp4Configurations { warning?: string; indexIntegrity?: import('
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
-export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000): Promise<Mp4Configurations> {
+export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000, rawTiming = false): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
@@ -168,7 +168,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
     // time. Older synthetic inputs without STTS report unknown raw timing.
     const stts = nested.find(b => b.type === 'stts');
     let decodeTimes: number[] | undefined;
-    if (stts) {
+    if (rawTiming && stts) {
       if (stts.end - stts.data > 24 * 1024 * 1024) throw new MediaOpenError('resource', 'MP4 STTS 超过上限。');
       const data = await reader.read(stts.data, stts.end - stts.data), tv = new DataView(data.buffer, data.byteOffset, data.byteLength);
       if (data.length < 8 || data[0] !== 0 || 8 + tv.getUint32(4) * 8 !== data.length) return invalid('STTS 数量无效。');

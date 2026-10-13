@@ -69,6 +69,7 @@ export async function openMp4AnalysisInput(
       { size: reader.size, read } as RangeReader,
       track.id,
       250000,
+      true,
     );
     if (configurations.indexIntegrity === "prefix")
       throw new AnalysisFailure(

@@ -19,6 +19,7 @@ try {
   let closed = false;
   const reader = {
     size: stat.size,
+    ...(workerData.flvSnapshot ? { flvIndex: async () => workerData.flvSnapshot } : {}),
     async read(offset: number, length: number) {
       if (
         !Number.isSafeInteger(offset) ||
