@@ -256,6 +256,7 @@ jobs:
             .run/test-suites/selected/
             .run/analysis-lifecycle/
             .run/browser-fixtures/bitstream-analysis-${{ matrix.engine }}/
+            .run/browser-fixtures/bitstream-analysis-matrix-*-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
 

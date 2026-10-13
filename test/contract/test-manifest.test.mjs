@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { selectAnalysisMatrixRows } from '../../scripts/testing/analysis-matrix.mjs';
 import { testManifest, validateManifest, selectCases, validateCiBrowserCoverage } from '../../scripts/testing/manifest.mjs';
 
 const clone = () => structuredClone(testManifest);
@@ -119,10 +120,19 @@ test('analysis matrix, streaming diagrams and incremental indexing are independe
   for (const engine of ['chromium', 'webkit']) {
     const cases = selectCases({ suite: 'ci-analysis-browser', engine, platform: 'linux' }).selected;
     const parts = cases.filter(row => row.script === 'scripts/check-bitstream-analysis-browser.mjs' && !row.command.includes('--layout-only'));
-    assert.equal(parts.length, 3);
-    assert.deepEqual(parts.map(row => row.command.at(-1)).sort(), ['--diagrams-only', '--incremental-only', '--matrix-only']);
+    assert.equal(parts.length, 5);
+    assert.deepEqual(parts.map(row => row.command.at(-1)).sort(), ['--diagrams-only', '--incremental-only', '--matrix-part=flv-enhanced', '--matrix-part=flv-legacy', '--matrix-part=mp4']);
+    const matrix = JSON.parse(readFileSync(new URL('../../scripts/bitstream-analysis-matrix.json', import.meta.url), 'utf8'));
+    const cells = parts.filter(row => row.command.includes('--matrix-only'));
+    const selected = cells.flatMap(row => selectAnalysisMatrixRows(matrix.rows, row.command));
+    assert.equal(selected.length, matrix.rows.length, 'CI partitions retain every admitted matrix row');
+    assert.equal(new Set(selected.map(row => row.fixture)).size, matrix.rows.length, 'partitions neither overlap nor drop fixtures');
+    assert.equal(selected.reduce((count, row) => count + row.inputs.length * 2, 0), 36);
+    assert.deepEqual(selectAnalysisMatrixRows(matrix.rows, []), matrix.rows, 'unfiltered CLI still runs the complete matrix');
+    assert.throws(() => selectAnalysisMatrixRows(matrix.rows, ['--matrix-part=unknown']), /Unknown/);
+    assert.throws(() => selectAnalysisMatrixRows(matrix.rows, ['--matrix-part=mp4', '--matrix-part=flv-legacy']), /Choose one/);
     assert.ok(parts.every(row => row.required && row.timeoutMs === 600000));
-    assert.equal(new Set(parts.flatMap(row => row.artifacts)).size, 3, 'each case owns separate evidence');
+    assert.equal(new Set(parts.flatMap(row => row.artifacts)).size, 5, 'each case owns separate evidence');
   }
 });
 
