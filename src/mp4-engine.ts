@@ -24,6 +24,11 @@ export class Mp4Engine {
   private timeline?:PacketTimeline;
   private primed:FlvFrame|null=null;
   private nativeConfig?:VideoDecoderConfig;
+  private rotation: 0 | 90 | 180 | 270 = 0;
+  private displayed(frame: FlvFrame): FlvFrame {
+    const d = frame.description, swap = this.rotation === 90 || this.rotation === 270;
+    return { ...frame, rotation: this.rotation, width: swap ? d.displayHeight : d.displayWidth, height: swap ? d.displayWidth : d.displayHeight };
+  }
   constructor(source:RandomAccessInput){
     this.reader=new RangeReader(source);
     this.input=new Input({source:new CustomSource({getSize:()=>this.reader.size,read:async(start,end)=>{
@@ -38,7 +43,8 @@ export class Mp4Engine {
       try{await this.input.getFormat();}catch(error){if(error instanceof MediaOpenError)throw error;throw new MediaOpenError('container','不是可通过 MP4 索引读取的文件。');}
       const track=await this.input.getPrimaryVideoTrack();if(!track)throw new MediaOpenError('container','MP4 没有视频轨道。');
       this.audioMetadata.retainPrefix(this.reader.peek(0, Math.min(65536, this.reader.size)));
-      if(track.rotation!==0)throw new MediaOpenError('container','旋转 MP4 需要容器展示路径。');
+      if(![0,90,180,270].includes(track.rotation))throw new MediaOpenError('container','MP4 旋转角度不受支持。');
+      this.rotation=track.rotation as typeof this.rotation;
       const id=await track.getInternalCodecId(),known=await track.getCodec();
       const codec:FlvCodec=id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
       if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
@@ -94,7 +100,7 @@ export class Mp4Engine {
       const firstPtsUs=this.primed.pts;
       const activeDecoder=this.timeline.decoder;
       const color=activeDecoder.kind==='webcodecs'?await track.getColorSpace():null;
-      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.primed.width,height:this.primed.height,...activeDecoder.metadata?.(),
+      return {codec,decoder:activeDecoder.kind,hardwareAcceleration:activeDecoder.hardwareAcceleration,width:this.displayed(this.primed).width,height:this.displayed(this.primed).height,...activeDecoder.metadata?.(),
         ...(color?{colorSource:'container' as const,color:{primaries:color.primaries??null,transfer:color.transfer??null,matrix:color.matrix??null,fullRange:color.fullRange??null}}:{}),
         ...(recovered?{timelineSource:'hevc-poc' as const}:{}),
         indexIntegrity: configs.indexIntegrity, indexTruncatedAt: configs.indexTruncatedAt,
@@ -105,16 +111,16 @@ export class Mp4Engine {
   /** 只读分析查询共用：返回 demux 包表，不转移底层缓冲。 */
   get analysisIndex(): FlvIndex | undefined { return (this as unknown as { index?: FlvIndex }).index; }
   async at(pts:number,recycle?:ArrayBuffer){
-    if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return f;}
-    this.primed?.frame?.close();this.primed=null;return this.timeline!.at(pts,recycle);
+    if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return this.displayed(f);}
+    this.primed?.frame?.close();this.primed=null;return this.displayed(await this.timeline!.at(pts,recycle));
   }
-  next(pts:number,recycle?:ArrayBuffer){return this.timeline!.next(pts,recycle);}
+  async next(pts:number,recycle?:ArrayBuffer){const frame=await this.timeline!.next(pts,recycle);return frame?this.displayed(frame):null;}
   /** Produce a first-frame software witness from this MP4 index and reader. */
   async referenceWitness(glueURL:string,wasmBinary?:Uint8Array,threads=1):Promise<FlvFrame>{
     if(this.timeline?.decoder.kind!=='webcodecs'||!this.timeline)throw new MediaOpenError('decode','MP4 原生解码器尚未就绪。');
     const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
     const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
-    try{return await timeline.at(this.primed?.pts??this.index.packets[this.index.order[0]].pts);}
+    try{return this.displayed(await timeline.at(this.primed?.pts??this.index.packets[this.index.order[0]].pts));}
     finally{timeline.close();}
   }
   /** Replace the active decoder without rebuilding the MP4 sample table. */
@@ -145,7 +151,7 @@ export class Mp4Engine {
   }
   private decoderInfo(){
     const decoder=this.timeline!.decoder;
-    return {codec:this.index.codec,decoder:decoder.kind,width:this.primed!.width,height:this.primed!.height,
+    return {codec:this.index.codec,decoder:decoder.kind,width:this.displayed(this.primed!).width,height:this.displayed(this.primed!).height,
       hardwareAcceleration:decoder.hardwareAcceleration,...decoder.metadata?.(),
       decodedPixelFormat:this.primed!.frame?.format??this.primed!.description.format??null};
   }

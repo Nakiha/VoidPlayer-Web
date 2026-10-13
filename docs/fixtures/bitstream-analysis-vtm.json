@@ -1,0 +1,260 @@
+{
+  "schema": 1,
+  "codec": "vvc",
+  "file": "h266_10s_1920x1080.mp4",
+  "sha256": "088a1b66b61bd23ceebe863720e80c6bac62ad379ae633c510326678de7954fd",
+  "oracle": {
+    "repository": "https://vcgit.hhi.fraunhofer.de/jvet/VVCSoftware_VTM.git",
+    "revision": "69f5112bae8c0f91f3cbc5ba0f44b58986080f16",
+    "buildFlags": "-DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS=-DENABLE_TRACING=1",
+    "traceRule": "D_BLOCK_STATISTICS_ALL:poc>=0",
+    "inputPacketCount": 17,
+    "annexBSha256": "6b2550cb445a4426c8c1fddb796fa209b63c841b57abe3d000bee2d31340bb2f",
+    "traceSha256": "f8d506d8902d7cf4d5d5053159f2a283bedef413d2d701189404a47d1c45208d"
+  },
+  "canonicalBlocks": "[x,y,width,height,lumaQP,mode] sorted numerically by x,y,width,height; compact JSON UTF-8",
+  "pictures": [
+    {
+      "au": 0,
+      "poc": 0,
+      "frameType": "I",
+      "width": 1920,
+      "height": 1080,
+      "blockCount": 27584,
+      "blocksSha256": "bbebcab1bf60d7c41d7f6058443b60039157402190622e3b1f171f8c9dbbb132",
+      "selected": [
+        [
+          0,
+          0,
+          64,
+          64,
+          26,
+          "intra"
+        ],
+        [
+          0,
+          64,
+          64,
+          64,
+          26,
+          "intra"
+        ],
+        [
+          0,
+          128,
+          64,
+          64,
+          26,
+          "intra"
+        ],
+        [
+          1916,
+          1024,
+          4,
+          4,
+          26,
+          "intra"
+        ],
+        [
+          1916,
+          1040,
+          4,
+          4,
+          26,
+          "intra"
+        ],
+        [
+          1916,
+          1052,
+          4,
+          4,
+          26,
+          "intra"
+        ]
+      ],
+      "modeCounts": {
+        "intra": 27584
+      },
+      "references": []
+    },
+    {
+      "au": 1,
+      "poc": 16,
+      "frameType": "B",
+      "width": 1920,
+      "height": 1080,
+      "blockCount": 5158,
+      "blocksSha256": "c156440631dec1d120982fa756edaaf8f77774eef33507b2883aa19c50f8c0a0",
+      "selected": [
+        [
+          0,
+          0,
+          128,
+          128,
+          31,
+          "skip"
+        ],
+        [
+          0,
+          128,
+          128,
+          128,
+          31,
+          "skip"
+        ],
+        [
+          0,
+          256,
+          128,
+          128,
+          31,
+          "skip"
+        ],
+        [
+          1904,
+          896,
+          16,
+          32,
+          29,
+          "skip"
+        ],
+        [
+          1904,
+          928,
+          16,
+          32,
+          29,
+          "skip"
+        ],
+        [
+          1904,
+          1048,
+          16,
+          8,
+          29,
+          "skip"
+        ],
+        [
+          0,
+          632,
+          8,
+          4,
+          29,
+          "intra"
+        ],
+        [
+          0,
+          536,
+          8,
+          8,
+          29,
+          "inter"
+        ]
+      ],
+      "modeCounts": {
+        "skip": 1865,
+        "inter": 1703,
+        "intra": 1590
+      },
+      "references": [
+        {
+          "au": 0,
+          "list": 0
+        },
+        {
+          "au": 0,
+          "list": 1
+        }
+      ]
+    },
+    {
+      "au": 5,
+      "poc": 1,
+      "frameType": "B",
+      "width": 1920,
+      "height": 1080,
+      "blockCount": 241,
+      "blocksSha256": "1dbce8a8fe98fdf4c6b9baf496430eceb9957c0fe607c138e007adaa68f02a57",
+      "selected": [
+        [
+          0,
+          0,
+          128,
+          128,
+          52,
+          "skip"
+        ],
+        [
+          0,
+          128,
+          128,
+          128,
+          52,
+          "skip"
+        ],
+        [
+          0,
+          256,
+          128,
+          128,
+          52,
+          "skip"
+        ],
+        [
+          1856,
+          1024,
+          64,
+          32,
+          52,
+          "skip"
+        ],
+        [
+          1856,
+          1056,
+          64,
+          16,
+          52,
+          "skip"
+        ],
+        [
+          1856,
+          1072,
+          64,
+          8,
+          52,
+          "skip"
+        ],
+        [
+          384,
+          512,
+          128,
+          128,
+          52,
+          "inter"
+        ]
+      ],
+      "modeCounts": {
+        "skip": 239,
+        "inter": 2
+      },
+      "references": [
+        {
+          "au": 0,
+          "list": 0
+        },
+        {
+          "au": 4,
+          "list": 0
+        },
+        {
+          "au": 3,
+          "list": 1
+        },
+        {
+          "au": 4,
+          "list": 1
+        }
+      ]
+    }
+  ]
+}

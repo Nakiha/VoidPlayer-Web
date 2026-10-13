@@ -1,6 +1,7 @@
 {
   "version": 1,
   "files": [
+    "src/admin/analysis.ts",
     "src/admin/annotations.ts",
     "src/admin/caches.ts",
     "src/admin/diagnostics.ts",

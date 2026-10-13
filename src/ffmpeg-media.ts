@@ -1,3 +1,4 @@
+import { coreAssetUrl } from './core-url.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { abortableWait } from './media-abort.ts';
 import type { AnalysisAxis, AnalysisQuery } from './analysis/types.ts';
@@ -158,8 +159,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   const indexUrl = 'url' in file ? ffmpegIndexMediaUrl(file.url) : undefined;
   if (deps.glueURL) candidates.push(deps.glueURL);
   else {
-    if (globalThis.crossOriginIsolated) candidates.push(new URL(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin).href);
-    candidates.push(new URL(`/${WASM_CORE_GLUE_PATH}`, location.origin).href);
+    if (globalThis.crossOriginIsolated) candidates.push(coreAssetUrl(`/${WASM_CORE_GLUE_PATH_MT}`, location.origin));
+    candidates.push(coreAssetUrl(`/${WASM_CORE_GLUE_PATH}`, location.origin));
   }
   const scoped = contextLog();
   const readMs = Math.round(performance.now() - openStart);

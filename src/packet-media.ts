@@ -1,3 +1,4 @@
+import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from './media-reference.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { WorkerRpc } from './worker-rpc.ts';
@@ -32,9 +33,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
-    const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
+    const single = deps.glueURL ?? coreAssetUrl(WASM_CORE_GLUE_PATH, document.baseURI);
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
-      ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
+      ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, document.baseURI), single] : [single];
     type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
@@ -147,7 +148,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
     const toDecodedFrame = async (frame: FlvFrame): Promise<DecodedFrame> => {
       const position = floorIndex(times, frame.pts - info.firstPtsUs);
       if (disposed) { frame.frame?.close(); throw new Error('媒体已释放。'); }
-      const sample = frame.frame ? new VideoSample(frame.frame) : undefined;
+      const sample = frame.frame ? new VideoSample(frame.frame, { rotation: frame.rotation ?? 0 }) : undefined;
       const pixels = frame.pixels ? new Uint8ClampedArray(frame.pixels) : undefined;
       try { validateDescription(frame.description, pixels?.byteLength); } catch (error) { sample?.close(); throw error; }
       let closed = false;
@@ -155,7 +156,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       // tags. A platform may return an SDR-tagged resource for an HDR source.
       const description = info.color && !frame.description.sourceColor
         ? { ...frame.description, sourceColor: { ...info.color }, sourceColorOrigin: 'container' as const } : frame.description;
-      const rawFrame = { description, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
+      const rawFrame = { description, rotation: frame.rotation, kind: sample ? 'video-sample' : frame.description.yuv ? 'yuv' : 'rgba8',
         ...(frame.packetPicture ? { sourcePicture: { ...frame.packetPicture, sourceVersion: info.source ? `${info.source.id}@${referenceVersion(info.source.url)}` : info.id, picture: 0 as const, layer: 0 as const, field: 'frame' as const } } : {}),
         width: frame.width, height: frame.height, ptsUs: frame.pts - info.firstPtsUs, sourcePtsUs: frame.pts,
         durationUs: frame.durationUs ?? durations[position], byteSize: frame.description.byteLength, sample, pixels,

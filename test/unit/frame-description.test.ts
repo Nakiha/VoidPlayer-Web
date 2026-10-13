@@ -58,3 +58,17 @@ test('ABI v2 reads plane layout before string ccall grows the WASM heap',()=>{
   const frame=readWasmFrame(core,()=>memory,1);
   assert.equal(frame.description.yuv!.planes.length,3);assert.deepEqual([...new Uint8Array(frame.pixels)],[16,235,16,235,128,128]);
 });
+
+test('RGBA ABI packs visible pixels while retaining coded crop and SAR identity',()=>{
+  const memory=new Uint8Array(1024),view=new DataView(memory.buffer,8,160);
+  for(const [offset,value] of [[16,2],[20,160],[24,4],[28,4],[32,16],[36,64],[60,2],[64,1],[68,1],[144,1],[148,1],[152,1],[156,1]])view.setInt32(offset,value,true);
+  for(let pixel=0;pixel<16;pixel++)memory.fill(pixel,256+pixel*4,260+pixel*4);
+  const core={ccall(name:string){return name==='vp_frame_info'?8:name==='vp_pixels'?256:'gbrp';}};
+  const output=readWasmFrame(core,()=>memory,1);
+  assert.deepEqual(output.description.visibleRect,{x:1,y:1,width:2,height:2});
+  assert.equal(output.description.codedWidth,4);assert.equal(output.description.displayWidth,4);
+  assert.equal(output.description.stride,8);assert.equal(output.description.byteLength,16);
+  assert.deepEqual([...new Uint8Array(output.pixels)],[5,5,5,5,6,6,6,6,9,9,9,9,10,10,10,10]);
+  view.setInt32(144,-1,true);assert.throws(()=>readWasmFrame(core,()=>memory,1),/裁剪/);
+  view.setInt32(144,1,true);view.setInt32(156,4,true);assert.throws(()=>readWasmFrame(core,()=>memory,1),/尺寸/);
+});

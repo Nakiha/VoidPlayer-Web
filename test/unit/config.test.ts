@@ -13,7 +13,7 @@ test('shared configuration resolves file-relative paths and explicit CLI overrid
     const config = await loadConfig(['--config', 'config/settings.json', '--port', '5191'], 'dev', root);
     assert.deepEqual(config.mediaRoots, [path.join(root, 'media')]);
     assert.equal(config.staticDir, path.join(root, 'web')); assert.equal(config.logsDir, null);
-    assert.equal(config.indexWatch, true);
+    assert.equal(config.indexWatch, true); assert.equal(config.analysisConcurrency, 8);
     assert.equal(config.port, 5190); assert.equal(config.devPort, 5191);
     const override = await loadConfig(['--config=config/settings.json', '--folder', 'another', '--port', '5192'], 'production', root);
     assert.deepEqual(override.mediaRoots, [path.join(root, 'another')]); assert.equal(override.port, 5192);
@@ -102,5 +102,21 @@ test('portable startup supports an empty library and keeps defaults beside the e
     const config = await loadConfig([], 'production', cwd, { configFile: path.join(data, 'voidplayer.config.json'), dataDir: data, staticDir: path.join(app, 'dist'), logsDir: path.join(data, 'logs'), allowEmptyRoots: true });
     assert.deepEqual(config.mediaRoots, []); assert.equal(config.dataDir, data);
     assert.equal(config.staticDir, path.join(app, 'dist')); assert.equal(config.logsDir, path.join(data, 'logs'));
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
+
+
+test('server analysis concurrency accepts 1–32 and rejects invalid persisted values', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-analysis-config-'));
+  try {
+    const file = path.join(root, 'voidplayer.config.json');
+    for (const analysisConcurrency of [1, 4, 8, 32]) {
+      await writeFile(file, JSON.stringify({ mediaRoots: ['media'], analysisConcurrency }));
+      assert.equal((await loadConfig([], 'production', root)).analysisConcurrency, analysisConcurrency);
+    }
+    for (const analysisConcurrency of [0, 33, -1, 1.5, '4', null]) {
+      await writeFile(file, JSON.stringify({ mediaRoots: ['media'], analysisConcurrency }));
+      await assert.rejects(loadConfig([], 'production', root), /analysisConcurrency/);
+    }
   } finally { await rm(root, { recursive: true, force: true }); }
 });

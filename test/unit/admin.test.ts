@@ -110,3 +110,36 @@ test('log pagination stays bounded and symlinks never grant access outside the l
   }
   assert.equal((await fetch(base + '/api/admin/logs/..%2Foutside.json')).status, 404);
 }));
+
+test('analysis settings persist, hot-apply across listeners and reject stale or invalid writes', async () => fixture(async ({ root, base, library, admin, config }) => {
+  const second = createMediaServer({ roots: library.roots, library, admin, onLog: () => {} });
+  await new Promise<void>(r => second.listen(0, '127.0.0.1', r));
+  const other = `http://127.0.0.1:${(second.address() as { port: number }).port}`;
+  try {
+    const before = await (await fetch(base + '/api/admin/analysis')).json();
+    assert.equal(before.concurrency, 8); assert.equal(before.writable, true);
+    for (const concurrency of [0, 33, 1.5, '8', null]) {
+      assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency }))).status, 400);
+    }
+    assert.equal((await fetch(base + '/api/admin/analysis', mutation('http://elsewhere.test', 'PUT', { revision: before.revision, concurrency: 12 }))).status, 403);
+    const saved = await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: before.revision, concurrency: 12 }));
+    assert.equal(saved.status, 200); const after = await saved.json();
+    assert.equal(after.concurrency, 12); assert.notEqual(after.revision, before.revision);
+    assert.equal(admin.analysis.resources().concurrency, 12);
+    assert.equal((await (await fetch(other + '/api/admin/status')).json()).analysis.concurrency, 12);
+    const loaded = await loadConfig([], 'production', root);
+    assert.equal(loaded.analysisConcurrency, 12); assert.deepEqual(loaded.mediaRoots, config.mediaRoots);
+    assert.equal((await fetch(other + '/api/admin/analysis', mutation(other, 'PUT', { revision: before.revision, concurrency: 2 }))).status, 409);
+    // A --folder override only restricts editing roots, not independent resource settings.
+    config.origin!.rootsFromCli = true;
+    assert.equal((await (await fetch(base + '/api/admin/analysis')).json()).writable, true);
+    assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: after.revision, concurrency: 32 }))).status, 200);
+    assert.equal(admin.analysis.resources().concurrency, 32);
+    const current = await (await fetch(base + '/api/admin/analysis')).json();
+    await fs.writeFile(config.origin!.file, JSON.stringify({ mediaRoots: config.mediaRoots, analysisConcurrency: 12 }));
+    assert.equal((await (await fetch(base + '/api/admin/analysis')).json()).reasonCode, 'external-change');
+    assert.equal((await fetch(base + '/api/admin/analysis', mutation(base, 'PUT', { revision: current.revision, concurrency: 2 }))).status, 409);
+    assert.equal(admin.analysis.resources().concurrency, 32);
+  } finally { await new Promise<void>(r => second.close(() => r())); }
+  assert.equal(admin.analysis.resources().concurrency, 32, 'closing one listener leaves the shared scheduler alive');
+}));

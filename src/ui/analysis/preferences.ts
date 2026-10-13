@@ -38,7 +38,7 @@ function sanitizeAnalysisPreferences(p: Partial<AnalysisPreferences> & { layoutM
 export function loadAnalysisPreferences(): AnalysisPreferences {
   const fallback: AnalysisPreferences = {
     // 多轨主体色恒为轨道色（与曲线对应），关键用顶端菱形/K 标记，不再按类型填色。
-    showBitrate: true, showSize: true,
+    showBitrate: true, showSize: true, loadMetrics: ['bitrate'],
     axis: 'pts', windowUs: DEFAULT_BITRATE_WINDOW_US, layoutMode: 'merged',
     selected: [],
   };

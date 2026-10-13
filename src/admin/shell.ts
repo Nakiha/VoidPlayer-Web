@@ -1,3 +1,4 @@
+import { analysisSettingsShell } from './analysis.ts';
 import { t, th, msg } from '../i18n.ts';
 import { annotationAdminShell } from './annotations.ts';
 import { cacheShell } from './caches.ts';
@@ -17,6 +18,7 @@ export function adminShell() {
         <h2>${th(msg("admin.serviceTitle", "服务"))}</h2><p>${th(msg("admin.serviceDesc", "可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。"))}</p><dl class="admin-properties"><div><dt>${th(msg("admin.version", "版本"))}</dt><dd id="version">—</dd></div><div><dt>${th(msg("admin.runtime", "运行环境"))}</dt><dd id="runtime">—</dd></div><div><dt>${th(msg("admin.dataDir", "数据目录"))}</dt><dd id="data-dir">—</dd></div><div><dt>${th(msg("admin.currentIdentity", "当前身份"))}</dt><dd id="identity">—</dd></div><div><dt>${th(msg("admin.systemMemory", "系统可用内存"))}</dt><dd id="system-memory">—</dd></div><div><dt>${th(msg("admin.httpRequests", "HTTP 请求"))}</dt><dd id="requests">—</dd></div></dl>
         <p class="admin-caption">${th(msg("admin.cpuCaption", "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。"))}</p>
         <h2>${th(msg("admin.indexTitle", "媒体索引"))}</h2><dl class="admin-properties"><div><dt>${th(msg("admin.rootDirs", "根目录"))}</dt><dd id="root-summary">—</dd></div><div><dt>${th(msg("admin.scanJobs", "扫描任务"))}</dt><dd id="scan-summary">—</dd></div><div><dt>${th(msg("admin.watchDirs", "目录监听"))}</dt><dd id="watch-summary">—</dd></div></dl>
+        ${analysisSettingsShell()}
       </section>
       ${cacheShell()}
       ${workspaceAdminShell()}

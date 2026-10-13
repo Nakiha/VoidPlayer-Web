@@ -1,3 +1,5 @@
+import { AnalysisScheduler } from './analysis/scheduler.ts';
+import { MAX_ANALYSIS_CONCURRENCY, validAnalysisConcurrency } from './analysis/limits.ts';
 import { promises as fs, constants } from 'node:fs';
 import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
@@ -46,6 +48,15 @@ export type RootReasonCode = 'external-change' | 'cli-override' | 'no-source' | 
 export class AdminController {
   readonly config: ServiceConfig;
   readonly library: MediaLibraryIndex;
+  private analysisInstance?: AnalysisScheduler;
+  get analysis() { return this.analysisFor(process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(this.config.staticDir, 'vendor/voidplayer-analysis')); }
+  analysisFor(coreDir: string) {
+    if (!this.analysisInstance) {
+      this.analysisInstance = new AnalysisScheduler(this.library, coreDir, this.library.analysisDirectory);
+      this.analysisInstance.setConcurrency(this.config.analysisConcurrency);
+    }
+    return this.analysisInstance;
+  }
   readonly measurements: Measurements;
   readonly workspaces: WorkspaceStore;
   readonly annotations: AnnotationStore;
@@ -64,7 +75,7 @@ export class AdminController {
       this.cpu = current; this.cpuAt = now;
     }
     const memory = process.memoryUsage();
-    return { ...this.build, runtime: process.versions.bun ? `Bun ${process.versions.bun}` : `Node ${process.versions.node}`, platform: `${process.platform} ${process.arch}`, uptimeSeconds: process.uptime(), cpuPercent: this.cpuPercent, logicalCpus: os.availableParallelism(), memory: { rss: memory.rss, heapUsed: memory.heapUsed, systemTotal: os.totalmem(), systemFree: os.freemem() }, dataDir: this.config.dataDir, logsEnabled: !!this.config.logsDir, library: this.library.status() };
+    return { ...this.build, analysis: this.analysis.resources(), runtime: process.versions.bun ? `Bun ${process.versions.bun}` : `Node ${process.versions.node}`, platform: `${process.platform} ${process.arch}`, uptimeSeconds: process.uptime(), cpuPercent: this.cpuPercent, logicalCpus: os.availableParallelism(), memory: { rss: memory.rss, heapUsed: memory.heapUsed, systemTotal: os.totalmem(), systemFree: os.freemem() }, dataDir: this.config.dataDir, logsEnabled: !!this.config.logsDir, library: this.library.status() };
   }
   async roots() {
     const origin = this.config.origin;
@@ -97,6 +108,33 @@ export class AdminController {
     });
     this.config.mediaRoots = roots; origin.revision = configRevision(after);
     return this.roots();
+  }
+  async analysisSettings() {
+    const origin = this.config.origin;
+    const changed = !!origin && configRevision(await configText(origin.file)) !== origin.revision;
+    const writeAccess = !!origin && await fs.access(path.dirname(origin.file), constants.W_OK).then(() => true, () => false);
+    return { ...this.analysis.resources(), min: 1, max: MAX_ANALYSIS_CONCURRENCY, revision: origin?.revision ?? null,
+      writable: !!origin && !changed && writeAccess,
+      reasonCode: (changed ? 'external-change' : !origin ? 'no-source' : !writeAccess ? 'not-writable' : null) as RootReasonCode | null };
+  }
+  saveAnalysisSettings(document: unknown) {
+    if (this.mutation) throw new AdminError(409, '另一项配置修改正在保存，请稍后重试。');
+    const operation = this.updateAnalysisSettings(document).finally(() => { this.mutation = null; });
+    this.mutation = operation; return operation;
+  }
+  private async updateAnalysisSettings(document: unknown) {
+    const input = document as { revision?: unknown; concurrency?: unknown } | null;
+    if (!input || typeof input.revision !== 'string' || !validAnalysisConcurrency(input.concurrency))
+      throw new AdminError(400, '请提供配置版本及 1–32 的分析并发数。');
+    const origin = this.config.origin;
+    if (!origin || input.revision !== origin.revision) throw new AdminError(409, '配置已更新或无法写回，请重新载入后再编辑。');
+    const before = await configText(origin.file);
+    if (configRevision(before) !== origin.revision) throw new AdminError(409, '配置文件已被外部修改，请重启服务后再编辑。');
+    const after = JSON.stringify({ ...(before ? JSON.parse(before) : {}), analysisConcurrency: input.concurrency }, null, 2) + '\n';
+    await atomicWrite(origin.file, after);
+    this.config.analysisConcurrency = input.concurrency; origin.revision = configRevision(after);
+    this.analysis.setConcurrency(input.concurrency);
+    return this.analysisSettings();
   }
   async logs(before = '', limit = 40) {
     if (!this.config.logsDir) return { entries: [], next: null, enabled: false };
@@ -139,5 +177,5 @@ export class AdminController {
     if (!version) throw new AdminError(428, '删除需要当前日志版本。');
     const { file } = await this.logFile(name, version); await fs.unlink(file); return { ok: true };
   }
-  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); this.workspaces.close(); this.annotations.close(); }
+  async close() { await this.measurements.close(); await this.mutation?.catch(() => {}); await this.analysisInstance?.close(); this.workspaces.close(); this.annotations.close(); }
 }

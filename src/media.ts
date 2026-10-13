@@ -129,7 +129,7 @@ async function chooseMp4DemuxPlan(input: RandomAccessInput, signal?: AbortSignal
     onProgress?.('inspect');
     if (!(await media.getFormat() instanceof IsobmffInputFormat)) return 'ffmpeg';
     const track = await media.getPrimaryVideoTrack();
-    if (!track || track.rotation !== 0) return 'ffmpeg';
+    if (!track || ![0, 90, 180, 270].includes(track.rotation)) return 'ffmpeg';
     const id = await track.getInternalCodecId();
     const codec = await track.getCodec();
     const packetCodecs = ['avc', 'hevc', 'av1', 'vvc'];

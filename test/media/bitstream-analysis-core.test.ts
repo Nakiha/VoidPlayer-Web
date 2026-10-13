@@ -670,3 +670,146 @@ test('native metadata adapter drives the analysis frontier without waiting for i
     assert.equal((await adapter.bitstreamFrontier()).complete, true);
   } finally { release(); adapter.close(); input.dispose(); }
 });
+
+for (const fixture of fixtures) test(`sparse ${fixture.codec} ranges reuse exact pictures and decode only missing output`, async () => {
+  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
+  const { pictureId } = await import('../../src/bitstream-analysis/contract.ts');
+  const signal = new AbortController().signal;
+  const index = await openAnalysisInput(await reader(fixture.file), signal);
+  const firstPtsUs = Math.min(...index.packets.map(p => p.pts));
+  index.close();
+  const target = { sourceVersion: fixture.sha256, firstPtsUs, startUs: 0, endUs: 100000 };
+  const expected = new Map<string, any>();
+  await analyzeRange(await reader(fixture.file), target, await core(), 'test', signal,
+    async result => { expected.set(pictureId(result.picture), result); });
+  assert.ok(expected.size >= 2);
+  const cached = new Map(expected);
+  const middle = [...expected.values()][Math.floor(expected.size / 2)];
+  cached.delete(pictureId(middle.picture));
+  const seen = new Set<string>();
+  const module = await core();
+  let factoryCalls = 0;
+  await analyzeRange(await reader(fixture.file), target, async () => { factoryCalls++; return module; }, 'test', signal,
+    async result => {
+      const id = pictureId(result.picture);
+      assert.ok(!seen.has(id), 'no duplicate cached/decoded publication'); seen.add(id);
+      assert.deepEqual(result.blocks, expected.get(id).blocks);
+      assert.deepEqual(result.capabilities, expected.get(id).capabilities);
+      if (cached.has(id)) assert.equal(result, cached.get(id), 'publish the existing result');
+      else assert.notEqual(result, middle, 'missing picture is decoded again');
+    }, async key => cached.get(pictureId(key)) ?? null);
+  assert.equal(factoryCalls, 1);
+  assert.equal(seen.size, expected.size);
+  assert.equal(module._vpa_record_bytes(), 0);
+  seen.clear();
+  await analyzeRange(await reader(fixture.file), { ...target, endUs: 50000 },
+    () => { throw new Error('A fully cached subrange must not allocate WASM'); }, 'test', signal,
+    async result => { seen.add(pictureId(result.picture)); }, async key => expected.get(pictureId(key)) ?? null);
+  assert.equal(seen.size, [...expected.values()].filter(r => r.sourcePtsUs < firstPtsUs + 50000).length);
+});
+
+test('sparse range rejects obsolete, partial, wrong-picture and incomplete-capability cache entries', async () => {
+  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
+  const signal = new AbortController().signal;
+  const target = { sourceVersion: 'cache-validation', firstPtsUs: 0, startUs: 0, endUs: 10000 };
+  let expected: any;
+  await analyzeRange(await reader(fixtures[0].file), target, await core(), 'test', signal, async r => { expected = r; });
+  for (const patch of [
+    { buildId: 'old-build' }, { recipe: 'old-recipe' }, { analyzerVersion: 'old-version' },
+    { picture: { ...expected.picture, sourceVersion: 'different-file' } },
+    { sourcePtsUs: expected.sourcePtsUs + 1 }, { confidence: 'partial' },
+    { capabilities: { ...expected.capabilities, blocks: 'unsupported' } },
+    { blocks: null },
+  ]) {
+    let opened = false;
+    await analyzeRange(await reader(fixtures[0].file), target,
+      async () => { opened = true; return core(); }, 'test', signal,
+      async result => { assert.deepEqual(result.blocks, expected.blocks); }, async () => ({ ...expected, ...patch }));
+    assert.equal(opened, true, JSON.stringify(patch));
+  }
+  const controller = new AbortController();
+  await assert.rejects(analyzeRange(await reader(fixtures[0].file), target,
+    () => { throw new Error('must not allocate after cancellation'); }, 'test', controller.signal,
+    async () => { throw new Error('must not publish after cancellation'); }, async () => {
+      controller.abort(); return expected;
+    }), { name: 'AbortError' });
+});
+
+test('VVC geometry, QP, intra/inter/skip and L0/L1 agree with independent VTM block statistics', async () => {
+  const expected = JSON.parse(await readFile(new URL('../../docs/fixtures/bitstream-analysis-vtm.json', import.meta.url), 'utf8'));
+  assert.equal(createHash('sha256').update(await readFile(resolve('fixtures/video', expected.file))).digest('hex'), expected.sha256);
+  const signal = new AbortController().signal;
+  const input = await openAnalysisInput(await reader(expected.file), signal);
+  const packets = input.packets;
+  const firstPtsUs = Math.min(...packets.map(p => p.pts));
+  input.close();
+  for (const answer of expected.pictures) {
+    const packet = packets[answer.au];
+    const result = await analyzePicture(await reader(expected.file), {
+      sourceVersion: expected.sha256, sourcePtsUs: packet.pts, normalizedMediaUs: packet.pts - firstPtsUs,
+    }, await core(), 'test', signal);
+    assert.equal(result.confidence, 'exact');
+    assert.equal(result.picture.au, answer.au);
+    assert.equal(result.width, answer.width); assert.equal(result.height, answer.height);
+    assert.equal(result.blocks.length, answer.blockCount);
+    const blocks = result.blocks.map(b => [b.x, b.y, b.width, b.height, b.qp, b.mode] as const)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
+    assert.equal(createHash('sha256').update(JSON.stringify(blocks)).digest('hex'), answer.blocksSha256, `all CUs for POC ${answer.poc}`);
+    for (const selected of answer.selected) assert.ok(blocks.some(b => JSON.stringify(b) === JSON.stringify(selected)), 'concrete independent CU record');
+    assert.deepEqual({ ...result.references, edges: [...result.references!.edges].sort((a, b) => a.list - b.list || a.au - b.au) },
+      { kind: 'active-lists', state: 'ready', poc: answer.poc, frameType: answer.frameType, edges: answer.references });
+  }
+});
+
+for(const fixture of fixtures)test(`whole ${fixture.codec} cache resumes holes with bounded reference preroll and no duplicate pictures`,async()=>{
+  const {groupAnalysisGops}=await import('../../src/bitstream-analysis/stream.ts');
+  const {gzipSync,gunzipSync}=await import('node:zlib');
+  const signal=new AbortController().signal;
+  const makeInput=async()=>{
+    const input=await openAnalysisInput(await reader(fixture.file),signal,true);
+    const groups=groupAnalysisGops(input.packets);
+    input.packets.splice(groups[2].endAu);input.totalPackets=input.packets.length;
+    Object.defineProperty(input,'sealedEnd',{get:()=>input.packets.length});
+    return input;
+  };
+  const cache=new Map<number,Buffer>(),hashes=new Map<number,string>();
+  const hash=(value:any)=>createHash('sha256').update(JSON.stringify([value.picture,value.sourcePtsUs,value.blocks,value.references,value.nalus])).digest('hex');
+  const run=async(module:any,cached:any,consume:(r:any)=>Promise<void>)=>{
+    const input=await makeInput();
+    return analyzePicture(input.reader,{sourceVersion:fixture.sha256,sourcePtsUs:input.packets[0].pts,normalizedMediaUs:0},
+      module,'test',signal,{input,sequential:true,stream:{mode:'stream',sourceVersion:fixture.sha256,firstPtsUs:0,durationUs:10000000},cached,onResult:consume});
+  };
+  await run(await core(),undefined,async result=>{
+    hashes.set(result.picture.au,hash(result));cache.set(result.picture.au,gzipSync(JSON.stringify(result)));
+  });
+  const get=(au:number)=>JSON.parse(gunzipSync(cache.get(au)!).toString());
+  let seen=new Set<number>();
+  await run(()=>assert.fail('complete cached stream must not allocate WASM'),async(p:any)=>get(p.au),async result=>{
+    assert.ok(!seen.has(result.picture.au));seen.add(result.picture.au);assert.equal(hash(result),hashes.get(result.picture.au));
+  });
+  assert.equal(seen.size,cache.size);
+  const cancelledInput=await makeInput(),controller=new AbortController();
+  let closed=false,published=0;
+  const close=cancelledInput.close.bind(cancelledInput);
+  cancelledInput.close=()=>{closed=true;close();};
+  await assert.rejects(analyzePicture(cancelledInput.reader,
+    {sourceVersion:fixture.sha256,sourcePtsUs:cancelledInput.packets[0].pts,normalizedMediaUs:0},
+    ()=>assert.fail('cancelled cached stream must not allocate WASM'),'test',controller.signal,
+    {input:cancelledInput,sequential:true,stream:{mode:'stream',sourceVersion:fixture.sha256,firstPtsUs:0,durationUs:10000000},
+      cached:async p=>get(p.au),onResult:async()=>{if(++published===3)controller.abort();}}),{name:'AbortError'});
+  assert.equal(published,3);assert.equal(closed,true,'cached cancellation releases the reader');
+  const input=await makeInput(),groups=groupAnalysisGops(input.packets);input.close();
+  const hole=groups[1].startAu+3,module=await core(),originalFeed=module._vpa_feed;
+  const fed:number[]=[];
+  module._vpa_feed=(...args:any[])=>{fed.push(args[4]);return originalFeed(...args);};
+  seen=new Set();
+  await run(module,async(p:any)=>p.au===hole?null:get(p.au),async result=>{
+    assert.ok(!seen.has(result.picture.au));seen.add(result.picture.au);assert.equal(hash(result),hashes.get(result.picture.au));
+    const before=fed.length;await new Promise(resolve=>setTimeout(resolve,1));assert.equal(fed.length,before,'cache and decode both honor consumer backpressure');
+    if(result.picture.au!==hole)assert.deepEqual(result.metrics,get(result.picture.au).metrics,'cached records are reused');
+  });
+  assert.equal(seen.size,cache.size);assert.ok(fed.includes(hole));
+  if(get(groups[1].startAu).gop.anchor==='closed')assert.ok(fed.every(au=>au>=groups[1].startAu),'closed cached prefix is never decoded');
+  else assert.ok(fed.some(au=>au<groups[1].startAu),'dependent hole retains reference preroll');
+  assert.equal(module._vpa_record_bytes(),0);
+});

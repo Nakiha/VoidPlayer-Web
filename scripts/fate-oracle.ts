@@ -4,15 +4,19 @@ export type ObservedFrame = ReferenceFrame & { bytes?: number };
 export type Failure = { code: string; detail: string };
 /** 4x4 regional means per raw plane, independent of any YUV→RGB convention.
  * Decode is bit-exact, so plane fingerprints must match exactly. */
-export function planeSignature(pixels: ArrayLike<number>, layout: { bitDepth: number; semiplanar: boolean; planes: { offset: number; stride: number; width: number; height: number }[] }): number[] {
+export function planeSignature(pixels: ArrayLike<number>, layout: { bitDepth: number; semiplanar: boolean; planes: { offset: number; stride: number; width: number; height: number }[]; subsampleX?: number; subsampleY?: number }, crop?: { x: number; y: number; width: number; height: number }): number[] {
   const bytes = layout.bitDepth > 8 ? 2 : 1;
   const result: number[] = [];
   for (let plane = 0; plane < layout.planes.length; plane++) for (let channel = 0; channel < (layout.semiplanar && plane ? 2 : 1); channel++) {
     const p = layout.planes[plane];
+    const sx = plane ? 2 ** (layout.subsampleX ?? 0) : 1, sy = plane ? 2 ** (layout.subsampleY ?? 0) : 1;
+    const left = crop ? Math.floor(crop.x / sx) : 0, top = crop ? Math.floor(crop.y / sy) : 0;
+    const width = crop ? Math.ceil((crop.x + crop.width) / sx) - left : p.width;
+    const height = crop ? Math.ceil((crop.y + crop.height) / sy) - top : p.height;
     for (let gy = 0; gy < 4; gy++) for (let gx = 0; gx < 4; gx++) {
       let sum = 0, count = 0;
-      for (let y = Math.floor(gy * p.height / 4); y < Math.floor((gy + 1) * p.height / 4); y++) {
-        for (let x = Math.floor(gx * p.width / 4); x < Math.floor((gx + 1) * p.width / 4); x++) {
+      for (let y = top + Math.floor(gy * height / 4); y < top + Math.floor((gy + 1) * height / 4); y++) {
+        for (let x = left + Math.floor(gx * width / 4); x < left + Math.floor((gx + 1) * width / 4); x++) {
           const offset = p.offset + y * p.stride + (x * (layout.semiplanar && plane ? 2 : 1) + channel) * bytes;
           sum += pixels[offset] + (bytes === 2 ? pixels[offset + 1] * 256 : 0);
           count++;

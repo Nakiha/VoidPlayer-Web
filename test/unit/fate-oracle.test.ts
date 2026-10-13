@@ -44,3 +44,19 @@ test('pinned sample retries are bounded and transport exhaustion remains a failu
   await assert.rejects(downloadPinnedSample(sample, {fetchImpl: async () => {calls++; throw new TypeError('fetch failed');}, wait: async ms => {waits.push(ms);}, onRetry() {}}), /fetch failed/);
   assert.equal(calls, 3); assert.deepEqual(waits, [1000, 2000]);
 });
+
+test('FATE plane fingerprints compare visible samples, excluding coded padding without hiding pixel changes', async()=>{
+  const {planeSignature}=await import('../../scripts/fate-oracle.ts');
+  const layout={bitDepth:8,semiplanar:false,subsampleX:1,subsampleY:1,
+    planes:[{offset:0,stride:12,width:12,height:12},{offset:144,stride:6,width:6,height:6},{offset:180,stride:6,width:6,height:6}]};
+  const compact={...layout,planes:[{offset:0,stride:8,width:8,height:8},{offset:64,stride:4,width:4,height:4},{offset:80,stride:4,width:4,height:4}]};
+  const coded=new Uint8Array(216).fill(255),visible=new Uint8Array(96);
+  for(let plane=0;plane<3;plane++) {
+    const p=layout.planes[plane],v=compact.planes[plane],inset=plane?1:2;
+    for(let y=0;y<v.height;y++)for(let x=0;x<v.width;x++)coded[p.offset+(y+inset)*p.stride+x+inset]=visible[v.offset+y*v.stride+x]=plane*32+y*4+x;
+  }
+  const crop={x:2,y:2,width:8,height:8},expected=planeSignature(visible,compact);
+  assert.deepEqual(planeSignature(coded,layout,crop),expected);
+  assert.notDeepEqual(planeSignature(coded,layout),expected);
+  coded[26]++;assert.notDeepEqual(planeSignature(coded,layout,crop),expected);
+});

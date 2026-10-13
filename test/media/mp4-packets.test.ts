@@ -2,11 +2,10 @@ import { packetFixture } from '.././packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
+import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import { Mp4Engine } from '../../src/mp4-engine.ts';
 import { openFFmpegMedia } from '../../src/ffmpeg-media.ts';
 const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
-const hash = (pixels: Uint8Array | Uint8ClampedArray) => createHash('sha256').update(pixels).digest('hex');
 
 for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'hevc-packet-1080p.mp4']) {
   test(`MP4 packet WASM ${name}: metadata-only indexing and exact pixels across GOP seeks and EOF`, { timeout: 120000 }, async () => {
@@ -28,7 +27,7 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
         const expected = await reference.frameAt(init.times[position]);
         try {
           assert.equal(actual.pts, init.firstPtsUs + init.times[position]);
-          assert.equal(hash(new Uint8Array(actual.pixels!)), hash(expected.pixels!), `frame ${position}`);
+          assert.equal(visiblePixelHash(actual.description, actual.pixels!), visiblePixelHash(expected.description, expected.pixels!), `frame ${position}`);
         } finally { expected.close(); }
       }
     } finally { engine.close(); reference.dispose(); }

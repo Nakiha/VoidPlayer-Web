@@ -1,3 +1,4 @@
+import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
@@ -61,13 +62,25 @@ type Work = {
   seq: number;
 };
 type Consumer = { work: Work; owner: string; expires: number; cursor: number; delivered: number };
-/** Each distinct admitted job runs independently; matching demands share work. */
+// Reserve capacity before constructing a worker, including index-waiting and
+// consumer-backpressured jobs. Per-window admission cannot bound a shared server.
+/** Bounded independent jobs; matching demands share work and consumer leases. */
 export class AnalysisScheduler {
   private work = new Map<string, Work>();
   private consumers = new Map<string, Consumer>();
   private running = new Set<Work>();
   private timer?: ReturnType<typeof setInterval>;
   private closed = false;
+  private concurrency = DEFAULT_ANALYSIS_CONCURRENCY;
+  setConcurrency(value: number) {
+    if (!validAnalysisConcurrency(value)) throw new RangeError("Invalid analysis concurrency");
+    this.concurrency = value;
+    // Reductions only affect future admission; existing workers keep their slots.
+    this.pump();
+  }
+  resources() {
+    return { concurrency: this.concurrency, running: this.running.size, queued: [...this.work.values()].filter(work => work.state === "queued").length };
+  }
   private pendingSubmissions = 0;
   private resultReads = 0;
   private waitingReads: { signal: AbortSignal; resolve: (release: () => void) => void; reject: (error: unknown) => void; abort: () => void }[] = [];
@@ -174,6 +187,9 @@ export class AnalysisScheduler {
     );
     if (manifest.abi !== 1 || manifest.semanticVersion !== ANALYZER_VERSION)
       throw new Error("Analysis core ABI/version mismatch");
+    if (!Number.isSafeInteger(manifest.heapMaxBytes) || manifest.heapMaxBytes <= 0 ||
+        manifest.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
+      throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
     const id = createHash("sha256")
       .update(
         JSON.stringify([
@@ -342,11 +358,12 @@ export class AnalysisScheduler {
   }
   private pump() {
     if (this.closed) return;
-    // Client admission controls per-window concurrency. The server starts every
-    // distinct admitted demand, including requests from different users.
+    // Prioritize paused-picture demand over queued ranges/streams. Running work
+    // retains its decoder; a slot is released only after worker termination.
     const queued = [...this.work.values()].filter(w => w.state === 'queued' && w.consumers.size);
     queued.sort((a, b) => Number('mode' in a.target || 'startUs' in a.target) - Number('mode' in b.target || 'startUs' in b.target));
     for (const work of queued) {
+      if (this.running.size >= this.concurrency) break;
       work.state = 'running'; work.seq++; this.running.add(work);
       work.done = this.run(work);
     }
@@ -397,6 +414,18 @@ export class AnalysisScheduler {
           }
         };
         worker.on("message", async (m) => {
+          if (m.type === 'cache') {
+            try {
+              if (work.state !== 'running' || !work.consumers.size ||
+                  m.picture?.sourceVersion !== work.target.sourceVersion)
+                throw new AnalysisFailure('cancelled', 'Analysis demand expired');
+              const id = createHash('sha256').update(JSON.stringify([
+                work.target.sourceVersion, pictureId(m.picture), ANALYSIS_RECIPE, ANALYZER_VERSION, work.buildId,
+              ])).digest('hex');
+              acknowledge({ type: 'cache', result: await this.store.get(id) });
+            } catch (error) { reject(error); }
+            return;
+          }
           if (m.type === 'index') {
             try { acknowledge({ type: 'index', index: await index!.read() }); }
             catch (error) { acknowledge({ type: 'index', error: String(error), reason: failureInfo(error) }); reject(error); }

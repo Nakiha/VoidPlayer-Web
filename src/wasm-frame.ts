@@ -23,23 +23,33 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
     displayWidth:Math.max(1,Math.round(width*sarNum/sarDen)),sourceColor,color:{...sourceColor,matrix:'rgb',fullRange:true},
     sourcePixelFormat:null});
   const layout=view.getInt32(72,true);
+  const storageBytes=description.byteLength, storageStride=description.stride!;
+  if(layout===0)validateDescription(description,storageBytes);
+  const x=view.getInt32(144,true),y=view.getInt32(148,true);
+  description.width=width-x-view.getInt32(152,true); description.height=height-y-view.getInt32(156,true);
+  description.visibleRect={x,y,width:description.width,height:description.height};
+  description.displayWidth=Math.max(1,Math.round(description.width*sarNum/sarDen)); description.displayHeight=description.height;
   if(layout!==0) {
     if(layout!==1 && layout!==2)throw new MediaOpenError('decode','Unknown WASM plane layout');
     description.format='YUV'; description.stride=null; description.color=sourceColor;
     description.yuv={bitDepth:view.getInt32(76,true),bitShift:view.getInt32(80,true),
       subsampleX:view.getInt32(84,true),subsampleY:view.getInt32(88,true),chromaLocation:view.getInt32(92,true),semiplanar:layout===2,
       planes:Array.from({length:layout===2?2:3},(_,i)=>({offset:view.getInt32(96+i*16,true),stride:view.getInt32(100+i*16,true),width:view.getInt32(104+i*16,true),height:view.getInt32(108+i*16,true)}))};
-    const x=view.getInt32(144,true),y=view.getInt32(148,true);
-    description.width=width-x-view.getInt32(152,true); description.height=height-y-view.getInt32(156,true);
-    description.visibleRect={x,y,width:description.width,height:description.height};
-    description.displayWidth=Math.max(1,Math.round(description.width*sarNum/sarDen)); description.displayHeight=description.height;
-  } else description.colorFallback='swscale-rgba';
+  } else {
+    description.colorFallback='swscale-rgba';
+    description.stride=description.width*4; description.byteLength=description.stride*description.height;
+  }
   description.sourcePixelFormat=core.ccall('vp_frame_format','string',['number'],[ctx])||null;
   validateDescription(description,description.byteLength);
   const pixelPtr=core.ccall('vp_pixels','number',['number'],[ctx]),len=description.byteLength;
   const pixels=heap(); // ccall(string) can grow memory; refresh the view.
-  if(!Number.isSafeInteger(pixelPtr)||pixelPtr<=0||pixelPtr+len>pixels.byteLength)throw new MediaOpenError('decode','WASM 输出像素范围越界。');
+  if(!Number.isSafeInteger(pixelPtr)||pixelPtr<=0||pixelPtr+storageBytes>pixels.byteLength)throw new MediaOpenError('decode','WASM 输出像素范围越界。');
   const out=recycle?.byteLength===len?new Uint8Array(recycle):new Uint8Array(len);
-  out.set(pixels.subarray(pixelPtr,pixelPtr+len));
+  if(layout===0 && (x||y||description.width!==width||description.height!==height)) {
+    for(let row=0;row<description.height;row++) {
+      const start=pixelPtr+(y+row)*storageStride+x*4;
+      out.set(pixels.subarray(start,start+description.stride!),row*description.stride!);
+    }
+  } else out.set(pixels.subarray(pixelPtr,pixelPtr+len));
   return {pts,duration,description,pixels:out.buffer};
 }

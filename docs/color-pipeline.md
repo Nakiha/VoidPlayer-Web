@@ -146,6 +146,8 @@ packet 和 FFmpeg 容器统一调用 `readWasmFrame`，同一 ArrayBuffer 跨 wo
 core 每行复制有效字节，去掉 padding，支持负 linesize。descriptor 与缓冲只在下次输出/reset/destroy 前有效。
 Web 在下一次解码前独立复制，验证范围、尺寸、stride、位深及平面非重叠；字符串 ccall 可能增长 heap，描述必须先读完，再刷新像素 heap 视图。
 
+MP4 包解码保留完整 coded 平面及非零 crop 原点，不让 libavcodec 自动对齐裁剪丢掉坐标。YUV 继续由呈现器按 visibleRect 采样；RGBA 在复制 WASM 输出时只打包可见行，同时保留 coded/visible 元数据。显示 SAR 与 0/90/180/270° 旋转只用于呈现，RGBA 存储尺寸不随显示比例膨胀。
+
 旧 RGBA 回退仍由 swscale SWS_BICUBIC 执行：显式 AVFrame matrix/range 优先，未知 matrix 用 height≥720 的 BT.709，否则 BT.601；未知 range 为 limited。
 该回退不计入统一 YUV 验收，尤其不代表完整 HDR tone mapping。
 

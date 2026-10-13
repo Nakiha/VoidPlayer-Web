@@ -10,5 +10,6 @@
   "allowLocalReveal": false,
   "indexTtlMs": 30000,
   "indexWatch": true,
-  "adminUsers": []
+  "adminUsers": [],
+  "analysisConcurrency": 8
 }

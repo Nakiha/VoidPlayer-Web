@@ -1,9 +1,11 @@
+import { verifyStaticAssets } from './static-assets.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readReleaseIdentity, verifyFrontendIdentity } from './release-version.mjs';
+import { verifyCoreArtifact, playbackFiles, analysisFiles } from './core-artifacts.mjs';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 if (argv.length && (argv.length !== 2 || argv[0] !== '--target')) throw new Error('用法: node scripts/package-release.mjs [--target bun-linux-x64]');
@@ -14,11 +16,18 @@ const bun = process.env.BUN_BIN || 'bun';
 const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
 const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).trim();
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
-const required = ['index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
+const required = ['static-assets.json', 'index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
+await verifyStaticAssets(path.join(root, 'dist'));
 const identity = await readReleaseIdentity(root);
 const { revision, dirty, version, tag } = identity;
 verifyFrontendIdentity(JSON.parse(await readFile(path.join(root, 'dist/build-info.json'), 'utf8')), identity);
+// Check the bytes actually being packaged, before compiling or creating output.
+for (const [name, schema, files, lockFile] of [
+  ['voidplayer-core', 'voidplayer-core-build', playbackFiles, 'release-core.json'],
+  ['voidplayer-analysis', 'voidplayer-analysis-build', analysisFiles, 'release-analysis.json'],
+]) await verifyCoreArtifact(path.join(root, 'dist/vendor', name),
+  JSON.parse(await readFile(path.join(root, 'scripts', lockFile), 'utf8')), schema, files);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 const name = `voidplayer-${version}-${target.slice(4)}${tag ? '' : `-${stamp}`}`;
 const out = path.join(root, 'artifacts', name);
@@ -43,7 +52,7 @@ for (const [directory, dependency] of Object.entries(lock.packages)) {
   for (const license of licenses) notices += await readFile(path.join(root, directory, license), 'utf8') + '\n';
 }
 await writeFile(path.join(out, 'deploy/licenses/javascript.txt'), notices);
-await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, adminUsers: [] }, null, 2) + '\n');
+await writeFile(path.join(out, 'voidplayer.config.example.json'), JSON.stringify({ mediaRoots: [{ id: 'media', name: '媒体库', path: '/absolute/path/to/media' }], host: '127.0.0.1', port: 5180, allowLocalReveal: false, indexTtlMs: 30000, indexWatch: true, analysisConcurrency: 8, adminUsers: [] }, null, 2) + '\n');
 // Include the exact application sources needed to rebuild with a different runtime.
 // Explicit paths and Git's excludes keep media, local settings, credentials and logs out.
 const rootFiles = new Set(['package.json', 'package-lock.json', 'index.html', 'vite.config.ts', 'tsconfig.json', '.bun-version', '.gitignore', 'LICENSE', 'README.md', 'AGENTS.md', 'voidplayer.config.example.json', 'public/theme-init.js', 'public/startup-guard.js']);

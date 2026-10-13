@@ -1,3 +1,4 @@
+import { StaticAssets } from './static-assets.ts';
 import { AnalysisScheduler } from './analysis/scheduler.ts';
 import { handleAnalysisRoutes } from './analysis/routes.ts';
 import { randomUUID } from 'node:crypto';
@@ -13,7 +14,7 @@ import path from 'node:path';
 import { localRequest, setClientAddress } from './reveal.ts';
 import { MediaLibraryIndex } from './library.ts';
 import type { AdminController } from './admin.ts';
-import { ISOLATION_HEADERS, sendJson, serveFile } from './http-utils.ts';
+import { ISOLATION_HEADERS, sendJson } from './http-utils.ts';
 import { handleConnectionRoutes } from './routes/connection.ts';
 import { handleStateRoutes } from './routes/state.ts';
 import { handleContentRoutes } from './routes/content.ts';
@@ -46,9 +47,11 @@ export function createMediaServer(options: ServerOptions): Server {
   const roots = options.roots.map(r => path.resolve(r));
   const library = options.library ?? new MediaLibraryIndex(roots);
   if (!options.library) library.start();
-  const analysis = new AnalysisScheduler(library, process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(),'public'),'vendor/voidplayer-analysis'), library.analysisDirectory);
+  const analysisCore = process.env.VOIDPLAYER_ANALYSIS_CORE_DIR || path.join(options.staticDir ?? path.join(process.cwd(), 'public'), 'vendor/voidplayer-analysis');
+  const analysis = options.admin?.analysisFor(analysisCore) ?? new AnalysisScheduler(library, analysisCore, library.analysisDirectory);
   const staticDir = options.staticDir ? path.resolve(options.staticDir) : undefined;
   const staticRoot = staticDir ? fs.realpath(staticDir).catch(() => null) : Promise.resolve(null);
+  const staticAssets = staticRoot.then(root => root ? new StaticAssets(root) : null);
   const logLine = options.onLog ?? (entry => console.log(JSON.stringify(entry)));
   const traffic=options.traffic ?? createTrafficState();
   const {sockets,recentRequests}=traffic;
@@ -96,7 +99,7 @@ export function createMediaServer(options: ServerOptions): Server {
         const candidate = root ? path.join(root, rel) : '';
         const real = await fs.realpath(candidate).catch(() => null);
         if (root && real && (real === root || real.startsWith(root + path.sep)) && (await fs.stat(real)).isFile()) {
-          await serveFile(req, res, real);
+          await (await staticAssets)!.serve(req, res, url, real);
           return;
         }
         sendJson(res, 404, { error: 'not found' });
@@ -109,7 +112,7 @@ export function createMediaServer(options: ServerOptions): Server {
     }
   };
   const server = options.tls ? createSecureServer(options.tls, handleRequest) : createServer(handleRequest);
-  server.on('close',()=>{void analysis.close();});
+  if (!options.admin) server.on('close',()=>{void analysis.close();});
   server.on('connection', socket => { sockets.add(socket); socket.once('close', () => sockets.delete(socket)); });
   if (!options.library) server.on('close', () => { void library.close(); });
   return server;

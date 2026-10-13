@@ -54,22 +54,28 @@ try {
     const manifest = JSON.parse(
       await readFile(path.join(workerData.coreDir, "manifest.json"), "utf8"),
     );
-    const module = await import(
-      pathToFileURL(path.join(workerData.coreDir, "voidplayer-analysis.js"))
-        .href
-    );
-    const core = await module.default({
-      wasmBinary: new Uint8Array(
-        await readFile(
-          path.join(workerData.coreDir, "voidplayer-analysis.wasm"),
+    const loadCore = async () => {
+      const module = await import(
+        pathToFileURL(path.join(workerData.coreDir, "voidplayer-analysis.js"))
+          .href
+      );
+      const core = await module.default({
+        wasmBinary: new Uint8Array(
+          await readFile(
+            path.join(workerData.coreDir, "voidplayer-analysis.wasm"),
+          ),
         ),
-      ),
-    });
-    validateAnalysisCore(core);
+      });
+      validateAnalysisCore(core);
+      return core;
+    };
+    let cacheReply: ((value: import('../../src/bitstream-analysis/contract.ts').AnalysisResult | null) => void) | undefined;
     let acknowledgement: { resolve(): void; reject(error: unknown): void } | undefined;
     let indexReply: { resolve(value: import('../../src/bitstream-analysis/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
     parentPort!.on('message', message => {
-      if (message.type === 'index') {
+      if (message.type === 'cache') {
+        const reply = cacheReply; cacheReply = undefined; reply?.(message.result ?? null);
+      } else if (message.type === 'index') {
         const reply = indexReply; indexReply = undefined;
         if (message.error) reply?.reject(restoreFailure(message.reason, message.error)); else reply?.resolve(message.index);
       } else {
@@ -84,27 +90,32 @@ try {
       });
     };
     if (workerData.target.mode === 'stream')
-      await analyzeStream(reader, workerData.target, core, (manifest.buildId ?? manifest.revision),
+      await analyzeStream(reader, workerData.target, loadCore, (manifest.buildId ?? manifest.revision),
         new AbortController().signal, publish,
         async progress => parentPort!.postMessage({ type: 'progress', progress }),
         workerData.externalIndex ? () => new Promise((resolve, reject) => {
           indexReply = { resolve, reject }; parentPort!.postMessage({ type: 'index' });
-        }) : undefined);
+        }) : undefined, picture => new Promise(resolve => {
+          cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+        }));
     else if ("startUs" in workerData.target)
       await analyzeRange(
         reader,
         workerData.target,
-        core,
+        loadCore,
         (manifest.buildId ?? manifest.revision),
         new AbortController().signal,
         publish,
+        picture => new Promise(resolve => {
+          cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+        }),
       );
     else
       await publish(
         await analyzePicture(
           reader,
           workerData.target,
-          core,
+          await loadCore(),
           (manifest.buildId ?? manifest.revision),
           new AbortController().signal,
         ),

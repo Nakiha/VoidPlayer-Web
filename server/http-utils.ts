@@ -45,8 +45,9 @@ export function parseRange(header: string | undefined, size: number): { start: n
   return { start, end };
 }
 
-export async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: string, contentType?: string, expectedVersion?: string) {
-  const handle = await fs.open(absPath, 'r').catch(() => null);
+export async function serveFile(req: IncomingMessage, res: ServerResponse, absPath: string, contentType?: string, expectedVersion?: string,
+  asset?: { file?: string; etag?: string; cacheControl: string; encoding?: string }) {
+  const handle = await fs.open(asset?.file ?? absPath, 'r').catch(() => null);
   if (!handle) { sendJson(res, 404, { error: 'not found' }); return; }
   try {
     const stat = await handle.stat().catch(() => null);
@@ -54,7 +55,12 @@ export async function serveFile(req: IncomingMessage, res: ServerResponse, absPa
     if (expectedVersion && fileVersion(stat) !== expectedVersion) { sendJson(res, 409, { error: '媒体内容已改变，请重新载入。' }); return; }
     const size = stat.size;
     const type = contentType ?? MIME[path.extname(absPath).toLowerCase()] ?? 'application/octet-stream';
-    const base = { etag: `"${fileVersion(stat)}"`, 'content-type': type, 'accept-ranges': 'bytes', 'cache-control': 'no-store' };
+    const base = { etag: asset?.etag ?? `"${fileVersion(stat)}"`, 'content-type': type, 'accept-ranges': 'bytes',
+      'cache-control': asset?.cacheControl ?? 'no-store', ...(asset ? { vary: 'Accept-Encoding' } : {}),
+      ...(asset?.encoding ? { 'content-encoding': asset.encoding } : {}) };
+    if (asset && req.headers['if-none-match']?.split(',').some(value => value.trim() === '*' || value.trim().replace(/^W\//, '') === base.etag)) {
+      res.writeHead(304, base); res.end(); return;
+    }
     const range = parseRange(req.headers.range, size);
     if (range === 'unsatisfiable') {
       res.writeHead(416, { ...base, 'content-range': `bytes */${size}` });

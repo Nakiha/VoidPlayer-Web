@@ -1,6 +1,25 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reconcileTrackSelection } from '../../src/ui/track-selection.ts';
+import { loadAnalysisPreferences, PREF_KEY } from '../../src/ui/analysis/preferences.ts';
+
+test('QP defaults off for fresh and legacy preferences while explicit saved choices survive', t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+  const values = new Map<string, string>();
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+  } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'localStorage', previous);
+    else Reflect.deleteProperty(globalThis, 'localStorage');
+  });
+  assert.deepEqual(loadAnalysisPreferences().loadMetrics, ['bitrate']);
+  values.set('voidplayer.analysis.v1', JSON.stringify({ showBitrate: true, showSize: true }));
+  assert.deepEqual(loadAnalysisPreferences().loadMetrics, ['bitrate']);
+  values.set(PREF_KEY, JSON.stringify({ loadMetrics: ['bitrate', 'qp'] }));
+  assert.deepEqual(loadAnalysisPreferences().loadMetrics, ['bitrate', 'qp']);
+});
 
 const entry = (slot: string, mediaId = slot.toLowerCase()) => ({ slot, mediaId });
 

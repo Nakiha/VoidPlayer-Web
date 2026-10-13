@@ -57,6 +57,19 @@ try {
   page.setDefaultTimeout(15000); page.on('pageerror', e => errors.push(e.message));
   await page.locator('#identity').filter({ hasText: '访客' }).waitFor();
 
+  await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '8');
+  await page.getByLabel('服务端分析并发数').fill('12');
+  await page.getByRole('button', { name: '保存分析配置', exact: true }).click();
+  await page.locator('#analysis-resource-save-state').filter({ hasText: '分析配置已保存' }).waitFor();
+  assert.equal(JSON.parse(await readFile(file, 'utf8')).analysisConcurrency, 12);
+  assert.equal((await (await fetch(base + '/api/admin/status')).json()).analysis.concurrency, 12);
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '12');
+  await page.getByLabel('服务端分析并发数').fill('33');
+  assert.equal(await page.locator('#analysis-resource-save').isDisabled(), true);
+  await page.locator('#analysis-resource-reload').click();
+  await page.waitForFunction(() => document.getElementById('analysis-concurrency')?.value === '12');
+
   assert.equal(await page.evaluate(() => { const rows = [...document.querySelectorAll('#pane-overview .admin-properties > div')]; return rows.every((r, i) => !i || r.getBoundingClientRect().top > rows[i-1].getBoundingClientRect().top); }), true, 'properties must remain a single ordered list');
   await page.screenshot({ path: `/tmp/voidplayer-admin-overview-light-${browserName}.png` });
   await page.route('**/api/admin/status', route => route.fulfill({ status: 503, json: { error: '服务暂不可用，请重试' } }));

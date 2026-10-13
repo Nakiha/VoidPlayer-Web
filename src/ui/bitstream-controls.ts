@@ -31,6 +31,7 @@ type Entry = {
   message?: string;
 };
 const tokenKey = (token: PresentedFrameToken | null) => token?.picture ? JSON.stringify([token.generation, token.picture]) : null;
+const inspectionKey = (token: PresentedFrameToken | null) => tokenKey(token) ?? (token ? `${token.generation}:${token.commit}` : null);
 const modeLabel = (mode: Mode) => mode === 'qp' ? t(msg('bitstream.qp','QP 热图')) : mode === 'modes' ? t(msg('bitstream.prediction','预测模式')) : t(msg('bitstream.boundaries','块边界'));
 const predictionLabel = (mode: AnalysisBlock['mode']) => mode === 'intra' ? t(msg('bitstream.intra','帧内')) : mode === 'inter' ? t(msg('bitstream.inter','帧间')) : t(msg('bitstream.skip','跳过'));
 
@@ -65,7 +66,6 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       render();
     },
   });
-  const automaticStreams = new Map<Slot, string>();
   const retryButtons = new Map<Slot, ReturnType<typeof analysisRetryButton>>();
   installFilterGestures($('bitstream-tracks'), life.signal, (button, solo) => {
     const slot = button.dataset.slot as Slot;
@@ -90,22 +90,23 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (event.key === 'Escape' && !(event.target as Element).closest('[popover]:popover-open')) { event.preventDefault(); event.stopPropagation(); setOpen(false); trigger.focus(); }
   }, {signal:life.signal});
   function automatic(slot: Slot, entry: Entry) {
-    if (!entry.enabled || lastState.busy || cached(slot,entry)) return;
+    if (!entry.enabled || lastState.busy || lastState.playing || cached(slot,entry)) return;
     const state = session.getBitstreamAnalysisState(slot);
-    if (state.state === 'pending' || entry.request) return;
-    if (automaticStreams.get(slot) !== entry.sourceId && !state.completedStream && !(state.state === 'ready' && state.stream)) {
-      automaticStreams.set(slot, entry.sourceId);
-      queueMicrotask(()=> { if (entries.get(slot)===entry && entry.enabled && session.getBitstreamAnalysisState(slot).state!=='pending') void session.requestBitstreamStream(slot).catch(()=>{}); });
-    } else if ((state.completedStream || state.state === 'ready' && state.stream) && !cached(slot,entry) && !lastState.playing) {
-      const key = tokenKey(session.getPresentedFrame(slot));
-      if (key && key !== entry.requestedKey) {
-        entry.requestedKey=key;
-        queueMicrotask(()=> {
-          if (!entry.enabled || entries.get(slot)!==entry) return;
-          if (lastState.busy || lastState.playing) { if (entry.requestedKey===key) entry.requestedKey=undefined; return; }
-          void run(slot);
-        });
-      }
+    if (state.state === 'pending' || state.state === 'unsupported' || entry.request) return;
+    // The picture provider plans bounded preroll from a verified closed anchor.
+    // Opening an overlay must never turn a paused-frame inspection into a full scan.
+    const key = inspectionKey(session.getPresentedFrame(slot));
+    if (key && key !== entry.requestedKey) {
+      entry.requestedKey = key;
+      queueMicrotask(() => {
+        if (!entry.enabled || entries.get(slot) !== entry) return;
+        if (lastState.busy || lastState.playing || inspectionKey(session.getPresentedFrame(slot)) !== key ||
+            session.getBitstreamAnalysisState(slot).state === 'pending') {
+          if (entry.requestedKey === key) entry.requestedKey = undefined;
+          return;
+        }
+        void run(slot);
+      });
     }
   }
 
@@ -200,9 +201,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
           const entry = entryFor(track.slot); if (!entry) return;
           entry.requestedKey = undefined; entry.message = undefined; entry.enabled = true;
           await ensureOverlay(track.slot, entry);
-          const state = session.getBitstreamAnalysisState(track.slot);
-          if (state.completedStream) await run(track.slot);
-          else await session.requestBitstreamStream(track.slot);
+          await run(track.slot);
         });
         retry.button.id = `bitstream-retry-${track.slot}`; retryButtons.set(track.slot, retry);
         wrapper.append(button, retry.button); return wrapper;
@@ -231,6 +230,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
     if (cached(slot, entry)?.confidence === 'exact' && !canRetryAnalysis(session.getBitstreamAnalysisState(slot))) { setVisibility(slot, true); return; }
     if (entry.request) return;
     const requested = session.getPresentedFrame(slot), controller = new AbortController();
+    entry.requestedKey = inspectionKey(requested) ?? undefined;
     entry.request = controller; entry.message = undefined;
     render();
     try {

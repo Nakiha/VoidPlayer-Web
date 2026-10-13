@@ -1,4 +1,5 @@
 import { DiagramStore } from "./diagrams.ts";
+import { AnalysisPollingBudget } from './task-pool.ts';
 import { AnalysisCache } from "./cache.ts";
 import {
   BUDGET,
@@ -347,7 +348,11 @@ export class BitstreamAnalysisService {
           clearTimeout(timer);
           timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
         }
-        if (data.event === 'index') {
+        if (data.event === 'cache') {
+          try {
+            worker.postMessage({ event: 'cache', result: data.picture?.sourceVersion === target.sourceVersion ? this.cache.get(data.picture) : null });
+          } catch (error) { done(error); }
+        } else if (data.event === 'index') {
           void frontier!().then(index => {
             if (!settled) worker.postMessage({ event: 'index', index });
           }, error => done(error));
@@ -398,21 +403,22 @@ export class BitstreamAnalysisService {
         base,
       ),
       seen = new Set<string>();
-    let cursor = 0, lastAdvance = performance.now(), lastSeq = -1;
+    let cursor = 0;
     const stream = 'mode' in target;
+    const budget = new AnalysisPollingBudget(stream);
     try {
-      for (let poll = 0; stream || poll < 150; poll++) {
-        if (performance.now() - lastAdvance > 30000) throw new AnalysisFailure('resource-limit', 'Analysis stream stalled');
+      for (;;) {
         if (stream) status.searchParams.set('after', String(cursor));
         signal.throwIfAborted();
         const response = await fetch(status, { signal, cache: "no-store" });
         if (!response.ok)
           throw new AnalysisFailure("cancelled", "Analysis lease expired");
         const state = await response.json();
+        budget.observe(state);
         if (state.progress) onProgress?.(state.progress);
-        // Only actual index/analysis progress renews the stall budget; repeated
-        // status reads cannot keep a stuck producer alive forever.
-        if (state.seq !== lastSeq) { lastSeq = state.seq; lastAdvance = performance.now(); }
+        if (this.state.queued !== (state.state === 'queued')) {
+          this.state = { ...this.state, queued: state.state === 'queued' }; this.changed();
+        }
         if (!Array.isArray(state.chunks) || state.chunks.length > 32)
           throw new Error("Invalid analysis chunk manifest");
         for (const chunk of state.chunks) {
@@ -439,7 +445,7 @@ export class BitstreamAnalysisService {
             throw new Error("Incomplete analysis chunk");
           consume(JSON.parse(new TextDecoder().decode(bytes)));
           if (stream) cursor = chunk.cursor; else seen.add(chunk.id);
-          lastAdvance = performance.now();
+          budget.progress();
         }
         if (state.state === "complete" && (!stream || cursor === state.published)) return;
         if (state.state === "unsupported" && state.result) {
@@ -455,7 +461,6 @@ export class BitstreamAnalysisService {
           );
         await new Promise((r) => setTimeout(r, 200));
       }
-      throw new AnalysisFailure("resource-limit", "Analysis timed out");
     } finally {
       void fetch(status, { method: "DELETE", headers, keepalive: true }).catch(
         () => {},
@@ -531,8 +536,9 @@ export class BitstreamAnalysisService {
       `/api/bitstream-analysis/requests/${request.requestId}`,
       base,
     );
+    const budget = new AnalysisPollingBudget(false);
     try {
-      for (let poll = 0; poll < 150; poll++) {
+      for (;;) {
         signal.throwIfAborted();
         const response = await fetch(status, { signal, cache: "no-store" });
         if (!response.ok)
@@ -541,6 +547,10 @@ export class BitstreamAnalysisService {
             `Analysis status failed (${response.status})`,
           );
         const state = await response.json();
+        budget.observe(state);
+        if (this.state.queued !== (state.state === 'queued')) {
+          this.state = { ...this.state, queued: state.state === 'queued' }; this.changed();
+        }
         if (state.state === "unsupported" && state.result) return state.result;
         if (
           ["error", "cancelled", "limited", "unsupported"].includes(state.state)
@@ -583,7 +593,6 @@ export class BitstreamAnalysisService {
           signal.addEventListener("abort", abort, { once: true });
         });
       }
-      throw new AnalysisFailure("resource-limit", "Analysis request timed out");
     } finally {
       void fetch(status, { method: "DELETE", headers, keepalive: true }).catch(
         () => {},

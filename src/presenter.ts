@@ -50,14 +50,14 @@ const colorStates = new WeakMap<HTMLCanvasElement, string>();
 function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   validateDescription(frame.description,frame.pixels?.byteLength);
   const channel = frame.kind === 'yuv' ? getPresentationChannel() : 'rgb';
-  if(frame.kind==='yuv') {
+  if(frame.kind==='yuv'||frame.kind==='rgba8') {
     const d=frame.description, rotation=frame.rotation??frame.sample?.rotation??0;
     const width=rotation===90||rotation===270?d.height:d.width;
     const height=rotation===90||rotation===270?d.width:d.height;
     if(canvas.width!==width)canvas.width=width;if(canvas.height!==height)canvas.height=height;
   }
-  if (frame.kind!=='yuv' && canvas.width !== frame.width) canvas.width = frame.width;
-  if (frame.kind!=='yuv' && canvas.height !== frame.height) canvas.height = frame.height;
+  if (frame.kind==='video-sample' && canvas.width !== frame.width) canvas.width = frame.width;
+  if (frame.kind==='video-sample' && canvas.height !== frame.height) canvas.height = frame.height;
   const surface = surfaces.get(canvas);
   const policy = presentationColor(frame.kind, frame.description);
   const colorState = JSON.stringify({ kind: frame.kind, channel, ...policy });
@@ -83,13 +83,13 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   }
   canvas.dataset.channel = 'rgb';
   if (surface?.directUpload) {
-    if (frame.kind === 'rgba8') {
+    if (frame.kind === 'rgba8' && !frame.rotation) {
       if (!frame.pixels) throw new Error('RGBA 帧缺少像素数据。');
       surface.upload(frame.pixels);
       return;
     }
-    if (!frame.sample) throw new Error('视频帧缺少采样内容。');
-    if (frame.sample.rotation === 0 && !policy.canvasConversion) {
+    if (frame.kind !== 'rgba8' && !frame.sample) throw new Error('视频帧缺少采样内容。');
+    if (frame.sample?.rotation === 0 && !policy.canvasConversion) {
       const resource = frame.sample.toVideoFrame();
       try { surface.upload(resource); } finally { resource.close(); }
       return;
@@ -103,7 +103,11 @@ function paintFrameContent(canvas: HTMLCanvasElement, frame: DecodedFrame) {
   if (!ctx) throw new Error('浏览器无法创建画布。');
   if (frame.kind === 'rgba8') {
     if (!frame.pixels) throw new Error('RGBA 帧缺少像素数据。');
-    ctx.putImageData(new ImageData(frame.pixels as Uint8ClampedArray<ArrayBuffer>, frame.width, frame.height), 0, 0);
+    const image = new ImageData(frame.pixels as Uint8ClampedArray<ArrayBuffer>, frame.description.width, frame.description.height);
+    if(frame.rotation) {
+      const scratch=new OffscreenCanvas(image.width,image.height);scratch.getContext('2d')!.putImageData(image,0,0);
+      ctx.save();ctx.translate(canvas.width/2,canvas.height/2);ctx.rotate(frame.rotation*Math.PI/180);ctx.drawImage(scratch,-image.width/2,-image.height/2);ctx.restore();
+    } else ctx.putImageData(image,0,0);
     surface?.upload();
     return;
   }

@@ -89,7 +89,7 @@ try {
     }
     throw new Error(output || "Native startup timeout");
   }
-  async function request(entry) {
+  async function request(entry, requestedTarget) {
     const version = entry.version,
       response = await fetch(
         `${base}/api/media/${entry.id}/bitstream-analysis/requests?v=${version}`,
@@ -102,7 +102,7 @@ try {
           },
           body: JSON.stringify({
             version,
-            target: {
+            target: requestedTarget ?? {
               sourceVersion: `${entry.id}@${version}`,
               sourcePtsUs: entry.name.startsWith("h265_") ? -50000 : 0,
               normalizedMediaUs: 0,
@@ -132,6 +132,24 @@ try {
     }
     assert.fail("Native analysis timed out");
   }
+  async function range(entry, firstPtsUs, startUs, endUs) {
+    const demand = await request(entry, { sourceVersion: `${entry.id}@${entry.version}`, firstPtsUs, startUs, endUs });
+    for (let i = 0; i < 200; i++) {
+      const state = await (await fetch(`${base}/api/bitstream-analysis/requests/${demand.requestId}`)).json();
+      assert.ok(!['error', 'unsupported', 'limited', 'cancelled'].includes(state.state), state.error ?? state.reason?.message);
+      if (state.state === 'complete') {
+        const results = [];
+        for (const chunk of state.chunks) {
+          const value = await (await fetch(base + chunk.url)).json();
+          validateResult(value); assert.equal(value.confidence, 'exact'); results.push(value);
+        }
+        assert.equal(new Set(results.map(r => r.picture.au)).size, results.length);
+        return results;
+      }
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.fail('Native range analysis timed out');
+  }
   await start();
   let entries;
   // Freshly checked-out files first enter the server's settling state.
@@ -149,7 +167,7 @@ try {
       break;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
-  const rows = [];
+  const rows = [], ranges = [];
   for (const [codec, name] of [
     ["h264", "h264_9s_1920x1080.mp4"],
     ["hevc", "h265_10s_1920x1080.mp4"],
@@ -160,6 +178,7 @@ try {
     const r = await result(await request(entry));
     assert.equal(r.codec, codec);
     rows.push({ codec, picture: r.picture, blocks: r.blocks.length });
+    ranges.push({ entry, firstPtsUs: r.sourcePtsUs, results: await range(entry, r.sourcePtsUs, 0, 100000) });
   }
   await stop();
   await start();
@@ -169,6 +188,14 @@ try {
     true,
     "native restart reuses completed chunks",
   );
+  for (const [i, cached] of ranges.entries()) {
+    const results = await range(cached.entry, cached.firstPtsUs, 10000, 50000);
+    const expected = cached.results.filter(r => r.sourcePtsUs >= cached.firstPtsUs + 10000 && r.sourcePtsUs < cached.firstPtsUs + 50000);
+    assert.ok(expected.length >= 2);
+    assert.equal(results.length, expected.length);
+    for (const hit of results) assert.deepEqual(hit, expected.find(r => r.picture.au === hit.picture.au), 'native overlap preserves cached records and original decode metrics');
+    rows[i].reusedRangePictures = results.length;
+  }
   const report = path.resolve(
     process.env.VOIDPLAYER_TEST_ARTIFACTS ??
       path.join(root, ".run/analysis-release"),
@@ -179,7 +206,7 @@ try {
     JSON.stringify({ target: manifest.target, rows }, null, 2),
   );
   console.log(
-    `PASS ${manifest.target}: native H264/HEVC/VVC analysis and restart cache, empty PATH`,
+    `PASS ${manifest.target}: native H264/HEVC/VVC analysis, restart and overlapping range cache, empty PATH`,
   );
 } finally {
   await stop();
