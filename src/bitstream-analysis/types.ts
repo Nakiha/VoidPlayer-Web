@@ -3,6 +3,7 @@ export interface AnalysisReader {
   readonly size: number;
   /** Source-bound immutable metadata; payload IO remains independently owned. */
   flvIndex?(): Promise<import("../flv-index-cache.ts").FlvIndexDocument>;
+  readMetadata?(offset: number, length: number): Promise<Uint8Array>;
   read(offset: number, length: number): Promise<Uint8Array>;
   close(): void;
 }

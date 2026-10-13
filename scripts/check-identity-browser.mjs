@@ -12,6 +12,22 @@ const insecure = process.env.VOIDPLAYER_HTTP_TEST === '1';
 const secure = process.env.VOIDPLAYER_HTTPS_TEST === '1';
 const temp = await mkdtemp(path.join(os.tmpdir(), 'vp-identity-browser-'));
 let service, lifecycle, browser, untrust, failure;
+const errors = [], events = [];
+let phase = 'startup';
+const record = (page, label, event, details = {}) => {
+  events.push({ time: new Date().toISOString(), phase, page: label, url: page.url(), event, ...details });
+  if (events.length > 1000) events.shift();
+};
+function observe(page, label) {
+  page.on('pageerror', error => { errors.push(error.message); record(page, label, 'pageerror', { message: error.message, stack: error.stack }); });
+  page.on('request', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-request', { requestUrl: request.url(), method: request.method() }); });
+  page.on('response', response => { if (new URL(response.url()).pathname === '/api/users') record(page, label, 'users-response', { requestUrl: response.url(), status: response.status() }); });
+  page.on('requestfinished', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-finished', { requestUrl: request.url() }); });
+  page.on('requestfailed', request => { if (new URL(request.url()).pathname === '/api/users') record(page, label, 'users-failed', { requestUrl: request.url(), error: request.failure()?.errorText }); });
+  page.on('framenavigated', frame => { if (frame === page.mainFrame()) record(page, label, 'navigation'); });
+  page.on('close', () => record(page, label, 'close'));
+}
+
 try {
   await mkdir(path.join(temp, 'media'));
   if (process.env.VOIDPLAYER_HTTP_PLAYBACK === '1') await writeFile(path.join(temp, 'media/http-smoke.mp4'), Buffer.from(await readFile(new URL('../test/http-smoke.mp4.base64', import.meta.url), 'utf8'), 'base64'));
@@ -24,9 +40,9 @@ try {
   const base = `${secure ? 'https' : 'http'}://${insecure || secure ? 'voidplayer.test' : '127.0.0.1'}:${config.port}`;
   browser = await (process.env.IDENTITY_BROWSER === 'webkit' ? webkit : chromium).launch({ headless: true, args: insecure || secure ? ['--host-resolver-rules=MAP voidplayer.test 127.0.0.1', '--no-proxy-server'] : [], ...(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {}) });
   const a = await browser.newContext({locale:'zh-CN',  viewport: { width: 1280, height: 900 }, reducedMotion: 'reduce' });
-  const b = await browser.newContext({locale:'zh-CN'}); const errors = [];
+  const b = await browser.newContext({locale:'zh-CN'});
   const page = await a.newPage(), other = await b.newPage();
-  for (const p of [page, other]) p.on('pageerror', error => errors.push(error.message));
+  observe(page, 'primary'); observe(other, 'other-user');
   // Labels can update before the following user-list refresh finishes. Drain
   // normal requests before navigation/restart/close so WebKit does not report
   // a test-induced aborted fetch as a page error. The stalled-list case below
@@ -143,7 +159,7 @@ try {
   assert.equal(await other.locator('#settings').evaluate(e => e.open), true);
   assert.equal(await other.locator('#identity-users').evaluate(e => e === document.activeElement), true);
   // Editing from another tab updates the name without replacing the user ID.
-  const tab = await a.newPage(); await tab.goto(base); await settings(tab);
+  const tab = await a.newPage(); observe(tab, 'peer-tab'); await tab.goto(base); await settings(tab);
   await tab.locator('#identity-name').fill('新名字'); await tab.locator('#identity-save').click();
   await page.waitForFunction(() => document.querySelector('#identity-current').textContent === '新名字');
   await settled(page, other, tab);
@@ -159,7 +175,9 @@ try {
   await page.screenshot({ path: '/tmp/voidplayer-identity-mobile.png' });
   await settled(page, other, tab);
   console.log('Identity browser: users, cross-tab synchronization and layout passed; restarting service');
+  phase = 'service-restart';
   service = await lifecycle.restart();
+  phase = 'post-restart-recovery';
   console.log('Identity browser: service restarted');
   await page.reload(); await settings(page); assert.equal(await page.locator('#identity-id').getAttribute('data-tooltip'), id);
   await a.clearCookies(); await page.reload(); await settled(page); await page.locator('#identity-welcome [data-guest]').click(); await settings(page);
@@ -199,7 +217,7 @@ try {
   }
   // The shared admin welcome also selects an existing identity without creating a duplicate.
   const returningContext = await browser.newContext({locale:'zh-CN'}); const returning = await returningContext.newPage();
-  returning.on('pageerror', error => errors.push(error.message));
+  phase = 'admin-returning'; observe(returning, 'admin-returning');
   await returning.goto(base + '/admin/');
   await returning.locator('#identity-welcome .welcome-toggle').click();
   await returning.locator('#identity-welcome [role=option]').filter({ hasText: '新名字' }).click();
@@ -210,7 +228,8 @@ try {
   await settled(returning);
   await returningContext.close();
   // Explicit settings actions keep rename, create and switch distinct.
-  const editContext = await browser.newContext({locale:'zh-CN'}); const editPage = await editContext.newPage();
+  phase = 'identity-edit';
+  const editContext = await browser.newContext({locale:'zh-CN'}); const editPage = await editContext.newPage(); observe(editPage, 'identity-edit');
   await editPage.goto(base); await editPage.locator('#identity-welcome input').fill('原用户');
   await editPage.locator('#identity-welcome .welcome-enter').click(); await settings(editPage);
   const originalId = await editPage.locator('#identity-id').getAttribute('data-tooltip');
@@ -233,7 +252,7 @@ try {
   await editContext.close();
   // A failed list must not label unknown names as new; failed submission remains retryable.
   const failureContext = await browser.newContext({locale:'zh-CN'}); const failure = await failureContext.newPage();
-  failure.on('pageerror', error => errors.push(error.message));
+  phase = 'failed-list'; observe(failure, 'failed-list');
   await failure.route('**/api/users', route => route.fulfill({ status: 503, json: { error: '不可用' } }));
   await failure.route('**/api/identity', route => route.fulfill({ status: 503, json: { error: '暂时无法进入，请重试。' } }));
   await failure.goto(base);
@@ -249,7 +268,8 @@ try {
   await settled(failure);
   await failureContext.close();
   // A stalled list must not block visitor entry or keep the welcome dialog alive.
-  const slowContext = await browser.newContext({locale:'zh-CN'}); const slow = await slowContext.newPage();
+  phase = 'stalled-list';
+  const slowContext = await browser.newContext({locale:'zh-CN'}); const slow = await slowContext.newPage(); observe(slow, 'stalled-list');
   let releaseList;
   const listGate = new Promise(resolve => { releaseList = resolve; });
   await slow.route('**/api/users', async route => { await listGate; await route.abort().catch(() => {}); });
@@ -257,6 +277,7 @@ try {
   await slow.locator('#identity-welcome [data-guest]').click();
   await slow.locator('#identity-welcome').waitFor({ state: 'hidden', timeout: 2000 });
   releaseList(); await slowContext.close();
+  phase = 'final-settle';
   await settled(page, other, tab);
   assert.deepEqual(errors, []);
   console.log(`PASS ${secure ? 'trusted HTTPS + WebCodecs' : insecure ? 'ordinary HTTP' : 'localhost'} identity:`);
@@ -265,6 +286,16 @@ try {
 } catch (error) {
   failure = { error };
 } finally {
+  try {
+    const directory = '.run/playback-reports';
+    await mkdir(directory, { recursive: true });
+    const build = JSON.parse(await readFile('dist/build-info.json', 'utf8'));
+    await writeFile(path.join(directory, `identity-${process.env.IDENTITY_BROWSER ?? 'chromium'}-${secure ? 'https' : insecure ? 'http' : 'localhost'}-diagnostics.json`), JSON.stringify({ build, errors, events, failure: failure?.error ? { message: failure.error.message, stack: failure.error.stack } : null }, null, 2) + '\n');
+  } catch (error) {
+    if (!failure) failure = { error };
+    else console.error('Identity browser: diagnostics failed', error);
+  }
+  phase = 'cleanup';
   await cleanupIdentityBrowser([
     ['browser', async () => { console.log('Identity browser: closing browser'); await browser?.close(); }],
     ['service', async () => { console.log('Identity browser: closing service'); await lifecycle?.close(); }],

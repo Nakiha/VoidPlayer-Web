@@ -190,12 +190,74 @@
       "oracle": "docs/fixtures/bitstream-analysis-vtm.json",
       "framing": "enhanced",
       "fixtureDir": "flv-analysis"
+    },
+    {
+      "codec": "h264",
+      "container": "fmp4",
+      "inputs": [
+        "local-file",
+        "library"
+      ],
+      "playbackPaths": [
+        "webcodecs-packet",
+        "wasm-packet"
+      ],
+      "features": [
+        "blocks",
+        "qp-luma8",
+        "basic-modes"
+      ],
+      "fixture": "fragmented-h264.mp4",
+      "expected": "exact",
+      "oracle": "docs/fixtures/bitstream-analysis-answers.json",
+      "fixtureDir": "fmp4-analysis"
+    },
+    {
+      "codec": "hevc",
+      "container": "fmp4",
+      "inputs": [
+        "local-file",
+        "library"
+      ],
+      "playbackPaths": [
+        "webcodecs-packet",
+        "wasm-packet"
+      ],
+      "features": [
+        "blocks",
+        "qp-luma8",
+        "basic-modes"
+      ],
+      "fixture": "fragmented-hevc.mp4",
+      "expected": "exact",
+      "oracle": "docs/fixtures/bitstream-analysis-answers.json",
+      "fixtureDir": "fmp4-analysis"
+    },
+    {
+      "codec": "vvc",
+      "container": "fmp4",
+      "inputs": [
+        "local-file",
+        "library"
+      ],
+      "playbackPaths": [
+        "wasm-packet"
+      ],
+      "features": [
+        "blocks",
+        "qp-luma8",
+        "basic-modes"
+      ],
+      "fixture": "fragmented-vvc.mp4",
+      "expected": "exact",
+      "oracle": "docs/fixtures/bitstream-analysis-vtm.json",
+      "fixtureDir": "fmp4-analysis"
     }
   ],
   "excluded": [
     "TS/MKV and other containers",
     "native container decode without verified packet identity",
-    "fragmented MP4",
+    "mixed/init-external/live/encrypted/discontinuous/multi-config fragmented MP4",
     "multi-picture AU",
     "VVC multi-slice AU",
     "field pictures",

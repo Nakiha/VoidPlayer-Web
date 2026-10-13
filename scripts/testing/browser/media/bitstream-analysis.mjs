@@ -36,7 +36,9 @@ const diagramsOnly = process.argv.includes('--diagrams-only');
 const incrementalOnly = process.argv.includes('--incremental-only');
 const matrixOnly = process.argv.includes('--matrix-only');
 const matrixPart = process.argv.find(arg => arg.startsWith('--matrix-part='))?.slice('--matrix-part='.length);
-const matrixRows = selectAnalysisMatrixRows(matrix.rows, process.argv);
+const matrixFixture = process.argv.find(arg => arg.startsWith('--matrix-fixture='))?.slice('--matrix-fixture='.length);
+const matrixRows = selectAnalysisMatrixRows(matrix.rows, process.argv).filter(row => !matrixFixture || row.fixture === matrixFixture);
+assert.ok(matrixRows.length, 'Matrix filter matches a fixture');
 assert.ok(!matrixPart || matrixOnly, 'Matrix partition requires --matrix-only');
 const matrixCase = `bitstream-analysis-matrix${matrixPart ? '-' + matrixPart : ''}`;
 assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
@@ -110,7 +112,7 @@ for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`i
 await withBrowserFixture(
   {
     caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
-    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), limitsDir],
+    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), path.join(repositoryRoot, "fixtures/fmp4-analysis"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: layoutOnly ? 300000 : 600000,
@@ -501,8 +503,8 @@ await withBrowserFixture(
     }
     if (!incrementalOnly) {
     if (!diagramsOnly) {
-    for (const input of ["local-file", "library"])
-      for (const decoding of ["browser", "software"])
+    for (const input of (process.argv.includes('--checkpoint-only') ? ["local-file"] : ["local-file", "library"]))
+      for (const decoding of (process.argv.includes('--checkpoint-only') ? ["software"] : ["browser", "software"]))
         for (const row of matrixRows) {
           console.log(`${engine}: ${input}/${decoding}/${row.codec}`);
           await call("remove_review_track", { slot: "A" });
@@ -812,6 +814,21 @@ await withBrowserFixture(
             "offset is not persistent picture identity",
           );
           await call("set_review_track_offset", { slot: "A", offsetUs: 0 });
+          if (row.container === 'fmp4') {
+            await call('seek_review', { ptsUs: 350000 }); await stable();
+            const rearToken = await call('get_presented_frame', { slot: 'A' });
+            const rearResult = await call('request_bitstream_analysis', { slot: 'A' });
+            assert.deepEqual(rearResult.picture, rearToken.picture, 'nonkey fragment seek preserves actual presented AU');
+            assert.equal(rearResult.sourcePtsUs, rearToken.sourcePtsUs);
+            await analyze(); await overlay.waitFor({ state: 'visible' });
+            assert.equal(await overlay.getAttribute('data-picture'), JSON.stringify([rearToken.picture.sourceVersion, 'video', 0, rearToken.picture.au, 0, 0, 'frame']));
+            await hideOverlay();
+            const crossing = await call('request_bitstream_range', { slot: 'A', startUs: 280000, endUs: 480000 });
+            assert.ok(crossing.pictures >= 10, 'real interval crosses a nonkey fragment');
+            const decoder = (await call('get_review_session')).tracks[0].decoder;
+            if (row.codec === 'vvc' || decoding === 'software') assert.equal(decoder, 'ffmpeg-wasm', 'actual software packet path');
+            await call('seek_review', { ptsUs: 0 });
+          }
           const report = await call("benchmark_review", { durationMs: 2000 });
           assert.equal(report.error, null);
 
@@ -830,7 +847,10 @@ await withBrowserFixture(
         }
     // A response for a frame superseded during the request must never become visible.
     await hideOverlay();
-    await call("seek_review", { ptsUs: 400000 });
+    // Select from the actual final fixture: unpartitioned and fixture-filtered
+    // runs also cache the fMP4 280–480 ms cross-fragment interval.
+    const lifecyclePtsUs = matrixRows.at(-1)?.container === 'fmp4' ? 800000 : 400000;
+    await call("seek_review", { ptsUs: lifecyclePtsUs });
     await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
     // Establish that the old-picture demand exists before superseding it;
     // otherwise an async UI import can start a legitimate new-picture request.
@@ -879,7 +899,7 @@ await withBrowserFixture(
       assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
       assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis.wasm')), 'analysis Worker fetches a real core');
       for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
-      assert.equal(rows.filter(row => row.codec).length, matrixRows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
+      assert.equal(rows.filter(row => row.codec).length, process.argv.includes('--checkpoint-only') ? matrixRows.length : matrixRows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
       assert.deepEqual(errors, []);
       await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
       await page.screenshot({ path: artifact('final.png') });
@@ -2050,7 +2070,7 @@ await withBrowserFixture(
     }
 
     const limitations = [];
-    if (!incrementalOnly) for (const input of ["local-file", "library"])
+    if (!incrementalOnly) for (const input of (process.argv.includes('--checkpoint-only') ? ["local-file"] : ["local-file", "library"]))
       for (const depth of [8, 10]) {
         await call("remove_review_track", { slot: "A" });
         await call("set_review_color_mode", { mode: "reference" });

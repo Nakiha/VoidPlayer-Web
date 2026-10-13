@@ -1,0 +1,1055 @@
+{
+  "schema": 1,
+  "issue": 59,
+  "pullRequest": "https://github.com/Nakiha/VoidPlayer-Web/pull/61",
+  "base": "68e44e2b6e7d23c79276586dca24648f44690088",
+  "applicationCommits": [
+    "55ad1de",
+    "c50fa51"
+  ],
+  "testedMatrixRevision": "423a1fdb0ecd63083c62faa6e016225580c61203",
+  "cleanPlaybackBuild": {
+    "version": "1.0.0-preview.f244d18f",
+    "revision": "f244d18f4ea0f64afc331ee9ab2c9ec1434486b0",
+    "dirty": false,
+    "tag": "",
+    "coreAssetDigests": {
+      "/vendor/voidplayer-core/provenance.json": "d19ce44116d39f7a8b1060b6258f1abe606212f2aabd5b17e6d93d56ab6cbcc2",
+      "/vendor/voidplayer-core/voidplayer-core-mt.js": "b3d3b90c6bd12e6afcffd23e52e62715a2074d29f30dfb91f271ff78ab028edc",
+      "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "700692715c98274d315e3d937f154d01f32bde4fd00055a560eae7f7a558724a",
+      "/vendor/voidplayer-core/voidplayer-core.js": "a4024127273e84f75d0f634f00e9376f113581260110849fae60fc8ef7fddffd",
+      "/vendor/voidplayer-core/voidplayer-core.wasm": "69fc0999001d03fd1b21b630c13d22878cca1b613093d05cf5a57a642cb5dc7f",
+      "/vendor/voidplayer-analysis/manifest.json": "6f917e36b2d177719cba14d3bf4b5c4b6514296e3936b16c22afe104f8b77f03",
+      "/vendor/voidplayer-analysis/provenance.json": "04d4fc8f67bdc76ecf4a822b91059ac7b5511e94e14065b88deb8d97dad3a92c",
+      "/vendor/voidplayer-analysis/voidplayer-analysis.js": "c9b69cd2ef4fda0f83bf14974ccd2d20c15587a74c2e6342959828ddf000db21",
+      "/vendor/voidplayer-analysis/voidplayer-analysis.wasm": "df2acd552d2d80bcbda654100237b299c7e065faca560b6ea513c0c10fe99a4e"
+    },
+    "builtAt": "2026-10-13T11:35:35.787Z",
+    "sourceDigest": "9559534e92d15d1fac905e2cb76d297ae95b7936623c3a189a0b3ddb146147e7",
+    "wasmDigests": {
+      "voidplayer-core.wasm": "69fc0999001d03fd1b21b630c13d22878cca1b613093d05cf5a57a642cb5dc7f",
+      "voidplayer-core-mt.wasm": "700692715c98274d315e3d937f154d01f32bde4fd00055a560eae7f7a558724a"
+    }
+  },
+  "tests": {
+    "sourceCases": 116,
+    "fastCases": 40,
+    "fragmentBoundaryTests": 19,
+    "fmp4MediaTests": 12,
+    "ordinaryMp4RangeTests": 11,
+    "flvMediaTests": 20,
+    "fullSourcePicturesPerCodec": 600,
+    "libraryCachePicturesPerCodec": 120
+  },
+  "matrix": {
+    "webkit": {
+      "cells": 12,
+      "path": ".run/browser-fixtures/bitstream-analysis-matrix-fmp4-webkit/matrix.json",
+      "sha256": "0e3ef85323db535bfd905904042eae18e32fc611f65e6b4a998687723347cfb3",
+      "actualDecoders": [
+        {
+          "codec": "h264",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        }
+      ]
+    },
+    "chromium": {
+      "cells": 12,
+      "path": ".run/browser-fixtures/bitstream-analysis-matrix-fmp4-chromium/matrix.json",
+      "sha256": "1018c8f42bd89eb0c785bacb07346fae6ff9ad5c14d0a8f6b511e1068410d03c",
+      "actualDecoders": [
+        {
+          "codec": "h264",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "local-file",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "local-file",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "webcodecs",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "library",
+          "preference": "browser",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "h264",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "hevc",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        },
+        {
+          "codec": "vvc",
+          "input": "library",
+          "preference": "software",
+          "decoder": "ffmpeg-wasm",
+          "presentedAu": 0
+        }
+      ]
+    }
+  },
+  "playback": {
+    "webkit": {
+      "path": ".run/browser-fixtures/fmp4-playback-clean-f244d18-webkit/playback.json",
+      "sha256": "62a05c765c62f147b8c57d1910de03bb1ada0f9a799215c9a926611175360f42",
+      "passed": 12,
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9991651552331166,
+          "maxFrameLagUs": 17160,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 2,
+          "tracks": {
+            "A": {
+              "drawn": 177,
+              "dropped": 2,
+              "fps": 59.01258935239518,
+              "maxGapMs": 30.359999999999673,
+              "p95GapMs": 18.519999999999982
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.997289850249584,
+          "maxFrameLagUs": 23017,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.7799999999997453,
+          "tracks": {
+            "A": {
+              "drawn": 172,
+              "dropped": 7,
+              "fps": 57.23793677204659,
+              "maxGapMs": 34.73999999999978,
+              "p95GapMs": 19.05999999999949
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9948003664705959,
+          "maxFrameLagUs": 17160,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 2.100000000000364,
+          "tracks": {
+            "A": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 59.41869265598236,
+              "maxGapMs": 29.280000000000655,
+              "p95GapMs": 18.720000000001164
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9999424696527417,
+          "maxFrameLagUs": 14480,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.3800000000010186,
+          "tracks": {
+            "A": {
+              "drawn": 479,
+              "dropped": 0,
+              "fps": 59.906600731886066,
+              "maxGapMs": 30.779999999999973,
+              "p95GapMs": 18.520000000000437
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9997524591557605,
+          "maxFrameLagUs": 16653,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.4799999999995634,
+          "tracks": {
+            "A": {
+              "drawn": 465,
+              "dropped": 14,
+              "fps": 58.134592207714256,
+              "maxGapMs": 33.07999999999993,
+              "p95GapMs": 18.900000000001455
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.999934969435635,
+          "maxFrameLagUs": 16620,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.319999999999709,
+          "tracks": {
+            "A": {
+              "drawn": 361,
+              "dropped": 118,
+              "fps": 45.14621872279973,
+              "maxGapMs": 35.54000000000087,
+              "p95GapMs": 24.979999999999563
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9997116314450993,
+          "maxFrameLagUs": 22084,
+          "maxFrameSkewUs": 17328,
+          "pauseMs": 1.5400000000000773,
+          "tracks": {
+            "A": {
+              "drawn": 364,
+              "dropped": 118,
+              "fps": 45.244031889584676,
+              "maxGapMs": 33.2199999999998,
+              "p95GapMs": 25.179999999999836
+            },
+            "B": {
+              "drawn": 134,
+              "dropped": 45,
+              "fps": 16.65576998133062,
+              "maxGapMs": 46.27999999999997,
+              "p95GapMs": 25.180000000000064
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9997224562868652,
+          "maxFrameLagUs": 24364,
+          "maxFrameSkewUs": 16620,
+          "pauseMs": 1.5600000000013097,
+          "tracks": {
+            "A": {
+              "drawn": 363,
+              "dropped": 116,
+              "fps": 45.3821476882609,
+              "maxGapMs": 32.57999999999993,
+              "p95GapMs": 25.23999999999978
+            },
+            "B": {
+              "drawn": 136,
+              "dropped": 43,
+              "fps": 17.00267792177268,
+              "maxGapMs": 45.04000000000087,
+              "p95GapMs": 25.719999999999345
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9999424510834208,
+          "maxFrameLagUs": 19648,
+          "maxFrameSkewUs": 17576,
+          "pauseMs": 1.3800000000010186,
+          "tracks": {
+            "A": {
+              "drawn": 365,
+              "dropped": 114,
+              "fps": 45.663814242105786,
+              "maxGapMs": 31.81999999999971,
+              "p95GapMs": 24.56000000000131
+            },
+            "B": {
+              "drawn": 137,
+              "dropped": 42,
+              "fps": 17.139568633338335,
+              "maxGapMs": 28.92000000000189,
+              "p95GapMs": 24.38000000000102
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9995064734648067,
+          "maxFrameLagUs": 16651,
+          "maxFrameSkewUs": 16634,
+          "pauseMs": 4,
+          "tracks": {
+            "A": {
+              "drawn": 348,
+              "dropped": 130,
+              "fps": 43.590668590668585,
+              "maxGapMs": 37.61999999999989,
+              "p95GapMs": 28.55999999999949
+            },
+            "B": {
+              "drawn": 348,
+              "dropped": 130,
+              "fps": 43.590668590668585,
+              "maxGapMs": 37.61999999999989,
+              "p95GapMs": 28.579999999999927
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9998725993724895,
+          "maxFrameLagUs": 16611,
+          "maxFrameSkewUs": 33,
+          "pauseMs": 4.399999999997817,
+          "tracks": {
+            "A": {
+              "drawn": 344,
+              "dropped": 137,
+              "fps": 42.96648614081017,
+              "maxGapMs": 32.899999999999636,
+              "p95GapMs": 29.200000000000728
+            },
+            "B": {
+              "drawn": 344,
+              "dropped": 136,
+              "fps": 42.96648614081017,
+              "maxGapMs": 32.93999999999869,
+              "p95GapMs": 29.340000000000146
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.999887734634614,
+          "maxFrameLagUs": 16622,
+          "maxFrameSkewUs": 33,
+          "pauseMs": 3.360000000000582,
+          "tracks": {
+            "A": {
+              "drawn": 346,
+              "dropped": 135,
+              "fps": 43.15979602630504,
+              "maxGapMs": 32.900000000001455,
+              "p95GapMs": 28.039999999997235
+            },
+            "B": {
+              "drawn": 346,
+              "dropped": 134,
+              "fps": 43.15979602630504,
+              "maxGapMs": 32.89999999999782,
+              "p95GapMs": 28.020000000000437
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.6 Safari/605.1.15"
+        }
+      ]
+    },
+    "chromium": {
+      "path": ".run/browser-fixtures/fmp4-playback-clean-f244d18-chromium/playback.json",
+      "sha256": "338240e39edae29bc0913f2ec28192a181f464035217530abc564e29f6a9203f",
+      "passed": 12,
+      "runs": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9985758697573119,
+          "maxFrameLagUs": 19851,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.7899999618530273,
+          "tracks": {
+            "A": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 59.64420068450364,
+              "maxGapMs": 26.314999997615814,
+              "p95GapMs": 25.174999952316284
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9981750870445578,
+          "maxFrameLagUs": 24494,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.7199999690055847,
+          "tracks": {
+            "A": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 59.62026222847406,
+              "maxGapMs": 26.240000009536743,
+              "p95GapMs": 25.155000030994415
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9979523843632491,
+          "maxFrameLagUs": 21291,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.449999988079071,
+          "tracks": {
+            "A": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 59.60696036146601,
+              "maxGapMs": 26.884999990463257,
+              "p95GapMs": 25.030000030994415
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9991327928836206,
+          "maxFrameLagUs": 16663,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.125,
+          "tracks": {
+            "A": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.88896262626342,
+              "maxGapMs": 31.27999997138977,
+              "p95GapMs": 17.194999992847443
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9978603462043881,
+          "maxFrameLagUs": 16660,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.3700000047683716,
+          "tracks": {
+            "A": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.87047564050467,
+              "maxGapMs": 33.43000000715256,
+              "p95GapMs": 24.730000019073486
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9991413746854412,
+          "maxFrameLagUs": 16635,
+          "maxFrameSkewUs": 0,
+          "pauseMs": 1.1649999618530273,
+          "tracks": {
+            "A": {
+              "drawn": 480,
+              "dropped": 0,
+              "fps": 59.94765820082621,
+              "maxGapMs": 32.05999994277954,
+              "p95GapMs": 25.07499998807907
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9996869569820134,
+          "maxFrameLagUs": 24484,
+          "maxFrameSkewUs": 18303,
+          "pauseMs": 1.5199999809265137,
+          "tracks": {
+            "A": {
+              "drawn": 479,
+              "dropped": 0,
+              "fps": 59.859324339670465,
+              "maxGapMs": 27.6700000166893,
+              "p95GapMs": 18.375
+            },
+            "B": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 22.369142081004203,
+              "maxGapMs": 27.75499999523163,
+              "p95GapMs": 25.894999980926514
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9988901801196507,
+          "maxFrameLagUs": 24809,
+          "maxFrameSkewUs": 17404,
+          "pauseMs": 1.3899999856948853,
+          "tracks": {
+            "A": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.879233172508194,
+              "maxGapMs": 26.044999957084656,
+              "p95GapMs": 24.7399999499321
+            },
+            "B": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 22.283539995590367,
+              "maxGapMs": 33.594999969005585,
+              "p95GapMs": 25.82499998807907
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9998058367268248,
+          "maxFrameLagUs": 24584,
+          "maxFrameSkewUs": 18303,
+          "pauseMs": 1.1649999618530273,
+          "tracks": {
+            "A": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.867010601456975,
+              "maxGapMs": 26.805000007152557,
+              "p95GapMs": 24.540000021457672
+            },
+            "B": {
+              "drawn": 179,
+              "dropped": 0,
+              "fps": 22.27899147122827,
+              "maxGapMs": 26.87000000476837,
+              "p95GapMs": 25.87000000476837
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.999214513645999,
+          "maxFrameLagUs": 16664,
+          "maxFrameSkewUs": 16656,
+          "pauseMs": 4.264999985694885,
+          "tracks": {
+            "A": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.828809997364154,
+              "maxGapMs": 26.039999961853027,
+              "p95GapMs": 24.539999961853027
+            },
+            "B": {
+              "drawn": 481,
+              "dropped": 0,
+              "fps": 59.828809997364154,
+              "maxGapMs": 26.064999997615814,
+              "p95GapMs": 24.634999990463257
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9996417616077145,
+          "maxFrameLagUs": 16654,
+          "maxFrameSkewUs": 33,
+          "pauseMs": 2.8449999690055847,
+          "tracks": {
+            "A": {
+              "drawn": 480,
+              "dropped": 0,
+              "fps": 59.91443469785784,
+              "maxGapMs": 25.935000002384186,
+              "p95GapMs": 23.52000004053116
+            },
+            "B": {
+              "drawn": 480,
+              "dropped": 0,
+              "fps": 59.91443469785784,
+              "maxGapMs": 25.98499995470047,
+              "p95GapMs": 23.519999980926514
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "limits": {
+            "minWallMs": 1000,
+            "minSpeed": 0.9,
+            "maxFrameLagUs": 100000,
+            "maxFrameSkewUs": 100000,
+            "maxP95GapMs": 75,
+            "maxGapMs": 250,
+            "maxPauseMs": 100
+          },
+          "speed": 0.9993460720394048,
+          "maxFrameLagUs": 16649,
+          "maxFrameSkewUs": 16645,
+          "pauseMs": 2.9649999737739563,
+          "tracks": {
+            "A": {
+              "drawn": 480,
+              "dropped": 0,
+              "fps": 59.90179848947621,
+              "maxGapMs": 29.055000007152557,
+              "p95GapMs": 18.75
+            },
+            "B": {
+              "drawn": 480,
+              "dropped": 0,
+              "fps": 59.90179848947621,
+              "maxGapMs": 29.134999990463257,
+              "p95GapMs": 19.025000035762787
+            }
+          },
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+        }
+      ]
+    }
+  },
+  "fixtures": {
+    "h264": {
+      "file": "fixtures/fmp4-analysis/fragmented-h264.mp4",
+      "sha256": "4c9a93a44553587dc346ebab9b0fdbc7a26dbfc45e83a325e5760890ac3b16cd",
+      "samples": 600,
+      "videoFragments": 30,
+      "truns": 60,
+      "transcoded": false
+    },
+    "hevc": {
+      "file": "fixtures/fmp4-analysis/fragmented-hevc.mp4",
+      "sha256": "6f845208a6d7e091485abe8da20894b0343c6e85ec3f6a526dc9244c3a302f09",
+      "samples": 600,
+      "videoFragments": 30,
+      "truns": 60,
+      "transcoded": false
+    },
+    "vvc": {
+      "file": "fixtures/fmp4-analysis/fragmented-vvc.mp4",
+      "sha256": "82476114c5a3d525534173f50f1966cbf1ae23b2b45b9011f7d113720d7dddc1",
+      "samples": 600,
+      "videoFragments": 30,
+      "truns": 60,
+      "transcoded": false
+    }
+  },
+  "notes": [
+    "Raw test and browser artifacts remain local/gitignored; hashes and exact commands identify evidence.",
+    "Fixture remux defines a 60 fps decode clock and signed CTS from existing presentation order; product parsing does not repair fragment clocks.",
+    "Matrix/coded-source assertions run before performance checks; performance limits and budgets were not raised.",
+    "Local runs are not a claim that pending/skipped CI jobs passed."
+  ],
+  "reviewFollowup": {
+    "productionCodeChanged": false,
+    "lifecycleTarget": "Use the actual final fixture container, including unpartitioned fixture-filtered entry points.",
+    "browserCommand": "node scripts/check-bitstream-analysis-browser.mjs webkit --matrix-only --matrix-fixture=fragmented-vvc.mp4 --checkpoint-only",
+    "browserPassed": true,
+    "browserArtifact": ".run/browser-fixtures/bitstream-analysis-matrix-webkit/matrix.json",
+    "browserSha256": "54893a85a6ed5cd762aa451f6925c12303ed21f6c01d7fac2eea9c626e7cc476",
+    "wholeSource": {
+      "codecs": [
+        "h264",
+        "hevc",
+        "vvc"
+      ],
+      "expectedAuRange": [
+        0,
+        600
+      ],
+      "duplicatesRejected": true,
+      "completeAuSetAsserted": true,
+      "passed": 3
+    },
+    "parserManifestReleaseContractsPassed": 48
+  }
+}
