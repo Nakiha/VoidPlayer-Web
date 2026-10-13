@@ -275,3 +275,35 @@ test('analysis preparation rejects provenance claiming references when actual ex
     await assert.rejects(readFile(path.join(root, 'output/provenance.json')), {code:'ENOENT'});
   } finally { await rm(root, {recursive:true,force:true}); }
 });
+
+test('core sync replaces both variants, drops stale unpinned metadata and preserves destination on failure', async () => {
+  const { syncPlaybackCore, verifyCoreArtifact, playbackFiles } = await import('../../scripts/core-artifacts.mjs');
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-core-sync-'));
+  const source = path.join(root, 'source'), target = path.join(root, 'target');
+  const lock = { revision: 'a'.repeat(40), ffmpegRef: 'test' };
+  try {
+    await mkdir(source); await mkdir(target);
+    const files = {};
+    for (const name of playbackFiles) {
+      await mkdir(path.dirname(path.join(source, name)), { recursive: true });
+      const bytes = Buffer.from(`new ${name}`); files[name] = sha256(bytes);
+      await writeFile(path.join(source, name), bytes);
+    }
+    const provenance = { schema: 'voidplayer-core-build', source: lock, files };
+    await writeFile(path.join(source, 'provenance.json'), JSON.stringify(provenance));
+    await writeFile(path.join(target, 'voidplayer-core-mt.js'), 'old MT');
+    await syncPlaybackCore(source, target, lock);
+    assert.match(await readFile(path.join(target, 'voidplayer-core-mt.js'), 'utf8'), /^new /);
+    await verifyCoreArtifact(target, lock, 'voidplayer-core-build', playbackFiles);
+    await writeFile(path.join(source, 'voidplayer-core-mt.js'), 'mismatched MT');
+    await assert.rejects(syncPlaybackCore(source, target, lock), /bytes differ/);
+    await verifyCoreArtifact(target, lock, 'voidplayer-core-build', playbackFiles);
+    await assert.rejects(verifyCoreArtifact(target, {...lock,revision:'b'.repeat(40)}, 'voidplayer-core-build', playbackFiles), /release lock/);
+    for (const name of ['provenance.json','voidplayer-core-mt.js','voidplayer-core-mt.wasm']) await rm(path.join(source, name));
+    await syncPlaybackCore(source, target, lock);
+    for (const name of ['provenance.json','voidplayer-core-mt.js','voidplayer-core-mt.wasm']) await assert.rejects(readFile(path.join(target, name)), {code:'ENOENT'});
+    await writeFile(path.join(source, 'voidplayer-core-mt.js'), 'incomplete variant');
+    await assert.rejects(syncPlaybackCore(source, target, lock), {code:'ENOENT'});
+    assert.equal(await readFile(path.join(target, 'voidplayer-core.js'), 'utf8'), 'new voidplayer-core.js');
+  } finally { await rm(root, { recursive: true, force: true }); }
+});
