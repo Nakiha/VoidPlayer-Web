@@ -8,7 +8,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BROWSER_ROOT="$(dirname "$SCRIPT_DIR")"
-DEFAULT_SRC="$(cd "$BROWSER_ROOT/.." && pwd)/VoidPlayer-FFmpeg-Build/dist/voidplayer-ffmpeg-wasm-n9.0.1"
+FFMPEG_REF="$(node -p 'require(process.argv[1]).ffmpegRef' "$SCRIPT_DIR/release-core.json")"
+DEFAULT_SRC="$(cd "$BROWSER_ROOT/.." && pwd)/VoidPlayer-FFmpeg-Build/dist/voidplayer-ffmpeg-wasm-$FFMPEG_REF"
 SRC="${WASM_CORE_DIR:-${1:-$DEFAULT_SRC}}"
 DEST="$BROWSER_ROOT/public/vendor/voidplayer-core"
 

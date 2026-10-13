@@ -1,3 +1,4 @@
+import { verifyStaticAssets } from './static-assets.mjs';
 import { cp, mkdir, readFile, writeFile, readdir, stat, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -15,8 +16,9 @@ const bun = process.env.BUN_BIN || 'bun';
 const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot, 'System32', 'tar.exe') : 'tar';
 const bunVersion = (await readFile(path.join(root, '.bun-version'), 'utf8')).trim();
 if (execFileSync(bun, ['--version'], { encoding: 'utf8' }).trim() !== bunVersion) throw new Error(`构建需要 Bun ${bunVersion}，用 BUN_BIN 指定该版本。`);
-const required = ['index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
+const required = ['static-assets.json', 'index.html', 'admin/index.html', 'theme-init.js', 'startup-guard.js', 'licenses/voidplayer-web.txt', 'licenses/mediabunny.txt', 'licenses/phosphor-icons.txt', 'vendor/voidplayer-core/voidplayer-core.js', 'vendor/voidplayer-core/voidplayer-core.wasm', 'vendor/voidplayer-core/voidplayer-core-mt.js', 'vendor/voidplayer-core/voidplayer-core-mt.wasm', 'vendor/voidplayer-core/LICENSES/COPYING.LGPLv2.1', 'vendor/voidplayer-core/LICENSES/dav1d-COPYING', 'vendor/voidplayer-analysis/voidplayer-analysis.js', 'vendor/voidplayer-analysis/voidplayer-analysis.wasm', 'vendor/voidplayer-analysis/manifest.json', 'vendor/voidplayer-analysis/provenance.json', 'vendor/voidplayer-analysis/LICENSE'];
 for (const name of required) if (!(await stat(path.join(root, 'dist', name)).catch(() => null))?.isFile()) throw new Error(`发布包缺少 ${name}；请先同步解码器并构建。`);
+await verifyStaticAssets(path.join(root, 'dist'));
 const identity = await readReleaseIdentity(root);
 const { revision, dirty, version, tag } = identity;
 verifyFrontendIdentity(JSON.parse(await readFile(path.join(root, 'dist/build-info.json'), 'utf8')), identity);

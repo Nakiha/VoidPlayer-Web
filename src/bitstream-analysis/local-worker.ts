@@ -1,3 +1,4 @@
+import { coreAssetUrl } from '../core-url.ts';
 import { validateAnalysisCore } from './core-abi.ts';
 import { RangeReader } from "../range-reader.ts";
 import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
@@ -13,17 +14,17 @@ scope.onmessage = async ({ data }) => {
   if (data.ok) { const ack = acknowledgement; acknowledgement = undefined; ack?.(); return; }
   try {
     const response = await fetch(
-      new URL("/vendor/voidplayer-analysis/manifest.json", data.base),
+      coreAssetUrl("/vendor/voidplayer-analysis/manifest.json", data.base),
     );
     if (!response.ok) throw new Error("Analysis core unavailable");
     const manifest = await response.json();
     const module = await import(
-      /* @vite-ignore */ new URL(
+      /* @vite-ignore */ coreAssetUrl(
         "/vendor/voidplayer-analysis/voidplayer-analysis.js",
         data.base,
-      ).href
+      )
     );
-    const core = await module.default();
+    const core = await module.default({ locateFile: (name: string) => coreAssetUrl(`/vendor/voidplayer-analysis/${name}`, data.base) });
     validateAnalysisCore(core);
     if (data.target.mode === 'stream' || 'startUs' in data.target) {
       await (data.target.mode === "stream" ? analyzeStream : analyzeRange)(

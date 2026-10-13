@@ -831,6 +831,11 @@ await withBrowserFixture(
 
     }
     if (matrixOnly) {
+      const built = JSON.parse(await readFile(path.join(repositoryRoot, 'dist/build-info.json'), 'utf8'));
+      const coreRequests = requests.map(request => new URL(request.url)).filter(url => url.pathname.startsWith('/vendor/') && /\.(js|wasm|json)$/.test(url.pathname));
+      assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
+      assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis.wasm')), 'analysis Worker fetches a real core');
+      for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
       assert.equal(rows.filter(row => row.codec).length, matrix.rows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
       assert.deepEqual(errors, []);
       await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));

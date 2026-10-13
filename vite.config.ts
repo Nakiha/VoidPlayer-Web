@@ -1,3 +1,4 @@
+import { prepareStaticAssets } from './scripts/static-assets.mjs';
 import { lowerDescriptors } from './scripts/testing/i18n-transform.mjs';
 import { defineConfig, normalizePath } from 'vite';
 import { readBuildIdentity } from './scripts/release-version.mjs';
@@ -32,13 +33,26 @@ async function buildInfo() {
     try { return [name, createHash('sha256').update(readFileSync(resolve(coreDir, name))).digest('hex')]; }
     catch { return [name, null]; }
   }));
-  return { ...identity, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
+  const coreAssetDigests: Record<string, string> = {};
+  for (const folder of ['voidplayer-core', 'voidplayer-analysis']) {
+    const directory = resolve(import.meta.dirname, 'public/vendor', folder);
+    try { for (const name of readdirSync(directory)) if (/\.(js|wasm|json)$/.test(name))
+      coreAssetDigests[`/vendor/${folder}/${name}`] = createHash('sha256').update(readFileSync(resolve(directory, name))).digest('hex'); } catch {}
+  }
+  return { ...identity, coreAssetDigests, builtAt: new Date().toISOString(), sourceDigest: hash.digest('hex'), wasmDigests };
 }
+let outputDirectory = resolve(import.meta.dirname, 'dist');
 let productionBuildInfo: ReturnType<typeof buildInfo> | undefined;
+const transformBuildInfo = async (_code: string, id: string) => {
+  if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(await (productionBuildInfo ?? buildInfo()))}`, map: null };
+};
 export default defineConfig({
+  // Vite builds Worker entrypoints in a separate plugin pipeline. Their WASM
+  // URLs must use the same content versions as the main-thread glue URLs.
+  worker: { plugins: () => [{ name: 'voidplayer-worker-build-evidence', transform: transformBuildInfo }] },
   build: { rollupOptions: { input: { player: resolve(import.meta.dirname, 'index.html'), admin: resolve(import.meta.dirname, 'admin/index.html') } } },
   plugins: [{ name: 'voidplayer-i18n-catalog-url', enforce: 'pre',
-    configResolved(config) { buildCatalog = config.command === 'build'; },
+    configResolved(config) { buildCatalog = config.command === 'build'; outputDirectory = resolve(config.root, config.build.outDir); },
     buildStart() { if(buildCatalog) englishCatalogRef=this.emitFile({type:'chunk',id:resolve(sourceDir,'i18n/generated/en.js'),name:'en'}); },
     transform(code,id) {
       if(normalizePath(id.split('?')[0])!==normalizePath(resolve(sourceDir,'i18n.ts')))return;
@@ -63,13 +77,12 @@ export default defineConfig({
     },
   }, {
     name: 'voidplayer-build-evidence',
+    async closeBundle() { if (buildCatalog) await prepareStaticAssets(outputDirectory); },
     async buildStart() {
       productionBuildInfo = buildCatalog ? buildInfo() : undefined;
       if (productionBuildInfo) this.emitFile({ type: 'asset', fileName: 'build-info.json', source: JSON.stringify(await productionBuildInfo, null, 2) + '\n' });
     },
-    async transform(code, id) {
-      if (normalizePath(id.split('?')[0]) === normalizePath(infoFile)) return { code: `export const buildInfo = ${JSON.stringify(await (productionBuildInfo ?? buildInfo()))}`, map: null };
-    },
+    transform: transformBuildInfo,
     handleHotUpdate({ file, server }) {
       if (normalizePath(file).startsWith(normalizePath(sourceDir)) || normalizePath(file).startsWith(normalizePath(coreDir))) {
         const module = server.moduleGraph.getModuleById(infoFile);

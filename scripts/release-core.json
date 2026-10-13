@@ -1,9 +1,9 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "1e68e6c4980c132d16f967739d93abac5b5fe2e1",
-  "ffmpegRepository": "Nakiha/FFmpeg",
-  "ffmpegRevision": "bf1b838f2ab88b4f8fd83443325c782ea0e0f7fa",
-  "ffmpegRef": "n9.0.1",
+  "revision": "0dbc60eca4c63d1fd87843e340165d93cf0ae25d",
+  "ffmpegRepository": "FFmpeg/FFmpeg",
+  "ffmpegRevision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
+  "ffmpegRef": "n9.0.2",
   "dav1dRepository": "videolan/dav1d",
   "dav1dRevision": "42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa",
   "emscripten": "6.0.9",

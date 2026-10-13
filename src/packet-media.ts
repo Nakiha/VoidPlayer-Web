@@ -1,3 +1,4 @@
+import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from './media-reference.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
 import { WorkerRpc } from './worker-rpc.ts';
@@ -32,9 +33,9 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
   const releaseReservation = () => { if (reservationHeld) { reservation.release(); reservationHeld = false; } };
   let rpc: WorkerRpc<PacketCommands> | undefined;
   try {
-    const single = deps.glueURL ?? new URL(WASM_CORE_GLUE_PATH, document.baseURI).href;
+    const single = deps.glueURL ?? coreAssetUrl(WASM_CORE_GLUE_PATH, document.baseURI);
     const candidates = !deps.glueURL && !deps.wasmBinary && globalThis.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
-      ? [new URL(WASM_CORE_GLUE_PATH_MT, document.baseURI).href, single] : [single];
+      ? [coreAssetUrl(WASM_CORE_GLUE_PATH_MT, document.baseURI), single] : [single];
     type Init = PacketInitResult;
     let init: Init | null | undefined, selected = single, failure: unknown;
     let prepared: PreparedFlv | undefined;
