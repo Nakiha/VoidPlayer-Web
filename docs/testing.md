@@ -275,3 +275,7 @@ npm run test:fate:browser
 `node scripts/make-analysis-fmp4-fixtures.ts` 生成三 codec 的 byte-identical fragment remux 与真实视频复制/AAC traf 片源。`test/bitstream-analysis-fmp4.test.ts` 覆盖 payload/config、独立 codec/VTM 答案、真实播放 AU、跨非关键片 range、whole drain、取消、实际 Blob IO、媒体库缓存重启/补缺与 edit-list/raw ticks。`test/mp4-fragments.test.ts` 校验 addressing/defaults、64 位时间、合法 CTO 及越界/截断/时间断裂等拒绝边界。
 
 `ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
+
+### 服务端索引数据库 RPC
+
+`server/frame-index-protocol.ts` 绑定六个数据库操作的字段与结果，`FrameIndexJobs.call` 从操作名推导返回值，Worker 使用 `frameIndexReply` 检查响应。HTTP JSON 和磁盘索引的既有运行时校验仍在入口执行；数据库 Worker 消息布局、transfer、超时、并发与关闭策略保持。`test/helpers/frame-index-protocol-types.ts` 的负例随 build 和 `node-frame-index-worker` 编译，拒绝未知操作、缺失/错误字段及请求/响应错配；这些测试不在媒体逐帧路径增加校验或复制。

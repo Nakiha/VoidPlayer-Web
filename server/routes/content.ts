@@ -116,7 +116,7 @@ async function sendFfmpegRecordStream(
   if (startBuild) {
     if (!filePath || size === undefined) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
     build = library.indexJobs.startBuild({ id, version, size, filePath,
-      epoch: await library.indexJobs.call('epoch') as number, identity }, { onUpdate: wake });
+      epoch: await library.indexJobs.call('epoch'), identity }, { onUpdate: wake });
     void build.promise.then((value: { built?: boolean }) => { if (!value?.built) buildAlreadyPresent = true; wake(); }, error => {
       buildError = error instanceof Error ? error : new Error(String(error)); wake();
     });
@@ -131,10 +131,7 @@ async function sendFfmpegRecordStream(
   try {
     for (;;) {
       if (res.destroyed) return;
-      const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity }) as {
-        epoch: number; manifest: null | { buildId: string; state: string; lastSeq: number; complete: boolean; packets: number; scannedBytes: number;
-          stablePresentationUs: number; bytes: number; frames: number; metadata: Record<string, unknown> | null };
-      };
+      const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
       const manifest = snapshot.manifest;
       if (manifest && manifest.metadata && (!build || manifest.buildId === build.buildId || buildAlreadyPresent)) {
         if (requestedBuildId && requestedBuildId !== manifest.buildId && !sentReset) {
@@ -159,8 +156,7 @@ async function sendFfmpegRecordStream(
           await writeMediaIndexEvent(res, { type: 'progress', phase: 'scan', packets: manifest.packets,
             scannedBytes: manifest.scannedBytes, totalBytes: size });
         }
-        const page = await library.indexJobs.call('stream-batches', { id, version, identity, after: seq, limit: 16 }) as
-          { seq: number; payload: string; bytes: number; frames: number }[];
+        const page = await library.indexJobs.call('stream-batches', { id, version, identity, after: seq, limit: 16 });
         for (const row of page) {
           if (row.seq !== seq + 1) throw new AdminError(500, '服务端索引 batch 序号不连续。');
           const records = Buffer.from(row.payload, 'base64');
@@ -169,7 +165,7 @@ async function sendFfmpegRecordStream(
           // Resume may begin inside an untimed tail: recover its finite frontier.
           if (lastPts === FFMPEG_NO_TIMESTAMP && lastKnownTick === undefined) {
             for (let previousSeq = seq; previousSeq >= 0 && lastPts === FFMPEG_NO_TIMESTAMP; previousSeq--) {
-              const previous = await library.indexJobs.call('stream-batches', { id, version, identity, after: previousSeq - 1, limit: 1 }) as { seq: number; payload: string }[];
+              const previous = await library.indexJobs.call('stream-batches', { id, version, identity, after: previousSeq - 1, limit: 1 });
               if (previous[0]?.seq !== previousSeq) throw new AdminError(500, '服务端索引续传缺少前序 batch。');
               lastPts = lastFfmpegPts(Buffer.from(previous[0].payload, 'base64'));
             }
@@ -194,7 +190,7 @@ async function sendFfmpegRecordStream(
         throw buildError;
       } else if (manifest && manifest.complete && !manifest.metadata) {
         // Older complete documents remain readable through the legacy transport.
-        const bytes = await library.indexJobs.call('get', { id, version, identity }) as Uint8Array;
+        const bytes = await library.indexJobs.call('get', { id, version, identity });
         const envelope = JSON.parse(Buffer.from(bytes).toString('utf8')) as { epoch?: unknown };
         if (!Number.isSafeInteger(envelope.epoch)) throw new AdminError(500, '索引缓存 epoch 无效。');
         await sendMediaIndexStream(res, bytes, Number(envelope.epoch), 'ffmpeg', after, true);
@@ -277,7 +273,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
       let releaseUpload: (() => void) | undefined;
       try {
         if (req.method === 'GET') {
-          const cached = await library.indexJobs.call('has', { id: entry.id, version, identity }) as boolean;
+          const cached = await library.indexJobs.call('has', { id: entry.id, version, identity });
           if (kind === 'ffmpeg' && streamingGet && (cached || url.searchParams.get('build') === '1')) {
             const shouldBuild = !cached && url.searchParams.get('build') === '1';
             const resolvedPath = shouldBuild ? await library.resolve(entry.id, version) : undefined;
@@ -292,7 +288,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           if (url.searchParams.get('build') === '1' && !cached) {
             const filePath = await library.resolve(entry.id, version);
             if (!filePath) throw new AdminError(409, '媒体已改变，未建立旧版本索引。');
-            const epoch = await library.indexJobs.call('epoch') as number;
+            const epoch = await library.indexJobs.call('epoch');
             if (streamingGet) {
               beginMediaIndexStream(res);
               indexStreamStarted = true;
@@ -332,7 +328,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
               throw new AdminError(409, '媒体已改变，未保存旧索引。');
             }
           }
-          const bytes = await library.indexJobs.call('get', { id: entry.id, version, kind, identity }) as Uint8Array;
+          const bytes = await library.indexJobs.call('get', { id: entry.id, version, identity });
           if (res.destroyed) return true;
           if (streamingGet) {
             const envelope = JSON.parse(Buffer.from(bytes).toString('utf8')) as { epoch?: unknown };

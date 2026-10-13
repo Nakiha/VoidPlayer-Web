@@ -1,3 +1,4 @@
+import type { FrameIndexManifest, FrameIndexBatch } from './frame-index-protocol.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
@@ -206,16 +207,17 @@ export class FrameIndexStore {
       .run(id, version, ...identityArgs(identity), buildId);
   }
 
-  streamManifest(id: string, version: string, identity: MediaIndexIdentity) {
+  streamManifest(id: string, version: string, identity: MediaIndexIdentity): FrameIndexManifest {
     if (identity.kind === 'ffmpeg') this.migrateLegacyFfmpegBatches(id, version, identity);
     const row = this.db.prepare('SELECT e.epoch,m.* FROM frame_index_epoch e LEFT JOIN media_index_manifests m ON m.media_id=? AND m.media_version=? AND m.kind=? AND m.stream_key=? AND m.schema_version=? AND m.indexer_build=? WHERE e.id=1')
       .get(id, version, ...identityArgs(identity)) as Record<string, unknown>;
     if (!row?.media_id) return { epoch: Number(row?.epoch ?? this.epoch), manifest: null };
     this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
       .run(Date.now(), id, version, ...identityArgs(identity));
+    if (typeof row.build_id !== 'string' || typeof row.state !== 'string') throw new AdminError(500, '索引 manifest 标识无效。');
     return { epoch: Number(row.epoch), manifest: { buildId: row.build_id, state: row.state, lastSeq: Number(row.last_seq), complete: !!row.complete,
       packets: Number(row.packets), scannedBytes: Number(row.scanned_bytes), stablePresentationUs: Number(row.stable_presentation_us), bytes: Number(row.bytes), frames: Number(row.frames),
-      metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) : null } };
+      metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) as Record<string, unknown> : null } };
   }
 
   private migrateLegacyFfmpegBatches(id: string, version: string, identity: MediaIndexIdentity) {
@@ -260,9 +262,9 @@ export class FrameIndexStore {
     } catch (error) { this.db.exec('ROLLBACK'); throw error; }
   }
 
-  streamBatches(id: string, version: string, identity: MediaIndexIdentity, after: number, limit = 16) {
+  streamBatches(id: string, version: string, identity: MediaIndexIdentity, after: number, limit = 16): FrameIndexBatch[] {
     return this.db.prepare('SELECT seq,payload,bytes,frames FROM media_index_batches WHERE media_id=? AND media_version=? AND ' + identityWhere + ' AND seq>? ORDER BY seq LIMIT ?')
-      .all(id, version, ...identityArgs(identity), after, Math.max(1, Math.min(64, limit)));
+      .all(id, version, ...identityArgs(identity), after, Math.max(1, Math.min(64, limit))) as FrameIndexBatch[];
   }
 
   private evictCache(currentId: string, currentVersion: string, identity: MediaIndexIdentity) {
