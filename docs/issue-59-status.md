@@ -62,3 +62,7 @@ Chromium job [115206446227](https://github.com/Nakiha/VoidPlayer-Web/actions/run
 干净构建的可见播放基准使用 `f244d18`，四个原场景、每场景三次、8 秒/clip-end，原 speed/lag/skew/gap/pause 门槛全部保持。摘要和证据定位见 [fMP4 验收记录](fixtures/bitstream-analysis-fmp4.json)。初次 dirty-build 测量与加严测试的缓存命中等待错误保留为历史检查点，不作为最终验收。
 
 Draft [PR #61](https://github.com/Nakiha/VoidPlayer-Web/pull/61)，Refs #59；不合入、不发版。本机结果与 PR CI 分开记录，不将 pending 或 skipped job 算作成功。最新 main 以 FLV squash `68e44e2b6e7d23c79276586dca24648f44690088` 为基线；未修改先前工作区的未提交 CI 内容。
+
+### 独立 review 后的 harness 修正
+
+末尾 lifecycle probe 按实际最后一个 fixture 的容器选择未缓存目标，不依赖显式 `--matrix-part=fmp4`。无分区筛选入口 `node scripts/check-bitstream-analysis-browser.mjs webkit --matrix-only --matrix-fixture=fragmented-vvc.mp4 --checkpoint-only` 已通过，仍断言 pending、过期结果不显示和显式取消。三 codec whole 验收增加逐结果重复 AU 拒绝，并严格比较完整 AU 集合为 `0..599`；相关三个真实 whole/range/cache/IO 用例均通过。解析、manifest、release 契约 48/48 通过；本次只改测试与证据，生产代码及此前干净播放基准对应的代码不变。

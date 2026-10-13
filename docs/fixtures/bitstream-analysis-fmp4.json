@@ -1028,5 +1028,28 @@
     "Fixture remux defines a 60 fps decode clock and signed CTS from existing presentation order; product parsing does not repair fragment clocks.",
     "Matrix/coded-source assertions run before performance checks; performance limits and budgets were not raised.",
     "Local runs are not a claim that pending/skipped CI jobs passed."
-  ]
+  ],
+  "reviewFollowup": {
+    "productionCodeChanged": false,
+    "lifecycleTarget": "Use the actual final fixture container, including unpartitioned fixture-filtered entry points.",
+    "browserCommand": "node scripts/check-bitstream-analysis-browser.mjs webkit --matrix-only --matrix-fixture=fragmented-vvc.mp4 --checkpoint-only",
+    "browserPassed": true,
+    "browserArtifact": ".run/browser-fixtures/bitstream-analysis-matrix-webkit/matrix.json",
+    "browserSha256": "54893a85a6ed5cd762aa451f6925c12303ed21f6c01d7fac2eea9c626e7cc476",
+    "wholeSource": {
+      "codecs": [
+        "h264",
+        "hevc",
+        "vvc"
+      ],
+      "expectedAuRange": [
+        0,
+        600
+      ],
+      "duplicatesRejected": true,
+      "completeAuSetAsserted": true,
+      "passed": 3
+    },
+    "parserManifestReleaseContractsPassed": 48
+  }
 }

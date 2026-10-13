@@ -41,13 +41,15 @@ for (const codec of ['h264', 'hevc', 'vvc']) test(`fMP4 ${codec}: cross-fragment
   const hole = [...cache.keys()][3], expected = cache.get(hole); cache.delete(hole); let repaired = false;
   await analyzeRange(await reader(file), range, await core(), 'test', signal, async r => { if (pictureId(r.picture) === hole) { assert.deepEqual(r.blocks, expected.blocks); repaired = true; } }, async p => cache.get(pictureId(p)) ?? null);
   assert.ok(repaired);
-  let count = 0, drains = 0; const module = await core(), drain = module._vpa_drain;
+  const aus = new Set<number>(); let drains = 0; const module = await core(), drain = module._vpa_drain;
   module._vpa_drain = (...args: any[]) => { drains++; return drain(...args); };
   await analyzeStream(await reader(file), { mode: 'stream', sourceVersion: 'fmp4-test', firstPtsUs: input.packets[0].pts, durationUs: 10000000 }, module, 'test', signal, async r => {
-    assert.equal(r.confidence, 'exact'); assert.equal(r.picture.au >= 0 && r.picture.au < 600, true); count++;
+    assert.equal(r.confidence, 'exact');
+    assert.ok(!aus.has(r.picture.au), `duplicate whole-source AU ${r.picture.au}`); aus.add(r.picture.au);
     const e = cache.get(pictureId(r.picture)); if (e) assert.deepEqual(r.blocks, e.blocks);
   }, async () => {});
-  assert.equal(count, 600); assert.equal(drains, 1, 'only whole-source EOF drains, fragment boundaries never drain');
+  assert.deepEqual([...aus].sort((a, b) => a - b), Array.from({ length: 600 }, (_, au) => au), 'whole source publishes every AU exactly once');
+  assert.equal(drains, 1, 'only whole-source EOF drains, fragment boundaries never drain');
   const abort = new AbortController(), cancelledCore = await core(); let consumed = 0;
   await assert.rejects(analyzeStream(await reader(file), { mode: 'stream', sourceVersion: 'fmp4-test', firstPtsUs: input.packets[0].pts, durationUs: 10000000 }, cancelledCore, 'test', abort.signal,
     async () => { if (++consumed === 21) abort.abort(); }, async () => {}), { name: 'AbortError' });
