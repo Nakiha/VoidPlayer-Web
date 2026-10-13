@@ -189,6 +189,8 @@ export async function openMp4AnalysisInput(
       ensure: streamIndex ? ensure : undefined,
       get sealedEnd() { return sealedEnd; },
       get indexComplete() { return indexComplete; },
+      indexIntegrity: configurations.indexIntegrity,
+      indexTruncatedAt: configurations.indexTruncatedAt,
       totalPackets: expectedPackets,
       get sourceEndUs() { return sourceEndUs; },
       reader,

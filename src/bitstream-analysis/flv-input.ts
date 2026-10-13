@@ -1,4 +1,4 @@
-import { scanFlv } from '../flv-demux.ts';
+import { scanFlv, flvIndexIntegrity } from '../flv-demux.ts';
 import type { FlvCheckpoint } from '../flv-demux.ts';
 import { inspectPacketPicture } from '../packet-picture.ts';
 import { BUDGET } from './contract.ts';
@@ -106,6 +106,8 @@ export async function openFlvAnalysisInput(reader: AnalysisReader, signal: Abort
       ensure: continuous ? ensure : undefined,
       get sealedEnd() { return sealedEnd; },
       get indexComplete() { return scanComplete && externalComplete; },
+      get indexIntegrity() { return scanComplete ? flvIndexIntegrity(checkpoint!.index) : undefined; },
+      get indexTruncatedAt() { return checkpoint!.index.truncatedAt; },
       // Until both scanners finish, a final count is unknown, not zero/EOF.
       get totalPackets(): number | null { return scanComplete && externalComplete ? packets.length : null; },
       get sourceEndUs() { return sourceEndUs; },

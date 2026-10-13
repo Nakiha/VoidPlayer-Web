@@ -10,7 +10,7 @@ FLV 直接复用 `scanFlv` 的 decode-order 包序号、configuration 和 discon
 
 本地和服务器各自持有独立 reader、扫描游标和分析 core。播放只提供只读索引前缀；分析不调用播放 seek/decoder。FLV 服务器索引沿用共享扫描器已验证的单调前缀进度，完成后解析 FLV JSON document 检查最终计数，不解释为 FFmpeg 的 48 字节 record。完成的索引查询不重复加载完整文档。取消释放分析订阅，不终止其他索引消费者。
 
-整片任务在下一个 key/config/discontinuity 或确定 EOF 处封口。最终 AU 数在扫描/外部索引完成前为 `null`，进度显式报告等待；等待不 drain decoder。配置变化和损坏重同步都在安全锚处重建参考状态，包括配置未变化的 discontinuity。区间跨配置时只重开 decoder，复用独立元数据计划。预算保持一秒、32 个结果、300 个预滚包和既有缓存/heap 上限。
+索引枚举结束与源完整性分开：适配器显式保留 complete/recovered/prefix 及截断位置，前缀枚举完成不冒充源文件完整。整片任务在下一个 key/config/discontinuity 或确定的有效前缀终点处封口。最终 AU 数在扫描/外部索引完成前为 `null`，进度显式报告等待；等待不 drain decoder。配置变化和损坏重同步都在安全锚处重建参考状态，包括配置未变化的 discontinuity。区间跨配置时只重开 decoder，复用独立元数据计划。预算保持一秒、32 个结果、300 个预滚包和既有缓存/heap 上限。
 
 ## 支持矩阵
 

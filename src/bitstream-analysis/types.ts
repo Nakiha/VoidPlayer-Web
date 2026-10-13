@@ -27,7 +27,10 @@ export interface AnalysisInput {
   packets: AnalysisPacket[];
   ensure?: (cursor: number) => Promise<boolean>;
   sealedEnd: number;
+  /** Enumeration is terminal; source integrity is independent of this flag. */
   indexComplete: boolean;
+  indexIntegrity?: import('../index-integrity.ts').IndexIntegrity;
+  indexTruncatedAt?: number;
   totalPackets: number | null;
   sourceEndUs: number;
   reader: AnalysisReader;

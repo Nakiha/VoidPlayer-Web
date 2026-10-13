@@ -88,6 +88,8 @@ test('FLV tail and recovered gap preserve source identities and reset same-confi
   for (const suffix of ['tail', 'gap', 'sequence']) {
     const file = `fixtures/flv-analysis/legacy-h264-${suffix}.flv`;
     const input = await openAnalysisInput(await reader(file), signal);
+    assert.equal(input.indexIntegrity, suffix === 'tail' ? 'prefix' : suffix === 'gap' ? 'recovered' : 'complete');
+    assert.equal(input.indexTruncatedAt !== undefined, suffix === 'tail');
     const boundary = input.packets.find(p => p.discontinuity);
     if (suffix === 'gap') assert.ok(boundary);
     const targetPacket = boundary ?? input.packets[200];
