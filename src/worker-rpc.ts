@@ -207,17 +207,20 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     const notifyIndex = reportIndexFailure && this.indexReady && !this.indexTerminal;
     this.failure = error;
     for (const finish of this.byteRequests.values()) finish();
+    const callbackErrors:unknown[]=[];
     if (notifyIndex) {
       this.indexTerminal = true;
       this.queuedIndexProgress = undefined;
       const indexError = { error: error.message, stage: 'resource' as const };
-      if (this.indexHandlers) this.indexHandlers.error?.(indexError);
+      if (this.indexHandlers) {try {this.indexHandlers.error?.(indexError);}catch(error){callbackErrors.push(error);}}
       else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
     }
-    this.onTerminate();
+    try {this.onTerminate();}catch(error){callbackErrors.push(error);}
     for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
     this.pending.clear();
     this.worker.terminate();
+    if(callbackErrors.length===1)throw callbackErrors[0];
+    if(callbackErrors.length>1)throw new AggregateError(callbackErrors,'Worker cleanup callbacks failed.');
   }
 }
 

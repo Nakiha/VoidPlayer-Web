@@ -179,3 +179,23 @@ test('postMessage failure terminates only its RPC and rejects other pending work
     assert.equal(await other,null);assert.equal(healthy.terminated,0,'independent worker survives');
   } finally {a.terminate();b.terminate();}
 });
+
+for(const hook of ['index','terminate'] as const)test(`a throwing ${hook} hook cannot strand latched-failure requests or their worker`,async()=>{
+  const stub=browserWorker();let releases=0;
+  const rpc=new WorkerRpc(stub.worker,()=>{releases++;if(hook==='terminate')throw new Error('terminate hook failed');});
+  const ready=rpc.call('init',{glueURL:'',name:'test'});stub.emit({id:1,type:'ready',data:init});await ready;
+  rpc.setIndexHandlers({error:()=>{if(hook==='index')throw new Error('index hook failed');}});
+  const waiting=rpc.call('extract',{ctx:1,index:0},[],1000);
+  const settled=waiting.then(()=>assert.fail('failed request cannot fulfill'),error=>{assert.match(error.message,/original fault/);});
+  try {
+    assert.throws(()=>rpc.terminate(new Error('original fault')),new RegExp(`${hook} hook failed`));
+    assert.equal(Reflect.get(rpc,'pending').size,0,'pending cleanup follows callback failure');
+    assert.equal(stub.terminated,1);assert.equal(releases,1);await settled;
+    await assert.rejects(rpc.call('extract',{ctx:1,index:1}),/original fault/);
+    rpc.terminate();assert.equal(stub.terminated,1);assert.equal(releases,1);
+  }finally{
+    // Keep the old-head negative probe bounded even when its latched failure
+    // prevents the ordinary deadline from settling the stranded promise.
+    const pending=Reflect.get(rpc,'pending');for(const request of pending.values()){clearTimeout(request.timer);request.reject(new Error('original fault'));}pending.clear();await settled;
+  }
+});
