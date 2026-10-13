@@ -6,6 +6,7 @@ interface Box { start: number; type: string; data: number; end: number; truncate
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
 async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
   const result: Box[] = [];
+  let fragmented = false;
   const ignoreTail = (type?: string) => {
     if (!root || !result.some(b => b.type === 'moov') || !result.some(b => b.type === 'mdat')
       || (type && ['moov', 'moof', 'mdat', 'mfra', 'sidx', 'ftyp', 'styp'].includes(type))) return false;
@@ -14,7 +15,8 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
   };
   while (start < end) {
     if (end - start < 8) { if (ignoreTail()) break; invalid('box 头被截断。'); }
-    const header = await reader.read(start, Math.min(16, end - start));
+    const header = await (fragmented && reader.readMetadata ? reader.readMetadata(start, Math.min(16, end - start)) : reader.read(start, Math.min(16, end - start)));
+    if (header.length < 8) return invalid('box 头被截断。');
     const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
     let length = view.getUint32(0), bytes = 8;
     const type = String.fromCharCode(...header.subarray(4, 8));
@@ -28,6 +30,7 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
     if (truncated) length = end - start;
     result.push({ start, type, data: start + bytes, end: start + length, ...(truncated ? { truncated: true, declaredEnd } : {}) });
     if (result.length > 100000) throw new MediaOpenError('resource', 'MP4 box 数量超过上限。');
+    if (root && type === 'moof') fragmented = true;
     start += length;
   }
   return result;
@@ -75,6 +78,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
   if(root.some(b=>b.type==='moof') && root.filter(b=>b.type==='moov'||b.type==='moof').reduce((n,b)=>n+b.end-b.start,0)>24*1024*1024)throw new MediaOpenError('resource','MP4 fragment metadata 超过上限。');
+  if(root.some(b=>b.type==='moof') && reader.readMetadata)reader={size:reader.size,read:reader.readMetadata.bind(reader)} as RangeReader;
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
     let nested=await boxes(reader,track.data,track.end);
     const tkhd=nested.find(b=>b.type==='tkhd');if(!tkhd)continue;
@@ -90,7 +94,9 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       const codec=({avc1:'avcC',avc3:'avcC',hvc1:'hvcC',hev1:'hvcC',av01:'av1C',vvc1:'vvcC',vvi1:'vvcC'} as Record<string,string>)[entry.type];
       if(!codec||entry.end-entry.data<78)return invalid('视频 sample description 需要容器解码路径。');
       if(kind&&kind!==codec)return invalid('sample description 跨编码切换需要容器解码路径。');kind=codec;
-      const config=(await boxes(reader,entry.data+78,entry.end)).find(b=>b.type===codec);
+      const entryBoxes=await boxes(reader,entry.data+78,entry.end);
+      if(root.some(b=>b.type==='moof') && entryBoxes.some(b=>b.type==='sinf'))return invalid('加密分片 MP4 暂不支持。');
+      const config=entryBoxes.find(b=>b.type===codec);
       const skip=codec==='vvcC'?4:0;
       if(!config||config.end-config.data<=skip||config.end-config.data>1024*1024)return invalid('sample description 配置无效。');
       const description=await reader.read(config.data+skip,config.end-config.data-skip);
@@ -195,6 +201,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
 async function readFragmentConfigurations(reader: RangeReader, root: Box[], moov: Box, stbl: Box[], trackId: number,
   descriptions: Uint8Array[], maxSamples: number, rawTiming: boolean): Promise<Mp4Configurations> {
   const safe = (n: number, label: string) => { if (!Number.isSafeInteger(n) || n < 0) invalid(`${label} 超出安全整数范围。`); return n; };
+  if (root.some(b => b.type === 'pssh')) return invalid('加密分片 MP4 暂不支持。');
   if (root.some(b => b.truncated || b.ignoredTail)) return invalid('分片 MP4 必须完整，不能恢复截断前缀。');
   if (descriptions.length !== 1) return invalid('分片 MP4 仅支持单一 sample description。');
   if (root.filter(b => b.type === 'moov').length !== 1 || root.find(b => b.type === 'moof')!.start < moov.end)
@@ -234,7 +241,9 @@ async function readFragmentConfigurations(reader: RangeReader, root: Box[], moov
   let nextDecodeTime: number | undefined;
   for (const moof of root.filter(b => b.type === 'moof')) {
     let foundTrack = false, fragmentIndex = 0;
-    for (const traf of (await boxes(reader, moof.data, moof.end)).filter(b => b.type === 'traf')) {
+    const moofBoxes = await boxes(reader, moof.data, moof.end), mfhd = await fields(single(moofBoxes, 'mfhd'));
+    full(mfhd, 8); if (mfhd.byteLength !== 8 || mfhd.getUint32(0)) return invalid('mfhd 无效。');
+    for (const traf of moofBoxes.filter(b => b.type === 'traf')) {
       const entries = await boxes(reader, traf.data, traf.end), tfhd = await fields(single(entries, 'tfhd'));
       full(tfhd, 8);
       if (tfhd.getUint32(4) !== trackId) continue; // Audio traf does not define a video base or ordinal.
@@ -292,9 +301,11 @@ async function readFragmentConfigurations(reader: RangeReader, root: Box[], moov
 
 /** Verify the pinned demuxer's fragment locator before assigning our continuous
  * decode-order AU. A fragment sequence number is never an analysis identity. */
-export function validateFragmentPacket(config: Mp4Configurations, au: number, packet: { sequenceNumber: number; byteLength: number; type: string }) {
+export function validateFragmentPacket(config: Mp4Configurations, au: number, packet: { sequenceNumber: number; byteLength: number; type: string; timestamp: number }, resolution: number) {
   if (!config.fragmentSequenceNumbers) return;
   if (packet.sequenceNumber !== config.fragmentSequenceNumbers[au] || packet.byteLength !== config.sampleSizes![au]
-    || (packet.type === 'key') !== config.sampleKeys![au])
+    || (packet.type === 'key') !== config.sampleKeys![au]
+    || !Number.isSafeInteger(Math.round(packet.timestamp * 1e6))
+    || !Number.isSafeInteger(Math.round(packet.timestamp * 1e6 - config.compositionOffsets![au] / resolution * 1e6)))
     invalid('fragment packet 与 sample mapping 不一致。');
 }

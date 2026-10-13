@@ -15,22 +15,25 @@ export async function openMp4AnalysisInput(
   streamIndex?: AnalysisInputOptions,
 ) {
   let bytesRead = 0;
-  const read = async (offset: number, length: number) => {
+  let fragmented = false;
+  const readInternal = async (offset: number, length: number, metadata = false) => {
     signal.throwIfAborted();
     if (length > BUDGET.inputBytes || (!continuous && bytesRead + length > 64 * 1024 * 1024))
       throw new AnalysisFailure(
         "resource-limit",
         "Analysis input budget exceeded",
       );
-    const b = await reader.read(offset, length);
+    const b = await (metadata && reader.readMetadata ? reader.readMetadata(offset, length) : reader.read(offset, length));
     signal.throwIfAborted();
     bytesRead += b.length;
     return b;
   };
+  const read = (offset: number, length: number) => readInternal(offset, length);
+  const readMetadata = (offset: number, length: number) => readInternal(offset, length, true);
   const input = new Input({
     source: new CustomSource({
       getSize: () => reader.size,
-      read: (start, end) => read(start, end - start),
+      read: (start, end) => fragmented ? readMetadata(start, end - start) : read(start, end - start),
       maxCacheSize: 1024 * 1024,
     }),
     formats: [MP4, QTFF],
@@ -66,11 +69,12 @@ export async function openMp4AnalysisInput(
         "Unsupported analysis codec",
       );
     const configurations = await readMp4Configurations(
-      { size: reader.size, read } as RangeReader,
+      { size: reader.size, read, readMetadata } as RangeReader,
       track.id,
       250000,
       true,
     );
+    fragmented = !!configurations.fragmentSequenceNumbers;
     if (configurations.indexIntegrity === "prefix")
       throw new AnalysisFailure(
         "incomplete-reference-state",
@@ -119,7 +123,7 @@ export async function openMp4AnalysisInput(
         return false;
       }
       const packet = next.value;
-      validateFragmentPacket(configurations, au, packet);
+      validateFragmentPacket(configurations, au, packet, resolution);
       if (au >= 250000) throw new AnalysisFailure('resource-limit', 'Analysis packet index budget exceeded');
       const offset = configurations.sampleOffsets?.[au], size = configurations.sampleSizes?.[au];
       if (offset === undefined || size !== packet.byteLength)

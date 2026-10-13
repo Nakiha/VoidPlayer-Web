@@ -67,3 +67,23 @@ test('fragment metadata/sample budgets are enforced before allocating sample arr
   const payload = Buffer.alloc(24 * 1024 * 1024), bytes = Buffer.concat([init(), box('moof', payload)]);
   await assert.rejects(read(bytes), (e: any) => e.stage === 'resource');
 });
+
+test('sparse metadata reads use exact physical ranges, preserve ordinary cache and stop after close', async () => {
+  const { RangeReader } = await import('../../src/range-reader.ts');
+  const data = new Uint8Array(1024 * 1024), blob = new Blob([data]), slice = blob.slice.bind(blob), ranges: [number, number][] = [];
+  blob.slice = (a = 0, b = blob.size, type) => { ranges.push([a, b]); return slice(a, b, type); };
+  const source = new RangeReader({ file: blob });
+  await source.readMetadata(700000, 16); assert.deepEqual(ranges, [[700000, 700016]]); assert.deepEqual(source.cachedWindows(), []);
+  await source.read(0, 16); const windows = source.cachedWindows(), reads = ranges.length;
+  await source.readMetadata(4, 8); assert.equal(ranges.length, reads); assert.deepEqual(source.cachedWindows(), windows);
+  await assert.rejects(source.readMetadata(blob.size - 1, 8), /越界/);
+  source.close(); await assert.rejects(source.readMetadata(0, 8), /取消/);
+});
+
+test('fragment packet locators validate moof offsets but never assign discontinuous AU identities', async () => {
+  const { validateFragmentPacket } = await import('../../src/mp4-config.ts'), config = await read(fixture());
+  const packet = { sequenceNumber: config.fragmentSequenceNumbers![0], byteLength: 3, type: 'delta', timestamp: 1 };
+  validateFragmentPacket(config, 0, packet, 1000);
+  assert.throws(() => validateFragmentPacket(config, 0, { ...packet, sequenceNumber: 0 }, 1000), /mapping/);
+  assert.throws(() => validateFragmentPacket(config, 0, { ...packet, timestamp: Number.MAX_SAFE_INTEGER }, 1), /mapping/);
+});

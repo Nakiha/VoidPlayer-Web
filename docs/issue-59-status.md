@@ -51,3 +51,5 @@ Chromium job [115206446227](https://github.com/Nakiha/VoidPlayer-Web/actions/run
 初始检查点：H.264/HEVC/VVC 三个真实 QA 片源按 payload/config 原样 remux 为 30 个非 GOP 对齐 fragment、每片两个 trun；Node 逐 AU 字节核对、独立首帧/后段块答案、实际软件播放 AU 均通过。WebKit × 本地 H.264 × 软件偏好的当前帧 presented token、独立分析、可见遮罩精确身份、缓存/区间和取消闭环通过（`.run/browser-fixtures/bitstream-analysis-matrix-fmp4-webkit/matrix.json`）。`npm run build` 通过。下一步扩展解析负例、整片 drain、IO/缓存与完整浏览器矩阵；此检查点尚不代表最终验收。
 
 混合普通 samples + fragments、外部 init/.m4s、增长直播、多配置/多视频轨、加密/样本分组、decode 时间断裂或回退、隐式跨 traf 基址、损坏/截断分片不支持；继续容器 fallback 或明确拒绝精确分析。TS/MKV 仍由 #59 后续阶段跟踪。本阶段只开 draft PR，不合入、不发版，Refs #59。
+
+第二个检查点：独立 fMP4 矩阵在 WebKit/Chromium 各 12 个组合已通过；后续加严非关键片 seek 的实际 presented token/遮罩与跨片区间断言。三 codec 整片各消费 600 帧、每片边界不 drain、EOF 恰好 drain 一次；缓存全命中/补缺、21 帧取消、两次独立后段 Blob.slice IO 均通过；VVC I/B VTM hash/reference 答案通过。真实 FFmpeg 视频复制 + AAC traf 的 payload/config 与当前帧播放/分析身份通过；edit-list 后微秒时间不反写原始 tfdt ticks。共享 RangeReader 增加 exact metadata 读取，只有发现 moof 后使用；普通 MP4 配置与 FLV 继续原读法和缓存身份。快速套件 40/40 通过。播放基准初次 12/12 通过，但构建元数据来自检查点提交前的 dirty build，因此最终会在干净提交重建后重跑。

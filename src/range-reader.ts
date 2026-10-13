@@ -67,6 +67,22 @@ export class RangeReader {
     this.serial = task.catch(() => {});
     return task;
   }
+  /** Sparse fragment metadata must not fetch a 256 KiB payload block for each
+   * moof header. Reuse already cached bytes, otherwise load only the requested
+   * range with the same version, bounds and cancellation checks. */
+  readMetadata(offset: number, length: number): Promise<Uint8Array> {
+    const run = async () => {
+      if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
+      if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > this.size)
+        throw new MediaOpenError('input', '媒体读取范围越界。');
+      if (length > 24 * 1024 * 1024) throw new MediaOpenError('resource', '单次 metadata 读取超过上限。');
+      if (!length) return new Uint8Array();
+      const bytes = this.peek(offset, length) ?? await this.load(offset, offset + length);
+      if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
+      return bytes;
+    };
+    const task = this.serial.then(run); this.serial = task.catch(() => {}); return task;
+  }
   private async readInner(offset: number, length: number): Promise<Uint8Array> {
     if (this.controller.signal.aborted) throw new MediaOpenError('input', '媒体读取已取消。');
     if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length) || offset < 0 || length < 0 || offset + length > this.size) throw new MediaOpenError('input', '媒体读取范围越界。');

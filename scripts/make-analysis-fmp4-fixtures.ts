@@ -44,3 +44,9 @@ for (const row of matrix.rows.filter((r: any) => r.container === 'mp4')) {
   await writeFile(`fixtures/fmp4-analysis/fragmented-${input.codec}.mp4`, Buffer.concat(parts));
   console.log(`fragmented-${input.codec}: ${input.packets.length} byte-identical AUs, 30 non-GOP-aligned fragments, 60 truns`); input.close();
 }
+// A real interleaved AAC traf exercises a standard muxer's fragment layout.
+// Video is copied; it retains the same independent codec answers.
+const { execFileSync } = await import('node:child_process');
+execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-i', 'fixtures/video/h264_9s_1920x1080.mp4',
+  '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=12', '-map', '0:v:0', '-map', '1:a:0',
+  '-c:v', 'copy', '-c:a', 'aac', '-shortest', '-movflags', 'empty_moov+default_base_moof+frag_keyframe', 'fixtures/fmp4-analysis/fragmented-h264-audio.mp4']);

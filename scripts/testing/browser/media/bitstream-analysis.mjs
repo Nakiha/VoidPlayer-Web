@@ -814,6 +814,21 @@ await withBrowserFixture(
             "offset is not persistent picture identity",
           );
           await call("set_review_track_offset", { slot: "A", offsetUs: 0 });
+          if (row.container === 'fmp4') {
+            await call('seek_review', { ptsUs: 350000 }); await stable();
+            const rearToken = await call('get_presented_frame', { slot: 'A' });
+            const rearResult = await call('request_bitstream_analysis', { slot: 'A' });
+            assert.deepEqual(rearResult.picture, rearToken.picture, 'nonkey fragment seek preserves actual presented AU');
+            assert.equal(rearResult.sourcePtsUs, rearToken.sourcePtsUs);
+            await analyze(); await overlay.waitFor({ state: 'visible' });
+            assert.equal(await overlay.getAttribute('data-picture'), JSON.stringify([rearToken.picture.sourceVersion, 'video', 0, rearToken.picture.au, 0, 0, 'frame']));
+            await hideOverlay();
+            const crossing = await call('request_bitstream_range', { slot: 'A', startUs: 280000, endUs: 480000 });
+            assert.ok(crossing.pictures >= 10, 'real interval crosses a nonkey fragment');
+            const decoder = (await call('get_review_session')).tracks[0].decoder;
+            if (row.codec === 'vvc' || decoding === 'software') assert.equal(decoder, 'ffmpeg-wasm', 'actual software packet path');
+            await call('seek_review', { ptsUs: 0 });
+          }
           const report = await call("benchmark_review", { durationMs: 2000 });
           assert.equal(report.error, null);
 

@@ -44,7 +44,7 @@
     "prepare": ["node", "scripts/make-analysis-flv-fixtures.ts"],
     "prepareOnDemand": true
   },
-  "analysis-fmp4": {"paths": ["fixtures/fmp4-analysis/fragmented-h264.mp4", "fixtures/fmp4-analysis/fragmented-hevc.mp4", "fixtures/fmp4-analysis/fragmented-vvc.mp4"], "inputs": ["fixtures/video/h264_9s_1920x1080.mp4", "fixtures/video/h265_10s_1920x1080.mp4", "fixtures/video/h266_10s_1920x1080.mp4"], "prepare": ["node", "scripts/make-analysis-fmp4-fixtures.ts"], "prepareOnDemand": true},
+  "analysis-fmp4": {"paths": ["fixtures/fmp4-analysis/fragmented-h264.mp4", "fixtures/fmp4-analysis/fragmented-hevc.mp4", "fixtures/fmp4-analysis/fragmented-vvc.mp4", "fixtures/fmp4-analysis/fragmented-h264-audio.mp4"], "inputs": ["fixtures/video/h264_9s_1920x1080.mp4", "fixtures/video/h265_10s_1920x1080.mp4", "fixtures/video/h266_10s_1920x1080.mp4"], "prepare": ["node", "scripts/make-analysis-fmp4-fixtures.ts"], "prepareOnDemand": true},
   "flv": {
     "paths": [
       "fixtures/flv/standard-h264.flv"
