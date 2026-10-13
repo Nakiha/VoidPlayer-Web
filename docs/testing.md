@@ -2,7 +2,11 @@
 
 套件与稳定 case ID 以 `scripts/testing/manifest.json` 为准，统一入口为 `scripts/run-tests.mjs`。`package.json` 保留原有单项命令。不要把某次历史测试数量或构建成功当作当前兼容性结论。
 
-码流分析的 `ci-analysis-browser` 将每种引擎的编码/遮罩矩阵、流式图表生命周期和增量索引分别登记为必需用例（`--matrix-only`、`--diagrams-only`、`--incremental-only`），各自拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消、身份与性能断言保持不变；布局和普通分析面板继续单独执行。直接调用 `node scripts/check-bitstream-analysis-browser.mjs <engine>` 仍运行完整兼容流程。拆分避免正常持续进展的整个组合在 600 秒被强制终止，不代表实时播放门槛变化。
+码流分析的 `ci-analysis-browser` 保留完整本地套件。CI 将 MP4、legacy FLV、enhanced FLV 三个矩阵分片分别放在 Chromium/WebKit 的独立并行 job 中，使用 `ci-analysis-matrix-{mp4,flv-legacy,flv-enhanced}`；每个 job 只跑一个矩阵 case，合计保留每种引擎全部 36 格。流式图表、增量索引、几何、布局与普通分析面板仍由 `analysis-browser` job 的 `ci-analysis-ui` 必跑，三个真实分析 Node 用例由 `playback` 的 `unit` 必跑，不在每种浏览器重复执行。`release-set` 同时依赖 `analysis-browser` 与整个 `analysis-matrix`，任一分片失败、取消或跳过都不能产出验证通过的发布集。
+
+各矩阵、流式图表与增量索引 case 仍拥有独立服务、浏览器、临时目录和 600 秒整例 watchdog。原有逐操作超时、整片 ready/EOF/帧数、取消、身份与性能断言保持不变；没有延长 job 超时或降低性能门槛。直接调用 `node scripts/check-bitstream-analysis-browser.mjs <engine>` 仍运行完整兼容流程。
+
+统一 runner 会按清单准备明确标记 `prepareOnDemand` 的本地衍生 fixture，目前仅 `analysis-flv`：任一所需输出缺失时，先验证三个固定 MP4 输入，再调用 `node scripts/make-analysis-flv-fixtures.ts`，重新检查六种基础 FLV 与 H.264 损坏/重复配置变体。每次套件内只准备一次，生成器拥有独立 300 秒超时、取消与子进程清理；失败记录在套件目录的 `fixtures/analysis-flv/`，依赖它的 case 失败，其他独立 case 继续。`unit`、`media` 和浏览器入口共用此前置流程；core、基础视频和 FATE 等外部资源仍须事先显式同步，不会自动下载。
 
 ## 统一套件与单项筛选
 
@@ -12,7 +16,7 @@
 | `npm run test:source` | 所有不依赖媒体、core、浏览器、外部工具或构建的 Node 逻辑测试；新增适用用例必须登记 | 独立 `source-logic` job，不等待解码器构建 |
 | `npm run test:contract` | 清单、覆盖下限、独立结果、生命周期、发布依赖等契约 | identity / playback job；release identity 在安装依赖前也检查清单 |
 | `npm run test:suite -- unit` | 全部 Node 测试，包括真实 WASM 与媒体断言；准备完整媒体环境 | playback job 的 `unit` |
-| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-browser`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
+| `npm run test:browser:all` | 自动化浏览器检查及内部矩阵；Chromium/WebKit、媒体/core/FFmpeg，默认构建一次 | `ci-audio`、`ci-playback`、`ci-cache`、`ci-flv`、`ci-fate`、`ci-analysis-ui`、`ci-analysis-matrix-*`、`uncovered`、`flv-startup` 与 HEVC 四格矩阵 |
 | `npm run test:media` | 真实媒体 Node / 浏览器检查；包括特殊的可信 HTTPS 功能用例 | playback / hevc-browser job；可信 HTTPS 仅在一次性 CI 主机执行 |
 | `npm run test:suite -- release` | 固定 core 来源、原生归档、归档浏览器及三平台汇总；需先生成对应产物 | decoder / native-release / release-set；打包及草稿操作仍由 workflow 管理 |
 | `npm run test:perf` | 索引构建、争用和可信 HTTPS 播放性能；所有结果显式 informational | `ci-perf`，保留 `continue-on-error`；可信 HTTPS 仅在一次性 CI 主机执行 |
@@ -38,7 +42,7 @@ npm run test:suite -- ci-native-console --platform win32 --list
 
 `--case` 使用精确 ID，可逗号分隔；与套件、引擎、输入筛选取交集。带内部多引擎/输入循环的脚本作为一个 case 整体执行，筛选不会改写它的内部覆盖。`--platform` 仅用于枚举，不允许在另一平台伪执行。`--list` 输出适用 case、命令、引擎、输入、平台、夹具、外部工具、超时、产物目录、required 属性及不适用理由；空选择不算通过。参数拼写错误直接失败。缺少夹具、工具、浏览器或原生包是失败，不是自动跳过。
 
-清单中 `fixtures.*.prepare` 给出准备命令；suite 不隐式下载、更换参考结果或生成缺失媒体。CI 每个 job 只准备一次可复用媒体/core，并继续负责下载、系统依赖、浏览器和平台矩阵。只有内部断言专用的可写夹具仍由各 case 自行生成。
+清单中 `fixtures.*.prepare` 给出准备命令；suite 不隐式下载或更换参考结果，仅为明确标记 `prepareOnDemand` 的本地衍生 fixture 生成缺失输出。CI 每个 job 只准备一次可复用媒体/core，并继续负责下载、系统依赖、浏览器和平台矩阵。内部断言专用的可写夹具仍由各 case 自行生成。
 
 ### 解码 Worker 的消息契约
 

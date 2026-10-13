@@ -47,7 +47,7 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
   const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
     assert.ok(jobs[need], `unknown dependency ${need}`);
@@ -75,10 +75,10 @@ test('release workflow gates verified artifacts and draft staging on every verif
   assert.match(jobs['release-set'].body, /name: verified-release-set/);
   assert.match(jobs['release-draft'].body, /name: verified-release-set/);
   assert.doesNotMatch(jobs['release-set'].body, /if:.*(?:always\(|!cancelled\(|failure\()/);
-  // Model GitHub's default success() dependency predicate for the observed
-  // missing edge: failure, cancellation, pending and skipped all block output.
-  for (const outcome of ['failure', 'cancelled', 'pending', 'skipped', 'success']) {
-    const outcomes = Object.fromEntries(required.map(id => [id, id === 'uncovered-regressions' ? outcome : 'success']));
+  // Every required edge, including all cells of the analysis matrix job, must
+  // block release output on failure, cancellation, pending or skipped states.
+  for (const dependency of required) for (const outcome of ['failure', 'cancelled', 'pending', 'skipped', 'success']) {
+    const outcomes = Object.fromEntries(required.map(id => [id, id === dependency ? outcome : 'success']));
     const produceVerifiedSet = jobs['release-set'].needs.every(id => outcomes[id] === 'success');
     const stageDraft = jobs['release-draft'].needs.every(id => id === 'release-set' && produceVerifiedSet);
     assert.equal(produceVerifiedSet, outcome === 'success');
@@ -93,6 +93,26 @@ test('browser workflow collects independent outcomes and uploads failure evidenc
   assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/test-suites\/uncovered\//);
   assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs flv-startup --prepared/);
   assert.match(jobs.playback.body, /\.run\/test-suites\//);
+});
+
+test('analysis matrix runs as independent required jobs with distinct evidence', async () => {
+  const jobs = workflowJobs(await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8'));
+  const matrix = jobs['analysis-matrix'];
+  assert.deepEqual(matrix.needs, ['decoder', 'analysis-core']);
+  assert.match(matrix.body, /timeout-minutes: 30/);
+  assert.match(matrix.body, /fail-fast: false/);
+  assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced\]/);
+  assert.match(matrix.body, /run: node scripts\/run-tests.mjs ci-analysis-matrix-\$\{\{ matrix.part \}\} --engine \$\{\{ matrix.engine \}\} --prepared/);
+  assert.match(matrix.body, /if: always\(\)[\s\S]*name: analysis-matrix-reports-\$\{\{ matrix.engine \}\}-\$\{\{ matrix.part \}\}/);
+  assert.match(matrix.body, /\.run\/test-suites\/ci-analysis-matrix-\$\{\{ matrix.part \}\}\//);
+  assert.doesNotMatch(matrix.body, /continue-on-error:/);
+  assert.match(jobs['analysis-browser'].body, /run: node scripts\/run-tests.mjs ci-analysis-ui --engine/);
+  assert.doesNotMatch(jobs['analysis-browser'].body, /--case node-bitstream-analysis|run-tests.mjs ci-analysis-browser/);
+  assert.match(jobs.playback.body, /run: node scripts\/run-tests.mjs unit/);
+  for (const id of ['node-bitstream-analysis-core', 'node-bitstream-analysis-server', 'node-bitstream-analysis-flv']) {
+    const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
+    assert.ok(manifest.cases.find(row => row.id === id && row.required && row.suites.includes('unit')), `${id}: remains required in unit`);
+  }
 });
 
 const revision = 'a'.repeat(40), identity = { version: '0.1.0', revision, dirty: false, tag: 'v0.1.0' };

@@ -6,6 +6,7 @@
 | --- | --- |
 | `manifest.json` / `manifest.mjs` | 稳定 case ID、覆盖矩阵、前置条件、命令与清单校验；不是第二份断言实现 |
 | `build.mjs` | 一次构建及显式准备凭据校验 |
+| `fixtures.mjs` | 验证 fixture；仅为清单明确允许的本地衍生输入执行有界、可取消的生成，不隐式下载基础资源 |
 | `browser-fixture.mjs` / `lifecycle.mjs` | case 独占临时数据、服务、浏览器、context，统一失败现场与逆序清理 |
 | `http-origin.mjs` | 保留不安全 origin 的普通 HTTP 测试转发；不拦截 HTTPS |
 | `browser/ui/` | 设置、菜单、主题、快捷键、反馈和标注卡片等 UI 断言 |

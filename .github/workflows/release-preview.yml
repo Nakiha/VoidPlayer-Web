@@ -240,10 +240,8 @@ jobs:
           sudo apt-get install -y ffmpeg
       - run: npx playwright install --with-deps chromium webkit
       - run: node scripts/run-tests.mjs --prepare
-      - run: node scripts/make-analysis-flv-fixtures.ts
-      - run: node scripts/run-tests.mjs --case node-bitstream-analysis-core --case node-bitstream-analysis-server --case node-bitstream-analysis-flv --prepared
       - name: Verify analysis panel on ${{ matrix.engine }}
-        run: node scripts/run-tests.mjs ci-analysis-browser --engine ${{ matrix.engine }} --prepared
+        run: node scripts/run-tests.mjs ci-analysis-ui --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -252,11 +250,68 @@ jobs:
           # 缺件时报错而不静默忽略。
           path: |
             .run/analysis-reports/${{ matrix.engine }}/
-            .run/test-suites/ci-analysis-browser/
+            .run/test-suites/ci-analysis-ui/
             .run/test-suites/selected/
             .run/analysis-lifecycle/
-            .run/browser-fixtures/bitstream-analysis-${{ matrix.engine }}/
-            .run/browser-fixtures/bitstream-analysis-matrix-*-${{ matrix.engine }}/
+            .run/browser-fixtures/bitstream-*-${{ matrix.engine }}/
+          if-no-files-found: error
+          retention-days: 14
+
+  analysis-matrix:
+    name: Verify analysis matrix (${{ matrix.engine }}, ${{ matrix.part }})
+    needs: [decoder, analysis-core]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [chromium, webkit]
+        part: [mp4, flv-legacy, flv-enhanced]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Use primary Ubuntu package archive
+        if: runner.os == 'Linux'
+        run: bash scripts/testing/prepare-ci-apt.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.15.0'
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-core
+          path: public/vendor/voidplayer-core
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-analysis-core
+          path: public/vendor/voidplayer-analysis
+      - run: npm ci
+      - name: Checkout pinned codec QA samples
+        uses: actions/checkout@v4
+        with:
+          repository: Nakiha/VoidPlayer
+          ref: 881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba
+          path: .run/qa-samples
+          sparse-checkout: resources/video
+          lfs: true
+      - run: bash scripts/sync-samples.sh .run/qa-samples/resources/video
+      - name: Install analysis fixture tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+      - run: npx playwright install --with-deps ${{ matrix.engine }}
+      - run: node scripts/run-tests.mjs --prepare
+      - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
+        run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: analysis-matrix-reports-${{ matrix.engine }}-${{ matrix.part }}
+          # B4：诊断与临时输入分离，脚本写入固定目录；失败现场保留，
+          # 缺件时报错而不静默忽略。
+          path: |
+            .run/analysis-reports/${{ matrix.engine }}/
+            .run/test-suites/ci-analysis-matrix-${{ matrix.part }}/
+            .run/browser-fixtures/bitstream-analysis-matrix-${{ matrix.part }}-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
 
@@ -705,7 +760,7 @@ jobs:
 
   release-set:
     name: Verify complete platform release set
-    needs: [native-release, playback, source-logic, analysis-logic, analysis-browser, hevc-browser, uncovered-regressions]
+    needs: [native-release, playback, source-logic, analysis-logic, analysis-browser, analysis-matrix, hevc-browser, uncovered-regressions]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:

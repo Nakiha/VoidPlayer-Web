@@ -73,7 +73,7 @@ test('local and CI select the same applicable matrix; filters cannot fake engine
 });
 test('CI uses the catalog for required suites and keeps platform/input matrices and informational gates', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
-  for (const suite of ['ci-analysis-logic','ci-analysis-browser','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','ci-perf','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
+  for (const suite of ['ci-analysis-logic','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','ci-perf','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
     assert.match(workflow, new RegExp(`scripts/run-tests\\.mjs ${suite}(?: |\\n)`));
     assert.ok(selectCases({ suite, platform: suite === 'ci-native-console' ? 'win32' : 'linux' }).selected.length);
   }
@@ -136,6 +136,42 @@ test('analysis matrix, streaming diagrams and incremental indexing are independe
   }
 });
 
+test('parallel analysis CI suites are a disjoint complete partition of the browser umbrella', () => {
+  for (const engine of ['chromium', 'webkit']) {
+    const umbrella = selectCases({suite:'ci-analysis-browser', engine}).selected;
+    const partitions = ['mp4', 'flv-legacy', 'flv-enhanced'].flatMap(part => {
+      const selected = selectCases({suite:`ci-analysis-matrix-${part}`, engine}).selected;
+      assert.equal(selected.length, 1, `${engine}/${part}: one 600s matrix case per CI job`);
+      assert.ok(selected[0].command.includes(`--matrix-part=${part}`));
+      assert.equal(selected[0].timeoutMs, 600000); assert.equal(selected[0].required, true);
+      return selected;
+    });
+    const residual = selectCases({suite:'ci-analysis-ui', engine}).selected;
+    assert.ok(residual.every(row => !row.command.includes('--matrix-only')));
+    assert.deepEqual([...partitions, ...residual].map(row => row.id).sort(), umbrella.map(row => row.id).sort());
+    assert.equal(new Set([...partitions, ...residual].map(row => row.id)).size, umbrella.length);
+  }
+});
+
+test('FLV analysis prerequisites are locally generated for unit and browser consumers', () => {
+  const fixture = testManifest.fixtures['analysis-flv'];
+  assert.equal(fixture.prepareOnDemand, true);
+  assert.deepEqual(fixture.prepare, ['node', 'scripts/make-analysis-flv-fixtures.ts']);
+  const matrix = JSON.parse(readFileSync(new URL('../../scripts/bitstream-analysis-matrix.json', import.meta.url), 'utf8'));
+  assert.deepEqual(fixture.inputs, matrix.rows.filter(row => row.container === 'mp4').map(row => `fixtures/video/${row.fixture}`));
+  for (const row of matrix.rows.filter(row => row.container === 'flv')) assert.ok(fixture.paths.includes(`fixtures/flv-analysis/${row.fixture}`));
+  for (const suffix of ['tail', 'gap', 'sequence']) assert.ok(fixture.paths.includes(`fixtures/flv-analysis/legacy-h264-${suffix}.flv`));
+  assert.deepEqual(Object.entries(testManifest.fixtures).filter(([, row]) => row.prepareOnDemand).map(([id]) => id), ['analysis-flv']);
+  for (const suite of ['unit', 'media']) assert.ok(selectCases({suite}).selected.find(row => row.id === 'node-bitstream-analysis-flv').fixtures.includes('analysis-flv'));
+  for (const part of ['mp4', 'flv-legacy', 'flv-enhanced']) for (const row of selectCases({suite:`ci-analysis-matrix-${part}`}).selected) {
+    assert.ok(row.fixtures.includes('analysis-flv'));
+  }
+  const noInputs = clone(); delete noInputs.fixtures['analysis-flv'].inputs;
+  assert.throws(() => validateManifest(noInputs), /explicit local inputs/);
+  const unsafe = clone(); unsafe.fixtures['analysis-flv'].inputs = ['../source.mp4'];
+  assert.throws(() => validateManifest(unsafe), /explicit local inputs/);
+});
+
 test('every required browser cell is selected by an actual CI suite or expanded engine/input matrix', () => {
   const workflows = ['release-preview.yml', 'identity.yml'].map(file => readFileSync(new URL('../../.github/workflows/' + file, import.meta.url), 'utf8'));
   assert.equal(validateCiBrowserCoverage(workflows), true);
@@ -145,6 +181,13 @@ test('every required browser cell is selected by an actual CI suite or expanded 
   assert.throws(() => validateCiBrowserCoverage(lostMatrix), /hevc-timeline-webkit/);
   const lostInput = workflows.map(source => source.replace('input: [local, remote]', 'input: [remote]'));
   assert.throws(() => validateCiBrowserCoverage(lostInput), /hevc-timeline-.*-local/);
+  for (const part of ['mp4', 'flv-legacy', 'flv-enhanced']) {
+    const lostPart = workflows.map(source => source.replace('part: [mp4, flv-legacy, flv-enhanced]',
+      `part: [${['mp4', 'flv-legacy', 'flv-enhanced'].filter(value => value !== part).join(', ')}]`));
+    assert.throws(() => validateCiBrowserCoverage(lostPart), /browser-bitstream-analysis/);
+  }
+  const lostAnalysisEngine = workflows.map(source => source.replace('engine: [chromium, webkit]\n        part:', 'engine: [chromium]\n        part:'));
+  assert.throws(() => validateCiBrowserCoverage(lostAnalysisEngine), /browser-bitstream-analysis.*webkit/);
 });
 test('all source-only Node checks run before media dependencies are prepared', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
