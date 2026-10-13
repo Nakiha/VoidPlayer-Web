@@ -137,9 +137,17 @@ try {
   await admin.waitForFunction(() => document.querySelector('#admin-workspace-json').value.includes('Native release round trip'));
   const [download] = await Promise.all([admin.waitForEvent('download'), admin.locator('#admin-workspace-download').click()]);
   const document = await readFile(await download.path()); assert.deepEqual(JSON.parse(gunzipSync(document)).marks, saved.marks);
-  const restored = await context.newPage(); await restored.goto(base);
+  const restored = await context.newPage(); restored.on('pageerror', e => errors.push(e.message)); await restored.goto(base);
+  // The shell input exists before main's asynchronous imports finish attaching
+  // the file handler. Wait for the same session facade as the initial page.
+  await restored.waitForFunction(() => window.voidPlayer);
+  await chooseTestGuest(restored);
   await restored.locator('#workspace-file').setInputFiles({ name: 'review.voidplayer', mimeType: 'application/gzip', buffer: document });
-  await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy);
+  try { await restored.waitForFunction(() => window.voidPlayer.getState().tracks.length === 2 && !window.voidPlayer.getState().busy); }
+  catch (error) {
+    console.error('Workspace file import diagnostics', JSON.stringify(await restored.evaluate(() => ({ state: window.voidPlayer?.getState(), dialogs: [...document.querySelectorAll('dialog[open]')].map(node => node.textContent), notices: [...document.querySelectorAll('[role=status],[role=alert]')].map(node => node.textContent) }))), errors);
+    throw error;
+  }
   await waitForWorkspace(restored, saved);
   const imported = await call(restored, 'export_workspace');
   for (const key of ['marks', 'tracks', 'positionUs', 'viewport', 'layout']) assert.deepEqual(imported[key], saved[key], key);
