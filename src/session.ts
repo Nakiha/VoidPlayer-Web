@@ -1266,7 +1266,7 @@ export class ReviewSession {
           this.positionUs + Math.round(elapsed * 1000), coverage));
         const advance = target - this.positionUs;
         metrics.waitingMs += Math.max(0, elapsed - advance / 1000);
-        if (advance > 0) lastProgress = now;
+        if (advance > 0) { lastProgress = now; metrics.firstAdvanceMs ??= now - metrics.startedMs; }
         if (now - lastProgress > 15000) {
           readers.forEach((reader, i) => {
             const [slot, track] = entries[i];
