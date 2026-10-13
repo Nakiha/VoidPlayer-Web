@@ -171,6 +171,10 @@ export async function handleStateRoutes(ctx: RouteContext, req: IncomingMessage,
       if (url.pathname === '/api/admin/status' && req.method === 'GET') {
         sendJson(res, 200, { ...admin.status(), identity, http: { activeRequests: traffic.activeRequests, connections: sockets.size, completedRequests: traffic.completedRequests, abortedRequests: traffic.abortedRequests }, recentRequests }); return true;
       }
+      if (url.pathname === '/api/admin/analysis') {
+        if (req.method === 'GET') { sendJson(res, 200, await admin.analysisSettings()); return true; }
+        if (req.method === 'PUT') { sendJson(res, 200, await admin.saveAnalysisSettings(await readAdminJson(req))); return true; }
+      }
       if (url.pathname === '/api/admin/roots') {
         if (req.method === 'GET') { sendJson(res, 200, await admin.roots()); return true; }
         if (req.method === 'PUT') { sendJson(res, 200, await admin.saveRoots(await readAdminJson(req))); return true; }

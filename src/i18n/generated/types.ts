@@ -19,6 +19,13 @@ export interface Sources {
   "activity.trackHidden": "已隐藏";
   "activity.waitingForSource": "等待添加片源";
   "admin.addDir": "添加目录";
+  "admin.analysisConcurrency": "服务端分析并发数";
+  "admin.analysisReload": "载入配置";
+  "admin.analysisResourceHelp": "设置所有用户共享的服务端分析并发数。默认 4 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。";
+  "admin.analysisResourceStatus": "当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队";
+  "admin.analysisResources": "分析资源";
+  "admin.analysisSave": "保存分析配置";
+  "admin.analysisSaved": "分析配置已保存";
   "admin.annotationMeta": "{author} · 版本 {revision} · {date}";
   "admin.anonymous": "匿名";
   "admin.backToLatest": "返回最新";
@@ -1132,6 +1139,13 @@ export interface MessageParameters {
   "activity.trackHidden": {  };
   "activity.waitingForSource": {  };
   "admin.addDir": {  };
+  "admin.analysisConcurrency": {  };
+  "admin.analysisReload": {  };
+  "admin.analysisResourceHelp": {  };
+  "admin.analysisResourceStatus": { "limit": string | number; "queued": string | number; "running": string | number };
+  "admin.analysisResources": {  };
+  "admin.analysisSave": {  };
+  "admin.analysisSaved": {  };
   "admin.annotationMeta": { "author": string | number; "date": string | number; "revision": string | number };
   "admin.anonymous": {  };
   "admin.backToLatest": {  };

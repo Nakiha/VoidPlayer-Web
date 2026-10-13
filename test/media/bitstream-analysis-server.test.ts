@@ -498,7 +498,7 @@ test('shared library index discovers GOPs before all batches arrive; cancel deta
   } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
 });
 
-test('three users can stream six distinct library jobs together; cancelling one preserves the other five', async () => {
+test('server bounds six multi-user demands, prioritizes queued pictures and reclaims cancelled work', async () => {
   const { execFileSync } = await import('node:child_process');
   const { copyFile } = await import('node:fs/promises');
   const media = await mkdtemp(join(tmpdir(), 'vp-six-streams-'));
@@ -507,6 +507,8 @@ test('three users can stream six distinct library jobs together; cancelling one 
     '-x264-params', 'scenecut=0:open-gop=0', join(media, 'stream-0.mp4')]);
   for (let n = 1; n < 6; n++) await copyFile(join(media, 'stream-0.mp4'), join(media, `stream-${n}.mp4`));
   const f = await fixture(media, 'stream-0.mp4'), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  assert.equal(scheduler.resources().concurrency, 4);
+  scheduler.setConcurrency(2);
   try {
     const entries = (await f.library.list()).entries.filter(e => e.name.startsWith('stream-'));
     assert.equal(entries.length, 6);
@@ -514,20 +516,34 @@ test('three users can stream six distinct library jobs together; cancelling one 
       mode: 'stream', sourceVersion: `${entry.id}@${entry.version}`, firstPtsUs: 0, durationUs: 2000000,
     }, `user-${Math.floor(n / 2)}`)));
     const owner = (n: number) => `user-${Math.floor(n / 2)}`;
-    // Do not acknowledge chunks: all six workers must reach their own bounded
-    // window while the first job is still running, proving actual overlap.
+    // Hold the two active workers at backpressure. Queued requests must not
+    // allocate a worker or publish anything, even when their windows allow more.
     for (let n = 0; ; n++) {
       const states = jobs.map((job, i) => scheduler.status(job.requestId, owner(i))!);
-      if (states.every(state => state.published === 32)) {
-        assert.ok(states.every(state => state.state === 'running')); break;
+      assert.ok(states.filter(state => state.state === 'running').length <= 2);
+      if (states.slice(0,2).every(state => state.published === 32)) {
+        assert.ok(states.slice(2).every(state => state.state === 'queued' && state.published === 0)); break;
       }
       assert.ok(n < 1000, JSON.stringify(states));
       assert.ok(states.every(state => ['running', 'queued'].includes(state.state)), JSON.stringify(states));
       await new Promise(r => setTimeout(r, 10));
     }
+    scheduler.setConcurrency(1);
+    assert.equal(scheduler.resources().running, 2, 'reducing capacity does not interrupt active jobs');
+    scheduler.release(jobs[5].requestId, owner(5));
+    assert.equal(scheduler.status(jobs[5].requestId, owner(5)), null, 'queued cancellation needs no worker');
+    const picture = await scheduler.submit(entries[5].id, entries[5].version!, target(entries[5]), 'inspector');
+    assert.equal(picture.state, 'queued');
+    scheduler.setConcurrency(3);
+    assert.equal((await wait(scheduler, picture.requestId, 'inspector')).state, 'complete', 'raising capacity admits the queued picture immediately');
+    scheduler.setConcurrency(2);
     scheduler.release(jobs[0].requestId, owner(0));
-    assert.ok(jobs.slice(1).every((job, i) => scheduler.status(job.requestId, owner(i + 1))!.state === 'running'));
-    await Promise.all(jobs.slice(1).map(async (job, j) => {
+    assert.equal((await wait(scheduler, picture.requestId, 'inspector')).state, 'complete', 'picture passes older queued streams');
+    scheduler.release(picture.requestId, 'inspector');
+    for (let n = 0; scheduler.resources().running > 2; n++) {
+      assert.ok(n < 1000); await new Promise(r => setTimeout(r, 10));
+    }
+    await Promise.all(jobs.slice(1,5).map(async (job, j) => {
       const i = j + 1; let cursor = 0;
       for (let n = 0; ; n++) {
         const state = await scheduler.streamStatus(job.requestId, owner(i), cursor);
@@ -538,7 +554,8 @@ test('three users can stream six distinct library jobs together; cancelling one 
           cursor = ref.cursor;
         }
         if (state.state === 'complete' && cursor === state.published) break;
-        assert.ok(n < 1000 && ['running','complete'].includes(state.state), JSON.stringify(state));
+        assert.ok(n < 1000 && ['queued','running','complete'].includes(state.state), JSON.stringify(state));
+        assert.ok(jobs.filter((job, k) => scheduler.status(job.requestId, owner(k))?.state === 'running').length <= 2);
         await new Promise(r => setTimeout(r, 10));
       }
       assert.equal(cursor, 60);

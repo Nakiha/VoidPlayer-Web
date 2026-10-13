@@ -598,3 +598,23 @@ test('session preserves source completion across eviction, multiple picture task
     if(locationDescriptor)Object.defineProperty(globalThis,'location',locationDescriptor);else Reflect.deleteProperty(globalThis,'location');
   }
 });
+
+
+test('remote queue wait does not consume decoder time and repeated polling never renews a stalled stream', async () => {
+  const { AnalysisPollingBudget } = await import('../../src/bitstream-analysis/task-pool.ts');
+  const picture = new AnalysisPollingBudget(false, 0);
+  picture.observe({state:'queued',seq:0}, 60000);
+  picture.observe({state:'running',seq:1}, 119000);
+  picture.observe({state:'running',seq:1}, 148999);
+  assert.throws(()=>picture.observe({state:'running',seq:1}, 149000), /execution stalled/);
+  const queued = new AnalysisPollingBudget(false, 0);
+  assert.throws(()=>queued.observe({state:'queued',seq:0}, 120000), /queue wait/);
+  const stream = new AnalysisPollingBudget(true, 0);
+  stream.observe({state:'queued',seq:0}, 60000);
+  stream.observe({state:'running',seq:1}, 90000);
+  stream.observe({state:'running',seq:2}, 110000);
+  stream.observe({state:'running',seq:2}, 139999);
+  assert.throws(()=>stream.observe({state:'running',seq:2}, 140000), /execution stalled/);
+  assert.throws(()=>stream.observe({state:'unknown',seq:3}, 140000), /Invalid/);
+  assert.throws(()=>stream.observe({state:'queued',seq:3}, 110001), /returned to queue/);
+});

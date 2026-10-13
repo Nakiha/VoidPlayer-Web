@@ -98,12 +98,18 @@ try {
   const portableActor = (await portableIdentityResponse.json()).actor;
   const portableCookie = portableIdentityResponse.headers.get('set-cookie').split(';')[0];
   assert.equal((await (await fetch(portableBase + '/api/admin/roots')).json()).writable, true);
+  const analysisSettings = await (await fetch(portableBase + '/api/admin/analysis')).json();
+  assert.equal(analysisSettings.concurrency, 4);
+  const savedAnalysis = await fetch(portableBase + '/api/admin/analysis', { method: 'PUT', headers: { origin: portableBase, 'x-voidplayer-action': 'admin', 'content-type': 'application/json' }, body: JSON.stringify({ revision: analysisSettings.revision, concurrency: 8 }) });
+  assert.equal(savedAnalysis.status, 200);
+  assert.equal((await (await fetch(portableBase + '/api/admin/status')).json()).analysis.concurrency, 8);
   await stop();
   assert.deepEqual(await readdir(cwd), cwdBefore, 'bare startup must not write into the invoking directory');
   const relocated = path.join(temp, 'portable moved');
   await renameReleased(folder, relocated); folder = relocated; executable = path.join(folder, manifest.executable);
   portableBase = await start(portablePort, {}, [], null);
   assert.deepEqual((await (await fetch(portableBase + '/api/health', { headers: { cookie: portableCookie } })).json()).actor, portableActor);
+  assert.equal((await (await fetch(portableBase + '/api/admin/analysis')).json()).concurrency, 8, 'resource settings survive relocation and restart');
   await stop();
   const securePort = await freePort();
   const guidePort = await freePort();

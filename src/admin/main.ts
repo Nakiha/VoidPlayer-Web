@@ -1,3 +1,4 @@
+import { installAnalysisSettings } from './analysis.ts';
 import { requestError, rootReason } from './diagnostics.ts';
 import { apiError } from '../api-error.ts';
 import { mountLocalizedShell } from '../ui/localized-shell.ts';
@@ -90,6 +91,7 @@ function renderRootStates() {
 }
 function renderStatus(value: Status) {
   status = value;
+  analysisSettings.update(value.analysis);
   const seconds = Math.floor(value.uptimeSeconds), hours = Math.floor(seconds / 3600);
   text('uptime', () => hours ? t(msg("admin.hoursMinutes", "{h} 小时 {m} 分"), { h: hours, m: Math.floor(seconds % 3600 / 60) }) : t(msg("activity.durationMinutesSeconds", "{m} 分 {s} 秒"), { m: Math.floor(seconds / 60), s: seconds % 60 }));
   text('memory', () => bytes(value.memory.rss)); text('cpu', () => `${value.cpuPercent.toFixed(1)}%`); text('connections', () => String(value.http.connections));
@@ -169,13 +171,15 @@ function renderRequests() {
     return row;
   }));
 }
+const analysisSettings = installAnalysisSettings(life.signal, api, notice);
 const caches = installCaches(life.signal, notice);
 const annotationAdmin = installAnnotationAdmin(life.signal, notice);
 const savedWorkspaces = installWorkspaceAdmin(life.signal, notice);
 const measurements = installMeasurements(life.signal, notice);
 for (const [id] of PANES()) document.querySelector<HTMLButtonElement>(`[data-pane=${id}]`)!.onclick = () => {
   history.replaceState(null, '', `#${id}`); pane = id; measurements.activate(id === 'measurements'); notice(() => ''); for (const [item] of PANES()) { $(`pane-${item}`).hidden = id !== item; document.querySelector(`[data-pane=${item}]`)!.setAttribute('aria-current', id === item ? 'page' : 'false'); }
-  if (id === 'library') void act(async () => { if (!rootConfig) await loadRoots(); await loadScan(); });
+  if (id === 'overview') void analysisSettings.load();
+  if (id === 'library') void act(async () => { if (!rootConfig || !rootDirty) await loadRoots(); await loadScan(); });
   if (id === 'caches') caches.activate();
   if (id === 'workspaces') savedWorkspaces.activate();
   if (id === 'annotations') annotationAdmin.activate();
@@ -215,12 +219,12 @@ document.querySelector<HTMLAnchorElement>('.admin-back')!.onclick = event => {
     event.preventDefault(); player.focus(); window.close();
   } catch { /* An opener on another origin is not a return destination. */ }
 };
-window.addEventListener('beforeunload', event => { if (rootDirty) { event.preventDefault(); event.returnValue = ''; } });
+window.addEventListener('beforeunload', event => { if (rootDirty || analysisSettings.dirty) { event.preventDefault(); event.returnValue = ''; } });
 const timer = setInterval(() => void poll(), 3000);
 window.addEventListener('pagehide', () => { clearInterval(timer); life.abort(); disposeTheme(); disposeLanguage(); }, { once: true });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) void poll(); }, { signal: life.signal });
 installLiveLocalization(document.body, life.signal);
-updateRootActions(); void poll();
+updateRootActions(); void analysisSettings.load(); void poll();
 void chooseInitialIdentity(life.signal).then(()=>poll()).catch(error=>notice(() => requestError(error),true));
 
 const initialPane=location.hash.slice(1);if(PANES().some(([id])=>id===initialPane))document.querySelector<HTMLButtonElement>(`[data-pane="${initialPane}"]`)?.click();

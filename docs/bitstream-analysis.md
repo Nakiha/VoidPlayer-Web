@@ -41,13 +41,13 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 路由是 `/api/media/:id/bitstream-analysis/{capabilities,requests,chunks/:id}` 和 `/api/bitstream-analysis/requests/:requestId`。写请求需要同源 Origin、专用 action header 和确切媒体版本；API 不接受文件路径。capabilities 是实现的 admission 范围，每个 picture 仍需独立验证。
 
-服务端为每个不同的已接纳任务启动独立 worker，不设运行路数上限；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
+服务端全局默认同时运行 4 个独立 worker，管理页「概览 → 分析资源」可设为 1–32 路，写回配置文件 `analysisConcurrency` 并立即生效；HTTP/HTTPS 入口共享同一调度器。调高立即补充排队任务，调低不终止已启动任务。单任务核心最大 heap 准入为 512 MiB，默认并发对应最多 2 GiB 的 WASM heap 容量；这不是进程 RSS 上限，JS 元数据、运行时和传输缓冲另占内存。超出运行路数的请求排队，排队单帧优先于区间和整片请求；不抢占正在运行的 decoder，等待索引或 consumer ACK 的任务也占用名额，只有 worker 终止完成才释放名额；每个 work 可以有多个 owner 隔离的 consumer lease，取消一个不终止另一个。GET 状态续租，30 秒失联回收；最后一个 consumer 退出时终止 worker。HTTP、播放和帧索引队列不等待分析。每个可信 picture checksum 校验后原子 rename 单独提交；区间 manifest 仅在完整完成后提交。异常/取消保留之前已完成的 chunks。重启、坏 checksum、截断、丢失 chunk、版本或 build 变化不能形成错误的完成覆盖。
 
 | 资源 | 上限 |
 | --- | --- |
-| 分析并发 | 每个浏览器窗口默认 2，设置可选 1–8；本地与媒体库任务共用窗口上限；服务端不另限运行路数 |
+| 分析并发 | 每个浏览器窗口默认 2，设置可选 1–8；本地与媒体库共用窗口上限；服务端全局最多 2 个 worker |
 | consumers / 提交队列 | 各 32 |
-| 任务 / consumer 租约 | 30 秒 |
+| 执行 / consumer 租约 | 执行无进展 30 秒 / 租约 30 秒；客户端排队另限 120 秒，不占执行预算 |
 | 区间 | 1 秒，32 picture |
 | 预滚与目标送包 | 300 packet；32 MiB payload；单包 8 MiB |
 | 元数据索引 / 逻辑读取 | 250000 sample；64 MiB（含重复逻辑 read） |
@@ -133,7 +133,7 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 
 分析并发设置位于「设置 → 色彩与解码 → 分析并发数」，按窗口持久化并跨窗口同步，默认 2 路，可选 1–8 路。本地文件与媒体库、逐帧与区间请求共用 `ReviewSession` 的任务池，超限等待，排队任务可取消且不创建 worker。调高即时补充任务，调低不打断已启动任务。每轨独立保存状态、AbortController 与任务世代，换源只取消本轨；所有轨道共用有界块缓存及图示存储，避免每轨复制缓存预算。Agent `get_bitstream_analysis_state` 接受可选 slot（省略时读取最近请求的轨道），`cancel_bitstream_analysis` 接受可选 slot（省略时取消全部轨道）。
 
-服务端不设置独立的 worker 并发上限：三个用户各提交两个不同任务时可以同时运行六个 worker；同一源版本/目标仍合并为一个 work 并按 owner 租约分别消费。原有 32 consumer/提交与每任务资源预算继续生效。并行任务的原子写入串行提交至同一个配额存储，所有任务的未消费及正在提交的结果共同受保护，不能被其他任务淘汰；下载缓冲保持两路，繁忙读请求等待空位，断连或服务关闭释放等待。
+服务端并发数独立于客户端窗口并发数，默认 4 路，可在管理页配置为 1–32 路。三个用户各提交两个不同任务且服务端设为两路时，两项执行、其余排队；取消或 lease 到期的排队项直接释放且不创建 worker。客户端轮询续租并显示排队状态，最长排队两分钟，开始执行后再计算执行/无进展预算；同一源版本/目标仍合并为一个 work 并按 owner 租约分别消费。原有 32 consumer/提交与每任务资源预算继续生效。并行任务的原子写入串行提交至同一个配额存储，所有任务的未消费及正在提交的结果共同受保护，不能被其他任务淘汰；下载缓冲保持两路，繁忙读请求等待空位，断连或服务关闭释放等待。
 
 遮罩控制条与标注工具条共用背板、内边距和控件高度，左侧把手可拖动，重叠时动画避让。彩色轨道按钮点击切换遮罩；右键或触摸长按单选，再次操作同一轨道恢复全部。
 

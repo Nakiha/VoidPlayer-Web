@@ -75,6 +75,34 @@
     "source": "添加目录",
     "translation": "Add directory"
   },
+  "admin.analysisConcurrency": {
+    "source": "服务端分析并发数",
+    "translation": "Server analysis concurrency"
+  },
+  "admin.analysisReload": {
+    "source": "载入配置",
+    "translation": "Load configuration"
+  },
+  "admin.analysisResourceHelp": {
+    "source": "设置所有用户共享的服务端分析并发数。默认 4 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。",
+    "translation": "Set server analysis concurrency shared by all users. Default: 4; range: 1–32. Higher concurrency uses more CPU and memory. Changes take effect immediately; lowering the limit lets running tasks finish."
+  },
+  "admin.analysisResourceStatus": {
+    "source": "当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队",
+    "translation": "Limit: {limit} · {running} running · {queued} queued"
+  },
+  "admin.analysisResources": {
+    "source": "分析资源",
+    "translation": "Analysis resources"
+  },
+  "admin.analysisSave": {
+    "source": "保存分析配置",
+    "translation": "Save analysis settings"
+  },
+  "admin.analysisSaved": {
+    "source": "分析配置已保存",
+    "translation": "Analysis settings saved"
+  },
   "admin.annotationMeta": {
     "source": "{author} · 版本 {revision} · {date}",
     "translation": "{author} · Revision {revision} · {date}"

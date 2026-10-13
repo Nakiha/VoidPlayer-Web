@@ -22,7 +22,7 @@
       "s": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:94",
+      "src/admin/main.ts:96",
       "src/ui/source-activity.ts:33"
     ]
   },
@@ -151,7 +151,60 @@
     "source": "添加目录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:26"
+      "src/admin/shell.ts:28"
+    ]
+  },
+  "admin.analysisConcurrency": {
+    "source": "服务端分析并发数",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:12"
+    ]
+  },
+  "admin.analysisReload": {
+    "source": "载入配置",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:16"
+    ]
+  },
+  "admin.analysisResourceHelp": {
+    "source": "设置所有用户共享的服务端分析并发数。默认 4 路，可设为 1–32 路；并发越高，CPU 和内存占用越大。保存后立即生效，调低不会中断正在运行的任务。",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:11"
+    ]
+  },
+  "admin.analysisResourceStatus": {
+    "source": "当前上限 {limit} 路 · {running} 项运行中 · {queued} 项排队",
+    "params": {
+      "limit": "string | number",
+      "queued": "string | number",
+      "running": "string | number"
+    },
+    "locations": [
+      "src/admin/analysis.ts:40"
+    ]
+  },
+  "admin.analysisResources": {
+    "source": "分析资源",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:10"
+    ]
+  },
+  "admin.analysisSave": {
+    "source": "保存分析配置",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:17"
+    ]
+  },
+  "admin.analysisSaved": {
+    "source": "分析配置已保存",
+    "params": {},
+    "locations": [
+      "src/admin/analysis.ts:37"
     ]
   },
   "admin.annotationMeta": {
@@ -169,14 +222,14 @@
     "source": "匿名",
     "params": {},
     "locations": [
-      "src/admin/main.ts:167"
+      "src/admin/main.ts:169"
     ]
   },
   "admin.backToLatest": {
     "source": "返回最新",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:38",
+      "src/admin/shell.ts:40",
       "src/admin/workspaces.ts:13"
     ]
   },
@@ -184,7 +237,7 @@
     "source": "返回播放器",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:12"
+      "src/admin/shell.ts:13"
     ]
   },
   "admin.blocks": {
@@ -230,7 +283,7 @@
     "params": {},
     "locations": [
       "src/admin/caches.ts:15",
-      "src/admin/shell.ts:7"
+      "src/admin/shell.ts:8"
     ]
   },
   "admin.cacheType": {
@@ -255,7 +308,7 @@
     "locations": [
       "src/admin/annotations.ts:13",
       "src/admin/caches.ts:20",
-      "src/admin/shell.ts:39",
+      "src/admin/shell.ts:41",
       "src/admin/workspaces.ts:17"
     ]
   },
@@ -356,7 +409,7 @@
     "source": "连接数",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:16"
+      "src/admin/shell.ts:17"
     ]
   },
   "admin.countLine": {
@@ -374,21 +427,21 @@
     "source": "CPU 以一个逻辑核为 100%。连接数包含浏览器保持的空闲连接。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:18"
+      "src/admin/shell.ts:19"
     ]
   },
   "admin.currentIdentity": {
     "source": "当前身份",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.dataDir": {
     "source": "数据目录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.dataDone": {
@@ -412,21 +465,21 @@
     "source": "删除日志",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39"
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.deleteLogConfirm": {
     "source": "从服务器删除这份日志？此操作无法撤销。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39"
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.deleteSelectedLog": {
     "source": "删除选中日志",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39"
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.deleteSelectedWorkspace": {
@@ -507,35 +560,35 @@
     "source": "填写服务器上的完整路径。移除目录不会删除原文件。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:29"
+      "src/admin/shell.ts:31"
     ]
   },
   "admin.dirNameAria": {
     "source": "目录名称",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.dirNamePh": {
     "source": "例如：拍摄素材",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.dirsSaved": {
     "source": "目录配置已保存",
     "params": {},
     "locations": [
-      "src/admin/main.ts:64"
+      "src/admin/main.ts:65"
     ]
   },
   "admin.dirsSavedNotice": {
     "source": "媒体目录已保存，后台开始校准索引。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:189"
+      "src/admin/main.ts:193"
     ]
   },
   "admin.disk": {
@@ -590,7 +643,7 @@
     "source": "下载",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39",
+      "src/admin/shell.ts:41",
       "src/admin/workspaces.ts:15"
     ]
   },
@@ -626,22 +679,22 @@
     "source": "无法读取此目录",
     "params": {},
     "locations": [
-      "src/admin/main.ts:125",
-      "src/admin/main.ts:125"
+      "src/admin/main.ts:127",
+      "src/admin/main.ts:127"
     ]
   },
   "admin.errNoEnt": {
     "source": "路径不存在",
     "params": {},
     "locations": [
-      "src/admin/main.ts:125"
+      "src/admin/main.ts:127"
     ]
   },
   "admin.errStorage": {
     "source": "网络存储已断开",
     "params": {},
     "locations": [
-      "src/admin/main.ts:125"
+      "src/admin/main.ts:127"
     ]
   },
   "admin.errorAccess": {
@@ -693,7 +746,7 @@
     "source": " · 详情保留前 1000 条",
     "params": {},
     "locations": [
-      "src/admin/main.ts:128"
+      "src/admin/main.ts:130"
     ]
   },
   "admin.errorUnavailable": {
@@ -746,7 +799,7 @@
       "size": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:159"
+      "src/admin/main.ts:161"
     ]
   },
   "admin.hoursMinutes": {
@@ -756,28 +809,28 @@
       "m": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:94"
+      "src/admin/main.ts:96"
     ]
   },
   "admin.httpRequests": {
     "source": "HTTP 请求",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.indexAfterSave": {
     "source": "保存后开始索引",
     "params": {},
     "locations": [
-      "src/admin/main.ts:87"
+      "src/admin/main.ts:88"
     ]
   },
   "admin.indexTitle": {
     "source": "媒体索引",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:19"
+      "src/admin/shell.ts:20"
     ]
   },
   "admin.itemsCount": {
@@ -817,15 +870,15 @@
     "source": "添加服务器目录，保存后即可在播放器中浏览视频。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:25"
+      "src/admin/shell.ts:27"
     ]
   },
   "admin.libraryTitle": {
     "source": "媒体库",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:7",
-      "src/admin/shell.ts:25"
+      "src/admin/shell.ts:8",
+      "src/admin/shell.ts:27"
     ]
   },
   "admin.listHeadMedia": {
@@ -868,35 +921,35 @@
     "source": "本机用户",
     "params": {},
     "locations": [
-      "src/admin/main.ts:167"
+      "src/admin/main.ts:169"
     ]
   },
   "admin.logDeleted": {
     "source": "日志已从服务器删除。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:207"
+      "src/admin/main.ts:211"
     ]
   },
   "admin.logJson": {
     "source": "日志 JSON",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39"
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.logPlaceholder": {
     "source": "日志内容会显示在这里",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:39"
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.logType": {
     "source": "日志类型",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:37"
+      "src/admin/shell.ts:39"
     ]
   },
   "admin.logUploaderLine": {
@@ -906,43 +959,43 @@
       "user": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:159"
+      "src/admin/main.ts:161"
     ]
   },
   "admin.logsDesc": {
     "source": "查看用户上传的诊断日志，或检查服务器收到的请求。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:36"
+      "src/admin/shell.ts:38"
     ]
   },
   "admin.logsDisabled": {
     "source": "未开启日志接收",
     "params": {},
     "locations": [
-      "src/admin/main.ts:144"
+      "src/admin/main.ts:146"
     ]
   },
   "admin.logsEmptyHint": {
     "source": "在播放器的“设置 → 日志”中点击“上传日志”，即可在这里查看。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:144"
+      "src/admin/main.ts:146"
     ]
   },
   "admin.logsNoDir": {
     "source": "服务器未设置日志接收目录。你仍可在播放器中下载本地日志。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:144"
+      "src/admin/main.ts:146"
     ]
   },
   "admin.logsTitle": {
     "source": "日志",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:7",
-      "src/admin/shell.ts:36"
+      "src/admin/shell.ts:8",
+      "src/admin/shell.ts:38"
     ]
   },
   "admin.marksDesc": {
@@ -958,7 +1011,7 @@
     "locations": [
       "src/admin/annotations.ts:13",
       "src/admin/annotations.ts:13",
-      "src/admin/shell.ts:7"
+      "src/admin/shell.ts:8"
     ]
   },
   "admin.measureBusyError": {
@@ -986,7 +1039,7 @@
     "source": "已完成",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40",
+      "src/admin/main.ts:41",
       "src/admin/measurement.ts:16"
     ]
   },
@@ -1029,7 +1082,7 @@
     "source": "进行中",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40",
+      "src/admin/main.ts:41",
       "src/admin/measurement.ts:16"
     ]
   },
@@ -1045,14 +1098,14 @@
     "params": {},
     "locations": [
       "src/admin/measurement.ts:21",
-      "src/admin/shell.ts:7"
+      "src/admin/shell.ts:8"
     ]
   },
   "admin.mediaDirs": {
     "source": "媒体目录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:26"
+      "src/admin/shell.ts:28"
     ]
   },
   "admin.mediaVersion": {
@@ -1080,14 +1133,14 @@
     "source": "服务管理",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:10"
+      "src/admin/shell.ts:11"
     ]
   },
   "admin.navCategory": {
     "source": "管理分类",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:10"
+      "src/admin/shell.ts:11"
     ]
   },
   "admin.netRate": {
@@ -1101,7 +1154,7 @@
     "source": "下一页错误",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:33"
+      "src/admin/shell.ts:35"
     ]
   },
   "admin.nextPage": {
@@ -1109,7 +1162,7 @@
     "params": {},
     "locations": [
       "src/admin/measurement.ts:24",
-      "src/admin/shell.ts:38",
+      "src/admin/shell.ts:40",
       "src/admin/workspaces.ts:13"
     ]
   },
@@ -1156,7 +1209,7 @@
     "source": "本次扫描没有读取错误",
     "params": {},
     "locations": [
-      "src/admin/main.ts:128"
+      "src/admin/main.ts:130"
     ]
   },
   "admin.noReadableMedia": {
@@ -1171,21 +1224,21 @@
     "source": "尚未扫描",
     "params": {},
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.noScanJob": {
     "source": "尚无扫描任务",
     "params": {},
     "locations": [
-      "src/admin/main.ts:119"
+      "src/admin/main.ts:121"
     ]
   },
   "admin.noUploadedLogs": {
     "source": "暂无上传日志",
     "params": {},
     "locations": [
-      "src/admin/main.ts:144"
+      "src/admin/main.ts:146"
     ]
   },
   "admin.noWsYet": {
@@ -1265,15 +1318,15 @@
     "source": "查看服务状态、资源占用和媒体扫描进度。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:15"
+      "src/admin/shell.ts:16"
     ]
   },
   "admin.overviewTitle": {
     "source": "概览",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:7",
-      "src/admin/shell.ts:15"
+      "src/admin/shell.ts:8",
+      "src/admin/shell.ts:16"
     ]
   },
   "admin.pageCaption": {
@@ -1290,14 +1343,14 @@
     "source": "管理 · VoidPlayer",
     "params": {},
     "locations": [
-      "src/admin/main.ts:43"
+      "src/admin/main.ts:44"
     ]
   },
   "admin.prevErrors": {
     "source": "上一页错误",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:33"
+      "src/admin/shell.ts:35"
     ]
   },
   "admin.prevPage": {
@@ -1311,14 +1364,14 @@
     "source": "进程 CPU",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:16"
+      "src/admin/shell.ts:17"
     ]
   },
   "admin.procMemory": {
     "source": "进程内存",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:16"
+      "src/admin/shell.ts:17"
     ]
   },
   "admin.rawData": {
@@ -1347,7 +1400,7 @@
     "source": "正在读取扫描状态…",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:32"
+      "src/admin/shell.ts:34"
     ]
   },
   "admin.reasonBrowser": {
@@ -1396,7 +1449,7 @@
     "source": "最近 200 条请求，服务重启后清空。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:40"
+      "src/admin/shell.ts:42"
     ]
   },
   "admin.refreshCaches": {
@@ -1410,7 +1463,7 @@
     "source": "刷新日志",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:36"
+      "src/admin/shell.ts:38"
     ]
   },
   "admin.refreshMarks": {
@@ -1424,7 +1477,7 @@
     "source": "刷新状态",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:15"
+      "src/admin/shell.ts:16"
     ]
   },
   "admin.refreshWorkspaces": {
@@ -1438,49 +1491,49 @@
     "source": "移除目录",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.removeDirTitle": {
     "source": "移出媒体库，不删除文件",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.reqDuration": {
     "source": "耗时",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:40"
+      "src/admin/shell.ts:42"
     ]
   },
   "admin.reqRequest": {
     "source": "请求",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:40"
+      "src/admin/shell.ts:42"
     ]
   },
   "admin.reqStatus": {
     "source": "状态",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:40"
+      "src/admin/shell.ts:42"
     ]
   },
   "admin.reqTimeUser": {
     "source": "时间 / 用户",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:40"
+      "src/admin/shell.ts:42"
     ]
   },
   "admin.requestRecords": {
     "source": "请求记录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:37"
+      "src/admin/shell.ts:39"
     ]
   },
   "admin.requestsSummary": {
@@ -1491,14 +1544,14 @@
       "done": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:99"
+      "src/admin/main.ts:101"
     ]
   },
   "admin.rescan": {
     "source": "重新扫描",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:31"
+      "src/admin/shell.ts:33"
     ]
   },
   "admin.resourceNote": {
@@ -1545,7 +1598,7 @@
     "source": "还原修改",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:28"
+      "src/admin/shell.ts:30"
     ]
   },
   "admin.reviewSpace": {
@@ -1566,7 +1619,7 @@
     "source": "根目录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:19"
+      "src/admin/shell.ts:20"
     ]
   },
   "admin.rootExternal": {
@@ -1580,7 +1633,7 @@
     "source": "(根目录)",
     "params": {},
     "locations": [
-      "src/admin/main.ts:124"
+      "src/admin/main.ts:126"
     ]
   },
   "admin.rootNoSource": {
@@ -1604,14 +1657,14 @@
       "o": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:100"
+      "src/admin/main.ts:102"
     ]
   },
   "admin.runtime": {
     "source": "运行环境",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.saveCopy": {
@@ -1625,7 +1678,7 @@
     "source": "保存目录",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:28"
+      "src/admin/shell.ts:30"
     ]
   },
   "admin.saveName": {
@@ -1646,7 +1699,8 @@
     "source": "正在保存…",
     "params": {},
     "locations": [
-      "src/admin/main.ts:64"
+      "src/admin/analysis.ts:34",
+      "src/admin/main.ts:65"
     ]
   },
   "admin.scanActive": {
@@ -1655,35 +1709,35 @@
       "visited": "number"
     },
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.scanDesc": {
     "source": "目录变化会自动更新；找不到新增视频时，可重新扫描。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:31"
+      "src/admin/shell.ts:33"
     ]
   },
   "admin.scanDetailOk": {
     "source": "目录离线时保留已有视频索引。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:120"
+      "src/admin/main.ts:122"
     ]
   },
   "admin.scanDetailPartial": {
     "source": "部分目录无法读取，请检查下方路径或网络挂载。",
     "params": {},
     "locations": [
-      "src/admin/main.ts:120"
+      "src/admin/main.ts:122"
     ]
   },
   "admin.scanDetailReading": {
     "source": "正在读取根目录…",
     "params": {},
     "locations": [
-      "src/admin/main.ts:120"
+      "src/admin/main.ts:122"
     ]
   },
   "admin.scanErrors": {
@@ -1693,7 +1747,7 @@
       "truncated": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:128"
+      "src/admin/main.ts:130"
     ]
   },
   "admin.scanJobSummary": {
@@ -1703,21 +1757,21 @@
       "state": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:102"
+      "src/admin/main.ts:104"
     ]
   },
   "admin.scanJobs": {
     "source": "扫描任务",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:19"
+      "src/admin/shell.ts:20"
     ]
   },
   "admin.scanMedia": {
     "source": "扫描媒体",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:31"
+      "src/admin/shell.ts:33"
     ]
   },
   "admin.scanProgressLine": {
@@ -1728,7 +1782,7 @@
       "visited": "number"
     },
     "locations": [
-      "src/admin/main.ts:119"
+      "src/admin/main.ts:121"
     ]
   },
   "admin.search": {
@@ -1797,8 +1851,8 @@
     "source": "选择一份日志查看内容",
     "params": {},
     "locations": [
-      "src/admin/main.ts:132",
-      "src/admin/shell.ts:39"
+      "src/admin/main.ts:134",
+      "src/admin/shell.ts:41"
     ]
   },
   "admin.selectToView": {
@@ -1820,35 +1874,35 @@
     "source": "服务器路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.serverPathAria": {
     "source": "服务器上的目录路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.serverPathPh": {
     "source": "填写完整目录路径",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71"
+      "src/admin/main.ts:72"
     ]
   },
   "admin.serviceDesc": {
     "source": "可信内网模式：用户名用于内容归属，不是身份认证。访问者可选择已有身份并使用管理功能；本服务不提供安全的多租户隔离。",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.serviceTitle": {
     "source": "服务",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.sharedDb": {
@@ -1904,70 +1958,70 @@
     "source": "已停止",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateError": {
     "source": "扫描出错",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateFailed": {
     "source": "失败",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateInterrupted": {
     "source": "上次任务被中断",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateOffline": {
     "source": "存储离线",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.statePartial": {
     "source": "部分路径不可读",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateReady": {
     "source": "可用",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateScanning": {
     "source": "扫描中",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stateUnscanned": {
     "source": "等待扫描",
     "params": {},
     "locations": [
-      "src/admin/main.ts:40"
+      "src/admin/main.ts:41"
     ]
   },
   "admin.stopScan": {
     "source": "停止扫描",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:31"
+      "src/admin/shell.ts:33"
     ]
   },
   "admin.storageLocation": {
@@ -1981,7 +2035,7 @@
     "source": "系统可用内存",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.testConditions": {
@@ -2044,35 +2098,36 @@
     "source": "未知",
     "params": {},
     "locations": [
-      "src/admin/main.ts:159"
+      "src/admin/main.ts:161"
     ]
   },
   "admin.unsavedChanges": {
     "source": "有未保存的修改",
     "params": {},
     "locations": [
-      "src/admin/main.ts:64"
+      "src/admin/analysis.ts:36",
+      "src/admin/main.ts:65"
     ]
   },
   "admin.uploadedLogs": {
     "source": "上传日志",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:37"
+      "src/admin/shell.ts:39"
     ]
   },
   "admin.uptime": {
     "source": "已运行",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:16"
+      "src/admin/shell.ts:17"
     ]
   },
   "admin.version": {
     "source": "版本",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:17"
+      "src/admin/shell.ts:18"
     ]
   },
   "admin.waitStable": {
@@ -2087,28 +2142,28 @@
     "source": " · 其余由周期校准覆盖",
     "params": {},
     "locations": [
-      "src/admin/main.ts:104"
+      "src/admin/main.ts:106"
     ]
   },
   "admin.watchDirs": {
     "source": "目录监听",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:19"
+      "src/admin/shell.ts:20"
     ]
   },
   "admin.watchPartial": {
     "source": " · 部分目录监听不可用",
     "params": {},
     "locations": [
-      "src/admin/main.ts:104"
+      "src/admin/main.ts:106"
     ]
   },
   "admin.watchPollOnly": {
     "source": "仅周期校准",
     "params": {},
     "locations": [
-      "src/admin/main.ts:104"
+      "src/admin/main.ts:106"
     ]
   },
   "admin.watchSummary": {
@@ -2120,7 +2175,7 @@
       "partial": "string | number"
     },
     "locations": [
-      "src/admin/main.ts:104"
+      "src/admin/main.ts:106"
     ]
   },
   "admin.workspaceCopyName": {
@@ -2200,7 +2255,7 @@
     "source": "名称",
     "params": {},
     "locations": [
-      "src/admin/main.ts:71",
+      "src/admin/main.ts:72",
       "src/admin/workspaces.ts:14"
     ]
   },
@@ -2215,7 +2270,7 @@
     "source": "工作区",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:7",
+      "src/admin/shell.ts:8",
       "src/admin/workspaces.ts:11"
     ]
   },
@@ -4472,7 +4527,7 @@
     "source": "语言 / Language",
     "params": {},
     "locations": [
-      "src/admin/shell.ts:14",
+      "src/admin/shell.ts:15",
       "src/connection-guide.ts:32",
       "src/ui/settings-shell.ts:41"
     ]
