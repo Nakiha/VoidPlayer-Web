@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { Worker as NodeWorker } from 'node:worker_threads';
+import { execFileSync } from 'node:child_process';
 import { TsPacketSource, tsDecodeIndex, tsPictureStream, parseTsPacketIndex, TS_PACKET_BUILD } from '../../src/ts-packet-source.ts';
 import { RangeReader } from '../../src/range-reader.ts';
 import { PacketTimeline } from '../../src/packet-timeline.ts';
@@ -109,6 +110,64 @@ test('a serialized complete document in a fresh runtime rebuilds instead of trus
     });
     assert.equal(result.reused,false);assert.equal(result.packets,600);assert.ok(result.bytes>=bytes.length,'untrusted persisted metadata cannot produce exact results with a prefix-only verification');
   } finally {clearTimeout(timer);await worker?.terminate();original.close();}
+});
+
+test('live sealed indexes and independent analysis clones survive bounded lookup eviction', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  const index=await original.open();
+  const expected=digest(await original.readUnit(49));
+  const copy=structuredClone(index);
+  const reader={size:bytes.length,read:async(at:number,length:number)=>bytes.subarray(at,at+length),close(){}};
+  const analysis=await openJsTsAnalysisInput(reader,version,signal(),copy);
+  original.close();
+  try {
+    const short=bytes.subarray(0,index.packets[2].pesOffset!);
+    for(let i=0;i<32;i++) {
+      const unrelated=new TsPacketSource({size:short.length,read:async(at,length)=>short.subarray(at,at+length),close(){}},`unrelated-${i}`,signal());
+      try {assert.equal((await unrelated.open()).packets.length,2);} finally {unrelated.close();}
+    }
+    assert.equal(tsDecodeIndex(index).packets.length,600,'live sealed authority is independent of clone lookup capacity');
+    assert.equal(digest(await analysis.readUnit(analysis.packets[49])),expected,'analysis owns its validated clone independently');
+    assert.ok(analysis.bytesRead<bytes.length/2,'lookup eviction does not force an analysis rescan');
+  } finally {analysis.close();}
+});
+
+test('analysis retains verified clone authority after the playback original is collected', () => {
+  const output=execFileSync(process.execPath,['--expose-gc','--input-type=module','-e',`
+    import assert from 'node:assert/strict';
+    import {readFile} from 'node:fs/promises';
+    import {setImmediate} from 'node:timers/promises';
+    import {TsPacketSource} from './src/ts-packet-source.ts';
+    import {openJsTsAnalysisInput} from './src/bitstream-analysis/js-ts-input.ts';
+    const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
+    let weak,input;
+    await(async()=>{
+      const source=new TsPacketSource({size:bytes.length,read:async(at,len)=>bytes.subarray(at,at+len),close(){}},'gc-source',new AbortController().signal);
+      const index=await source.open();weak=new WeakRef(index);
+      input=await openJsTsAnalysisInput({size:bytes.length,read:async(at,len)=>bytes.subarray(at,at+len),close(){}},'gc-source',new AbortController().signal,structuredClone(index));
+      source.close();
+    })();
+    for(let i=0;i<12;i++){await setImmediate();global.gc();}
+    assert.equal(weak.deref(),undefined,'the playback original is actually collected');
+    const packet=input.packets[49];assert.equal((await input.readUnit(packet)).length,packet.size);
+    assert.ok(input.bytesRead<bytes.length/2);input.close();console.log('verified clone remained independently usable after GC');
+  `],{encoding:'utf8',timeout:20000});
+  assert.match(output,/independently usable after GC/);
+});
+
+test('retained cache authority still rejects a truly changed first PES clock', async () => {
+  const {bytes,source}=await fixture(), original=source();
+  const index=await original.open();original.close();
+  const changed=new Uint8Array(bytes);
+  let closed=0;
+  const analysis=await openJsTsAnalysisInput({size:changed.length,read:async(at,len)=>changed.subarray(at,at+len),close(){closed++;}},version,signal(),structuredClone(index));
+  let pes=index.packets[0].pesOffset!+4;
+  if(changed[pes-1]&0x20)pes+=changed[pes]+1;
+  const pts=BigInt(index.packets[0].timing.pts!+1),prefix=changed[pes+9]&0xf0;
+  changed.set([prefix|Number((pts>>29n)&14n)|1,Number((pts>>22n)&255n),Number((pts>>14n)&254n)|1,Number((pts>>7n)&255n),Number((pts<<1n)&254n)|1],pes+9);
+  try {await assert.rejects(analysis.readUnit(analysis.packets[0]),{name:'AnalysisFailure',code:'source-changed'});assert.equal(closed,1);}
+  finally {analysis.close();}
+  assert.equal(closed,1);
 });
 
 test('JS TS refuses broken transport clocks, short reads and cancelled ownership', async () => {

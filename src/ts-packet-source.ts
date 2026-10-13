@@ -41,10 +41,12 @@ export interface TsPacketIndex {
 // A document's own flags/checksum cannot prove AU completeness. Only this
 // module's complete source enumeration can mint a reusable metadata proof.
 // Weak references retain no index storage and the registry is bounded.
+const sealedIndexes = new WeakSet<TsPacketIndex>();
 const verifiedIndexes: WeakRef<TsPacketIndex>[] = [];
 function sealCompleteIndex(index: TsPacketIndex): TsPacketIndex {
   for (const packet of index.packets) { Object.freeze(packet.timing.timebase); Object.freeze(packet.timing); Object.freeze(packet); }
   Object.freeze(index.configuration); Object.freeze(index.packets); Object.freeze(index.completeness); Object.freeze(index);
+  sealedIndexes.add(index);
   verifiedIndexes.push(new WeakRef(index));
   if (verifiedIndexes.length > 32) verifiedIndexes.shift();
   return index;
@@ -54,6 +56,7 @@ function sealCompleteIndex(index: TsPacketIndex): TsPacketIndex {
 export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
   if (index.schema !== 2 || index.kind !== 'js-ts-packets' || index.codec !== 'h264' || index.streamKey !== 'video:0'
     || index.completeness?.state !== 'complete' || index.completeness.packets !== index.packets.length) return false;
+  if (sealedIndexes.has(index)) return true;
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
@@ -70,6 +73,14 @@ export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
         && p.timing.timebase[1] === candidate.timing.timebase[1];
     });
   });
+}
+
+/** Retain a previously proven clone independently of its original owner. */
+export function retainVerifiedTsIndex(index: TsPacketIndex): TsPacketIndex | undefined {
+  return isVerifiedCompleteTsIndex(index) ? sealCompleteIndex(index) : undefined;
+}
+export class TsSourceChangedError extends MediaOpenError {
+  constructor() { super('input', 'JS TS: source changed after complete index verification'); }
 }
 
 function fail(message: string): never { throw new MediaOpenError('container', `JS TS: ${message}`); }
@@ -191,9 +202,10 @@ export class TsPacketSource {
       if (configuration.length > 4096) fail('configuration budget exceeded');
       if (!this.validatePicture(first.data, configuration).closedRandomAccess) fail('first picture must prove IDR');
       const restored = parseTsPacketIndex(cached, this.sourceVersion, this.reader.size);
-      if (restored && isVerifiedCompleteTsIndex(restored) && restored.pid === track.id && equal(Uint8Array.from(restored.configuration), configuration)
-        && restored.packets[0].locator === first.sequenceNumber && restored.packets[0].size === first.byteLength
-        && restored.packets[0].timestamp === first.timestamp) {
+      if (restored && isVerifiedCompleteTsIndex(restored)) {
+        if (restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
+          || restored.packets[0].locator !== first.sequenceNumber || restored.packets[0].size !== first.byteLength
+          || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
       }
       const clocks = await pesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal);

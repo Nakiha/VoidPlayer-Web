@@ -1,4 +1,4 @@
-import { TsPacketSource, tsPictureStream, parseTsPacketIndex, isVerifiedCompleteTsIndex } from '../ts-packet-source.ts';
+import { TsPacketSource, tsPictureStream, parseTsPacketIndex, retainVerifiedTsIndex, TsSourceChangedError } from '../ts-packet-source.ts';
 import { inspectPacketPicture } from '../packet-picture.ts';
 import { pictureId, BUDGET } from './contract.ts';
 import type { SourcePictureKey } from './contract.ts';
@@ -11,7 +11,7 @@ export async function openJsTsAnalysisInput(reader: AnalysisReader, sourceVersio
   try {
     signal.throwIfAborted();
     const restored = parseTsPacketIndex(cached, sourceVersion, reader.size);
-    const reusable = restored && isVerifiedCompleteTsIndex(restored) ? restored : undefined;
+    const reusable = restored ? retainVerifiedTsIndex(restored) : undefined;
     const index = reusable ?? await source.open();
     signal.throwIfAborted();
     let opened = !reusable;
@@ -27,9 +27,9 @@ export async function openJsTsAnalysisInput(reader: AnalysisReader, sourceVersio
     };
     const readUnit = async (packet: AnalysisPacket) => {
       if (!opened) await (opening ??= source.open(index).then(() => {
-        if (!source.indexReused) throw new AnalysisFailure('source-changed', 'Cached JS packet index no longer matches source');
+        if (!source.indexReused) {source.close();throw new AnalysisFailure('source-changed', 'Cached JS packet index no longer matches source');}
         opened = true;
-      }));
+      }).catch(error=>{source.close();if(error instanceof TsSourceChangedError)throw new AnalysisFailure('source-changed',error.message);throw error;}));
       return source.readUnit(packet.au);
     };
     return { rawTiming: true, codec: 'h264', configurations: [configuration], packets, sealedEnd: packets.length,
