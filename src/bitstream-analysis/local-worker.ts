@@ -3,6 +3,7 @@ import { validateAnalysisCore } from './core-abi.ts';
 import { RangeReader } from "../range-reader.ts";
 import { analyzePicture, analyzeRange, analyzeStream } from "./runner.ts";
 import { failureInfo } from "./failure.ts";
+let snapshotReply: ((value: import("../flv-index-cache.ts").FlvIndexDocument) => void) | undefined;
 let cacheReply: ((value: import('./contract.ts').AnalysisResult | null) => void) | undefined;
 let acknowledgement: (() => void) | undefined;
 let indexReply: ((index: import('./stream.ts').AnalysisIndexFrontier) => void) | undefined;
@@ -11,6 +12,7 @@ const scope = globalThis as unknown as {
   postMessage: (data: unknown) => void;
 };
 scope.onmessage = async ({ data }) => {
+  if (data.event === 'snapshot') { const reply = snapshotReply; snapshotReply = undefined; reply?.(data.index); return; }
   if (data.event === 'cache') { const reply = cacheReply; cacheReply = undefined; reply?.(data.result ?? null); return; }
   if (data.event === 'index') { const reply = indexReply; indexReply = undefined; reply?.(data.index); return; }
   if (data.ok) { const ack = acknowledgement; acknowledgement = undefined; ack?.(); return; }
@@ -31,12 +33,17 @@ scope.onmessage = async ({ data }) => {
       validateAnalysisCore(core);
       return core;
     };
+    const makeReader = () => Object.assign(new RangeReader({ file: data.file }), data.externalSnapshot ? {
+      flvIndex: () => new Promise<import('../flv-index-cache.ts').FlvIndexDocument>(resolve => {
+        snapshotReply = resolve; scope.postMessage({ event: 'snapshot' });
+      }),
+    } : {});
     if (data.target.mode === 'stream' || 'startUs' in data.target) {
       const publish = async (result: import('./contract.ts').AnalysisResult) => {
         scope.postMessage({ event: 'chunk', result });
         await new Promise<void>(resolve => { acknowledgement = resolve; });
       };
-      const reader = new RangeReader({ file: data.file });
+      const reader = makeReader();
       const signal = new AbortController().signal;
       const buildId = manifest.buildId ?? manifest.revision;
       if (data.target.mode === 'stream')
@@ -56,7 +63,7 @@ scope.onmessage = async ({ data }) => {
       return;
     }
     const result = await analyzePicture(
-      new RangeReader({ file: data.file }),
+      makeReader(),
       data.target,
       await loadCore(),
       (manifest.buildId ?? manifest.revision),

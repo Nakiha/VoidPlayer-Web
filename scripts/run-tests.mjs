@@ -1,12 +1,13 @@
-import { access, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repositoryRoot, testManifest, validateManifest, selectCases } from './testing/manifest.mjs';
 import { prepareBuild } from './testing/build.mjs';
+import { createFixturePrerequisites } from './testing/fixtures.mjs';
 import { runBrowserRegressions } from './run-browser-regressions.mjs';
 
-export async function runTestSuite(selection, { root = repositoryRoot, directory, prepared = false, output = process.stdout, signal, build = prepareBuild } = {}) {
+export async function runTestSuite(selection, { root = repositoryRoot, directory, prepared = false, output = process.stdout, signal, build = prepareBuild, fixtures = testManifest.fixtures } = {}) {
   if (!selection.selected.length) throw new Error('No applicable cases selected; inspect --list and exclusions');
   directory = path.resolve(directory ?? path.join(root, '.run/test-suites/selected'));
   await mkdir(directory, { recursive: true });
@@ -17,6 +18,7 @@ export async function runTestSuite(selection, { root = repositoryRoot, directory
     catch (error) { buildFailure = error; }
   }
   const checkedTools = new Map();
+  const checkFixture = createFixturePrerequisites({ fixtures, root, directory, output, signal });
   return runBrowserRegressions(selection.selected.map(row => ({ ...row, name: row.id })), {
     cwd: root, directory, signal, output,
     beforeCase: async row => {
@@ -32,10 +34,7 @@ export async function runTestSuite(selection, { root = repositoryRoot, directory
         }
         if (!checkedTools.get(executable)) throw new Error(`Missing external tool: ${executable}`);
       }
-      for (const fixture of row.fixtures) for (const file of testManifest.fixtures[fixture].paths) {
-        try { await access(path.join(root, file)); }
-        catch { throw new Error(`Missing fixture ${fixture}: ${file}; prepare with ${testManifest.fixtures[fixture].prepare?.join(' ') ?? 'the release workflow'}`); }
-      }
+      for (const fixture of row.fixtures) await checkFixture(fixture);
     },
   });
 }

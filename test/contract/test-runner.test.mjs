@@ -48,6 +48,63 @@ test('suite builds once for multiple cases, and a broken build does not hide sou
   const failed=await runTestSuite({selected,excluded:[]},{directory,output:silent,build:async()=>{throw Error('build failed');}});
   assert.deepEqual(failed.results.map(row=>row.status),['failed','failed','passed']);
 }));
+test('selected derived fixtures prepare once, verify every output, and never run base downloads', async () => temporary(async root => {
+  await writeFile(path.join(root, 'source.mp4'), 'source');
+  await writeFile(path.join(root, 'first.flv'), 'already present');
+  const fixtures = {
+    derived: { paths: ['first.flv', 'last.flv'], inputs: ['source.mp4'], prepareOnDemand: true,
+      prepare: ['node', '-e', 'const fs=require("node:fs");fs.appendFileSync("prepares","1");fs.writeFileSync("last.flv","generated");'] },
+    base: { paths: ['missing-base'], prepare: ['node', '-e', 'require("node:fs").writeFileSync("downloaded","bad")'] },
+  };
+  const selected = [entry('derived-a', 'process.exit(0)', {fixtures:['derived']}), entry('derived-b', 'process.exit(0)', {fixtures:['derived']})];
+  const options = { root, directory: path.join(root, 'reports'), output: silent, fixtures };
+  assert.equal((await runTestSuite({selected, excluded:[]}, options)).passed, true);
+  assert.equal(await readFile(path.join(root, 'prepares'), 'utf8'), '1', 'partial fixtures are regenerated only once');
+  assert.equal((await runTestSuite({selected, excluded:[]}, options)).passed, true);
+  assert.equal(await readFile(path.join(root, 'prepares'), 'utf8'), '1', 'complete fixtures need no preparation');
+  await assert.rejects(readFile(path.join(root, 'downloaded')), {code:'ENOENT'});
+  const failed = await runTestSuite({selected:[entry('base', '', {fixtures:['base']})], excluded:[]}, options);
+  assert.equal(failed.passed, false); assert.match(failed.results[0].error, /Missing fixture base/);
+  await assert.rejects(readFile(path.join(root, 'downloaded')), {code:'ENOENT'}, 'base preparation remains explicit');
+}));
+test('missing derived inputs and incomplete successful generators fail without hiding independent cases', async () => temporary(async root => {
+  const fixture = { paths:['output.flv'], inputs:['source.mp4'], prepareOnDemand:true,
+    prepare:['node', '-e', 'require("node:fs").appendFileSync("prepares","1")'] };
+  const options = {root, directory:path.join(root, 'reports'), output:silent, fixtures:{derived:fixture}};
+  const selected = [entry('dependent-a', '', {fixtures:['derived']}), entry('dependent-b', '', {fixtures:['derived']}), entry('independent', '')];
+  const missing = await runTestSuite({selected, excluded:[]}, options);
+  assert.deepEqual(missing.results.map(row => row.status), ['failed', 'failed', 'passed']);
+  assert.match(missing.results[0].error, /Missing input for fixture derived: source.mp4/);
+  await assert.rejects(readFile(path.join(root, 'prepares')), {code:'ENOENT'});
+  await writeFile(path.join(root, 'source.mp4'), 'source');
+  const incomplete = await runTestSuite({selected, excluded:[]}, options);
+  assert.deepEqual(incomplete.results.map(row => row.status), ['failed', 'failed', 'passed']);
+  assert.match(incomplete.results[0].error, /Missing fixture derived: output.flv/);
+  assert.equal(await readFile(path.join(root, 'prepares'), 'utf8'), '1');
+  fixture.prepare = ['node', '-e', 'require("node:fs").appendFileSync("prepares","2");process.exit(7)'];
+  const failed = await runTestSuite({selected, excluded:[]}, options);
+  assert.deepEqual(failed.results.map(row => row.status), ['failed', 'failed', 'passed']);
+  assert.match(failed.results[0].error, /Fixture derived preparation failed/);
+  assert.equal(await readFile(path.join(root, 'prepares'), 'utf8'), '12');
+  const evidence = JSON.parse(await readFile(path.join(root, 'reports/fixtures/derived/results.json'), 'utf8'));
+  assert.equal(evidence.results[0].exitCode, 7);
+}));
+test('cancellation terminates an active fixture generator and preserves its report', async () => temporary(async root => {
+  await writeFile(path.join(root, 'source.mp4'), 'source');
+  const controller = new AbortController();
+  const fixtures = {derived:{paths:['output.flv'], inputs:['source.mp4'], prepareOnDemand:true,
+    prepare:['node', '-e', 'require("node:fs").writeFileSync("pid",String(process.pid));console.log("fixture-started");setInterval(()=>{},1000)']}};
+  const report = await runTestSuite({selected:[entry('dependent', '', {fixtures:['derived']})], excluded:[]}, {
+    root, directory:path.join(root, 'reports'), fixtures, signal:controller.signal,
+    output:{write(chunk) {if (String(chunk).includes('fixture-started')) controller.abort();}},
+  });
+  assert.equal(report.passed, false);
+  const pid = Number(await readFile(path.join(root, 'pid'), 'utf8'));
+  assert.throws(() => process.kill(pid, 0));
+  const evidence = JSON.parse(await readFile(path.join(root, 'reports/fixtures/derived/results.json'), 'utf8'));
+  assert.equal(evidence.passed, false); assert.equal(evidence.results[0].status, 'cancelled');
+  assert.equal(evidence.results[0].timeoutMs, 300000, 'fixture preparation has its own bounded watchdog');
+}));
 test('verified receipt reuses exactly one build and rejects changed source/configuration/output', async () => temporary(async root => {
   await mkdir(path.join(root,'src'));await writeFile(path.join(root,'src/main.ts'),'original');
   const marker=path.join(root,'builds');

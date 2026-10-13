@@ -17,7 +17,7 @@ UI 和 Agent 使用 `ReviewSession` 的相同入口：`getPresentedFrame`、`req
 
 ## 支持矩阵与身份
 
-可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和现有 browser / reference software 播放路径。H.264、HEVC、VVC 的真实 MP4 均有成功正向样本。WebCodecs 可用性由平台决定，实际使用的 decoder 写入测试报告；VVC 走 packet WASM。FLV、TS、MKV、fragmented MP4 和无 packet 身份的容器解码不在首批范围。
+可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和现有 browser / reference software 播放路径。H.264、HEVC、VVC 的真实 MP4 均有成功正向样本。WebCodecs 可用性由平台决定，实际使用的 decoder 写入测试报告；VVC 走 packet WASM。本轮新增有限 FLV 文件（AVC、legacy/private、Enhanced framing），同样逐项运行本地与媒体库组合。TS、MKV、fragmented MP4 和无 packet 身份的容器解码仍不在范围内。
 
 持久 key 是 source version、video stream、description 配置段、稳定 sample/AU ordinal、picture 0、layer 0、frame。本地 File 使用会话中的随机来源 ID，不按文件名、长度或 mtime 拼身份；媒体库使用 `id@version`。配置、AU 索引、源时间戳缺失或重复以及不唯一的 packet/picture 映射必须拒绝。
 
@@ -33,7 +33,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 旧批量 writer 已被独立 streaming collector 替换；不调用旧 finalize_frame_summaries / finish_vachunk，不全局重排、重算或在文件结尾重赋 coded_order。每个 picture 的 records 在 codec hook 中 collecting，只有成功 avcodec_receive_frame 才 sealed，排序一次后 take；take 释放分析 records，不释放 decoder 的参考帧。已交付源 AU、坐标、QP 和顺序不会回写。没有继承旧 COMPLETE/EXACT 位。
 
-定位器只读取有界 MP4 元数据和必要 NAL 首部。闭合 IDR 的语法检查与容器 key 标记同时成立才能起步；CRA、recovery 和未知 open-GOP 不按安全起点处理。每个区间保留一个 decoder，逐 picture 取结果并等待 consumer ACK 后才继续。找不到预算内的安全起点、跨配置区间或块覆盖不完整会明确失败/降级，播放不受影响。
+定位器只读取有界容器元数据和必要 NAL 首部，FLV 复用现有共享扫描器。闭合 IDR 的语法检查与容器 key 标记同时成立才能起步；CRA、recovery 和未知 open-GOP 不按安全起点处理。每个区间保留一个 decoder，逐 picture 取结果并等待 consumer ACK 后才继续。找不到预算内的安全起点或块覆盖不完整会明确失败/降级；跨配置区间在各自经过验证的安全锚重建参考状态，播放不受影响。
 
 本地 File 由独立 browser worker / RangeReader 分块读，文件不上传。媒体库由独立服务端 worker 本地读盘；浏览器只取 JSON chunks，不加载分析 WASM，也不会在服务端失败时隐式下载远程文件分析。二者使用相同输入适配、核心和协议。Worker 终止是同步 WASM 取消的硬兜底；正常循环在每次 feed/step/take 前检查取消。
 
@@ -146,3 +146,7 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 遮罩控制条与标注工具条共用背板、内边距和控件高度，左侧把手可拖动，重叠时动画避让。彩色轨道按钮点击切换遮罩；右键或触摸长按单选，再次操作同一轨道恢复全部。
 
 全流完成记录由会话按轨道及片源世代独立保存，`completedStream` 含 sourceVersion 和已确认的覆盖进度；当前任务的 `state/stream` 不代表历史全流覆盖。单帧补算、失败或取消不抹掉完成记录，换源不得继承旧世代。遮罩在暂停且视图事务结束后为连续的缓存缺失帧补算。每个 UI 自动尝试一次；错误、取消和资源限制时，轨道旁显示明确的「重新分析」按钮。确定不支持的能力不自动循环重试，也不显示反复启动同一能力的按钮。源码测试及实际控件浏览器回归覆盖全流完成、连续两个缺失帧、失败后手动恢复与换源隔离。
+
+## 多容器输入扩展
+
+普通 MP4 与有限 FLV 文件通过统一压缩单元接口进入相同分析 runner。首轮 FLV 的 framing、原始时间与播放身份、索引前缀及排除项见 [Issue #59 状态](issue-59-status.md)。后续 fMP4/TS/MKV 尚未支持。

@@ -128,7 +128,7 @@ export class BitstreamAnalysisService {
       const result = source.info.source
         ? await this.remote(source, target, controller.signal)
         : source.bitstreamFile
-          ? await this.local(source.bitstreamFile, target, controller.signal)
+          ? await this.local(source.bitstreamFile, target, controller.signal, source.getBitstreamFlvIndex?.bind(source))
           : await Promise.reject(
               new Error("This source has no local File reference"),
             );
@@ -221,6 +221,7 @@ export class BitstreamAnalysisService {
           target,
           controller.signal,
           consume,
+          undefined, undefined, source.getBitstreamFlvIndex?.bind(source),
         );
       else throw new Error("No local analysis source");
       controller.signal.throwIfAborted();
@@ -280,8 +281,8 @@ export class BitstreamAnalysisService {
       progress = { ...progress, pictures: consumed, gopStartAu: result.gop.startAu }; update();
     };
     const onProgress = (next: StreamProgress) => {
-      if (!next || typeof next.indexComplete !== 'boolean' || (next.waitingForIndex !== undefined && typeof next.waitingForIndex !== 'boolean') || ![next.pictures, next.totalPictures, next.checkedUs, next.totalUs].every(Number.isSafeInteger) ||
-          next.totalPictures < 0 || next.totalPictures > 250000 || next.pictures < 0 || next.pictures > next.totalPictures ||
+      if (!next || typeof next.indexComplete !== 'boolean' || (next.waitingForIndex !== undefined && typeof next.waitingForIndex !== 'boolean') || ![next.pictures, next.checkedUs, next.totalUs].every(Number.isSafeInteger) || (next.totalPictures !== null && !Number.isSafeInteger(next.totalPictures)) ||
+          (next.totalPictures !== null && (next.totalPictures < 0 || next.totalPictures > 250000 || next.pictures > next.totalPictures)) || next.pictures < 0 || next.pictures > 250000 ||
           next.totalUs <= 0 || next.checkedUs < 0 || next.checkedUs > next.totalUs)
         throw new Error('Invalid stream progress');
       // Remote producer may be ahead; displayed coverage counts consumed chunks.
@@ -314,6 +315,7 @@ export class BitstreamAnalysisService {
     consume: (result: AnalysisResult) => void,
     onProgress?: (progress: StreamProgress) => void,
     frontier?: () => Promise<import('./stream.ts').AnalysisIndexFrontier>,
+    snapshot?: () => Promise<import("../flv-index-cache.ts").FlvIndexDocument>,
   ): Promise<void> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
@@ -348,7 +350,9 @@ export class BitstreamAnalysisService {
           clearTimeout(timer);
           timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
         }
-        if (data.event === 'cache') {
+        if (data.event === 'snapshot') {
+          void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }, done);
+        } else if (data.event === 'cache') {
           try {
             worker.postMessage({ event: 'cache', result: data.picture?.sourceVersion === target.sourceVersion ? this.cache.get(data.picture) : null });
           } catch (error) { done(error); }
@@ -367,7 +371,7 @@ export class BitstreamAnalysisService {
           }
         } else data.ok ? done() : done(restoreFailure(data.reason, data.error));
       };
-      worker.postMessage({ file, target, externalIndex: !!frontier, base: location.href });
+      worker.postMessage({ file, target, externalIndex: !!frontier, externalSnapshot: !!snapshot, base: location.href });
     });
   }
   private async remoteRange(
@@ -471,13 +475,16 @@ export class BitstreamAnalysisService {
     file: Blob,
     target: AnalysisTarget,
     signal: AbortSignal,
+    snapshot?: () => Promise<import("../flv-index-cache.ts").FlvIndexDocument>,
   ): Promise<AnalysisResult> {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./local-worker.ts", import.meta.url), {
       type: "module",
     });
     return new Promise((resolve, reject) => {
+      let settled = false;
       const done = (error?: unknown, result?: AnalysisResult) => {
+        if (settled) return; settled = true;
         clearTimeout(timer);
         signal.removeEventListener("abort", abort);
         worker.terminate();
@@ -499,11 +506,15 @@ export class BitstreamAnalysisService {
       );
       signal.addEventListener("abort", abort, { once: true });
       worker.onerror = (e) => done(new Error(e.message));
-      worker.onmessage = ({ data }) =>
+      worker.onmessage = ({ data }) => {
+        if (data.event === 'snapshot') {
+          void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }, done); return;
+        }
         data.ok
           ? done(undefined, data.result)
           : done(restoreFailure(data.reason, data.error));
-      worker.postMessage({ file, target, base: location.href });
+      };
+      worker.postMessage({ file, target, externalSnapshot: !!snapshot, base: location.href });
     });
   }
   private async remote(

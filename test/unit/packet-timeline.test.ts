@@ -133,3 +133,30 @@ test('a recovery boundary drains the prefix, resets even without a config change
   assert.ok(closed.includes(20000));
  }finally{timeline.close();}
 });
+
+test('index growth during awaited send invalidates a duplicate PTS pending identity', async () => {
+  const p = { pts: 100, dts: 0, key: true, offset: 13, size: 3 };
+  const prefix = buildFlvIndex('h264', new Uint8Array(5), [p]);
+  const ready: FlvFrame[] = []; let sending!: () => void, release!: () => void;
+  const sent = new Promise<void>(resolve => { sending = resolve; });
+  const decoder: PacketDecoder = { kind: 'webcodecs', reset() {}, close() {}, async drain() {}, receive() { return ready.shift() ?? null; },
+    async send(_bytes, packet) { sending(); await new Promise<void>(resolve => { release = resolve; });
+      ready.push({ pts: packet.pts, width: 2, height: 2, description: rgbaDescription(2, 2), pixels: new ArrayBuffer(16) }); } };
+  const timeline = new PacketTimeline(prefix, decoder, async () => new Uint8Array([2, 0x65, 0x80]), true);
+  const result = timeline.at(100); await sent;
+  timeline.appendIndex(buildFlvIndex('h264', prefix.description, [p, { ...p, offset: 32, dts: 10 }])); release();
+  assert.equal((await result).packetPicture, undefined);
+  timeline.close();
+});
+
+test('uncompleted FLV identity cannot escape as an already presented exact token', async () => {
+  const p = { pts: 100, dts: 0, key: true, offset: 13, size: 3 };
+  const ready: FlvFrame[] = []; let complete = false;
+  const decoder: PacketDecoder = { kind: 'webcodecs', reset() {}, close() {}, async drain() {}, receive() { return ready.shift() ?? null; },
+    async send(_bytes, packet) { ready.push({ pts: packet.pts, width: 2, height: 2, description: rgbaDescription(2, 2), pixels: new ArrayBuffer(16) }); } };
+  const timeline = new PacketTimeline(buildFlvIndex('h264', new Uint8Array(5), [p]), decoder, async () => new Uint8Array([2, 0x65, 0x80]), true, () => complete);
+  assert.equal((await timeline.at(100)).packetPicture, undefined);
+  complete = true;
+  assert.deepEqual((await timeline.at(100)).packetPicture, { au: 0, configuration: 0, stream: 'video' });
+  timeline.close();
+});

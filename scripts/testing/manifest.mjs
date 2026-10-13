@@ -10,6 +10,16 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
   const failures = [], ids = new Set(), registered = new Set();
   const fail = message => failures.push(message);
   if (new Set(manifest.suites).size !== manifest.suites.length) fail('Duplicate suite');
+  for (const [name, fixture] of Object.entries(manifest.fixtures)) {
+    if (!/^[a-z0-9][a-z0-9-]*$/.test(name)) fail(`Unsafe fixture name: ${name}`);
+    const safePath = file => typeof file === 'string' && !path.isAbsolute(file) && !file.split(/[\\/]/).includes('..');
+    if (!fixture.paths?.length || !fixture.paths.every(safePath)) fail(`${name}: invalid fixture paths`);
+    if (fixture.prepareOnDemand !== undefined && typeof fixture.prepareOnDemand !== 'boolean') fail(`${name}: invalid prepareOnDemand flag`);
+    if (fixture.prepareOnDemand && (!fixture.inputs?.length || !fixture.inputs.every(safePath)
+      || !Array.isArray(fixture.prepare) || fixture.prepare.length < 2 || fixture.prepare.some(arg => typeof arg !== 'string'))) {
+      fail(`${name}: on-demand fixture needs explicit local inputs and a preparation command`);
+    }
+  }
   for (const row of manifest.cases) {
     if (!/^(scripts|test)\//.test(row.script) || row.script.split('/').includes('..')) fail(`${row.id}: unsafe script path`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(row.id) || ids.has(row.id)) fail(`Invalid or duplicate ID: ${row.id}`);

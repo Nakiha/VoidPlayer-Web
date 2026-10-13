@@ -67,11 +67,11 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
   return invalid('未找到对应的 VVC 视频轨道。');
 }
 
-export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
+export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; decodeTimes?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; }
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
-export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000): Promise<Mp4Configurations> {
+export async function readMp4Configurations(reader: RangeReader, trackId: number, maxSamples = 2_000_000, rawTiming = false): Promise<Mp4Configurations> {
   const root=await boxes(reader,0,reader.size,true),moov=root.find(b=>b.type==='moov');
   if(!moov)return invalid('缺少 moov。');
   for(const track of (await boxes(reader,moov.data,moov.end)).filter(b=>b.type==='trak')){
@@ -164,8 +164,25 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       let at=0;for(let i=0;i<cv.getUint32(4);i++){const n=cv.getUint32(8+i*8),offset=data[0]===1?cv.getInt32(12+i*8):cv.getUint32(12+i*8);if(at+n>samples)return invalid('CTTS 样本数量越界。');compositionOffsets.fill(offset,at,at+n);at+=n;}
       if(at!==samples)return invalid('CTTS 样本数量不一致。');
     }
+    // Preserve source media ticks separately from edit-list/POC presentation
+    // time. Older synthetic inputs without STTS report unknown raw timing.
+    const stts = nested.find(b => b.type === 'stts');
+    let decodeTimes: number[] | undefined;
+    if (rawTiming && stts) {
+      if (stts.end - stts.data > 24 * 1024 * 1024) throw new MediaOpenError('resource', 'MP4 STTS 超过上限。');
+      const data = await reader.read(stts.data, stts.end - stts.data), tv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      if (data.length < 8 || data[0] !== 0 || 8 + tv.getUint32(4) * 8 !== data.length) return invalid('STTS 数量无效。');
+      decodeTimes = []; let ticks = 0;
+      for (let i = 0; i < tv.getUint32(4); i++) {
+        const count = tv.getUint32(8 + i * 8), delta = tv.getUint32(12 + i * 8);
+        if (!count || decodeTimes.length + count > samples) return invalid('STTS 样本数量越界。');
+        for (let n = 0; n < count; n++) { decodeTimes.push(ticks); ticks += delta; }
+        if (!Number.isSafeInteger(ticks)) return invalid('STTS 时间溢出。');
+      }
+      if (decodeTimes.length !== samples) return invalid('STTS 样本数量不一致。');
+    }
     const indexIntegrity = availableSamples < samples ? 'prefix' : recovered || ignoredTail ? 'recovered' : 'complete';
-    return {descriptions,sampleConfigurations,compositionOffsets,sampleOffsets,sampleSizes,availableSamples,indexIntegrity,
+    return {descriptions,sampleConfigurations,compositionOffsets,decodeTimes,sampleOffsets,sampleSizes,availableSamples,indexIntegrity,
       ...(indexIntegrity === 'prefix' ? { indexTruncatedAt: sampleOffsets[availableSamples] } : {}),
       ...(ignoredTail ? {warning: '文件末尾存在异常数据；已验证并保留完整的视频样本。'} : recovered ? {warning: availableSamples < samples
       ? `文件尾部缺失：仅播放前 ${availableSamples} 个完整视频包（声明 ${samples} 个）；时长按有效前缀计算。`

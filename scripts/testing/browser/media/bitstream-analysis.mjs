@@ -3,6 +3,7 @@ import { readFile, writeFile, mkdir, copyFile } from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { withBrowserFixture } from "../../browser-fixture.mjs";
+import { selectAnalysisMatrixRows } from "../../analysis-matrix.mjs";
 import { repositoryRoot } from "../../manifest.mjs";
 
 async function selectDiagrams(page, choice) {
@@ -34,13 +35,17 @@ const layoutOnly = overlayOnly || process.argv.includes('--layout-only');
 const diagramsOnly = process.argv.includes('--diagrams-only');
 const incrementalOnly = process.argv.includes('--incremental-only');
 const matrixOnly = process.argv.includes('--matrix-only');
+const matrixPart = process.argv.find(arg => arg.startsWith('--matrix-part='))?.slice('--matrix-part='.length);
+const matrixRows = selectAnalysisMatrixRows(matrix.rows, process.argv);
+assert.ok(!matrixPart || matrixOnly, 'Matrix partition requires --matrix-only');
+const matrixCase = `bitstream-analysis-matrix${matrixPart ? '-' + matrixPart : ''}`;
 assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
 let gatedId, releaseIndexGate = true, heldBatches = 0;
 const limitsDir = path.join(
   repositoryRoot,
   ".run",
   "analysis-limit-fixtures",
-  layoutOnly ? `${engine}-layout` : matrixOnly ? `${engine}-matrix` : diagramsOnly ? `${engine}-diagrams` : incrementalOnly ? `${engine}-index` : engine,
+  layoutOnly ? `${engine}-layout` : matrixOnly ? `${engine}-matrix${matrixPart ? '-' + matrixPart : ''}` : diagramsOnly ? `${engine}-diagrams` : incrementalOnly ? `${engine}-index` : engine,
 );
 await mkdir(limitsDir, { recursive: true });
 for (const depth of [8, 10])
@@ -104,8 +109,8 @@ function duplicateDescription(bytes) {
 for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`incremental-${action}.mp4`),duplicateDescription(incremental));
 await withBrowserFixture(
   {
-    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? 'bitstream-analysis-matrix' : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
-    roots: [path.join(repositoryRoot, "fixtures/video"), limitsDir],
+    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
+    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: layoutOnly ? 300000 : 600000,
@@ -498,7 +503,7 @@ await withBrowserFixture(
     if (!diagramsOnly) {
     for (const input of ["local-file", "library"])
       for (const decoding of ["browser", "software"])
-        for (const row of matrix.rows) {
+        for (const row of matrixRows) {
           console.log(`${engine}: ${input}/${decoding}/${row.codec}`);
           await call("remove_review_track", { slot: "A" });
           await call("set_review_color_mode", {
@@ -514,7 +519,7 @@ await withBrowserFixture(
             await page
               .locator("#file-A")
               .setInputFiles(
-                path.join(repositoryRoot, "fixtures/video", row.fixture),
+                path.join(repositoryRoot, "fixtures", row.fixtureDir ?? "video", row.fixture),
               );
           else
             await call("load_library_item", {
@@ -534,7 +539,7 @@ await withBrowserFixture(
             "disabled analysis does not load its worker or core",
           );
           assert.equal(await page.locator('#inspector-analysis-tab').count(),0,'left inspector contains only source information');
-          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264') {
+          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             await page.locator('#toggle-analysis').click();
             await selectDiagrams(page, 'nalu-size');
             await page.locator('.bitstream-diagram-empty').waitFor({ state: 'visible' });
@@ -544,6 +549,16 @@ await withBrowserFixture(
             assert.equal(await page.locator('.analysis-picture-overlay').count(), 0);
             await selectDiagrams(page, 'overview');
             await page.locator('#toggle-analysis').click();
+          }
+          if (row.container === 'flv') {
+            const prefixToken = await call('get_presented_frame', { slot: 'A' });
+            const capability = (await call('get_analysis_capabilities'))[0].capability;
+            if (capability.indexState === 'building') assert.equal(prefixToken.picture, null, 'growing FLV index cannot promise global PTS uniqueness');
+            // An explicit indexed seek starts the shared metadata job. Analysis
+            // payloads still use their own reader and no playback decoder.
+            await call('seek_review', { ptsUs: 1000000 });
+            await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'complete');
+            await call('seek_review', { ptsUs: 0 }); await stable();
           }
           const token = await call("get_presented_frame", { slot: "A" });
           assert.ok(
@@ -587,7 +602,7 @@ await withBrowserFixture(
           if (
             input === "local-file" &&
             decoding === "browser" &&
-            row.codec === "h264"
+            row.codec === "h264" && row.container === "mp4"
           ) {
             let release;
             const blocked = new Promise((r) => {
@@ -641,7 +656,7 @@ await withBrowserFixture(
             if (
               input === "local-file" &&
               decoding === "browser" &&
-              row.codec === "h264" &&
+              row.codec === "h264" && row.container === "mp4" &&
               mode === "qp"
             )
               await page.screenshot({ path: artifact("qp-overlay.png") });
@@ -701,10 +716,11 @@ await withBrowserFixture(
               "only an exact next-picture cache hit may remain visible",
             );
           }
-          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264') {
+          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             const next = await call('get_presented_frame', { slot: 'A' });
             await analyze();
-            await overlay.waitFor({ state: 'visible' });
+            try { await overlay.waitFor({ state: 'visible' }); }
+            catch (error) { console.error('Next-picture overlay state:', await call('get_bitstream_analysis_state', { slot: 'A' })); throw error; }
             assert.equal(await overlay.getAttribute('data-picture'), JSON.stringify([next.picture.sourceVersion, next.picture.stream, next.picture.configuration, next.picture.au, 0, 0, 'frame']), 'next frame can be analyzed directly without toggling visibility');
           }
           await call("seek_review", { ptsUs: 0 });
@@ -729,7 +745,7 @@ await withBrowserFixture(
           assert.ok(cachedRange.pictures >= 2, 'overlapping range enumerates its own pictures');
           if (input === 'local-file') assert.ok(!requests.slice(beforeCachedRange).some(r => /voidplayer-analysis\.(js|wasm)/.test(r.url)),
             'a completely cached local range reads metadata without loading analysis WASM');
-          if (decoding === "browser" && row.codec === "h264") {
+          if (decoding === "browser" && row.codec === "h264" && row.container === "mp4") {
             await call("request_bitstream_range", {
               slot: "A",
               startUs: 0,
@@ -863,7 +879,7 @@ await withBrowserFixture(
       assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
       assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis.wasm')), 'analysis Worker fetches a real core');
       for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
-      assert.equal(rows.filter(row => row.codec).length, matrix.rows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
+      assert.equal(rows.filter(row => row.codec).length, matrixRows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
       assert.deepEqual(errors, []);
       await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
       await page.screenshot({ path: artifact('final.png') });

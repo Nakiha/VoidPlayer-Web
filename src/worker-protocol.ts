@@ -65,6 +65,8 @@ export interface PacketCommands {
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
   init: Command<SoftwareOptions & { input: FlvInput; prepared?: PreparedFlv; forceWasm?: boolean; container?: 'flv' | 'mp4' }, PacketInitResult>;
+  'analysis-flv-index': Command<Empty, import('./flv-index-cache.ts').FlvIndexDocument>;
+  'analysis-index': Command<Empty, import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
   'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>>>;
   'reference-witness': Command<SoftwareOptions, FlvFrame>;
   'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>>>;
