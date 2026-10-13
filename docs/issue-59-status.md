@@ -1,6 +1,6 @@
-# Issue #59：首轮 MP4 / FLV 适配
+# Issue #59：MP4 / FLV 与有限 fMP4 适配
 
-本轮关联 [#59](https://github.com/Nakiha/VoidPlayer-Web/issues/59)，交付有限文件的 FLV 分析和精确暂停帧遮罩。后续 fragmented MP4、TS、MKV 仍由该 issue 跟踪，首轮 PR 不关闭 issue。
+本轮关联 [#59](https://github.com/Nakiha/VoidPlayer-Web/issues/59)，首轮交付有限 FLV 分析和精确暂停帧遮罩；第二阶段交付有限自包含 fMP4 的播放与分析闭环。TS、MKV 与复杂分片仍由该 issue 跟踪，PR 不关闭 issue。
 
 ## 输入与身份
 
@@ -19,6 +19,7 @@ FLV 直接复用 `scanFlv` 的 decode-order 包序号、configuration 和 discon
 | 容器与 framing | Codec | 来源 | 播放与分析 |
 | --- | --- | --- | --- |
 | 普通 MP4 | H.264 / HEVC / VVC | 本地 / 媒体库 | 原有组合继续验证 |
+| 完整自包含 init + moof/mdat fMP4 | H.264 / HEVC / VVC | 本地 / 媒体库 | 共用 sample mapping 和整轨 AU；浏览器/软件偏好均验证，VVC 为实际软件路径 |
 | AVC FLV、legacy HEVC、private VVC | H.264 / HEVC / VVC | 本地 / 媒体库 | WebCodecs 可用时使用浏览器；独立 WASM 播放兜底；统一分析 |
 | Enhanced FLV avc1 / hvc1 / vvc1 | H.264 / HEVC / VVC | 本地 / 媒体库 | 同上；VVC 使用软件播放 |
 
@@ -50,6 +51,14 @@ Chromium job [115206446227](https://github.com/Nakiha/VoidPlayer-Web/actions/run
 
 初始检查点：H.264/HEVC/VVC 三个真实 QA 片源按 payload/config 原样 remux 为 30 个非 GOP 对齐 fragment、每片两个 trun；Node 逐 AU 字节核对、独立首帧/后段块答案、实际软件播放 AU 均通过。WebKit × 本地 H.264 × 软件偏好的当前帧 presented token、独立分析、可见遮罩精确身份、缓存/区间和取消闭环通过（`.run/browser-fixtures/bitstream-analysis-matrix-fmp4-webkit/matrix.json`）。`npm run build` 通过。下一步扩展解析负例、整片 drain、IO/缓存与完整浏览器矩阵；此检查点尚不代表最终验收。
 
-混合普通 samples + fragments、外部 init/.m4s、增长直播、多配置/多视频轨、加密/样本分组、decode 时间断裂或回退、隐式跨 traf 基址、损坏/截断分片不支持；继续容器 fallback 或明确拒绝精确分析。TS/MKV 仍由 #59 后续阶段跟踪。本阶段只开 draft PR，不合入、不发版，Refs #59。
+混合普通 samples + fragments、外部 init/.m4s、增长直播、多配置/多视频轨、加密/样本分组、decode 时间断裂或回退、隐式跨 traf 基址、同一 moof 重复视频 traf、损坏/截断分片不支持；继续容器 fallback 或明确拒绝精确分析。TS/MKV 仍由 #59 后续阶段跟踪。本阶段只开 draft PR，不合入、不发版，Refs #59。
 
 第二个检查点：独立 fMP4 矩阵在 WebKit/Chromium 各 12 个组合已通过；后续加严非关键片 seek 的实际 presented token/遮罩与跨片区间断言。三 codec 整片各消费 600 帧、每片边界不 drain、EOF 恰好 drain 一次；缓存全命中/补缺、21 帧取消、两次独立后段 Blob.slice IO 均通过；VVC I/B VTM hash/reference 答案通过。真实 FFmpeg 视频复制 + AAC traf 的 payload/config 与当前帧播放/分析身份通过；edit-list 后微秒时间不反写原始 tfdt ticks。共享 RangeReader 增加 exact metadata 读取，只有发现 moof 后使用；普通 MP4 配置与 FLV 继续原读法和缓存身份。快速套件 40/40 通过。播放基准初次 12/12 通过，但构建元数据来自检查点提交前的 dirty build，因此最终会在干净提交重建后重跑。
+
+### 第二阶段最终本机验收
+
+功能实现位于 `55ad1de` / `c50fa51`，最终测试修正位于 `423a1fd` / `f244d18`。WebKit、Chromium 的最终独立 fMP4 矩阵各 12/12 通过，包括非关键 fragment 的实际 presented token/可见遮罩精确匹配、跨片 range 与 VVC 实际软件路径。Node fMP4 12/12、解析/资源边界 19/19、普通 MP4/Range 11/11、FLV 20/20、source 116/116、fast 40/40 通过。媒体库整片缓存重启/补缺各使用 120 AU 的完整有限片源，保留 128 MiB 预算；本地整片各消费 600 AU，不能把有限缓存解释为任意整片永久命中。独立后段请求统计真实 `Blob.slice` 字节，两个位置、三 codec 均小于源文件一半。
+
+干净构建的可见播放基准使用 `f244d18`，四个原场景、每场景三次、8 秒/clip-end，原 speed/lag/skew/gap/pause 门槛全部保持。摘要和证据定位见 [fMP4 验收记录](fixtures/bitstream-analysis-fmp4.json)。初次 dirty-build 测量与加严测试的缓存命中等待错误保留为历史检查点，不作为最终验收。
+
+Draft [PR #61](https://github.com/Nakiha/VoidPlayer-Web/pull/61)，Refs #59；不合入、不发版。本机结果与 PR CI 分开记录，不将 pending 或 skipped job 算作成功。最新 main 以 FLV squash `68e44e2b6e7d23c79276586dca24648f44690088` 为基线；未修改先前工作区的未提交 CI 内容。
