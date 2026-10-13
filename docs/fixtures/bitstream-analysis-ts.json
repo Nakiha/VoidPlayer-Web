@@ -2,14 +2,14 @@
   "schema": 1,
   "stage": "static-h264-ts-checkpoint",
   "webBaseline": "49152bdc6d9df591382670e419001cc8f2e691a5",
-  "coreRevision": "848c4507cf6a450990361b5fecfeaec34d196bd6",
+  "coreRevision": "353088620d08ee4ec2669842508f0fc84da2db28",
   "coreDraft": "https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/pull/6",
   "corePRTarget": "wasm",
-  "demuxCompatibility": "ffmpeg-9.0.2-avformat-740392267b71-ts-nofill-v1",
+  "demuxCompatibility": "ffmpeg-9.0.2-avformat-740392267b71-ts-raw-input-v2",
   "nodeTs": {
-    "passed": 6,
-    "total": 6,
-    "log": ".run/ts-prototype/node-ts-test.log"
+    "passed": 11,
+    "total": 11,
+    "log": ".run/ts-prototype/node-ts-review.log"
   },
   "browsers": {
     "webkit": {
@@ -37,8 +37,8 @@
     ]
   },
   "remaining": [
-    "clean Web benchmark",
-    "original MP4/FLV/fMP4 final regression result",
+    "final clean Web benchmark",
+    "post-review original MP4/FLV/fMP4 and browser revalidation",
     "final-head CI and native release gates"
   ],
   "history": [
@@ -53,5 +53,12 @@
     "Only finite static single-video progressive single-slice H264 TS.",
     "MKV and other TS codecs remain outside this checkpoint.",
     "Local checkpoints do not claim CI/native release completion."
+  ],
+  "reviewFollowups": [
+    "Actual paired WASMs preserve unknown clocks on HRD PES 10/11/40/41; original present clocks remain known.",
+    "SPS coding structure rejects 50 MBAFF pictures even with 50 progressive presentation flags.",
+    "Range factory miss creates one instance; complete cache hit creates zero.",
+    "300 actual pre-return IO failures retain zero contexts and no heap growth; same module reopens.",
+    "79 MiB padded TS completes all 600 AU; unconsumed physical IO remains capped until acknowledgement."
   ]
 }

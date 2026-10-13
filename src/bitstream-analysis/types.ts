@@ -29,6 +29,8 @@ export interface AnalysisInputOptions {
 
 export interface AnalysisInput {
   analysisCore?: any;
+  /** Reset only bounded unconsumed IO after the consumer acknowledges a result. */
+  acknowledge?(): void;
   codec: 'h264' | 'hevc' | 'vvc';
   configurations: Uint8Array[];
   packets: AnalysisPacket[];

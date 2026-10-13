@@ -17,6 +17,6 @@ export async function openAnalysisInput(reader: AnalysisReader, signal: AbortSig
   const adapterOptions = Object.keys(containerOptions).length ? containerOptions : undefined;
   if (header[0] === 70 && header[1] === 76 && header[2] === 86)
     return openFlvAnalysisInput(reader, signal, continuous, adapterOptions);
-  if (header[0] === 0x47) return openTsAnalysisInput(reader, signal, streamIndex);
+  if (header[0] === 0x47) return openTsAnalysisInput(reader, signal, continuous, streamIndex);
   return openMp4AnalysisInput(reader, signal, continuous, adapterOptions);
 }

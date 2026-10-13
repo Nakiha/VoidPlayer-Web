@@ -44,7 +44,7 @@
     "prepare": ["node", "scripts/make-analysis-flv-fixtures.ts"],
     "prepareOnDemand": true
   },
-  "analysis-ts": {"paths": ["fixtures/ts-analysis/h264-static.ts", "fixtures/ts-analysis/h264-missing-timestamps.ts", "fixtures/ts-analysis/h264-duplicate-pts.ts"], "inputs": ["fixtures/video/h264_9s_1920x1080.mp4"], "prepare": ["node", "scripts/make-analysis-ts-fixtures.ts"], "prepareOnDemand": true},
+  "analysis-ts": {"paths": ["fixtures/ts-analysis/h264-static.ts", "fixtures/ts-analysis/h264-missing-timestamps.ts", "fixtures/ts-analysis/h264-duplicate-pts.ts", "fixtures/ts-analysis/hrd.ts", "fixtures/ts-analysis/hrd-missing.ts", "fixtures/ts-analysis/mbaff.ts", "fixtures/ts-analysis/mbaff-frame-sei.ts", "fixtures/ts-analysis/progressive-single.ts", "fixtures/ts-analysis/progressive-two-slices.ts", "fixtures/ts-analysis/h264-padded-long.ts"], "inputs": ["fixtures/video/h264_9s_1920x1080.mp4"], "prepare": ["node", "scripts/make-analysis-ts-fixtures.ts"], "prepareOnDemand": true},
   "analysis-fmp4": {"paths": ["fixtures/fmp4-analysis/fragmented-h264.mp4", "fixtures/fmp4-analysis/fragmented-hevc.mp4", "fixtures/fmp4-analysis/fragmented-vvc.mp4", "fixtures/fmp4-analysis/fragmented-h264-audio.mp4"], "inputs": ["fixtures/video/h264_9s_1920x1080.mp4", "fixtures/video/h265_10s_1920x1080.mp4", "fixtures/video/h266_10s_1920x1080.mp4"], "prepare": ["node", "scripts/make-analysis-fmp4-fixtures.ts"], "prepareOnDemand": true},
   "flv": {
     "paths": [

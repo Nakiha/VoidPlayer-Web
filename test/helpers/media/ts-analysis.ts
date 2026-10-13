@@ -9,8 +9,8 @@ export async function loadTsCore(playback=false) {
   const file=resolve(playback?'public/vendor/voidplayer-core/voidplayer-core.js':'public/vendor/voidplayer-analysis/voidplayer-analysis.js');
   return (await import(pathToFileURL(file).href)).default({wasmBinary:fs.readFileSync(file.replace(/\.js$/,'.wasm'))});
 }
-export async function tsFixture() {
-  const bytes=fs.readFileSync('fixtures/ts-analysis/h264-static.ts'),play=await loadTsCore(true);
+export async function tsFixture(name='h264-static.ts') {
+  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),play=await loadTsCore(true);
   play.vpBlobs=new Map([[1,{blob:{slice:(start:number,end:number)=>({start,end})},reader:{readAsArrayBuffer:({start,end}:any)=>bytes.subarray(start,end)}}]]);
   const ctx=play._vp_create();assert.equal(play._vp_open_blob(ctx,1,BigInt(bytes.length)),0);assert.equal(play._vp_index_build(ctx),600);
   const len=play._vp_index_export_bytes(ctx),ptr=play._malloc(len);assert.equal(play._vp_index_export(ctx,ptr,len),600);

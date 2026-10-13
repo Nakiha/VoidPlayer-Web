@@ -142,6 +142,7 @@ export async function analyzePicture(
       last = result;
       await options.onResult?.(result);
       signal.throwIfAborted();
+      input.acknowledge?.();
       await progress();
     };
     const prepared = new Set<number>();
@@ -486,6 +487,10 @@ export async function analyzeRange(
   cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
 ) {
   validateRange(target);
+  if(typeof core==='function') {
+    const factory=core;let instance:Promise<any> | undefined;
+    core=()=>instance ??= Promise.resolve().then(factory);
+  }
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
   const input = await openAnalysisInput(reader, signal, false, {demuxCore: core});

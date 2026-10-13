@@ -104,3 +104,66 @@ test('real PES missing timestamps stay unknown; duplicate PES PTS produce no exa
   }
  }finally{f.close();}
 });
+test('a range miss allocates one shared WASM session; complete cache hit allocates none',async()=>{
+ const f=await tsFixture();try {
+  let loads=0;const cache=new Map<string,any>();const target={sourceVersion,firstPtsUs:f.pts(0),startUs:0,endUs:50000};
+  await analyzeRange(f.reader(),target,async()=>{loads++;return loadTsCore();},'ts-test',signal(),async r=>{cache.set(pictureId(r.picture),r);});
+  assert.equal(loads,1,'demux and collector share the same instance');
+  await analyzeRange(f.reader(),target,async()=>{loads++;throw new Error('cache must not instantiate WASM');},'ts-test',signal(),async()=>{},async p=>cache.get(pictureId(p))??null);
+  assert.equal(loads,1);
+ }finally{f.close();}
+});
+test('actual WASM IO failures unwind C allocations before propagating, then the module reopens',async()=>{
+ const f=await tsFixture(),core=await loadTsCore();try {
+  const injected=new Error('injected synchronous reader failure');const target={sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0};
+  for(let i=0;i<3;i++) {
+   const reader=f.reader();reader.readSync=()=>{throw injected;};
+   await assert.rejects(analyzePicture(reader,target,core,'ts-test',signal()),error=>error===injected);
+   assert.ok(reader.closed);assert.equal(core._vpd_live_contexts(),0);
+  }
+  const initialHeap=core.HEAPU8.byteLength;
+  for(let i=0;i<300;i++) {
+   core.vpDemuxRead=()=>{throw injected;};core.vpDemuxError=undefined;
+   assert.equal(core._vpd_open(-1,BigInt(f.bytes.length)),0);assert.equal(core.vpDemuxError,injected);assert.equal(core._vpd_live_contexts(),0);
+  }
+  assert.equal(core.HEAPU8.byteLength,initialHeap,'repeated pre-return failures retain no growing C heap');
+  const result=await analyzePicture(f.reader(),target,core,'ts-test',signal());assert.equal(result.picture.au,0);assert.equal(core._vpd_live_contexts(),0);
+ }finally{f.close();}
+});
+test('whole TS can consume more than 64 MiB while each advancement and result remains bounded',async()=>{
+ const f=await tsFixture('h264-padded-long.ts');try {
+  assert.ok(f.bytes.length>64*1024*1024);const reader=f.reader(),core=await loadTsCore();let count=0;
+  await analyzeStream(reader,{mode:'stream',sourceVersion,firstPtsUs:f.pts(0),durationUs:10000000},core,'ts-test',signal(),async r=>{assert.equal(r.confidence,'exact');count++;assert.ok(core._vpa_record_bytes()<32*1024*1024);},async()=>{});
+  assert.equal(count,600);assert.ok(reader.actualBytes>64*1024*1024);assert.ok(reader.closed);assert.equal(core._vpd_live_contexts(),0);
+ }finally{f.close();}
+});
+test('paired pinned WASMs preserve HRD input clocks and reject coding MBAFF despite FRAME presentation',async()=>{
+ // CI prepares only artifacts, so this repository carries the same assertion
+ // below rather than depending on a sibling checkout.
+ const play=await loadTsCore(true),analyzer=await loadTsCore();
+ for(const core of [play,analyzer])for(const name of ['hrd.ts','hrd-missing.ts']) {
+  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name);core.vpDemuxRead=(_h:number,o:number,n:number)=>bytes.subarray(o,o+n);const ctx=core._vpd_open(-1,BigInt(bytes.length));assert.ok(ctx);let count=0;
+  try{for(;;){const status=core._vpd_read(ctx,128);if(!status)break;assert.ok(status>0);if(status===2)continue;
+   const ptr=core._vpd_packet(ctx),v=new DataView(core.HEAPU8.buffer,ptr,72),au=Number(v.getBigUint64(32,true));assert.equal(au,count++);
+   if(name==='hrd-missing.ts' && [10,11,40,41].includes(au)){assert.equal(v.getUint32(44,true)&3,0);assert.equal(v.getBigInt64(0,true),-9223372036854775808n);assert.equal(v.getBigInt64(8,true),-9223372036854775808n);}
+   else assert.equal(v.getUint32(44,true)&3,3);core._vpd_release(ctx);
+  }}finally{core._vpd_close(ctx);}assert.equal(count,100);
+ }
+ for(const [name,count,expected] of [['progressive-single.ts',25,25],['progressive-two-slices.ts',25,0],['mbaff.ts',50,0],['mbaff-frame-sei.ts',50,0]] as const) {
+  play.FS.writeFile('/admission.ts',fs.readFileSync('fixtures/ts-analysis/'+name));const ctx=play._vp_create();let admitted=0,shownProgressive=0;
+  try{assert.equal(play.ccall('vp_open','number',['number','string'],[ctx,'/admission.ts']),0);assert.equal(play._vp_index_build(ctx),count);
+   for(let i=0;i<count;i++){assert.equal(play._vp_extract(ctx,play._vp_index_ticks(ctx,i)),1);admitted+=+!!play._vp_picture_info(ctx);shownProgressive+=+(play._vp_frame_interlaced(ctx)===0);}
+   assert.equal(admitted,expected);if(name==='mbaff-frame-sei.ts')assert.equal(shownProgressive,50);
+  }finally{play._vp_destroy(ctx);play.FS.unlink('/admission.ts');}
+ }
+});
+test('unconsumed whole IO remains bounded until a result is acknowledged',async()=>{
+ const f=await tsFixture(),core=await loadTsCore();try {
+  const reader=f.reader(),input=await openAnalysisInput(reader,signal(),true,{demuxCore:core});
+  try {
+    await assert.rejects(async()=>{for(let i=0;i<200;i++)await input.readUnit(input.packets[560]);},/IO budget/);
+    assert.ok(input.bytesRead<=64*1024*1024);
+  }finally{input.close();}
+  assert.equal(core._vpd_live_contexts(),0);
+ }finally{f.close();}
+});

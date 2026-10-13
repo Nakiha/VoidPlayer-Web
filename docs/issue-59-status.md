@@ -119,3 +119,27 @@ B 帧、后段、尾帧、反向 seek。WebKit/Chromium TS local/library × 两�
 支持矩阵、独立 CI 分片与 fixture 准备已登记。TS 目前仅支持上述静态 H264 子集；
 HEVC/VVC TS、MKV、动态流和复杂恢复继续由 #59 跟踪，不关闭总 issue，不自行
 合入或发版。
+
+### 独立 review 修正：原始时间与编码结构
+
+原 `848c450` 的 NOFILLIN 方案不足以证明原始时间：pinned H264 parser 会从 HRD
+SEI 生成 DTS/PTS，发生在 libavformat 的 NOFILLIN 分支之前。两个实际 WASM 均
+复现了被清掉 PES 时钟的 AU 10/11/40/41 仍返回 known=3；该检查点不能作为时间
+可信度验收。修复固定 parser.c hash，TS inspect/read/seek 范围内保留 generic
+parser 输入的时间描述，阻止 codec parser 合成值进入原始 known 状态，payload/AU
+重组仍由同一个 av_parser_parse2 执行。Compatibility 升为 raw-input-v2，继续
+要求精确 indexerBuild，已有 v1 索引不能混用。
+
+core 同时在 SPS admission 直接要求 frame_mbs_only_flag=1。真实 MBAFF 数据只改
+picture-timing SEI 为 FRAME，pinned decoder 的 50 帧展示 interlaced 标志都变为 0，
+但 core 仍 0/50 提供身份；原 MBAFF 也 0/50。Progressive 单 slice 25/25 成功，
+双 slice 0/25。当前 x264 的 SEI 为 31 个 pic_struct=3 与 19 个=4，fixture 明确核对
+这 50 个短 SEI 都未跨 TS packet，再全部改为 0；SPS/VCL/PES 时钟不修改。
+
+Web review 的三个生命周期问题也有实际回归：EM_JS/host callback 以错误返回
+让 C 正常释放，再保留原异常抛出；300 次实际 pre-return IO 失败保持 live context
+为 0、heap 不增长，随后同一模块重开成功。Range factory 在 miss 时只调用一次，
+全缓存保持零新增实例。Whole 的累计物理 IO 仍保留指标，但预算按有界推进检查，
+不再用 lifetime 64 MiB 截断全片；插入 null TS packets、压缩图片和时钟不变的
+79 MiB 片源完整消费 600 AU，保留每步/未产出/结果背压预算。修复后 Node TS 10/10
+通过；最终干净 head 的浏览器、原格式回归、bench 与 CI 仍需要复核。

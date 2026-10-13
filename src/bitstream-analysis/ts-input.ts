@@ -9,8 +9,9 @@ import { AnalysisFailure } from './failure.ts';
 
 /** Finite, single-video, static progressive H264 TS. Independent fmt/AVIO owns
  * parser reassembly; index positions are locators, never raw payload ranges. */
-export async function openTsAnalysisInput(reader: AnalysisReader, signal: AbortSignal, options?: AnalysisInputOptions): Promise<AnalysisInput> {
-  let core: any, ctx = 0, closed = false, bytesRead = 0, lastAu = -1;
+export async function openTsAnalysisInput(reader: AnalysisReader, signal: AbortSignal, continuous = false, options?: AnalysisInputOptions): Promise<AnalysisInput> {
+  let core: any, ctx = 0, closed = false, bytesRead = 0, operationBytes = 0, lastAu = -1;
+  let ioFailure: unknown;
   const close = () => {
     if (closed) return; closed = true;
     if (ctx) core._vpd_close(ctx);
@@ -40,17 +41,20 @@ export async function openTsAnalysisInput(reader: AnalysisReader, signal: AbortS
       core = typeof options.demuxCore === 'function' ? await options.demuxCore() : options.demuxCore;
       signal.throwIfAborted();
       if (typeof core._vpd_abi !== 'function' || core._vpd_abi() !== 1 ||
-          string(core._vpd_compat_id()) !== 'ffmpeg-9.0.2-avformat-740392267b71-ts-nofill-v1' ||
+          string(core._vpd_compat_id()) !== 'ffmpeg-9.0.2-avformat-740392267b71-ts-raw-input-v2' ||
           string(core._vpd_build_id()) !== doc.indexerBuild)
         throw new AnalysisFailure('internal-error', 'Demux ABI/implementation/indexer identity mismatch');
+      operationBytes=0;core.vpDemuxError=undefined;
       core.vpDemuxRead = (_handle: number, offset: number, length: number) => {
-        signal.throwIfAborted();
+        try {signal.throwIfAborted();
         if (closed || !Number.isSafeInteger(offset) || offset<0 || length<0 || length>256*1024 || offset+length>reader.size)
           throw new AnalysisFailure('resource-limit', 'Demux IO bounds exceeded');
-        if (bytesRead+length>64*1024*1024) throw new AnalysisFailure('resource-limit', 'TS request IO budget exceeded');
-        const bytes = reader.readSync!(offset, length); bytesRead+=bytes.length; return bytes;
+        if ((continuous ? operationBytes : bytesRead)+length>64*1024*1024) throw new AnalysisFailure('resource-limit', 'TS request/advancement IO budget exceeded');
+        const bytes = reader.readSync!(offset, length);bytesRead+=bytes.length;operationBytes+=bytes.length;return bytes;
+        }catch(error){ioFailure=error;return -1;}
       };
       ctx=core._vpd_open(-1, BigInt(reader.size));
+      if(ioFailure || core.vpDemuxError)throw ioFailure ?? core.vpDemuxError;
       if (!ctx || string(core._vpd_format(ctx)) !== 'mpegts' || string(core._vpd_codec(ctx)) !== 'h264' || core._vpd_video_count(ctx)!==1)
         throw new AnalysisFailure('unsupported-container', 'Only finite single-video H264 TS is admitted');
       if (core._vpd_stream(ctx)!==doc.streamIndex || core._vpd_tb_num(ctx)!==doc.timeBaseNum || core._vpd_tb_den(ctx)!==doc.timeBaseDen)
@@ -98,10 +102,13 @@ export async function openTsAnalysisInput(reader: AnalysisReader, signal: AbortS
         let anchor=packet.au;
         while(anchor>0 && !packets[anchor].key)anchor--;
         if(packet.au-anchor>=BUDGET.packets)throw new AnalysisFailure('no-safe-anchor-within-budget','No TS anchor within budget');
-        if(core._vpd_seek(ctx,raw[anchor].dts)<0)fail('TS seek failed');lastAu=-1;
+        const seek=core._vpd_seek(ctx,raw[anchor].dts);
+        if(ioFailure || core.vpDemuxError)throw ioFailure ?? core.vpDemuxError;
+        if(seek<0)fail('TS seek failed');lastAu=-1;
       }
       for(let tries=0;tries<BUDGET.packets;tries++) {
         const status=core._vpd_read(ctx,128);
+        if(ioFailure || core.vpDemuxError)throw ioFailure ?? core.vpDemuxError;
         if(status===2)continue;
         if(status!==1)fail('TS demux ended before requested AU');
         try {
@@ -125,7 +132,7 @@ export async function openTsAnalysisInput(reader: AnalysisReader, signal: AbortS
     };
     return {codec:'h264',configurations:[configuration],packets,sealedEnd:packets.length,indexComplete:true,indexIntegrity:'complete',totalPackets:packets.length,
       sourceEndUs:packets.reduce((max,p)=>Math.max(max,p.pts),0)+ffmpegTicksToUs(raw.at(-1)!.duration || (raw[1] ? raw[1].dts-raw[0].dts : 1n),doc.timeBaseNum,doc.timeBaseDen), reader,
-      get analysisCore(){return core;},read:(offset,length)=>reader.read(offset,length),readUnit,picture,get bytesRead(){return bytesRead;},
+      get analysisCore(){return core;},acknowledge(){if(continuous)operationBytes=0;},read:(offset,length)=>reader.read(offset,length),readUnit,picture,get bytesRead(){return bytesRead;},
       async plan(target:AnalysisTarget) {
         const packet=byPts.get(target.sourcePtsUs);if(!packet || (target.picture && pictureId(picture(packet,target.sourceVersion))!==pictureId(target.picture)))fail('TS target picture mismatch');
         for(let start=packet.au;start>=0 && packet.au-start<BUDGET.packets;start--)if(packets[start].key) {
