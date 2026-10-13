@@ -220,7 +220,7 @@ test('frame-index HTTP failures finish before the deadline and release request r
       const worker = Reflect.get(library.indexJobs, 'worker');
       // Suppress the database reply while exercising the real RPC deadline/cleanup.
       const stalled = t.mock.method(worker, 'postMessage', () => {});
-      const mocked = t.mock.method(library.indexJobs, 'call', (...[op, data, transfer]: Parameters<typeof call>) => call(op, data, transfer, 10));
+      const mocked = t.mock.method(library.indexJobs, 'call', (...[op, ...args]: Parameters<typeof call>) => { args[2] = 10; return call(op, ...args); });
       try {
         await busy(endpoint, {}, '索引数据库操作超时，请稍后重试。');
         // Closed service is another pre-header 503, including an NDJSON request.
