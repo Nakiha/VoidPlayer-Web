@@ -1,7 +1,8 @@
 /** Called inside the owned fixture page. Bounds evidence and observes only
  * metadata; never touches transferable resources or changes RPC replies. */
 export function beginPlaybackTrace() {
-  const started = performance.now(), events = [], samples = [], longTasks = [];
+  const started = performance.now(), events = [], samples = [], longTasks = [], diagnosticErrors = [];
+  const attempt = (phase,work) => {try{return work();}catch(error){if(diagnosticErrors.length<32)diagnosticErrors.push({phase,error:String(error)});}};
   const pending = new Map(), workers = new Map();
   const post = Worker.prototype.postMessage;
   const push = value => { if (events.length < 256) events.push(value); };
@@ -34,18 +35,23 @@ export function beginPlaybackTrace() {
     samples.push({atMs:performance.now()-started,playing:state.playing,busy:state.busy,positionUs:state.positionUs,error:state.error,
       measurements:state.playback,tracks:state.tracks.map(t=>({slot:t.slot,id:t.id,sourceGen:t.sourceGen,frame:t.frame,indexState:t.indexState,decoder:t.decoder}))});
   };
-  sample(); const timer=setInterval(sample,75);
+  attempt('initial-sample',sample); const timer=setInterval(()=>attempt('sample',sample),75);
   const supported=typeof PerformanceObserver!=='undefined'&&PerformanceObserver.supportedEntryTypes.includes('longtask');
   const observer=supported?new PerformanceObserver(list=>{
     for(const e of list.getEntries())if(longTasks.length<128)longTasks.push({atMs:e.startTime-started,durationMs:e.duration});
   }):null;
   observer?.observe({entryTypes:['longtask']});
   window.__finishPlaybackTrace=()=>{
-    clearInterval(timer);sample();observer?.disconnect();Worker.prototype.postMessage=post;
     const at=performance.now();
     const outstanding=[...pending.values()].map(r=>({...r,elapsedMs:at-r.started}));
-    for(const [worker,current] of workers)worker.removeEventListener('message',current.receive);
-    workers.clear();pending.clear();delete window.__finishPlaybackTrace;
-    return {startedMs:started,elapsedMs:at-started,events,samples,longTasksSupported:supported,longTasks,outstanding};
+    try {attempt('final-sample',sample);}
+    finally {
+      attempt('sampling-timer',()=>clearInterval(timer));
+      attempt('worker-wrapper',()=>{Worker.prototype.postMessage=post;});
+      attempt('observer',()=>observer?.disconnect());
+      for(const [worker,current] of workers)attempt('worker-listener',()=>worker.removeEventListener('message',current.receive));
+      workers.clear();pending.clear();delete window.__finishPlaybackTrace;
+    }
+    return {startedMs:started,elapsedMs:at-started,events,samples,longTasksSupported:supported,longTasks,outstanding,diagnosticErrors};
   };
 }
