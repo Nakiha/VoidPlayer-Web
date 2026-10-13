@@ -24,7 +24,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
       }
     },
   });
-  let closed = false, buildId: string | undefined, seq = -1, frontier = 0;
+  let closed = false, buildId: string | null | undefined, seq = -1, frontier = 0;
   const ordinals = new Set<number>();
   void build.promise.catch(error => { buildError = error; });
   const append = (records: Uint8Array) => {
