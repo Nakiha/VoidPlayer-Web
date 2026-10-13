@@ -49,7 +49,10 @@ test('static assets negotiate verified compression, immutable versions, revalida
     assert.equal(cached.status, 304); assert.equal(cached.headers.get('vary'), 'Accept-Encoding');
     const gzip = await get(versioned, { 'accept-encoding': 'br;q=0, gzip' });
     assert.equal(gzip.headers.get('content-encoding'), 'gzip');
-    assert.deepEqual(gunzipSync(Buffer.from(await gzip.arrayBuffer())), bytes);
+    const compressed = Buffer.from(await gzip.arrayBuffer());
+    assert.equal(compressed.readUInt32LE(4), 0, 'shared assets have no build-time timestamp');
+    assert.equal(compressed[9], 255, 'shared assets do not encode the host operating system');
+    assert.deepEqual(gunzipSync(compressed), bytes);
     const plain = await get(versioned, { 'accept-encoding': 'identity' });
     assert.equal(plain.headers.get('content-encoding'), null); assert.notEqual(plain.headers.get('etag'), br.headers.get('etag'));
     const range = await get(versioned, { 'accept-encoding': 'br', range: 'bytes=3-12' });

@@ -28,6 +28,8 @@
 
 收尾同时修复原有 CI：增量索引 fixture 用两个合法 sample description 触发容器适配器，避免旋转 MP4 改用精确 packet 路径后不再进入被测分支；网络拦截包含内容版本查询参数，等待请求有明确超时；FATE 指纹按 visible crop 比较全部有效样本，不把 coded padding 作为图像差异，也不放宽像素阈值或重生成答案。
 
+`1767856` 的三平台原生包、两浏览器分析面板、HEVC 时间线及完整播放/FATE/HTTPS 功能检查已通过；最终汇总发现 gzip 头携带平台 OS 标记，导致解码器 sidecar 哈希不同。相同 deflate 内容仅改变该字节即可复现日志中的两个哈希。静态资源构建统一写 gzip 的 unknown OS（255），保持零时间戳与原压缩参数；解压内容、CRC 和原始 core 来源不变。汇总仍严格比较完整 JS/WASM、来源清单及所有压缩表示，不排除 sidecar 或放宽来源校验。
+
 FLV/TS/MKV、fragmented MP4、field/layer、VVC 多 slice、复杂工具和 MV 可视化已排除在首批矩阵外。扩展这些功能无需阻塞声明范围内的 MVP，但不得把排除项勾成“已验证支持”。
 
 ## 本轮本地验证

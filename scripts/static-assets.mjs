@@ -5,6 +5,13 @@ import path from 'node:path';
 
 const included = name => /\.(wasm|js|css|json|html)$/.test(name) && name !== 'static-assets.json';
 export const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+function portableGzip(bytes) {
+  const compressed = gzipSync(bytes, { level: 9 });
+  // zlib writes a host-specific OS byte even with a zero timestamp. Use
+  // the gzip "unknown" OS value so shared core sidecars match on all platforms.
+  compressed[9] = 255;
+  return compressed;
+}
 /** Run after Vite copies public assets; sidecars are build outputs, never runtime work. */
 export async function prepareStaticAssets(directory) {
   const assets = {};
@@ -16,7 +23,7 @@ export async function prepareStaticAssets(directory) {
         const bytes = await readFile(file), variants = {};
         if (bytes.length >= 1024) for (const [encoding, compressed] of [
           ['br', brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 9 } })],
-          ['gzip', gzipSync(bytes, { level: 9 })],
+          ['gzip', portableGzip(bytes)],
         ]) {
           if (compressed.length >= bytes.length) continue;
           const suffix = encoding === 'br' ? '.br' : '.gz';
