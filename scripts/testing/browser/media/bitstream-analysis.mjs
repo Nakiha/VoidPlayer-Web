@@ -847,7 +847,7 @@ await withBrowserFixture(
         }
     // A response for a frame superseded during the request must never become visible.
     await hideOverlay();
-    await call("seek_review", { ptsUs: 400000 });
+    await call("seek_review", { ptsUs: matrixPart === 'fmp4' ? 800000 : 400000 });
     await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
     // Establish that the old-picture demand exists before superseding it;
     // otherwise an async UI import can start a legitimate new-picture request.

@@ -17,7 +17,7 @@ UI 和 Agent 使用 `ReviewSession` 的相同入口：`getPresentedFrame`、`req
 
 ## 支持矩阵与身份
 
-可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和现有 browser / reference software 播放路径。H.264、HEVC、VVC 的真实 MP4 均有成功正向样本。WebCodecs 可用性由平台决定，实际使用的 decoder 写入测试报告；VVC 走 packet WASM。本轮新增有限 FLV 文件（AVC、legacy/private、Enhanced framing），同样逐项运行本地与媒体库组合。TS、MKV、fragmented MP4 和无 packet 身份的容器解码仍不在范围内。
+可执行矩阵是 `scripts/bitstream-analysis-matrix.json`；浏览器回归逐行执行本地 File / 媒体库和现有 browser / reference software 播放路径。H.264、HEVC、VVC 的真实 MP4 均有成功正向样本。WebCodecs 可用性由平台决定，实际使用的 decoder 写入测试报告；VVC 走 packet WASM。本轮新增有限 FLV 文件（AVC、legacy/private、Enhanced framing），同样逐项运行本地与媒体库组合。有限、自包含、单视频轨/单 stsd 的 fMP4 也使用共享包索引与连续 AU；完整范围和限制见 [Issue #59 状态](issue-59-status.md)。TS、MKV、外部 init、直播/混合/多配置/时间断裂分片与无 packet 身份的容器解码仍不在范围内。
 
 持久 key 是 source version、video stream、description 配置段、稳定 sample/AU ordinal、picture 0、layer 0、frame。本地 File 使用会话中的随机来源 ID，不按文件名、长度或 mtime 拼身份；媒体库使用 `id@version`。配置、AU 索引、源时间戳缺失或重复以及不唯一的 packet/picture 映射必须拒绝。
 
@@ -149,4 +149,4 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 
 ## 多容器输入扩展
 
-普通 MP4 与有限 FLV 文件通过统一压缩单元接口进入相同分析 runner。首轮 FLV 的 framing、原始时间与播放身份、索引前缀及排除项见 [Issue #59 状态](issue-59-status.md)。后续 fMP4/TS/MKV 尚未支持。
+普通 MP4 与有限 FLV 文件通过统一压缩单元接口进入相同分析 runner。首轮 FLV 的 framing、原始时间与播放身份、索引前缀及排除项见 [Issue #59 状态](issue-59-status.md)。第二阶段支持有限自包含 fMP4；TS/MKV 留待后续。

@@ -101,3 +101,57 @@ test('real video-copy fMP4 with audio traf keeps video payload/config and playba
     } finally { engine.close(); }
   } finally { input.close(); source.close(); }
 });
+
+for (const codec of ['h264', 'hevc', 'vvc']) test(`media library fMP4 ${codec}: independent stream index, cache restart and corrupt-hole repair`, async () => {
+  const { MediaLibraryIndex } = await import('../../server/library.ts');
+  const { AnalysisScheduler } = await import('../../server/analysis/scheduler.ts');
+  const { mkdtemp, rm, mkdir, copyFile, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const temp = await mkdtemp(join(tmpdir(), 'vp-fmp4-analysis-'));
+  const fullBytes = await readFile(`fixtures/fmp4-analysis/fragmented-${codec}.mp4`);
+  const original = await openAnalysisInput(await reader(`fixtures/fmp4-analysis/fragmented-${codec}.mp4`), signal);
+  const last = original.packets[119]; original.close();
+  const media = join(temp, 'media'); await mkdir(media);
+  await writeFile(join(media, `fragmented-${codec}.mp4`), fullBytes.subarray(0, last.offset + last.size));
+  const library = new MediaLibraryIndex([media], { database: join(temp, 'library.sqlite'), watch: false });
+  const coreDir = resolve('public/vendor/voidplayer-analysis'), directory = join(temp, 'analysis');
+  let scheduler = new AnalysisScheduler(library, coreDir, directory);
+  await library.refresh();
+  const entry = (await library.list()).entries.find(e => e.name === `fragmented-${codec}.mp4`)!;
+  const version = `${entry.id}@${entry.version}`;
+  const demand = { mode: 'stream' as const, sourceVersion: version, firstPtsUs: 1600000, durationUs: 2000000 };
+  const consume = async (requestId: string, expected?: Map<number, any>) => {
+    const results = new Map<number, any>(); let cursor = 0;
+    const until = performance.now() + 120000;
+    for (;;) {
+      assert.ok(performance.now() < until, 'bounded stream completion');
+      const state = await scheduler.streamStatus(requestId, 'owner', cursor);
+      assert.ok(state && ['queued', 'running', 'complete'].includes(state.state), JSON.stringify(state));
+      for (const ref of state.chunks) {
+        const r = await scheduler.store.get(ref.id);
+        assert.equal(r?.confidence, 'exact'); assert.ok(!results.has(r!.picture.au));
+        if (expected) assert.deepEqual(r!.blocks, expected.get(r!.picture.au).result.blocks);
+        results.set(r!.picture.au, { id: ref.id, result: r }); cursor = ref.cursor;
+      }
+      if (state.state === 'complete' && cursor === state.published) { assert.equal(state.progress!.indexComplete, true); break; }
+      await new Promise(resolve => setTimeout(resolve, 5));
+    }
+    assert.equal(cursor, 120); return results;
+  };
+  try {
+    const expected = await consume((await scheduler.submit(entry.id, entry.version!, demand, 'owner')).requestId);
+    const local = await analyzePicture(await reader(`fixtures/fmp4-analysis/fragmented-${codec}.mp4`),
+      { sourceVersion: version, sourcePtsUs: expected.get(60).result.sourcePtsUs, normalizedMediaUs: expected.get(60).result.sourcePtsUs - 1600000 }, await core(), 'test', signal);
+    assert.deepEqual(local.blocks, expected.get(60).result.blocks); assert.deepEqual(local.references, expected.get(60).result.references);
+    await scheduler.close();
+    const manifestOnly = join(temp, 'manifest-only'); await mkdir(manifestOnly);
+    await copyFile(join(coreDir, 'manifest.json'), join(manifestOnly, 'manifest.json'));
+    scheduler = new AnalysisScheduler(library, manifestOnly, directory);
+    const hits = await consume((await scheduler.submit(entry.id, entry.version!, demand, 'owner')).requestId, expected);
+    assert.deepEqual(hits, expected, 'restart reuses every exact record without JS/WASM');
+    await scheduler.close(); scheduler = new AnalysisScheduler(library, coreDir, directory);
+    await writeFile(scheduler.store.chunkFile(expected.get(60).id), '{broken');
+    await consume((await scheduler.submit(entry.id, entry.version!, demand, 'owner')).requestId, expected);
+  } finally { await scheduler.close(); await library.close(); await rm(temp, { recursive: true, force: true }); }
+});

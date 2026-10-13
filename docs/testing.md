@@ -269,3 +269,9 @@ npm run test:fate:browser
 2026-09-12 本机编码矩阵的原始产物位于 `artifacts/local-codecs-2026-09-12/`（`report.json`、`chromium-4k-recheck.json`、`exact-recheck/report.json`）；这些产物未提交，当前 checkout 无法直接复核。历史记录中的载入/定位通过不等于首次播放全部通过，后续 4K 软件复测也不能抹去首次失败或推广为稳定性能保证。需要重新取证时使用 `scripts/check-local-codec-matrix.mjs`，按其 `CODEC_FILES`、`CODEC_BROWSER`、`CODEC_MODE` 和 `CODEC_REPEATS` 配置明确输入与环境。
 
 配对 HTTPS 对照在隔离目录构建固定 PR base，并把 feature 的三个公共测试脚本同步到 baseline；两边的应用代码保持各自版本。执行前仍强制检查脚本、媒体及 WASM 的字节一致，报告保存实际 harness SHA-256，采用 baseline-feature-feature-baseline 次序。`perf-https-pair` 在自己的套件中为 required：启动或测量失败使套件 `passed=false`。CI job 保留性能测量的 informational 定位，但显式输出失败与原始证据，不能用绿色外层 job 推断无回归。
+
+### 有限 fMP4 分区
+
+`node scripts/make-analysis-fmp4-fixtures.ts` 生成三 codec 的 byte-identical fragment remux 与真实视频复制/AAC traf 片源。`test/bitstream-analysis-fmp4.test.ts` 覆盖 payload/config、独立 codec/VTM 答案、真实播放 AU、跨非关键片 range、whole drain、取消、实际 Blob IO、媒体库缓存重启/补缺与 edit-list/raw ticks。`test/mp4-fragments.test.ts` 校验 addressing/defaults、64 位时间、合法 CTO 及越界/截断/时间断裂等拒绝边界。
+
+`ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
