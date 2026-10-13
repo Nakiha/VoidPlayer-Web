@@ -153,6 +153,8 @@ await withBrowserFixture(
     const library = await call("list_library");
     if (layoutOnly) {
       for (const input of ['local-file', 'library']) {
+        console.log(`${engine}: overlay and opt-in analysis ${input}`);
+        if (await page.locator('#analysis-diagrams').count()) await selectDiagrams(page, 'overview');
         for (const slot of ['A', 'B']) {
           await call('remove_review_track', { slot });
           const name = slot === 'A' ? 'stream.mp4' : 'stream-2.mp4';
@@ -160,8 +162,28 @@ await withBrowserFixture(
           else await call('load_library_item', { slot, id: library.entries.find(e => e.name === name).id });
           await page.waitForFunction(slot => { const state=window.voidPlayer.getState(); return !state.busy && state.tracks.some(t=>t.slot===slot && t.frame && !t.failure); }, slot);
         }
-        await stable(); await call('seek_review', { ptsUs: 1_000_000 });
+        await stable(); await call('seek_review', { ptsUs: 3_200_000 });
+        const beforeOverview = requests.length;
         if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
+        await page.waitForFunction(() => Number(document.querySelector('#analysis-canvas')?.dataset.plotRight) > 0);
+        assert.equal(await page.locator('#analysis-load-metrics [data-metric="qp"]').getAttribute('aria-pressed'), 'false', 'QP is opt-in');
+        assert.deepEqual((await call('export_workspace')).layout.analysisView.loadMetrics, ['bitrate']);
+        assert.ok(!requests.slice(beforeOverview).some(r => /voidplayer-analysis|local-worker|bitstream-analysis/.test(r.url)), 'opening the lightweight overview starts no deep analysis');
+        for (const slot of ['A', 'B']) assert.equal((await call('get_bitstream_analysis_state', {slot})).state, 'idle');
+        for (const slot of ['A', 'B']) {
+          await openAnalysis(slot);
+          await page.locator(`#bitstream-overlay-${slot}`).waitFor({state:'visible'});
+          await page.waitForFunction(slot => window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot}).state === 'ready', slot);
+          const state = await call('get_bitstream_analysis_state', {slot});
+          assert.equal(state.completedStream, undefined, 'opening an overlay does not scan the whole file');
+          assert.equal(state.stream, undefined, 'overlay inspection requests a picture, not a stream');
+          const result = await call('request_bitstream_analysis', {slot});
+          assert.equal((await call('get_bitstream_analysis_state', {slot})).cacheHit, true);
+          assert.ok(result.metrics.startAu >= 90, 'rear picture starts at its verified GOP anchor');
+          assert.ok(result.metrics.packets < 60, 'rear picture does not decode the whole file');
+          await hideOverlay();
+        }
+        await call('seek_review', { ptsUs: 1_000_000 });
         await selectDiagrams(page, 'bitrate');
         const qpButton=page.locator('#analysis-load-metrics [data-metric="qp"]');
         await qpButton.click();

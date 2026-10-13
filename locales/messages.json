@@ -2293,7 +2293,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:812",
-      "src/ui/bitstream-controls.ts:168"
+      "src/ui/bitstream-controls.ts:169"
     ]
   },
   "analysis.containerConfig": {
@@ -3067,7 +3067,7 @@
     },
     "locations": [
       "src/ui/analysis-panel.ts:690",
-      "src/ui/bitstream-controls.ts:216"
+      "src/ui/bitstream-controls.ts:215"
     ]
   },
   "analysis.streamQueued": {
@@ -3179,7 +3179,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis/status.ts:105",
-      "src/ui/bitstream-controls.ts:219"
+      "src/ui/bitstream-controls.ts:218"
     ]
   },
   "analysis.trackUnsupported": {
@@ -3397,14 +3397,14 @@
     "source": "分析进度",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:221"
+      "src/ui/bitstream-controls.ts:220"
     ]
   },
   "bitstream.boundaries": {
     "source": "块边界",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:34"
+      "src/ui/bitstream-controls.ts:35"
     ]
   },
   "bitstream.cancelled": {
@@ -3418,14 +3418,14 @@
     "source": "关闭分析遮罩",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:166"
+      "src/ui/bitstream-controls.ts:167"
     ]
   },
   "bitstream.editOpacity": {
     "source": "编辑不透明度",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:61"
+      "src/ui/bitstream-controls.ts:62"
     ]
   },
   "bitstream.hideTrackOverlay": {
@@ -3434,7 +3434,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/bitstream-controls.ts:218"
+      "src/ui/bitstream-controls.ts:217"
     ]
   },
   "bitstream.incompleteReferences": {
@@ -3448,7 +3448,7 @@
     "source": "帧间",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:35"
+      "src/ui/bitstream-controls.ts:36"
     ]
   },
   "bitstream.internalError": {
@@ -3462,7 +3462,7 @@
     "source": "帧内",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:35"
+      "src/ui/bitstream-controls.ts:36"
     ]
   },
   "bitstream.invalidRequest": {
@@ -3483,16 +3483,16 @@
     "source": "不透明度",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:51",
-      "src/ui/bitstream-controls.ts:54"
+      "src/ui/bitstream-controls.ts:52",
+      "src/ui/bitstream-controls.ts:55"
     ]
   },
   "bitstream.overlayControls": {
     "source": "分析遮罩",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:54",
-      "src/ui/bitstream-controls.ts:167",
+      "src/ui/bitstream-controls.ts:55",
+      "src/ui/bitstream-controls.ts:168",
       "src/ui/shell.ts:82",
       "src/ui/shell.ts:82",
       "src/ui/shell.ts:90"
@@ -3502,21 +3502,21 @@
     "source": "显示内容",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:55"
+      "src/ui/bitstream-controls.ts:56"
     ]
   },
   "bitstream.prediction": {
     "source": "预测模式",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:34"
+      "src/ui/bitstream-controls.ts:35"
     ]
   },
   "bitstream.qp": {
     "source": "QP 热图",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:34"
+      "src/ui/bitstream-controls.ts:35"
     ]
   },
   "bitstream.resourceLimit": {
@@ -3532,14 +3532,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/bitstream-controls.ts:218"
+      "src/ui/bitstream-controls.ts:217"
     ]
   },
   "bitstream.skip": {
     "source": "跳过",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:35"
+      "src/ui/bitstream-controls.ts:36"
     ]
   },
   "bitstream.sourceChanged": {
@@ -6503,8 +6503,8 @@
     "source": "拖动工具条",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:164",
       "src/ui/bitstream-controls.ts:165",
+      "src/ui/bitstream-controls.ts:166",
       "src/ui/shell.ts:93",
       "src/ui/shell.ts:93"
     ]
