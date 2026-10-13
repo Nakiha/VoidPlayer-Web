@@ -414,6 +414,18 @@ export class AnalysisScheduler {
           }
         };
         worker.on("message", async (m) => {
+          if (m.type === 'cache') {
+            try {
+              if (work.state !== 'running' || !work.consumers.size ||
+                  m.picture?.sourceVersion !== work.target.sourceVersion)
+                throw new AnalysisFailure('cancelled', 'Analysis demand expired');
+              const id = createHash('sha256').update(JSON.stringify([
+                work.target.sourceVersion, pictureId(m.picture), ANALYSIS_RECIPE, ANALYZER_VERSION, work.buildId,
+              ])).digest('hex');
+              acknowledge({ type: 'cache', result: await this.store.get(id) });
+            } catch (error) { reject(error); }
+            return;
+          }
           if (m.type === 'index') {
             try { acknowledge({ type: 'index', index: await index!.read() }); }
             catch (error) { acknowledge({ type: 'index', error: String(error), reason: failureInfo(error) }); reject(error); }

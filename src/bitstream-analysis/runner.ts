@@ -8,6 +8,7 @@ import {
   validateTarget,
   validateRange,
   validateStream,
+  pictureId,
 } from "./contract.ts";
 import type {
   AnalysisResult,
@@ -15,6 +16,7 @@ import type {
   AnalysisBlock,
   AnalysisRangeTarget,
   AnalysisStreamTarget,
+  SourcePictureKey,
 } from "./contract.ts";
 import { inspectPacketPicture } from "../packet-picture.ts";
 import { openAnalysisInput } from "./input.ts";
@@ -31,6 +33,7 @@ export async function analyzePicture(
   options: {
     input?: Awaited<ReturnType<typeof openAnalysisInput>>;
     sequential?: boolean;
+    desiredAus?: ReadonlySet<number>;
     endSourcePtsUs?: number;
     onResult?: (result: AnalysisResult) => Promise<void>;
     stream?: AnalysisStreamTarget;
@@ -81,7 +84,7 @@ export async function analyzePicture(
       }
     };
     open();
-    const desired = new Set(
+    const desired = new Set(options.desiredAus ??
       input.packets
         .filter((p) =>
           options.endSourcePtsUs === undefined
@@ -376,12 +379,15 @@ export async function analyzeRange(
   buildId: string,
   signal: AbortSignal,
   onResult: (result: AnalysisResult) => Promise<void>,
+  cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
 ) {
   validateRange(target);
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
   const input = await openAnalysisInput(reader, signal);
   let first: number;
+  const missing = new Set<number>();
+  let lastCached: AnalysisResult | undefined;
   try {
     const matches = input.packets
       .filter(
@@ -399,7 +405,31 @@ export async function analyzeRange(
         matches.length > 32 ? "resource-limit" : "ambiguous-picture-identity",
         "Missing, ambiguous or oversized analysis range",
       );
+    // Metadata enumerates every expected picture: cached points alone never
+    // prove interval coverage. Keep only missing ordinals, not 32 block arrays.
     first = matches[0].pts;
+    for (const packet of matches) {
+      signal.throwIfAborted();
+      const picture = input.picture(packet, target.sourceVersion);
+      const hit = await cached?.(picture);
+      signal.throwIfAborted();
+      let reusable = false;
+      if (hit) {
+        try {
+          validateResult(hit);
+          reusable = hit.confidence === 'exact' && hit.codec === input.codec && hit.buildId === buildId &&
+            hit.recipe === ANALYSIS_RECIPE && hit.analyzerVersion === ANALYZER_VERSION &&
+            pictureId(hit.picture) === pictureId(picture) && hit.sourcePtsUs === packet.pts &&
+            hit.capabilities.blocks === 'ready' && hit.capabilities.modes === 'ready';
+        } catch { /* Corrupt or obsolete entries are misses, never coverage. */ }
+      }
+      if (hit && reusable) { await onResult(hit); signal.throwIfAborted(); lastCached = hit; }
+      else { if (!missing.size) first = packet.pts; missing.add(packet.au); }
+    }
+    if (!missing.size) { input.close(); return lastCached!; }
+    // A factory keeps WASM allocation out of entirely cached range requests.
+    if (typeof core === 'function') core = await core();
+    signal.throwIfAborted();
   } catch (error) {
     input.close();
     throw error;
@@ -414,7 +444,7 @@ export async function analyzeRange(
     core,
     buildId,
     signal,
-    { input, endSourcePtsUs: target.firstPtsUs + target.endUs, onResult },
+    { input, desiredAus: missing, endSourcePtsUs: target.firstPtsUs + target.endUs, onResult },
   );
 }
 

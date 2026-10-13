@@ -563,3 +563,39 @@ test('server bounds six multi-user demands, prioritizes queued pictures and recl
     }));
   } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
 });
+
+test('overlapping ranges reuse atomic picture chunks after restart and repair evicted holes', async () => {
+  const f = await fixture();
+  const directory = join(f.folder, 'analysis');
+  let scheduler = new AnalysisScheduler(f.library, coreDir, directory);
+  const range = { sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, startUs: 0, endUs: 100000 };
+  const execute = async (startUs: number, endUs: number) => {
+    const request = await scheduler.submit(f.entry.id, f.entry.version!, { ...range, startUs, endUs }, 'owner');
+    const state = await wait(scheduler, request.requestId, 'owner');
+    assert.equal(state.state, 'complete', state.error ?? '');
+    return Promise.all(state.chunks.map(async chunk => {
+      const id = chunk.id;
+      return { id, result: (await scheduler.store.get(id))! };
+    }));
+  };
+  try {
+    const original = await execute(0, 100000);
+    assert.ok(original.length >= 5);
+    await scheduler.close();
+    scheduler = new AnalysisScheduler(f.library, coreDir, directory);
+    const overlap = await execute(10000, 90000);
+    for (const hit of overlap) assert.deepEqual(hit.result, original.find(r => r.id === hit.id)!.result,
+      'preserved decoder metrics prove the original chunk was reused');
+    await scheduler.close();
+    const hole = overlap[Math.floor(overlap.length / 2)];
+    await rm(scheduler.store.chunkFile(hole.id));
+    scheduler = new AnalysisScheduler(f.library, coreDir, directory);
+    const repaired = await execute(10000, 90000);
+    assert.equal(repaired.length, overlap.length);
+    for (const result of repaired) {
+      const previous = original.find(r => r.id === result.id)!.result;
+      assert.deepEqual(result.result.blocks, previous.blocks);
+      if (result.id !== hole.id) assert.deepEqual(result.result, previous);
+    }
+  } finally { await scheduler.close(); await f.close(); }
+});

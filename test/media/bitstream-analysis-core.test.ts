@@ -670,3 +670,93 @@ test('native metadata adapter drives the analysis frontier without waiting for i
     assert.equal((await adapter.bitstreamFrontier()).complete, true);
   } finally { release(); adapter.close(); input.dispose(); }
 });
+
+for (const fixture of fixtures) test(`sparse ${fixture.codec} ranges reuse exact pictures and decode only missing output`, async () => {
+  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
+  const { pictureId } = await import('../../src/bitstream-analysis/contract.ts');
+  const signal = new AbortController().signal;
+  const index = await openAnalysisInput(await reader(fixture.file), signal);
+  const firstPtsUs = Math.min(...index.packets.map(p => p.pts));
+  index.close();
+  const target = { sourceVersion: fixture.sha256, firstPtsUs, startUs: 0, endUs: 100000 };
+  const expected = new Map<string, any>();
+  await analyzeRange(await reader(fixture.file), target, await core(), 'test', signal,
+    async result => { expected.set(pictureId(result.picture), result); });
+  assert.ok(expected.size >= 2);
+  const cached = new Map(expected);
+  const middle = [...expected.values()][Math.floor(expected.size / 2)];
+  cached.delete(pictureId(middle.picture));
+  const seen = new Set<string>();
+  const module = await core();
+  let factoryCalls = 0;
+  await analyzeRange(await reader(fixture.file), target, async () => { factoryCalls++; return module; }, 'test', signal,
+    async result => {
+      const id = pictureId(result.picture);
+      assert.ok(!seen.has(id), 'no duplicate cached/decoded publication'); seen.add(id);
+      assert.deepEqual(result.blocks, expected.get(id).blocks);
+      assert.deepEqual(result.capabilities, expected.get(id).capabilities);
+      if (cached.has(id)) assert.equal(result, cached.get(id), 'publish the existing result');
+      else assert.notEqual(result, middle, 'missing picture is decoded again');
+    }, async key => cached.get(pictureId(key)) ?? null);
+  assert.equal(factoryCalls, 1);
+  assert.equal(seen.size, expected.size);
+  assert.equal(module._vpa_record_bytes(), 0);
+  seen.clear();
+  await analyzeRange(await reader(fixture.file), { ...target, endUs: 50000 },
+    () => { throw new Error('A fully cached subrange must not allocate WASM'); }, 'test', signal,
+    async result => { seen.add(pictureId(result.picture)); }, async key => expected.get(pictureId(key)) ?? null);
+  assert.equal(seen.size, [...expected.values()].filter(r => r.sourcePtsUs < firstPtsUs + 50000).length);
+});
+
+test('sparse range rejects obsolete, partial, wrong-picture and incomplete-capability cache entries', async () => {
+  const { analyzeRange } = await import('../../src/bitstream-analysis/runner.ts');
+  const signal = new AbortController().signal;
+  const target = { sourceVersion: 'cache-validation', firstPtsUs: 0, startUs: 0, endUs: 10000 };
+  let expected: any;
+  await analyzeRange(await reader(fixtures[0].file), target, await core(), 'test', signal, async r => { expected = r; });
+  for (const patch of [
+    { buildId: 'old-build' }, { recipe: 'old-recipe' }, { analyzerVersion: 'old-version' },
+    { picture: { ...expected.picture, sourceVersion: 'different-file' } },
+    { sourcePtsUs: expected.sourcePtsUs + 1 }, { confidence: 'partial' },
+    { capabilities: { ...expected.capabilities, blocks: 'unsupported' } },
+    { blocks: null },
+  ]) {
+    let opened = false;
+    await analyzeRange(await reader(fixtures[0].file), target,
+      async () => { opened = true; return core(); }, 'test', signal,
+      async result => { assert.deepEqual(result.blocks, expected.blocks); }, async () => ({ ...expected, ...patch }));
+    assert.equal(opened, true, JSON.stringify(patch));
+  }
+  const controller = new AbortController();
+  await assert.rejects(analyzeRange(await reader(fixtures[0].file), target,
+    () => { throw new Error('must not allocate after cancellation'); }, 'test', controller.signal,
+    async () => { throw new Error('must not publish after cancellation'); }, async () => {
+      controller.abort(); return expected;
+    }), { name: 'AbortError' });
+});
+
+test('VVC geometry, QP, intra/inter/skip and L0/L1 agree with independent VTM block statistics', async () => {
+  const expected = JSON.parse(await readFile(new URL('../../docs/fixtures/bitstream-analysis-vtm.json', import.meta.url), 'utf8'));
+  assert.equal(createHash('sha256').update(await readFile(resolve('fixtures/video', expected.file))).digest('hex'), expected.sha256);
+  const signal = new AbortController().signal;
+  const input = await openAnalysisInput(await reader(expected.file), signal);
+  const packets = input.packets;
+  const firstPtsUs = Math.min(...packets.map(p => p.pts));
+  input.close();
+  for (const answer of expected.pictures) {
+    const packet = packets[answer.au];
+    const result = await analyzePicture(await reader(expected.file), {
+      sourceVersion: expected.sha256, sourcePtsUs: packet.pts, normalizedMediaUs: packet.pts - firstPtsUs,
+    }, await core(), 'test', signal);
+    assert.equal(result.confidence, 'exact');
+    assert.equal(result.picture.au, answer.au);
+    assert.equal(result.width, answer.width); assert.equal(result.height, answer.height);
+    assert.equal(result.blocks.length, answer.blockCount);
+    const blocks = result.blocks.map(b => [b.x, b.y, b.width, b.height, b.qp, b.mode] as const)
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2] || a[3] - b[3]);
+    assert.equal(createHash('sha256').update(JSON.stringify(blocks)).digest('hex'), answer.blocksSha256, `all CUs for POC ${answer.poc}`);
+    for (const selected of answer.selected) assert.ok(blocks.some(b => JSON.stringify(b) === JSON.stringify(selected)), 'concrete independent CU record');
+    assert.deepEqual({ ...result.references, edges: [...result.references!.edges].sort((a, b) => a.list - b.list || a.au - b.au) },
+      { kind: 'active-lists', state: 'ready', poc: answer.poc, frameType: answer.frameType, edges: answer.references });
+  }
+});

@@ -6,7 +6,7 @@
 | --- | --- | --- |
 | 自动回归与基础设施 | `testing/`、`run-tests.mjs`、`run-browser-regressions.mjs`；专用 `check-*` 在清单中登记 | 使用 suite/case 筛选；required 决定门禁 |
 | 开发与资源维护 | `tools/development/make-icons.mjs`；`dev.ts`、`service.mjs`、`clean.mjs` | 显式开发命令；不加入回归门禁 |
-| 夹具准备 | `tools/fixtures/{make-library-fixtures,sync-fate-samples}.mjs`；`sync-samples.sh`、`sync-wasm-core.sh`、`make-{flv,hlg}-fixture*` | 每个 job 准备一次只读素材；合成可写素材由 case 独占 |
+| 夹具准备 | `tools/fixtures/{make-library-fixtures,sync-fate-samples}.mjs`；`sync-samples.sh`、`sync-wasm-core.sh`、`make-{flv,hlg}-fixture*`、`tools/fixtures/read-vtm-analysis.py`（独立 VTM 块统计冻结） | 每个 job 准备一次只读素材；合成可写素材由 case 独占 |
 | 诊断与复现 | `tools/diagnostics/repro-native-yuv-color.mjs`；其余 `repro-*`、`diagnose-*` | 操作者显式运行；诊断成功不代表验收通过 |
 | 性能 | `tools/perf/bench-frame-index.mjs`；其余 `bench-*`、`compare-index-scan-modes.mjs` | `perf` 套件或专用参数；显式 informational |
 | 发布与产物 | `tools/release/release-version.mjs`；`package-release.mjs`、`prepare-release-core.mjs`、`check-release*.mjs`、`stage-release.mjs` | workflow 管理原生平台、产物依赖和草稿；回归不触发发布 |

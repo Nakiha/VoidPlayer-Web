@@ -702,6 +702,11 @@ await withBrowserFixture(
             range.pictures >= 5,
             "half-open range publishes picture chunks",
           );
+          const beforeCachedRange = requests.length;
+          const cachedRange = await call('request_bitstream_range', { slot: 'A', startUs: 10000, endUs: 50000 });
+          assert.ok(cachedRange.pictures >= 2, 'overlapping range enumerates its own pictures');
+          if (input === 'local-file') assert.ok(!requests.slice(beforeCachedRange).some(r => /voidplayer-analysis\.(js|wasm)/.test(r.url)),
+            'a completely cached local range reads metadata without loading analysis WASM');
           if (decoding === "browser" && row.codec === "h264") {
             await call("request_bitstream_range", {
               slot: "A",

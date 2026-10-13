@@ -45,7 +45,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 | 资源 | 上限 |
 | --- | --- |
-| 分析并发 | 每个浏览器窗口默认 2，设置可选 1–8；本地与媒体库共用窗口上限；服务端全局最多 2 个 worker |
+| 分析并发 | 每个浏览器窗口默认 2，设置可选 1–8；本地与媒体库共用窗口上限；服务端全局默认 8 个 worker，管理页可设 1–32 |
 | consumers / 提交队列 | 各 32 |
 | 执行 / consumer 租约 | 执行无进展 30 秒 / 租约 30 秒；客户端排队另限 120 秒，不占执行预算 |
 | 区间 | 1 秒，32 picture |
@@ -68,13 +68,17 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 服务端不再把所有 partial 输出归为内部错误；经过身份校验、无块且最多 16 KiB 的 unsupported 摘要只保留在 consumer 租约内，不写 exact chunk 或完整 manifest。10-bit HEVC 实测 blocks/modes 保持 exact、QP 为 null/unsupported；QP 选项禁用。损坏和 unsupported 输入不放宽身份、预滚预算或完整覆盖校验。
 
-第一阶段交付仍是普通 MP4 MVP；#56 保持开放。后续依次追踪 FLV、高位深 QP、复杂随机访问（包括非闭合 IDR 起点）、更多 slice/工具的独立验证，以及按 picture/能力补缺口和只读定位描述复用。现有本地缓存和服务端 manifest 复用不等于完整跨区间稀疏覆盖；已缓存的目标也不代表可以跳过后续缺失结果所需的参考解码。
+第一阶段交付仍是普通 MP4 MVP；#56 保持开放，关闭门槛见 [验收状态](issue-56-status.md)。FLV、高位深 QP、复杂随机访问（包括非闭合 IDR 起点）、更多 slice/工具属于后续能力扩展。
+
+有界区间现在按只读 MP4 索引枚举实际 picture，逐帧查询缓存，而不是依据最大时间戳或几个缓存点推断覆盖。本地查询共享会话缓存，服务端查询跨任务持久化 picture chunk；因此不同起止点的重叠区间、单帧和已提交的整片结果可以复用。每个命中校验完整 picture 身份、精确 PTS、codec、schema、buildId、recipe、分析器版本及 blocks/modes 能力；高位深 QP 的 unsupported 状态原样保留，不能冒充已支持 QP。无效、淘汰、损坏或旧构建结果作为缺口重新计算。
+
+全部命中仍需要有界元数据读取和一个任务 Worker，但不加载/实例化分析 WASM。部分命中先逐块交付已有结果，再从最早缺失 picture 的安全锚点推进，只输出缺失 picture；必要的参考帧仍解码，不能因其结果已缓存就跳过。每块查询/交付都有背压，避免额外保存整区间块数组。取消保留已交付结果；只有所有实际 picture 完成才提交区间 manifest。整片请求仍从头连续执行，不承诺跨服务重启恢复流式游标或 decoder 状态；可从持久化 picture 重新发起有界区间请求。
 
 ## 验证与证据
 
 `node --test test/bitstream-analysis*.test.ts` 覆盖三种真实核心、选定已知记录、随机/顺序逐块一致、后段闭合 IDR、H.264/HEVC/VVC 各 600 帧持续 drain、B 帧重排、各三个后段闭合 GOP 的随机/顺序逐块对照、记录/heap 稳态、暂停 consumer、单帧超预算、双 consumer、lease、原子缓存损坏/配额和重启。H.264/HEVC 额外使用固定编码器 CU/MB 大小与 QP 17 的全黑输入，独立检查完整网格、QP 和 intra；不只检查非空。
 
-`docs/fixtures/bitstream-analysis-answers.json` 固定原样片 SHA-256 和旧原生 analyzer 的选定 CU/MB 记录，用于三种 codec 的迁移对照。该原生参考运行使用旧 writer，和新流式 writer 独立，但两者共享 instrumented codec hook。它不是独立证明所有 VVC 复杂工具语义的 oracle；MVP 不声明那些工具。VVC 更全面的独立语法/参考实现核对仍应持续补充。
+`docs/fixtures/bitstream-analysis-answers.json` 固定原样片 SHA-256 和旧原生 analyzer 的选定 CU/MB 记录，用于三种 codec 的迁移对照。该原生参考运行使用旧 writer，和新流式 writer 独立，但两者共享 instrumented codec hook。它不是独立证明所有 VVC 复杂工具语义的 oracle；MVP 不声明那些工具。新增 `docs/fixtures/bitstream-analysis-vtm.json` 由独立 VTM 参考解码器内置块统计生成，覆盖 I/B picture 的全部 CU 几何、luma QP、intra/inter/skip 和 L0/L1 参考身份；不是从 FFmpeg 输出反写期望。固定源码、原始统计哈希、具体记录与复现命令见 [VTM 答案说明](fixtures/bitstream-analysis-vtm.md)。复杂工具仍不因基本块记录一致而自动纳入支持范围。
 
 `node scripts/check-bitstream-analysis-browser.mjs chromium|webkit` 执行矩阵，检查 disabled 不加载 worker/core/canvas、local 无上传、library 不下载分析 decoder、真实 token/key、QP/mode、DPR 2、缓存、区间、offset、换帧和迟到响应。`node scripts/check-analysis-release.mjs` 从解压原生包、无 Node/Bun/ffmpeg 的 PATH、无关 cwd 实际执行三种分析并验证重启缓存。三平台 release workflow 均运行该验收，产物汇总另外验证相同 analysis provenance 与字节。
 
@@ -122,7 +126,7 @@ GOP 按源包表的 AU/解码 ordinal 与配置段划分；容器 key 标记仅�
 
 轻量图示元数据独立于块 LRU 保存（另有 32 MiB 上限），避免块结果淘汰后整片图消失；按 sourceVersion/configuration/AU 隔离，取消保留已收到结果。NAL 每帧最多 4096 条，参考边最多 64 条；导入先验证类型、长度、前向解码身份及重复边，再进入缓存。图示查询保留可见窗口，禁止把全片块数组放进 UI/Agent 会话状态。新增 query_bitstream_chart / session.queryBitstreamChart 以会话时间和像素宽度查询：最多 256 个 raw picture / 2 MiB，或按像素分辨率汇总的桶。另有最多 8 个片源、每源 1024 个自适应时间桶与 2M AU 去重位图，整片汇总独立于原始记录淘汰，重复检查不会累计两遍。若详细缓存被淘汰，缩放仍保留汇总并明确提示重新检查可恢复细节，禁止把缓存尾段伪装成全片。工作区只保存图示选择，不保存任务、核心或结果。
 
-参考 ABI 1 的修改位于独立 VoidPlayer-FFmpeg-Build 的 `analysis/stream.c`、`analysis/reference-patch.py`、`scripts/build-analysis.sh`。源帧标识直接取参考 AVFrame 的 COPY_OPAQUE，不用 POC 猜测身份。必需出口包括 reference ABI/count/pointer/invalid/type/POC，记录为 u32 AU + u32 list，take 后失效。发布锁固定已提交并推送的 `cc4fb4334cdcd238eacd1a57c40831393fb2499a`，声明 block ABI 1 与 reference ABI 1。Worker 初始化、runner 和准备发布核心均检查实际 WASM 接口，缺失任一参考出口直接拒绝；CI 缓存恢复也必须执行相同检查。打包拒绝 dirty 核心，原生包验收要求三种 codec 的 `references.state` 均为 `ready`。服务缓存使用 buildId，避免旧块结果遮掉新图示字段。
+参考 ABI 1 的导出位于独立 VoidPlayer-FFmpeg-Build 的 `analysis/stream.c`、`scripts/build-analysis.sh`；解码器插桩与参考身份逻辑已直接进入 `Nakiha/FFmpeg@c160c1bb3f0faf3ac59b8fbf907a8e3fb604632e`，不再在构建时通过文本补丁注入。源帧标识直接取参考 AVFrame 的 COPY_OPAQUE，不用 POC 猜测身份。必需出口包括 reference ABI/count/pointer/invalid/type/POC，记录为 u32 AU + u32 list，take 后失效。发布锁固定已提交并推送的 `7c2f9b053e19961568b5ca4ecd5a23c123e2c73b`，声明 block ABI 1 与 reference ABI 1。Worker 初始化、runner 和准备发布核心均检查实际 WASM 接口，缺失任一参考出口直接拒绝；CI 缓存恢复也必须执行相同检查。打包拒绝 dirty 核心，原生包验收要求三种 codec 的 `references.state` 均为 `ready`。服务缓存使用 buildId，避免旧块结果遮掉新图示字段。
 
 NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配置柱，柱宽与普通逐帧柱共用计算，不额外保留最小列宽：分别在大小与类型分区显示 avcC、hvcC、vvcC 内的 SPS/PPS/VPS、扩展参数集和配置 SEI，悬浮或 Home 键显示“来自容器头部”以及真实 NAL 数量和 payload 字节数。没有独立配置栏；所有图共用同一前置空间，码率、帧大小与参考图在该位置留空。−1 不是媒体帧或负时间，不定位、不进入逐帧帧数、大小、时间桶或参考层级；容器配置类型与逐帧类型合并到共用图例，图例使用“容器头部”来源徽标（双来源标明“容器头部 + 逐帧”），−1 柱使用同色斜纹与逐帧实色柱区分，点击类型同时筛选大小、类型分区及悬浮内容，配置柱仍标明“来自容器头部”；配置类型筛选不改变逐帧统计。缩放到其他区段时配置柱离开可见范围。配置摘要随流式检查结果进入会话缓存，逐帧记录淘汰后仍保留；源版本及 configuration 独立，返回值脱离内部缓存。分析 recipe 更新为 blocks-basic-v2，防止复用缺少配置元数据的旧分析缓存。选择 NALU 或帧参考图时按窗口并发设置自动开始可见轨道的流式分析。轨道按钮平滑展宽显示只读圈形进度，完成后缩回；没有开始或重新检查按钮，悬浮和键盘聚焦不再展开。当前片源自动检查只执行一次，图示/显隐/时间基准切换不会重启。
 

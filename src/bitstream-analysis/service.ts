@@ -348,7 +348,11 @@ export class BitstreamAnalysisService {
           clearTimeout(timer);
           timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
         }
-        if (data.event === 'index') {
+        if (data.event === 'cache') {
+          try {
+            worker.postMessage({ event: 'cache', result: data.picture?.sourceVersion === target.sourceVersion ? this.cache.get(data.picture) : null });
+          } catch (error) { done(error); }
+        } else if (data.event === 'index') {
           void frontier!().then(index => {
             if (!settled) worker.postMessage({ event: 'index', index });
           }, error => done(error));
