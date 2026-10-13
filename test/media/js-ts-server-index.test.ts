@@ -5,6 +5,8 @@ import { appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildJsTsIndexDocument } from '../../server/js-ts-index-builder.ts';
+import {Worker} from 'node:worker_threads';
+import {FrameIndexJobs} from '../../server/frame-index-jobs.ts';
 import { MediaLibraryIndex, fileVersion } from '../../server/library.ts';
 import { createMediaServer } from '../../server/app.ts';
 import { TsPacketSource } from '../../src/ts-packet-source.ts';
@@ -83,7 +85,7 @@ test('JS TS library index cold build, joined clients and durable warm restart re
     const epoch=await library.indexJobs.call('epoch');
     const bad=structuredClone(index);bad.sourceVersion='other-source';
     const bytes=new TextEncoder().encode(JSON.stringify({epoch,index:bad}));
-    await assert.rejects(library.indexJobs.call('put',{id:entry.id,version:entry.version!,size:entry.size,identity:JS_TS_MEDIA_INDEX_IDENTITY,bytes}),/源身份/);
+    await assert.rejects(library.indexJobs.call('put',{id:entry.id,version:entry.version!,size:entry.size,identity:JS_TS_MEDIA_INDEX_IDENTITY,bytes}),/只能由服务端/);
     assert.throws(()=>prepareFrameIndex(index,entry.size,{...JS_TS_MEDIA_INDEX_IDENTITY,indexerBuild:'wrong-build'},sourceVersion),/身份与请求/);
     assert.throws(()=>parseMediaIndexIdentity('js-ts',new URLSearchParams({stream:'video:0',schema:'2',indexer:'wrong-build'})),/版本不受支持/);
     assert.equal(JSON.parse(library.frameIndexes.getJson(entry.id,entry.version!,'ffmpeg',{kind:'ffmpeg',streamKey:'video:0',schemaVersion:3,indexerBuild:'0'.repeat(40)})).index,null,'legacy FFmpeg identity never aliases JS');
@@ -98,8 +100,46 @@ test('JS TS library index cold build, joined clients and durable warm restart re
     const restartedBase=await startServer();
     const c=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(c);
     assert.deepEqual(await c.read(),a);assert.equal(restartedBuilds,0);
+    const damaged=structuredClone(index);damaged.packets.splice(1,1);damaged.packets.forEach((p,i)=>p.au=i);damaged.completeness.packets=damaged.packets.length;
+    const db=Reflect.get(library.frameIndexes,'db');
+    db.prepare("UPDATE media_index_batches SET payload=? WHERE media_id=? AND media_version=? AND kind='js-ts'").run(JSON.stringify(damaged),entry.id,entry.version);
+    assert.equal(library.frameIndexes.has(entry.id,entry.version!,'js-ts',JS_TS_MEDIA_INDEX_IDENTITY),false,'stored seal rejects self-consistent dropped/renumbered payload after restart');
+    const rebuilt=new MediaIndexClient(`${restartedBase}/api/media/${entry.id}?v=${entry.version}`,'js-ts',64*1024*1024,120000,true,JS_TS_MEDIA_INDEX_IDENTITY);clients.push(rebuilt);
+    assert.deepEqual(await rebuilt.read(),a);assert.equal(restartedBuilds,1,'damaged persisted documents rebuild from the actual file');
+    const upload=new TextEncoder().encode(JSON.stringify({epoch,index}));
+    await assert.rejects(library.indexJobs.call('put',{id:entry.id,version:entry.version!,size:entry.size,identity:JS_TS_MEDIA_INDEX_IDENTITY,bytes:upload}),/只能由服务端/);
     await assert.rejects(stat(missingCore),{code:'ENOENT'});
   } finally {
     for(const c of clients)c.close();await closeServer();await library?.close();await rm(directory,{recursive:true,force:true});
   }
+});
+
+test('real slowly advancing JS reads keep the shared worker alive; an unresolved read still times out', async () => {
+  const directory=await mkdtemp(path.join(tmpdir(),'vp-js-ts-progress-')),bytes=await fixture();
+  const reference=new TsPacketSource({size:bytes.length,read:async(at,len)=>bytes.subarray(at,at+len),close(){}},'prefix-source',new AbortController().signal);
+  let short:Uint8Array;
+  try {const index=await reference.open();short=bytes.subarray(0,index.packets[2].pesOffset!);}finally{reference.close();}
+  const file=path.join(directory,'short.ts');await writeFile(file,short);
+  const jobs=(stall:boolean)=>new FrameIndexJobs(path.join(directory,'unused.sqlite'),path.join(directory,'missing-core'),()=>new Worker(new URL('../helpers/js-ts-build-worker.ts',import.meta.url),{workerData:{delayMs:2,stall}}));
+  const advancing=jobs(false),stalled=jobs(true);
+  const request={id:'progress-source',version:'file-version',size:short.length,filePath:file,epoch:0,identity:JS_TS_MEDIA_INDEX_IDENTITY};
+  const policy={idleTimeoutMs:1000,absoluteTimeoutMs:15000};
+  const progress:{packets:number;scannedBytes:number;bytesRead?:number}[]=[];
+  try {
+    const started=performance.now();
+    const result=await advancing.buildIndex(request,{policy,onProgress:data=>progress.push(data)});
+    assert.equal(result.packets,2);assert.ok(performance.now()-started>policy.idleTimeoutMs,'actual IO is deliberately slower than the idle period overall');
+    assert.ok(progress.some(p=>(p.bytesRead??0)>0&&p.packets===0),'inspection/packet assembly report actual bytes, not timer heartbeats');
+    assert.ok(progress.some(p=>p.scannedBytes===short.length));assert.equal(progress.at(-1)?.packets,2);
+    await assert.rejects(stalled.buildIndex(request,{policy}),/进度停滞/);
+  } finally {await advancing.close();await stalled.close();await rm(directory,{recursive:true,force:true});}
+});
+
+test('cancel propagates through a JS read that has not settled', async () => {
+  const controller=new AbortController();let closed=0,entered!:()=>void;
+  const reading=new Promise<void>(resolve=>entered=resolve);
+  const actual=await fixture();
+  const source=new TsPacketSource({size:actual.length,read:async()=>{entered();return new Promise<Uint8Array>(()=>{});},close(){closed++;}},'cancel-source',controller.signal);
+  const opening=source.open();await reading;controller.abort();
+  await assert.rejects(opening,{name:'AbortError'});assert.equal(closed,1);assert.equal(source.index,undefined);
 });

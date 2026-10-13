@@ -258,6 +258,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           : parseMediaIndexIdentity(kind, url.searchParams);
       } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
+      if (req.method === 'POST' && kind === 'js-ts') throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');

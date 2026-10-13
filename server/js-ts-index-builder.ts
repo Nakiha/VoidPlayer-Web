@@ -7,7 +7,7 @@ import type { MediaIndexScanProgress } from '../src/media-index-types.ts';
 
 /** Disk indexing owns no decoder/core; the client and server use the same parser. */
 export async function buildJsTsIndexDocument(filePath: string, size: number, version: string, sourceVersion: string,
-  onProgress?: (data: MediaIndexScanProgress) => void) {
+  onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal) {
   const started = performance.now(), cpu = process.cpuUsage(), handle = await open(filePath, 'r');
   let readCalls = 0, readBytes = 0, closed = false;
   const assertVersion = async () => {
@@ -45,9 +45,9 @@ export async function buildJsTsIndexDocument(filePath: string, size: number, ver
   let source: TsPacketSource | undefined;
   try {
     await assertVersion();
-    source = new TsPacketSource(reader, sourceVersion, new AbortController().signal);
+    source = new TsPacketSource(reader, sourceVersion, signal);
     onProgress?.({ packets: 0, scannedBytes: 0, totalBytes: size });
-    const document = await source.open();
+    const document = await source.open(undefined,onProgress);
     await assertVersion();
     onProgress?.({ packets: document.packets.length, scannedBytes: size, totalBytes: size });
     const used = process.cpuUsage(cpu);

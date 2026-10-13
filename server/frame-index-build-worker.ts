@@ -1,7 +1,7 @@
 import { buildJsTsIndexDocument } from './js-ts-index-builder.ts';
 import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
-import { FrameIndexStore } from './frame-index-store.ts';
+import { prepareFrameIndex, FrameIndexStore } from './frame-index-store.ts';
 import { encodeBase64 } from '../src/ffmpeg-index-cache.ts';
 import { AdminError } from './admin-error.ts';
 import { buildFlvIndexDocument } from './flv-index-builder.ts';
@@ -40,7 +40,7 @@ parentPort!.on('message', async (request: {
       if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
       const result = await buildJsTsIndexDocument(request.filePath, request.size, request.version, `${request.id}@${request.version}`,
         data => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...data } }));
-      store.put(request.id, request.version, request.size, result.document, request.epoch, request.identity);
+      store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`),request.epoch);
       parentPort!.postMessage({ value: { built: true, epoch: request.epoch, profile: result.profile } });
       return;
     }
