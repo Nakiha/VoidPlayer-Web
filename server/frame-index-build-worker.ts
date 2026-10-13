@@ -1,3 +1,4 @@
+import { buildJsTsIndexDocument } from './js-ts-index-builder.ts';
 import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
 import { FrameIndexStore } from './frame-index-store.ts';
@@ -33,6 +34,14 @@ parentPort!.on('message', async (request: {
       const result=await buildFlvIndexDocument(request.filePath,request.size,request.version,progress=>parentPort!.postMessage({type:'progress',data:progress}));
       store.put(request.id,request.version,request.size,result.document,request.epoch,request.identity);
       parentPort!.postMessage({value:{built:true,epoch:request.epoch,profile:result.profile}});
+      return;
+    }
+    if (request.identity.kind === 'js-ts') {
+      if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
+      const result = await buildJsTsIndexDocument(request.filePath, request.size, request.version, `${request.id}@${request.version}`,
+        data => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...data } }));
+      store.put(request.id, request.version, request.size, result.document, request.epoch, request.identity);
+      parentPort!.postMessage({ value: { built: true, epoch: request.epoch, profile: result.profile } });
       return;
     }
     if (!hasServerIndexCore(workerData.coreDir)) throw new AdminError(503, '服务端 FFmpeg WASM core 不可用。');

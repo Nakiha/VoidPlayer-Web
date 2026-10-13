@@ -1,5 +1,5 @@
 import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
-import type { MediaIndexIdentity } from './media-index-identity.ts';
+import type { MediaIndexIdentity, MediaIndexKind } from './media-index-identity.ts';
 import { decodeIndexBase64 } from './index-stream-encoding.ts';
 import { IndexStreamTransport } from './index-stream-transport.ts';
 import type { IndexStreamEventResult } from './index-stream-transport.ts';
@@ -22,12 +22,12 @@ export class MediaIndexClient {
   private lookup: Promise<ServerIndexResult | null>;
   private transport: IndexStreamTransport;
   private ffmpegConsumer?: FfmpegIndexConsumer;
-  private readonly kind: 'flv' | 'ffmpeg';
+  private readonly kind: MediaIndexKind;
   private readonly maxBytes: number;
   private readonly onScanProgress?: (progress: MediaIndexScanProgress) => void;
   private readonly traceStartedAt = performance.now();
   private trace: Partial<MediaIndexClientTrace> = {};
-  constructor(url: string | undefined, kind: 'flv' | 'ffmpeg', maxBytes: number, idleTimeoutMs = 120000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
+  constructor(url: string | undefined, kind: MediaIndexKind, maxBytes: number, idleTimeoutMs = 120000, requestBuild = false, identity?: MediaIndexIdentity, onScanProgress?: (progress: MediaIndexScanProgress) => void, onRecordManifest?: (manifest: MediaIndexRecordManifest) => void, onRecordBatch?: (batch: MediaIndexRecordBatch) => void, onRecordComplete?: (manifest: MediaIndexRecordManifest, frames: number) => void) {
     this.kind = kind;
     this.maxBytes = maxBytes;
     this.onScanProgress = onScanProgress;

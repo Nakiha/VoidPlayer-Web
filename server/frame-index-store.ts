@@ -1,3 +1,4 @@
+import { JS_TS_INDEX_BYTES, parseTsPacketIndex } from '../src/ts-packet-index.ts';
 import type { FrameIndexManifest, FrameIndexBatch } from './frame-index-protocol.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { randomUUID } from 'node:crypto';
@@ -5,7 +6,7 @@ import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../src/media-index-identity.ts';
 import { validFfmpegRecovery } from '../src/index-integrity.ts';
 import type { FfmpegIndexRecovery } from '../src/index-integrity.ts';
@@ -66,7 +67,7 @@ export class FrameIndexStore {
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
-    return this.commit(id, version, prepareFrameIndex(value, size, identity), epoch);
+    return this.commit(id, version, prepareFrameIndex(value, size, identity, `${id}@${version}`), epoch);
   }
 
   commit(id: string, version: string, prepared: PreparedFrameIndex, epoch: unknown) {
@@ -76,6 +77,8 @@ export class FrameIndexStore {
       const media = this.db.prepare("SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1").get(id, version);
       if (!media) throw new AdminError(409, '媒体已改变，未保存旧索引。');
       const { text, bytes, frames, scannedBytes, identity } = prepared;
+      if (identity.kind === 'js-ts' && !parseTsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
+        throw new AdminError(409, 'JS TS 索引源身份与提交不匹配。');
       const now = Date.now();
       if (identity.kind === 'ffmpeg') {
         const doc = JSON.parse(text) as Record<string, unknown>;
@@ -316,12 +319,20 @@ export type PreparedFrameIndex = {
   identity: MediaIndexIdentity;
 };
 
-export function prepareFrameIndex(value: unknown, size: number, identityOrKind: MediaIndexIdentity | FrameIndexKind = FLV_MEDIA_INDEX_IDENTITY): PreparedFrameIndex {
+export function prepareFrameIndex(value: unknown, size: number, identityOrKind: MediaIndexIdentity | FrameIndexKind = FLV_MEDIA_INDEX_IDENTITY, sourceVersion?: string): PreparedFrameIndex {
   if (size < 0 || !Number.isSafeInteger(size)) throw new AdminError(400, '媒体大小无效。');
   const expectedKind = typeof identityOrKind === 'string' ? identityOrKind : identityOrKind.kind;
   let identity: MediaIndexIdentity;
   let text: string, bytes: number, frames: number;
-  if (expectedKind === 'ffmpeg') {
+  if (expectedKind === 'js-ts') {
+    const parsed = sourceVersion ? parseTsPacketIndex(value, sourceVersion, size) : undefined;
+    if (!parsed) throw new AdminError(400, 'JS TS 索引格式、源身份或范围无效。');
+    identity = JS_TS_MEDIA_INDEX_IDENTITY;
+    if (typeof identityOrKind !== 'string' && identityArgs(identityOrKind).some((v,i)=>v !== identityArgs(identity)[i]))
+      throw new AdminError(409, 'JS TS 索引身份与请求不匹配。');
+    text = JSON.stringify(parsed); bytes = Buffer.byteLength(text); frames = parsed.packets.length;
+    if (bytes > JS_TS_INDEX_BYTES) throw new AdminError(413, 'JS TS 帧索引过大。');
+  } else if (expectedKind === 'ffmpeg') {
     const parsed = parseFfmpegIndex(value, size);
     if (!parsed) throw new AdminError(400, 'FFmpeg 帧索引格式或范围无效。');
     const inferred: MediaIndexIdentity = {
