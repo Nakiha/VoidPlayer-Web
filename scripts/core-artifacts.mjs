@@ -20,7 +20,7 @@ export async function verifyCoreArtifact(directory, lock, schema, required) {
   }
   if (schema === 'voidplayer-analysis-build') {
     const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
-    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi'])
+    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi', 'demuxAbi', 'demuxCompatibility'])
       assert.equal(manifest[key], lock[key], `Analysis manifest ${key} differs from release lock`);
     assert.ok(!manifest.dirty, 'Unpublished analysis manifest');
     assert.equal(provenance.buildId, manifest.buildId ?? manifest.revision, 'Analysis build ID differs');

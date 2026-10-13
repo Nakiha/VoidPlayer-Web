@@ -51,6 +51,7 @@ export interface MediaSource {
   bitstreamFile?: Blob;
   /** Read-only confirmed packet frontier; starts metadata indexing, never seeks. */
   getBitstreamIndex?(): Promise<import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
+  getBitstreamFfmpegIndex?(): Promise<import('./ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   getBitstreamFlvIndex?(): Promise<import("./flv-index-cache.ts").FlvIndexDocument>;
   bitstreamIndexIdentity?: import('./media-index-identity.ts').MediaIndexIdentity;
   info: MediaInfo;

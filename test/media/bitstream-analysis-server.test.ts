@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { mkdtemp, rm, readFile, symlink, access } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { createMediaServer } from "../../server/app.ts";
 import { MediaLibraryIndex } from "../../server/library.ts";
 import { AnalysisScheduler } from "../../server/analysis/scheduler.ts";
@@ -151,7 +154,8 @@ test("HTTP writes require same origin and version; server failures never downloa
     server = createMediaServer({
       roots: [],
       library: f.library,
-      staticDir: resolve("dist"),
+      // This backend fixture uses the downloaded public core. It does not
+      // serve a built frontend or require dist to exist.
       onLog() {},
     });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
@@ -185,7 +189,7 @@ test("HTTP writes require same origin and version; server failures never downloa
       },
       body,
     });
-    assert.equal(response.status, 202);
+    assert.equal(response.status, 202, await response.clone().text());
     const request = await response.json();
     for (let i = 0; i < 100; i++) {
       const state = await (
@@ -207,6 +211,35 @@ test("HTTP writes require same origin and version; server failures never downloa
   } finally {
     await new Promise<void>((r) => server.close(() => r()));
     await f.close();
+  }
+});
+
+test("backend HTTP analysis works from public with no dist directory", async () => {
+  const folder = await mkdtemp(join(tmpdir(), "vp-http-without-dist-"));
+  try {
+    for (const name of ["public", "fixtures"]) {
+      await symlink(resolve(name), join(folder, name), process.platform === "win32" ? "junction" : "dir");
+    }
+    await assert.rejects(access(join(folder, "dist")), { code: "ENOENT" });
+    try {
+      const result = await promisify(execFile)(process.execPath, [
+        "--experimental-strip-types", "--test", "--test-reporter=tap",
+        "--test-name-pattern=^HTTP writes require same origin and version",
+        fileURLToPath(import.meta.url),
+      ], {
+        cwd: folder,
+        env: { ...process.env, VOIDPLAYER_ANALYSIS_CORE_DIR: "", NODE_TEST_CONTEXT: undefined },
+        timeout: 60000,
+        maxBuffer: 1024 * 1024,
+      });
+      assert.match(result.stdout, /^ok \d+ - HTTP writes require same origin and version/m);
+      assert.match(result.stdout, /^# pass 1$/m, "the isolated process must actually execute the HTTP assertion");
+    } catch (error: any) {
+      assert.fail(`Backend-only HTTP regression failed: ${error.stdout ?? ""}\n${error.stderr ?? error.message}`);
+    }
+    await assert.rejects(access(join(folder, "dist")), { code: "ENOENT" });
+  } finally {
+    await rm(folder, { recursive: true, force: true });
   }
 });
 

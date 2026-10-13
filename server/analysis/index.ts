@@ -1,7 +1,7 @@
 import { parseFlvIndex, FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../library.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
-import { FFMPEG_INDEX_RECORD_BYTES } from '../../src/ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_BYTES, parseFfmpegIndex } from '../../src/ffmpeg-index-cache.ts';
 import { AnalysisFailure } from '../../src/bitstream-analysis/failure.ts';
 
 /** A separate read-only subscriber to the shared streaming index. Presentation
@@ -100,6 +100,22 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
         await new Promise(resolve => setTimeout(resolve, 20));
       }
       return flvDocument!;
+    },
+    async ffmpegSnapshot(active: () => boolean = () => true) {
+      if(identity.kind !== 'ffmpeg')throw new AnalysisFailure('unsupported-container','FFmpeg snapshot required');
+      const started=performance.now();
+      while(!(await this.read()).complete) {
+        if(!active())throw new AnalysisFailure('cancelled','Analysis demand expired during indexing');
+        if(performance.now()-started>120000)throw new AnalysisFailure('resource-limit','FFmpeg index snapshot stalled');
+        await new Promise(resolve=>setTimeout(resolve,20));
+      }
+      const bytes=await library.indexJobs.call('get',{id,version,identity});
+      if(!bytes || bytes.length>FFMPEG_INDEX_BYTES+1024)throw new AnalysisFailure('resource-limit','Invalid FFmpeg index document');
+      const envelope=JSON.parse(Buffer.from(bytes).toString('utf8'));
+      if(envelope.epoch!==epoch || !await library.resolve(id,version))throw new AnalysisFailure('source-changed','Index source/epoch changed');
+      const parsed=parseFfmpegIndex(envelope.index,metadata.size,{indexerBuild:identity.indexerBuild,streamIndex:Number(identity.streamKey.split(':')[1])});
+      if(!parsed || parsed.document.count!==frontier)throw new AnalysisFailure('incomplete-reference-state','FFmpeg index coverage/identity mismatch');
+      return parsed.document;
     },
     close() { closed = true; build.unsubscribe(); },
   };

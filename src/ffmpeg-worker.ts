@@ -1,3 +1,4 @@
+import {ffmpegAnalysisConfiguration} from './ffmpeg-analysis-config.ts';
 import { FfmpegPacketIndex } from './analysis/ffmpeg-adapter.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { FfmpegCommands, FfmpegInitResult, WorkerMessage, WorkerRequest, IndexInput } from './worker-protocol.ts';
@@ -12,7 +13,7 @@ import { randomUUID } from './uuid.ts';
 import { loadCore } from './wasm-core.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import type { MediaIndexTrace, MediaIndexRecordBatch, MediaIndexRecordManifest } from './media-index-types.ts';
-import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from './ffmpeg-index-cache.ts';
+import { FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_SCHEMA, parseFfmpegIndex, serializeFfmpegIndex, FFMPEG_NO_TIMESTAMP, lastFfmpegPts } from './ffmpeg-index-cache.ts';
 // Web Worker hosting the self-built FFmpeg WASM core. Decoding is synchronous
 // CPU work; it must never run on the UI thread. The page talks to this worker
 // over a small RPC: init (open + first presentable frame), index-input (already
@@ -48,6 +49,16 @@ const reply = workerReply<FfmpegCommands>();
 
 let core: any = null;
 let heap: () => Uint8Array;
+/** Native IO must unwind allocations before the original JS read failure is
+ * propagated with its input/resource stage intact. */
+function ioCall(name: string, result: string | null, types: string[], args: unknown[]): any {
+  core.vpDemuxError=undefined;
+  const value=core.ccall(name,result,types,args);
+  const error=core.vpDemuxError;core.vpDemuxError=undefined;
+  if(error)throw error;
+  return value;
+}
+
 let indexRequestId: number | undefined;
 type FfmpegIndexSink = {
   manifest(manifest: MediaIndexRecordManifest, trace: MediaIndexTrace): void;
@@ -83,7 +94,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       ioMode = 'http-range'; blobHandle = ctx;
       const { shared, size } = payload.range;
       core.vpBlobs.set(blobHandle, rangeBlobReader(shared, size, message => port.postMessage(message)));
-      if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
+      if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else if (payload.blob && typeof FileReaderSync !== 'undefined') {
@@ -97,7 +108,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
           observed.add(start, new Uint8Array(buffer)); return buffer;
         } },
       });
-      if (core.ccall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
+      if (ioCall('vp_open_blob', 'number', ['number', 'number', 'i64'], [ctx, blobHandle, BigInt(payload.blob.size)]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     } else {
@@ -106,7 +117,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       if (bytes.byteLength > 512 * 1024 * 1024) throw new Error('文件超过 WASM 回退解码的内存上限。');
       observed.add(0, new Uint8Array(bytes));
       core.FS.writeFile(path, new Uint8Array(bytes));
-      if (core.ccall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
+      if (ioCall('vp_open', 'number', ['number', 'string'], [ctx, path]) !== 0) {
         throw new MediaOpenError('container', '软件解码器未能打开视频轨道：封装、编码可能不受支持，或文件数据不完整。');
       }
     }
@@ -232,7 +243,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       while (prefix < ticks.length && ticks[prefix] < timelineOrigin) {
         if (prefix >= 128) throw new MediaOpenError('resource', '视频预滚范围超过 128 帧探测上限。');
         if (!firstPresentation) {
-          const extracted = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, BigInt(ticks[prefix])]);
+          const extracted = ioCall('vp_extract', 'number', ['number', 'i64'], [ctx, BigInt(ticks[prefix])]);
           if (extracted === 1) break;
           if (extracted !== 2) throw new MediaOpenError('decode', '软件解码器无法解析视频预滚帧。');
         }
@@ -284,7 +295,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
     };
     const externalIndex = payload.externalIndexSession === true && canImportIndex && Number.isSafeInteger(payload.mediaSize);
     if (externalIndex && typeof core._vp_prime_first_presentable === 'function') {
-      const primed = core.ccall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
+      const primed = ioCall('vp_prime_first_presentable', 'number', ['number'], [ctx]);
       if (primed !== 1) throw new MediaOpenError('decode', 'FFmpeg 无法解出首个可显示画面。');
       firstPresentation = readWasmFrame(core, heap, ctx);
       const firstTicks = firstPresentation.pts;
@@ -324,10 +335,10 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
               return makeIndexResult(imported, 'server', 0);
             } finally { core._free(ptr); }
           }
-          const built = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
+          const built = ioCall('vp_index_build', 'number', ['number'], [ctx]) as number;
           return makeIndexResult(built, 'client', 1);
         },
-        fallback: () => makeIndexResult(core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number, 'client', 1),
+        fallback: () => makeIndexResult(ioCall('vp_index_build', 'number', ['number'], [ctx]) as number, 'client', 1),
       };
       contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [firstTicks], durations: firstDurations, blobHandle, path, indexSink });
       const ready: FfmpegInitResult = {
@@ -350,7 +361,7 @@ async function init(payload: FfmpegCommands['init']['request'], onProgress: Medi
       onReady?.(ready);
       return ready;
     }
-    const count = core.ccall('vp_index_build', 'number', ['number'], [ctx]) as number;
+    const count = ioCall('vp_index_build', 'number', ['number'], [ctx]) as number;
     contexts.set(ctx, { packets: new FfmpegPacketIndex(), indexComplete: false, ticks: [], durations: [], blobHandle, path });
     return makeIndexResult(count, 'client', 1);
   } catch (error) {
@@ -368,7 +379,7 @@ function extract(ctx: number, index: number, recycle?: ArrayBuffer) {
   const ticks = entry?.ticks;
   if (!ticks || !Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
   const target = BigInt(ticks[index]);
-  const result = core.ccall('vp_extract', 'number', ['number', 'i64'], [ctx, target]);
+  const result = ioCall('vp_extract', 'number', ['number', 'i64'], [ctx, target]);
   if (result !== 1 || Number(core.ccall('vp_last_ticks', 'i64', ['number'], [ctx])) !== ticks[index]) {
     throw new Error(`WASM 解码未能命中索引帧 ${index}（结果 ${result}）。`);
   }
@@ -399,6 +410,20 @@ port.onmessage = async (event: { data: Request }) => {
       if (readyContext !== undefined) {
         if (!('indexPending' in result && result.indexPending)) port.postMessage({ id, type: 'index-complete', data: result });
       } else port.postMessage(reply(message, result));
+    } else if (type === 'analysis-ffmpeg-index') {
+      const ctx = message.ctx;
+      if (!contexts.get(ctx)?.indexComplete) throw new Error('Complete FFmpeg index required');
+      const len=core._vp_index_export_bytes(ctx),ptr=core._malloc(len);
+      if(len<=0 || !ptr) throw new Error('Invalid FFmpeg index export');
+      try {
+        const count=core._vp_index_export(ctx,ptr,len);
+        if(count*48!==len)throw new Error('Incomplete FFmpeg index export');
+        const index=serializeFfmpegIndex({size:message.size,codec:core.ccall('vp_codec_name','string',['number'],[ctx]),
+          timeBaseNum:core._vp_tb_num(ctx),timeBaseDen:core._vp_tb_den(ctx),width:core._vp_width(ctx),height:core._vp_height(ctx),
+          analysisConfiguration:ffmpegAnalysisConfiguration(core,heap,ctx),streamIndex:core._vp_stream_index(ctx),indexerBuild:core.ccall('vp_core_build_id','string',[],[]),
+          ...(core._vp_index_integrity(ctx)?{indexIntegrity:'prefix' as const,indexTruncatedAt:Number(core._vp_index_truncated_at(ctx)),indexEndDts:String(core._vp_index_end_dts(ctx))}:{})},heap().slice(ptr,ptr+len));
+        port.postMessage(reply(message,index));
+      } finally {core._free(ptr);}
     } else if (type === 'index-input') {
       const ctx = message.ctx;
       const sink = contexts.get(ctx)?.indexSink;

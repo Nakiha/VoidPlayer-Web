@@ -1,6 +1,6 @@
 {
   "repository": "Nakiha/VoidPlayer-FFmpeg-Build",
-  "revision": "36bd6662b873a291ac2a426ea99d1745a6e64235",
+  "revision": "353088620d08ee4ec2669842508f0fc84da2db28",
   "ffmpegRepository": "FFmpeg/FFmpeg",
   "ffmpegRevision": "946fcce07b6dcd0331c8cc609192aeff5e1924f8",
   "ffmpegRef": "n9.0.2",
@@ -8,5 +8,8 @@
   "dav1dRevision": "42b2b24fb8819f1ed3643aa9cf2a62f03868e3aa",
   "emscripten": "6.0.9",
   "meson": "1.11.2",
-  "ninja": "1.13.0"
+  "ninja": "1.13.0",
+  "demuxAbi": 1,
+  "demuxCompatibility": "ffmpeg-9.0.2-avformat-740392267b71-ts-raw-input-v2",
+  "pictureAbi": 1
 }

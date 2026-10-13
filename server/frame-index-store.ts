@@ -178,7 +178,7 @@ export class FrameIndexStore {
       .run(packets, scannedBytes, Date.now(), id, version, ...identityArgs(identity), buildId);
   }
 
-  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number, recovery: FfmpegIndexRecovery = {}) {
+  finishBuild(id: string, version: string, identity: MediaIndexIdentity, epoch: number, buildId: string, scannedBytes: number, stablePresentationUs: number, frames: number, recovery: FfmpegIndexRecovery & Pick<import('../src/ffmpeg-index-cache.ts').FfmpegIndexMetadata, 'analysisConfiguration'> = {}) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
       if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');

@@ -1,3 +1,4 @@
+import {isAnnexB} from '../nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
 import {
@@ -44,10 +45,22 @@ export async function analyzePicture(
 ): Promise<AnalysisResult> {
   validateTarget(target);
   const started = performance.now(),
-    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream));
+    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core}));
   let opened = false;
   try {
-    const plan = await input.plan(target);
+    const firstPacket=input.packets[0];
+    const cachedAnchor=(hit: AnalysisResult | null | undefined, packet: typeof firstPacket) =>
+      !!hit && input.codec==='h264' && isAnnexB(input.configurations[packet.configuration]) &&
+      reusableResult(hit,input.codec,buildId,input.picture(packet,target.sourceVersion),packet.pts) &&
+      hit.gop?.anchor==='closed' && hit.gop.startAu===packet.au && hit.gop.configuration===packet.configuration &&
+      !!hit.containerHeader && !!hit.references && hit.nalus?.filter(n=>n.type===1 || n.type===5).length===1 && hit.nalus.some(n=>n.type===5);
+    const firstHit=options.stream && options.cached ? await options.cached(input.picture(firstPacket,target.sourceVersion)) : null;
+    signal.throwIfAborted();
+    // A matching exact cached IDR already carries source-bound syntax proof.
+    // It may seed a cache-only TS stream without instantiating demux/decoder.
+    const plan = cachedAnchor(firstHit,firstPacket)
+      ? {start:0,target:firstPacket,identity:input.picture(firstPacket,target.sourceVersion)}
+      : await input.plan(target);
     if (options.sequential) plan.start = 0;
     let groups = options.stream ? groupAnalysisGops(input.packets.slice(0, input.sealedEnd)) : [];
     const extend = async (cursor: number) => {
@@ -74,6 +87,7 @@ export async function analyzePicture(
     const containerHeaders = new Map<number, ReturnType<typeof readContainerHeader>>();
     let pointer = 0;
     const open = async () => {
+      if (input.analysisCore) core = input.analysisCore;
       if (typeof core === 'function') core = await core();
       signal.throwIfAborted();
       validateAnalysisCore(core);
@@ -141,6 +155,7 @@ export async function analyzePicture(
       last = result;
       await options.onResult?.(result);
       signal.throwIfAborted();
+      input.acknowledge?.();
       await progress();
     };
     const prepared = new Set<number>();
@@ -156,7 +171,9 @@ export async function analyzePicture(
       prepared.add(cursor);
       const first = input.packets[cursor];
       if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
-      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
+      const anchorHit=await options.cached(input.picture(first,target.sourceVersion));
+      const evidence = cachedAnchor(anchorHit,first) ? {singlePicture:true,closedRandomAccess:true}
+        : inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
       if (!evidence.singlePicture) throw new AnalysisFailure('unsupported-picture-layout', `Unsupported picture layout: ${evidence.reason}`);
       group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
       if (evidence.closedRandomAccess) streamAnchor = cursor;
@@ -441,13 +458,10 @@ export async function analyzePicture(
         );
       try {
         core.HEAPU8.set(bytes, pointer);
-        const ret = core._vpa_feed(
-          pointer,
-          bytes.length,
-          packet.pts,
-          packet.dts,
-          packet.au,
-        );
+        const ret = input.analysisCore
+          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts,
+              (packet.timing?.pts != null ? 1 : 0) | (packet.timing?.dts != null ? 2 : 0), packet.au)
+          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts, packet.au);
         if (ret === 2) continue;
         if (ret < 0) throw coreFailure(ret, "Analysis packet failed");
       } finally {
@@ -488,9 +502,13 @@ export async function analyzeRange(
   cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
 ) {
   validateRange(target);
+  if(typeof core==='function') {
+    const factory=core;let instance:Promise<any> | undefined;
+    core=()=>instance ??= Promise.resolve().then(factory);
+  }
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
-  const input = await openAnalysisInput(reader, signal);
+  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core});
   let first: number;
   const missing = new Set<number>();
   let lastCached: AnalysisResult | undefined;
@@ -569,7 +587,7 @@ export async function analyzeStream(
   validateStream(target);
   let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
   const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
-  const input = await openAnalysisInput(reader, signal, true, { frontier,
+  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
   return analyzePicture(reader, { sourceVersion: target.sourceVersion,

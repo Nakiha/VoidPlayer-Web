@@ -112,7 +112,7 @@ for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`i
 await withBrowserFixture(
   {
     caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
-    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), path.join(repositoryRoot, "fixtures/fmp4-analysis"), limitsDir],
+    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), path.join(repositoryRoot, "fixtures/fmp4-analysis"), path.join(repositoryRoot, "fixtures/ts-analysis"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: layoutOnly ? 300000 : 600000,
@@ -552,7 +552,7 @@ await withBrowserFixture(
             await selectDiagrams(page, 'overview');
             await page.locator('#toggle-analysis').click();
           }
-          if (row.container === 'flv') {
+          if (row.container === 'flv' || row.container === 'ts') {
             const prefixToken = await call('get_presented_frame', { slot: 'A' });
             const capability = (await call('get_analysis_capabilities'))[0].capability;
             if (capability.indexState === 'building') assert.equal(prefixToken.picture, null, 'growing FLV index cannot promise global PTS uniqueness');
@@ -814,14 +814,14 @@ await withBrowserFixture(
             "offset is not persistent picture identity",
           );
           await call("set_review_track_offset", { slot: "A", offsetUs: 0 });
-          if (row.container === 'fmp4') {
-            await call('seek_review', { ptsUs: 350000 }); await stable();
+          if (row.container === 'fmp4' || row.container === 'ts') {
+            await call('seek_review', { ptsUs: row.container === 'ts' ? 8_700_000 : 350000 }); await stable();
             const rearToken = await call('get_presented_frame', { slot: 'A' });
             const rearResult = await call('request_bitstream_analysis', { slot: 'A' });
             assert.deepEqual(rearResult.picture, rearToken.picture, 'nonkey fragment seek preserves actual presented AU');
             assert.equal(rearResult.sourcePtsUs, rearToken.sourcePtsUs);
             await analyze(); await overlay.waitFor({ state: 'visible' });
-            assert.equal(await overlay.getAttribute('data-picture'), JSON.stringify([rearToken.picture.sourceVersion, 'video', 0, rearToken.picture.au, 0, 0, 'frame']));
+            assert.equal(await overlay.getAttribute('data-picture'), JSON.stringify([rearToken.picture.sourceVersion, rearToken.picture.stream, 0, rearToken.picture.au, 0, 0, 'frame']));
             await hideOverlay();
             const crossing = await call('request_bitstream_range', { slot: 'A', startUs: 280000, endUs: 480000 });
             assert.ok(crossing.pictures >= 10, 'real interval crosses a nonkey fragment');
@@ -849,7 +849,7 @@ await withBrowserFixture(
     await hideOverlay();
     // Select from the actual final fixture: unpartitioned and fixture-filtered
     // runs also cache the fMP4 280–480 ms cross-fragment interval.
-    const lifecyclePtsUs = matrixRows.at(-1)?.container === 'fmp4' ? 800000 : 400000;
+    const lifecyclePtsUs = matrixRows.at(-1)?.container === 'ts' ? 4_700_000 : matrixRows.at(-1)?.container === 'fmp4' ? 800000 : 400000;
     await call("seek_review", { ptsUs: lifecyclePtsUs });
     await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
     // Establish that the old-picture demand exists before superseding it;

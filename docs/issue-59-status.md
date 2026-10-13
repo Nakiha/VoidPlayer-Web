@@ -72,3 +72,94 @@ Draft [PR #61](https://github.com/Nakiha/VoidPlayer-Web/pull/61)，Refs #59；�
 CI run `38391988066` 的非 fMP4 WebKit identity case 在最终 `errors=[]` 收集到 `/api/users` access-control pageerror；没有用错误消息过滤豁免。精确 `3e3b6770c5ad2e49191d871e0b62e2632ad7d62a` head 本机单跑该 case 通过。诊断版再跑两次也通过，捕获到启动列表取消和故意 stalled-list route abort，但均无 pageerror；这不证明 Linux CI 根因已修复。
 
 harness 现在为所有页面记录标签、URL、时间、phase、pageerror stack，以及 `/api/users` 请求/响应/完成/失败；仍保留 `errors=[]`，且额外页面也纳入该断言。报告写入 `.run/playback-reports/identity-webkit-localhost-diagnostics.json`（已在 CI artifact 上传范围），写证据失败也不跳过资源清理。身份生产代码未改。若 CI 再复现，应按带来源的事件修正实际导航/关闭或产品异步处理；不可把单纯重跑成功解释为修复。
+
+## 第三阶段：静态 H264 TS 检查点
+
+Web 从 PR61 合入后的 `49152bd` 独立检出；core 从既有播放 pin `36bd666`
+起步并保留其上的 FFmpeg 9.0.2、pthread URL、tag 校验和 crop 修复。共享
+实现已推送为 `848c4507cf6a450990361b5fecfeaec34d196bd6`，core draft
+[PR #6](https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/pull/6) 的目标是 `wasm`。
+播放和 analysis 固定同一已推送 revision，FFmpeg 本体仍分别是 `946fcce` /
+`c160c1b`；两者 libavformat tree 完全相同。维持两个既有产物，analysis 只增加
+裁剪的 MPEG-TS libavformat，不加入第三套框架或 swscale。
+
+独立 `vpd_*` 持有自己的 format/AVIO/parser/packet 游标，提供有界读取、配置、
+known flags、原 ordinal、stream、raw PTS/DTS/timebase、position、size、key/corrupt
+及重组 payload。position 是 demux locator，不能按 position+size 直接读裸 AU。
+seek 用完整只读 v3 索引唯一核对 PTS/DTS/position/size，后续包必须连续匹配源
+ordinal。歧义、缺失/重复时间戳或时间断裂拒绝 exact，不按最近 PTS 配对，不隐式
+从头解封装。H264/TS 的 NOFILLIN 保留缺失 PES 时间；完整枚举字节重绕到 0，
+避免按时间 seek 跳过无时间戳的第一个 PES。原始 ticks 不修复；不同时间基量化可
+相差一 tick，duration 未知时仍明确为 0。demux compatibility ID 固定实现语义，
+同时继续严格核对 indexerBuild 为当前 core revision。
+
+播放以 COPY_OPAQUE 携带候选身份，从实际 receive 的 AVFrame 读取，通过独立
+picture ABI 1 accessor 贯通 Worker、wasm-frame、ffmpeg-media 和 presenter；160
+字节像素描述 ABI 不变。首版只有单视频、静态 SPS/PPS、progressive、单 VCL slice
+且 first_mb=0、完整唯一源索引及无损坏实际输出可提供 token；重复输出 token、
+field/MBAFF、layer/SVC/MVC、多 slice/picture、配置变化均关闭精确身份。容器 key
+仍只作候选；analysis 必须检查 IDR。相同参数集重复不增加 epoch。
+
+现有 metadata scan 记录静态 in-band SPS/PPS，明确标为归一化 Annex-B NAL
+配置，绝不伪称 avcC。local/library 的当前帧、range、whole 共用原 runner/core，
+各自持有独立 payload reader；全缓存 range 只枚举只读索引，不加载 analysis WASM。
+实际需要压缩包才打开 demux，probe、seek 和重复 IO 均计入真实读取成本。
+
+无转码 `h264-static.ts` 保留 600 个源 picture。原 QA MP4 最后一个长度前缀 VCL
+内嵌 `00 00 00 01 0a` 的 EOS marker，FFmpeg parser 在 TS 中将其分离；验收逐 AU
+核对所有实际 VCL SHA-256，并显式核对这一已知 5 字节边界，独立冻结 block 答案
+继续有效。两个后段 GOP AU 540/570 在两个 WASM 中各推进 4 个包、读取 512 KiB，
+ordinal/tuple/payload hash 一致。Node TS 6/6 已通过首帧独立答案、两个独立后段
+请求的真实 IO、顺序/局部一致、全缓存/缺口、600 个 distinct AU、一次 EOF drain、
+21 帧取消后释放重开，以及物理 PES 缺失/重复时间戳负例。ST/MT 接收 token 包含
+B 帧、后段、尾帧、反向 seek。WebKit/Chromium TS local/library × 两种色彩政策的
+真实可见遮罩、逐帧、seek、offset、cache/range、分析关闭不加载重任务、迟到与
+取消闭环均已通过，最终干净 Web 提交后的 bench/回归与 CI 状态另行记录。
+
+支持矩阵、独立 CI 分片与 fixture 准备已登记。TS 目前仅支持上述静态 H264 子集；
+HEVC/VVC TS、MKV、动态流和复杂恢复继续由 #59 跟踪，不关闭总 issue，不自行
+合入或发版。
+
+### 独立 review 修正：原始时间与编码结构
+
+原 `848c450` 的 NOFILLIN 方案不足以证明原始时间：pinned H264 parser 会从 HRD
+SEI 生成 DTS/PTS，发生在 libavformat 的 NOFILLIN 分支之前。两个实际 WASM 均
+复现了被清掉 PES 时钟的 AU 10/11/40/41 仍返回 known=3；该检查点不能作为时间
+可信度验收。修复固定 parser.c hash，TS inspect/read/seek 范围内保留 generic
+parser 输入的时间描述，阻止 codec parser 合成值进入原始 known 状态，payload/AU
+重组仍由同一个 av_parser_parse2 执行。Compatibility 升为 raw-input-v2，继续
+要求精确 indexerBuild，已有 v1 索引不能混用。
+
+core 同时在 SPS admission 直接要求 frame_mbs_only_flag=1。真实 MBAFF 数据只改
+picture-timing SEI 为 FRAME，pinned decoder 的 50 帧展示 interlaced 标志都变为 0，
+但 core 仍 0/50 提供身份；原 MBAFF 也 0/50。Progressive 单 slice 25/25 成功，
+双 slice 0/25。当前 x264 的 SEI 为 31 个 pic_struct=3 与 19 个=4，fixture 明确核对
+这 50 个短 SEI 都未跨 TS packet，再全部改为 0；SPS/VCL/PES 时钟不修改。
+
+Web review 的三个生命周期问题也有实际回归：EM_JS/host callback 以错误返回
+让 C 正常释放，再保留原异常抛出；300 次实际 pre-return IO 失败保持 live context
+为 0、heap 不增长，随后同一模块重开成功。Range factory 在 miss 时只调用一次，
+全缓存保持零新增实例。Whole 的累计物理 IO 仍保留指标，但预算按有界推进检查，
+不再用 lifetime 64 MiB 截断全片；插入 null TS packets、压缩图片和时钟不变的
+79 MiB 片源完整消费 600 AU，保留每步/未产出/结果背压预算。修复后 Node TS 10/10
+通过；最终干净 head 的浏览器、原格式回归、bench 与 CI 仍需要复核。
+
+### 综合 CI 总时限修正
+
+功能 head `e279521` / core `3530886` 的最终本机验证已完成：source 116/116
+case、MP4/FLV/fMP4/TS 媒体 73/73 test、TS Node 12/12，WebKit/Chromium
+功能矩阵各 4/4，干净可见 WebKit 原场景 bench 12/12。额外可见 Chromium
+同压缩片源的 TS/MP4 强制 WASM 对照各三次，共 6/6，TS 约 60 fps、零丢帧。
+Headless Chromium 矩阵内的负性能遥测仍保留，不算作通过的性能验收。
+
+该 head 的最后综合 CI job 在 45 分钟总时限被 GitHub 取消；官方 annotation
+是 `The job has exceeded the maximum execution time of 45m0s`。完整 unit
+（13 分 21 秒）、播放/source UI（8 分 57 秒）、标注/缓存、FLV 和 FATE 帧契约
+均已成功，取消发生在后续时钟审计，HTTPS 尚未执行，不能宣称该 head CI 全过。
+
+完整 144-case Node unit 套件改为独立必须成功的 job，继续使用同一 pinned
+playback/analysis 产物、QA 片源和原生 oracle，并纳入 release-set 的直接依赖。
+Unit 与综合浏览器 job 都保留 45 分钟总预算，所有原 case 的断言、时限和性能
+门槛保持原值；unit 不过滤 case、也不与浏览器 job 重复执行。新的工作流契约
+验证失败、取消、pending 和 skipped 均阻止 release aggregation。最终以该拆分
+修正后的精确 Web head 的干净 build/bench、source 回归及 CI 重新报告。

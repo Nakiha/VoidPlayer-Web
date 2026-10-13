@@ -252,6 +252,29 @@
       "expected": "exact",
       "oracle": "docs/fixtures/bitstream-analysis-vtm.json",
       "fixtureDir": "fmp4-analysis"
+    },
+    {
+      "codec": "h264",
+      "container": "ts",
+      "inputs": [
+        "local-file",
+        "library"
+      ],
+      "playbackPaths": [
+        "wasm-container"
+      ],
+      "features": [
+        "blocks",
+        "qp-luma8",
+        "basic-modes"
+      ],
+      "fixture": "h264-static.ts",
+      "fixtureDir": "ts-analysis",
+      "expected": "exact",
+      "oracle": "docs/fixtures/bitstream-analysis-answers.json",
+      "restrictions": [
+        "Finite single-video progressive single-slice AVC; static SPS/PPS and unique continuous timestamps."
+      ]
     }
   ],
   "excluded": [

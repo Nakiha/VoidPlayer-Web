@@ -2,7 +2,7 @@ import { MediaOpenError } from './media-errors.ts';
 import { ffmpegColorInfo } from './media-metadata.ts';
 import { rgbaDescription, validateDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
-export type WasmFrameOutput = { pts: number; duration: number; description: FrameDescription; pixels: ArrayBuffer };
+export type WasmFrameOutput = { pts: number; duration: number; description: FrameDescription; pixels: ArrayBuffer; picture?: {au: number; stream: string; configuration: number} };
 export function requireFrameAbi(core: any): void {
   if (typeof core._vp_frame_info!=='function' || typeof core._vp_frame_format!=='function') throw new MediaOpenError('decode','WASM core 缺少完整帧描述接口，请同步当前锁定版本。');
 }
@@ -51,5 +51,15 @@ export function readWasmFrame(core: any, heap: () => Uint8Array, ctx: number, re
       out.set(pixels.subarray(start,start+description.stride!),row*description.stride!);
     }
   } else out.set(pixels.subarray(pixelPtr,pixelPtr+len));
-  return {pts,duration,description,pixels:out.buffer};
+  let picture: WasmFrameOutput['picture'];
+  if (typeof core._vp_picture_info === 'function' && typeof core._vp_picture_abi_version === 'function' && core._vp_picture_abi_version() === 1) {
+    const id = core._vp_picture_info(ctx);
+    if (id) {
+      if(!Number.isSafeInteger(id) || id<1 || id+56>heap().byteLength)throw new MediaOpenError('decode','WASM picture identity pointer out of bounds');
+      const v = new DataView(heap().buffer,id,56), au=Number(v.getBigUint64(24,true)), stream=v.getInt32(36,true);
+      if(v.getUint32(44,true)===1 && v.getUint32(40,true)===1 && Number(v.getBigInt64(0,true))===pts && Number.isSafeInteger(au) && au>=0 && au<2000000 && stream>=0)
+        picture={au,stream:`video:${stream}`,configuration:0};
+    }
+  }
+  return {pts,duration,description,pixels:out.buffer,...(picture?{picture}:{})};
 }

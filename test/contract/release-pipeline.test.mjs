@@ -47,8 +47,14 @@ test('release workflow gates verified artifacts and draft staging on every verif
   const workflow = await readFile(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
   const jobs = workflowJobs(workflow);
   assert.match(jobs['analysis-core'].body, /name: Verify analysis reference ABI including restored caches\n        run: node scripts\/prepare-analysis-core.mjs public\/vendor\/voidplayer-analysis/);
-  const required = ['native-release', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
+  const required = ['native-release', 'unit', 'playback', 'source-logic', 'analysis-logic', 'analysis-browser', 'analysis-matrix', 'hevc-browser', 'uncovered-regressions'];
   assert.deepEqual([...jobs['release-set'].needs].sort(), required.sort());
+  assert.deepEqual(jobs.unit.needs, ['decoder', 'analysis-core']);
+  assert.match(jobs.unit.body, /run: node scripts\/run-tests\.mjs unit\n        env:\n          VOIDPLAYER_FFMPEG_ORACLE:/);
+  assert.equal((workflow.match(/run: node scripts\/run-tests\.mjs unit(?:\n|$)/g) ?? []).length, 1, 'complete unit suite runs exactly once with no case filter');
+  assert.doesNotMatch(jobs.playback.body, /run-tests\.mjs unit/);
+  assert.match(jobs.unit.body, /if: always\(\)[\s\S]*name: complete-unit-reports[\s\S]*\.run\/test-suites\/unit\//);
+
   const dependencies = id => new Set(jobs[id].needs.flatMap(need => {
     assert.ok(jobs[need], `unknown dependency ${need}`);
     return [need, ...dependencies(need)];
@@ -101,14 +107,14 @@ test('analysis matrix runs as independent required jobs with distinct evidence',
   assert.deepEqual(matrix.needs, ['decoder', 'analysis-core']);
   assert.match(matrix.body, /timeout-minutes: 30/);
   assert.match(matrix.body, /fail-fast: false/);
-  assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4\]/);
+  assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4, ts\]/);
   assert.match(matrix.body, /run: node scripts\/run-tests.mjs ci-analysis-matrix-\$\{\{ matrix.part \}\} --engine \$\{\{ matrix.engine \}\} --prepared/);
   assert.match(matrix.body, /if: always\(\)[\s\S]*name: analysis-matrix-reports-\$\{\{ matrix.engine \}\}-\$\{\{ matrix.part \}\}/);
   assert.match(matrix.body, /\.run\/test-suites\/ci-analysis-matrix-\$\{\{ matrix.part \}\}\//);
   assert.doesNotMatch(matrix.body, /continue-on-error:/);
   assert.match(jobs['analysis-browser'].body, /run: node scripts\/run-tests.mjs ci-analysis-ui --engine/);
   assert.doesNotMatch(jobs['analysis-browser'].body, /--case node-bitstream-analysis|run-tests.mjs ci-analysis-browser/);
-  assert.match(jobs.playback.body, /run: node scripts\/run-tests.mjs unit/);
+  assert.match(jobs.unit.body, /run: node scripts\/run-tests.mjs unit/);
   for (const id of ['node-bitstream-analysis-core', 'node-bitstream-analysis-server', 'node-bitstream-analysis-flv']) {
     const manifest = JSON.parse(await readFile(new URL('../../scripts/testing/manifest.json', import.meta.url), 'utf8'));
     assert.ok(manifest.cases.find(row => row.id === id && row.required && row.suites.includes('unit')), `${id}: remains required in unit`);

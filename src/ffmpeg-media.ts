@@ -379,7 +379,7 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     if (!Number.isInteger(index) || index < 0 || index >= ticks.length) throw new Error('帧索引无效。');
     const started = performance.now(), randomAccess = index !== previousIndex + 1;
     let output: WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } };
-    if (index === 0 && firstFrame) {
+    if (index === 0 && firstFrame && (firstFrame.picture || info.indexState !== 'complete' || init.codec !== 'h264')) {
       // The primed frame may first be consumed as a native-decoder witness,
       // before the player asks for its initial image. Keep the cache replayable
       // and give each caller a private buffer because returned buffers can be
@@ -410,6 +410,8 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
       pixels,
       ptsUs: ticksToUs(output.pts) - ticksToUs(firstTick),
       sourcePtsUs: ticksToUs(output.pts),
+      ...(output.picture ? {sourcePicture: {sourceVersion: info.source ? `${info.source.id}@${new URL(info.source.url, globalThis.location?.href ?? 'http://localhost').searchParams.get('v')}` : info.id,
+        ...output.picture, picture: 0 as const, layer: 0 as const, field: 'frame' as const}} : {}),
       durationUs: ticksToUs(output.duration) || durationsUs[index] || initialDurationUs,
       close() { if (!closed) { closed = true; if (!disposed) spare = pixels.buffer as ArrayBuffer; } },
     };
@@ -425,6 +427,10 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
   source = {
     info, ensureIndexed,
     bitstreamIndexIdentity: init.indexIdentity,
+    async getBitstreamFfmpegIndex() {
+      await ensureIndexed();
+      return activeRpc.call('analysis-ffmpeg-index', {ctx: init!.ctx, size: file.size});
+    },
     async getBitstreamIndex() {
       if (disposed || info.indexState === 'error') throw new Error(info.indexError ?? '索引不可用。');
       return { packets: analysisSummary?.confirmedPackets ?? (info.indexState === 'complete' ? null : 0), complete: info.indexState === 'complete' };
