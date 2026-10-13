@@ -2,6 +2,7 @@ import { serializeFlvIndex } from './flv-index-cache.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
+import { TsEngine } from './ts-engine.ts';
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -14,7 +15,7 @@ async function start() {
     ? (await import('node:worker_threads')).parentPort : null;
   const reply = workerReply<PacketCommands>();
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
-  let engine: FlvEngine | Mp4Engine | undefined;
+  let engine: FlvEngine | Mp4Engine | TsEngine | undefined;
   let chain = Promise.resolve();
   let audioTimer: ReturnType<typeof setTimeout> | undefined;
   let audioRequest: { pts: number; generation: number } | undefined;
@@ -53,6 +54,10 @@ async function start() {
       send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
+    if (message.type === 'analysis-ts-index' && engine instanceof TsEngine) {
+      send(reply(message, engine.packetIndex!));
+      return;
+    }
     if (message.type === 'analysis-index' && engine) {
       const packets = engine instanceof FlvEngine ? engine.index.packets : engine.analysisIndex!.packets;
       send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
@@ -80,18 +85,18 @@ async function start() {
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
           if (!(engine instanceof FlvEngine && message.container === 'flv')) {
-            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);
+            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : message.container === 'ts' ? new TsEngine(message.input, message.sourceVersion) : new FlvEngine(message.input, message.prepared);
           }
           const data = await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress }));
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
-        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
           try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }
           finally { frame.frame?.close(); }
-        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads)));
-        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           send(reply(message, await engine.switchToNative()));
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send(reply(message, null));
@@ -116,7 +121,7 @@ async function start() {
             mediaId, sourceVersion: `${mediaId}@${packets.length}${complete ? '' : '+'}`, indexRevision: packets.length,
             firstPtsUs: message.firstPtsUs ?? 0, durationUs: message.durationUs ?? 0,
             capability: {
-              hasSize: true, hasDts: true, keySource: 'container',
+              hasSize: true, hasDts: engine instanceof TsEngine ? packets.some(p=>p.dts!==null) : true, keySource: engine instanceof TsEngine ? 'verified' : 'container',
               pictureType: 'key-only', qp: 'unsupported',
               indexState: complete ? 'complete' : 'building',
             },
