@@ -120,7 +120,7 @@ export class FlvEngine {
           onProgress?.('decode');
           const native = await nativeFlvDecoder(this.index, undefined, event => this.nativeDiagnostics.push(event));
           phase = 'first-frame';
-          if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size)); onProgress?.('first-frame'); this.primed = await this.extract(0); }
+          if (native) { this.decoder = native; this.timeline=new PacketTimeline(this.index,native,p=>this.reader.read(p.offset,p.size),true); onProgress?.('first-frame'); this.primed = await this.extract(0); }
         } catch (error) {
           if (error instanceof MediaOpenError && error.stage !== 'decode') throw error;
           this.nativeDiagnostics.push({ reason: 'native-failed', phase, error: error instanceof Error ? error.message : String(error) });
@@ -132,7 +132,7 @@ export class FlvEngine {
         onProgress?.('decoder');
         this.decodeFailure = undefined;
         this.decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
-        this.timeline=new PacketTimeline(this.index,this.decoder,p=>this.reader.read(p.offset,p.size));
+        this.timeline=new PacketTimeline(this.index,this.decoder,p=>this.reader.read(p.offset,p.size),true);
         onProgress?.('first-frame');
         this.primed = await this.extract(0);
       }
@@ -170,7 +170,7 @@ export class FlvEngine {
   async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<FlvFrame> {
     if (this.decoder?.kind !== 'webcodecs' || !this.timeline) throw new MediaOpenError('decode', 'FLV 原生解码器尚未就绪。');
     const decoder = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
-    const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size));
+    const timeline = new PacketTimeline(this.index, decoder, packet => this.reader.read(packet.offset, packet.size),true);
     try {
       const firstPts = this.primed?.pts ?? this.index.packets[(this.index.displayOrder ?? this.index.order)[0]].pts;
       return await timeline.at(firstPts);
@@ -182,7 +182,7 @@ export class FlvEngine {
     if (this.decoder?.kind === 'webcodecs') {
       const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
       const decoder=await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
-      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+      const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
       let primed:FlvFrame;
       try{primed=await timeline.at(target);}catch(error){timeline.close();throw error;}
       this.primed?.frame?.close();this.timeline?.close();
@@ -201,7 +201,7 @@ export class FlvEngine {
       const decoder=await nativeFlvDecoder(this.index);
       if(decoder){
         const target=this.primed?.pts??this.index.packets[(this.index.displayOrder??this.index.order)[0]].pts;
-        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size));
+        const timeline=new PacketTimeline(this.index,decoder,packet=>this.reader.read(packet.offset,packet.size),true);
         let primed:FlvFrame;
         try{primed=await timeline.at(target);}catch(error){timeline.close();if(error instanceof MediaOpenError&&error.stage==='decode')return this.decoderInfo();throw error;}
         this.primed?.frame?.close();this.timeline?.close();this.decoder=decoder;this.timeline=timeline;this.primed=primed;

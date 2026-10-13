@@ -47,6 +47,11 @@ async function start() {
       }, 0);
       return;
     }
+    if (message.type === 'analysis-index' && engine) {
+      const packets = engine instanceof FlvEngine ? engine.index.packets : engine.analysisIndex!.packets;
+      send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
+      return;
+    }
     if (message.type === 'complete-index' && engine instanceof FlvEngine) {
       const current = engine, id = message.id;
       // Incremental commits never await the extraction chain: an extract may

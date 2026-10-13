@@ -1,3 +1,4 @@
+import { parseMediaIndexIdentity } from "../media-index-identity.ts";
 import { validateDiagram, validateContainerHeader } from "./diagrams.ts";
 import type { FrameDescription } from "../frame-description.ts";
 import { AnalysisFailure, ANALYSIS_REASON_CODES } from "./failure.ts";
@@ -57,9 +58,12 @@ export interface AnalysisStreamTarget {
 export function validateStream(target: AnalysisStreamTarget) {
   if (!target || target.mode !== 'stream') throw new AnalysisFailure('invalid-request', 'Invalid stream request');
   validateTarget({ sourceVersion: target.sourceVersion, sourcePtsUs: target.firstPtsUs, normalizedMediaUs: 0 });
-  if (target.indexIdentity && (target.indexIdentity.kind !== 'ffmpeg' || !/^video:(?:0|[1-9][0-9]{0,2})$/.test(target.indexIdentity.streamKey) ||
-      target.indexIdentity.schemaVersion !== 3 || !/^[a-f0-9]{40}$/.test(target.indexIdentity.indexerBuild)))
-    throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity');
+  if (target.indexIdentity) {
+    const id = target.indexIdentity;
+    try { parseMediaIndexIdentity(id.kind, new URLSearchParams({stream: id.streamKey,
+      schema: String(id.schemaVersion), indexer: id.indexerBuild})); }
+    catch { throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity'); }
+  }
   if (!Number.isSafeInteger(target.durationUs) || target.durationUs <= 0)
     throw new AnalysisFailure('invalid-request', 'Invalid stream duration');
 }

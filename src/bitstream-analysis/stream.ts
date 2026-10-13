@@ -10,7 +10,7 @@ export interface StreamProgress {
   checkedUs: number;
   totalUs: number;
   pictures: number;
-  totalPictures: number;
+  totalPictures: number | null;
   gopStartAu?: number;
 }
 
@@ -20,7 +20,7 @@ export function groupAnalysisGops(packets: readonly AnalysisPacket[]) {
   const groups: AnalysisGop[] = [];
   for (const packet of packets) {
     const previous = groups[groups.length - 1];
-    if (!previous || packet.key || packet.configuration !== previous.configuration) {
+    if (!previous || packet.key || packet.discontinuity || packet.configuration !== previous.configuration) {
       if (previous) previous.endAu = packet.au;
       groups.push({ startAu: packet.au, endAu: packets.at(-1)!.au + 1,
         configuration: packet.configuration, anchor: 'unknown' });

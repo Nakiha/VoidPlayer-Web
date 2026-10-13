@@ -33,6 +33,7 @@ export async function analyzePicture(
   options: {
     input?: Awaited<ReturnType<typeof openAnalysisInput>>;
     sequential?: boolean;
+    keepInput?: boolean;
     desiredAus?: ReadonlySet<number>;
     endSourcePtsUs?: number;
     onResult?: (result: AnalysisResult) => Promise<void>;
@@ -55,8 +56,17 @@ export async function analyzePicture(
       await input.ensure(cursor);
       groups.push(...groupAnalysisGops(input.packets.slice(previousEnd, input.sealedEnd)));
     };
-    const seen = options.stream ? new Uint8Array(input.totalPackets) : undefined;
-    const decoded = options.stream ? new Uint8Array(input.totalPackets) : undefined;
+    const timestampCounts = new Map<number, number>();
+    let identityCounted = 0;
+    const refreshIdentities = () => {
+      for (; identityCounted < Math.min(input.sealedEnd, input.packets.length); identityCounted++) {
+        const pts = input.packets[identityCounted].pts;
+        timestampCounts.set(pts, (timestampCounts.get(pts) ?? 0) + 1);
+      }
+    };
+    refreshIdentities();
+    const seen = options.stream ? new Set<number>() : undefined;
+    const decoded = options.stream ? new Set<number>() : undefined;
     if (options.stream && new Set(input.packets.map(p => p.pts)).size !== input.packets.length)
       throw new AnalysisFailure('ambiguous-picture-identity', 'Duplicate picture timestamps');
     let configuration = plan.target.configuration;
@@ -122,11 +132,11 @@ export async function analyzePicture(
     const progress = async (complete = false) => {
       if (!options.stream) return;
       await options.onProgress?.({ pictures: outputPictures, totalPictures: input.totalPackets, indexComplete: input.indexComplete, waitingForIndex: false,
-        checkedUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : Math.min(options.stream.durationUs - 1, Math.floor(options.stream.durationUs * outputPictures / input.totalPackets)),
+        checkedUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : Math.min(options.stream.durationUs - 1, (input.totalPackets ? Math.floor(options.stream.durationUs * outputPictures / input.totalPackets) : 0)),
         totalUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : options.stream.durationUs, gopStartAu: last?.gop?.startAu });
     };
     const publish = async (result: AnalysisResult) => {
-      if (seen) seen[result.picture.au] = 1;
+      if (seen) seen.add(result.picture.au);
       outputPictures++;
       last = result;
       await options.onResult?.(result);
@@ -146,7 +156,7 @@ export async function analyzePicture(
       prepared.add(cursor);
       const first = input.packets[cursor];
       if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
-      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.read(first.offset, first.size));
+      const evidence = inspectPacketPicture(input.codec, input.configurations[first.configuration], await input.readUnit(first));
       if (!evidence.singlePicture) throw new AnalysisFailure('unsupported-picture-layout', `Unsupported picture layout: ${evidence.reason}`);
       group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
       if (evidence.closedRandomAccess) streamAnchor = cursor;
@@ -157,7 +167,7 @@ export async function analyzePicture(
         const hit = await options.cached(picture);
         signal.throwIfAborted();
         if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts) && hit.nalus && hit.containerHeader && hit.references) {
-          if (!seen![au]) await publish({ ...hit, gop: { ...group } });
+          if (!seen!.has(au)) await publish({ ...hit, gop: { ...group } });
         } else complete = false;
       }
       if (!complete) return null;
@@ -166,7 +176,7 @@ export async function analyzePicture(
       const next = input.packets[group.endAu];
       if (next && opened) {
         if (next.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
-        const boundary = inspectPacketPicture(input.codec, input.configurations[next.configuration], await input.read(next.offset, next.size));
+        const boundary = inspectPacketPicture(input.codec, input.configurations[next.configuration], await input.readUnit(next));
         if (!boundary.singlePicture || !boundary.closedRandomAccess) return null;
       } else if (!next && !input.indexComplete) return null;
       return group.endAu;
@@ -189,12 +199,15 @@ export async function analyzePicture(
         );
       let result: AnalysisResult | null = null;
       if (options.stream || desired.has(au)) {
-        if (!Number.isSafeInteger(au) || au < 0 || au >= input.packets.length || decoded?.[au])
+        if (!Number.isSafeInteger(au) || au < 0 || au >= input.packets.length || decoded?.has(au))
           throw new Error('Invalid or duplicate analyzer AU');
-        if (decoded) decoded[au] = 1;
+        if (decoded) decoded.add(au);
       }
-      if ((options.stream && !seen![au]) || (!options.stream && desired.has(au))) {
+      if ((options.stream && !seen!.has(au)) || (!options.stream && desired.has(au))) {
         const selected = input.packets[au];
+        refreshIdentities();
+        if (timestampCounts.get(selected.pts) !== 1)
+          throw new AnalysisFailure('ambiguous-picture-identity', 'Duplicate source picture timestamps');
         const invalid = core._vpa_invalid() !== 0,
           depth = core._vpa_depth(),
           ptr = core._vpa_blocks(),
@@ -313,7 +326,7 @@ export async function analyzePicture(
       signal.throwIfAborted();
       if (!opened) {
         if (options.stream) await extend(cursor);
-        if (cursor >= input.totalPackets && input.indexComplete && outputPictures === input.totalPackets && last) {
+        if (input.indexComplete && cursor >= input.totalPackets! && outputPictures === input.totalPackets && last) {
           await progress(true);
           return last;
         }
@@ -326,7 +339,7 @@ export async function analyzePicture(
         // a cached prefix must not turn a valid stream into a random-seek failure.
         if (options.stream) cursor = streamAnchor;
         plan.start = cursor;
-        decoded?.fill(0);
+        decoded?.clear();
         configuration = input.packets[cursor].configuration;
         description = input.configurations[configuration];
         await open();
@@ -354,15 +367,15 @@ export async function analyzePicture(
           sinceOutputPackets = 0; sinceOutputBytes = 0;
           continue;
         }
-        if (options.stream && drained && cursor < input.packets.length && input.packets[cursor].configuration !== configuration) {
+        if (options.stream && drained && cursor < input.packets.length && (input.packets[cursor].configuration !== configuration || input.packets[cursor].discontinuity)) {
           // An uncached configuration boundary still requires a closed anchor.
           const packet = input.packets[cursor];
-          const bytes = await input.read(packet.offset, packet.size);
+          const bytes = await input.readUnit(packet);
           const nextDescription = input.configurations[packet.configuration];
           if (!inspectPacketPicture(input.codec, nextDescription, bytes).closedRandomAccess)
             throw new AnalysisFailure('no-safe-anchor-within-budget', 'Configuration change has no closed anchor');
           core._vpa_close(); opened = false;
-          configuration = packet.configuration; description = nextDescription;
+          configuration = packet.configuration; description = nextDescription; plan.start = cursor;
           await open(); drained = false; sinceOutputPackets = 0; sinceOutputBytes = 0;
           continue;
         }
@@ -389,7 +402,7 @@ export async function analyzePicture(
         continue;
       }
       const packet = input.packets[cursor];
-      if (!packet || packet.configuration !== configuration) {
+      if (!packet || packet.configuration !== configuration || (packet.discontinuity && cursor !== plan.start)) {
         if (drained)
           throw new AnalysisFailure(
             "incomplete-reference-state",
@@ -408,7 +421,7 @@ export async function analyzePicture(
           "resource-limit",
           "Analysis input budget exceeded",
         );
-      const bytes = await input.read(packet.offset, packet.size),
+      const bytes = await input.readUnit(packet),
         evidence = inspectPacketPicture(input.codec, description, bytes);
       if (options.stream || desired.has(packet.au)) nalus.set(packet.au, readNalus(input.codec, description, bytes));
       if (!evidence.singlePicture)
@@ -449,7 +462,7 @@ export async function analyzePicture(
     }
   } finally {
     if (opened) core._vpa_close();
-    input.close();
+    if (!options.keepInput) input.close();
   }
 }
 
@@ -518,18 +531,30 @@ export async function analyzeRange(
     input.close();
     throw error;
   }
-  return analyzePicture(
-    reader,
-    {
-      sourceVersion: target.sourceVersion,
-      sourcePtsUs: first,
-      normalizedMediaUs: first - target.firstPtsUs,
-    },
-    core,
-    buildId,
-    signal,
-    { input, desiredAus: missing, endSourcePtsUs: target.firstPtsUs + target.endUs, onResult },
-  );
+  // A bounded interval may span configuration/recovery boundaries. Reopen only
+  // decoder state while retaining this independently owned metadata reader.
+  let last = lastCached;
+  try {
+    const groups = groupAnalysisGops(input.packets);
+    const segments: number[][] = [];
+    for (const packet of input.packets) {
+      if (!missing.has(packet.au)) continue;
+      const group = gopForAu(groups, packet.au);
+      const previous = segments.at(-1);
+      const previousGroup = previous && gopForAu(groups, previous[0]);
+      if (!previous || previousGroup!.configuration !== group.configuration ||
+          input.packets.slice(previous[0] + 1, packet.au + 1).some(p => p.discontinuity)) segments.push([packet.au]);
+      else previous.push(packet.au);
+    }
+    for (const aus of segments) {
+      const packet = input.packets[aus[0]];
+      last = await analyzePicture(reader, { sourceVersion: target.sourceVersion,
+        sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) },
+        core, buildId, signal, { input, keepInput: true, desiredAus: new Set(aus), onResult });
+    }
+    return last!;
+  } finally { input.close(); }
+
 }
 
 /** Reconstruct coverage from validated picture chunks; skip only cache-covered

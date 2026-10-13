@@ -1,3 +1,4 @@
+import { parseFlvIndex, FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../library.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
 import { FFMPEG_INDEX_RECORD_BYTES } from '../../src/ffmpeg-index-cache.ts';
@@ -10,8 +11,19 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
   const metadata = library.metadata(id);
   if (!metadata || metadata.version !== version) throw new AnalysisFailure('source-changed', 'Index source changed');
   const epoch = await library.indexJobs.call('epoch');
-  const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity });
-  let buildError: unknown, closed = false, buildId: string | undefined, seq = -1, frontier = 0;
+  let buildError: unknown;
+  let flvPrefix = 0, flvComplete = false;
+  const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity }, {
+    onProgress(progress) {
+      // Shared FLV scanner publishes only append-only validated source packets.
+      if (identity.kind === 'flv') {
+        if (!Number.isSafeInteger(progress.packets) || progress.packets < flvPrefix || progress.packets > 250000)
+          buildError = new AnalysisFailure('resource-limit', 'Invalid FLV index prefix');
+        else flvPrefix = progress.packets;
+      }
+    },
+  });
+  let closed = false, buildId: string | undefined, seq = -1, frontier = 0;
   const ordinals = new Set<number>();
   void build.promise.catch(error => { buildError = error; });
   const append = (records: Uint8Array) => {
@@ -30,6 +42,25 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
       if (closed) throw new AnalysisFailure('cancelled', 'Index subscriber closed');
       if (!await library.resolve(id, version)) throw new AnalysisFailure('source-changed', 'Index source changed');
       if (buildError) throw buildError;
+      if (identity.kind === 'flv') {
+        if (await library.indexJobs.call('epoch') !== epoch)
+          throw new AnalysisFailure('source-changed', 'Index cache reset');
+        if (!flvComplete) {
+          const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
+          if (snapshot.epoch !== epoch) throw new AnalysisFailure('source-changed', 'Index cache reset');
+          if (snapshot.manifest?.complete) {
+            const bytes = await library.indexJobs.call('get', { id, version, identity });
+            if (!bytes || bytes.length > FLV_INDEX_BYTES + 1024)
+              throw new AnalysisFailure('resource-limit', 'Invalid FLV index document');
+            const envelope = JSON.parse(Buffer.from(bytes).toString('utf8'));
+            const index = parseFlvIndex(envelope.index ?? envelope, metadata.size);
+            if (index.packets.length < flvPrefix || index.packets.length > 250000)
+              throw new AnalysisFailure('incomplete-reference-state', 'Invalid FLV index AU coverage');
+            flvPrefix = index.packets.length; flvComplete = true;
+          }
+        }
+        return { packets: flvPrefix, complete: flvComplete };
+      }
       const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
       if (snapshot.epoch !== epoch) throw new AnalysisFailure('source-changed', 'Index cache reset');
       const manifest = snapshot.manifest;

@@ -105,7 +105,7 @@ for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`i
 await withBrowserFixture(
   {
     caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? 'bitstream-analysis-matrix' : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
-    roots: [path.join(repositoryRoot, "fixtures/video"), limitsDir],
+    roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), limitsDir],
     engine,
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: layoutOnly ? 300000 : 600000,
@@ -498,7 +498,7 @@ await withBrowserFixture(
     if (!diagramsOnly) {
     for (const input of ["local-file", "library"])
       for (const decoding of ["browser", "software"])
-        for (const row of matrix.rows) {
+        for (const row of matrix.rows.filter(r => !process.argv.includes('--flv-only') || r.container === 'flv')) {
           console.log(`${engine}: ${input}/${decoding}/${row.codec}`);
           await call("remove_review_track", { slot: "A" });
           await call("set_review_color_mode", {
@@ -514,7 +514,7 @@ await withBrowserFixture(
             await page
               .locator("#file-A")
               .setInputFiles(
-                path.join(repositoryRoot, "fixtures/video", row.fixture),
+                path.join(repositoryRoot, "fixtures", row.fixtureDir ?? "video", row.fixture),
               );
           else
             await call("load_library_item", {
@@ -534,7 +534,7 @@ await withBrowserFixture(
             "disabled analysis does not load its worker or core",
           );
           assert.equal(await page.locator('#inspector-analysis-tab').count(),0,'left inspector contains only source information');
-          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264') {
+          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             await page.locator('#toggle-analysis').click();
             await selectDiagrams(page, 'nalu-size');
             await page.locator('.bitstream-diagram-empty').waitFor({ state: 'visible' });
@@ -587,7 +587,7 @@ await withBrowserFixture(
           if (
             input === "local-file" &&
             decoding === "browser" &&
-            row.codec === "h264"
+            row.codec === "h264" && row.container === "mp4"
           ) {
             let release;
             const blocked = new Promise((r) => {
@@ -641,7 +641,7 @@ await withBrowserFixture(
             if (
               input === "local-file" &&
               decoding === "browser" &&
-              row.codec === "h264" &&
+              row.codec === "h264" && row.container === "mp4" &&
               mode === "qp"
             )
               await page.screenshot({ path: artifact("qp-overlay.png") });
@@ -701,7 +701,7 @@ await withBrowserFixture(
               "only an exact next-picture cache hit may remain visible",
             );
           }
-          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264') {
+          if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             const next = await call('get_presented_frame', { slot: 'A' });
             await analyze();
             await overlay.waitFor({ state: 'visible' });
@@ -729,7 +729,7 @@ await withBrowserFixture(
           assert.ok(cachedRange.pictures >= 2, 'overlapping range enumerates its own pictures');
           if (input === 'local-file') assert.ok(!requests.slice(beforeCachedRange).some(r => /voidplayer-analysis\.(js|wasm)/.test(r.url)),
             'a completely cached local range reads metadata without loading analysis WASM');
-          if (decoding === "browser" && row.codec === "h264") {
+          if (decoding === "browser" && row.codec === "h264" && row.container === "mp4") {
             await call("request_bitstream_range", {
               slot: "A",
               startUs: 0,
@@ -863,7 +863,7 @@ await withBrowserFixture(
       assert.ok(coreRequests.some(url => /voidplayer-core.*\.wasm$/.test(url.pathname)), 'playback Worker fetches a real core');
       assert.ok(coreRequests.some(url => url.pathname.endsWith('/voidplayer-analysis.wasm')), 'analysis Worker fetches a real core');
       for (const url of coreRequests) assert.equal(url.searchParams.get('v'), built.coreAssetDigests[url.pathname], `main/Worker core version: ${url.pathname}`);
-      assert.equal(rows.filter(row => row.codec).length, matrix.rows.reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
+      assert.equal(rows.filter(row => row.codec).length, matrix.rows.filter(r => !process.argv.includes('--flv-only') || r.container === 'flv').reduce((count, row) => count + row.inputs.length * 2, 0), 'every admitted codec/input/playback preference is checked');
       assert.deepEqual(errors, []);
       await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
       await page.screenshot({ path: artifact('final.png') });

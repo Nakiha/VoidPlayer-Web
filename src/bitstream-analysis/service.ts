@@ -280,8 +280,8 @@ export class BitstreamAnalysisService {
       progress = { ...progress, pictures: consumed, gopStartAu: result.gop.startAu }; update();
     };
     const onProgress = (next: StreamProgress) => {
-      if (!next || typeof next.indexComplete !== 'boolean' || (next.waitingForIndex !== undefined && typeof next.waitingForIndex !== 'boolean') || ![next.pictures, next.totalPictures, next.checkedUs, next.totalUs].every(Number.isSafeInteger) ||
-          next.totalPictures < 0 || next.totalPictures > 250000 || next.pictures < 0 || next.pictures > next.totalPictures ||
+      if (!next || typeof next.indexComplete !== 'boolean' || (next.waitingForIndex !== undefined && typeof next.waitingForIndex !== 'boolean') || ![next.pictures, next.checkedUs, next.totalUs].every(Number.isSafeInteger) || (next.totalPictures !== null && !Number.isSafeInteger(next.totalPictures)) ||
+          (next.totalPictures !== null && (next.totalPictures < 0 || next.totalPictures > 250000 || next.pictures > next.totalPictures)) || next.pictures < 0 || next.pictures > 250000 ||
           next.totalUs <= 0 || next.checkedUs < 0 || next.checkedUs > next.totalUs)
         throw new Error('Invalid stream progress');
       // Remote producer may be ahead; displayed coverage counts consumed chunks.

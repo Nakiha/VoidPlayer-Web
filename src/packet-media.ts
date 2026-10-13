@@ -1,3 +1,4 @@
+import { FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
 import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from './media-reference.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
@@ -262,6 +263,13 @@ export async function openPacketMedia(container: 'flv' | 'mp4', input: FlvInput,
       async admitReference(depth) {
         await reconfigureColorMode('reference', { decoder: info.decoder === 'webcodecs' ? 'hardware' : 'software', depth: depth as ReferenceDecode['depth'] }, deps.signal);
         return source;
+      },
+      ...(container === 'flv' ? { bitstreamIndexIdentity: FLV_MEDIA_INDEX_IDENTITY } : {}),
+      async getBitstreamIndex() {
+        if (disposed) throw new Error('媒体已释放。');
+        if (info.indexState === 'error') throw new Error(info.indexError);
+        if (container === 'flv' && info.indexState === 'building') void completeIndex().catch(() => {});
+        return activeRpc.call('analysis-index', {});
       },
       getAnalysisCapability(): AnalysisCapability {
         return {
