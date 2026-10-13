@@ -90,3 +90,49 @@ test('local FLV scans without a service; a failed library build never silently s
  const remote=new FlvEngine({url:'http://localhost/api/media/'+'a'.repeat(24)+'?v=1',size:bytes.length});
  try{await remote.prepare();await assert.rejects(remote.completeIndex(),/服务端 FLV 索引未能完成/);assert.equal(mediaReads,1);assert.equal(remote.index.packets.length,1);}finally{remote.close();globalThis.fetch=original;}
 });
+
+test('cold, warm and restarted FLV analysis subscribers accept complete manifests without a build ID', async () => {
+ const {libraryAnalysisIndex}=await import('../../server/analysis/index.ts');
+ const dir=await mkdtemp(path.join(tmpdir(),'vp-flv-null-build-')),media=path.join(dir,'media');
+ await mkdir(media);const file=path.join(media,'clip.flv');await writeFile(file,syntheticFlv());
+ const database=path.join(dir,'library.sqlite');
+ let library=new MediaLibraryIndex([media],{database,watch:false});
+ try {
+  await library.refresh();
+  for(const phase of ['cold','uploaded','warm','restart']) {
+   if(phase==='restart') {await library.close();library=new MediaLibraryIndex([media],{database,watch:false});await library.refresh();}
+   const entry=library.browse().entries[0],identity=FLV_MEDIA_INDEX_IDENTITY;
+   if(phase==='uploaded') {
+    const cached=JSON.parse(new TextDecoder().decode(await library.indexJobs.call('get',{id:entry.id,version:entry.version!,identity})));
+    library.frameIndexes.remove();
+    const epoch=await library.indexJobs.call('epoch');
+    const bytes=new TextEncoder().encode(JSON.stringify({epoch,index:cached.index}));
+    assert.deepEqual(await library.indexJobs.call('put',{id:entry.id,version:entry.version!,identity,size:entry.size,bytes},[bytes.buffer]),{ok:true});
+    assert.equal(bytes.byteLength,0,'put retains transfer ownership');
+   }
+   const subscriber=await libraryAnalysisIndex(library,entry.id,entry.version!,file,identity);
+   try {
+    const started=performance.now();
+    const document=await subscriber.snapshot(()=>performance.now()-started<2000);
+    assert.equal(document.packets.length,4,phase);
+    assert.deepEqual(await subscriber.read(),{packets:4,complete:true},phase);
+    const stored=await library.indexJobs.call('stream-manifest',{id:entry.id,version:entry.version!,identity});
+    assert.ok(stored.manifest);assert.equal(stored.manifest.complete,true);
+    assert.equal(stored.manifest.buildId,null,'FLV has no build generation identifier');
+    assert.equal(stored.manifest.metadata,null,'FLV retains its whole-document protocol');
+    const server=createMediaServer({roots:[media],library,onLog(){}});
+    await new Promise<void>(r=>server.listen(0,'127.0.0.1',r));
+    try {
+     const endpoint=`http://127.0.0.1:${(server.address() as {port:number}).port}/api/media/${entry.id}/frame-index?v=${entry.version}`;
+     const result=await fetch(endpoint,{signal:AbortSignal.timeout(1500)});
+     assert.equal(result.status,200);assert.deepEqual((await result.json()).index,document);
+     const stream=await fetch(endpoint,{headers:{accept:'application/x-ndjson'},signal:AbortSignal.timeout(1500)});
+     assert.equal(stream.status,200);
+     assert.deepEqual((await stream.text()).trim().split('\n').map(line=>JSON.parse(line).type),['manifest','batch','progress','complete']);
+    } finally {server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));}
+   } finally {subscriber.close();}
+   await assert.rejects(subscriber.read(),/Index subscriber closed/);
+   assert.equal(await library.indexJobs.call('has',{id:entry.id,version:entry.version!,identity}),true,'subscriber cancellation retains the shared cache');
+  }
+ } finally {await library.close();await rm(dir,{recursive:true,force:true});}
+});

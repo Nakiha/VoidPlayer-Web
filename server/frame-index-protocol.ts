@@ -3,7 +3,7 @@ import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
 export type FrameIndexManifest = {
   epoch: number;
   manifest: null | {
-    buildId: string; state: string; lastSeq: number; complete: boolean;
+    buildId: string | null; state: string; lastSeq: number; complete: boolean;
     packets: number; scannedBytes: number; stablePresentationUs: number;
     bytes: number; frames: number; metadata: Record<string, unknown> | null;
   };

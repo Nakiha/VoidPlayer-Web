@@ -214,7 +214,7 @@ export class FrameIndexStore {
     if (!row?.media_id) return { epoch: Number(row?.epoch ?? this.epoch), manifest: null };
     this.db.prepare('UPDATE media_index_manifests SET accessed_at=? WHERE media_id=? AND media_version=? AND ' + identityWhere)
       .run(Date.now(), id, version, ...identityArgs(identity));
-    if (typeof row.build_id !== 'string' || typeof row.state !== 'string') throw new AdminError(500, '索引 manifest 标识无效。');
+    if ((row.build_id !== null && typeof row.build_id !== 'string') || typeof row.state !== 'string') throw new AdminError(500, '索引 manifest 标识无效。');
     return { epoch: Number(row.epoch), manifest: { buildId: row.build_id, state: row.state, lastSeq: Number(row.last_seq), complete: !!row.complete,
       packets: Number(row.packets), scannedBytes: Number(row.scanned_bytes), stablePresentationUs: Number(row.stable_presentation_us), bytes: Number(row.bytes), frames: Number(row.frames),
       metadata: row.metadata_json ? JSON.parse(String(row.metadata_json)) as Record<string, unknown> : null } };
