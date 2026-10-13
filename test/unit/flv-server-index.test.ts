@@ -69,7 +69,7 @@ for(const outcome of ['recovered','prefix'] as const) test(`cold library FLV ${o
   assert.equal(buildRequests,2);assert.match(results[0].indexWarning!,outcome==='recovered'?/149.*重同步/:/有效视频前缀/);
   assert.ok(results.every(r=>r.indexIntegrity===outcome));
   if(outcome==='prefix')assert.equal(results[0].indexTruncatedAt,syntheticFlv().length);
-  const cached=await library.indexJobs.call('has',{id:entry.id,version:entry.version,identity:FLV_MEDIA_INDEX_IDENTITY});assert.equal(cached,true);
+  const cached=await library.indexJobs.call('has',{id:entry.id,version:entry.version!,identity:FLV_MEDIA_INDEX_IDENTITY});assert.equal(cached,true);
   const warm=new FlvEngine(input);try{await warm.prepare();const result=await warm.completeIndex();assert.equal(result.indexSource,'server');assert.equal(result.indexIntegrity,outcome);assert.equal(result.indexWarning,results[0].indexWarning);}finally{warm.close();}
   assert.equal(handles.size,1,'warm lookup does not start another build');assert.equal(uploads,0);
   const reader=new FlvReader({file:new Blob([bytes])});try{assert.deepEqual(first.index,await demuxFlv(reader));}finally{reader.close();}

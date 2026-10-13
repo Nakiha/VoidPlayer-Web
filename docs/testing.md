@@ -279,3 +279,7 @@ npm run test:fate:browser
 ### 媒体与 Worker 的翻译依赖边界
 
 `node-i18n-build` 使用 `scripts/testing/i18n-architecture.mjs` 检查 media、presenter、FFmpeg/packet Worker 与实际 `src/thumbnails/pixel-worker.ts` 根入口。必检根入口或递归依赖缺失必须报出路径并失败。扫描相对运行时 import、re-export 和字符串字面量 dynamic import；type-only import/export 与包依赖不递归。Worker URL 单独列为根入口，计算式 import、require 和未列出的 Worker URL 不属于这个扫描器的覆盖范围。临时工程负例验证缺失入口、缩略图直接/间接引入翻译依赖均被拒绝；现有 progress callback 限制保持。
+
+### 服务端索引数据库 RPC
+
+`server/frame-index-protocol.ts` 绑定六个数据库操作的字段与结果，`FrameIndexJobs.call` 从操作名推导返回值，Worker 使用 `frameIndexReply` 检查响应。HTTP JSON 和磁盘索引的既有运行时校验仍在入口执行；数据库 Worker 消息布局、transfer、超时、并发与关闭策略保持。`test/helpers/frame-index-protocol-types.ts` 的负例随 build 和 `node-frame-index-worker` 编译，拒绝未知操作、缺失/错误字段及请求/响应错配；这些测试不在媒体逐帧路径增加校验或复制。
