@@ -28,6 +28,10 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
   private failure: Error | null = null;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout>; refresh?: () => void }>();
   private onTerminate: () => void;
+  private cleanupCallbackErrors:readonly unknown[]=Object.freeze([]);
+  /** Direct teardown rethrows these errors. A post failure inside a settled
+   * Promise executor cannot do so; its caller can inspect this bounded record. */
+  get terminationCallbackErrors():readonly unknown[]{return this.cleanupCallbackErrors;}
   constructor(worker: Worker, onTerminate: () => void = () => {}, onProgress?: MediaOpenProgress) {
     this.onTerminate = onTerminate;
     this.worker = worker;
@@ -216,6 +220,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
       else this.queuedIndexEvents.push({ type: 'index-error', data: indexError });
     }
     try {this.onTerminate();}catch(error){callbackErrors.push(error);}
+    this.cleanupCallbackErrors=Object.freeze(callbackErrors.slice());
     for (const entry of this.pending.values()) { clearTimeout(entry.timer); entry.reject(error); }
     this.pending.clear();
     this.worker.terminate();

@@ -199,3 +199,18 @@ for(const hook of ['index','terminate'] as const)test(`a throwing ${hook} hook c
     const pending=Reflect.get(rpc,'pending');for(const request of pending.values()){clearTimeout(request.timer);request.reject(new Error('original fault'));}pending.clear();await settled;
   }
 });
+
+test('synchronous postMessage failure preserves hook diagnostics even after the request Promise settles', async()=>{
+  const stub=browserWorker();
+  const ownerError=new Error('owner hook failed'),indexError=new Error('index hook failed'),postError=new Error('post failed');
+  let releases=0;
+  const rpc=new WorkerRpc(stub.worker,()=>{releases++;throw ownerError;});
+  const ready=rpc.call('init',{glueURL:'',name:'diagnostic'});stub.emit({id:1,type:'ready',data:init});await ready;
+  rpc.setIndexHandlers({error(){throw indexError;}});
+  stub.worker.postMessage=()=>{throw postError;};
+  await assert.rejects(rpc.call('extract',{ctx:1,index:0}),error=>error===postError);
+  assert.deepEqual(rpc.terminationCallbackErrors,[indexError,ownerError]);
+  assert.equal(Object.isFrozen(rpc.terminationCallbackErrors),true);
+  assert.equal(Reflect.get(rpc,'pending').size,0);assert.equal(releases,1);assert.equal(stub.terminated,1);
+  await assert.rejects(rpc.call('extract',{ctx:1,index:1}),error=>error===postError);
+});
