@@ -22,7 +22,7 @@ export async function runTestSuite(selection, { root = repositoryRoot, directory
   const checkedTools = new Map();
   const checkFixture = createFixturePrerequisites({ fixtures, root, directory, output, signal });
   return runBrowserRegressions(selection.selected.map(row => ({ ...row, name: row.id })), {
-    cwd: root, directory, signal, output,
+    cwd: root, directory, signal, output, stopOnFailure:selection.stopOnFailure,
     beforeCase: async row => {
       if (row.build && buildFailure) throw buildFailure;
       if (row.restrictions.some(reason => reason.includes('Disposable CI') || reason.includes('disposable CI')) && process.env.CI !== 'true') {

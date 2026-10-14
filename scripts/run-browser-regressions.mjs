@@ -107,7 +107,7 @@ async function runOwnedCase(entry, logPath, { cwd, timeoutMs, output, signal, di
 // Each browser owns its process and result. One failing script must never hide
 // later correctness checks; the aggregate exit status still gates the release.
 export async function runBrowserRegressions(entries, {
-  directory, cwd = process.cwd(), timeoutMs, output = process.stdout, signal, beforeCase,
+  directory, cwd = process.cwd(), timeoutMs, output = process.stdout, signal, beforeCase, stopOnFailure=false,
   removeTemporary = directory => rm(directory, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }),
 } = {}) {
   await mkdir(directory, { recursive: true });
@@ -127,7 +127,8 @@ export async function runBrowserRegressions(entries, {
     output.write(`::group::${entry.name}\n`);
     let result;
     try {
-      if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
+      if (stopOnFailure && results.some(row=>row.status!=='passed')) result={error:'Earlier dependent npm stage failed',phase:'dependency',durationMs:0,exitCode:null};
+      else if (signal?.aborted) result = { cancelled: true, error: 'suite cancelled', durationMs: 0, exitCode: null };
       else {
         await beforeCase?.(entry);
         result = await runCase(entry, logPath, { cwd, timeoutMs: timeoutMs ?? entry.timeoutMs ?? 300000, output, signal, directory, removeTemporary });

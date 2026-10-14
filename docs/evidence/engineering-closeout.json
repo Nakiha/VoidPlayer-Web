@@ -1,0 +1,426 @@
+{
+  "base": "edc2311c0a567f1937150b61a661aae2ac4fd6a8",
+  "scope": "One engineering closeout branch: remaining npm command aliases, explicit retirement of unreferenced forwarding entries, nativeYuvSource lifecycle. No decoder/render/color algorithm or threshold changes.",
+  "npm": {
+    "migratedCommands": 48,
+    "classification": {
+      "singleCaseOrDefault": 40,
+      "composite": 3,
+      "manualOrDiagnostic": 5
+    },
+    "contractTestsPassed": 67,
+    "allTestScriptsDelegateToRunner": true,
+    "unitCases": 153,
+    "uniqueUnitOwners": 153,
+    "retiredAliases": 139,
+    "remainingReferencedForwarders": 38,
+    "currentForwardersIncludingMainAdditions": 44
+  },
+  "converter": {
+    "oldTestsPassedBefore": 5,
+    "newAdversariesFailedBefore": 7,
+    "testsPassedAfter": 26,
+    "privateJobCorrelation": true,
+    "transportFailure": "latch only converter pool; settle jobs/slot/input waiters; detach and terminate; upstream stays independently owned",
+    "copyErrorReply": "reject picture only; worker reusable",
+    "lateSourceFrame": "close once after cancellation/disposal",
+    "browserChecks": [
+      "chromium",
+      "webkit"
+    ],
+    "browserEvidence": "Actual synthetic VideoFrame/Worker readback, plane bytes, transfer/reuse, ordering, disposal. Does not prove physical decoder hardware use."
+  },
+  "verification": {
+    "build": "passed",
+    "sourceCases": "122/122",
+    "manifestRegisteredCases": 328,
+    "browserMatrixRerun": false,
+    "rawTaskLogs": [
+      "engineering-closeout-converter-negative.log",
+      "engineering-closeout-converter-positive.log",
+      "engineering-closeout-final-entry-contract.log",
+      "engineering-closeout-source.log",
+      "engineering-closeout-final-build.log",
+      "engineering-closeout-readback-chromium.log",
+      "engineering-closeout-readback-webkit.log",
+      "engineering-closeout-focused-bench.log",
+      "engineering-closeout-baseline-bench.log"
+    ]
+  },
+  "benchmark": {
+    "repeats": 3,
+    "requestedWallMs": 8000,
+    "sameScenario": "h264_9s_1920x1080.mp4 reference mode, hardware preference, depth2, headless",
+    "originalLimitsRetained": true,
+    "candidateChromium": [
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30928033081325007,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.3100296058608691,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30475589254374336,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      }
+    ],
+    "candidateWebkit": [
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9999474616470023,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9997560052583357,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9999450831989537,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      }
+    ],
+    "baselineChromium": [
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.3099983022814913,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.31132451215135365,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30333477261169994,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      }
+    ],
+    "harnessSha256": "2471b8c400b03590d8e8973a6af269b39d517666afcc20c31016ccfa9d38c02a",
+    "sampleSha256": "fb41bae79c6dc65d22cf7e4e8657be0fce45f38a3206def6b535d6d9d32dfcb2",
+    "reviewFixesChromium": [
+      {
+        "passed": false,
+        "speed": 0.30821718909862234,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": false,
+        "speed": 0.31061879885814153,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": false,
+        "speed": 0.304409348246942,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      }
+    ],
+    "reviewFixesWebkit": [
+      {
+        "passed": true,
+        "speed": 0.9999350748262629,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": true,
+        "speed": 0.9999450516514474,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": true,
+        "speed": 0.9997730769518499,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      }
+    ]
+  },
+  "integratedMain": "f5826f4a68fa8edd661d4b31c21b686d30ee5f4d",
+  "reviewFixes": {
+    "introducedMissingGuards": [
+      "unissued reply IDs",
+      "complete reply layout failure must retire pool",
+      "release archive dash parsing",
+      "explicit archive conditional fixture",
+      "accurate supported/unsupported engine selection"
+    ],
+    "preExistingUnclosedBoundaries": [
+      "no upstream factory/next after converter failure",
+      "interrupt first pending next/return, including source input and copy wait"
+    ],
+    "redGreen": {
+      "converter": {
+        "tests": 25,
+        "beforePassed": 17,
+        "beforeFailed": 8,
+        "afterPassed": 25
+      },
+      "entry": {
+        "tests": 67,
+        "beforePassed": 64,
+        "beforeFailed": 3,
+        "afterPassed": 67
+      }
+    },
+    "caseCoverage": "All326 main cases retain every canonical field; only existing retirement markers differ. Seven JS TS cases and the two readback cases retained.",
+    "logs": [
+      "pr95-converter-review-negative.log",
+      "pr95-converter-review-positive.log",
+      "pr95-entry-review-negative.log",
+      "pr95-entry-review-positive.log",
+      "pr95-review-source.log",
+      "pr95-review-build.log",
+      "pr95-review-readback-chromium.log",
+      "pr95-review-readback-webkit.log",
+      "pr95-review-focused-bench.log"
+    ]
+  },
+  "diagramsFocusSynchronization": {
+    "oldCiFailure": {
+      "run": 38535788811,
+      "job": 115758924770,
+      "head": "78ca989e8a5669029d5cbd4a076e0f1d1a12dd6f",
+      "symptom": "WebKit timed out waiting for four independent hover cards"
+    },
+    "diagnosis": "Queued settings close handler returns focus and chart blur clears hover: plausible race, not reproduced or proven by event timeline.",
+    "before": {
+      "webkit": "passed",
+      "durationMs": 74752
+    },
+    "after": {
+      "chromium": {
+        "status": "passed",
+        "durationMs": 74885
+      },
+      "webkit": {
+        "status": "passed",
+        "durationMs": 74681
+      }
+    },
+    "change": "Wait for closed dialog, removed data-closing and aria-expanded=false, then focus target and ArrowRight.",
+    "scope": "Test synchronization only; four-card/layout assertions, 30s operation timeout and 600s case watchdog unchanged. Both local/library scenarios retained. No full visible matrix or playback benchmark rerun for this test-only change.",
+    "logs": [
+      "pr95-diagrams-webkit-before.log",
+      "pr95-diagrams-after.log"
+    ],
+    "report": ".run/test-suites/browser/results.json"
+  },
+  "finalNonBlockingReviewFixes": {
+    "repeatedReturn": {
+      "before": "25 pass, 1 fail: second return rejoined a held copy after the cancelled public next settled",
+      "after": "26/26 pass",
+      "change": "Already cancelled generator.return resolves done without queueing another underlying return; first cancellation retains ownership of eventual cleanup.",
+      "typecheck": "tsc --noEmit passed",
+      "logs": [
+        "pr95-repeat-return-negative.log",
+        "pr95-repeat-return-positive.log",
+        "pr95-repeat-return-typecheck.log"
+      ]
+    },
+    "analysisDocumentation": {
+      "change": "Replace retired-root-shim glob with explicit canonical runner selection",
+      "selection": "All six original distinct implementations retained, including FLV and TS",
+      "log": "pr95-analysis-doc-selection.log"
+    },
+    "scope": "Targeted converter tests, typecheck and documentation selection only. Previous source/build/readback/diagrams and performance evidence retain their recorded revision scope. No full media/browser matrix rerun."
+  },
+  "alignedNativeFixture": {
+    "failedCi": {
+      "run": 38540339931,
+      "job": 115773981949,
+      "case": "browser-native-yuv-lifecycle-webkit",
+      "oldExpected": [
+        10,
+        20,
+        30,
+        40,
+        100,
+        120
+      ],
+      "oldObserved": [
+        10,
+        20,
+        0,
+        0,
+        100,
+        120
+      ]
+    },
+    "parentReviewerDiagnosis": "Playwright1.63.0 WebKit2359 upstream4d05d732: GStreamer raw I420 uses 4-byte-aligned internal stride, while the WebKit source copy used even width2. No converter change for this fixture issue.",
+    "fixture": "8x6 I420, natural source strides8/4/4; all72 visible bytes distinctive per row/plane; frame values vary by timestamp. Separate padded output offsets16/96/128 strides12/8/8.",
+    "directControls": "Native copyTo default and explicit padded destination both strictly match all72 intended bytes; legacy2x2 direct result remains diagnostic with original expected nonzero bytes.",
+    "macResults": {
+      "chromium": {
+        "status": "passed",
+        "workerReadbacksChecked": 8,
+        "sampleCloses": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "terminations": [
+          1,
+          1
+        ],
+        "legacyDirect": {
+          "expected": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "values": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "layout": [
+            {
+              "offset": 0,
+              "stride": 2
+            },
+            {
+              "offset": 4,
+              "stride": 1
+            },
+            {
+              "offset": 5,
+              "stride": 1
+            }
+          ]
+        }
+      },
+      "webkit": {
+        "status": "passed",
+        "workerReadbacksChecked": 8,
+        "sampleCloses": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "terminations": [
+          1,
+          1
+        ],
+        "legacyDirect": {
+          "expected": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "values": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "layout": [
+            {
+              "offset": 0,
+              "stride": 2
+            },
+            {
+              "offset": 4,
+              "stride": 1
+            },
+            {
+              "offset": 5,
+              "stride": 1
+            }
+          ]
+        }
+      }
+    },
+    "scope": "Fixture/evidence/CI artifact upload only; no product-code or threshold change. Linux confirmation awaits fresh CI.",
+    "artifact": ".run/native-yuv-lifecycle/ in existing always-uploaded https-playback-reports",
+    "logs": [
+      "pr95-aligned-native-yuv-chromium.log",
+      "pr95-aligned-native-yuv-webkit.log",
+      "pr95-aligned-fixture-contract.log"
+    ]
+  }
+}

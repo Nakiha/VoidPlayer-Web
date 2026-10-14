@@ -1,3 +1,5 @@
+import catalog from './manifest.json' with {type:'json'};
+
 export function parseOptions(args) {
   const options = { caseIds: [] };
   const values = { '--case': 'caseIds', '--alias': 'alias', '--engine': 'engine', '--input': 'input', '--platform': 'platform', '--directory': 'directory' };
@@ -9,6 +11,7 @@ export function parseOptions(args) {
       if (arg === '--case') options.caseIds.push(...value.split(',')); else options[values[arg]] = value;
     } else if (['--list', '--prepared', '--prepare', '--check'].includes(arg)) options[arg.slice(2)] = true;
     else if (options.alias && arg.startsWith('--')) (options.caseArguments ??= []).push(arg);
+    else if (options.alias && catalog.npmCommands?.[options.alias]) (options.caseArguments ??= []).push(arg);
     else if (!arg.startsWith('-') && options.alias && !options.engine) options.engine = arg;
     else if (!arg.startsWith('-') && !options.alias && !options.suite) options.suite = arg;
     else throw new Error(`Unknown option: ${arg}`);

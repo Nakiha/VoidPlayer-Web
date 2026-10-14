@@ -76,7 +76,16 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 ## 验证与证据
 
-`node --test test/bitstream-analysis*.test.ts` 覆盖三种真实核心、选定已知记录、随机/顺序逐块一致、后段闭合 IDR、H.264/HEVC/VVC 各 600 帧持续 drain、B 帧重排、各三个后段闭合 GOP 的随机/顺序逐块对照、记录/heap 稳态、暂停 consumer、单帧超预算、双 consumer、lease、原子缓存损坏/配额和重启。H.264/HEVC 额外使用固定编码器 CU/MB 大小与 QP 17 的全黑输入，独立检查完整网格、QP 和 intra；不只检查非空。
+以下 runner 命令明确覆盖原先六项测试（含 FLV 和 TS），不依赖已退役的根目录 shim：
+
+```sh
+node scripts/run-tests.mjs unit \
+  --case node-bitstream-analysis,node-bitstream-analysis-core \
+  --case node-bitstream-analysis-server,node-bitstream-analysis-fmp4 \
+  --case node-bitstream-analysis-flv,node-bitstream-analysis-ts
+```
+
+覆盖三种真实核心、选定已知记录、随机/顺序逐块一致、后段闭合 IDR、H.264/HEVC/VVC 各 600 帧持续 drain、B 帧重排、各三个后段闭合 GOP 的随机/顺序逐块对照、记录/heap 稳态、暂停 consumer、单帧超预算、双 consumer、lease、原子缓存损坏/配额和重启。H.264/HEVC 额外使用固定编码器 CU/MB 大小与 QP 17 的全黑输入，独立检查完整网格、QP 和 intra；不只检查非空。
 
 `docs/fixtures/bitstream-analysis-answers.json` 固定原样片 SHA-256 和旧原生 analyzer 的选定 CU/MB 记录，用于三种 codec 的迁移对照。该原生参考运行使用旧 writer，和新流式 writer 独立，但两者共享 instrumented codec hook。它不是独立证明所有 VVC 复杂工具语义的 oracle；MVP 不声明那些工具。新增 `docs/fixtures/bitstream-analysis-vtm.json` 由独立 VTM 参考解码器内置块统计生成，覆盖 I/B picture 的全部 CU 几何、luma QP、intra/inter/skip 和 L0/L1 参考身份；不是从 FFmpeg 输出反写期望。固定源码、原始统计哈希、具体记录与复现命令见 [VTM 答案说明](fixtures/bitstream-analysis-vtm.md)。复杂工具仍不因基本块记录一致而自动纳入支持范围。
 

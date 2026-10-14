@@ -25,7 +25,11 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if (!/^(scripts|test)\//.test(row.script) || row.script.split('/').includes('..')) fail(`${row.id}: unsafe script path`);
     if (!/^[a-z0-9][a-z0-9-]*$/.test(row.id) || ids.has(row.id)) fail(`Invalid or duplicate ID: ${row.id}`);
     ids.add(row.id); registered.add(row.script);
-    if (!existsSync(path.join(root, row.script))) fail(`Dangling script: ${row.script}`);
+    if(row.retiredAlias!==undefined){
+      const file=path.join(root,'docs/evidence/retired-test-entrypoints.json');
+      const retired=existsSync(file)?JSON.parse(readFileSync(file,'utf8')).aliases:[];
+      if(row.retiredAlias!==true||!row.implementation||existsSync(path.join(root,row.script))||!retired.some(entry=>entry.script===row.script&&entry.implementation===row.implementation&&entry.caseIds.includes(row.id)))fail(`${row.id}: invalid retired alias record`);
+    }else if (!existsSync(path.join(root, row.script))) fail(`Dangling script: ${row.script}`);
     if (row.implementation !== undefined) {
       if (typeof row.implementation !== 'string' || !/^(scripts\/testing\/browser|scripts\/tools\/(development|fixtures|diagnostics|perf|release)|test\/(unit|contract|media))\//.test(row.implementation) || row.implementation.split('/').includes('..')) {
         fail(`${row.id}: unsafe implementation path`);
@@ -66,6 +70,23 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     const scripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
     if (scripts[name] !== `node scripts/run-tests.mjs --alias ${name}`) fail(`${name}: npm alias must only delegate to runner`);
   }
+  for (const [name, recipe] of Object.entries(manifest.npmCommands ?? {})) {
+    const scripts=existsSync(path.join(root,'package.json'))?JSON.parse(readFileSync(path.join(root,'package.json'),'utf8')).scripts:{};
+    if (!/^test:[a-z0-9][a-z0-9:-]*$/.test(name)||aliases.has(name)||scripts[name]!==`node scripts/run-tests.mjs --alias ${name}`) fail(`${name}: invalid npm command delegation`);
+    if (!Array.isArray(recipe.cases)||!recipe.cases.length) {fail(`${name}: missing canonical cases`);continue;}
+    const refs=[...recipe.cases.map(step=>step.id),...Object.values(recipe.engineCases??{}),...Object.values(recipe.environmentEngine?.cases??{})];
+    if(new Set(recipe.cases.map(step=>step.id)).size!==recipe.cases.length)fail(`${name}: duplicate npm stages`);
+    for(const [engine,id] of Object.entries({...recipe.engineCases,...recipe.environmentEngine?.cases})) {
+      const row=manifest.cases.find(row=>row.id===id),first=manifest.cases.find(row=>row.id===recipe.cases[0].id);
+      if(!engines.has(engine)||!row?.engines.includes(engine)||(row?.implementation??row?.script)!==(first?.implementation??first?.script))fail(`${name}: invalid engine variant`);
+    }
+    for(const id of refs) if(!manifest.cases.some(row=>row.id===id&&['regression','manual-regression','diagnostic'].includes(row.kind)))fail(`${name}: unknown executable case ${id}`);
+    for(const step of recipe.cases)if(step.args!==undefined&&(!Array.isArray(step.args)||step.args.some(arg=>typeof arg!=='string')))fail(`${name}: invalid legacy arguments`);
+    if(recipe.sequential!==undefined&&typeof recipe.sequential!=='boolean')fail(`${name}: invalid sequence policy`);
+    if(recipe.environmentEngine&&recipe.environmentEngine.name!=='IDENTITY_BROWSER')fail(`${name}: unknown engine environment`);
+    if(recipe.matrixArguments&&JSON.stringify(recipe.matrixArguments)!=='["engine","input"]')fail(`${name}: unknown matrix arguments`);
+    if(recipe.archiveInput&&(recipe.archiveInput.fixture!=='release-package'||recipe.archiveInput.position!==0||!Array.isArray(recipe.archiveInput.ignoreArgs)||recipe.archiveInput.ignoreArgs.some(arg=>typeof arg!=='string')||recipe.archiveInput.defaultToken!==undefined&&recipe.archiveInput.defaultToken!=='-'))fail(`${name}: invalid archive input policy`);
+  }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
       const relative = `${directory}/${entry.name}`;
@@ -100,7 +121,7 @@ export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
         for (const text of expanded) {
           if (text.includes('${{')) throw new Error(`Unsupported CI command: ${text}`);
           const options = parseOptions(text.trim().split(/\s+/));
-          if (options.caseArguments?.length) throw new Error('CI coverage cannot claim a filtered compatibility case');
+          if (options.caseArguments?.length || manifest.npmCommands?.[options.alias]) throw new Error('CI coverage cannot claim a filtered or customized compatibility case');
           for (const platform of ['linux', 'darwin', 'win32']) {
             for (const row of selectCases({ ...options, platform }, manifest).selected) covered.add(row.id);
           }
@@ -119,6 +140,7 @@ export function selectCases({ suite, caseIds = [], alias, caseArguments = [], en
   if (engine && !engines.has(engine)) throw new Error(`Unknown engine: ${engine}`);
   if (alias) {
     if (suite || caseIds.length || input) throw new Error('An npm alias cannot be combined with another case selection');
+    if(manifest.npmCommands?.[alias])return selectNpmCommand(alias,caseArguments,engine,platform,manifest);
     const bound = manifest.cases.filter(row => row.npmAliases?.some(binding => binding.name === alias));
     if (!bound.length) throw new Error(`Unknown npm alias: ${alias}`);
     const matches = bound.filter(row => engine ? row.engines.includes(engine) : row.npmAliases.some(binding => binding.name === alias && binding.default));
@@ -139,6 +161,39 @@ export function selectCases({ suite, caseIds = [], alias, caseArguments = [], en
     if (reason) excluded.push({ id: row.id, reason }); else selected.push(caseArguments.length ? { ...row, command: [...row.command, ...caseArguments], executionScope: 'filtered' } : row);
   }
   return { selected, excluded };
+}
+
+function selectNpmCommand(alias,args,engine,platform,manifest){
+  const recipe=manifest.npmCommands[alias];let steps=recipe.cases;
+  if(recipe.matrixArguments){
+    let selectors=args;
+    if(engine){
+      if(args[0]&&engines.has(args[0])){if(args[0]!==engine)throw new Error(`Conflicting engine for ${alias}`);}
+      else selectors=[engine,...args];
+    }
+    if(selectors.length>2||selectors[0]&&!['webkit','chromium'].includes(selectors[0])||selectors[1]&&!['local','remote'].includes(selectors[1]))throw new Error(`Unsupported matrix arguments for ${alias}`);
+    steps=steps.filter(step=>{const row=manifest.cases.find(row=>row.id===step.id);return (!selectors[0]||row.engines.includes(selectors[0]))&&(!selectors[1]||row.inputs.includes(selectors[1]));});
+  }else{
+    if(engine&&recipe.engineCases&&!Object.hasOwn(recipe.engineCases,engine))throw new Error(`Unsupported engine for ${alias}: ${engine}`);
+    if(recipe.engineCases&&args[0]&&!args[0].startsWith('-')&&!Object.hasOwn(recipe.engineCases,args[0]))throw new Error(`Unsupported engine for ${alias}: ${args[0]}`);
+    const selected=recipe.environmentEngine?(Object.hasOwn(recipe.environmentEngine.cases,process.env[recipe.environmentEngine.name])?recipe.environmentEngine.cases[process.env[recipe.environmentEngine.name]]:undefined):recipe.engineCases?.[engine??args.find(arg=>Object.hasOwn(recipe.engineCases??{},arg))];
+    if(engine&&!recipe.engineCases)throw new Error(`${alias}: use the declared legacy positional arguments`);
+    if(selected)steps=steps.map((step,i)=>i?step:{...step,id:selected});
+    if(engine)args=[engine,...args];
+  }
+  const selected=[],excluded=[];
+  for(const [i,step]of steps.entries()){
+    const row=manifest.cases.find(row=>row.id===step.id);
+    if(!row.platforms.includes(platform)){excluded.push({id:row.id,reason:`platform ${platform} outside ${row.platforms.join('/')}`});continue;}
+    const entry=row.implementation??row.script,at=row.command.findIndex(arg=>arg===entry||arg==='./'+entry);
+    const command=step.args===undefined?[...row.command]:[...row.command.slice(0,at+1),...step.args];
+    if(!recipe.matrixArguments&&i===steps.length-1)command.push(...args);
+    const archive=recipe.archiveInput,archiveArgs=archive?command.slice(at+1).filter(arg=>!archive.ignoreArgs.includes(arg)):[];
+    const explicitArchive=archive&&archiveArgs[archive.position]!==undefined&&archiveArgs[archive.position]!==archive.defaultToken;
+    const fixtures=explicitArchive?row.fixtures.filter(name=>name!==archive.fixture):row.fixtures;
+    selected.push({...row,command,fixtures,required:true,executionScope:'legacy-npm-alias',npmAlias:alias});
+  }
+  return {selected,excluded,stopOnFailure:recipe.sequential===true};
 }
 
 export function browserEntries(suite) {

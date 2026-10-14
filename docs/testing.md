@@ -298,3 +298,11 @@ The fixed-baseline comparison in `docs/evidence/test-entry-migration.json` recor
 `src/thumbnails/tasks.ts` 每个像素候选拥有一个一次性 browser Worker。正常结果、`error`、`messageerror`、`postMessage` 抛错或候选到期均走单次结束：解除三个事件属性与到期回调，终止该 Worker，随后仅释放候选自己的帧和预算、清除 in-flight。失败不会标记 completed，也不触碰播放原帧或下一任务；已捕获的迟到回调不能再次提交或清理。既有 hold deadline、队列上限和复制/transfer 路径保持。
 
 `node-thumbnail-offer` 从实际 offer/task 入口验证这些分支、成功回包、到期计时器清理与恢复任务。受控 browser-like Worker 使用真实 `structuredClone` transfer，验证播放像素数组仍完整；测试主动派发 `messageerror`，并不声称复现浏览器底层损坏消息。浏览器缩略图套件继续验证实际编码、存储与显示；此一次性客户端不增加 Node Worker 适配层。
+
+### npm compatibility and retired forwarding paths
+
+Every `test`/`test:*` npm command now delegates to the catalog runner. The 48 migrated legacy commands are declared by stable case IDs in `manifest.json` `npmCommands`; engine alternatives share the canonical owner, and literal legacy arguments (including package paths and required hardware flags) remain argument arrays, never shell commands. The two chained HDR commands stop after an earlier stage fails. Manual/diagnostic execution remains explicit and its failing exit is blocking when directly invoked through npm; these customized aliases cannot count toward CI matrix coverage. Use `node scripts/run-tests.mjs --list --alias <name>` to inspect the exact plan.
+
+Unreferenced thin forwarding paths listed in `docs/evidence/retired-test-entrypoints.json` are retired: use their npm alias or `node scripts/run-tests.mjs --case <id>`. Their case IDs and canonical implementations remain, and `retiredAlias` is accepted only with the checked-in matching retirement record and an absent forwarding file. Documented/imported/workflow-used forwarding entries remain compatible. A legacy top-level test glob is not the complete unit suite; `npm test` discovers every canonical unit case, including retired aliases, exactly once.
+
+Release aliases keep the browser default-archive `-` token. Explicit archives bypass only the latest-release fixture; default archive selection still requires that metadata. HEVC alias `--engine` selects only that engine's local/remote cases and conflicts or unsupported engines fail before execution.
