@@ -290,3 +290,16 @@ test('independent JS TS analysis shares packet identity, preserves missing DTS a
     }
   } finally { playback.close(); }
 });
+
+test('index IO limits apply without a progress observer and stop actual reads before publication',async()=>{
+  const bytes=await readFile('fixtures/ts-analysis/progressive-single.ts');
+  for(const observed of [false,true]){
+    let closed=0,readBytes=0;
+    const source=new TsPacketSource({size:bytes.length,async read(offset,length){readBytes+=length;return bytes.subarray(offset,offset+length);},close(){closed++;}},'io-limit-injection',signal());
+    // Controlled lower quota exercises the real IO path, without pretending
+    // this tiny fixture exhausts the production size-based budget.
+    Reflect.set(source,'indexByteBudget',128);
+    await assert.rejects(source.open(undefined,observed?()=>{}:undefined),/index IO budget exceeded/);
+    assert.ok(readBytes>128);assert.equal(closed,1);assert.equal(source.index,undefined);
+  }
+});

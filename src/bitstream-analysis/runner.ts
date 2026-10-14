@@ -45,7 +45,7 @@ export async function analyzePicture(
 ): Promise<AnalysisResult> {
   validateTarget(target);
   const started = performance.now(),
-    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core}));
+    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core,sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
   let opened = false;
   try {
     const firstPacket=input.packets[0];
@@ -512,7 +512,7 @@ export async function analyzeRange(
   }
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
-  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core});
+  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core,sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
   let first: number;
   const missing = new Set<number>();
   let lastCached: AnalysisResult | undefined;
@@ -591,7 +591,7 @@ export async function analyzeStream(
   validateStream(target);
   let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
   const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
-  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, frontier,
+  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
   return analyzePicture(reader, { sourceVersion: target.sourceVersion,

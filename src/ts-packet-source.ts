@@ -60,6 +60,11 @@ export function retainVerifiedTsIndex(index: TsPacketIndex): TsPacketIndex | und
 export class TsSourceChangedError extends MediaOpenError {
   constructor() { super('input', 'JS TS: source changed after complete index verification'); }
 }
+/** A declared combination outside this migration stage. Corruption, IO,
+ * clocks, cancellation and resource failures never use this classification. */
+export class TsCombinationNotMigrated extends MediaOpenError {
+  constructor(reason: string) { super('container', `JS TS: ${reason}`); }
+}
 
 function fail(message: string): never { throw new MediaOpenError('container', `JS TS: ${message}`); }
 const equal = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((value, i) => value === b[i]);
@@ -127,6 +132,8 @@ export class TsPacketSource {
   private progress?: (value: {packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void;
   private scannedBytes=0;
   private indexedPackets=0;
+  private indexBytesRead:number|undefined;
+  private readonly indexByteBudget:number;
   private lastProgressMs=-Infinity;
   private publishProgress(force=false) {
     if (!this.progress) return;
@@ -141,6 +148,7 @@ export class TsPacketSource {
   private abort = () => this.close();
   constructor(reader: TsPacketReader, sourceVersion: string, signal: AbortSignal) {
     this.reader = reader; this.sourceVersion = sourceVersion; this.signal = signal;
+    this.indexByteBudget=Math.min(Number.MAX_SAFE_INTEGER,reader.size*4+32*1024*1024);
     try {
     signal.throwIfAborted();
     if (!sourceVersion || !Number.isSafeInteger(reader.size) || reader.size <= 0) fail('missing source identity/size');
@@ -156,28 +164,39 @@ export class TsPacketSource {
     const bytes = await abortableWait(this.reader.read(offset, size), this.signal); this.check();
     if (!(bytes instanceof Uint8Array) || bytes.length !== size) fail('short transport read');
     this.bytesRead += bytes.length;
-    if (this.progress && (!Number.isSafeInteger(this.bytesRead) || this.bytesRead > Math.min(Number.MAX_SAFE_INTEGER,this.reader.size*4+32*1024*1024)))
-      throw new MediaOpenError('resource','JS TS: index IO budget exceeded');
+    // The scan budget belongs to indexing, independently of observation.
+    // Playback/analysis readUnit IO has separate per-read/AU bounds and must
+    // not exhaust a lifetime scan counter after repeated legitimate seeks.
+    if (this.indexBytesRead !== undefined) {
+      this.indexBytesRead += bytes.length;
+      if (!Number.isSafeInteger(this.indexBytesRead) || this.indexBytesRead > this.indexByteBudget)
+        throw new MediaOpenError('resource','JS TS: index IO budget exceeded');
+    }
     this.publishProgress(); return bytes;
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
     const evidence = inspectPacketPicture('h264', configuration, bytes);
-    if (!evidence.singlePicture) fail(`unverified picture layout: ${evidence.reason}`);
+    if (!evidence.singlePicture) {
+      if (evidence.reason === 'unsupported-ts-multiple-slices'
+        && nalRanges('h264',configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
+        throw new TsCombinationNotMigrated(`unverified picture layout: ${evidence.reason}`);
+      fail(`unverified picture layout: ${evidence.reason}`);
+    }
     for (const nal of nalRanges('h264', configuration, bytes)) {
       const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
       if (type !== 7 && type !== 8) continue;
       const stored = this.sets.get(type);
-      if (!stored || !equal(stored, data)) fail('parameter-set changes are outside static admission');
+      if (!stored || !equal(stored, data)) throw new TsCombinationNotMigrated('parameter-set changes are outside static admission');
     }
     return evidence;
   }
   async open(cached?: unknown, progress?: typeof this.progress): Promise<TsPacketIndex> {
     try {
-      this.progress=progress; this.publishProgress(true);
+      this.indexBytesRead=0;this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
       const tracks = await this.input.getVideoTracks();
-      if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') fail('requires one H.264 video track');
+      if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') throw new TsCombinationNotMigrated('requires one H.264 video track');
       const track = tracks[0];
       this.nativeConfig = await track.getDecoderConfig() ?? undefined;
       this.sink = new EncodedPacketSink(track);
@@ -187,8 +206,8 @@ export class TsPacketSource {
       for (const nal of nalRanges('h264', new Uint8Array([0, 0, 1]), first.data)) {
         const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
         if (type !== 7 && type !== 8) continue;
-        if (this.sets.has(type)) fail('multiple parameter sets are outside initial admission');
-        if (type === 7 && parseAvcSps(data).interlaced) fail('interlaced H.264 is outside initial admission');
+        if (this.sets.has(type)) throw new TsCombinationNotMigrated('multiple parameter sets are outside initial admission');
+        if (type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
         this.sets.set(type, data.slice());
       }
       if (this.sets.size !== 2) fail('missing static SPS/PPS');
@@ -231,7 +250,7 @@ export class TsPacketSource {
       this.cursor = { au: 0, packet: first };
       return this.index;
     } catch (error) { this.close(); this.signal.throwIfAborted(); throw error; }
-    finally {this.progress=undefined;}
+    finally {this.progress=undefined;this.indexBytesRead=undefined;}
   }
   async readUnit(au: number): Promise<Uint8Array> {
     try {

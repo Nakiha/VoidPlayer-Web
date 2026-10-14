@@ -15,7 +15,7 @@ export type MediaInfo = {
   trackMetadata?: import('./cached-track-metadata.ts').CachedTrackMetadata;
   opportunisticAudio?: 'flv-aac' | 'cached-container';
   container?: 'flv' | 'isobmff' | 'mpegts' | 'other';
-  indexKind?: 'packet-offsets' | 'timestamps' | 'container';
+  indexKind?: 'packet-offsets' | 'packet-locators' | 'timestamps' | 'container';
   seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';
   seekAnchorCount?: number;
   metadataRevision?:number;
