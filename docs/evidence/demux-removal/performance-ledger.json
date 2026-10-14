@@ -1,0 +1,764 @@
+{
+  "device": {
+    "model": "MacBook Pro Mac17,2",
+    "chip": "Apple M5",
+    "cpuCores": 10,
+    "memoryBytes": 34359738368,
+    "gpu": "Apple M5",
+    "os": "macOS27.2 build26B5101f",
+    "node": "24.15.0"
+  },
+  "baselineRevision": "f5826f4a68fa8edd661d4b31c21b686d30ee5f4d",
+  "candidateRevision": "f5e543099406c96570bc09f84fbff9491e1896a2",
+  "measurementLimits": "startupMs/firstPresentationMs follow completed media load and measure playback start, not cold media-open latency. peakBytes/peakFrames cover decoded queues only. Warm repeats reuse server metadata in the same page; OS disk cache was not flushed. No statistical no-regression claim.",
+  "coldWarm": "Per scenario first repeat fresh page and cold per-source server index; repeat2/3 replace source and Worker in same page, warm server metadata. No OS-cache-flush claim.",
+  "budgets": {
+    "minWallMs": 1000,
+    "minSpeed": 0.9,
+    "maxFrameLagUs": 100000,
+    "maxFrameSkewUs": 100000,
+    "maxP95GapMs": 75,
+    "maxGapMs": 250,
+    "maxPauseMs": 100
+  },
+  "samples": [
+    {
+      "file": "hevc.ts",
+      "bytes": 473760,
+      "sha256": "ca7fe8ed035451e107465fbff34fe33d4c8190473c42e59699114537316fdabd",
+      "pictures": 600,
+      "dimensions": [
+        128,
+        96
+      ],
+      "nominalFps": 30
+    },
+    {
+      "file": "hevc10.mkv",
+      "bytes": 331171,
+      "sha256": "b9d0d6045f4c2931681553fd951b2ebcf0cd3bf51757adbf5ca2e1ac349dfd0c",
+      "pictures": 600,
+      "dimensions": [
+        128,
+        96
+      ],
+      "nominalFps": 30
+    },
+    {
+      "file": "vp9.webm",
+      "bytes": 383554,
+      "sha256": "ba3c3bee43acecb0edc97f8b598790e505d7858b6a08df4ded347e56f1b0f91a",
+      "pictures": 600,
+      "dimensions": [
+        128,
+        96
+      ],
+      "nominalFps": 30
+    }
+  ],
+  "reports": [
+    {
+      "artifact": ".run/js-container-bench-review-chromium.json",
+      "revision": "f5e543099406c96570bc09f84fbff9491e1896a2",
+      "sourceDigest": "b0180ebe5d605d0e9fc4114f6549233276de0d1b6b234105c493242ccf4fc0b0",
+      "cleanBuild": true,
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "requestedWallMs": 8000,
+      "repetitions": 3,
+      "headless": true,
+      "hardwareUseVerified": false,
+      "results": [
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7574035785435749,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7634429869845002,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.750059067151091,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7354627681298692,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7304040813969588,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7281333733638861,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7327703858484748,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.733667091210907,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7364700152394829,
+          "decoders": [
+            "webcodecs"
+          ]
+        }
+      ]
+    },
+    {
+      "artifact": ".run/js-container-bench-review-webkit.json",
+      "revision": "f5e543099406c96570bc09f84fbff9491e1896a2",
+      "sourceDigest": "b0180ebe5d605d0e9fc4114f6549233276de0d1b6b234105c493242ccf4fc0b0",
+      "cleanBuild": true,
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "requestedWallMs": 8000,
+      "repetitions": 3,
+      "headless": true,
+      "hardwareUseVerified": false,
+      "results": [
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9995608092090323,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999552130738013,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999375774040192,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999975075893902,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9995942629275799,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999625573808136,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9995766700367053,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9994933625502581,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999225431821761,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        }
+      ]
+    }
+  ],
+  "unmeasured": {
+    "coldMediaOpenMs": null,
+    "lateSeekPositionsComparison": null,
+    "lateSeekActualIOAndPackets": null,
+    "cancellationLatencyMs": null,
+    "peakJsHeapBytes": null,
+    "peakWasmHeapBytes": null,
+    "peakRssBytes": null,
+    "gpuMemoryBytes": null
+  },
+  "rawPlaybackMeasurements": [
+    {
+      "engine": "chromium",
+      "scenario": "js-hevc-ts",
+      "repeat": 1,
+      "speed": 0.7574035785435749,
+      "playbackStartMs": 0.9350000023841858,
+      "firstPlaybackPresentationMs": 48.4650000333786,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 0,
+        "bytes": 0,
+        "peakFrames": 1,
+        "peakBytes": 18432,
+        "firstPtsUs": null,
+        "lastPtsUs": null,
+        "producerWaitMs": 0.39500004053115845,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-hevc-ts",
+      "repeat": 2,
+      "speed": 0.7634429869845002,
+      "playbackStartMs": 0.5649999976158142,
+      "firstPlaybackPresentationMs": 54.83499997854233,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 1,
+        "bytes": 18432,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 6133333,
+        "lastPtsUs": 6133333,
+        "producerWaitMs": 0.04500001668930054,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-hevc-ts",
+      "repeat": 3,
+      "speed": 0.750059067151091,
+      "playbackStartMs": 0.5849999785423279,
+      "firstPlaybackPresentationMs": 58.18000000715256,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 1,
+        "bytes": 18432,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 6000000,
+        "lastPtsUs": 6000000,
+        "producerWaitMs": 0.0350000262260437,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-main10-mkv",
+      "repeat": 1,
+      "speed": 0.7354627681298692,
+      "playbackStartMs": 0.9149999618530273,
+      "firstPlaybackPresentationMs": 48.60999995470047,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 0,
+        "bytes": 0,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": null,
+        "lastPtsUs": null,
+        "producerWaitMs": 1.3700000047683716,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-main10-mkv",
+      "repeat": 2,
+      "speed": 0.7304040813969588,
+      "playbackStartMs": 0.625,
+      "firstPlaybackPresentationMs": 55.37999999523163,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 1,
+        "bytes": 36864,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": 5867000,
+        "lastPtsUs": 5867000,
+        "producerWaitMs": 0.04000002145767212,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-main10-mkv",
+      "repeat": 3,
+      "speed": 0.7281333733638861,
+      "playbackStartMs": 0.5550000071525574,
+      "firstPlaybackPresentationMs": 50.889999985694885,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 0,
+        "bytes": 0,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": null,
+        "lastPtsUs": null,
+        "producerWaitMs": 0.10999995470046997,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-vp9-webm",
+      "repeat": 1,
+      "speed": 0.7327703858484748,
+      "playbackStartMs": 0.9799999594688416,
+      "firstPlaybackPresentationMs": 62.689999997615814,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 1,
+        "bytes": 27648,
+        "peakFrames": 4,
+        "peakBytes": 110592,
+        "firstPtsUs": 5933000,
+        "lastPtsUs": 5933000,
+        "producerWaitMs": 0.29500001668930054,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-vp9-webm",
+      "repeat": 2,
+      "speed": 0.733667091210907,
+      "playbackStartMs": 0.6150000095367432,
+      "firstPlaybackPresentationMs": 56.12999999523163,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 0,
+        "bytes": 0,
+        "peakFrames": 4,
+        "peakBytes": 110592,
+        "firstPtsUs": null,
+        "lastPtsUs": null,
+        "producerWaitMs": 1.274999976158142,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "chromium",
+      "scenario": "js-vp9-webm",
+      "repeat": 3,
+      "speed": 0.7364700152394829,
+      "playbackStartMs": 0.7199999690055847,
+      "firstPlaybackPresentationMs": 58.72000002861023,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 1,
+        "bytes": 27648,
+        "peakFrames": 4,
+        "peakBytes": 110592,
+        "firstPtsUs": 5867000,
+        "lastPtsUs": 5867000,
+        "producerWaitMs": 0.09499996900558472,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-hevc-ts",
+      "repeat": 1,
+      "speed": 0.9995608092090323,
+      "playbackStartMs": 1.8600000000000136,
+      "firstPlaybackPresentationMs": 45.799999999999955,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8000000,
+        "lastPtsUs": 8100000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-hevc-ts",
+      "repeat": 2,
+      "speed": 0.9999552130738013,
+      "playbackStartMs": 1.180000000000291,
+      "firstPlaybackPresentationMs": 37.100000000000364,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8033333,
+        "lastPtsUs": 8133333,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-hevc-ts",
+      "repeat": 3,
+      "speed": 0.9999375774040192,
+      "playbackStartMs": 1.0200000000004366,
+      "firstPlaybackPresentationMs": 41.919999999998254,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8000000,
+        "lastPtsUs": 8100000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-main10-mkv",
+      "repeat": 1,
+      "speed": 0.9999975075893902,
+      "playbackStartMs": 1.839999999999975,
+      "firstPlaybackPresentationMs": 40.84000000000003,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 147456,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": 8033000,
+        "lastPtsUs": 8133000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-main10-mkv",
+      "repeat": 2,
+      "speed": 0.9995942629275799,
+      "playbackStartMs": 1.1599999999998545,
+      "firstPlaybackPresentationMs": 50.899999999999636,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 147456,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": 8033000,
+        "lastPtsUs": 8133000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-main10-mkv",
+      "repeat": 3,
+      "speed": 0.9999625573808136,
+      "playbackStartMs": 1.0999999999985448,
+      "firstPlaybackPresentationMs": 41.63999999999942,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 147456,
+        "peakFrames": 4,
+        "peakBytes": 147456,
+        "firstPtsUs": 8000000,
+        "lastPtsUs": 8100000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-vp9-webm",
+      "repeat": 1,
+      "speed": 0.9995766700367053,
+      "playbackStartMs": 1.9599999999999795,
+      "firstPlaybackPresentationMs": 48.15999999999997,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8033000,
+        "lastPtsUs": 8133000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-vp9-webm",
+      "repeat": 2,
+      "speed": 0.9994933625502581,
+      "playbackStartMs": 1.0799999999999272,
+      "firstPlaybackPresentationMs": 46.67999999999847,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8000000,
+        "lastPtsUs": 8100000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    },
+    {
+      "engine": "webkit",
+      "scenario": "js-vp9-webm",
+      "repeat": 3,
+      "speed": 0.9999225431821761,
+      "playbackStartMs": 1,
+      "firstPlaybackPresentationMs": 38.2599999999984,
+      "decodedQueue": {
+        "ended": false,
+        "suspended": false,
+        "stopped": false,
+        "error": null,
+        "frames": 4,
+        "bytes": 73728,
+        "peakFrames": 4,
+        "peakBytes": 73728,
+        "firstPtsUs": 8000000,
+        "lastPtsUs": 8100000,
+        "producerWaitMs": null,
+        "capacity": 4,
+        "budgetBytes": 67108864,
+        "effectiveBudgetBytes": 67108864
+      }
+    }
+  ],
+  "classification": "Original absolute minSpeed failure reproduced in baseline Chromium. Candidate differences are reported per scenario; this is not proof of statistical equivalence and does not block unrelated development."
+}

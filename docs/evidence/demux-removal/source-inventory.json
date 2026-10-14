@@ -1,0 +1,57 @@
+{
+  "pin": "353088620d08ee4ec2669842508f0fc84da2db28",
+  "remoteWasm": "8c81271cea656d79af566fc7d541562c1f8a9f20",
+  "pinVsRemote": "same file tree; remote adds merge commit",
+  "files": [
+    {
+      "path": "scripts/build-wasm.sh",
+      "sha256": "ab2a61291f5f3d3159a40c3c400fa8458fc2059cefb2230ca69360e01a3e83ad"
+    },
+    {
+      "path": "scripts/build-analysis.sh",
+      "sha256": "2f0d161f7b6e7658483d66bf38ee7f4d6655b8533b3e56a6d80c73e10e5807cb"
+    },
+    {
+      "path": "shared/vp_demux.c",
+      "sha256": "b42aae08c896eedd45249502aa7ab625cc55870e918d464a68708fbb955e0b54"
+    },
+    {
+      "path": "shared/vp_packet_demux.c",
+      "sha256": "ca53beebff6bac59104538e086f9c7d5632e038477b73741e7c0a08d37ab560e"
+    },
+    {
+      "path": "shared/vp_parser_timing.c",
+      "sha256": "c887e2fd07f1bb494b6038aa21e0af2bab313d7080c874aab12c93c68e5e5aae"
+    },
+    {
+      "path": "wasm/vp_decoder.c",
+      "sha256": "550d60945f3502920c259eda16e031f16428b04793f56c938a0e729da7fb27bf"
+    },
+    {
+      "path": ".build/work/ffmpeg-wasm/libavformat/demuxer_list.c",
+      "sha256": "32cef11910807311e8a50ac9373680c31c98447ec7fd2a09b74b9306fa9bec85"
+    },
+    {
+      "path": ".build/work/ffmpeg-wasm-mt/libavformat/demuxer_list.c",
+      "sha256": "32cef11910807311e8a50ac9373680c31c98447ec7fd2a09b74b9306fa9bec85"
+    },
+    {
+      "path": ".build/analysis-ts/work/libavformat/demuxer_list.c",
+      "sha256": "87eec7780385b1df6643b2296f27817b688f9aae1cdc6c976092df1b65e5645c"
+    }
+  ],
+  "playbackDeclaredDemuxers": [
+    "mov",
+    "matroska",
+    "mpegts",
+    "mpegps",
+    "mpegvideo",
+    "avi"
+  ],
+  "analysisDeclaredDemuxers": [
+    "mpegts"
+  ],
+  "actualProductRuntimeProbe": "current-runtime-demux.json",
+  "actualProductExports": "current-artifact-exports.json",
+  "note": "Local playback build bytes differ from published consumed WASMs. Actual consumed ST was independently probed for all six registered formats; local generated lists are supporting source/config evidence, not a byte-equivalence claim. Analysis artifact bytes match the local build."
+}

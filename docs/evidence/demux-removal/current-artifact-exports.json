@@ -1,0 +1,1492 @@
+[
+  {
+    "name": "playback-st",
+    "file": "public/vendor/voidplayer-core/voidplayer-core.wasm",
+    "bytes": 6312687,
+    "sha256": "7c71f847fee0f5e1afa27022d0bf45b6fb29fea1a1c69313a25594a7dadf9b44",
+    "matchesOldBuildArtifact": false,
+    "exports": [
+      {
+        "name": "memory",
+        "kind": "memory"
+      },
+      {
+        "name": "__wasm_call_ctors",
+        "kind": "function"
+      },
+      {
+        "name": "vp_set_threads",
+        "kind": "function"
+      },
+      {
+        "name": "vp_create",
+        "kind": "function"
+      },
+      {
+        "name": "free",
+        "kind": "function"
+      },
+      {
+        "name": "vp_destroy",
+        "kind": "function"
+      },
+      {
+        "name": "vp_close_input",
+        "kind": "function"
+      },
+      {
+        "name": "vp_open",
+        "kind": "function"
+      },
+      {
+        "name": "vp_open_blob",
+        "kind": "function"
+      },
+      {
+        "name": "vp_width",
+        "kind": "function"
+      },
+      {
+        "name": "vp_height",
+        "kind": "function"
+      },
+      {
+        "name": "vp_tb_num",
+        "kind": "function"
+      },
+      {
+        "name": "vp_tb_den",
+        "kind": "function"
+      },
+      {
+        "name": "vp_codec_name",
+        "kind": "function"
+      },
+      {
+        "name": "vp_pixel_format",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_primaries",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_transfer",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_space",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_range",
+        "kind": "function"
+      },
+      {
+        "name": "vp_picture_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_picture_info",
+        "kind": "function"
+      },
+      {
+        "name": "vp_identity_config_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_identity_config",
+        "kind": "function"
+      },
+      {
+        "name": "malloc",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_integrity",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_truncated_at",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_end_dts",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_recovery_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_apply_prefix",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stream_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_step",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_complete",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_failed",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_progressive_supported",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stable_count",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stable_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_decoded_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_build",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_count",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_seek_anchors",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract_frames",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract_restarts",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_is_key",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_duration",
+        "kind": "function"
+      },
+      {
+        "name": "vp_core_build_id",
+        "kind": "function"
+      },
+      {
+        "name": "vp_stream_index",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_stream_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_record_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export_range",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import_batch",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract",
+        "kind": "function"
+      },
+      {
+        "name": "vp_prime_first_presentable",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_interlaced",
+        "kind": "function"
+      },
+      {
+        "name": "vp_last_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_pixels",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_info",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_format",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_open",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_alloc",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_send",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_receive",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_reset",
+        "kind": "function"
+      },
+      {
+        "name": "__indirect_function_table",
+        "kind": "table"
+      },
+      {
+        "name": "vpd_build_id",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_live_contexts",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_abi",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_compat_id",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_open",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_close",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_stream",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_video_count",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_codec",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_format",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_extra_size",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_extra",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_tb_num",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_tb_den",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_release",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_packet",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_bind_index",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_read",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_seek",
+        "kind": "function"
+      },
+      {
+        "name": "ff_h264_cabac_tables",
+        "kind": "global"
+      },
+      {
+        "name": "_emscripten_stack_restore",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_stack_alloc",
+        "kind": "function"
+      },
+      {
+        "name": "emscripten_stack_get_current",
+        "kind": "function"
+      }
+    ],
+    "imports": [
+      {
+        "module": "env",
+        "name": "vp_js_read",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_fcntl64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_ioctl",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_close",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_read",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_write",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_abort_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_faccessat",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "clock_time_get",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_date_now",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_fstat64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_stat64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_newfstatat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_lstat64",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "environ_sizes_get",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "environ_get",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_fdstat_get",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_get_now",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_seek",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_tzset_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_localtime_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_gmtime_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_openat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_getdents64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_renameat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_rmdir",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_get_heap_max",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_unlinkat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_resize_heap",
+        "kind": "function"
+      }
+    ]
+  },
+  {
+    "name": "playback-mt",
+    "file": "public/vendor/voidplayer-core/voidplayer-core-mt.wasm",
+    "bytes": 6370831,
+    "sha256": "8fe821a5739b2149e4857d4d202bc305692110bc196040c3adfa5d5c93413a65",
+    "matchesOldBuildArtifact": false,
+    "exports": [
+      {
+        "name": "__wasm_call_ctors",
+        "kind": "function"
+      },
+      {
+        "name": "vp_set_threads",
+        "kind": "function"
+      },
+      {
+        "name": "vp_create",
+        "kind": "function"
+      },
+      {
+        "name": "free",
+        "kind": "function"
+      },
+      {
+        "name": "vp_destroy",
+        "kind": "function"
+      },
+      {
+        "name": "vp_close_input",
+        "kind": "function"
+      },
+      {
+        "name": "vp_open",
+        "kind": "function"
+      },
+      {
+        "name": "vp_open_blob",
+        "kind": "function"
+      },
+      {
+        "name": "vp_width",
+        "kind": "function"
+      },
+      {
+        "name": "vp_height",
+        "kind": "function"
+      },
+      {
+        "name": "vp_tb_num",
+        "kind": "function"
+      },
+      {
+        "name": "vp_tb_den",
+        "kind": "function"
+      },
+      {
+        "name": "vp_codec_name",
+        "kind": "function"
+      },
+      {
+        "name": "vp_pixel_format",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_primaries",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_transfer",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_space",
+        "kind": "function"
+      },
+      {
+        "name": "vp_color_range",
+        "kind": "function"
+      },
+      {
+        "name": "vp_picture_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_picture_info",
+        "kind": "function"
+      },
+      {
+        "name": "vp_identity_config_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_identity_config",
+        "kind": "function"
+      },
+      {
+        "name": "malloc",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_integrity",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_truncated_at",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_end_dts",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_recovery_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_apply_prefix",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stream_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_step",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_complete",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_failed",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_progressive_supported",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stable_count",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_stable_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_decoded_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_scan_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_build",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_count",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_seek_anchors",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract_frames",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract_restarts",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_is_key",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_duration",
+        "kind": "function"
+      },
+      {
+        "name": "vp_core_build_id",
+        "kind": "function"
+      },
+      {
+        "name": "vp_stream_index",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_stream_abi_version",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_record_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export_range",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_export",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import_begin",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import_batch",
+        "kind": "function"
+      },
+      {
+        "name": "vp_index_import",
+        "kind": "function"
+      },
+      {
+        "name": "vp_extract",
+        "kind": "function"
+      },
+      {
+        "name": "vp_prime_first_presentable",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_interlaced",
+        "kind": "function"
+      },
+      {
+        "name": "vp_last_ticks",
+        "kind": "function"
+      },
+      {
+        "name": "vp_pixels",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_info",
+        "kind": "function"
+      },
+      {
+        "name": "vp_frame_format",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_open",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_alloc",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_send",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_receive",
+        "kind": "function"
+      },
+      {
+        "name": "vp_packet_reset",
+        "kind": "function"
+      },
+      {
+        "name": "__indirect_function_table",
+        "kind": "table"
+      },
+      {
+        "name": "vpd_build_id",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_live_contexts",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_abi",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_compat_id",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_open",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_close",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_stream",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_video_count",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_codec",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_format",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_extra_size",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_extra",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_tb_num",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_tb_den",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_bytes",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_packets",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_release",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_packet",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_bind_index",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_read",
+        "kind": "function"
+      },
+      {
+        "name": "vpd_seek",
+        "kind": "function"
+      },
+      {
+        "name": "ff_h264_cabac_tables",
+        "kind": "global"
+      },
+      {
+        "name": "_emscripten_tls_init",
+        "kind": "function"
+      },
+      {
+        "name": "pthread_self",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_thread_init",
+        "kind": "function"
+      },
+      {
+        "name": "__set_thread_state",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_thread_crashed",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_run_js_on_main_thread_done",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_run_js_on_main_thread",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_thread_free_data",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_thread_exit",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_check_mailbox",
+        "kind": "function"
+      },
+      {
+        "name": "emscripten_stack_set_limits",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_stack_restore",
+        "kind": "function"
+      },
+      {
+        "name": "_emscripten_stack_alloc",
+        "kind": "function"
+      },
+      {
+        "name": "emscripten_stack_get_current",
+        "kind": "function"
+      }
+    ],
+    "imports": [
+      {
+        "module": "env",
+        "name": "memory",
+        "kind": "memory"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_num_logical_cores",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "vp_js_read",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_fcntl64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_ioctl",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_close",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_read",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_write",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_abort_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_faccessat",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "clock_time_get",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_date_now",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_thread_set_strongref",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_exit_with_live_runtime",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_get_now",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_fstat64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_stat64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_newfstatat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_lstat64",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "environ_sizes_get",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "environ_get",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_fdstat_get",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_init_main_thread_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_thread_mailbox_await",
+        "kind": "function"
+      },
+      {
+        "module": "wasi_snapshot_preview1",
+        "name": "fd_seek",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_tzset_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_localtime_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_gmtime_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_openat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_receive_on_main_thread_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_check_blocking_allowed",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__pthread_create_js",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_thread_cleanup",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "exit",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_getdents64",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_renameat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_rmdir",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_get_heap_max",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "_emscripten_notify_mailbox_postmessage",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "__syscall_unlinkat",
+        "kind": "function"
+      },
+      {
+        "module": "env",
+        "name": "emscripten_resize_heap",
+        "kind": "function"
+      }
+    ]
+  },
+  {
+    "name": "analysis",
+    "file": "public/vendor/voidplayer-analysis/voidplayer-analysis.wasm",
+    "bytes": 3199869,
+    "sha256": "5ab1865c66e0789e6c38bc6b93df05ccbec8d5cb7eefa0624701a9d44fac25ef",
+    "matchesOldBuildArtifact": true,
+    "exports": [
+      {
+        "name": "t",
+        "kind": "memory"
+      },
+      {
+        "name": "u",
+        "kind": "function"
+      },
+      {
+        "name": "v",
+        "kind": "function"
+      },
+      {
+        "name": "w",
+        "kind": "function"
+      },
+      {
+        "name": "x",
+        "kind": "function"
+      },
+      {
+        "name": "y",
+        "kind": "function"
+      },
+      {
+        "name": "z",
+        "kind": "function"
+      },
+      {
+        "name": "A",
+        "kind": "function"
+      },
+      {
+        "name": "B",
+        "kind": "function"
+      },
+      {
+        "name": "C",
+        "kind": "function"
+      },
+      {
+        "name": "D",
+        "kind": "function"
+      },
+      {
+        "name": "E",
+        "kind": "function"
+      },
+      {
+        "name": "F",
+        "kind": "function"
+      },
+      {
+        "name": "G",
+        "kind": "function"
+      },
+      {
+        "name": "H",
+        "kind": "function"
+      },
+      {
+        "name": "I",
+        "kind": "function"
+      },
+      {
+        "name": "J",
+        "kind": "function"
+      },
+      {
+        "name": "K",
+        "kind": "function"
+      },
+      {
+        "name": "L",
+        "kind": "function"
+      },
+      {
+        "name": "M",
+        "kind": "function"
+      },
+      {
+        "name": "N",
+        "kind": "function"
+      },
+      {
+        "name": "O",
+        "kind": "function"
+      },
+      {
+        "name": "P",
+        "kind": "function"
+      },
+      {
+        "name": "Q",
+        "kind": "function"
+      },
+      {
+        "name": "R",
+        "kind": "function"
+      },
+      {
+        "name": "S",
+        "kind": "function"
+      },
+      {
+        "name": "T",
+        "kind": "function"
+      },
+      {
+        "name": "U",
+        "kind": "function"
+      },
+      {
+        "name": "V",
+        "kind": "function"
+      },
+      {
+        "name": "W",
+        "kind": "function"
+      },
+      {
+        "name": "X",
+        "kind": "function"
+      },
+      {
+        "name": "Y",
+        "kind": "function"
+      },
+      {
+        "name": "Z",
+        "kind": "function"
+      },
+      {
+        "name": "_",
+        "kind": "function"
+      },
+      {
+        "name": "$",
+        "kind": "function"
+      },
+      {
+        "name": "aa",
+        "kind": "function"
+      },
+      {
+        "name": "ba",
+        "kind": "function"
+      },
+      {
+        "name": "ca",
+        "kind": "function"
+      },
+      {
+        "name": "da",
+        "kind": "function"
+      },
+      {
+        "name": "ea",
+        "kind": "function"
+      },
+      {
+        "name": "fa",
+        "kind": "function"
+      },
+      {
+        "name": "ga",
+        "kind": "function"
+      },
+      {
+        "name": "ha",
+        "kind": "function"
+      },
+      {
+        "name": "ia",
+        "kind": "function"
+      },
+      {
+        "name": "ja",
+        "kind": "function"
+      },
+      {
+        "name": "ka",
+        "kind": "function"
+      },
+      {
+        "name": "la",
+        "kind": "function"
+      },
+      {
+        "name": "ma",
+        "kind": "global"
+      },
+      {
+        "name": "na",
+        "kind": "function"
+      }
+    ],
+    "imports": [
+      {
+        "module": "a",
+        "name": "a",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "b",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "c",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "d",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "e",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "f",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "g",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "h",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "i",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "j",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "k",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "l",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "m",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "n",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "o",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "p",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "q",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "r",
+        "kind": "function"
+      },
+      {
+        "module": "a",
+        "name": "s",
+        "kind": "function"
+      }
+    ]
+  }
+]

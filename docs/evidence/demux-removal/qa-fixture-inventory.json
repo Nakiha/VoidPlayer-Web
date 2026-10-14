@@ -1,0 +1,324 @@
+[
+  {
+    "file": "fixtures/video/av1_10s_1920x1080.webm",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "av1",
+          "profile": "Main",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "9.983333",
+        "size": "9663935"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/ci_h264_smoke.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "profile": "High",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "4.000000",
+        "size": "138314"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/ffv1_yuv422p10le.mkv",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "ffv1",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv422p10le",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "2.000000",
+        "size": "582922"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/ffv1_yuv422p_8bit.mkv",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "ffv1",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv422p",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "2.000000",
+        "size": "558756"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/ffv1_yuv444p10le.mkv",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "ffv1",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv444p10le",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "2.000000",
+        "size": "1162255"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/ffv1_yuv444p_8bit.mkv",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "ffv1",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv444p",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "2.000000",
+        "size": "903831"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/h264_9s_1920x1080.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "profile": "High",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "9.999956",
+        "size": "19334432"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/h264_high422p_1s_320x180.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "h264",
+          "profile": "High 4:2:2",
+          "width": 320,
+          "height": 180,
+          "pix_fmt": "yuv422p",
+          "r_frame_rate": "30/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "1.000000",
+        "size": "39078"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/h265_10s_1920x1080.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "hevc",
+          "profile": "Main",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "9.949600",
+        "size": "10179949"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/h266_10s_1920x1080.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vvc",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "10.000000",
+        "size": "5018129"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/mhw_hevc_fullrange_bt709_3s.mp4",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "hevc",
+          "profile": "Main",
+          "width": 3840,
+          "height": 2160,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "120/1"
+        }
+      ],
+      "format": {
+        "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+        "duration": "2.996857",
+        "size": "14204590"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/mhw_x265_aq_qg16_4s_1920x1080.mkv",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "hevc",
+          "profile": "Main",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "120/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "4.025000",
+        "size": "6722277"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/mpeg2_10s_1280x720.ts",
+    "probe": {
+      "programs": [
+        {
+          "streams": [
+            {
+              "codec_name": "mpeg2video",
+              "profile": "Main",
+              "width": 1280,
+              "height": 720,
+              "pix_fmt": "yuv420p",
+              "r_frame_rate": "60/1",
+              "side_data_list": [
+                {}
+              ]
+            }
+          ]
+        }
+      ],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "mpeg2video",
+          "profile": "Main",
+          "width": 1280,
+          "height": 720,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1",
+          "side_data_list": [
+            {}
+          ]
+        }
+      ],
+      "format": {
+        "format_name": "mpegts",
+        "duration": "10.000000",
+        "size": "20531104"
+      }
+    }
+  },
+  {
+    "file": "fixtures/video/vp9_10s_1920x1080.webm",
+    "probe": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "vp9",
+          "profile": "Profile 0",
+          "width": 1920,
+          "height": 1080,
+          "pix_fmt": "yuv420p",
+          "r_frame_rate": "60/1"
+        }
+      ],
+      "format": {
+        "format_name": "matroska,webm",
+        "duration": "10.000000",
+        "size": "13061155"
+      }
+    }
+  }
+]
