@@ -53,7 +53,7 @@ jobs:
         id: analysis-cache
         with:
           path: public/vendor/voidplayer-analysis
-          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs') }}
+          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
       - uses: actions/checkout@v4
         if: steps.analysis-cache.outputs.cache-hit != 'true'
         with:
@@ -107,7 +107,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: public/vendor/voidplayer-core
-          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs') }}
+          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
       - name: Checkout decoder build source
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
