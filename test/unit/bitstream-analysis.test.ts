@@ -511,6 +511,8 @@ test('required reference ABI rejects old or incomplete cores before analysis', a
   const { validateAnalysisCore, REFERENCE_EXPORTS } = await import('../../src/bitstream-analysis/core-abi.ts');
   const current = Object.fromEntries(REFERENCE_EXPORTS.map(name => [name, () => name === '_vpa_reference_abi' ? 1 : 0]));
   current._vpa_abi = () => 1;
+  assert.throws(() => validateAnalysisCore(current), /known timestamp feed/);
+  current._vpa_feed_known = () => 0;
   assert.doesNotThrow(() => validateAnalysisCore(current));
   assert.throws(() => validateAnalysisCore({ _vpa_abi: () => 1 }), /reference ABI 1/);
   for (const name of REFERENCE_EXPORTS) {
@@ -750,3 +752,41 @@ for (const { mode, failure } of localTransportCases) {
     }
   });
 }
+
+test('viewport analysis selects intersecting GOPs using the requested PTS or DTS axis', async () => {
+  const { viewportAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const packets = Array.from({ length: 6 }, (_, au) => ({ au, pts: 100 + au * 10, dts: 90 + au * 10, configuration: 0, key: au % 2 === 0 })) as any;
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'pts' }).map(group => [group.startAu, group.endAu]), [[2, 4]]);
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'dts' }).map(group => [group.startAu, group.endAu]), [[4, 6]]);
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 20, endUs: 40, axis: 'pts' }).map(group => [group.startAu, group.endAu]), [[2, 4]]);
+});
+
+test('pause and resume retain confirmed analysis coverage without borrowing another source generation', async t => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+  const { AnalysisFailure } = await import('../../src/bitstream-analysis/failure.ts');
+  let runs = 0, reached!: () => void, generation = 1;
+  const pending = new Promise<void>(resolve => { reached = resolve; }), states: any[] = [];
+  const instance = {};
+  const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation, available: true }), subscribeInvalidation: () => () => {}, changed: () => { states.push(coordinator.state('A')); } });
+  t.mock.method(BitstreamAnalysisService.prototype as any, 'localRange', async (_file: unknown, _target: unknown, signal: AbortSignal, consume: (r: AnalysisResult) => void, progress: (p: unknown) => void) => {
+    const first = ++runs === 1;
+    progress({ pictures: 0, totalPictures: 3, checkedUs: 0, totalUs: 300, indexComplete: true });
+    for (let au = 0; au < 3; au++) {
+      const r = result(); r.picture.au = au; r.sourcePtsUs = au * 100; r.gop = { startAu: 0, endAu: 3, configuration: 0, anchor: 'closed' }; consume(r);
+      if (first && au === 0) { reached(); await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new AnalysisFailure('cancelled', 'paused')), { once: true })); }
+    }
+  });
+  const source = { info: {}, bitstreamFile: new Blob() } as any;
+  const window = { startUs: 0, endUs: 300, axis: 'pts' as const };
+  const run = () => coordinator.run('A', undefined, { state: 'pending', stream: { slot: 'A', checkedUs: 0, totalUs: 300, pictures: 0, totalPictures: 3, window } }, (service, signal) => service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 300, window }, 'A', signal));
+  try {
+    const first = run().catch(() => {}); await pending;
+    coordinator.pause('A'); await first;
+    assert.equal(coordinator.state('A').state, 'paused'); assert.equal(coordinator.state('A').stream!.pictures, 1);
+    const cursor = states.length; await run();
+    assert.ok(states.slice(cursor).filter(state => state.state === 'pending').every(state => state.stream.pictures >= 1));
+    assert.equal(coordinator.state('A').state, 'ready'); assert.equal(coordinator.state('A').stream!.pictures, 3);
+    generation = 2; assert.equal(coordinator.state('A').state, 'idle');
+  } finally { coordinator.dispose(); }
+});

@@ -27,7 +27,7 @@ function readHistory() { try { return JSON.parse(localStorage.getItem(HISTORY_KE
 export function installWorkbench(session: ReviewSession, act: Action, addMark: (slot: Slot, markId?: string) => void, notify: (message: string) => void = () => {}) {
   const view = new WorkspaceState();
   if (new URL(location.href).searchParams.get('library') === '1') view.panels.sources = true;
-  const catalog = new SourceCatalog(readHistory());
+  const catalog = new SourceCatalog(readHistory(), { isolateLibraries: true });
   const lifecyle = new AbortController();
   const workspace = $('workspace');
   installStartPanelResize($('start-panel'), lifecyle.signal);

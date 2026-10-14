@@ -1,4 +1,5 @@
 import { analysisRetryButton } from './analysis/retry.ts';
+import { animatePlaybackIcon } from './playback-icon.ts';
 import { installBitstreamDiagrams, type BitstreamDiagram } from "./analysis/bitstream-diagrams.ts";
 // 顶部码流分析面板：工具条 + Canvas + 覆盖层 + 会话共用查询。
 // 数据全部走 ReviewSession.queryAnalysis（与 Agent 同一入口）；悬停只读
@@ -6,7 +7,7 @@ import { installBitstreamDiagrams, type BitstreamDiagram } from "./analysis/bits
 // 面板开关与高度由 workbench 统一管理（右上功能区、拖拽手势与子轨道同契约）；
 // 本模块只负责内容、查询与绘制。下拉全部使用项目 choice-menu 控件。
 
-import { SLOTS } from '../model.ts';
+import { SLOTS, formatTime } from '../model.ts';
 import type { Slot } from '../model.ts';
 import type { ReviewSession } from '../session.ts';
 import type { AnalysisDiagram, AnalysisCapability } from '../analysis/types.ts';
@@ -133,6 +134,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const sharedAxisHost = document.createElement('div'); sharedAxisHost.className = 'analysis-shared-axis'; sharedAxisHost.hidden = true;
   const sharedAxis = document.createElement('canvas'); sharedAxis.id = 'analysis-shared-axis'; sharedAxis.setAttribute('aria-hidden', 'true');
   sharedAxisHost.append(sharedAxis); charts.after(sharedAxisHost);
+  const rangeBand = document.createElement('span'); rangeBand.className = 'analysis-window-band'; rangeBand.setAttribute('aria-hidden', 'true');
+  const rangeHandles = (['start', 'end'] as const).map(edge => {
+    const button = document.createElement('button'); button.type = 'button'; button.className = `analysis-window-handle ${edge}`;
+    button.dataset.edge = edge; button.setAttribute('role', 'slider');
+    return button;
+  });
+  sharedAxisHost.append(rangeBand, ...rangeHandles);
   const sharedAxisCtx = sharedAxis.getContext('2d');
   let sharedAxisSignature = '';
   type DeepEntry = { mode: BitstreamDiagram; slot: Slot; host: HTMLElement; abort: AbortController; panel: ReturnType<typeof installBitstreamDiagrams> };
@@ -541,6 +549,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   const results = queries.results;
   const queryErrors = queries.errors;
   let view: { start: number; end: number } | null = null;
+  let viewInitialized = false;
   let rubber: { a: number; b: number } | null = null;
   let positionUs = 0;
   let durationUs = 0;
@@ -660,6 +669,26 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     },
   });
   sharedAxis.addEventListener('dblclick', () => { clearSharedHover(); setView(null); }, { signal });
+  for (const handle of rangeHandles) {
+    const apply = (value: number) => {
+      const range = viewRange(), domain = fullRange();
+      if (handle.dataset.edge === 'start') setView(Math.max(domain.start, Math.min(range.end - MIN_SPAN_US, value)), range.end);
+      else setView(range.start, Math.min(domain.end, Math.max(range.start + MIN_SPAN_US, value)));
+    };
+    handle.addEventListener('pointerdown', event => { if (event.button !== 0) return; event.preventDefault(); handle.setPointerCapture(event.pointerId); }, { signal });
+    handle.addEventListener('pointermove', event => {
+      if (!handle.hasPointerCapture(event.pointerId)) return;
+      const domain = fullRange(), geometry = sharedAxisGeometry(), bounds = sharedAxis.getBoundingClientRect();
+      const fraction = Math.max(0, Math.min(1, (event.clientX - bounds.left - geometry.gutter) / geometry.plotW));
+      apply(Math.round(domain.start + fraction * (domain.end - domain.start)));
+    }, { signal });
+    handle.addEventListener('pointerup', event => { if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId); }, { signal });
+    handle.addEventListener('keydown', event => {
+      const range = viewRange(), domain = fullRange(), value = handle.dataset.edge === 'start' ? range.start : range.end;
+      if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); apply(event.key === 'Home' ? domain.start : domain.end); }
+      else if (['ArrowLeft', 'ArrowRight'].includes(event.key)) { event.preventDefault(); apply(value + (event.key === 'ArrowLeft' ? -1 : 1) * (event.shiftKey ? 1_000_000 : 100_000)); }
+    }, { signal });
+  }
 
   const selectedTracks = () => tracks.filter(t => prefs.selected.includes(t.slot));
 
@@ -669,7 +698,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   };
 
   const status = installAnalysisStatus({ session, act, signal, prefs, statusEl, itemsEl, live,
-    tracks: () => tracks, colors: () => slotColors });
+    tracks: () => tracks, colors: () => slotColors, resume: slot => session.resumeBitstreamAnalysis(slot, visibleAnalysisWindow(slot)) });
   const updateStatus = () => status.update();
 
   let diagramSlot: Slot | undefined;
@@ -692,11 +721,18 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     if (state?.queued) status = t(msg('analysis.streamQueued', '{slot} 排队中'), { slot: slot ?? '—' });
     if (state?.reason) status += ` · ${bitstreamReasonText(state.reason.code)}`;
     if (state?.state === 'cancelled') status += ` · ${t(msg('analysis.streamCancelled','已取消'))}`;
+    if (state?.state === 'paused') status += ` · ${t(msg('analysis.streamPaused','已暂停'))}`;
     return { status, pending, percent, state: state?.state ?? 'idle', name: track?.name ?? '' };
   }
   // One automatic attempt per loaded source identity; session admission owns
   // the shared local/library concurrency limit and independent track tasks.
   const automaticStreams = new Map<Slot, string>();
+  function visibleAnalysisWindow(slot: Slot) {
+    const track = tracks.find(track => track.slot === slot)!, range = viewRange();
+    const startUs = Math.max(prefs.axis === 'pts' ? 0 : -track.durationUs, Math.floor(range.start - track.offsetUs));
+    const endUs = Math.min(Math.ceil(track.durationUs), Math.ceil(range.end - track.offsetUs));
+    return { startUs, endUs, axis: prefs.axis };
+  }
   let automaticScheduled = false;
   function queueAutomaticStreams() {
     if (automaticScheduled || signal.aborted) return;
@@ -705,11 +741,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       automaticScheduled = false;
       if (signal.aborted || !open || !([...diagrams].some(mode => mode !== 'bitrate' && mode !== 'size') || diagrams.has('bitrate') && loadMetrics.has('qp'))) return;
       for (const track of selectedTracks()) {
-        const identity = `${track.mediaId}:${track.sourceGen}`, state = session.getBitstreamAnalysisState(track.slot);
-        if (automaticStreams.get(track.slot) === identity || state.state === 'pending' ||
-          state.completedStream || (state.state === 'ready' && state.stream) || caps.get(track.slot)?.indexState === 'error') continue;
+        const window = visibleAnalysisWindow(track.slot);
+        if (window.endUs <= window.startUs) continue;
+        const identity = `${track.mediaId}:${track.sourceGen}:${JSON.stringify(window)}`, state = session.getBitstreamAnalysisState(track.slot);
+        if (automaticStreams.get(track.slot) === identity || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') continue;
         automaticStreams.set(track.slot, identity);
-        void session.requestBitstreamStream(track.slot).catch(() => { /* The facade publishes errors; never retry automatically. */ })
+        void session.requestBitstreamStream(track.slot, undefined, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
           .finally(() => { if (!signal.aborted) refreshStream(); });
       }
     });
@@ -721,7 +758,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const slot = chip.dataset.slot as Slot, ui = inspectionUi(slot);
       chip.dataset.state = ui.state;
       let retry = retryButtons.get(slot);
-      if (!retry) { retry = analysisRetryButton(slot, () => act(() => session.requestBitstreamStream(slot), 'ui.retry-analysis', { slot })); retry.button.id = `analysis-retry-${slot}`; retryButtons.set(slot, retry); }
+      if (!retry) { retry = analysisRetryButton(slot, () => act(() => session.requestBitstreamStream(slot, undefined, visibleAnalysisWindow(slot)), 'ui.retry-analysis', { slot })); retry.button.id = `analysis-retry-${slot}`; retryButtons.set(slot, retry); }
       if (retry.button.parentElement !== chip) chip.append(retry.button);
       retry.update(session.getBitstreamAnalysisState(slot));
       const button = chip.querySelector<HTMLButtonElement>('.analysis-chip')!;
@@ -732,8 +769,17 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       progress.setAttribute('aria-hidden', String(!ui.pending));
       progress.style.setProperty('--inspection-progress', String(100 - ui.percent));
       progress.classList.toggle('is-waiting', ui.percent === 0);
+      const action = chip.querySelector<HTMLButtonElement>('.analysis-progress-action')!;
+      const state = session.getBitstreamAnalysisState(slot), paused = state.state === 'paused';
+      action.disabled = !(state.stream && (ui.pending || paused));
+      action.hidden = action.disabled;
+      action.setAttribute('aria-label', t(paused ? msg('analysis.resumeTrack', '继续分析轨道 {slot}') : msg('analysis.pauseTrack', '暂停分析轨道 {slot}'), { slot }));
+      action.setAttribute('aria-description', ui.status); action.title = `${action.getAttribute('aria-label')} · ${ui.status}`;
+      const playing = String(!paused);
+      if (action.dataset.playing !== playing) { action.dataset.playing = playing; animatePlaybackIcon(action, !paused); }
     }
     refreshDeep(); queueAutomaticStreams();
+    if (open) renderSharedAxis();
     if(open && prefs.showBitrate && loadMetrics.has('qp')) requestRender();
   }
 
@@ -848,19 +894,39 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   function renderSharedAxis() {
     if (!open || sharedAxisHost.hidden || !sharedAxisCtx) { sharedAxisSignature = ''; return; }
     const width = Math.max(1, Math.floor(charts.clientWidth));
-    const range = viewRange(), dpr = Math.min(2, window.devicePixelRatio || 1);
-    const signature = JSON.stringify([width, range, dpr, colors]);
+    const range = viewRange(), domain = fullRange(), dpr = Math.min(2, window.devicePixelRatio || 1);
+    const coverage = selectedTracks().map(track => ({ track, state: session.getBitstreamAnalysisState(track.slot) }));
+    const signature = JSON.stringify([width, range, domain, dpr, colors, coverage.map(({track,state}) => [track.slot, state.stream, state.completedStream])]);
     if (signature === sharedAxisSignature) return;
     sharedAxisSignature = signature;
     sharedAxis.style.width = `${width}px`; sharedAxis.style.height = `${AXIS_H}px`;
     sharedAxis.width = Math.round(width * dpr); sharedAxis.height = Math.round(AXIS_H * dpr);
     sharedAxisCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
     sharedAxisCtx.clearRect(0, 0, width, AXIS_H);
-    drawTimeAxis(sharedAxisCtx, { width, height: AXIS_H, viewStart: range.start, viewEnd: range.end, colors });
+    drawTimeAxis(sharedAxisCtx, { width, height: AXIS_H, viewStart: domain.start, viewEnd: domain.end, colors });
     const geometry = plotGeometry(width);
     sharedAxisCtx.strokeStyle = colors.grid; sharedAxisCtx.beginPath();
-    sharedAxisCtx.moveTo(geometry.gutter, .5); sharedAxisCtx.lineTo(geometry.gutter + geometry.plotW, .5); sharedAxisCtx.stroke();
-    sharedAxis.dataset.axisStart = String(range.start); sharedAxis.dataset.axisEnd = String(range.end);
+    sharedAxisCtx.lineWidth = 4;
+    sharedAxisCtx.moveTo(geometry.gutter, 3); sharedAxisCtx.lineTo(geometry.gutter + geometry.plotW, 3); sharedAxisCtx.stroke();
+    const xFor = (time: number) => geometry.gutter + Math.max(0, Math.min(1, (time - domain.start) / (domain.end - domain.start))) * geometry.plotW;
+    for (const { track, state } of coverage) {
+      const stream = state.stream ?? state.completedStream;
+      if (!stream || !stream.totalUs) continue;
+      const window = 'window' in stream && stream.window ? stream.window : { startUs: 0, endUs: track.durationUs };
+      sharedAxisCtx.strokeStyle = slotColors.get(track.slot) ?? colors.delta; sharedAxisCtx.beginPath();
+      sharedAxisCtx.moveTo(xFor(window.startUs + track.offsetUs), 3);
+      sharedAxisCtx.lineTo(xFor(window.startUs + track.offsetUs + (window.endUs - window.startUs) * stream.checkedUs / stream.totalUs), 3); sharedAxisCtx.stroke();
+    }
+    rangeBand.style.left = `${xFor(range.start)}px`; rangeBand.style.width = `${Math.max(0, xFor(range.end) - xFor(range.start))}px`;
+    for (const handle of rangeHandles) {
+      const value = handle.dataset.edge === 'start' ? range.start : range.end;
+      handle.style.left = `${Math.min(width - 4, Math.max(4, xFor(value)))}px`;
+      handle.setAttribute('aria-label', t(handle.dataset.edge === 'start' ? msg('analysis.visibleStart', '图表可见区间起点') : msg('analysis.visibleEnd', '图表可见区间终点')));
+      handle.setAttribute('aria-valuemin', String(domain.start)); handle.setAttribute('aria-valuemax', String(domain.end)); handle.setAttribute('aria-valuenow', String(value)); handle.setAttribute('aria-valuetext', formatTime(value)); handle.title = `${handle.getAttribute('aria-label')} · ${formatTime(value)}`;
+    }
+    sharedAxis.dataset.domainStart = String(domain.start); sharedAxis.dataset.domainEnd = String(domain.end);
+    sharedAxis.dataset.axisStart = String(domain.start); sharedAxis.dataset.axisEnd = String(domain.end);
+    sharedAxis.dataset.viewStart = String(range.start); sharedAxis.dataset.viewEnd = String(range.end);
     sharedAxis.dataset.plotLeft = String(geometry.gutter); sharedAxis.dataset.plotRight = String(geometry.gutter + geometry.plotW);
     sharedAxis.dataset.timeAxis = 'true';
   }
@@ -1218,6 +1284,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     else setView(null);
   }
   function restoreAnalysisState(s: AnalysisViewState) {
+    viewInitialized = true;
     diagramSolo = undefined;
     loadSolo=undefined; loadMetrics=new Set(s.loadMetrics ?? ['bitrate']); prefs.loadMetrics=[...loadMetrics];
     diagrams = new Set(selectedAnalysisDiagrams(s));
@@ -1272,6 +1339,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         return current && current.mediaId !== previous.mediaId;
       })) view = null;
       tracks = entries;
+      if (!tracks.length) viewInitialized = false;
+      if (!viewInitialized && tracks.length) {
+        viewInitialized = true;
+        const end = Math.min(10_000_000, durationUs);
+        // Keep the existing virtual −1 configuration cell before frame zero.
+        view = end > 0 ? { start: domainBounds(end).start, end } : null;
+      }
       caps = new Map(session.getAnalysisCapabilities().map(c => [c.slot as Slot, c.capability]));
       if (prefs.axis === 'dts' && !allHaveDts()) prefs.axis = 'pts';
       // 换片/清轨后旧检查与冻结快照失效，不拿旧 sampleId 定位新片源。

@@ -417,6 +417,41 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   }
 });
 
+test('server viewport requests keep different windows separate and publish only their intersecting GOP', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const media = await mkdtemp(join(tmpdir(), 'vp-viewport-stream-')), name = 'viewport.mp4';
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=128x64:rate=30:duration=4', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
+  const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  const target = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 4000000 };
+  try {
+    const requests = await Promise.all([100000, 2100000].map(startUs => scheduler.submit(f.entry.id, f.entry.version!,
+      { ...target, window: { startUs, endUs: startUs + 100000, axis: 'pts' } }, String(startUs))));
+    for (let i = 0; i < requests.length; i++) {
+      const owner = String(i ? 2100000 : 100000), aus = new Set<number>();
+      let cursor = 0;
+      for (let n = 0; ; n++) {
+        assert.ok(n < 500, 'viewport request completes');
+        const state = await scheduler.streamStatus(requests[i].requestId, owner, cursor);
+        assert.ok(state && ['running', 'queued', 'complete'].includes(state.state), JSON.stringify(state));
+        for (const ref of state.chunks) {
+          const result = await scheduler.store.get(ref.id);
+          assert.ok(result && result.gop);
+          aus.add(result.picture.au); cursor = ref.cursor;
+          assert.equal(result.gop.startAu, i ? 60 : 0);
+        }
+        if (state.state === 'complete' && cursor === state.published) {
+          assert.equal(state.progress!.totalPictures, 30); break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.deepEqual([...aus].sort((a, b) => a - b), Array.from({ length: 30 }, (_, n) => n + (i ? 60 : 0)));
+      scheduler.release(requests[i].requestId, owner);
+    }
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
+});
+
 test('continuous server stream pages GOP chunks, backpressures each consumer and keeps committed cache on cancellation', async () => {
   const { execFileSync } = await import('node:child_process');
   const media = await mkdtemp(join(tmpdir(), 'vp-gop-stream-'));

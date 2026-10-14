@@ -379,6 +379,7 @@ export interface Sources {
   "analysis.noSampleAtTime": "轨道 {slot} 在该时间无可定位样本。";
   "analysis.noVideoYet": "尚未载入视频";
   "analysis.otherNaluTypes": "其他类型";
+  "analysis.pauseTrack": "暂停分析轨道 {slot}";
   "analysis.peakSeekFailed": "轨道 {slot}：峰值样本定位失败。";
   "analysis.pinnedSuffix": " · 已固定";
   "analysis.presentationLoad": "展示负载率";
@@ -396,6 +397,7 @@ export interface Sources {
   "analysis.referenceOverview": "整片帧类型分布 · 放大查看参考金字塔与 L0 / L1 连线。";
   "analysis.referencePyramid": "帧参考金字塔";
   "analysis.referenceSection": "帧参考";
+  "analysis.resumeTrack": "继续分析轨道 {slot}";
   "analysis.retryTrack": "重新分析轨道 {slot}";
   "analysis.sampleRateLabel": "样本率";
   "analysis.seekReason": "轨道 {slot}：{reason}";
@@ -409,6 +411,7 @@ export interface Sources {
   "analysis.streamEmptyHint": "正在准备分析，NALU 和帧参考结果会自动显示。";
   "analysis.streamLiveHint": "结果会随分析进度逐步显示。";
   "analysis.streamNotStarted": "{slot} 尚未检查";
+  "analysis.streamPaused": "已暂停";
   "analysis.streamProgress": "{slot} {percent}% · {count} 帧";
   "analysis.streamQueued": "{slot} 排队中";
   "analysis.streamSection": "码流";
@@ -426,6 +429,8 @@ export interface Sources {
   "analysis.trackUnsupported": "轨道 {slot}：当前片源路径暂不支持码流分析。";
   "analysis.unknownError": "未知错误";
   "analysis.untimedPackets": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。";
+  "analysis.visibleEnd": "图表可见区间终点";
+  "analysis.visibleStart": "图表可见区间起点";
   "annotation.framePreview": "标注画面";
   "appearance.amber": "琥珀";
   "appearance.baseBlush": "浅玫瑰";
@@ -574,6 +579,7 @@ export interface Sources {
   "error.diagnostic": "{summary}\n[{code} / {stage}] {reason}";
   "error.referenceFormat": "自有色彩不支持此像素格式或颜色信息。请切换为浏览器色彩后重试。";
   "error.referenceHdr": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。";
+  "error.wasmCoreIncompatible": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。";
   "identity.chooseExisting": "选择已有用户";
   "identity.continueAsGuest": "以访客身份继续";
   "identity.entering": "正在进入…";
@@ -764,6 +770,7 @@ export interface Sources {
   "recovery.recordCount": "恢复记录数量";
   "recovery.restore": "恢复工作区";
   "recovery.restored": "工作区已恢复。";
+  "recovery.restoredWithMissing": "工作区布局和标注已恢复，{n} 个片源尚未打开。";
   "recovery.saveFailed": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。";
   "recovery.savingResumed": "工作区本机自动恢复已恢复保存。";
   "recovery.storageEstimate": "估算占用空间";
@@ -943,6 +950,11 @@ export interface Sources {
   "shell.yuvChannels": "YUV 通道";
   "shell.yuvChannelsRawYuvFramesOnly": "YUV 通道：仅原始平面帧生效";
   "shell.zoom": "画面缩放";
+  "sourceAccess.libraryChanged": "媒体库文件「{name}」与保存的版本不一致，请重新选择并检查标注。";
+  "sourceAccess.libraryMissing": "媒体库引用「{name}」已失效或文件已移除，请在媒体库中重新选择。";
+  "sourceAccess.libraryUnavailable": "无法确认媒体库引用「{name}」，请检查服务连接后重试。";
+  "sourceAccess.localStale": "本地文件「{name}」已变化或不可用，请重新选择并检查标注。";
+  "sourceAccess.localUnsupported": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。";
   "sourceActions.connected": "媒体服务已连接";
   "sourceActions.copied": "绝对路径已拷贝";
   "sourceActions.copyAbsolutePath": "拷贝绝对路径";
@@ -964,7 +976,6 @@ export interface Sources {
   "sources.cancelLoad": "取消载入";
   "sources.cancelLoadName": "取消载入：{name}";
   "sources.checkReference": "检查媒体引用";
-  "sources.contentChanged": "内容已改变或不可用，请在媒体库中重新选择";
   "sources.currentIdentityPrefix": "当前身份 · ";
   "sources.emptyDirectory": "当前目录没有片源";
   "sources.folderMetaLibrary": "媒体库 · {root}";
@@ -973,6 +984,8 @@ export interface Sources {
   "sources.identityTitle": "点击打开用户设置（当前身份：{name}）";
   "sources.inLibrary": "媒体库";
   "sources.lastOpened": " · 上次打开 {date}";
+  "sources.libraryReference": "媒体库引用";
+  "sources.libraryReferenceUnavailable": "媒体库引用不可用";
   "sources.loadFailedWith": "载入失败：{reason}";
   "sources.loadedTracks": "已上屏轨道：{slots}";
   "sources.loading": "正在载入";
@@ -986,6 +999,7 @@ export interface Sources {
   "sources.noRecentVideos": "还没有最近打开的视频";
   "sources.openFolder": "打开目录：{name}";
   "sources.openName": "打开：{name}";
+  "sources.referenceNeedsReselect": " · 引用不可用，需重新选择";
   "sources.removeFromView": "从视图移除";
   "sources.removeFromViewName": "从视图移除：{name}";
   "sources.replaceTrack": "替换当前轨道";
@@ -995,7 +1009,6 @@ export interface Sources {
   "sources.reselectNeeded": " · 需重新选择";
   "sources.reselectRowName": "重新选择：{name}";
   "sources.showingFirstFrame": "正在显示首帧";
-  "sources.staleLibraryToast": "媒体库中的文件已变化，请在片源中重新选择";
   "sources.startMetaLibrary": "媒体库";
   "sources.startMetaLocal": "本地文件";
   "sources.stillWriting": "片源仍在写入，请稍后重试";
@@ -1099,7 +1112,6 @@ export interface Sources {
   "transfer.legacyConditions": "旧工作区未记录比较条件，已沿用当前色彩和解码设置。";
   "transfer.mtimeWarning": "「{name}」修改时间与工作区记录不一致，已按同名同大小文件恢复；如内容被替换请重新检查标注。";
   "transfer.nameMismatch": "文件名 {expected} → {actual}";
-  "transfer.notAuthorized": "本地文件尚未授权，请重新选择。";
   "transfer.openWorkspace": "打开工作区";
   "transfer.pendingRelink": "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}";
   "transfer.relinkBody": "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。";
@@ -1499,6 +1511,7 @@ export interface MessageParameters {
   "analysis.noSampleAtTime": { "slot": string | number };
   "analysis.noVideoYet": {  };
   "analysis.otherNaluTypes": {  };
+  "analysis.pauseTrack": { "slot": string | number };
   "analysis.peakSeekFailed": { "slot": string | number };
   "analysis.pinnedSuffix": {  };
   "analysis.presentationLoad": {  };
@@ -1516,6 +1529,7 @@ export interface MessageParameters {
   "analysis.referenceOverview": {  };
   "analysis.referencePyramid": {  };
   "analysis.referenceSection": {  };
+  "analysis.resumeTrack": { "slot": string | number };
   "analysis.retryTrack": { "slot": string | number };
   "analysis.sampleRateLabel": {  };
   "analysis.seekReason": { "reason": string | number; "slot": string | number };
@@ -1529,6 +1543,7 @@ export interface MessageParameters {
   "analysis.streamEmptyHint": {  };
   "analysis.streamLiveHint": {  };
   "analysis.streamNotStarted": { "slot": string | number };
+  "analysis.streamPaused": {  };
   "analysis.streamProgress": { "count": string | number; "percent": string | number; "slot": string | number };
   "analysis.streamQueued": { "slot": string | number };
   "analysis.streamSection": {  };
@@ -1546,6 +1561,8 @@ export interface MessageParameters {
   "analysis.trackUnsupported": { "slot": string | number };
   "analysis.unknownError": {  };
   "analysis.untimedPackets": { "bytes": string | number; "count": string | number; "slot": string | number };
+  "analysis.visibleEnd": {  };
+  "analysis.visibleStart": {  };
   "annotation.framePreview": {  };
   "appearance.amber": {  };
   "appearance.baseBlush": {  };
@@ -1694,6 +1711,7 @@ export interface MessageParameters {
   "error.diagnostic": { "code": string | number; "reason": string | number; "stage": string | number; "summary": string | number };
   "error.referenceFormat": {  };
   "error.referenceHdr": {  };
+  "error.wasmCoreIncompatible": {  };
   "identity.chooseExisting": {  };
   "identity.continueAsGuest": {  };
   "identity.entering": {  };
@@ -1884,6 +1902,7 @@ export interface MessageParameters {
   "recovery.recordCount": {  };
   "recovery.restore": {  };
   "recovery.restored": {  };
+  "recovery.restoredWithMissing": { "n": string | number };
   "recovery.saveFailed": {  };
   "recovery.savingResumed": {  };
   "recovery.storageEstimate": {  };
@@ -2063,6 +2082,11 @@ export interface MessageParameters {
   "shell.yuvChannels": {  };
   "shell.yuvChannelsRawYuvFramesOnly": {  };
   "shell.zoom": {  };
+  "sourceAccess.libraryChanged": { "name": string | number };
+  "sourceAccess.libraryMissing": { "name": string | number };
+  "sourceAccess.libraryUnavailable": { "name": string | number };
+  "sourceAccess.localStale": { "name": string | number };
+  "sourceAccess.localUnsupported": { "name": string | number };
   "sourceActions.connected": {  };
   "sourceActions.copied": {  };
   "sourceActions.copyAbsolutePath": {  };
@@ -2084,7 +2108,6 @@ export interface MessageParameters {
   "sources.cancelLoad": {  };
   "sources.cancelLoadName": { "name": string | number };
   "sources.checkReference": {  };
-  "sources.contentChanged": {  };
   "sources.currentIdentityPrefix": {  };
   "sources.emptyDirectory": {  };
   "sources.folderMetaLibrary": { "root": string | number };
@@ -2093,6 +2116,8 @@ export interface MessageParameters {
   "sources.identityTitle": { "name": string | number };
   "sources.inLibrary": {  };
   "sources.lastOpened": { "date": string | number };
+  "sources.libraryReference": {  };
+  "sources.libraryReferenceUnavailable": {  };
   "sources.loadFailedWith": { "reason": string | number };
   "sources.loadedTracks": { "slots": string | number };
   "sources.loading": {  };
@@ -2106,6 +2131,7 @@ export interface MessageParameters {
   "sources.noRecentVideos": {  };
   "sources.openFolder": { "name": string | number };
   "sources.openName": { "name": string | number };
+  "sources.referenceNeedsReselect": {  };
   "sources.removeFromView": {  };
   "sources.removeFromViewName": { "name": string | number };
   "sources.replaceTrack": {  };
@@ -2115,7 +2141,6 @@ export interface MessageParameters {
   "sources.reselectNeeded": {  };
   "sources.reselectRowName": { "name": string | number };
   "sources.showingFirstFrame": {  };
-  "sources.staleLibraryToast": {  };
   "sources.startMetaLibrary": {  };
   "sources.startMetaLocal": {  };
   "sources.stillWriting": {  };
@@ -2219,7 +2244,6 @@ export interface MessageParameters {
   "transfer.legacyConditions": {  };
   "transfer.mtimeWarning": { "name": string | number };
   "transfer.nameMismatch": { "actual": string | number; "expected": string | number };
-  "transfer.notAuthorized": {  };
   "transfer.openWorkspace": {  };
   "transfer.pendingRelink": { "n": number };
   "transfer.relinkBody": {  };

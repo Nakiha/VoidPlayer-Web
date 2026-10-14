@@ -35,6 +35,18 @@ test('browser transport preserves request IDs, command payloads, transfers and r
   rpc.terminate();
 });
 
+test('decoder failure retains the core compatibility code across worker transport', async () => {
+  const stub = browserWorker(), rpc = new WorkerRpc<PacketCommands>(stub.worker);
+  const pending = rpc.call('at', { pts: 42 });
+  stub.emit({ id: 1, ok: false, stage: 'decode', code: 'wasm-core-incompatible', error: 'WASM packet configuration ABI unavailable' });
+  await assert.rejects(pending, error => {
+    assert.equal((error as any).stage, 'decode');
+    assert.equal((error as any).code, 'wasm-core-incompatible');
+    return true;
+  });
+  rpc.terminate();
+});
+
 test('optional cache observations never occupy or fail video RPC requests', async () => {
   const stub = browserWorker(), rpc = new WorkerRpc<PacketCommands>(stub.worker);
   let observed = 0;

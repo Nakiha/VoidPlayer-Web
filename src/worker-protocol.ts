@@ -94,7 +94,7 @@ export type WorkerRequest<C extends CommandsShape<C>, K extends keyof C = keyof 
 export type WorkerSuccess<C extends CommandsShape<C>, K extends keyof C = keyof C> = {
   [P in K]: { id: number; ok: true; data: C[P]['response']; diagnostics?: Record<string, unknown>[] };
 }[K];
-export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage };
+export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage; code?: import('./media-errors.ts').MediaErrorCode };
 export type IndexBatch = { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
 export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
 export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; bytesRead?:number; durationUs?: number };

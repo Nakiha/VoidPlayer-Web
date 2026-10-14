@@ -92,7 +92,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   function automatic(slot: Slot, entry: Entry) {
     if (!entry.enabled || lastState.busy || lastState.playing || cached(slot,entry)) return;
     const state = session.getBitstreamAnalysisState(slot);
-    if (state.state === 'pending' || state.state === 'unsupported' || entry.request) return;
+    if (state.state === 'pending' || state.state === 'paused' || state.state === 'unsupported' || entry.request) return;
     // The picture provider plans bounded preroll from a verified closed anchor.
     // Opening an overlay must never turn a paused-frame inspection into a full scan.
     const key = inspectionKey(session.getPresentedFrame(slot));

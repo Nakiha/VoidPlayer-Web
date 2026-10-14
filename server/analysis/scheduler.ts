@@ -215,7 +215,7 @@ export class AnalysisScheduler {
         JSON.stringify([
           target.sourceVersion,
           ...('mode' in target || 'startUs' in target ? [target.indexIdentity ?? null] : []),
-          "mode" in target ? ['stream', target.firstPtsUs, target.durationUs] : "startUs" in target
+          "mode" in target ? ['stream', target.firstPtsUs, target.durationUs, target.window ?? null] : "startUs" in target
             ? [target.firstPtsUs, target.startUs, target.endUs]
             : target.picture
               ? pictureId(target.picture)

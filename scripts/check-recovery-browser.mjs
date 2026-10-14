@@ -162,12 +162,15 @@ try {
   assert.equal(await storedCount(),100,'deletion frees one slot and the new tab resumes saving');
   await newTab.close();await page.locator('#settings-close').click();
   // Make the remote source temporarily unavailable and repeat a user-directed restore.
-  await rename(clip, clip + '.offline');
+  await rename(clip, clip + '.offline'); await library.refresh();
   await page.evaluate(document => window.voidPlayer.importWorkspace(document), snapshot);
   let state = await page.evaluate(() => window.voidPlayer.getState());
   assert.equal(state.tracks[0].pendingRelink, true); assert.equal(state.tracks[0].frame, null);
   assert.deepEqual(state.marks, snapshot.marks); assert.equal(state.tracks[0].offsetUs, 100000);
   assert.equal(await page.locator('#image-A').isVisible(), false, 'missing track must not show the previous review frame');
+  await page.locator('.toast').filter({ hasText: '已失效或文件已移除' }).waitFor();
+  const logs = await call('get_review_logs', { limit: 2000 });
+  assert.ok(logs.events.some(event => event.msg === '工作区片源恢复失败，保留轨道待重新关联' && event.data.sourceKind === 'library' && event.data.reason === 'missing' && event.data.error.includes('已失效')));
   // Rename changes ctime/version on some filesystems, so local reattachment
   // below uses the exact saved fingerprint instead of silently accepting a new server version.
   await rename(clip + '.offline', clip);
@@ -176,6 +179,22 @@ try {
   await page.getByRole('button', { name: '稍后关联', exact: true }).click(); await page.evaluate(() => window.pendingImport);
   assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].pendingRelink, true);
   assert.deepEqual(await page.evaluate(() => window.voidPlayer.getState().marks), snapshot.marks);
+  const localContext = await browser.newContext({ locale: 'zh-CN' });
+  try {
+    await localContext.addInitScript(() => Object.defineProperty(window, 'showOpenFilePicker', { value: undefined, configurable: true }));
+    const localPage = await localContext.newPage(); localPage.on('pageerror', error => errors.push(error.message));
+    await localPage.goto(base); await localPage.waitForFunction(() => window.voidPlayer);
+    const localDocument = structuredClone(snapshot); for (const info of localDocument.media) delete info.source;
+    const importing = localPage.evaluate(document => window.voidPlayer.tools.find(tool => tool.name === 'import_workspace').execute({ document }), localDocument);
+    await localPage.locator('.workspace-relink').waitFor();
+    assert.match(await localPage.locator('.workspace-relink').textContent(), /当前浏览器不支持保存本地文件访问权限/);
+    await localPage.getByRole('button', { name: '稍后关联', exact: true }).click(); await importing;
+    await localPage.locator('.toast').filter({ hasText: '当前浏览器不支持保存本地文件访问权限' }).waitFor();
+    const state = await localPage.evaluate(() => window.voidPlayer.getState());
+    assert.equal(state.tracks[0].pendingRelink, true); assert.equal(state.tracks[0].frame, null);
+    assert.deepEqual(state.marks, localDocument.marks);
+    await localPage.screenshot({ path: path.resolve('artifacts/source-activity/local-workspace-unsupported.png') });
+  } finally { await localContext.close(); }
   assert.deepEqual(errors, []);
   console.log(`PASS ${engine}: stable checkpoint reload, history restore/export/confirmed deletion, explicit recovery, comparison restoration, missing source/marks/offset retention, deferred local relink`);
 } finally { await browser.close(); server.closeAllConnections(); await new Promise(r => server.close(r)); await library.close(); await rm(directory, { recursive: true, force: true }); }

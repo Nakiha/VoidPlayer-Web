@@ -305,7 +305,10 @@
 .multi-choice-menu .choice-check { width: 1em; flex: 0 0 auto; }
 .multi-choice-menu button[aria-checked="false"] .choice-check { visibility: hidden; }
 .analysis-charts { --analysis-chart-min-plot-height: 36px; --analysis-type-row-min-height: 10px; display: flex; flex-direction: column; flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; }
-.analysis-shared-axis { height: 22px; flex: 0 0 22px; overflow: hidden; }
+.analysis-shared-axis { position:relative; height: 22px; flex: 0 0 22px; min-width:0; overflow: hidden; }
+.analysis-window-band { position:absolute; top:0; height:6px; background:color-mix(in srgb,var(--accent) 22%,transparent); pointer-events:none; }
+.analysis-window-handle { position:absolute; top:0; width:8px; height:10px; min-height:0; padding:0; border:0; border-radius:0; background:var(--accent); transform:translateX(-50%); clip-path:polygon(0 0,100% 0,100% 55%,50% 100%,0 55%); touch-action:none; }
+.analysis-window-handle:focus-visible { background:var(--text); }
 .analysis-shared-axis canvas { display: block; }
 .analysis-overview { display: flex; flex-direction: column; flex: var(--overview-weight, 2) 0 max(var(--overview-min-height, 72px), var(--analysis-view-min-height, 0px)); min-height: max(var(--overview-min-height, 72px), var(--analysis-view-min-height, 0px)); }
 .analysis-charts.multiple > .bitstream-diagrams { flex: 1 0 calc(var(--chart-min-plot-height, 36px) + 25px); min-height: calc(var(--chart-min-plot-height, 36px) + 25px); border-top: 1px solid var(--divider); box-sizing: border-box; }
@@ -440,8 +443,17 @@
 
 .analysis-card .analysis-card-track-badge { width:20px; height:20px; min-height:20px; font:600 12px/1 var(--font-ui); vertical-align:middle; }
 
-/* A passive progress circle expands inside the stable track button. */
-.analysis-track-control[data-state="pending"] .analysis-track-progress { width:26px; opacity:1; }
+/* The progress circle becomes the shared animated pause/play glyph on hover. */
+.analysis-progress-action { position:relative; border:0; border-radius:0; background:transparent; color:var(--accent); padding:0; width:26px; min-height:28px; display:inline-flex; align-items:center; justify-content:center; flex:none; }
+.analysis-progress-action .analysis-track-progress { width:26px; opacity:1; justify-content:center; transition:opacity .18s ease; }
+.analysis-progress-glyph { position:absolute; inset:0; display:grid; place-items:center; opacity:0; transition:opacity .18s ease; pointer-events:none; }
+.analysis-progress-glyph .icon { width:18px; height:18px; }
+.analysis-progress-action:is(:hover,:focus-visible) .analysis-track-progress,
+.analysis-track-control[data-state="paused"] .analysis-progress-action .analysis-track-progress { opacity:0; }
+.analysis-progress-action:is(:hover,:focus-visible) .analysis-progress-glyph,
+.analysis-track-control[data-state="paused"] .analysis-progress-glyph { opacity:1; }
+@media (hover:none) { .analysis-progress-action .analysis-track-progress { opacity:0; } .analysis-progress-glyph { opacity:1; } }
+@media (prefers-reduced-motion:reduce) { .analysis-progress-glyph,.analysis-progress-action .analysis-track-progress { transition:none; } }
 
 /* Independent cards move as a complete stack; only an oversized stack scrolls. */
 .analysis-individual-layer { inset: 8px 0; }

@@ -25,11 +25,12 @@ import type { Slot } from '../model.ts';
 export type DeepAnalysisState = {
   /** Source coverage survives later picture tasks; current task is state/stream. */
   completedStream?: StreamProgress & { slot: Slot; sourceVersion: string };
-  stream?: StreamProgress & { slot: Slot };
+  stream?: StreamProgress & { slot: Slot; window?: AnalysisStreamTarget['window'] };
   queued?: boolean;
   state:
     | "idle"
     | "pending"
+    | "paused"
     | "ready"
     | "unsupported"
     | "limited"
@@ -266,11 +267,11 @@ export class BitstreamAnalysisService {
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
     this.cancelActive = () => controller.abort();
-    let progress: StreamProgress = { checkedUs: 0, totalUs: target.durationUs, pictures: 0, totalPictures: 0 };
+    let progress: StreamProgress = { checkedUs: 0, totalUs: target.window ? target.window.endUs - target.window.startUs : target.durationUs, pictures: 0, totalPictures: 0 };
     const update = () => {
       controller.signal.throwIfAborted();
       if (seq !== this.sequence) throw new DOMException('Superseded analysis', 'AbortError');
-      this.state = { state: 'pending', stream: { slot, ...progress } }; this.changed();
+      this.state = { state: 'pending', stream: { slot, ...progress, ...(target.window ? { window: target.window } : {}) } }; this.changed();
     };
     update();
     let consumed = 0;
@@ -297,12 +298,12 @@ export class BitstreamAnalysisService {
       controller.signal.throwIfAborted();
       if (!consumed || consumed !== progress.totalPictures || !progress.indexComplete) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete stream coverage');
       progress = { ...progress, checkedUs: progress.totalUs, indexComplete: true, waitingForIndex: false };
-      if (seq === this.sequence) { this.state = { state: 'ready', stream: { slot, ...progress } }; this.changed(); }
+      if (seq === this.sequence) { this.state = { state: 'ready', stream: { slot, ...progress, ...(target.window ? { window: target.window } : {}) } }; this.changed(); }
       return progress;
     } catch (error) {
       if (seq === this.sequence) {
         const reason = failureInfo(controller.signal.aborted ? controller.signal.reason ?? new AnalysisFailure('cancelled', 'Analysis cancelled') : error);
-        this.state = { state: reason.kind, reason, message: reason.message, stream: { slot, ...progress } }; this.changed();
+        this.state = { state: reason.kind, reason, message: reason.message, stream: { slot, ...progress, ...(target.window ? { window: target.window } : {}) } }; this.changed();
       }
       throw error;
     } finally {

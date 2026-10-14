@@ -10,7 +10,7 @@ export class MediaOpenError extends Error {
   }
 }
 
-export type MediaErrorCode = 'reference-hdr-unsupported' | 'reference-format-unsupported';
+export type MediaErrorCode = 'reference-hdr-unsupported' | 'reference-format-unsupported' | 'wasm-core-incompatible';
 export type MediaDiagnostic = { code: MediaErrorCode; stage: OpenStage; message: string };
 /** Stable UI routing metadata. Raw diagnostics, stage and reason chains stay intact. */
 export function mediaDiagnostic(error: unknown): MediaDiagnostic | undefined {

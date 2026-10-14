@@ -141,7 +141,7 @@ await withBrowserFixture(
       rows = [];
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) =>
-      requests.push({ url: request.url(), method: request.method() }),
+      requests.push({ url: request.url(), method: request.method(), ...(request.method()==='POST' && /bitstream-analysis\/requests/.test(request.url()) ? {target:request.postDataJSON()?.target} : {}) }),
     );
     await page.addInitScript(() => { window.__vpAnalysisQA = true; });
     await ready();
@@ -461,11 +461,12 @@ await withBrowserFixture(
                 assert.equal(frames.length,8,`${input}/${viewport.width}/${bound}/${selected}: activation is sampled across several painted frames`);
                 const axis = await page.evaluate(() => {
                   const panel=document.querySelector('#analysis-panel').getBoundingClientRect(), charts=document.querySelector('.analysis-charts'), area=charts.getBoundingClientRect(), host=document.querySelector('.analysis-shared-axis'), fixed=host.getBoundingClientRect(), axis=document.querySelector('#analysis-shared-axis');
-                  return {visible:!host.hidden,height:fixed.height,bottom:fixed.bottom,panelBottom:panel.bottom,top:fixed.top,chartsBottom:area.bottom,range:[axis.dataset.axisStart,axis.dataset.axisEnd],right:axis.getBoundingClientRect().left+Number(axis.dataset.plotRight),
+                  return {visible:!host.hidden,height:fixed.height,bottom:fixed.bottom,panelBottom:panel.bottom,top:fixed.top,chartsBottom:area.bottom,range:[axis.dataset.viewStart,axis.dataset.viewEnd],domain:[axis.dataset.axisStart,axis.dataset.axisEnd],right:axis.getBoundingClientRect().left+Number(axis.dataset.plotRight),
                     plots:[...document.querySelectorAll('#analysis-canvas,.bitstream-diagrams canvas')].filter(c=>!c.hidden && c.getClientRects().length).map(c=>({inline:c.dataset.timeAxis,range:[c.dataset.axisStart,c.dataset.axisEnd],right:c.getBoundingClientRect().left+Number(c.dataset.plotRight)}))};
                 });
                 assert.ok(axis.visible && axis.height===22 && Math.abs(axis.bottom-axis.panelBottom)<=1 && Math.abs(axis.top-axis.chartsBottom)<=1,`${selected}: time axis remains outside the scroll area at the panel bottom`);
                 assert.ok(axis.plots.length && axis.plots.every(c=>c.inline==='false' && Math.abs(c.right-axis.right)<1 && JSON.stringify(c.range)===JSON.stringify(axis.range)),`${selected}: all plots use one fixed time axis and range`);
+                assert.ok(+axis.domain[0] <= +axis.range[0] && +axis.domain[1] >= +axis.range[1], 'fixed progress bar covers the whole source and contains the visible chart window');
                 // The complete plots belong to the outer scroller; the overview never clips its last row.
                 const beforeAxis = axis.top;
                 await page.evaluate(() => { const charts=document.querySelector('.analysis-charts'); charts.scrollTop=charts.scrollHeight; });
@@ -934,7 +935,7 @@ await withBrowserFixture(
       console.log(`PASS ${engine}: isolated codec/overlay matrix, cache, range, sustained load and cancellation`);
       return;
     }
-    // Choosing a deep diagram starts whole-file execution automatically,
+    // Choosing a deep diagram starts visible-GOP execution automatically,
     // uses one local worker or one remote task, and never enables an overlay.
     for (const input of ['local-file', 'library']) {
       await call('remove_review_track', { slot: 'A' });
@@ -1054,6 +1055,8 @@ await withBrowserFixture(
         assert.equal(await chart.getAttribute('data-time-axis'), 'false', 'single diagram leaves time labels to the fixed panel axis');
         assert.equal(await page.locator('#analysis-shared-axis').isVisible(), true);
         const view = () => chart.evaluate(c => ({ start: +c.dataset.viewStart, end: +c.dataset.viewEnd }));
+        await chart.dispatchEvent('dblclick');
+        await page.waitForFunction(() => { const c=document.querySelector('.bitstream-diagrams canvas'); return +c.dataset.viewStart===0 && +c.dataset.viewEnd===1; });
         const initialRadius = diagram === 'references' ? +await chart.getAttribute('data-node-radius') : null;
         const wheel = async (deltaY, ctrlKey = true, deltaMode = 0) => {
           const prevented = await chart.evaluate((c, args) => {
@@ -1248,7 +1251,9 @@ await withBrowserFixture(
         },undefined,{timeout:60000});
         const done=await call('get_bitstream_analysis_state',{slot:'A'});
         assert.equal(done.stream.pictures,120);
-        assert.equal((await call('get_bitstream_analysis_state',{slot:'B'})).stream.pictures,300);
+        const longer = await call('get_bitstream_analysis_state',{slot:'B'});
+        assert.equal(longer.stream.pictures,120, 'the longer track only analyzes the shared visible region');
+        assert.ok(longer.stream.window.endUs < 10_000_000);
         assert.equal((await call('get_bitstream_analysis_state',{slot:'C'})).stream.pictures,120);
         await page.waitForFunction(()=>[...document.querySelectorAll('.analysis-track-progress')].every(e=>e.getBoundingClientRect().width===0));
         await page.screenshot({path:artifact(`parallel-complete-${input}.png`)});
@@ -1288,7 +1293,7 @@ await withBrowserFixture(
       // Streams have a no-progress budget, not a 30 s total lifetime. CI may
       // continuously consume all 300 HTTP chunks beyond that old total limit.
       // Keep the same terminal/coverage gate and the existing 60 s stream wait.
-      await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'}); return s.state === 'ready' && s.stream?.pictures === 300 && s.completedStream?.pictures === 300; }, undefined, { timeout: 60000 });
+      await page.waitForFunction(() => { const s = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'}); return s.state === 'ready' && s.stream?.pictures === 300 && !s.completedStream; }, undefined, { timeout: 60000 });
       for (const close of await page.locator('.toast-close').all()) await close.click();
       await page.locator('.toast-stack .toast').waitFor({ state: 'hidden' });
       const playback = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));
@@ -1312,7 +1317,7 @@ await withBrowserFixture(
         if (input === 'library') await page.screenshot({ path: artifact(`whole-chart-${diagram}.png`) });
         assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback, 'whole-film overview and detail zoom never seek');
       }
-      assert.ok(!requests.slice(requestsBefore).some(r => r.method === 'POST' && /bitstream-analysis/.test(r.url)), 'viewport queries never start another analysis');
+      assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
       await page.locator('#analysis-current').click();
       await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && +c.dataset.axisEnd - +c.dataset.axisStart === 1_000_000; });
       assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), playback.positionUs);
@@ -1343,7 +1348,7 @@ await withBrowserFixture(
         if (input === 'library') await page.screenshot({ path: artifact(`shared-range-${diagram}.png`) });
       }
       assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback, 'diagram comparison keeps playback paused at the same frame');
-      assert.ok(!requests.slice(requestsBefore).some(r => r.method === 'POST' && /bitstream-analysis/.test(r.url)), 'diagram comparison does not launch analysis');
+      assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'diagram comparison only requests visible GOPs');
       const choose = async mode => {
         await selectDiagrams(page, mode);
         const target = page.locator(mode === 'overview' ? '#analysis-canvas' : '.bitstream-diagrams canvas');
@@ -1391,7 +1396,7 @@ await withBrowserFixture(
       assert.deepEqual(await axis(overview), delayedRange, 'full range padding stays aligned between overview and deep charts');
       await call('set_review_track_offset', { slot: 'A', offsetUs: 0 });
       assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback);
-      assert.ok(!requests.slice(requestsBefore).some(r => r.method === 'POST' && /bitstream-analysis/.test(r.url)), 'overview comparison and alignment do not start deep analysis');
+      assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'overview comparison and alignment do not launch whole-source analysis');
       // Several checkbox choices stay mounted and compare the same range simultaneously.
       const choices = ['bitrate', 'size', 'nalu-size', 'nalu-types', 'references'];
       await selectDiagrams(page, choices);
@@ -1699,10 +1704,10 @@ await withBrowserFixture(
       assert.ok(zeroX-edge.left>=8,'time zero leaves room for reference node and bar');
       await page.waitForFunction(() => {
         const cs=[...document.querySelectorAll('#analysis-canvas, .bitstream-diagrams canvas, #analysis-shared-axis')];
-        return cs.every(c=>c.dataset.axisStart===cs[0].dataset.axisStart && c.dataset.axisEnd===cs[0].dataset.axisEnd);
+        return cs.every(c=>(c.id==='analysis-shared-axis'?c.dataset.viewStart:c.dataset.axisStart)===cs[0].dataset.axisStart && (c.id==='analysis-shared-axis'?c.dataset.viewEnd:c.dataset.axisEnd)===cs[0].dataset.axisEnd);
       });
-      const edgeAxes = await page.locator('#analysis-canvas, .bitstream-diagrams canvas, #analysis-shared-axis').evaluateAll(cs=>cs.map(c=>[c.dataset.axisStart,c.dataset.axisEnd]));
-      assert.ok(edgeAxes.every(range=>range[0]===edgeAxes[0][0] && range[1]===edgeAxes[0][1]),'first-frame padding is shared by every chart and the bottom axis');
+      const edgeAxes = await page.locator('#analysis-canvas, .bitstream-diagrams canvas, #analysis-shared-axis').evaluateAll(cs=>cs.map(c=>c.id==='analysis-shared-axis'?[c.dataset.viewStart,c.dataset.viewEnd]:[c.dataset.axisStart,c.dataset.axisEnd]));
+      assert.ok(edgeAxes.every(range=>range[0]===edgeAxes[0][0] && range[1]===edgeAxes[0][1]),'first-frame padding is shared by every chart and the bottom range pointers');
       if (input==='library') await page.screenshot({path:artifact('first-frame-padding.png')});
       for (const mode of ['bitrate', 'size', 'nalu-types', 'nalu-size']) {
         await selectDiagrams(page, mode);
@@ -1843,7 +1848,7 @@ await withBrowserFixture(
       assert.equal(await sharedAxis.isVisible(), true);
       const sharedAxisGeometry = await sharedAxis.evaluate(c => {
         const r = c.getBoundingClientRect(), charts = document.querySelector('.analysis-charts').getBoundingClientRect();
-        return { left: r.left + +c.dataset.plotLeft, right: r.left + +c.dataset.plotRight, height: r.height, belowCharts: r.top >= charts.bottom - 1, start: c.dataset.axisStart, end: c.dataset.axisEnd };
+        return { left: r.left + +c.dataset.plotLeft, right: r.left + +c.dataset.plotRight, height: r.height, belowCharts: r.top >= charts.bottom - 1, start: c.dataset.viewStart, end: c.dataset.viewEnd };
       });
       assert.ok(sharedAxisGeometry.belowCharts && sharedAxisGeometry.height === 22, 'one shared time axis sits below the chart stack');
       assert.equal(sharedAxisGeometry.left, compactGeometry[0].left);
@@ -1858,7 +1863,7 @@ await withBrowserFixture(
       });
       await page.waitForFunction(() => {
         const shared = document.querySelector('#analysis-shared-axis').dataset;
-        return [...document.querySelectorAll('#analysis-canvas, .bitstream-diagrams canvas')].every(c => c.dataset.axisStart === shared.axisStart && c.dataset.axisEnd === shared.axisEnd);
+        return [...document.querySelectorAll('#analysis-canvas, .bitstream-diagrams canvas')].every(c => c.dataset.axisStart === shared.viewStart && c.dataset.axisEnd === shared.viewEnd);
       });
       const axisZoom = (await call('export_workspace')).layout.analysisView.view;
       assert.ok(Math.abs(axisZoom.end - axisZoom.start - (+sharedAxisGeometry.end - +sharedAxisGeometry.start) / 2) <= 2, 'pinching the shared axis zooms all plots together');
@@ -1934,7 +1939,7 @@ await withBrowserFixture(
       assert.equal(await page.locator('.bitstream-diagrams canvas').count(), 0);
       assert.equal(await page.locator('.analysis-no-charts').isVisible(), true);
       assert.equal(await page.locator('.analysis-linked-card:visible').count(), 0, 'empty selection hides the shared card');
-      assert.ok(!requests.slice(requestsBefore).some(r => r.method === 'POST' && /bitstream-analysis/.test(r.url)), 'already checked sources do not repeat analysis for chart selections or hover');
+      assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'chart selections and hover do not launch whole-source analysis');
       const importing = call('import_workspace', { document: multiple });
       if (input === 'local-file') {
         await page.getByLabel('重新选择 incremental.mp4', { exact: true }).setInputFiles(path.join(limitsDir, 'incremental.mp4'));
@@ -1960,7 +1965,7 @@ await withBrowserFixture(
       await page.locator('#analysis-current').click();
       await page.waitForFunction(() => {
         const charts=[...document.querySelectorAll('.bitstream-diagrams canvas')], shared=document.querySelector('#analysis-shared-axis').dataset;
-        return charts.length===6 && +shared.axisStart<500_000 && +shared.axisEnd>500_000 && charts.every(c=>c.dataset.aggregated==='false' && c.dataset.axisStart===shared.axisStart && c.dataset.axisEnd===shared.axisEnd);
+        return charts.length===6 && +shared.viewStart<500_000 && +shared.viewEnd>500_000 && charts.every(c=>c.dataset.aggregated==='false' && c.dataset.axisStart===shared.viewStart && c.dataset.axisEnd===shared.viewEnd);
       });
       assert.equal(await page.locator('.bitstream-nalu-group').count(),2);
       assert.equal(await page.locator('#analysis-layout').isVisible(),true);

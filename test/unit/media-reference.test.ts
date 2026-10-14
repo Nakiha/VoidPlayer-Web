@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mediaActionUrl, pinLibraryReference } from '../../src/media-reference.ts';
 import { SourceCatalog } from '../../src/ui/source-catalog.ts';
 import type { MediaInfo } from '../../src/model.ts';
+import { LibraryAccessError } from '../../src/source-access.ts';
+import { libraryAccessMessage } from '../../src/ui/source-access-message.ts';
 const id = 'a'.repeat(24), version = 'b'.repeat(24), base = 'https://media.example/player';
 const entry = { id, name: 'clip.mp4', root: 'archive', size: 12, lastModified: 12345, version, state: 'ready' };
 const info = (url = `/api/media/${id}`) => ({ name: entry.name, size: entry.size, lastModified: entry.lastModified, source: { kind: 'library', id, url } }) as MediaInfo;
@@ -47,4 +49,26 @@ test('recent entries resolve outside the current directory page and merge migrat
   assert.equal(catalog.available().length, 0);
   assert.equal(catalog.recent().length, 1); assert.equal(catalog.recent()[0].library?.id, id);
   assert.equal(catalog.serializable()[0].version, version);
+});
+
+test('missing and disconnected references share reasons between history and workspace restore', async () => {
+  const catalog = new SourceCatalog([{ ...entry, libraryId: id }]);
+  for (const kind of ['missing', 'unavailable'] as const) {
+    catalog.setRecentLibrary([], [[id, kind]]);
+    assert.equal(catalog.recent()[0].libraryId, id);
+    assert.equal(catalog.recent()[0].libraryProblem, kind);
+    const request = kind === 'missing' ? async () => new Response('', { status: 404 }) : async () => { throw new Error('offline'); };
+    await assert.rejects(pinLibraryReference(info(), base, request as typeof fetch), error => error instanceof LibraryAccessError && error.kind === kind && error.message === libraryAccessMessage(entry.name, kind));
+  }
+  catalog.setRecentLibrary([[id, { ...entry, version: 'c'.repeat(24) }]]);
+  assert.equal(catalog.recent()[0].libraryProblem, 'changed');
+  catalog.setRecentLibrary([[id, entry]]);
+  assert.equal(catalog.recent()[0].libraryProblem, undefined);
+  assert.equal(catalog.recent()[0].library?.id, id);
+  await assert.rejects(pinLibraryReference(info(), base, (async () => new Response('', { status: 503 })) as typeof fetch), error => error instanceof LibraryAccessError && error.kind === 'unavailable' && error.status === 503);
+});
+
+test('cancelled workspace metadata requests preserve the abort instead of claiming a disconnected service', async () => {
+  const controller = new AbortController(); controller.abort();
+  await assert.rejects(pinLibraryReference(info(), base, (async () => { throw controller.signal.reason; }) as typeof fetch, controller.signal), error => error === controller.signal.reason);
 });

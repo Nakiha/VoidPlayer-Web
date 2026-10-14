@@ -1,5 +1,8 @@
 import { installWorkspaceRecovery } from './workspace-recovery.ts';
-import { restoreHandleFile, handleKey } from '../file-handles.ts';
+import { FileHandleError, restoreHandleFile, handleKey, supportsFileHandles } from '../file-handles.ts';
+import { LibraryAccessError } from '../source-access.ts';
+import { libraryAccessMessage, localAccessMessage } from './source-access-message.ts';
+import type { LocalAccessProblem } from '../source-access.ts';
 import { installWorkspaceSharing } from './workspace-sharing.ts';
 import type { ToastStack } from './toast.ts';
 import {updateMediaInfo} from '../media-state.ts';
@@ -29,7 +32,7 @@ function relinkMismatch(name: string, mismatches: MediaIdentityMismatch[]) {
 export const isWorkspaceFile = (file: File) => /\.(voidplayer|json|gz)$/i.test(file.name);
 
 /** Browser files cannot be reopened from a JSON path. Resolve every missing file before touching the session. */
-async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal) {
+async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = true, onMtimeWarning?: (name: string) => void, signal?: AbortSignal, problems = new Map<string, LocalAccessProblem>()) {
   const files = new Map<string, File>();
   const accept = (info: MediaInfo, file: File) => {
     const match = matchMediaIdentity(info, file);
@@ -40,7 +43,8 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
   };
   for (const info of media) { const file = supplied.find(f => matchMediaIdentity(info, f).ok); if (file) accept(info, file); }
   for (const info of media) if (!files.has(info.id)) {
-    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) continue; } catch {}
+    try { const file = await restoreHandleFile(handleKey(info), undefined, false); if (!accept(info, file)) problems.set(info.id, 'stale'); }
+    catch (error) { problems.set(info.id, error instanceof FileHandleError ? error.kind : 'unavailable'); }
   }
   if (signal?.aborted) return null;
   if (!prompt) return files;
@@ -57,6 +61,7 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
     dialog.setAttribute('aria-label', title); dialog.querySelector('h2')!.textContent = title;
     dialog.querySelector('header button')!.setAttribute('aria-label', t(msg("transfer.cancelImport", "取消导入")));
     dialog.querySelector(':scope > p')!.textContent = t(msg("transfer.relinkBody", "工作区保存了视频引用。请重新选择这些本地文件，也可以稍后关联，先恢复轨道和标注。"));
+    if (!supportsFileHandles()) dialog.querySelector(':scope > p')!.textContent += ` ${localAccessMessage(missing.map(info => info.name).join(t(msg('transfer.detailSeparator', '、'))), 'unsupported')}`;
     dialog.querySelector('.relink-later')!.textContent = t(msg("transfer.later", "稍后关联"));
     proceed.textContent = t(msg("transfer.openWorkspace", "打开工作区"));
     dialog.querySelector('[role=alert]')!.textContent = warning?.() ?? '';
@@ -81,6 +86,7 @@ async function resolveLocalFiles(media: MediaInfo[], supplied: File[], prompt = 
     label.append(name, input); dialog.querySelector('.relink-files')!.append(label);
   }
   document.body.append(dialog);
+  localize();
   return new Promise<Map<string, File> | null>(resolve => {
     dialog.querySelector('header button')!.addEventListener('click', () => dialog.close());
     proceed.onclick = () => dialog.close('open');
@@ -113,6 +119,13 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
     document.thumbnails = document.marks.flatMap(mark => { const image = annotationThumbnails.get(mark.id); return image?.url.startsWith('data:image/jpeg;base64,') ? [{ id: mark.id, ...image }] : []; });
     return document;
   }
+  async function resolveLibraryReference(info: MediaInfo, signal: AbortSignal) {
+    try { return await pinLibraryReference(info, location.href, fetch, signal); }
+    catch (error) {
+      if (error instanceof LibraryAccessError) error.message = libraryAccessMessage(info.name, error.kind) + (error.details ? ` ${error.details}` : '');
+      throw error;
+    }
+  }
   async function importWorkspace(value: unknown, supplied: File[] = [], recovery = false, fromShare = false) {
     if (importing) throw new Error(t(msg("transfer.importing", "工作区正在导入，请等待完成。")));
     importing = true;
@@ -121,12 +134,13 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       await options.closeSettings();
       const active = document.tracks.map(t => document.media.find(m => m.id === t.mediaId)!);
       const warnMtime = (name: string) => options.toasts.show(() => relinkMtimeWarning(name));
-      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, lifetime.signal);
+      const problems = new Map<string, LocalAccessProblem>();
+      const files = await resolveLocalFiles(active.filter(m => !m.source), supplied, !recovery, warnMtime, lifetime.signal, problems);
       if (!files) return false;
       const rollback=options.beforeRestore();
       try { await session.restoreWorkspace(document, async (info, signal, progress) => {
-        if (!info.source) { const file = files.get(info.id); if (!file) throw new Error(t(msg("transfer.notAuthorized", "本地文件尚未授权，请重新选择。"))); return openMedia(file, undefined, progress, signal); }
-        const pinned = await pinLibraryReference(info, location.href, fetch, signal);
+        if (!info.source) { const file = files.get(info.id); if (!file) throw new FileHandleError(problems.get(info.id) ?? 'unavailable', localAccessMessage(info.name, problems.get(info.id) ?? 'unavailable')); return openMedia(file, undefined, progress, signal); }
+        const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal); updateMediaInfo(source,{source:reference},'identity'); return source;
@@ -157,7 +171,7 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
       if (!info.source && !files.has(info.id)) continue;
       await options.act(() => session.relinkTrack(info.slot, async (signal, progress) => {
         if (!info.source) return openMedia(files.get(info.id)!, undefined, progress, signal);
-        const pinned = await pinLibraryReference(info, location.href, fetch, signal);
+        const pinned = await resolveLibraryReference(info, signal);
         if (pinned.mtimeChanged) warnMtime(info.name);
         const { mtimeChanged: _ignored, ...reference } = pinned;
         const source = await openMediaFromUrl(reference.url, info, undefined, progress, signal);
@@ -167,10 +181,10 @@ export function installWorkspaceTransfer(session: ReviewSession, options: {
   }
   function updateMissing() {
     const pending = session.getState().tracks.filter(t => t.pendingRelink);
-    const signature = pending.map(t => `${t.slot}:${t.id}`).join('|');
+    const signature = JSON.stringify(pending.map(t => [t.slot, t.id, t.failure?.message]));
     if (signature === missingSignature) return;
     missingSignature = signature; dismissMissing?.();
-    if (pending.length) dismissMissing = options.toasts.show(() => t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length }), { durationMs: 0,
+    if (pending.length) dismissMissing = options.toasts.show(() => `${t(msg("transfer.pendingRelink", "{n, plural, other {# 个片源待重新关联；轨道、偏移和标注已保留。}}"), { n: pending.length })} ${pending.map(track => `${track.slot}：${track.failure?.message ?? ''}`).join('；')}`, { kind: 'warning', durationMs: 0,
       action: { label: () => t(msg("transfer.relinkNow", "重新关联")), onClick: () => { void relinkMissing().catch(error => options.toasts.show(String(error), { kind: 'error' })).finally(() => { missingSignature = ''; updateMissing(); }); } } });
   }
   const recovery = installWorkspaceRecovery(session, { snapshot: exportWorkspace, restore: document => importWorkspace(document, [], true), ready: options.identityReady, toasts: options.toasts });

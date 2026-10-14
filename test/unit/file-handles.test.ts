@@ -20,6 +20,12 @@ test('file handles are unavailable without browser APIs', () => {
   assert.equal(supportsFileHandles(), false);
 });
 
+test('unsupported persistent local access is distinct from a missing stored handle', async () => {
+  await assert.rejects(restoreHandleFile('k'), error => error instanceof FileHandleError && error.kind === 'unsupported');
+  const { store } = memoryStore();
+  await assert.rejects(restoreHandleFile('k', store), error => error instanceof FileHandleError && error.kind === 'unavailable');
+});
+
 test('granted handles restore the fingerprinted file', async () => {
   const { store } = memoryStore();
   await saveFileHandle('k', handle() as unknown as FsFileHandle, file(), store);

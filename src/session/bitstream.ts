@@ -14,7 +14,7 @@ interface AnalysisHost {
   subscribeInvalidation(listener: () => void): () => void;
   changed(): void;
 }
-type AnalysisTask = { generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState };
+type AnalysisTask = { generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState; retainedStream?: DeepAnalysisState['stream'] };
 type AnalysisQueries = Pick<BitstreamAnalysisService, 'queryDiagrams' | 'chartBounds' | 'queryChart' | 'cached'>;
 
 /** Owns admission, per-track task cancellation and completion; never frames. */
@@ -36,9 +36,11 @@ export class BitstreamSessionCoordinator {
     const track = this.host.track(slot);
     if (!track?.available) throw new AnalysisFailure('invalid-request', 'Track unavailable');
     signal?.throwIfAborted();
-    this.cancel(slot);
+    const previous = this.state(slot);
+    const retainedStream = initial.stream && previous.state === 'paused' && JSON.stringify(initial.stream.window) === JSON.stringify(previous.stream?.window) ? previous.stream : undefined;
+    this.cancel(slot, true);
     const controller = new AbortController();
-    const task: AnalysisTask = { generation: track.generation, controller, state: { ...initial, queued: true } };
+    const task: AnalysisTask = { generation: track.generation, controller, retainedStream, state: { ...initial, ...(retainedStream ? { stream: retainedStream } : {}), queued: true } };
     this.tasks.set(slot, task); this.lastSlot = slot;
     const abort = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', abort, { once: true });
@@ -60,7 +62,7 @@ export class BitstreamSessionCoordinator {
       task.state = undefined;
       return await run(task.service, controller.signal);
     } catch (error) {
-      if (!task.service || task.service.state.state === 'idle') {
+      if (task.state?.state !== 'paused' && (!task.service || task.service.state.state === 'idle')) {
         const reason = failureInfo(controller.signal.aborted ? controller.signal.reason : error);
         task.state = { ...initial, state: reason.kind, reason, message: reason.message };
         this.host.changed();
@@ -79,14 +81,27 @@ export class BitstreamSessionCoordinator {
     const task = selected === undefined ? undefined : this.tasks.get(selected);
     const completion = selected === undefined ? undefined : this.completed.get(selected);
     const state = task && (slot === undefined || task.generation === generation) ? task.state ?? task.service?.state ?? { state: 'idle' as const } : { state: 'idle' as const };
-    return structuredClone({ ...state, ...(completion && completion.generation === generation ? { completedStream: completion.progress } : {}) });
+    // Reopening a continuous decoder may replay its reference prefix. Those
+    // pictures are already cached; retain confirmed coverage while it catches up.
+    const stream = state.stream && task?.retainedStream && state.stream.pictures < task.retainedStream.pictures ? task.retainedStream : state.stream;
+    return structuredClone({ ...state, ...(stream ? { stream } : {}), ...(completion && completion.generation === generation ? { completedStream: completion.progress } : {}) });
   }
 
-  cancel(slot?: Slot) {
+  pause(slot: Slot) {
+    const state = this.state(slot), task = this.tasks.get(slot);
+    if (!task || state.state !== 'pending' || !state.stream) return;
+    task.state = { state: 'paused', stream: state.stream };
+    task.controller?.abort(new AnalysisFailure('cancelled', 'Analysis paused'));
+    task.service?.cancel();
+    this.host.changed();
+  }
+
+  cancel(slot?: Slot, preservePaused = false) {
     for (const [key, task] of this.tasks) {
       if (slot !== undefined && key !== slot) continue;
-      if (!task.controller) continue;
       const reason = new AnalysisFailure('cancelled', 'Analysis cancelled');
+      if (task.state?.state === 'paused' && !preservePaused) { task.state = { ...task.state, state: 'cancelled', reason: reason.info }; this.host.changed(); }
+      if (!task.controller) continue;
       task.controller.abort(reason);
       if (task.state?.queued) { task.state = { ...task.state, state: 'cancelled', queued: false, reason: reason.info }; this.host.changed(); }
       task.service?.cancel();

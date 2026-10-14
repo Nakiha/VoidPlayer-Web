@@ -20,7 +20,7 @@ function mpeg4DecoderSpecificInfo(bytes:Uint8Array):Uint8Array {
   };
   return walk(4,bytes.length,0)??invalid('缺少 MPEG-4 DecoderSpecificInfo。');
 }
-async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
+async function boxes(reader: RangeReader, start: number, end: number, root = false, videoExtensions = false): Promise<Box[]> {
   const result: Box[] = [];
   let fragmented = false;
   const ignoreTail = (type?: string) => {
@@ -30,7 +30,15 @@ async function boxes(reader: RangeReader, start: number, end: number, root = fal
     return true;
   };
   while (start < end) {
-    if (end - start < 8) { if (ignoreTail()) break; invalid('box 头被截断。'); }
+    if (end - start < 8) {
+      // QuickTime video sample descriptions may end with a four-byte zero
+      // terminator (Apple QTFF video sample description specification).
+      if (videoExtensions && end - start === 4) {
+        const tail = await reader.read(start, 4);
+        if (tail.length === 4 && tail.every(byte => byte === 0)) break;
+      }
+      if (ignoreTail()) break; invalid('box 头被截断。');
+    }
     const header = await (fragmented && reader.readMetadata ? reader.readMetadata(start, Math.min(16, end - start)) : reader.read(start, Math.min(16, end - start)));
     if (header.length < 8) return invalid('box 头被截断。');
     const view = new DataView(header.buffer, header.byteOffset, header.byteLength);
@@ -78,7 +86,7 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
     const entries = await boxes(reader, stsd.data + 8, stsd.end);
     const sample = entries[0];
     if (!sample || !['vvc1', 'vvi1'].includes(sample.type) || sample.end - sample.data < 78) return invalid('VVC sample entry 无效。');
-    const config = (await boxes(reader, sample.data + 78, sample.end)).find(b => b.type === 'vvcC');
+    const config = (await boxes(reader, sample.data + 78, sample.end, false, true)).find(b => b.type === 'vvcC');
     // vvcC is a FullBox: FFmpeg's extradata starts after version/flags.
     if (!config || config.end - config.data <= 4 || config.end - config.data > 1024 * 1024) return invalid('vvcC 配置无效。');
     return reader.read(config.data + 4, config.end - config.data - 4);
@@ -111,7 +119,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       if(!codec||entry.end-entry.data<78)return invalid('视频 sample description 需要容器解码路径。');
       if(kind&&kind!==codec)return invalid('sample description 跨编码切换需要容器解码路径。');kind=codec;
       const visual=await reader.read(entry.data,28),dimensions=new DataView(visual.buffer,visual.byteOffset,visual.byteLength),width=dimensions.getUint16(24),height=dimensions.getUint16(26);if(!width||!height)return invalid('sample entry 尺寸无效。');displayBounds.push({width,height});
-      const entryBoxes=await boxes(reader,entry.data+78,entry.end);
+      const entryBoxes=await boxes(reader,entry.data+78,entry.end,false,true);
       if(root.some(b=>b.type==='moof') && entryBoxes.some(b=>b.type==='sinf'))return invalid('加密分片 MP4 暂不支持。');
       if(codec==='none'||codec==='esds'){
         if(root.some(b=>b.type==='moof'))return invalid('分片的此视频编码尚未验证。');

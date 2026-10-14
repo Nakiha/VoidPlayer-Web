@@ -190,7 +190,7 @@ async function start() {
           send(reply(message, data));
         } else throw new MediaOpenError('input', '压缩包 worker 未初始化。');
       } catch (error) {
-        send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'decode' });
+        send({ id, ok: false, error: error instanceof Error ? error.message : String(error), stack: workerStack(error), stage: error instanceof MediaOpenError ? error.stage : 'decode', code: error instanceof MediaOpenError ? error.code : undefined });
       }
     });
   };

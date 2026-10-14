@@ -23,7 +23,7 @@ import { inspectPacketPicture } from "../packet-picture.ts";
 import { openAnalysisInput } from "./input.ts";
 import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, coreFailure } from "./failure.ts";
-import { groupAnalysisGops, gopForAu } from './stream.ts';
+import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
 export async function analyzePicture(
   reader: AnalysisReader,
@@ -36,6 +36,7 @@ export async function analyzePicture(
     sequential?: boolean;
     keepInput?: boolean;
     desiredAus?: ReadonlySet<number>;
+    viewport?: boolean;
     endSourcePtsUs?: number;
     onResult?: (result: AnalysisResult) => Promise<void>;
     stream?: AnalysisStreamTarget;
@@ -120,7 +121,7 @@ export async function analyzePicture(
         )
         .map((p) => p.au),
     );
-    if (!options.stream && (!desired.size || desired.size > 32))
+    if (!options.stream && (!desired.size || desired.size > (options.viewport ? 250000 : 32)))
       throw new AnalysisFailure(
         "resource-limit",
         "Analysis range result count budget exceeded",
@@ -403,8 +404,8 @@ export async function analyzePicture(
           "Target picture was not output",
         );
       }
-      if ((options.stream ? sinceOutputPackets : count) >= BUDGET.packets ||
-          (options.stream ? sinceOutputBytes : packetBytes) >= BUDGET.inputBytes)
+      if ((options.stream || options.viewport ? sinceOutputPackets : count) >= BUDGET.packets ||
+          (options.stream || options.viewport ? sinceOutputBytes : packetBytes) >= BUDGET.inputBytes)
         throw new AnalysisFailure(
           "resource-limit",
           "Analysis preroll budget exceeded",
@@ -431,7 +432,7 @@ export async function analyzePicture(
       }
       if (
         packet.size > BUDGET.packetBytes ||
-        (options.stream ? sinceOutputBytes : packetBytes) + packet.size > BUDGET.inputBytes
+        (options.stream || options.viewport ? sinceOutputBytes : packetBytes) + packet.size > BUDGET.inputBytes
       )
         throw new AnalysisFailure(
           "resource-limit",
@@ -588,6 +589,43 @@ export async function analyzeStream(
   cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
 ) {
   validateStream(target);
+  if (target.window) {
+    if (typeof core === 'function') { const factory = core; let instance: Promise<any> | undefined; core = () => instance ??= Promise.resolve().then(factory); }
+    const input = await openAnalysisInput(reader, signal, false, { sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity });
+    try {
+      const groups = viewportAnalysisGops(input.packets, target.firstPtsUs, target.window);
+      const totalPictures = groups.reduce((count, group) => count + group.endAu - group.startAu, 0);
+      if (!totalPictures || totalPictures > 250000) throw new AnalysisFailure('resource-limit', 'Empty or oversized analysis viewport');
+      const totalUs = target.window.endUs - target.window.startUs;
+      let pictures = 0, last: AnalysisResult | undefined;
+      const progress = () => onProgress({ pictures, totalPictures, totalUs, checkedUs: pictures === totalPictures ? totalUs : Math.min(totalUs - 1, Math.floor(totalUs * pictures / totalPictures)), indexComplete: true, waitingForIndex: false });
+      await progress();
+      for (const group of groups) {
+        const first = input.packets[group.startAu];
+        if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
+        const evidence = inspectPacketPicture(input.codec, input.configurations[group.configuration], await input.readUnit(first));
+        group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
+        const publish = async (result: AnalysisResult) => {
+          last = { ...result, gop: { ...group } };
+          await onResult(last); signal.throwIfAborted(); pictures++; await progress();
+        };
+        const missing = new Set<number>();
+        for (let au = group.startAu; au < group.endAu; au++) {
+          signal.throwIfAborted();
+          const packet = input.packets[au], picture = input.picture(packet, target.sourceVersion), hit = await cached?.(picture);
+          if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts)) await publish(hit);
+          else missing.add(au);
+        }
+        if (missing.size) {
+          const packet = input.packets[missing.values().next().value!];
+          await analyzePicture(reader, { sourceVersion: target.sourceVersion, sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
+            { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish });
+        }
+      }
+      if (pictures !== totalPictures) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete viewport GOP coverage');
+      return last!;
+    } finally { input.close(); }
+  }
   let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
   const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
   const input = await openAnalysisInput(reader, signal, true, {  sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,

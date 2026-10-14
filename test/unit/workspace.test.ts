@@ -145,3 +145,32 @@ test('panel collapse needs deliberate overshoot on either side and reverses befo
   assert.deepEqual(panelDragIntent(240,500,1,bounds,32), {width:480,collapse:false});
   assert.deepEqual(panelDragIntent(120,-32,1,{min:120,max:120},32), {width:120,collapse:true});
 });
+
+test('library histories are scoped to active roots and legacy references require exact server resolution', () => {
+  const metadata = { name: 'same.mp4', size: 10, lastModified: 1 };
+  const entries = ['a', 'b'].map(rootId => ({ ...metadata, rootId, root: rootId, id: `file-${rootId}` }));
+  const legacy = [{ ...metadata, libraryId: 'file-a' }, { ...metadata, libraryId: 'old-unknown' }, { name: 'local.mp4', size: 1, lastModified: 1 }];
+  const catalog = new SourceCatalog(legacy, { isolateLibraries: true });
+  assert.deepEqual(catalog.recent().map(item => item.name), ['local.mp4']);
+  catalog.setLibraryRoots(['a']); catalog.setLibrary([entries[0]]); catalog.setRecentLibrary([['file-a', entries[0]]]);
+  assert.deepEqual(catalog.recent().map(item => item.name), ['same.mp4', 'local.mp4']);
+  catalog.remember(entries[1], entries[1].id, undefined, 'b');
+  assert.equal(catalog.recent().some(item => item.libraryId === 'file-b'), false);
+  assert.equal(catalog.referencesToResolve().some(item => item.libraryId === 'file-b'), false);
+  const restored = new SourceCatalog(catalog.serializable(), { isolateLibraries: true });
+  restored.setLibraryRoots(['b']); restored.setRecentLibrary([['file-b', entries[1]]]);
+  assert.deepEqual(restored.recent().flatMap(item => item.libraryId ?? []), ['file-b']);
+  assert.equal(restored.serializable().some(item => item.libraryId === 'old-unknown'), true, 'unresolved legacy history is preserved');
+  restored.setLibraryRoots(['a']); restored.setRecentLibrary([['file-a', entries[0]]]);
+  assert.deepEqual(restored.recent().flatMap(item => item.libraryId ?? []), ['file-a']);
+});
+
+test('retention in another library cannot evict this library or local file history', () => {
+  const catalog = new SourceCatalog([], { isolateLibraries: true }); catalog.setLibraryRoots(['a']);
+  catalog.remember({ name: 'local.mp4', size: 1, lastModified: 1 });
+  catalog.remember({ name: 'a.mp4', size: 1, lastModified: 1 }, 'a-file', undefined, 'a');
+  for (let i = 0; i < 110; i++) catalog.remember({ name: `b-${i}.mp4`, size: 1, lastModified: 1 }, `b-${i}`, undefined, 'b');
+  assert.equal(catalog.serializable().length, 102);
+  const restored = new SourceCatalog(catalog.serializable(), { isolateLibraries: true }); restored.setLibraryRoots(['a']);
+  assert.deepEqual(restored.recent().map(item => item.name), ['a.mp4', 'local.mp4']);
+});
