@@ -327,6 +327,7 @@ export class BitstreamAnalysisService {
         if (settled) return; settled = true;
         clearTimeout(timer);
         signal.removeEventListener("abort", abort);
+        worker.onmessage = worker.onerror = worker.onmessageerror = null;
         worker.terminate();
         error ? reject(error) : resolve();
       };
@@ -343,6 +344,7 @@ export class BitstreamAnalysisService {
       );
       signal.addEventListener("abort", abort, { once: true });
       worker.onerror = (e) => done(new Error(e.message));
+      worker.onmessageerror = () => done(new AnalysisFailure("internal-error", "Analysis Worker message could not be deserialized"));
       worker.onmessage = ({ data }) => {
         if (settled) return;
         // A long stream has a stall budget rather than a 30-second total lifetime.
@@ -351,15 +353,19 @@ export class BitstreamAnalysisService {
           timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
         }
         if (data.event === 'snapshot') {
-          void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }, done);
+          try {
+            void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }).catch(done);
+          } catch (error) { done(error); }
         } else if (data.event === 'cache') {
           try {
             worker.postMessage({ event: 'cache', result: data.picture?.sourceVersion === target.sourceVersion ? this.cache.get(data.picture) : null });
           } catch (error) { done(error); }
         } else if (data.event === 'index') {
-          void frontier!().then(index => {
-            if (!settled) worker.postMessage({ event: 'index', index });
-          }, error => done(error));
+          try {
+            void frontier!().then(index => {
+              if (!settled) worker.postMessage({ event: 'index', index });
+            }).catch(done);
+          } catch (error) { done(error); }
         } else if (data.event === 'progress') {
           try { onProgress?.(data.progress); } catch (error) { done(error); }
         } else if (data.event === "chunk") {
@@ -371,7 +377,7 @@ export class BitstreamAnalysisService {
           }
         } else data.ok ? done() : done(restoreFailure(data.reason, data.error));
       };
-      worker.postMessage({ file, target, externalIndex: !!frontier, externalSnapshot: !!snapshot, base: location.href });
+      try { worker.postMessage({ file, target, externalIndex: !!frontier, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
     });
   }
   private async remoteRange(
@@ -487,6 +493,7 @@ export class BitstreamAnalysisService {
         if (settled) return; settled = true;
         clearTimeout(timer);
         signal.removeEventListener("abort", abort);
+        worker.onmessage = worker.onerror = worker.onmessageerror = null;
         worker.terminate();
         error ? reject(error) : resolve(result!);
       };
@@ -506,15 +513,20 @@ export class BitstreamAnalysisService {
       );
       signal.addEventListener("abort", abort, { once: true });
       worker.onerror = (e) => done(new Error(e.message));
+      worker.onmessageerror = () => done(new AnalysisFailure("internal-error", "Analysis Worker message could not be deserialized"));
       worker.onmessage = ({ data }) => {
+        if (settled) return;
         if (data.event === 'snapshot') {
-          void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }, done); return;
+          try {
+            void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }).catch(done);
+          } catch (error) { done(error); }
+          return;
         }
         data.ok
           ? done(undefined, data.result)
           : done(restoreFailure(data.reason, data.error));
       };
-      worker.postMessage({ file, target, externalSnapshot: !!snapshot, base: location.href });
+      try { worker.postMessage({ file, target, externalSnapshot: !!snapshot, base: location.href }); } catch (error) { done(error); }
     });
   }
   private async remote(

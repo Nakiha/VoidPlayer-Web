@@ -143,3 +143,103 @@ test('settling A cannot release B, and the hold expires without queue progress',
   assert.equal(thumbnailState.holdingFull, true);
   c.release(); settleOffer('c', false);
 });
+
+// Drive the real optional task from its accepted-frame boundary. This worker
+// models browser event properties and real structured-clone transfer ownership.
+class ThumbnailTestWorker {
+  static instances: ThumbnailTestWorker[] = [];
+  static failPost = false;
+  onmessage: ((event: { data: unknown }) => void) | null = null;
+  onerror: (() => void) | null = null;
+  onmessageerror: (() => void) | null = null;
+  terminated = 0;
+  transferred?: { pixels: Uint8ClampedArray };
+  constructor() { ThumbnailTestWorker.instances.push(this); }
+  postMessage(message: { pixels: Uint8ClampedArray }, transfer: ArrayBuffer[]) {
+    if (ThumbnailTestWorker.failPost) throw new Error('thumbnail clone failure');
+    this.transferred = structuredClone(message, { transfer });
+  }
+  terminate() { this.terminated++; }
+}
+
+async function drainThumbnailTask() {
+  await new Promise<void>(resolve => setImmediate(resolve));
+}
+
+for (const failure of ['messageerror', 'error', 'postMessage', 'expiry', 'success'] as const) {
+  test(`optional pixel thumbnail ${failure} settles, detaches and releases only its owned frame`, async t => {
+    const { runThumbnailTask } = await import('../../src/thumbnails/tasks.ts');
+    thumbnailState.reset();
+    ThumbnailTestWorker.instances = [];
+    ThumbnailTestWorker.failPost = failure === 'postMessage';
+    const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+    Object.defineProperty(globalThis, 'Worker', { value: ThumbnailTestWorker, configurable: true });
+    t.after(() => {
+      if (descriptor) Object.defineProperty(globalThis, 'Worker', descriptor);
+      else Reflect.deleteProperty(globalThis, 'Worker');
+    });
+    t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+    const original = rgbaFrame();
+    let originalCloses = 0;
+    original.close = () => { originalCloses++; };
+    const accepted = offerFirstFrameCandidate(context(), original);
+    assert.equal(typeof accepted, 'object'); if (typeof accepted !== 'object') return;
+    let ownedCloses = 0;
+    const close = accepted.owned.close.bind(accepted.owned);
+    accepted.owned.close = () => { ownedCloses++; close(); };
+    try {
+      runThumbnailTask(accepted);
+      t.mock.timers.tick(0);
+      const worker = ThumbnailTestWorker.instances[0];
+      assert.ok(worker, 'the real task started its dedicated worker');
+      const lateMessage = worker.onmessage;
+      const lateError = worker.onerror;
+      if (failure === 'messageerror') worker.onmessageerror?.();
+      else if (failure === 'error') worker.onerror?.();
+      else if (failure === 'expiry') t.mock.timers.tick(500);
+      else if (failure === 'success') worker.onmessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) } });
+      await drainThumbnailTask();
+      assert.equal(worker.terminated, 1);
+      assert.equal(accepted.onExpire, undefined);
+      for (const handler of ['onmessage', 'onerror', 'onmessageerror'] as const) assert.equal(worker[handler], null);
+      assert.equal(thumbnailState.inFlight.size, 0);
+      assert.equal(thumbnailState.holdingFull, false);
+      assert.equal(thumbnailState.rendered, failure === 'success' ? 1 : 0);
+      assert.equal(thumbnailState.completed.size, failure === 'success' ? 1 : 0);
+      assert.equal(ownedCloses, 1);
+      assert.equal(originalCloses, 0);
+      assert.equal(original.pixels!.byteLength, 16);
+      assert.equal(accepted.owned.pixels, undefined);
+      if (failure !== 'postMessage') assert.equal(worker.transferred!.pixels.byteLength, 16);
+      lateMessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([1, 2]) } });
+      lateError?.();
+      await drainThumbnailTask();
+      assert.equal(worker.terminated, 1);
+      assert.equal(thumbnailState.rendered, failure === 'success' ? 1 : 0);
+      assert.equal(ownedCloses, 1);
+      if (failure !== 'expiry') {
+        t.mock.timers.tick(500);
+        assert.equal(thumbnailState.skipped['budget:hold-timeout'], undefined);
+      }
+      // A failed optional job must neither poison the next candidate nor use
+      // its callbacks to release the next job's independent hold slot.
+      ThumbnailTestWorker.failPost = false;
+      const next = offerFirstFrameCandidate(context(), rgbaFrame());
+      assert.equal(typeof next, 'object'); if (typeof next !== 'object') return;
+      runThumbnailTask(next);
+      t.mock.timers.tick(0);
+      const nextWorker = ThumbnailTestWorker.instances[1];
+      assert.ok(nextWorker);
+      lateError?.();
+      assert.equal(thumbnailState.holdingFull, true);
+      nextWorker.onmessage?.({ data: null });
+      await drainThumbnailTask();
+      assert.equal(nextWorker.terminated, 1);
+      assert.equal(thumbnailState.holdingFull, false);
+      assert.equal(thumbnailState.inFlight.size, 0);
+    } finally {
+      accepted.onExpire?.(); accepted.release(); settleOffer(accepted.context.cacheKey, false);
+      t.mock.timers.tick(500); await drainThumbnailTask();
+    }
+  });
+}
