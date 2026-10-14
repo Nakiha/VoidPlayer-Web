@@ -43,7 +43,8 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
       if (!Array.isArray(row.npmAliases)) fail(`${row.id}: invalid npm aliases`);
       else for (const binding of row.npmAliases) {
         if (typeof binding?.name !== 'string' || !/^test:[a-z0-9][a-z0-9:-]*$/.test(binding.name) || typeof binding.default !== 'boolean'
-          || row.kind !== 'regression' || row.engines.length !== 1) {
+          || row.kind !== 'regression' || row.engines.length !== 1
+          || binding.argumentPrefixes !== undefined && (!Array.isArray(binding.argumentPrefixes) || binding.argumentPrefixes.some(prefix => typeof prefix !== 'string' || !/^--[a-z][a-z-]*=$/.test(prefix)))) {
           fail(`${row.id}: invalid npm alias binding`); continue;
         }
         const entries = aliases.get(binding.name) ?? [];
@@ -99,6 +100,7 @@ export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
         for (const text of expanded) {
           if (text.includes('${{')) throw new Error(`Unsupported CI command: ${text}`);
           const options = parseOptions(text.trim().split(/\s+/));
+          if (options.caseArguments?.length) throw new Error('CI coverage cannot claim a filtered compatibility case');
           for (const platform of ['linux', 'darwin', 'win32']) {
             for (const row of selectCases({ ...options, platform }, manifest).selected) covered.add(row.id);
           }
@@ -111,7 +113,7 @@ export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
   return true;
 }
 
-export function selectCases({ suite, caseIds = [], alias, engine, input, platform = process.platform } = {}, manifest = testManifest) {
+export function selectCases({ suite, caseIds = [], alias, caseArguments = [], engine, input, platform = process.platform } = {}, manifest = testManifest) {
   if (!['linux', 'darwin', 'win32'].includes(platform)) throw new Error(`Unknown platform: ${platform}`);
   if (suite && !manifest.suites.includes(suite)) throw new Error(`Unknown suite: ${suite}`);
   if (engine && !engines.has(engine)) throw new Error(`Unknown engine: ${engine}`);
@@ -121,9 +123,12 @@ export function selectCases({ suite, caseIds = [], alias, engine, input, platfor
     if (!bound.length) throw new Error(`Unknown npm alias: ${alias}`);
     const matches = bound.filter(row => engine ? row.engines.includes(engine) : row.npmAliases.some(binding => binding.name === alias && binding.default));
     if (matches.length !== 1) throw new Error(`Ambiguous or unsupported engine for npm alias ${alias}`);
+    const binding = matches[0].npmAliases.find(binding => binding.name === alias);
+    for (const arg of caseArguments) if (!binding.argumentPrefixes?.some(prefix => arg.startsWith(prefix))) throw new Error(`Unsupported case argument for npm alias ${alias}: ${arg}`);
     caseIds = [matches[0].id];
   }
   for (const id of caseIds) if (!manifest.cases.some(row => row.id === id && row.kind === 'regression')) throw new Error(`Unknown runnable case: ${id}`);
+  if (caseArguments.length && !alias) throw new Error('Case arguments require a declared npm alias');
   if (!suite && !caseIds.length) throw new Error('Select a suite or --case ID');
   const selected = [], excluded = [];
   for (const row of manifest.cases) {
@@ -131,7 +136,7 @@ export function selectCases({ suite, caseIds = [], alias, engine, input, platfor
     const reason = !row.platforms.includes(platform) ? `platform ${platform} outside ${row.platforms.join('/')}`
       : engine && !row.engines.includes(engine) ? `engine ${engine} outside ${row.engines.join('/')}`
       : input && !row.inputs.includes(input) ? `input ${input} outside ${row.inputs.join('/')}` : null;
-    if (reason) excluded.push({ id: row.id, reason }); else selected.push(row);
+    if (reason) excluded.push({ id: row.id, reason }); else selected.push(caseArguments.length ? { ...row, command: [...row.command, ...caseArguments], executionScope: 'filtered' } : row);
   }
   return { selected, excluded };
 }

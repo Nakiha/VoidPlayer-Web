@@ -8,6 +8,7 @@ export function parseOptions(args) {
       if (arg === '--alias' && options.alias || arg === '--engine' && options.alias && options.engine) throw new Error(`Duplicate npm alias option: ${arg}`);
       if (arg === '--case') options.caseIds.push(...value.split(',')); else options[values[arg]] = value;
     } else if (['--list', '--prepared', '--prepare', '--check'].includes(arg)) options[arg.slice(2)] = true;
+    else if (options.alias && arg.startsWith('--')) (options.caseArguments ??= []).push(arg);
     else if (!arg.startsWith('-') && options.alias && !options.engine) options.engine = arg;
     else if (!arg.startsWith('-') && !options.alias && !options.suite) options.suite = arg;
     else throw new Error(`Unknown option: ${arg}`);

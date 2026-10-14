@@ -195,3 +195,8 @@ test('npm alias CLI accepts its one legacy engine argument without mixing anothe
     ['--alias', 'test:browser', '--prepare'], ['--alias', 'test:browser', '--check'],
     ['--alias', 'test:browser', 'chromium', '--engine', 'webkit'], ['--alias', 'test:browser', '--alias', 'test:other']]) assert.throws(() => parseOptions(args));
 });
+
+test('npm compatibility filter remains a literal case argument after its engine', () => {
+  const options = parseOptions(['--alias', 'test:browser', 'chromium', '--filter=analysis recovery', '--list']);
+  assert.equal(options.engine, 'chromium'); assert.deepEqual(options.caseArguments, ['--filter=analysis recovery']);
+});
