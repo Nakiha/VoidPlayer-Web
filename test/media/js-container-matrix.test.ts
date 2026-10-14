@@ -12,6 +12,7 @@ import {jsPictureStream} from '../../src/matroska-packet-index.ts';
 import {loadTsCore} from '../helpers/media/ts-analysis.ts';
 import {readWasmFrame} from '../../src/wasm-frame.ts';
 import {visiblePixelHash} from '../helpers/visible-pixels.ts';
+import type {MatroskaPacketIndex} from '../../src/matroska-packet-index.ts';
 import {MatroskaPacketSource} from '../../src/matroska-packet-source.ts';
 import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
 import {RangeReader} from '../../src/range-reader.ts';
@@ -74,8 +75,8 @@ test('native codec startup failure retains the JS packet path; input failure nev
 });
 test('untrusted serialized Matroska completeness rebuilds from actual blocks; corruption does not select an unmigrated route',async()=>{
  const bytes=new Uint8Array(await readFile('fixtures/js-container/hevc.mkv')),source=()=>new MatroskaPacketSource(new RangeReader({file:new Blob([bytes])}),'mkv-completeness',new AbortController().signal);
- const original=source();let index;try{index=await original.open();}finally{original.close();}
- for(const tail of [false,true]){const forged=structuredClone(index);forged.packets.splice(tail?599:2,1);forged.packets.forEach((p,i)=>p.au=i);forged.completeness.packets=599;const fresh=source();try{assert.deepEqual(await fresh.open(forged),index);assert.equal(fresh.indexReused,false);assert.equal(fresh.packetsRead,600);}finally{fresh.close();}}
+ const original=source();let index:MatroskaPacketIndex;try{index=await original.open();}finally{original.close();}
+ for(const tail of [false,true]){const forged:MatroskaPacketIndex=structuredClone(index);forged.packets.splice(tail?599:2,1);forged.packets.forEach((p,i)=>p.au=i);forged.completeness.packets=599;const fresh=source();try{assert.deepEqual(await fresh.open(forged),index);assert.equal(fresh.indexReused,false);assert.equal(fresh.packetsRead,600);}finally{fresh.close();}}
  const corrupted=new JsContainerEngine({file:new Blob([bytes.subarray(0,bytes.length-80)])},'truncated',{},'matroska');
  try{await assert.rejects(corrupted.prepare(),(error:unknown)=>error instanceof Error&&!(error instanceof TsCombinationNotMigrated));}finally{corrupted.close();}
  const unadmitted=new JsContainerEngine({file:new Blob([await readFile('fixtures/js-container/ffv1-unmigrated.mkv')])},'unmigrated',{},'matroska');
