@@ -236,5 +236,35 @@
       "pr95-review-readback-webkit.log",
       "pr95-review-focused-bench.log"
     ]
+  },
+  "diagramsFocusSynchronization": {
+    "oldCiFailure": {
+      "run": 38535788811,
+      "job": 115758924770,
+      "head": "78ca989e8a5669029d5cbd4a076e0f1d1a12dd6f",
+      "symptom": "WebKit timed out waiting for four independent hover cards"
+    },
+    "diagnosis": "Queued settings close handler returns focus and chart blur clears hover: plausible race, not reproduced or proven by event timeline.",
+    "before": {
+      "webkit": "passed",
+      "durationMs": 74752
+    },
+    "after": {
+      "chromium": {
+        "status": "passed",
+        "durationMs": 74885
+      },
+      "webkit": {
+        "status": "passed",
+        "durationMs": 74681
+      }
+    },
+    "change": "Wait for closed dialog, removed data-closing and aria-expanded=false, then focus target and ArrowRight.",
+    "scope": "Test synchronization only; four-card/layout assertions, 30s operation timeout and 600s case watchdog unchanged. Both local/library scenarios retained. No full visible matrix or playback benchmark rerun for this test-only change.",
+    "logs": [
+      "pr95-diagrams-webkit-before.log",
+      "pr95-diagrams-after.log"
+    ],
+    "report": ".run/test-suites/browser/results.json"
   }
 }
