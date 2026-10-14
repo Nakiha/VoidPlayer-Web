@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Worker } from 'node:worker_threads';
-import { once, getEventListeners } from 'node:events';
+import { once, getEventListeners, EventEmitter } from 'node:events';
 import { NativeAnalysisClient } from '../../src/analysis/native-client.ts';
 
 test('browser metadata messageerror releases pending, abort and transport listeners without affecting a second client',async()=>{
@@ -21,7 +21,7 @@ test('browser metadata messageerror releases pending, abort and transport listen
   } finally {client.close();}
 });
 
-test('real Node metadata messageerror settles callers and detaches client listeners after thread termination',async()=>{
+test('real Node metadata messageerror settles callers and exits with no remaining listeners',async()=>{
   const worker=new Worker(`const {parentPort}=require('node:worker_threads');parentPort.on('message',m=>parentPort.postMessage({event:'received',id:m.id}));`,{eval:true});
   const client=new NativeAnalysisClient(()=>worker as unknown as globalThis.Worker);
   const received=once(worker,'message');
@@ -36,4 +36,32 @@ test('real Node metadata messageerror settles callers and detaches client listen
     for(const name of ['message','error','exit','messageerror'])assert.equal(worker.listenerCount(name),0,`${name}: client listener released`);
     await assert.rejects(client.call('rank',{firstPtsUs:0,axis:'pts',tUs:0}),/Invalid native analysis worker reply/);
   } finally {client.close();await worker.terminate();}
+});
+
+for(const outcome of ['resolve','reject'] as const)test(`controlled Node termination ${outcome} removes only this client's callbacks after settlement`,async()=>{
+  const worker=new EventEmitter();
+  let posted!:(value?:unknown)=>void,ended!:(value?:unknown)=>void,rejectEnd!:(error:Error)=>void,stopped=0;
+  const posting=new Promise(resolve=>{posted=resolve;});
+  const termination=new Promise((resolve,reject)=>{ended=resolve;rejectEnd=reject;});
+  Object.assign(worker,{postMessage(){posted();},terminate(){stopped++;return termination;}});
+  const names=['message','error','exit','messageerror'];
+  const external=new Map(names.map(name=>[name,()=>{}]));
+  for(const [name,callback]of external)worker.on(name,callback);
+  const client=new NativeAnalysisClient(()=>worker as unknown as globalThis.Worker),abort=new AbortController();
+  const request=client.call('rank',{firstPtsUs:0,axis:'pts',tUs:0},abort.signal);void request.catch(()=>{});
+  try{
+    await posting;
+    const owned=new Map(names.map(name=>[name,worker.listeners(name).find(callback=>callback!==external.get(name))!]));
+    for(const name of names){assert.equal(worker.listenerCount(name),2);assert.ok(owned.get(name));}
+    worker.emit('messageerror',new Error('synthetic deserialization event'));
+    assert.equal(stopped,1);assert.equal(Reflect.get(client,'pending').size,0);assert.equal(getEventListeners(abort.signal,'abort').length,0);
+    await assert.rejects(request,/Invalid native analysis worker reply/);
+    for(const name of names)assert.ok(worker.listeners(name).includes(owned.get(name)!),`${name}: owned callback must remain until termination settles`);
+    assert.doesNotThrow(()=>worker.emit('error',new Error('late thread error before settlement')));
+    client.close();assert.equal(stopped,1);
+    if(outcome==='resolve')ended(0);else rejectEnd(new Error('synthetic termination rejection'));
+    await new Promise(resolve=>setImmediate(resolve));
+    for(const name of names)assert.deepEqual(worker.listeners(name),[external.get(name)],`${name}: only the external callback remains`);
+    assert.doesNotThrow(()=>worker.emit('error',new Error('external listener survives')));
+  }finally{ended(0);client.close();}
 });
