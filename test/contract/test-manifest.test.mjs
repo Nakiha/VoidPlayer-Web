@@ -347,3 +347,22 @@ test('npm argument compatibility keeps package paths, multiple real browsers and
   const m=clone();mutation(m);assert.throws(()=>validateManifest(m));
  }
 });
+
+test('release aliases preserve the default archive dash and only require latest metadata for that default',()=>{
+ const options=parseOptions(['--list','--alias','test:release:browser','-','chromium','--version-only']);
+ const selected=selectCases(options).selected;assert.deepEqual(selected[0].command.slice(-3),['-','chromium','--version-only']);
+ assert.ok(selected[0].fixtures.includes('release-package'));
+ for(const alias of ['test:release','test:release:browser']){
+  const row=selectCases({alias,caseArguments:['/tmp/explicit package.tar.gz']}).selected[0];
+  assert.equal(row.fixtures.includes('release-package'),false,'an explicit archive must not require unrelated latest-release.json');
+  assert.ok(selectCases({alias}).selected[0].fixtures.includes('release-package'));
+ }
+});
+test('explicit npm engine selection narrows HEVC and rejects unsupported range variants',()=>{
+ const rows=selectCases({alias:'test:hevc-timeline:browser',engine:'chromium'}).selected;
+ assert.equal(rows.length,2);assert.ok(rows.every(row=>row.engines.join()==='chromium'));
+ assert.equal(selectCases({alias:'test:hevc-timeline:browser',engine:'chromium',caseArguments:['remote']}).selected.length,1);
+ assert.throws(()=>selectCases({alias:'test:hevc-timeline:browser',engine:'chromium',caseArguments:['webkit','local']}),/Unsupported|conflict/i);
+ assert.throws(()=>selectCases({alias:'test:range:browser',engine:'chrome'}),/Unsupported/i);
+ assert.throws(()=>selectCases({alias:'test:range:browser',caseArguments:['chrome']}),/Unsupported/i);
+});

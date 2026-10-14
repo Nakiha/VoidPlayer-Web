@@ -200,3 +200,42 @@ test('malformed converter replies retire the transport and constructor failures 
  globalThis.Worker=BrokenWorker as unknown as typeof Worker;
  try{assert.throws(()=>nativeYuvSource(f.source,2),/constructor failed/);assert.equal(terminated,1);}finally{globalThis.Worker=old;}
 });
+
+for(const id of [0,-1,42])test(`converter rejects an unissued reply ID ${id} instead of retaining its pending job`,async t=>{
+ const f=converterFixture(t);let error:unknown;const pending=f.wrapped.frameAt(0).catch(cause=>{error=cause;});await tick();
+ f.workers[0].onmessage?.({data:{id,buffer:new ArrayBuffer(6),layout:[{offset:0,stride:2},{offset:4,stride:2}]}});await tick();
+ try{assert.ok(error instanceof Error);assert.equal(f.workers[0].terminated,1);}finally{f.wrapped.dispose();await pending;}
+});
+for(const layout of [[],[{offset:100,stride:2},{offset:4,stride:2}],[{offset:0,stride:100},{offset:4,stride:2}]])test(`invalid complete plane layout retires the converter: ${JSON.stringify(layout)}`,async t=>{
+ const f=converterFixture(t);const pending=f.wrapped.frameAt(0);const rejected=assert.rejects(pending);await tick();
+ f.workers[0].onmessage?.({data:{id:f.workers[0].requests[0].id,buffer:new ArrayBuffer(6),layout}});await rejected;
+ assert.equal(f.workers[0].terminated,1);await assert.rejects(f.wrapped.frameAt(1),/Worker|平面/);
+});
+test('failed streaming entry points never invoke the upstream factory or next',async t=>{
+ const f=converterFixture(t);let opened=0,reads=0;
+ const open=()=>{opened++;return{async next(){reads++;return{done:true as const,value:undefined};},async return(){return{done:true as const,value:undefined};},[Symbol.asyncIterator](){return this;}} as unknown as AsyncGenerator<DecodedFrame>;};
+ f.source.framesFrom=open;f.source.framesFollowing=open;const wrapped=nativeYuvSource(f.source,1,1,false);
+ try{
+  const pending=wrapped.frameAt(0);const rejected=assert.rejects(pending,/Worker/);await tick();f.workers[1].onerror?.();await rejected;
+  await assert.rejects(wrapped.framesFrom(0).next(),/Worker/);await assert.rejects(wrapped.framesFollowing!(0).next(),/Worker/);await assert.rejects(wrapped.framesAfter!(0,1),/Worker/);
+  assert.equal(opened,0);assert.equal(reads,0);
+ }finally{wrapped.dispose();}
+});
+test('return interrupts the first pending next before any source picture is available',async t=>{
+ const f=converterFixture(t);let finish!:(frame:DecodedFrame)=>void;
+ f.source.framesFrom=async function*(){yield await new Promise<DecodedFrame>(resolve=>finish=resolve);};
+ const wrapped=nativeYuvSource(f.source,1,1,false),iterator=wrapped.framesFrom(0);let nextSettled=false,returnSettled=false;
+ const next=iterator.next().then(result=>{nextSettled=true;if(!result.done)result.value.close();},()=>nextSettled=true);await tick();
+ const returning=iterator.return(undefined).then(()=>returnSettled=true,()=>returnSettled=true);await tick();
+ try{assert.equal(nextSettled,true);assert.equal(returnSettled,true);}
+ finally{finish(f.frame(0));wrapped.dispose();await Promise.all([next,returning]);await tick();}
+ assert.equal(f.samples.at(-1)!.closed,1);
+});
+test('return interrupts the first pending copy and a late copied frame remains owned and cleaned',async t=>{
+ const f=converterFixture(t);const iterator=f.wrapped.framesFrom(0);let nextSettled=false,returnSettled=false;
+ const next=iterator.next().then(result=>{nextSettled=true;if(!result.done)result.value.close();},()=>nextSettled=true);await tick();
+ const returning=iterator.return(undefined).then(()=>returnSettled=true,()=>returnSettled=true);await tick();
+ try{assert.equal(nextSettled,true);assert.equal(returnSettled,true);f.workers[0].reply();await tick();}
+ finally{f.wrapped.dispose();await Promise.all([next,returning]);}
+ assert.ok(f.samples.every(sample=>sample.closed===1));
+});

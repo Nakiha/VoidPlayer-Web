@@ -8,17 +8,18 @@
       "composite": 3,
       "manualOrDiagnostic": 5
     },
-    "contractTestsPassed": 64,
+    "contractTestsPassed": 67,
     "allTestScriptsDelegateToRunner": true,
-    "unitCases": 147,
-    "uniqueUnitOwners": 147,
+    "unitCases": 153,
+    "uniqueUnitOwners": 153,
     "retiredAliases": 139,
-    "remainingReferencedForwarders": 38
+    "remainingReferencedForwarders": 38,
+    "currentForwardersIncludingMainAdditions": 44
   },
   "converter": {
     "oldTestsPassedBefore": 5,
     "newAdversariesFailedBefore": 7,
-    "testsPassedAfter": 16,
+    "testsPassedAfter": 25,
     "privateJobCorrelation": true,
     "transportFailure": "latch only converter pool; settle jobs/slot/input waiters; detach and terminate; upstream stays independently owned",
     "copyErrorReply": "reject picture only; worker reusable",
@@ -31,8 +32,8 @@
   },
   "verification": {
     "build": "passed",
-    "sourceCases": "119/119",
-    "manifestRegisteredCases": 321,
+    "sourceCases": "122/122",
+    "manifestRegisteredCases": 328,
     "browserMatrixRerun": false,
     "rawTaskLogs": [
       "engineering-closeout-converter-negative.log",
@@ -142,6 +143,98 @@
       }
     ],
     "harnessSha256": "2471b8c400b03590d8e8973a6af269b39d517666afcc20c31016ccfa9d38c02a",
-    "sampleSha256": "fb41bae79c6dc65d22cf7e4e8657be0fce45f38a3206def6b535d6d9d32dfcb2"
+    "sampleSha256": "fb41bae79c6dc65d22cf7e4e8657be0fce45f38a3206def6b535d6d9d32dfcb2",
+    "reviewFixesChromium": [
+      {
+        "passed": false,
+        "speed": 0.30821718909862234,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": false,
+        "speed": 0.31061879885814153,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": false,
+        "speed": 0.304409348246942,
+        "failures": [
+          "below-realtime"
+        ],
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false
+      }
+    ],
+    "reviewFixesWebkit": [
+      {
+        "passed": true,
+        "speed": 0.9999350748262629,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": true,
+        "speed": 0.9999450516514474,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      },
+      {
+        "passed": true,
+        "speed": 0.9997730769518499,
+        "failures": [],
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false
+      }
+    ]
+  },
+  "integratedMain": "f5826f4a68fa8edd661d4b31c21b686d30ee5f4d",
+  "reviewFixes": {
+    "introducedMissingGuards": [
+      "unissued reply IDs",
+      "complete reply layout failure must retire pool",
+      "release archive dash parsing",
+      "explicit archive conditional fixture",
+      "accurate supported/unsupported engine selection"
+    ],
+    "preExistingUnclosedBoundaries": [
+      "no upstream factory/next after converter failure",
+      "interrupt first pending next/return, including source input and copy wait"
+    ],
+    "redGreen": {
+      "converter": {
+        "tests": 25,
+        "beforePassed": 17,
+        "beforeFailed": 8,
+        "afterPassed": 25
+      },
+      "entry": {
+        "tests": 67,
+        "beforePassed": 64,
+        "beforeFailed": 3,
+        "afterPassed": 67
+      }
+    },
+    "caseCoverage": "All326 main cases retain every canonical field; only existing retirement markers differ. Seven JS TS cases and the two readback cases retained.",
+    "logs": [
+      "pr95-converter-review-negative.log",
+      "pr95-converter-review-positive.log",
+      "pr95-entry-review-negative.log",
+      "pr95-entry-review-positive.log",
+      "pr95-review-source.log",
+      "pr95-review-build.log",
+      "pr95-review-readback-chromium.log",
+      "pr95-review-readback-webkit.log",
+      "pr95-review-focused-bench.log"
+    ]
   }
 }

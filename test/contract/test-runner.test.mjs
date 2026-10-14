@@ -1,3 +1,4 @@
+import {selectCases} from '../../scripts/testing/manifest.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
@@ -408,4 +409,16 @@ test('dependent npm stages stop after failure while canonical independent suites
  const report=await runTestSuite({selected:[entry('manual-required','process.exit(7)',{kind:'manual-regression'}),entry('dependent',`require('node:fs').writeFileSync(${JSON.stringify(later)},'ran')`)],excluded:[],stopOnFailure:true},{root:directory,directory:path.join(directory,'serial'),output:silent});
  assert.equal(report.passed,false);assert.equal(suiteExitCode(report),1);assert.equal(report.results[0].exitCode,7);assert.equal(report.results[1].phase,'dependency');
  await assert.rejects(readFile(later),{code:'ENOENT'});
+}));
+
+test('explicit release archives execute without latest-release metadata, while default archives fail preparation',async()=>temporary(async root=>{
+ const archive=path.join(root,'explicit package.tar.gz');await writeFile(archive,'owned fixture');
+ for(const alias of ['test:release','test:release:browser']){
+  const selection=selectCases({alias,caseArguments:[archive]});const row=selection.selected[0],entry=row.implementation??row.script;
+  await mkdir(path.dirname(path.join(root,entry)),{recursive:true});await writeFile(path.join(root,entry),"import{readFileSync}from'node:fs';if(readFileSync(process.argv[2],'utf8')!=='owned fixture')process.exit(4);\n");
+  const report=await runTestSuite(selection,{root,directory:path.join(root,alias.replaceAll(':','-')),output:silent});
+  assert.equal(report.passed,true,JSON.stringify(report.results));assert.equal(report.results[0].phase,'execute');
+  const missing=await runTestSuite(selectCases({alias}),{root,directory:path.join(root,'default-'+alias.replaceAll(':','-')),output:silent});
+  assert.equal(missing.passed,false);assert.equal(missing.results[0].phase,'prepare');assert.match(missing.results[0].error,/latest-release|release-package/);
+ }
 }));

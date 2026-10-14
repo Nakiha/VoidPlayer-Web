@@ -436,7 +436,12 @@
           "id": "release",
           "args": []
         }
-      ]
+      ],
+      "archiveInput": {
+        "fixture": "release-package",
+        "position": 0,
+        "ignoreArgs": []
+      }
     },
     "test:library:browser": {
       "cases": [
@@ -803,7 +808,15 @@
           "id": "release-browser",
           "args": []
         }
-      ]
+      ],
+      "archiveInput": {
+        "fixture": "release-package",
+        "position": 0,
+        "ignoreArgs": [
+          "--version-only"
+        ],
+        "defaultToken": "-"
+      }
     },
     "test:fate": {
       "cases": [

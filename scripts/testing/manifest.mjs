@@ -85,6 +85,7 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if(recipe.sequential!==undefined&&typeof recipe.sequential!=='boolean')fail(`${name}: invalid sequence policy`);
     if(recipe.environmentEngine&&recipe.environmentEngine.name!=='IDENTITY_BROWSER')fail(`${name}: unknown engine environment`);
     if(recipe.matrixArguments&&JSON.stringify(recipe.matrixArguments)!=='["engine","input"]')fail(`${name}: unknown matrix arguments`);
+    if(recipe.archiveInput&&(recipe.archiveInput.fixture!=='release-package'||recipe.archiveInput.position!==0||!Array.isArray(recipe.archiveInput.ignoreArgs)||recipe.archiveInput.ignoreArgs.some(arg=>typeof arg!=='string')||recipe.archiveInput.defaultToken!==undefined&&recipe.archiveInput.defaultToken!=='-'))fail(`${name}: invalid archive input policy`);
   }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
@@ -165,9 +166,16 @@ export function selectCases({ suite, caseIds = [], alias, caseArguments = [], en
 function selectNpmCommand(alias,args,engine,platform,manifest){
   const recipe=manifest.npmCommands[alias];let steps=recipe.cases;
   if(recipe.matrixArguments){
-    if(args.length>2||args[0]&&!['webkit','chromium'].includes(args[0])||args[1]&&!['local','remote'].includes(args[1]))throw new Error(`Unsupported matrix arguments for ${alias}`);
-    steps=steps.filter(step=>{const row=manifest.cases.find(row=>row.id===step.id);return (!args[0]||row.engines.includes(args[0]))&&(!args[1]||row.inputs.includes(args[1]));});
+    let selectors=args;
+    if(engine){
+      if(args[0]&&engines.has(args[0])){if(args[0]!==engine)throw new Error(`Conflicting engine for ${alias}`);}
+      else selectors=[engine,...args];
+    }
+    if(selectors.length>2||selectors[0]&&!['webkit','chromium'].includes(selectors[0])||selectors[1]&&!['local','remote'].includes(selectors[1]))throw new Error(`Unsupported matrix arguments for ${alias}`);
+    steps=steps.filter(step=>{const row=manifest.cases.find(row=>row.id===step.id);return (!selectors[0]||row.engines.includes(selectors[0]))&&(!selectors[1]||row.inputs.includes(selectors[1]));});
   }else{
+    if(engine&&recipe.engineCases&&!Object.hasOwn(recipe.engineCases,engine))throw new Error(`Unsupported engine for ${alias}: ${engine}`);
+    if(recipe.engineCases&&args[0]&&!args[0].startsWith('-')&&!Object.hasOwn(recipe.engineCases,args[0]))throw new Error(`Unsupported engine for ${alias}: ${args[0]}`);
     const selected=recipe.environmentEngine?(Object.hasOwn(recipe.environmentEngine.cases,process.env[recipe.environmentEngine.name])?recipe.environmentEngine.cases[process.env[recipe.environmentEngine.name]]:undefined):recipe.engineCases?.[engine??args.find(arg=>Object.hasOwn(recipe.engineCases??{},arg))];
     if(engine&&!recipe.engineCases)throw new Error(`${alias}: use the declared legacy positional arguments`);
     if(selected)steps=steps.map((step,i)=>i?step:{...step,id:selected});
@@ -180,7 +188,10 @@ function selectNpmCommand(alias,args,engine,platform,manifest){
     const entry=row.implementation??row.script,at=row.command.findIndex(arg=>arg===entry||arg==='./'+entry);
     const command=step.args===undefined?[...row.command]:[...row.command.slice(0,at+1),...step.args];
     if(!recipe.matrixArguments&&i===steps.length-1)command.push(...args);
-    selected.push({...row,command,required:true,executionScope:'legacy-npm-alias',npmAlias:alias});
+    const archive=recipe.archiveInput,archiveArgs=archive?command.slice(at+1).filter(arg=>!archive.ignoreArgs.includes(arg)):[];
+    const explicitArchive=archive&&archiveArgs[archive.position]!==undefined&&archiveArgs[archive.position]!==archive.defaultToken;
+    const fixtures=explicitArchive?row.fixtures.filter(name=>name!==archive.fixture):row.fixtures;
+    selected.push({...row,command,fixtures,required:true,executionScope:'legacy-npm-alias',npmAlias:alias});
   }
   return {selected,excluded,stopOnFailure:recipe.sequential===true};
 }
