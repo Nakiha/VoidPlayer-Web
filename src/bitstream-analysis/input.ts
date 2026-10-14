@@ -1,3 +1,5 @@
+import { openJsTsAnalysisInput } from './js-ts-input.ts';
+import { AnalysisFailure } from './failure.ts';
 import { openTsAnalysisInput } from './ts-input.ts';
 import { openMp4AnalysisInput } from './mp4-input.ts';
 import { openFlvAnalysisInput } from './flv-input.ts';
@@ -13,10 +15,16 @@ export async function openAnalysisInput(reader: AnalysisReader, signal: AbortSig
     header = await reader.read(0, Math.min(9, reader.size));
     signal.throwIfAborted();
   } catch (error) { reader.close(); throw error; }
-  const {demuxCore: _demuxCore, ...containerOptions} = streamIndex ?? {};
+  const {demuxCore: _demuxCore, sourceVersion: _sourceVersion, indexIdentity: _indexIdentity, ...containerOptions} = streamIndex ?? {};
   const adapterOptions = Object.keys(containerOptions).length ? containerOptions : undefined;
   if (header[0] === 70 && header[1] === 76 && header[2] === 86)
     return openFlvAnalysisInput(reader, signal, continuous, adapterOptions);
-  if (header[0] === 0x47) return openTsAnalysisInput(reader, signal, continuous, streamIndex);
+  if (header[0] === 0x47) {
+    if(streamIndex?.indexIdentity?.kind==='js-ts') {
+      if(!streamIndex.sourceVersion){reader.close();throw new AnalysisFailure('invalid-request','JS TS source namespace is missing');}
+      return openJsTsAnalysisInput(reader,streamIndex.sourceVersion,signal);
+    }
+    return openTsAnalysisInput(reader, signal, continuous, streamIndex);
+  }
   return openMp4AnalysisInput(reader, signal, continuous, adapterOptions);
 }

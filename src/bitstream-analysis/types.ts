@@ -13,7 +13,7 @@ export interface AnalysisPacket {
   au: number;
   configuration: number;
   pts: number;
-  dts: number;
+  dts: number | null;
   offset: number;
   size: number;
   key: boolean;
@@ -22,6 +22,8 @@ export interface AnalysisPacket {
   timing?: { pts: number | null; dts: number | null; timebase: [number, number] };
 }
 export interface AnalysisInputOptions {
+  sourceVersion?: string;
+  indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   demuxCore?: any;
   frontier?: () => Promise<AnalysisIndexFrontier>;
   waiting?: (waiting: boolean) => Promise<void>;
@@ -29,6 +31,8 @@ export interface AnalysisInputOptions {
 
 export interface AnalysisInput {
   analysisCore?: any;
+  /** Packet clocks carry explicit missingness; feed_known must preserve it. */
+  rawTiming?: boolean;
   /** Reset only bounded unconsumed IO after the consumer acknowledges a result. */
   acknowledge?(): void;
   codec: 'h264' | 'hevc' | 'vvc';

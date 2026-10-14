@@ -127,13 +127,19 @@ try {
       if (long || software || usesFfmpegDecoder) await page.waitForFunction(() => window.voidPlayer.getState().tracks[0]?.indexState === 'complete', null, { timeout: 60000 });
       const final = await call('get_review_session');
       assert.equal(final.error, null);
-      if (long || software || usesFfmpegDecoder) {
+      if (name === 'h264.ts') {
+        assert.equal(final.tracks[0].indexKind,'packet-locators','admitted H.264 TS uses the verified JS packet index');
+        assert.equal(final.tracks[0].seekStrategy,'packet-anchor');
+        assert.equal(final.tracks[0].indexState,'complete');
+        assert.equal(final.tracks[0].decoder,software?'ffmpeg-wasm':'webcodecs','decoder selection preserves the JS TS demux/index');
+        assert.ok(final.tracks[0].seekAnchorCount>0);
+      } else if (long || software || usesFfmpegDecoder) {
         assert.equal(final.tracks[0].decoder, 'ffmpeg-wasm');
         assert.equal(final.tracks[0].indexState, 'complete');
         assert.equal(final.tracks[0].seekStrategy, 'demuxer-keyframe');
         assert.ok(final.tracks[0].seekAnchorCount > 0);
       } else if (name === 'h264.mp4') assert.equal(first.tracks[0].decoder, 'webcodecs', 'supported H.264 MP4 uses native decode');
-      else assert.equal(first.tracks[0].decoder, 'ffmpeg-wasm', 'MPEG-TS uses the FFmpeg container/decode fallback for H.264');
+      else assert.fail(`Unexpected unclassified container fixture: ${name}`);
       const timings = [];
       for (const ptsUs of long ? [10e6, 36e6, 64e6, 10e6, 0] : [1e6, 2e6, 0]) {
         const start = performance.now(); await call('seek_review', { ptsUs });
@@ -142,13 +148,18 @@ try {
         assert.equal(state.error, null); assert.equal(state.tracks[0].frame.ptsUs, ptsUs);
       }
       const logs = await call('get_review_logs', { limit: 500 });
-      assert.ok(logs.events.some(e => e.msg === '媒体适配器选择' && e.data.software === (name === 'h264.mp4' ? 'packet-mp4' : 'ffmpeg-container')));
+      assert.ok(logs.events.some(e => e.msg === '媒体适配器选择' && e.data.software === (name === 'h264.mp4' ? 'packet-mp4' : name==='h264.ts' ? 'packet-ts' : 'ffmpeg-container')));
       if (!local && name === 'mpeg2.ts') {
         const ready = logs.events.filter(e => e.msg === 'WASM core 已就绪').map(e => e.data);
         assert.ok(ready.length >= 2, 'cold and warm server-index opens are observed');
         assert.ok(ready.slice(-2).every(e => e.indexSource === 'server' && e.localIndexBuildCalls === 0), JSON.stringify(ready.slice(-2)));
       }
       assert.ok(!logs.events.some(e => /MP4 压缩包路径不可用/.test(e.msg)), 'TS never attempts the MP4 packet adapter');
+      if (name==='h264.ts') {
+        const traces=logs.events.filter(e=>e.msg==='媒体管线追踪').map(e=>e.data);
+        assert.ok(traces.some(e=>e.demuxBackend==='js-ts-packets'&&e.indexBackend==='js-ts-packet-index'));
+        assert.ok(!traces.some(e=>e.demuxBackend==='ffmpeg-wasm'),'admitted TS never selects a container demux route');
+      }
       if (long) {
         const seeks = logs.events.filter(e => e.msg === 'WASM 帧定位完成').map(e => e.data);
         assert.ok(seeks.length >= 4, 'each random seek records bounded work');

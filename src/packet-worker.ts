@@ -2,6 +2,9 @@ import { serializeFlvIndex } from './flv-index-cache.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
+import { TsEngine } from './ts-engine.ts';
+import { TsCombinationNotMigrated } from './ts-packet-source.ts';
+import { randomUUID } from './uuid.ts';
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -14,7 +17,8 @@ async function start() {
     ? (await import('node:worker_threads')).parentPort : null;
   const reply = workerReply<PacketCommands>();
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
-  let engine: FlvEngine | Mp4Engine | undefined;
+  let engine: FlvEngine | Mp4Engine | TsEngine | undefined;
+  let tsSession: string | undefined;
   let chain = Promise.resolve();
   let audioTimer: ReturnType<typeof setTimeout> | undefined;
   let audioRequest: { pts: number; generation: number } | undefined;
@@ -48,13 +52,21 @@ async function start() {
       }, 0);
       return;
     }
-    if (message.type === 'analysis-flv-index' && engine instanceof FlvEngine) {
+    if (message.type === 'analysis-flv-index') {
+      if(!(engine instanceof FlvEngine)){send({id:message.id,ok:false,error:'FLV index is not ready (worker 未初始化)',stage:'container'});return;}
       if (!engine.indexComplete) { send({ id: message.id, ok: false, error: 'FLV index is incomplete' }); return; }
       send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
-    if (message.type === 'analysis-index' && engine) {
-      const packets = engine instanceof FlvEngine ? engine.index.packets : engine.analysisIndex!.packets;
+    if (message.type === 'analysis-ts-index') {
+      const index=engine instanceof TsEngine?engine.packetIndex:undefined;
+      if(!index){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
+      send(reply(message,index));
+      return;
+    }
+    if (message.type === 'analysis-index') {
+      const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
+      if (!packets) { send({id:message.id,ok:false,error:'Packet index is not ready (worker 未初始化 or closed)',stage:'container'});return; }
       send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
       return;
     }
@@ -72,26 +84,45 @@ async function start() {
     chain = chain.then(async () => {
       const { id, type } = message;
       try {
-        if (type === 'prepare') {
+        if (type === 'prepare-ts') {
+          engine?.close(); engine = undefined; tsSession = undefined;
+          const candidate = new TsEngine(message.input, message.sourceVersion);
+          try {
+            const index = await candidate.prepare(data => send({id,type:'index-progress',data})); engine = candidate; tsSession = randomUUID();
+            send(reply(message, {admitted:true, session:tsSession, index}));
+          } catch (error) {
+            candidate.close();
+            if (!(error instanceof TsCombinationNotMigrated)) throw error;
+            send(reply(message, {admitted:false, reason:error.message}));
+          }
+        } else if (type === 'prepare') {
           engine?.close(); engine = new FlvEngine(message.input);
           send(reply(message, await engine.prepare(progress => send({ id, type: 'progress', progress }))));
         } else if (type === 'native' && engine instanceof FlvEngine) {
           const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
-          if (!(engine instanceof FlvEngine && message.container === 'flv')) {
-            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : new FlvEngine(message.input, message.prepared);
+          const preparedTs = message.container === 'ts' && message.preparedTsSession !== undefined;
+          if (preparedTs && (!(engine instanceof TsEngine) || message.preparedTsSession !== tsSession
+            || engine.packetIndex?.sourceVersion !== message.sourceVersion)) throw new MediaOpenError('input','JS TS admission session changed');
+          if (!(engine instanceof FlvEngine && message.container === 'flv') && !preparedTs) {
+            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : message.container === 'ts' ? new TsEngine(message.input, message.sourceVersion) : new FlvEngine(message.input, message.prepared);
           }
-          const data = await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress }));
+          tsSession = undefined;
+          if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');
+          const progress = (progress: import('./media-progress.ts').MediaLoadStage) => send({id,type:'progress',progress});
+          const data = engine instanceof TsEngine
+            ? await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress,data=>send({id,type:'index-progress',data}))
+            : await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress);
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
-        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
           try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }
           finally { frame.frame?.close(); }
-        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads)));
-        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine)) {
+        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
           send(reply(message, await engine.switchToNative()));
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send(reply(message, null));
@@ -108,7 +139,7 @@ async function start() {
         } else if (type === 'analysis' && engine) {
           // 只读统计：复用当前 demux 包表，不启动第二套扫描、不转移底层缓冲。
           // 查询走同一串行 chain 保序，但只做区间二分与有界物化，不重算全片。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const complete = engine instanceof FlvEngine ? engine.indexComplete : true;
           const mediaId = message.mediaId ?? '';
@@ -116,7 +147,7 @@ async function start() {
             mediaId, sourceVersion: `${mediaId}@${packets.length}${complete ? '' : '+'}`, indexRevision: packets.length,
             firstPtsUs: message.firstPtsUs ?? 0, durationUs: message.durationUs ?? 0,
             capability: {
-              hasSize: true, hasDts: true, keySource: 'container',
+              hasSize: true, hasDts: engine instanceof TsEngine ? packets.some(p=>p.dts!==null) : true, keySource: engine instanceof TsEngine ? 'verified' : 'container',
               pictureType: 'key-only', qp: 'unsupported',
               indexState: complete ? 'complete' : 'building',
             },
@@ -135,14 +166,14 @@ async function start() {
           send(reply(message, data));
         } else if (type === 'analysis-locate' && engine) {
           // 按样本身份的有界定位：O(1) 反查包表，不扫描、不新建索引。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = locateSampleById(packets, message.mediaId ?? '', message.firstPtsUs ?? 0, message.sampleId ?? '');
           send(reply(message, data));
         } else if (type === 'analysis-rank' && engine) {
           // 展示序排名：与 analysis 分支共用同一份有序轴缓存，O(log N) 二分，
           // 不物化样本数组、不解码。complete 由主线程按索引状态判定。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const axis = message.axis === 'dts' ? 'dts' : 'pts';
           const tUs = Number(message.tUs);
@@ -150,7 +181,7 @@ async function start() {
           const data = querier.rank(packets, message.firstPtsUs ?? 0, axis, tUs);
           send(reply(message, data));
         } else if (type === 'analysis-number' && engine) {
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = querier.sampleAtNumber(packets, message.firstPtsUs ?? 0, message.axis === 'dts' ? 'dts' : 'pts', Number(message.number));
           send(reply(message, data));

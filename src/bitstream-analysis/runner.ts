@@ -45,7 +45,7 @@ export async function analyzePicture(
 ): Promise<AnalysisResult> {
   validateTarget(target);
   const started = performance.now(),
-    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core}));
+    input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {demuxCore: core,sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
   let opened = false;
   try {
     const firstPacket=input.packets[0];
@@ -458,10 +458,14 @@ export async function analyzePicture(
         );
       try {
         core.HEAPU8.set(bytes, pointer);
-        const ret = input.analysisCore
-          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts,
+        if (input.rawTiming && packet.timing?.pts == null)
+          throw new AnalysisFailure('ambiguous-picture-identity', 'Derived packet time cannot stand in for original container PTS');
+        if (packet.dts === null && !input.analysisCore && !input.rawTiming)
+          throw new AnalysisFailure('internal-error', 'Unknown packet clocks require the explicit feed-known contract');
+        const ret = input.analysisCore || input.rawTiming
+          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts ?? 0,
               (packet.timing?.pts != null ? 1 : 0) | (packet.timing?.dts != null ? 2 : 0), packet.au)
-          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts, packet.au);
+          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts ?? 0, packet.au);
         if (ret === 2) continue;
         if (ret < 0) throw coreFailure(ret, "Analysis packet failed");
       } finally {
@@ -508,7 +512,7 @@ export async function analyzeRange(
   }
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
-  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core});
+  const input = await openAnalysisInput(reader, signal, false, {demuxCore: core,sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
   let first: number;
   const missing = new Set<number>();
   let lastCached: AnalysisResult | undefined;
@@ -587,7 +591,7 @@ export async function analyzeStream(
   validateStream(target);
   let latest: StreamProgress = { pictures: 0, totalPictures: 0, checkedUs: 0, totalUs: target.durationUs, indexComplete: false };
   const report = async (progress: StreamProgress) => { latest = progress; await onProgress(progress); };
-  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, frontier,
+  const input = await openAnalysisInput(reader, signal, true, { demuxCore: core, sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
   return analyzePicture(reader, { sourceVersion: target.sourceVersion,

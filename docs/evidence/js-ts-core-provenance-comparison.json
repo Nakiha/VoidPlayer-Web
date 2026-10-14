@@ -1,0 +1,20 @@
+{
+  "status": "Two separately built playback artifacts, not identical-byte validation",
+  "pin": "353088620d08ee4ec2669842508f0fc84da2db28",
+  "sourceLocksEqual": true,
+  "localBuildRun": null,
+  "ciBuildRun": "https://github.com/Nakiha/VoidPlayer-Web/actions/runs/38443480797",
+  "ciCacheKey": "release-core-v1-Linux-5377013b1e3d36e90ca1bda753f2a73b8c67dfc5b560b75e1e6952bff06b656d",
+  "glueDigestsEqual": true,
+  "analysisFilesAndProvenanceEqual": true,
+  "localPlaybackSingle": "2d429b2584a3b462380074a92276c1de213ad0a1b2eba4069b1485828a0ac46a",
+  "ciPlaybackSingle": "7c71f847fee0f5e1afa27022d0bf45b6fb29fea1a1c69313a25594a7dadf9b44",
+  "localPlaybackMT": "4a9866cab144b5fa07d0708d20c5159f0a893d2d09fde6bf07b890b056c66262",
+  "ciPlaybackMT": "8fe821a5739b2149e4857d4d202bc305692110bc196040c3adfa5d5c93413a65",
+  "observedBinaryDifferences": [
+    "Embedded FFmpeg file labels use ./src/... locally and src/... in CI",
+    "Embedded dav1d git-version label is 1.5.1-0-g42b2b24 locally and 42b2b24 in CI",
+    "WASM global/data/code sections differ; matching pin/provenance is not a proof of binary semantic equivalence"
+  ],
+  "next": "Use the exact downloaded verified CI artifacts for final local validation and retain separate old local and CI reports"
+}

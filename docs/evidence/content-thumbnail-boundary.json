@@ -1,0 +1,6 @@
+{
+  "base": "603072518cf6993f8d9be6f9bdb3ef20b2fb957f",
+  "originalHandlerBlockSha256": "4d08fc0ff6997e77b8093009e4a3b85c96c4ffc124ce93f4fbb85dcc7b1c41a7",
+  "comparison": "Exact original handler block, unchanged; only imports, narrow library owner argument and dispatch moved",
+  "verification": "Real HTTP thumbnail status/GET/HEAD/upload/dedupe/epoch/version and SQLite reopen; adjacent frame-index and transport tests retained"
+}

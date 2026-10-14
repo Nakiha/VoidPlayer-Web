@@ -7,6 +7,7 @@ import type { MediaLoadStage } from './media-progress.ts';
 import type { OpenStage } from './media-errors.ts';
 import type { FlvInput } from './flv-demux.ts';
 import type { FlvEngine, PreparedFlv } from './flv-engine.ts';
+import type { TsEngine } from './ts-engine.ts';
 import type { Mp4Engine } from './mp4-engine.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import type { CachedWindow, CachedAudioBatch } from './audio-types.ts';
@@ -56,22 +57,25 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>>) & Pick<MediaInfo, 'timelineSource'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'prepare-ts': Command<{input: FlvInput; sourceVersion: string},
+    {admitted: true; session: string; index: import('./ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
-  init: Command<SoftwareOptions & { input: FlvInput; prepared?: PreparedFlv; forceWasm?: boolean; container?: 'flv' | 'mp4' }, PacketInitResult>;
+  init: Command<SoftwareOptions & { input: FlvInput; forceWasm?: boolean } & ({container: 'ts'; sourceVersion: string; preparedTsSession?: string} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
+  'analysis-ts-index': Command<Empty, import('./ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('./flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
   'complete-index': Command<Empty, Awaited<ReturnType<FlvEngine['completeIndex']>>>;
   'reference-witness': Command<SoftwareOptions, FlvFrame>;
-  'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>>>;
-  'switch-native': Command<Empty, Awaited<ReturnType<FlvEngine['switchToNative']>> | Awaited<ReturnType<Mp4Engine['switchToNative']>>>;
+  'switch-software': Command<SoftwareOptions, Awaited<ReturnType<FlvEngine['switchToSoftware']>> | Awaited<ReturnType<Mp4Engine['switchToSoftware']>> | Awaited<ReturnType<TsEngine['switchToSoftware']>>>;
+  'switch-native': Command<Empty, Awaited<ReturnType<FlvEngine['switchToNative']>> | Awaited<ReturnType<Mp4Engine['switchToNative']>> | Awaited<ReturnType<TsEngine['switchToNative']>>>;
   dispose: Command<Empty, null>;
   extract: Command<{ position: number; recycle?: ArrayBuffer }, FlvFrame | null>;
   at: Command<{ pts: number; recycle?: ArrayBuffer }, FlvFrame | null>;
@@ -91,7 +95,7 @@ export type WorkerSuccess<C extends CommandsShape<C>, K extends keyof C = keyof 
 export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage };
 export type IndexBatch = { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
 export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
-export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; durationUs?: number };
+export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; bytesRead?:number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };
 export type WorkerEvent = ({ id: number } & IndexEvent)
   | { id: number; type: 'cached-audio'; generation: number; data: CachedAudioBatch }
