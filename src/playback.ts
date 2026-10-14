@@ -20,6 +20,7 @@ export class FrameQueue {
   private get effectiveBudgetBytes() { return Math.max(this.budgetBytes, Math.min(this.minimumFrames, this.capacity) * this.largestFrameBytes); }
   readonly done: Promise<void>;
   private gen: AsyncGenerator<DecodedFrame>;
+  private nextStartedMs: number | null = null;
   readonly capacity: number;
   readonly budgetBytes: number;
   constructor(gen: AsyncGenerator<DecodedFrame>, capacity = 4, budgetBytes?: number, resources?: SessionResources, estimateBytes = 0) {
@@ -42,8 +43,9 @@ export class FrameQueue {
         const release = this.resources?.reserve('decodeReservations', Math.max(this.estimateBytes, this.largestFrameBytes), this.frames.length === 0);
         if (this.resources && !release) continue;
         let next: IteratorResult<DecodedFrame>;
+        this.nextStartedMs = performance.now();
         try { next = await this.gen.next(); if (!next.done) this.resources?.own(next.value); }
-        finally { release?.(); }
+        finally { this.nextStartedMs = null; release?.(); }
         if (next.done) { this.ended = true; break; }
         if (this.stopped) { next.value.close(); break; }
         this.largestFrameBytes = Math.max(this.largestFrameBytes, next.value.byteSize);
@@ -76,6 +78,8 @@ export class FrameQueue {
   }
   snapshot() {
     return { ended: this.ended, suspended: this.suspended, stopped: this.stopped, error: this.error instanceof Error ? this.error.message : this.error == null ? null : String(this.error), frames: this.frames.length, bytes: this.bytes, peakFrames: this.peakFrames, peakBytes: this.peakBytes,
+      firstPtsUs: this.frames[0]?.ptsUs ?? null, lastPtsUs: this.frames.at(-1)?.ptsUs ?? null,
+      producerWaitMs: this.nextStartedMs === null ? null : performance.now() - this.nextStartedMs,
       capacity: this.capacity, budgetBytes: this.budgetBytes, effectiveBudgetBytes: this.effectiveBudgetBytes };
   }
 }
@@ -85,6 +89,8 @@ export class PlaybackMeasurements {
   wallMs = 0;
   mediaUs = 0;
   waitingMs = 0;
+  firstAdvanceMs: number | null = null;
+  firstPresentationMs: number | null = null;
   maxFrameLagUs = 0;
   maxFrameSkewUs = 0;
   private tracks = new Map<string, { drawn: number; dropped: number; lastMs: number; maxGapMs: number; intervals: number[] }>();
@@ -93,6 +99,7 @@ export class PlaybackMeasurements {
   buffer(slot: string, queue: FrameQueue) { this.buffers[slot] = queue.snapshot(); }
   holdBeforeStart(slot:string, now:number) { this.heldUntil.set(slot,now); }
   draw(slot: string, now: number, dropped: number) {
+    this.firstPresentationMs ??= now - this.startedMs;
     const t = this.tracks.get(slot) ?? { drawn: 0, dropped: 0, lastMs: this.heldUntil.get(slot) ?? this.startedMs, maxGapMs: 0, intervals: [] };
     const gap = now - t.lastMs;
     t.maxGapMs = Math.max(t.maxGapMs, gap);
@@ -101,7 +108,7 @@ export class PlaybackMeasurements {
     this.tracks.set(slot, t);
   }
   snapshot() {
-    return { wallMs: this.wallMs, mediaUs: this.mediaUs, waitingMs: this.waitingMs, buffers: { ...this.buffers },
+    return { wallMs: this.wallMs, mediaUs: this.mediaUs, waitingMs: this.waitingMs, firstAdvanceMs: this.firstAdvanceMs, firstPresentationMs: this.firstPresentationMs, buffers: { ...this.buffers },
       speed: this.wallMs > 0 ? this.mediaUs / (this.wallMs * 1000) : 0,
       maxFrameLagUs: this.maxFrameLagUs, maxFrameSkewUs: this.maxFrameSkewUs,
       tracks: Object.fromEntries([...this.tracks].map(([slot, t]) => {

@@ -1,7 +1,7 @@
 import { rgbaDescription } from '../../src/frame-description.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { FrameQueue } from '../../src/playback.ts';
+import { FrameQueue, PlaybackMeasurements } from '../../src/playback.ts';
 import { assessPlayback } from '../../src/benchmark.ts';
 import { WorkerRpc } from '../../src/ffmpeg-media.ts';
 const turn = () => new Promise<void>(r => setTimeout(r, 0));
@@ -46,7 +46,7 @@ test('prefetch is bounded and stopping a full queue releases every frame', async
 });
 
 test('benchmark rejects slow playback and missing or stalled presentation, even with a healthy timeline', () => {
-  const healthy = { wallMs: 2000, mediaUs: 2000000, waitingMs: 0, buffers: {}, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
+  const healthy = { firstAdvanceMs: null, firstPresentationMs: null, wallMs: 2000, mediaUs: 2000000, waitingMs: 0, buffers: {}, speed: 1, maxFrameLagUs: 16000, maxFrameSkewUs: 16000,
     tracks: { A: { drawn: 120, dropped: 0, fps: 60, p95GapMs: 17, maxGapMs: 20 } } };
   assert.deepEqual(assessPlayback(healthy, 1, false), []);
   assert.ok(assessPlayback({ ...healthy, speed: .5 }, 1, false).includes('below-realtime'));
@@ -113,4 +113,29 @@ test('suspending an in-flight oversized frame retains its successor without pull
   assert.equal(produced, 3);
   assert.equal(q.frames[0].ptsUs, 1, 'unseen successor is retained, not discarded');
   q.stop(); await q.done; assert.equal(closed, produced);
+});
+
+test('readiness diagnostics keep missing advancement/presentation explicit and retain the first actual draw time', () => {
+  const measurements=new PlaybackMeasurements();
+  assert.equal(measurements.snapshot().firstAdvanceMs,null);assert.equal(measurements.snapshot().firstPresentationMs,null);
+  measurements.firstAdvanceMs=250;
+  measurements.draw('A',measurements.startedMs+275,0);
+  measurements.draw('A',measurements.startedMs+500,0);
+  assert.equal(measurements.snapshot().firstAdvanceMs,250);assert.equal(measurements.snapshot().firstPresentationMs,275);
+  assert.equal(measurements.snapshot().tracks.A.drawn,2);
+});
+
+test('queue diagnostics distinguish an in-flight producer from queued frame coverage', async () => {
+  let release!:()=>void,closed=0;
+  const gate=new Promise<void>(resolve=>release=resolve);
+  const frame=(ptsUs:number)=>({ptsUs,sourcePtsUs:ptsUs,durationUs:1,description:rgbaDescription(10,10),kind:'rgba8' as const,width:10,height:10,byteSize:400,close(){closed++;}});
+  async function* frames(){yield frame(0);await gate;yield frame(1);}
+  const queue=new FrameQueue(frames());
+  try {
+    await turn();const blocked=queue.snapshot();
+    assert.equal(blocked.firstPtsUs,0);assert.equal(blocked.lastPtsUs,0);assert.ok(blocked.producerWaitMs!==null&&blocked.producerWaitMs>=0);
+    queue.take(0).frame!.close();release();await turn();
+    const ready=queue.snapshot();assert.equal(ready.firstPtsUs,1);assert.equal(ready.lastPtsUs,1);assert.equal(ready.producerWaitMs,null);assert.equal(ready.ended,true);
+  } finally {release();queue.stop();await queue.done;}
+  assert.equal(closed,2);
 });
