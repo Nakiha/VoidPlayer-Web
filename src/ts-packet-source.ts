@@ -132,6 +132,8 @@ export class TsPacketSource {
   private progress?: (value: {packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void;
   private scannedBytes=0;
   private indexedPackets=0;
+  private indexBytesRead:number|undefined;
+  private readonly indexByteBudget:number;
   private lastProgressMs=-Infinity;
   private publishProgress(force=false) {
     if (!this.progress) return;
@@ -146,6 +148,7 @@ export class TsPacketSource {
   private abort = () => this.close();
   constructor(reader: TsPacketReader, sourceVersion: string, signal: AbortSignal) {
     this.reader = reader; this.sourceVersion = sourceVersion; this.signal = signal;
+    this.indexByteBudget=Math.min(Number.MAX_SAFE_INTEGER,reader.size*4+32*1024*1024);
     try {
     signal.throwIfAborted();
     if (!sourceVersion || !Number.isSafeInteger(reader.size) || reader.size <= 0) fail('missing source identity/size');
@@ -161,8 +164,14 @@ export class TsPacketSource {
     const bytes = await abortableWait(this.reader.read(offset, size), this.signal); this.check();
     if (!(bytes instanceof Uint8Array) || bytes.length !== size) fail('short transport read');
     this.bytesRead += bytes.length;
-    if (this.progress && (!Number.isSafeInteger(this.bytesRead) || this.bytesRead > Math.min(Number.MAX_SAFE_INTEGER,this.reader.size*4+32*1024*1024)))
-      throw new MediaOpenError('resource','JS TS: index IO budget exceeded');
+    // The scan budget belongs to indexing, independently of observation.
+    // Playback/analysis readUnit IO has separate per-read/AU bounds and must
+    // not exhaust a lifetime scan counter after repeated legitimate seeks.
+    if (this.indexBytesRead !== undefined) {
+      this.indexBytesRead += bytes.length;
+      if (!Number.isSafeInteger(this.indexBytesRead) || this.indexBytesRead > this.indexByteBudget)
+        throw new MediaOpenError('resource','JS TS: index IO budget exceeded');
+    }
     this.publishProgress(); return bytes;
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
@@ -184,7 +193,7 @@ export class TsPacketSource {
   }
   async open(cached?: unknown, progress?: typeof this.progress): Promise<TsPacketIndex> {
     try {
-      this.progress=progress; this.publishProgress(true);
+      this.indexBytesRead=0;this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
       const tracks = await this.input.getVideoTracks();
       if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') throw new TsCombinationNotMigrated('requires one H.264 video track');
@@ -241,7 +250,7 @@ export class TsPacketSource {
       this.cursor = { au: 0, packet: first };
       return this.index;
     } catch (error) { this.close(); this.signal.throwIfAborted(); throw error; }
-    finally {this.progress=undefined;}
+    finally {this.progress=undefined;this.indexBytesRead=undefined;}
   }
   async readUnit(au: number): Promise<Uint8Array> {
     try {

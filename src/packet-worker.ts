@@ -88,7 +88,7 @@ async function start() {
           engine?.close(); engine = undefined; tsSession = undefined;
           const candidate = new TsEngine(message.input, message.sourceVersion);
           try {
-            const index = await candidate.prepare(); engine = candidate; tsSession = randomUUID();
+            const index = await candidate.prepare(data => send({id,type:'index-progress',data})); engine = candidate; tsSession = randomUUID();
             send(reply(message, {admitted:true, session:tsSession, index}));
           } catch (error) {
             candidate.close();
@@ -110,7 +110,10 @@ async function start() {
           }
           tsSession = undefined;
           if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');
-          const data = await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress }));
+          const progress = (progress: import('./media-progress.ts').MediaLoadStage) => send({id,type:'progress',progress});
+          const data = engine instanceof TsEngine
+            ? await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress,data=>send({id,type:'index-progress',data}))
+            : await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress);
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
         } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {

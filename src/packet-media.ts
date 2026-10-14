@@ -72,7 +72,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
           forceWasm: container === 'flv' || !!deps.forceWasm, threads: reservation.threads,
           ...(container==='ts'?{container,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
-          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000);
+          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000, container==='ts');
         selected = glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;

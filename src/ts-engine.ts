@@ -6,6 +6,7 @@ import { nativeFlvDecoder, wasmFlvDecoder } from './flv-decoder.ts';
 import type { FlvFrame, PacketDecodeIndex, PacketDecoder } from './flv-decoder.ts';
 import type { PacketView } from './analysis/adapters.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
+import type { IndexProgress } from './worker-protocol.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { TsCombinationNotMigrated } from './ts-packet-source.ts';
 import { inspectCachedTracks } from './cached-track-metadata.ts';
@@ -60,29 +61,29 @@ export class TsEngine {
     if (this.closed) { frame.frame?.close(); this.check(); }
     return frame;
   }
-  async prepare() {
+  async prepare(onIndexProgress?: (data:IndexProgress)=>void) {
     this.check();
     if (this.document) return this.document;
     const prefix = await this.reader.read(0, Math.min(65536, this.reader.size));
+    this.checkPsi=staticTsPsi(prefix);
     const codecs = probeTsVideo(prefix);
     const tracks = await inspectCachedTracks(this.reader.size, async (at,length)=>this.reader.peek(at,length));
     // Keep existing audio and other TS combinations on their declared,
     // unmigrated route. Do not silently lose a stream ignored by Mediabunny.
     if(codecs.length!==1||codecs[0]!=='H.264 / AVC')throw new TsCombinationNotMigrated('initial product migration requires one declared H.264 video stream');
-    this.checkPsi=staticTsPsi(prefix);
     if(tracks.audio.presence!=='absent'||!tracks.audio.complete)throw new TsCombinationNotMigrated('initial product migration requires confirmed video-only H.264 TS');
     this.prefix=prefix.slice();
-    this.document = await this.source.open();
+    this.document = await this.source.open(undefined,onIndexProgress);
     this.index = tsDecodeIndex(this.document);
     this.statistics = {packets: this.document.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,
       dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6/90000),size:packet.size,key:packet.key}))};
     return this.document;
   }
-  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress) {
+  async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress, onIndexProgress?: (data:IndexProgress)=>void) {
     try {
       this.check();
       onProgress?.('index');
-      this.document = await this.prepare();
+      this.document = await this.prepare(onIndexProgress);
       this.index = tsDecodeIndex(this.document);
       onProgress?.('decoder');
       const native = !forceWasm ? await this.createNative(this.index, this.source.nativeConfig) : null;
@@ -103,6 +104,7 @@ export class TsEngine {
       return { ...this.decoderInfo(), firstPtsUs: this.primed.pts,
         durationUs: this.index.firstPts + this.index.duration - this.primed.pts,
         times: this.index.order.map(au => this.index!.packets[au].pts - this.primed!.pts),
+        seekAnchorCount: this.index.packets.filter(packet=>packet.key).length,
         durations: this.index.durations, indexIntegrity: 'complete' as const, indexWarning: undefined };
     } catch (error) { this.close(); throw error; }
   }

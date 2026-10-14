@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Worker } from 'node:worker_threads';
+import { once } from 'node:events';
+import { execFileSync } from 'node:child_process';
 import { WorkerRpc } from '../../src/worker-rpc.ts';
 import type { PacketCommands } from '../../src/worker-protocol.ts';
 import { tsPictureStream } from '../../src/ts-packet-index.ts';
@@ -35,6 +37,7 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
     assert.equal(initialized.codec, 'h264'); assert.equal(initialized.times.length, 600);
     const index = await rpc.call('analysis-ts-index', {});
     assert.equal(index.sourceVersion, 'engine-ts-v1'); assert.equal(index.packets.length, 600);
+    assert.equal(initialized.seekAnchorCount,index.packets.filter(packet=>packet.key).length);assert.ok(initialized.seekAnchorCount!>0);
     assert.equal(index.packets.filter(p => p.timing.dts === null).length, 138);
     for (const au of [0, 3, 200, 560, 599, 0]) {
       const frame = await rpc.call('at', { pts: index.packets[au].ptsUs }); assert.ok(frame);
@@ -190,4 +193,83 @@ test('native first-frame decode failure uses real packet WASM with the same veri
     const expected=readWasmFrame(oracle.play,()=>oracle.play.HEAPU8,oracle.ctx);
     assert.equal(visiblePixelHash(frame.description,frame.pixels!),visiblePixelHash(expected.description,expected.pixels!));frame.frame?.close();
   } finally {engine.close();oracle.close();await rm(directory,{recursive:true,force:true});}
+});
+
+// These use the actual product packet Worker and actual HTTP Range reads, not
+// a fabricated progress heartbeat or the independent server index watchdog.
+for(const mode of ['advancing','stalled'] as const)test(`product prepare-ts ${mode} Range scan retains a genuine progress-idle deadline`,{timeout:20000},async()=>{
+  const {createServer}=await import('node:http');
+  const bytes=mode==='advancing'?execFileSync('ffmpeg',['-v','error','-i','fixtures/video/h264_9s_1920x1080.mp4','-map','0:v:0','-an','-c:v','copy','-frames:v','128','-bsf:v','h264_mp4toannexb','-f','mpegts','pipe:1'],{maxBuffer:8*1024*1024}):await readFile('fixtures/ts-analysis/h264-static.ts');let requests=0;
+  const server=createServer((req,res)=>{
+    const match=/^bytes=(\d+)-(\d+)$/.exec(String(req.headers.range));assert.ok(match);
+    const start=Number(match[1]),end=Math.min(Number(match[2]),bytes.length-1);requests++;
+    if(mode==='stalled'&&requests>5)return;
+    const timer=setTimeout(()=>{if(!res.destroyed){res.writeHead(206,{'content-range':`bytes ${start}-${end}/${bytes.length}`,'content-length':end-start+1});res.end(bytes.subarray(start,end+1));}},80);
+    res.once('close',()=>clearTimeout(timer));
+  });
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+  const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+  const advances:{wall:number;data:any}[]=[];worker.on('message',message=>{if(message.type==='index-progress')advances.push({wall:performance.now(),data:message.data});});
+  await assert.rejects(rpc.call('analysis-index',{},[],2000),/not ready/);
+  const started=performance.now(),idle=500;
+  try{
+    const pending=rpc.call('prepare-ts',{input:{url:`http://127.0.0.1:${(server.address() as {port:number}).port}/fixture.ts`,size:bytes.length},sourceVersion:`product-${mode}`},[],idle,true);
+    if(mode==='advancing'){
+      const result=await pending;assert.equal(result.admitted,true);if(result.admitted)assert.equal(result.index.packets.length,128);
+      assert.ok(performance.now()-started>idle*2,'actual scan outlives at least two shortened idle periods');
+      assert.ok(advances.length>=3);assert.equal(advances.at(-1)!.data.packets,128);
+      assert.ok(advances.some(item=>item.data.scannedBytes===bytes.length));
+      for(let i=1;i<advances.length;i++)assert.ok(advances[i].data.bytesRead>=advances[i-1].data.bytesRead,'reported IO is actual monotonic source work');
+      await rpc.call('dispose',{});
+    }else{
+      await assert.rejects(pending,/prepare-ts.*超时/);assert.ok(requests>=2,'real Range request stalls after successful work');
+      assert.ok(advances.some(item=>item.data.bytesRead>0),'failure follows real measured work');
+      assert.ok(performance.now()-advances.at(-1)!.wall>=idle-20,'no periodic heartbeat renews a stalled reader');
+      assert.equal(Reflect.get(rpc,'pending').size,0);await assert.rejects(rpc.call('analysis-ts-index',{}),/超时/);
+    }
+  }finally{rpc.terminate();await worker.terminate();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
+test('product TS admission abort settles a genuinely held Range request and terminates its own worker',{timeout:10000},async()=>{
+  const {createServer}=await import('node:http'),{admitTsMedia}=await import('../../src/ts-media.ts');
+  const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');let entered!:()=>void;const requested=new Promise<void>(resolve=>{entered=resolve;});
+  const server=createServer(()=>entered());await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));const exited=once(worker,'exit');const abort=new AbortController();
+  const pending=admitTsMedia({url:`http://127.0.0.1:${(server.address() as {port:number}).port}/held.ts`,size:bytes.length},{name:'held.ts',size:bytes.length,lastModified:0},'product-cancel',
+    {signal:abort.signal,workerFactory:()=>worker as unknown as globalThis.Worker});void pending.catch(()=>{});
+  try{
+    let timer:ReturnType<typeof setTimeout>;try{await Promise.race([requested,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('held product request did not start')),1500);})]);}finally{clearTimeout(timer!);}
+    abort.abort(new Error('cancel owned TS admission'));await assert.rejects(pending,/cancel owned TS admission/);
+    let endedTimer:ReturnType<typeof setTimeout>;try{await Promise.race([exited,new Promise<never>((_,reject)=>{endedTimer=setTimeout(()=>reject(new Error('admission did not terminate its owned worker')),1500);})]);}finally{clearTimeout(endedTimer!);}
+  }finally{abort.abort();await worker.terminate();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
+test('actual product prepare-ts examines a second same-packet PMT section before any decoder initialization',async()=>{
+  const original=new Uint8Array(await readFile('fixtures/ts-analysis/h264-static.ts'));
+  let start=-1,end=0,packetAt=0;
+  for(let at=0;at+188<=original.length;at+=188){
+    if(!(original[at+1]&64)||!(original[at+3]&16))continue;
+    let pos=at+4;if(original[at+3]&32)pos+=1+original[pos];if(pos>=at+188)continue;pos+=1+original[pos];
+    if(pos+3>=at+188||original[pos]!==2)continue;
+    const next=pos+3+((original[pos+1]&15)*256+original[pos+2]);
+    if(next+(next-pos)<=at+188){start=pos;end=next;packetAt=at;break;}
+  }
+  assert.ok(start>=0,'real startup PMT has room for a second complete section');
+  for(const mode of ['repeat','changed','crc','adaptation'] as const){
+    const bytes=original.slice(),second=bytes.slice(start,end);
+    if(mode==='changed'){
+      second[5]^=2;let crc=0xffffffff;for(const b of second.subarray(0,-4)){crc^=b<<24;for(let bit=0;bit<8;bit++)crc=(crc<<1)^(crc&0x80000000?0x04c11db7:0);}
+      new DataView(second.buffer).setUint32(second.length-4,crc>>>0);
+    }else if(mode==='crc')second[second.length-1]^=1;
+    bytes.set(second,end);
+    if(mode==='adaptation'){bytes[packetAt+3]=(bytes[packetAt+3]&15)|0x30;bytes[packetAt+4]=184;}
+    const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url)),rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+    try{
+      const pending=rpc.call('prepare-ts',{input:{file:new Blob([bytes])},sourceVersion:`second-section-${mode}`},[],60000,true);
+      if(mode==='crc'||mode==='adaptation')await assert.rejects(pending,mode==='crc'?/invalid PSI CRC/:/invalid PSI adaptation length/);
+      else{const result=await pending;assert.equal(result.admitted,mode==='repeat');if(result.admitted)assert.equal(result.index.packets.length,600);else assert.match(result.reason,/program-map changes/);}
+      await rpc.call('dispose',{});
+    }finally{rpc.terminate();await worker.terminate();}
+  }
 });

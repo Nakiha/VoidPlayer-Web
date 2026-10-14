@@ -57,7 +57,7 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
@@ -95,7 +95,7 @@ export type WorkerSuccess<C extends CommandsShape<C>, K extends keyof C = keyof 
 export type WorkerFailure = { id: number; ok: false; error: string; stack?: string; stage?: OpenStage };
 export type IndexBatch = { analysis?: FfmpegAnalysisSummary; ctx: number; ticks: number[]; durations: number[]; stableCoverageUs: number; seekAnchorCount: number; buildId: string; indexIdentity?: MediaIndexIdentity; indexTrace?: MediaIndexClientTrace };
 export type IndexError = { ctx?: number; error: string; stage?: OpenStage };
-export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; durationUs?: number };
+export type IndexProgress = { scannedBytes: number; totalBytes: number; packets: number; bytesRead?:number; durationUs?: number };
 export type IndexEvent = { type: 'index-batch'; data: IndexBatch } | { type: 'index-complete'; data: FfmpegInitResult } | { type: 'index-error'; data: IndexError };
 export type WorkerEvent = ({ id: number } & IndexEvent)
   | { id: number; type: 'cached-audio'; generation: number; data: CachedAudioBatch }
