@@ -186,3 +186,12 @@ test('prepared builds distinguish tagged releases from previews', async () => te
     else process.env.VOIDPLAYER_RELEASE_TAG = previous;
   }
 }));
+
+test('npm alias CLI accepts its one legacy engine argument without mixing another suite', () => {
+  assert.equal(parseOptions(['--alias', 'test:browser', '--list']).alias, 'test:browser');
+  assert.equal(parseOptions(['--alias', 'test:browser', 'chromium']).engine, 'chromium');
+  assert.equal(parseOptions(['--alias', 'test:browser', '--engine', 'webkit']).engine, 'webkit');
+  for (const args of [['--alias'], ['--alias', 'test:browser', 'chromium', 'webkit'],
+    ['--alias', 'test:browser', '--prepare'], ['--alias', 'test:browser', '--check'],
+    ['--alias', 'test:browser', 'chromium', '--engine', 'webkit'], ['--alias', 'test:browser', '--alias', 'test:other']]) assert.throws(() => parseOptions(args));
+});

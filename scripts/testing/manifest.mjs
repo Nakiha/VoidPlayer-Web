@@ -1,5 +1,6 @@
 import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { parseOptions } from './options.mjs';
 
 export const repositoryRoot = path.resolve(import.meta.dirname, '../..');
 export const testManifest = JSON.parse(readFileSync(new URL('./manifest.json', import.meta.url), 'utf8'));
@@ -7,7 +8,7 @@ const engines = new Set(['node', 'bun', 'chromium', 'webkit', 'chrome', 'msedge'
 const kinds = new Set(['regression', 'helper', 'diagnostic', 'performance', 'manual-regression']);
 
 export function validateManifest(manifest = testManifest, root = repositoryRoot) {
-  const failures = [], ids = new Set(), registered = new Set();
+  const failures = [], ids = new Set(), registered = new Set(), aliases = new Map();
   const fail = message => failures.push(message);
   if (new Set(manifest.suites).size !== manifest.suites.length) fail('Duplicate suite');
   for (const [name, fixture] of Object.entries(manifest.fixtures)) {
@@ -38,6 +39,17 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if (row.kind !== 'regression' && (!row.restrictions?.length || row.required)) fail(`${row.id}: tool exception needs a reason and required=false`);
     for (const suite of row.suites) if (!manifest.suites.includes(suite)) fail(`${row.id}: unknown suite ${suite}`);
     for (const engine of row.engines) if (!engines.has(engine)) fail(`${row.id}: unknown engine ${engine}`);
+    if (row.npmAliases !== undefined) {
+      if (!Array.isArray(row.npmAliases)) fail(`${row.id}: invalid npm aliases`);
+      else for (const binding of row.npmAliases) {
+        if (typeof binding?.name !== 'string' || !/^test:[a-z0-9][a-z0-9:-]*$/.test(binding.name) || typeof binding.default !== 'boolean'
+          || row.kind !== 'regression' || row.engines.length !== 1) {
+          fail(`${row.id}: invalid npm alias binding`); continue;
+        }
+        const entries = aliases.get(binding.name) ?? [];
+        entries.push({ row, binding }); aliases.set(binding.name, entries);
+      }
+    }
     if (!row.platforms.length || row.platforms.some(p => !['linux', 'darwin', 'win32'].includes(p))) fail(`${row.id}: invalid platforms`);
     if (!row.inputs.length || !row.artifacts.length || !(row.timeoutMs > 0) || typeof row.build !== 'boolean') fail(`${row.id}: missing execution metadata`);
     const entry = row.implementation ?? row.script;
@@ -46,6 +58,12 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     for (const fixture of row.fixtures) if (!manifest.fixtures[fixture]) fail(`${row.id}: unknown fixture ${fixture}`);
     if (row.suites.some(suite => ['fast', 'source'].includes(suite)) && (row.fixtures.length || row.tools.length || row.build || row.engines.join() !== 'node')) fail(`${row.id}: source/fast requires source-only Node checks`);
     if (row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node' && !row.suites.includes('source')) fail(`${row.id}: source-only Node check missing from source suite`);
+  }
+  for (const [name, entries] of aliases) {
+    if (entries.filter(entry => entry.binding.default).length !== 1) fail(`${name}: npm alias needs exactly one default`);
+    if (new Set(entries.map(entry => entry.row.engines[0])).size !== entries.length) fail(`${name}: duplicate npm alias engine`);
+    const scripts = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts;
+    if (scripts[name] !== `node scripts/run-tests.mjs --alias ${name}`) fail(`${name}: npm alias must only delegate to runner`);
   }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {
@@ -80,13 +98,9 @@ export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
         }
         for (const text of expanded) {
           if (text.includes('${{')) throw new Error(`Unsupported CI command: ${text}`);
-          const args = text.trim().split(/\s+/);
-          const suite = args[0].startsWith('--') ? undefined : args[0];
-          const engine = args.includes('--engine') ? args[args.indexOf('--engine') + 1] : undefined;
-          const input = args.includes('--input') ? args[args.indexOf('--input') + 1] : undefined;
-          const caseIds = args.includes('--case') ? args[args.indexOf('--case') + 1].split(',') : [];
+          const options = parseOptions(text.trim().split(/\s+/));
           for (const platform of ['linux', 'darwin', 'win32']) {
-            for (const row of selectCases({ suite, engine, input, caseIds, platform }, manifest).selected) covered.add(row.id);
+            for (const row of selectCases({ ...options, platform }, manifest).selected) covered.add(row.id);
           }
         }
       }
@@ -97,10 +111,18 @@ export function validateCiBrowserCoverage(workflows, manifest = testManifest) {
   return true;
 }
 
-export function selectCases({ suite, caseIds = [], engine, input, platform = process.platform } = {}, manifest = testManifest) {
+export function selectCases({ suite, caseIds = [], alias, engine, input, platform = process.platform } = {}, manifest = testManifest) {
   if (!['linux', 'darwin', 'win32'].includes(platform)) throw new Error(`Unknown platform: ${platform}`);
   if (suite && !manifest.suites.includes(suite)) throw new Error(`Unknown suite: ${suite}`);
   if (engine && !engines.has(engine)) throw new Error(`Unknown engine: ${engine}`);
+  if (alias) {
+    if (suite || caseIds.length || input) throw new Error('An npm alias cannot be combined with another case selection');
+    const bound = manifest.cases.filter(row => row.npmAliases?.some(binding => binding.name === alias));
+    if (!bound.length) throw new Error(`Unknown npm alias: ${alias}`);
+    const matches = bound.filter(row => engine ? row.engines.includes(engine) : row.npmAliases.some(binding => binding.name === alias && binding.default));
+    if (matches.length !== 1) throw new Error(`Ambiguous or unsupported engine for npm alias ${alias}`);
+    caseIds = [matches[0].id];
+  }
   for (const id of caseIds) if (!manifest.cases.some(row => row.id === id && row.kind === 'regression')) throw new Error(`Unknown runnable case: ${id}`);
   if (!suite && !caseIds.length) throw new Error('Select a suite or --case ID');
   const selected = [], excluded = [];

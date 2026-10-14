@@ -3,6 +3,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { repositoryRoot, testManifest, validateManifest, selectCases } from './testing/manifest.mjs';
+import { parseOptions } from './testing/options.mjs';
+export { parseOptions } from './testing/options.mjs';
 import { prepareBuild } from './testing/build.mjs';
 import { createFixturePrerequisites } from './testing/fixtures.mjs';
 import { runBrowserRegressions } from './run-browser-regressions.mjs';
@@ -44,21 +46,6 @@ export function suiteExitCode(report) {
   return !report.passed || informationalOnly && report.results.some(row => row.status !== 'passed') ? 1 : 0;
 }
 
-export function parseOptions(args) {
-  const options = { caseIds: [] };
-  const values = { '--case': 'caseIds', '--engine': 'engine', '--input': 'input', '--platform': 'platform', '--directory': 'directory' };
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (values[arg]) {
-      const value = args[++i]; if (!value || value.startsWith('--')) throw new Error(`Missing value for ${arg}`);
-      if (arg === '--case') options.caseIds.push(...value.split(',')); else options[values[arg]] = value;
-    } else if (['--list', '--prepared', '--prepare', '--check'].includes(arg)) options[arg.slice(2)] = true;
-    else if (!arg.startsWith('-') && !options.suite) options.suite = arg;
-    else throw new Error(`Unknown option: ${arg}`);
-  }
-  if (options.platform && !options.list) throw new Error('--platform is enumeration-only; execute on the real host platform');
-  return options;
-}
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const options = parseOptions(process.argv.slice(2));
@@ -73,7 +60,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
       const selection = selectCases(options);
       if (options.list) console.log(JSON.stringify(selection, null, 2));
       else {
-        const report = await runTestSuite(selection, { ...options, signal: controller.signal, directory: options.directory ?? path.join(repositoryRoot, '.run/test-suites', options.suite ?? 'selected') });
+        const report = await runTestSuite(selection, { ...options, signal: controller.signal, directory: options.directory ?? path.join(repositoryRoot, '.run/test-suites', options.alias?.replaceAll(':', '-') ?? options.suite ?? 'selected') });
         console.log(`Required checks ${report.passed ? 'passed' : 'failed'}; ${report.results.filter(row => row.status === 'passed').length}/${report.expectedCount} cases passed`);
         for (const row of report.results.filter(row => row.status !== 'passed')) console.error(`${row.required === false ? 'INFO' : 'FAIL'} ${row.id}: ${row.error ?? `exit ${row.exitCode}`} (${row.logPath})`);
         process.exitCode = controller.signal.aborted ? 1 : suiteExitCode(report);
