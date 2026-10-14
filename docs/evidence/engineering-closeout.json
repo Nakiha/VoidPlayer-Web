@@ -19,7 +19,7 @@
   "converter": {
     "oldTestsPassedBefore": 5,
     "newAdversariesFailedBefore": 7,
-    "testsPassedAfter": 25,
+    "testsPassedAfter": 26,
     "privateJobCorrelation": true,
     "transportFailure": "latch only converter pool; settle jobs/slot/input waiters; detach and terminate; upstream stays independently owned",
     "copyErrorReply": "reject picture only; worker reusable",
@@ -266,5 +266,24 @@
       "pr95-diagrams-after.log"
     ],
     "report": ".run/test-suites/browser/results.json"
+  },
+  "finalNonBlockingReviewFixes": {
+    "repeatedReturn": {
+      "before": "25 pass, 1 fail: second return rejoined a held copy after the cancelled public next settled",
+      "after": "26/26 pass",
+      "change": "Already cancelled generator.return resolves done without queueing another underlying return; first cancellation retains ownership of eventual cleanup.",
+      "typecheck": "tsc --noEmit passed",
+      "logs": [
+        "pr95-repeat-return-negative.log",
+        "pr95-repeat-return-positive.log",
+        "pr95-repeat-return-typecheck.log"
+      ]
+    },
+    "analysisDocumentation": {
+      "change": "Replace retired-root-shim glob with explicit canonical runner selection",
+      "selection": "All six original distinct implementations retained, including FLV and TS",
+      "log": "pr95-analysis-doc-selection.log"
+    },
+    "scope": "Targeted converter tests, typecheck and documentation selection only. Previous source/build/readback/diagrams and performance evidence retain their recorded revision scope. No full media/browser matrix rerun."
   }
 }

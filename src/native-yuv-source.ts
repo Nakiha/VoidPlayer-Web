@@ -144,6 +144,7 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     };
     const cancel=(reason:unknown)=>{cancelRequested=true;consumerControl.abort(reason);producerControl.abort(reason);};
     generator.return=async value=>{
+      if(cancelRequested)return {done:true,value:await value};
       const busy=outstanding>0;cancel(aborted());const returning=finish(value);
       if(busy){void returning.catch(()=>{});return {done:true,value:await value};}return returning;
     };

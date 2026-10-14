@@ -239,3 +239,17 @@ test('return interrupts the first pending copy and a late copied frame remains o
  finally{f.wrapped.dispose();await Promise.all([next,returning]);}
  assert.ok(f.samples.every(sample=>sample.closed===1));
 });
+test('repeated return stays prompt after the first cancelled next settles while copy is held',async t=>{
+ const f=converterFixture(t),iterator=f.wrapped.framesFrom(0);
+ const next=iterator.next();await tick();
+ assert.deepEqual(await iterator.return(undefined),{done:true,value:undefined});
+ assert.deepEqual(await next,{done:true,value:undefined});
+ let settled=false;const returning=iterator.return(undefined).then(result=>{settled=true;return result;});await tick();
+ try{
+  assert.equal(settled,true,'a repeated return must not rejoin the unfinished converter copy');
+  assert.deepEqual(await returning,{done:true,value:undefined});
+  assert.equal(f.workers[0].terminated,0,'iterator cancellation does not terminate the shared converter pool');
+  f.workers[0].reply();await tick();
+  assert.ok(f.samples.every(sample=>sample.closed===1));
+ }finally{f.wrapped.dispose();await returning;}
+});
