@@ -1,4 +1,4 @@
-import { openJsTsAnalysisInput } from './js-ts-input.ts';
+import { openJsTsAnalysisInput,openJsPacketAnalysisInput } from './js-ts-input.ts';
 import { AnalysisFailure } from './failure.ts';
 import { openTsAnalysisInput } from './ts-input.ts';
 import { openMp4AnalysisInput } from './mp4-input.ts';
@@ -19,6 +19,10 @@ export async function openAnalysisInput(reader: AnalysisReader, signal: AbortSig
   const adapterOptions = Object.keys(containerOptions).length ? containerOptions : undefined;
   if (header[0] === 70 && header[1] === 76 && header[2] === 86)
     return openFlvAnalysisInput(reader, signal, continuous, adapterOptions);
+  if(header[0]===0x1a&&header[1]===0x45&&header[2]===0xdf&&header[3]===0xa3){
+    if(streamIndex?.indexIdentity?.kind!=='js-matroska'||!streamIndex.sourceVersion){reader.close();throw new AnalysisFailure('unsupported-container','Matroska analysis requires the admitted JS source identity');}
+    return openJsPacketAnalysisInput('matroska',reader,streamIndex.sourceVersion,signal);
+  }
   if (header[0] === 0x47) {
     if(streamIndex?.indexIdentity?.kind==='js-ts') {
       if(!streamIndex.sourceVersion){reader.close();throw new AnalysisFailure('invalid-request','JS TS source namespace is missing');}

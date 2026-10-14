@@ -2,10 +2,11 @@ import { RangeReader } from './range-reader.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 
-export type ContainerKind = 'flv' | 'isobmff' | 'mpegts' | 'other';
+export type ContainerKind = 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
 /** Routing hint, not validation: the selected demuxer still validates input.
  * No extension dispatch and no decoder initialization to recognize a format. */
 export function containerFromHeader(bytes: Uint8Array): ContainerKind {
+  if(bytes[0]===0x1a&&bytes[1]===0x45&&bytes[2]===0xdf&&bytes[3]===0xa3)return 'matroska';
   if (bytes[0] === 70 && bytes[1] === 76 && bytes[2] === 86) return 'flv';
   if (bytes.length >= 8) {
     const box = String.fromCharCode(...bytes.subarray(4, 8));

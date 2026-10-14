@@ -1,6 +1,8 @@
 import type { AnalysisIndexFrontier } from "./stream.ts";
 export interface AnalysisReader {
   readonly size: number;
+  /** Trusted server-cache reader. Consumer still requires a runtime authority seal. */
+  jsIndex?():Promise<import('../matroska-packet-index.ts').JsPacketIndex>;
   readSync?(offset: number, length: number): Uint8Array;
   ffmpegIndex?(): Promise<import('../ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   /** Source-bound immutable metadata; payload IO remains independently owned. */

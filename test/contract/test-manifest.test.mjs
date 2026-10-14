@@ -17,7 +17,7 @@ test('npm test enumerates the complete unit catalog with no lost or repeated com
   assert.equal(result.status, 0, result.stderr);
   const selection = JSON.parse(result.stdout);
   assert.deepEqual(selection, selectCases({ suite: 'unit' }));
-  const legacy = readdirSync(path.join(root, 'test')).filter(file => /\.test\.(ts|mjs)$/.test(file)).map(file => `test/${file}`).sort();
+  const legacy = readdirSync(path.join(root, 'test')).filter(file => /\.test\.(ts|mjs)$/.test(file)).map(file => `test/${file}`).concat(testManifest.cases.filter(row=>row.suites.includes('unit')&&!row.implementation&&/^test\/(?:unit|contract|media)\//.test(row.script)).map(row=>row.script)).sort();
   for (const platform of ['linux', 'darwin', 'win32']) {
     const selected = selectCases({ suite: 'unit', platform });
     assert.deepEqual(selected.excluded, []);
@@ -59,10 +59,10 @@ test('new checks cannot silently escape registration', async () => {
 test('Node implementations have one classified owner while every old command remains registered', () => {
   const owners = new Map();
   for (const row of testManifest.cases.filter(row => row.script.startsWith('test/'))) {
-    assert.match(row.implementation, /^test\/(unit|contract|media)\/[^/]+\.test\.(ts|mjs)$/);
-    const prior = owners.get(row.implementation);
+    assert.match(row.implementation??row.script, /^test\/(unit|contract|media)\/[^/]+\.test\.(ts|mjs)$/);
+    const prior = owners.get(row.implementation??row.script);
     assert.ok(!prior || prior === row.script, `${row.id}: two commands would execute the same implementation twice`);
-    owners.set(row.implementation, row.script);
+    owners.set(row.implementation??row.script, row.script);
   }
   assert.ok(owners.size >= 127, 'retain every original Node implementation; new registered cases may be added');
   for (const name of ['flv-fixture.ts', 'http-request.ts', 'packet-fixture.ts', 'range-bridge-worker.ts']) {
@@ -160,10 +160,10 @@ test('analysis matrix, streaming diagrams and incremental indexing are independe
 test('parallel analysis CI suites are a disjoint complete partition of the browser umbrella', () => {
   for (const engine of ['chromium', 'webkit']) {
     const umbrella = selectCases({suite:'ci-analysis-browser', engine}).selected;
-    const partitions = ['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts'].flatMap(part => {
+    const partitions = ['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts', 'js-containers'].flatMap(part => {
       const selected = selectCases({suite:`ci-analysis-matrix-${part}`, engine}).selected;
       assert.equal(selected.length, 1, `${engine}/${part}: one 600s matrix case per CI job`);
-      assert.ok(selected[0].command.includes(`--matrix-part=${part}`));
+      if(part==='js-containers')assert.equal(selected[0].implementation??selected[0].script,'scripts/testing/browser/media/js-containers.mjs');else assert.ok(selected[0].command.includes(`--matrix-part=${part}`));
       assert.equal(selected[0].timeoutMs, 600000); assert.equal(selected[0].required, true);
       return selected;
     });
@@ -182,7 +182,7 @@ test('FLV analysis prerequisites are locally generated for unit and browser cons
   assert.deepEqual(fixture.inputs, matrix.rows.filter(row => row.container === 'mp4').map(row => `fixtures/video/${row.fixture}`));
   for (const row of matrix.rows.filter(row => row.container === 'flv')) assert.ok(fixture.paths.includes(`fixtures/flv-analysis/${row.fixture}`));
   for (const suffix of ['tail', 'gap', 'sequence']) assert.ok(fixture.paths.includes(`fixtures/flv-analysis/legacy-h264-${suffix}.flv`));
-  assert.deepEqual(Object.entries(testManifest.fixtures).filter(([, row]) => row.prepareOnDemand).map(([id]) => id), ['analysis-flv', 'analysis-ts', 'analysis-fmp4']);
+  assert.deepEqual(Object.entries(testManifest.fixtures).filter(([, row]) => row.prepareOnDemand).map(([id]) => id), ['analysis-flv', 'js-containers', 'analysis-ts', 'analysis-fmp4']);
   for (const suite of ['unit', 'media']) assert.ok(selectCases({suite}).selected.find(row => row.id === 'node-bitstream-analysis-flv').fixtures.includes('analysis-flv'));
   for (const part of ['mp4', 'flv-legacy', 'flv-enhanced']) for (const row of selectCases({suite:`ci-analysis-matrix-${part}`}).selected) {
     assert.ok(row.fixtures.includes('analysis-flv'));
@@ -202,10 +202,10 @@ test('every required browser cell is selected by an actual CI suite or expanded 
   assert.throws(() => validateCiBrowserCoverage(lostMatrix), /hevc-timeline-webkit/);
   const lostInput = workflows.map(source => source.replace('input: [local, remote]', 'input: [remote]'));
   assert.throws(() => validateCiBrowserCoverage(lostInput), /hevc-timeline-.*-local/);
-  for (const part of ['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts']) {
-    const lostPart = workflows.map(source => source.replace('part: [mp4, flv-legacy, flv-enhanced, fmp4, ts]',
-      `part: [${['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts'].filter(value => value !== part).join(', ')}]`));
-    assert.throws(() => validateCiBrowserCoverage(lostPart), /browser-bitstream-(analysis|fmp4|ts)/);
+  for (const part of ['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts','js-containers']) {
+    const lostPart = workflows.map(source => source.replace('part: [mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers]',
+      `part: [${['mp4', 'flv-legacy', 'flv-enhanced', 'fmp4', 'ts','js-containers'].filter(value => value !== part).join(', ')}]`));
+    assert.throws(() => validateCiBrowserCoverage(lostPart), /browser-(?:bitstream-(analysis|fmp4|ts)|js-containers)/);
   }
   const lostAnalysisEngine = workflows.map(source => source.replace('engine: [chromium, webkit]\n        part:', 'engine: [chromium]\n        part:'));
   assert.throws(() => validateCiBrowserCoverage(lostAnalysisEngine), /browser-bitstream-analysis.*webkit/);

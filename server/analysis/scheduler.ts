@@ -380,7 +380,7 @@ export class AnalysisScheduler {
         );
       if (this.closed || work.state !== "running" || !work.consumers.size)
         return;
-      let flvSnapshot, ffmpegSnapshot;
+      let flvSnapshot, ffmpegSnapshot, jsSnapshot;
       if ('mode' in work.target && work.target.indexIdentity)
         index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, work.target.indexIdentity);
       {
@@ -399,6 +399,7 @@ export class AnalysisScheduler {
           ffmpegSnapshot=await index.ffmpegSnapshot(()=>!this.closed && work.state==='running' && !!work.consumers.size);
         }
       }
+      if(work.target.indexIdentity?.kind==='js-ts'||work.target.indexIdentity?.kind==='js-matroska'){index??=await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);jsSnapshot=await index.jsSnapshot(()=>!this.closed&&work.state==='running'&&!!work.consumers.size);}
       if (this.closed || work.state !== 'running' || !work.consumers.size) return;
       const worker = (work.worker = new Worker(
         new URL(
@@ -413,7 +414,7 @@ export class AnalysisScheduler {
             coreDir: this.coreDir,
             target: work.target,
             externalIndex: !!index,
-            flvSnapshot, ffmpegSnapshot,
+            flvSnapshot, ffmpegSnapshot, jsSnapshot,
           },
         },
       ));

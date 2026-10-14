@@ -36,10 +36,10 @@ parentPort!.on('message', async (request: {
       parentPort!.postMessage({value:{built:true,epoch:request.epoch,profile:result.profile}});
       return;
     }
-    if (request.identity.kind === 'js-ts') {
+    if ((request.identity.kind === 'js-ts'||request.identity.kind==='js-matroska')) {
       if (store.epoch !== request.epoch) throw new AdminError(409, '索引缓存已被清理，请重新请求。');
       const result = await buildJsTsIndexDocument(request.filePath, request.size, request.version, `${request.id}@${request.version}`,
-        data => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...data } }));
+        data => parentPort!.postMessage({ type: 'progress', data: { phase: 'scan', ...data } }),undefined,request.identity.kind==='js-ts'?'ts':'matroska');
       store.commit(request.id,request.version,prepareFrameIndex(result.document,request.size,request.identity,`${request.id}@${request.version}`),request.epoch);
       parentPort!.postMessage({ value: { built: true, epoch: request.epoch, profile: result.profile } });
       return;

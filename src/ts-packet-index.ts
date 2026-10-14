@@ -1,6 +1,6 @@
 /** Versioned JS TS metadata shape; complete-source verification belongs to TsPacketSource. */
 export const JS_TS_INDEX_BYTES = 64 * 1024 * 1024;
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v2';
+export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v3';
 export interface TsPacketRecord {
   au: number;
   /** Opaque Mediabunny locator. Never used as a payload byte offset. */
@@ -24,7 +24,7 @@ export interface TsPacketIndex {
   size: number;
   streamKey: 'video:0';
   pid: number;
-  codec: 'h264';
+  codec: 'h264' | 'hevc';
   configuration: number[];
   packets: TsPacketRecord[];
 }
@@ -36,7 +36,7 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
   if (!value || typeof value !== 'object') return;
   const doc = value as Partial<TsPacketIndex>;
   if (doc.schema !== 2 || doc.kind !== 'js-ts-packets' || doc.build !== TS_PACKET_BUILD || doc.sourceVersion !== sourceVersion || doc.size !== size
-    || doc.streamKey !== 'video:0' || doc.codec !== 'h264' || !Number.isSafeInteger(doc.pid) || doc.pid! < 1 || doc.pid! > 8190
+    || doc.streamKey !== 'video:0' || !['h264','hevc'].includes(doc.codec ?? '') || !Number.isSafeInteger(doc.pid) || doc.pid! < 1 || doc.pid! > 8190
     || !Array.isArray(doc.configuration) || !doc.configuration.length || doc.configuration.length > 4096 || !doc.configuration.every(n=>Number.isInteger(n)&&n>=0&&n<=255)
     || !Array.isArray(doc.packets) || !doc.packets.length || doc.packets.length > 250000) return;
   if (doc.completeness?.state !== 'complete' || doc.completeness.packets !== doc.packets.length) return;

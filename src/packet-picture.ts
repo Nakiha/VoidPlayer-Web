@@ -16,6 +16,25 @@ export function inspectPacketPicture(
     closedRandomAccess: false,
     reason,
   });
+  if(codec==='vp8') {
+    if(bytes.length<3 || !(bytes[0]&16))return fail('unsupported-hidden-vp8-picture');
+    const key=!(bytes[0]&1);
+    if(key&&(bytes.length<10||bytes[3]!==0x9d||bytes[4]!==1||bytes[5]!==0x2a))return fail('invalid-vp8-key');
+    return {singlePicture:true,closedRandomAccess:key};
+  }
+  if(codec==='vp9') {
+    if(bytes.length<2)return fail('truncated-vp9-header');
+    // VP9 superframes can emit multiple pictures. Do not assign one AU identity
+    // to them, or to hidden/show-existing frames, without a verified mapping.
+    const marker=bytes.at(-1)!,frames=(marker&7)+1,indexBytes=2+frames*((marker>>3&3)+1);
+    if((marker&0xe0)===0xc0&&bytes.length>=indexBytes&&bytes[bytes.length-indexBytes]===marker&&frames>1)return fail('unsupported-vp9-superframe');
+    let bit=0;const read=()=>{if(bit>=bytes.length*8)throw new Error('truncated VP9');return bytes[bit>>3]>>(7-(bit++&7))&1;};
+    if((read()<<1|read())!==2)return fail('invalid-vp9-marker');
+    const low=read(),profile=low|(read()<<1);if(profile===3&&read())return fail('invalid-vp9-profile');
+    if(read())return fail('unsupported-vp9-show-existing');
+    const key=read()===0;if(!read())return fail('unsupported-hidden-vp9-picture');
+    return {singlePicture:true,closedRandomAccess:key};
+  }
   if (!['h264','hevc','vvc'].includes(codec) || !bytes.length) return fail('unsupported-codec');
   let ranges: ReturnType<typeof nalRanges>;
   try { ranges = nalRanges(codec, description, bytes); } catch { return fail('truncated-nal'); }

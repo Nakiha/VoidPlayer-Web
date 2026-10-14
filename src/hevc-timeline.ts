@@ -1,5 +1,7 @@
 import type { Mp4Configurations } from './mp4-config.ts';
 import type { RangeReader } from './range-reader.ts';
+import {isAnnexB,nalRanges} from './nal-framing.ts';
+export class UnsupportedHevcPictureStructure extends Error {}
 
 /** A deliberately bounded H.265 7.3.6 / 8.3.1 reader. Only single-layer,
  * progressive Main/Main10, closed IDR GOPs with one output picture per sample
@@ -36,6 +38,7 @@ function nalType(nal: Uint8Array) {
   return (nal[0] >> 1) & 63;
 }
 function parameterSets(description: Uint8Array) {
+  if(isAnnexB(description))return {sets:nalRanges('hevc',description,description).map(n=>description.slice(n.offset,n.offset+n.size)),lengthSize:0};
   if (description.length < 23 || description[0] !== 1) throw Error('invalid hvcC');
   const sets: Uint8Array[] = [];
   let at = 23;
@@ -62,13 +65,13 @@ function spsHeader(nal: Uint8Array) {
   b.skip(4); const layers = b.read(3); if (layers > 6) throw Error('invalid sublayers'); b.skip(1);
   const space = b.read(2); b.skip(1); const profile = b.read(5); b.skip(32);
   const progressive = b.read(1), interlaced = b.read(1); b.skip(46 + 8);
-  if (space || ![1, 2].includes(profile) || !progressive || interlaced) throw Error('unsupported HEVC picture structure');
+  if (space || ![1, 2].includes(profile) || !progressive || interlaced) throw new UnsupportedHevcPictureStructure('unsupported HEVC picture structure');
   const profiles: number[] = [], levels: number[] = [];
   for (let i = 0; i < layers; i++) { profiles.push(b.read(1)); levels.push(b.read(1)); }
   if (layers) b.skip((8 - layers) * 2);
   for (let i = 0; i < layers; i++) { if (profiles[i]) b.skip(88); if (levels[i]) b.skip(8); }
   const id = b.ue(15), chroma = b.ue(3);
-  if (chroma !== 1) throw Error('unsupported HEVC chroma');
+  if (chroma !== 1) throw new UnsupportedHevcPictureStructure('unsupported HEVC chroma');
   b.ue(32768); b.ue(32768);
   if (b.read(1)) for (let i = 0; i < 4; i++) b.ue(32768);
   b.ue(8); b.ue(8);
@@ -99,7 +102,7 @@ export class HevcPictureOrder {
     const { sets, lengthSize } = parameterSets(description);
     this.sets = sets; this.lengthSize = lengthSize;
     const sps = sets.filter(n => nalType(n) === 33), pps = sets.filter(n => nalType(n) === 34);
-    if (sps.length !== 1 || pps.length !== 1) throw Error('multiple HEVC parameter sets');
+    if (sps.length !== 1 || pps.length !== 1) throw new UnsupportedHevcPictureStructure('multiple HEVC parameter sets');
     this.sps = spsHeader(sps[0]); this.pps = ppsHeader(pps[0]);
     if (this.pps.sps !== this.sps.id) throw Error('unknown SPS');
   }

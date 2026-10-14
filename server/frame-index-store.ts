@@ -1,4 +1,5 @@
-import { JS_TS_INDEX_BYTES, parseTsPacketIndex } from '../src/ts-packet-index.ts';
+import {parseJsPacketIndex} from '../src/js-packet-index-cache.ts';
+import { JS_TS_INDEX_BYTES } from '../src/ts-packet-index.ts';
 import type { FrameIndexManifest, FrameIndexBatch } from './frame-index-protocol.ts';
 import type { IndexDatabase } from './sqlite.ts';
 import { randomUUID, createHash } from 'node:crypto';
@@ -6,7 +7,7 @@ import { AdminError } from './admin-error.ts';
 import { FLV_INDEX_BYTES, FLV_INDEX_SCHEMA, parseFlvIndex, serializeFlvIndex } from '../src/flv-index-cache.ts';
 import type { FlvIndexDocument } from '../src/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, FFMPEG_INDEX_RECORD_LIMIT, encodeBase64, parseFfmpegIndex, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../src/ffmpeg-index-cache.ts';
-import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity, MediaIndexKind } from '../src/media-index-identity.ts';
 import { validFfmpegRecovery } from '../src/index-integrity.ts';
 import type { FfmpegIndexRecovery } from '../src/index-integrity.ts';
@@ -44,7 +45,7 @@ export class FrameIndexStore {
 
   has(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): boolean {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if(selected?.kind==='js-ts'&&!this.validJsTsCache(id,version,selected))return false;
+    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return false;
     if (!selected) return !!this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND kind=? AND complete=1')
       .get(id, version, kind);
     return !!this.db.prepare('SELECT 1 FROM media_index_manifests WHERE media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1')
@@ -55,7 +56,7 @@ export class FrameIndexStore {
    * document without parsing and stringifying its large record payload. */
   getJson(id: string, version: string, kind: FrameIndexKind = 'flv', identity?: MediaIndexIdentity): string {
     const selected = identity ?? (kind === 'flv' ? FLV_MEDIA_INDEX_IDENTITY : undefined);
-    if(selected?.kind==='js-ts'&&!this.validJsTsCache(id,version,selected))return JSON.stringify({epoch:this.epoch,index:null});
+    if((selected?.kind==='js-ts'||selected?.kind==='js-matroska')&&!this.validJsTsCache(id,version,selected))return JSON.stringify({epoch:this.epoch,index:null});
     if (!selected) return JSON.stringify({ epoch: this.epoch, index: null });
     if (selected.kind === 'ffmpeg') {
       const row = this.db.prepare('SELECT epoch,metadata_json FROM frame_index_epoch,media_index_manifests WHERE frame_index_epoch.id=1 AND media_id=? AND media_version=? AND ' + identityWhere + ' AND complete=1').get(id, version, ...identityArgs(selected));
@@ -79,7 +80,7 @@ export class FrameIndexStore {
   }
 
   put(id: string, version: string, size: number, value: unknown, epoch: unknown, identity: MediaIndexIdentity = FLV_MEDIA_INDEX_IDENTITY) {
-    if(identity.kind==='js-ts')throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
+    if((identity.kind==='js-ts'||identity.kind==='js-matroska'))throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
     if (epoch !== this.epoch) throw new AdminError(409, '索引缓存已被清理，请在下次载入时重新提交。');
     return this.commit(id, version, prepareFrameIndex(value, size, identity, `${id}@${version}`), epoch);
   }
@@ -91,7 +92,7 @@ export class FrameIndexStore {
       const media = this.db.prepare("SELECT 1 FROM media JOIN roots ON media.root_id=roots.id WHERE media.id=? AND version=? AND media.state='ready' AND roots.active=1").get(id, version);
       if (!media) throw new AdminError(409, '媒体已改变，未保存旧索引。');
       const { text, bytes, frames, scannedBytes, identity } = prepared;
-      if (identity.kind === 'js-ts' && !parseTsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
+      if ((identity.kind === 'js-ts'||identity.kind==='js-matroska') && !parseJsPacketIndex(JSON.parse(text), `${id}@${version}`, scannedBytes))
         throw new AdminError(409, 'JS TS 索引源身份与提交不匹配。');
       const now = Date.now();
       if (identity.kind === 'ffmpeg') {
@@ -138,7 +139,7 @@ export class FrameIndexStore {
       this.db.prepare(
         'INSERT OR IGNORE INTO media_index_batches(media_id,media_version,kind,stream_key,schema_version,indexer_build,seq,payload,bytes,frames,created_at) VALUES(?,?,?,?,?,?,0,?,?,?,?)',
       ).run(id, version, ...identityArgs(identity), text, bytes, frames, now);
-      if(identity.kind==='js-ts')this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere).run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
+      if((identity.kind==='js-ts'||identity.kind==='js-matroska'))this.db.prepare('UPDATE media_index_manifests SET metadata_json=? WHERE media_id=? AND media_version=? AND '+identityWhere).run(JSON.stringify({jsIndexSha256:createHash('sha256').update(text).digest('hex')}),id,version,...identityArgs(identity));
       this.evictCache(id, version, identity);
       this.db.exec('COMMIT');
       return { ok: true };
@@ -339,10 +340,10 @@ export function prepareFrameIndex(value: unknown, size: number, identityOrKind: 
   const expectedKind = typeof identityOrKind === 'string' ? identityOrKind : identityOrKind.kind;
   let identity: MediaIndexIdentity;
   let text: string, bytes: number, frames: number;
-  if (expectedKind === 'js-ts') {
-    const parsed = sourceVersion ? parseTsPacketIndex(value, sourceVersion, size) : undefined;
-    if (!parsed) throw new AdminError(400, 'JS TS 索引格式、源身份或范围无效。');
-    identity = JS_TS_MEDIA_INDEX_IDENTITY;
+  if ((expectedKind === 'js-ts'||expectedKind==='js-matroska')) {
+    const parsed = sourceVersion ? parseJsPacketIndex(value, sourceVersion, size) : undefined;
+    if (!parsed||(parsed.kind==='js-ts-packets')!==(expectedKind==='js-ts')) throw new AdminError(400, 'JS TS 索引格式、源身份或范围无效。');
+    identity = expectedKind==='js-ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY;
     if (typeof identityOrKind !== 'string' && identityArgs(identityOrKind).some((v,i)=>v !== identityArgs(identity)[i]))
       throw new AdminError(409, 'JS TS 索引身份与请求不匹配。');
     text = JSON.stringify(parsed); bytes = Buffer.byteLength(text); frames = parsed.packets.length;

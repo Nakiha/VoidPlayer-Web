@@ -1,4 +1,5 @@
 import { open, stat } from 'node:fs/promises';
+import {MatroskaPacketSource} from '../src/matroska-packet-source.ts';
 import { TsPacketSource } from '../src/ts-packet-source.ts';
 import type { TsPacketReader } from '../src/ts-packet-source.ts';
 import { fileVersion } from './library.ts';
@@ -7,7 +8,7 @@ import type { MediaIndexScanProgress } from '../src/media-index-types.ts';
 
 /** Disk indexing owns no decoder/core; the client and server use the same parser. */
 export async function buildJsTsIndexDocument(filePath: string, size: number, version: string, sourceVersion: string,
-  onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal) {
+  onProgress?: (data: MediaIndexScanProgress) => void, signal = new AbortController().signal, format:'ts'|'matroska'='ts') {
   const started = performance.now(), cpu = process.cpuUsage(), handle = await open(filePath, 'r');
   let readCalls = 0, readBytes = 0, closed = false;
   const assertVersion = async () => {
@@ -42,16 +43,16 @@ export async function buildJsTsIndexDocument(filePath: string, size: number, ver
     },
     close() { closed = true; blocks.clear(); },
   };
-  let source: TsPacketSource | undefined;
+  let source: TsPacketSource | MatroskaPacketSource | undefined;
   try {
     await assertVersion();
-    source = new TsPacketSource(reader, sourceVersion, signal);
+    const Source=format==='ts'?TsPacketSource:MatroskaPacketSource;source = new Source(reader, sourceVersion, signal);
     onProgress?.({ packets: 0, scannedBytes: 0, totalBytes: size });
     const document = await source.open(undefined,onProgress);
     await assertVersion();
     onProgress?.({ packets: document.packets.length, scannedBytes: size, totalBytes: size });
     const used = process.cpuUsage(cpu);
-    return { document, profile: { scanMode: 'js-ts-packets', totalBuildWallMs: performance.now() - started,
+    return { document, profile: { scanMode: format==='ts'?'js-ts-packets':'js-matroska-packets', totalBuildWallMs: performance.now() - started,
       cpuUserMs: used.user / 1000, cpuSystemMs: used.system / 1000, scannedBytes: size, packets: document.packets.length,
       diskReadCalls: readCalls, diskReadBytes: readBytes } };
   } finally { source?.close(); await handle.close(); }
