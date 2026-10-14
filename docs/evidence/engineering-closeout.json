@@ -285,5 +285,142 @@
       "log": "pr95-analysis-doc-selection.log"
     },
     "scope": "Targeted converter tests, typecheck and documentation selection only. Previous source/build/readback/diagrams and performance evidence retain their recorded revision scope. No full media/browser matrix rerun."
+  },
+  "alignedNativeFixture": {
+    "failedCi": {
+      "run": 38540339931,
+      "job": 115773981949,
+      "case": "browser-native-yuv-lifecycle-webkit",
+      "oldExpected": [
+        10,
+        20,
+        30,
+        40,
+        100,
+        120
+      ],
+      "oldObserved": [
+        10,
+        20,
+        0,
+        0,
+        100,
+        120
+      ]
+    },
+    "parentReviewerDiagnosis": "Playwright1.63.0 WebKit2359 upstream4d05d732: GStreamer raw I420 uses 4-byte-aligned internal stride, while the WebKit source copy used even width2. No converter change for this fixture issue.",
+    "fixture": "8x6 I420, natural source strides8/4/4; all72 visible bytes distinctive per row/plane; frame values vary by timestamp. Separate padded output offsets16/96/128 strides12/8/8.",
+    "directControls": "Native copyTo default and explicit padded destination both strictly match all72 intended bytes; legacy2x2 direct result remains diagnostic with original expected nonzero bytes.",
+    "macResults": {
+      "chromium": {
+        "status": "passed",
+        "workerReadbacksChecked": 8,
+        "sampleCloses": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "terminations": [
+          1,
+          1
+        ],
+        "legacyDirect": {
+          "expected": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "values": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "layout": [
+            {
+              "offset": 0,
+              "stride": 2
+            },
+            {
+              "offset": 4,
+              "stride": 1
+            },
+            {
+              "offset": 5,
+              "stride": 1
+            }
+          ]
+        }
+      },
+      "webkit": {
+        "status": "passed",
+        "workerReadbacksChecked": 8,
+        "sampleCloses": [
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1,
+          1
+        ],
+        "terminations": [
+          1,
+          1
+        ],
+        "legacyDirect": {
+          "expected": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "values": [
+            10,
+            20,
+            30,
+            40,
+            100,
+            120
+          ],
+          "layout": [
+            {
+              "offset": 0,
+              "stride": 2
+            },
+            {
+              "offset": 4,
+              "stride": 1
+            },
+            {
+              "offset": 5,
+              "stride": 1
+            }
+          ]
+        }
+      }
+    },
+    "scope": "Fixture/evidence/CI artifact upload only; no product-code or threshold change. Linux confirmation awaits fresh CI.",
+    "artifact": ".run/native-yuv-lifecycle/ in existing always-uploaded https-playback-reports",
+    "logs": [
+      "pr95-aligned-native-yuv-chromium.log",
+      "pr95-aligned-native-yuv-webkit.log",
+      "pr95-aligned-fixture-contract.log"
+    ]
   }
 }
