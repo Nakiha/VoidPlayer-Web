@@ -43,7 +43,7 @@ export function frameIndexBuildPolicy(env: NodeJS.ProcessEnv = process.env): Fra
   if (policy.absoluteTimeoutMs <= policy.idleTimeoutMs) throw new Error('VOIDPLAYER_INDEX_ABSOLUTE_TIMEOUT_MS must exceed the idle timeout.');
   return policy;
 }
-type IndexBuildProgress = { phase: 'scan'; packets: number; scannedBytes: number; totalBytes: number };
+type IndexBuildProgress = { phase: 'scan'; packets: number; scannedBytes: number; totalBytes: number; bytesRead?: number };
 type ProgressListener = (progress: IndexBuildProgress) => void;
 type BuildUpdateListener = () => void;
 type QueuedBuild = {
@@ -68,6 +68,7 @@ export class FrameIndexJobs {
   private closed = false;
   private database: string;
   private coreDir: string;
+  private createBuildWorker:(data:{database:string;coreDir:string})=>Worker;
   private uploads = 0;
   private builds = new Map<string, QueuedBuild>();
   private buildQueue: QueuedBuild[] = [];
@@ -78,7 +79,7 @@ export class FrameIndexJobs {
   private readonly maxUploads = 2;
   private readonly defaultBuildPolicy = frameIndexBuildPolicy();
 
-  constructor(privateDatabase: string, coreDir: string) { this.database = privateDatabase; this.coreDir = coreDir; }
+  constructor(privateDatabase: string, coreDir: string, createBuildWorker: (data: {database:string;coreDir:string})=>Worker = data=>new Worker(new URL('./frame-index-build-worker.ts',import.meta.url),{workerData:data})) { this.database = privateDatabase; this.coreDir = coreDir; this.createBuildWorker=createBuildWorker; }
 
   acquireUpload(): () => void {
     if (this.closed || this.uploads >= this.maxUploads) throw new AdminError(503, '索引上传繁忙，请稍后重试。');
@@ -211,16 +212,14 @@ export class FrameIndexJobs {
   private runBuild(request: BuildRequest, policy: FrameIndexBuildPolicy, onProgress: ProgressListener, onUpdate: () => void): Promise<any> {
     let worker: Worker;
     try {
-      worker = new Worker(new URL('./frame-index-build-worker.ts', import.meta.url), {
-        workerData: { database: this.database, coreDir: this.coreDir },
-      });
+      worker = this.createBuildWorker({database:this.database,coreDir:this.coreDir});
     } catch (error) { return Promise.reject(error instanceof Error ? error : new Error(String(error))); }
     this.buildWorkers.add(worker);
     return new Promise((resolve, reject) => {
       let settled = false;
       let idleTimer: ReturnType<typeof setTimeout>;
       let absoluteTimer: ReturnType<typeof setTimeout>;
-      let latestPackets = -1, latestScannedBytes = -1;
+      let latestPackets = -1, latestScannedBytes = -1, latestBytesRead = -1;
       const resetIdleTimer = () => {
         clearTimeout(idleTimer);
         idleTimer = setTimeout(() => finish(new AdminError(503, '媒体索引构建进度停滞。')), policy.idleTimeoutMs);
@@ -240,9 +239,13 @@ export class FrameIndexJobs {
         if (settled) return;
         if (result.type === 'progress') {
           const progress = result.data as IndexBuildProgress;
-          if (progress.packets > latestPackets || progress.scannedBytes > latestScannedBytes) {
+          if (progress.bytesRead !== undefined && (!Number.isSafeInteger(progress.bytesRead) || progress.bytesRead<0
+            || progress.bytesRead>Math.min(Number.MAX_SAFE_INTEGER,request.size*4+32*1024*1024))) { finish(new AdminError(503,'JS 索引读取进度预算无效。'));return; }
+          if (progress.packets > latestPackets || progress.scannedBytes > latestScannedBytes
+            || progress.bytesRead !== undefined && progress.bytesRead>latestBytesRead) {
             latestPackets = progress.packets;
             latestScannedBytes = progress.scannedBytes;
+            if(progress.bytesRead !== undefined)latestBytesRead=progress.bytesRead;
             resetIdleTimer();
           }
           try { onProgress(progress); } catch {}

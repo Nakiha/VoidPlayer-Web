@@ -1,3 +1,4 @@
+import { JS_TS_INDEX_BYTES } from '../../src/ts-packet-index.ts';
 import { adminErrorBody } from '../admin-error.ts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { promises as fs } from 'node:fs';
@@ -5,7 +6,7 @@ import path from 'node:path';
 import { FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import { FFMPEG_INDEX_BYTES, FFMPEG_INDEX_RECORD_BYTES, lastFfmpegPts, FFMPEG_NO_TIMESTAMP } from '../../src/ffmpeg-index-cache.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, parseMediaIndexIdentity } from '../../src/media-index-identity.ts';
-import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
+import type { MediaIndexIdentity, MediaIndexKind } from '../../src/media-index-identity.ts';
 import { THUMB_POST_BODY_MAX, THUMB_RECIPE_VERSION, thumbnailImageUrl } from '../../src/thumbnails/contract.ts';
 import { AdminError, adminWriteAllowed } from '../admin.ts';
 import { readAdminJson } from '../admin.ts';
@@ -248,8 +249,8 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
     let indexStreamTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       const kindParam = url.searchParams.get('kind') ?? 'flv';
-      if (kindParam !== 'flv' && kindParam !== 'ffmpeg') throw new AdminError(400, '未知帧索引类型。');
-      const kind = kindParam as 'flv' | 'ffmpeg';
+      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts') throw new AdminError(400, '未知帧索引类型。');
+      const kind = kindParam as MediaIndexKind;
       let identity: MediaIndexIdentity;
       try {
         identity = kind === 'flv' && !url.searchParams.has('stream') && !url.searchParams.has('schema') && !url.searchParams.has('indexer')
@@ -257,6 +258,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           : parseMediaIndexIdentity(kind, url.searchParams);
       } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
+      if (req.method === 'POST' && kind === 'js-ts') throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
@@ -346,7 +348,7 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
         }
         releaseUpload = library.indexJobs.acquireUpload();
         if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
-        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
+        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : kind === 'js-ts' ? JS_TS_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
         if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
         const chunks: Buffer[] = []; let size = 0;
         const timeout = setTimeout(() => req.destroy(new Error('索引上传超时。')), 30000);

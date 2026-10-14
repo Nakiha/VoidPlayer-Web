@@ -1,3 +1,4 @@
+import { abortableWait } from './media-abort.ts';
 import { CustomSource, EncodedPacketSink, Input, MPEG_TS } from 'mediabunny';
 import type { EncodedPacket } from 'mediabunny';
 import { MediaOpenError } from './media-errors.ts';
@@ -5,38 +6,15 @@ import { inspectPacketPicture } from './packet-picture.ts';
 import { isAnnexB, nalRanges } from './nal-framing.ts';
 import { parseAvcSps } from './avc-geometry.ts';
 
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v2';
+import { TS_PACKET_BUILD, parseTsPacketIndex } from './ts-packet-index.ts';
+import type { TsPacketIndex, TsPacketRecord } from './ts-packet-index.ts';
+export { TS_PACKET_BUILD, parseTsPacketIndex, tsPictureStream } from './ts-packet-index.ts';
+export type { TsPacketIndex, TsPacketRecord } from './ts-packet-index.ts';
+
 export interface TsPacketReader {
   readonly size: number;
   read(offset: number, length: number): Promise<Uint8Array>;
   close(): void;
-}
-export interface TsPacketRecord {
-  au: number;
-  /** Opaque Mediabunny locator. Never used as a payload byte offset. */
-  locator: number;
-  configuration: 0;
-  /** Validated physical PES header position; never a compressed payload range. */
-  pesOffset: number | null;
-  timestamp: number;
-  ptsUs: number;
-  durationUs: number;
-  size: number;
-  key: boolean;
-  timing: { pts: number | null; dts: number | null; timebase: [1, 90000]; origin: 'pes' | 'derived' };
-}
-export interface TsPacketIndex {
-  schema: 2;
-  completeness: { state: 'complete'; packets: number };
-  kind: 'js-ts-packets';
-  build: typeof TS_PACKET_BUILD;
-  sourceVersion: string;
-  size: number;
-  streamKey: 'video:0';
-  pid: number;
-  codec: 'h264';
-  configuration: number[];
-  packets: TsPacketRecord[];
 }
 // A document's own flags/checksum cannot prove AU completeness. Only this
 // module's complete source enumeration can mint a reusable metadata proof.
@@ -92,7 +70,7 @@ const ticks = (b: Uint8Array, at: number, prefix: number): number => {
 
 /** Raw-clock supplement only. Mediabunny still owns PSI, PES payload reassembly,
  * AU demux and packet seeking. This first admission is finite 188-byte TS. */
-async function pesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal) {
+async function pesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
   if (reader.size % 188) fail('truncated or non-188-byte transport');
   const clocks = new Map<number, { pts: number | null; dts: number | null }>();
   let previousCounter: number | undefined;
@@ -127,6 +105,7 @@ async function pesClocks(reader: TsPacketReader, pid: number, signal: AbortSigna
       if (clocks.size >= 250000) throw new MediaOpenError('resource', 'JS TS: PES clock budget exceeded');
       clocks.set(start + at, { pts: flags === 2 || flags === 3 ? ticks(b, 9, flags) : null, dts: flags === 3 ? ticks(b, 14, 1) : null });
     }
+    scanned?.(start + block.length);
   }
   return clocks;
   } catch (error) { clocks.clear(); throw error; }
@@ -145,6 +124,17 @@ export class TsPacketSource {
   bytesRead = 0;
   packetsRead = 0;
   indexReused = false;
+  private progress?: (value: {packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void;
+  private scannedBytes=0;
+  private indexedPackets=0;
+  private lastProgressMs=-Infinity;
+  private publishProgress(force=false) {
+    if (!this.progress) return;
+    const now=performance.now();
+    if (!force && now-this.lastProgressMs<25) return;
+    this.lastProgressMs=now;
+    this.progress({packets:this.indexedPackets,scannedBytes:this.scannedBytes,totalBytes:this.reader.size,bytesRead:this.bytesRead});
+  }
   private reader: TsPacketReader;
   private sourceVersion: string;
   private signal: AbortSignal;
@@ -163,9 +153,12 @@ export class TsPacketSource {
   private async read(offset: number, size: number) {
     this.check();
     if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(size) || offset < 0 || size < 0 || size > 32*1024*1024 || offset+size > this.reader.size) fail('read bounds exceeded');
-    const bytes = await this.reader.read(offset, size); this.check();
+    const bytes = await abortableWait(this.reader.read(offset, size), this.signal); this.check();
     if (!(bytes instanceof Uint8Array) || bytes.length !== size) fail('short transport read');
-    this.bytesRead += bytes.length; return bytes;
+    this.bytesRead += bytes.length;
+    if (this.progress && (!Number.isSafeInteger(this.bytesRead) || this.bytesRead > Math.min(Number.MAX_SAFE_INTEGER,this.reader.size*4+32*1024*1024)))
+      throw new MediaOpenError('resource','JS TS: index IO budget exceeded');
+    this.publishProgress(); return bytes;
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
@@ -179,8 +172,9 @@ export class TsPacketSource {
     }
     return evidence;
   }
-  async open(cached?: unknown): Promise<TsPacketIndex> {
+  async open(cached?: unknown, progress?: typeof this.progress): Promise<TsPacketIndex> {
     try {
+      this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
       const tracks = await this.input.getVideoTracks();
       if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') fail('requires one H.264 video track');
@@ -208,7 +202,7 @@ export class TsPacketSource {
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
       }
-      const clocks = await pesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal);
+      const clocks = await pesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
       const packets: TsPacketRecord[] = [];
       for await (const packet of this.sink.packets()) {
         this.check();
@@ -227,18 +221,20 @@ export class TsPacketSource {
         if (raw?.pts != null && Math.round(raw.pts * 1e6 / 90000) !== ptsUs) fail('PES/packet timestamp mapping mismatch');
         packets.push({ au: packets.length, locator: packet.sequenceNumber, configuration: 0, pesOffset: raw ? packet.sequenceNumber : null, timestamp: packet.timestamp, ptsUs, durationUs, size: packet.byteLength, key: evidence.closedRandomAccess,
           timing: { pts: raw?.pts ?? null, dts: raw?.dts ?? null, timebase: [1, 90000], origin: raw?.pts != null ? 'pes' : 'derived' } });
-        this.packetsRead++;
+        this.packetsRead++;this.indexedPackets=packets.length;this.publishProgress();
       }
       clocks.clear();
       if (!packets.length || new Set(packets.map(p => p.ptsUs)).size !== packets.length) fail('missing or ambiguous packet presentation timestamps');
       this.index = { schema: 2, completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
         streamKey: 'video:0', pid: track.id, codec: 'h264', configuration: [...configuration], packets };
-      this.index = sealCompleteIndex(this.index);
+      this.index = sealCompleteIndex(this.index);this.publishProgress(true);
       this.cursor = { au: 0, packet: first };
       return this.index;
-    } catch (error) { this.close(); throw error; }
+    } catch (error) { this.close(); this.signal.throwIfAborted(); throw error; }
+    finally {this.progress=undefined;}
   }
   async readUnit(au: number): Promise<Uint8Array> {
+    try {
     this.check();
     const target = this.index?.packets[au];
     if (!target || !Number.isSafeInteger(au) || au < 0) fail('access-unit ordinal out of bounds');
@@ -258,6 +254,7 @@ export class TsPacketSource {
     if (target.key && !evidence.closedRandomAccess) fail('container key does not prove a closed IDR anchor');
     this.cursor = { au, packet };
     return packet.data;
+    } catch(error) {this.signal.throwIfAborted();throw error;}
   }
   close() { if (this.closed) return; this.closed = true; this.signal.removeEventListener('abort', this.abort); this.cursor = undefined; this.index = undefined; this.nativeConfig = undefined; this.sink = undefined; this.sets.clear(); try { this.input.dispose(); } finally { this.reader.close(); } }
 }
@@ -273,33 +270,4 @@ export function tsDecodeIndex(index: TsPacketIndex): import('./flv-decoder.ts').
   const durations = order.map((au, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[au].pts : index.packets[au].durationUs);
   return { codec: 'h264', description: Uint8Array.from(index.configuration), configurations: [Uint8Array.from(index.configuration)], packets, order, firstPts,
     duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)!, durations };
-}
-
-/** Include the demux build and selected PID in exact picture/cache identity. */
-export function tsPictureStream(index: TsPacketIndex) { return `${index.streamKey}:${index.pid}@${index.build}`; }
-
-/** Old FFmpeg indexes and mismatched JS builds rebuild with JS; never load an old demuxer. */
-export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: number): TsPacketIndex | undefined {
-  if (!value || typeof value !== 'object') return;
-  const doc = value as Partial<TsPacketIndex>;
-  if (doc.schema !== 2 || doc.kind !== 'js-ts-packets' || doc.build !== TS_PACKET_BUILD || doc.sourceVersion !== sourceVersion || doc.size !== size
-    || doc.streamKey !== 'video:0' || doc.codec !== 'h264' || !Number.isSafeInteger(doc.pid) || doc.pid! < 1 || doc.pid! > 8190
-    || !Array.isArray(doc.configuration) || !doc.configuration.length || doc.configuration.length > 4096 || !doc.configuration.every(n=>Number.isInteger(n)&&n>=0&&n<=255)
-    || !Array.isArray(doc.packets) || !doc.packets.length || doc.packets.length > 250000) return;
-  if (doc.completeness?.state !== 'complete' || doc.completeness.packets !== doc.packets.length) return;
-  const times = new Set<number>();
-  for (let au = 0; au < doc.packets.length; au++) {
-    const p = doc.packets[au];
-    if (!p || p.au !== au || p.configuration !== 0 || !Number.isSafeInteger(p.locator) || p.locator < 0 || p.locator >= size
-      || au > 0 && p.locator <= doc.packets[au - 1].locator || !Number.isFinite(p.timestamp) || !Number.isSafeInteger(p.ptsUs) || Math.round(p.timestamp*1e6)!==p.ptsUs
-      || !Number.isSafeInteger(p.durationUs) || p.durationUs < 0 || !Number.isSafeInteger(p.size) || p.size <= 0 || p.size > 32*1024*1024 || typeof p.key !== 'boolean'
-      || times.has(p.ptsUs) || !p.timing || p.timing.timebase?.[0] !== 1 || p.timing.timebase?.[1] !== 90000) return;
-    times.add(p.ptsUs);
-    for (const clock of [p.timing.pts,p.timing.dts]) if(clock!==null&&(!Number.isSafeInteger(clock)||clock<0||clock>=2**33))return;
-    if(p.pesOffset!==null&&(!Number.isSafeInteger(p.pesOffset)||p.pesOffset<0||p.pesOffset%188||p.pesOffset+188>size))return;
-    if(p.timing.pts!==null&&p.timing.dts!==null&&Math.abs(p.timing.pts-p.timing.dts)>2**32)return;
-    if(p.timing.origin==='pes') {if(p.timing.pts===null||p.pesOffset===null||Math.round(p.timing.pts*1e6/90000)!==p.ptsUs)return;}
-    else if(p.timing.origin!=='derived'||p.timing.pts!==null||p.timing.dts!==null)return;
-  }
-  return doc as TsPacketIndex;
 }
