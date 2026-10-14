@@ -9,7 +9,7 @@
     "build": "npm run i18n:check && tsc --noEmit && vite build",
     "icons:generate": "node scripts/make-icons.mjs",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "node --experimental-strip-types --test --test-concurrency=4 test/*.test.ts test/*.test.mjs",
+    "test": "node scripts/run-tests.mjs unit",
     "serve": "node server/main.ts",
     "clean": "node scripts/clean.mjs",
     "dev:web": "vite --host 127.0.0.1",
