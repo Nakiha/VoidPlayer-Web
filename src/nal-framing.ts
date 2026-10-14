@@ -1,8 +1,10 @@
 /** Bounded NAL framing iterator shared by picture admission and diagrams.
  * An Annex-B configuration remains Annex-B; no avcC is fabricated. */
 export function isAnnexB(bytes: Uint8Array) {
-  return bytes.length >= 3 && bytes[0] === 0 && bytes[1] === 0 &&
-    (bytes[2] === 1 || (bytes.length >= 4 && bytes[2] === 0 && bytes[3] === 1));
+  if (bytes.length < 3 || bytes[0] !== 0 || bytes[1] !== 0) return false;
+  let at = 2;
+  while (at < bytes.length && bytes[at] === 0) at++;
+  return bytes[at] === 1; // Legal leading_zero_8bits precede the start code.
 }
 export function nalRanges(codec: string, description: Uint8Array, bytes: Uint8Array) {
   const output: {offset: number; size: number}[] = [];

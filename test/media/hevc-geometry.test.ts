@@ -45,6 +45,8 @@ test('native HEVC reorder bounds use every SPS and reject missing, truncated or 
 test('HEVC Annex-B SPS preserves geometry and reorder bounds without fabricating hvcC', () => {
   const configuration=Uint8Array.from([0,0,0,1,...sps(1,8,2)]);
   assert.equal(hevcReorderFrames(configuration),2);
+  const leading=Uint8Array.from([0,...configuration]);
+  assert.equal(hevcReorderFrames(leading),2);assert.deepEqual(hevcGeometry(leading),hevcGeometry(configuration));
   assert.deepEqual(hevcGeometry(configuration),parseHevcSpsGeometry(sps(1,8,2)));
   assert.equal(hevcReorderFrames(configuration.subarray(0,8)),null);
   assert.equal(hevcGeometry(Uint8Array.of(0,0,0,1,0x42)),null);

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { nalRanges } from '../../src/nal-framing.ts';
+import { isAnnexB, nalRanges } from '../../src/nal-framing.ts';
 import { inspectPacketPicture } from '../../src/packet-picture.ts';
 const annex=Uint8Array.of(0,0,0,1,0x40,1,0x80);
 
@@ -22,4 +22,21 @@ test('HEVC Annex-B rejects short NALs, mixed picture evidence and nonzero layers
   assert.throws(()=>nalRanges('hevc',annex,Uint8Array.of(1,2,3)),/Annex-B prefix/);
   assert.equal(inspectPacketPicture('hevc',annex,Uint8Array.of(0,0,1,38,9,128)).reason,'unsupported-layer');
   assert.equal(inspectPacketPicture('hevc',annex,Uint8Array.of(0,0,1,38,1,128,0,0,1,38,1,128)).singlePicture,false);
+});
+
+
+test('legal leading_zero_8bits keep Annex-B framing and exact picture evidence',()=>{
+  for(const codec of ['h264','hevc']){
+    const nal=codec==='hevc'?[38,1,128]:[0x65,128];
+    const ordinary=Uint8Array.from([0,0,0,1,...nal]);
+    for(const zeros of [1,2,16]){
+      const padded=Uint8Array.from([...new Uint8Array(zeros),...ordinary]);
+      assert.equal(isAnnexB(padded),true);
+      const ranges=nalRanges(codec,padded,padded);assert.equal(ranges.length,1);
+      assert.deepEqual([...padded.subarray(ranges[0].offset,ranges[0].offset+ranges[0].size)],nal);
+      assert.deepEqual(inspectPacketPicture(codec,padded,padded),inspectPacketPicture(codec,ordinary,ordinary));
+    }
+  }
+  assert.equal(isAnnexB(new Uint8Array(32)),false);
+  assert.equal(isAnnexB(Uint8Array.of(0,0,0,2,1)),false);
 });
