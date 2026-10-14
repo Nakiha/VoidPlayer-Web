@@ -42,6 +42,13 @@ test('native HEVC reorder bounds use every SPS and reject missing, truncated or 
   assert.equal(hevcReorderFrames(description()), null);
   assert.equal(hevcReorderFrames(description(sps()).subarray(0, 30)), null);
 });
+test('HEVC Annex-B SPS preserves geometry and reorder bounds without fabricating hvcC', () => {
+  const configuration=Uint8Array.from([0,0,0,1,...sps(1,8,2)]);
+  assert.equal(hevcReorderFrames(configuration),2);
+  assert.deepEqual(hevcGeometry(configuration),parseHevcSpsGeometry(sps(1,8,2)));
+  assert.equal(hevcReorderFrames(configuration.subarray(0,8)),null);
+  assert.equal(hevcGeometry(Uint8Array.of(0,0,0,1,0x42)),null);
+});
 test('wrong decoded pixel rectangles are rejected rather than stretched', () => {
   const frame = { codedWidth:1280,codedHeight:736,visibleRect:{width:1280,height:720},displayWidth:1280,displayHeight:720 } as VideoFrame;
   assert.throws(()=>verifyHevcFrame(frame,parseHevcSpsGeometry(sps())), /期望.*720×1280.*visible=1280×720/);
@@ -161,6 +168,20 @@ test('real portrait HEVC SPS supplies coded size, crop and SAR to WebCodecs', as
       const index = await demuxFlv(reader), geometry=hevcGeometry(index.description)!;
       assert.ok(geometry);assert.equal(geometry.width,244);assert.equal(geometry.height,436);
       assert.equal(geometry.sarNum/geometry.sarDen,sar==='1'?1:4/3);
+      // Independent framing conversion from the encoder's real hvcC arrays;
+      // raw NAL bytes stay unchanged, no SPS or codec metadata is fabricated.
+      const nals:number[]=[];let at=23;
+      for(let array=0;array<index.description[22];array++){
+        at++;const count=index.description[at]*256+index.description[at+1];at+=2;
+        for(let n=0;n<count;n++){
+          const size=index.description[at]*256+index.description[at+1];at+=2;
+          assert.ok(size>1&&at+size<=index.description.length);
+          nals.push(0,0,0,1,...index.description.subarray(at,at+size));at+=size;
+        }
+      }
+      const annexB=Uint8Array.from(nals);
+      assert.deepEqual(hevcGeometry(annexB),geometry,'real SPS geometry is invariant across both container framings');
+      assert.equal(hevcReorderFrames(annexB),hevcReorderFrames(index.description),'actual reorder declaration is retained');
       const config=flvDecoderConfig(index)!;
       assert.equal(config.codedWidth,geometry.codedWidth);assert.equal(config.codedHeight,geometry.codedHeight);
       assert.equal(config.displayAspectWidth!/config.displayAspectHeight!,244/436*geometry.sarNum/geometry.sarDen);

@@ -10,7 +10,7 @@ export function nalRanges(codec: string, description: Uint8Array, bytes: Uint8Ar
     if (size < (codec === 'h264' ? 1 : 2) || output.length >= 4096) throw new Error('Invalid NAL size/count');
     output.push({offset, size});
   };
-  if (codec === 'h264' && isAnnexB(description)) {
+  if ((codec === 'h264' || codec === 'hevc') && isAnnexB(description)) {
     const prefix = (i: number) => bytes[i] === 0 && bytes[i+1] === 0 ? bytes[i+2] === 1 ? 3 : bytes[i+2] === 0 && bytes[i+3] === 1 ? 4 : 0 : 0;
     let at = 0;
     while (at < bytes.length && !prefix(at)) { if (bytes[at++]) throw new Error('Invalid Annex-B prefix'); }
