@@ -1,3 +1,4 @@
+import { isAnnexB, nalRanges } from './nal-framing.ts';
 /** HEVC SPS geometry (H.265 7.3.2.2, 7.4.3.2 and Annex E).
  * Bounded reads; no guessing from FLV metadata or scanning arbitrary NAL bytes. */
 export interface HevcGeometry {
@@ -89,6 +90,13 @@ export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
   return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen };
 }
 function hevcSpses(description: Uint8Array) {
+  if (isAnnexB(description)) {
+    const spses = nalRanges('hevc', description, description)
+      .filter(nal => ((description[nal.offset] >> 1) & 63) === 33)
+      .map(nal => description.subarray(nal.offset, nal.offset + nal.size));
+    if (!spses.length) throw new Error('missing HEVC SPS');
+    return spses;
+  }
   if (description.length < 23 || description[0] !== 1) throw new Error('invalid hvcC');
   let offset = 23;
   const u16 = () => { if (offset+2 > description.length) throw new Error('truncated hvcC'); const n = description[offset]*256+description[offset+1]; offset += 2; return n; };
