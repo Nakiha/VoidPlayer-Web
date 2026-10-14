@@ -1,0 +1,166 @@
+{
+  "baseMain": "cf4f379d72bde9fc2de501a2550a287632c5b1aa",
+  "coveredOldPrs": [
+    {
+      "baseRefName": "main",
+      "headRefName": "codex/stabilize-i18n-preview",
+      "headRefOid": "2e35ee87229018b8d046e6470366d5be1f871718",
+      "isDraft": true,
+      "number": 68,
+      "title": "test(i18n): stabilize placeholder and image language states",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/68"
+    },
+    {
+      "baseRefName": "codex/stabilize-i18n-preview",
+      "headRefName": "codex/frame-index-rpc-contract",
+      "headRefOid": "0d88fe2f3bde777c441cce766a58f65b476b0d2b",
+      "isDraft": true,
+      "number": 67,
+      "title": "refactor(server): bind index RPC requests and replies",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/67"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "codex/worker-rpc-messageerror",
+      "headRefOid": "e82dd28d398c157e57216b4aa545f6daf868ec88",
+      "isDraft": true,
+      "number": 72,
+      "title": "fix(worker): settle RPC on deserialization failure",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/72"
+    },
+    {
+      "baseRefName": "codex/worker-rpc-messageerror",
+      "headRefName": "codex/worker-rpc-hook-cleanup",
+      "headRefOid": "f512a844752dd4d843e947d22c834cf0c7cfc83c",
+      "isDraft": true,
+      "number": 74,
+      "title": "fix(worker): finish teardown after callback failures",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/74"
+    },
+    {
+      "baseRefName": "codex/worker-rpc-messageerror",
+      "headRefName": "codex/native-analysis-worker-lifecycle",
+      "headRefOid": "8f492e133a3c2deb8d0956c0589074387e115bae",
+      "isDraft": true,
+      "number": 78,
+      "title": "Close native metadata requests on Node deserialization failure",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/78"
+    },
+    {
+      "baseRefName": "codex/worker-rpc-messageerror",
+      "headRefName": "codex/cached-audio-failures",
+      "headRefOid": "b6134be996a10903075748e452c471013311f927",
+      "isDraft": true,
+      "number": 80,
+      "title": "fix(audio): contain cached Worker reverse-channel failures",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/80"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "codex/identity-refresh-barrier",
+      "headRefOid": "bdad669117fe5faae8074928c990959254fcf796",
+      "isDraft": true,
+      "number": 76,
+      "title": "Wait for fresh identity lists before cross-tab reload",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/76"
+    },
+    {
+      "baseRefName": "main",
+      "headRefName": "codex/npm-unit-runner",
+      "headRefOid": "ff836913f0ea2cac590b3d0b8911b7f2f651ad7f",
+      "isDraft": true,
+      "number": 86,
+      "title": "refactor(test): route npm test through the unit catalog",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/86"
+    },
+    {
+      "baseRefName": "codex/npm-unit-runner",
+      "headRefName": "codex/browser-npm-alias",
+      "headRefOid": "c2b9d205a3456ba75679aed6d15ef4d73aca8055",
+      "isDraft": true,
+      "number": 91,
+      "title": "refactor(test): delegate basic browser npm alias to runner",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/91"
+    },
+    {
+      "baseRefName": "codex/frame-index-rpc-contract",
+      "headRefName": "codex/ts-playback-diagnostics",
+      "headRefOid": "bf5a8222ecc5adc20f40ef6b72154f082749ffd0",
+      "isDraft": true,
+      "number": 69,
+      "title": "test: preserve playback evidence for no-frame matrix failures",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/69"
+    },
+    {
+      "baseRefName": "codex/ts-playback-diagnostics",
+      "headRefName": "codex/ts-playback-readiness",
+      "headRefOid": "f299a4a26596e5b8ac24edee5b984540de83a043",
+      "isDraft": true,
+      "number": 73,
+      "title": "test(playback): diagnose TS readiness and main-thread delays",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/73"
+    }
+  ],
+  "integrationCommits": [
+    {
+      "oldPr": 68,
+      "oldHead": "2e35ee87229018b8d046e6470366d5be1f871718",
+      "integrationCommit": "5215aadc54a3703ab5ec8a23840dff7de3d57830"
+    },
+    {
+      "oldPr": 67,
+      "oldHead": "0d88fe2f3bde777c441cce766a58f65b476b0d2b",
+      "integrationCommit": "3c7ebb92c5e3dac078cae21bd9c7caeac16cfe33"
+    },
+    {
+      "oldPr": 72,
+      "oldHead": "e82dd28d398c157e57216b4aa545f6daf868ec88",
+      "integrationCommit": "8532ab671187509996b54948502b650c0c72e2a8"
+    },
+    {
+      "oldPr": 74,
+      "oldHead": "f512a844752dd4d843e947d22c834cf0c7cfc83c",
+      "integrationCommit": "4cffa30a979a2a2a1ac2c04b6b294072a1b3ab7b"
+    },
+    {
+      "oldPr": 78,
+      "oldHead": "8f492e133a3c2deb8d0956c0589074387e115bae",
+      "integrationCommit": "396476ca5923d91bb587192294468110dda9e22d",
+      "resolution": "Retain74hook cleanup documentation plus78Node termination evidence; preserve all canonical cases and add78native lifecycle case with canonical command."
+    },
+    {
+      "oldPr": 80,
+      "oldHead": "b6134be996a10903075748e452c471013311f927",
+      "integrationCommit": "0be4ec02d3f504832d6c70e513bc62baca6e205f",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 76,
+      "oldHead": "bdad669117fe5faae8074928c990959254fcf796",
+      "integrationCommit": "8bfcc820cc3d657f815aaa6465824fcdad511f12"
+    },
+    {
+      "oldPr": 86,
+      "oldHead": "ff836913f0ea2cac590b3d0b8911b7f2f651ad7f",
+      "integrationCommit": "c487fb2f35b7f0c2392b0c108f926048ea104e22"
+    },
+    {
+      "oldPr": 91,
+      "oldHead": "c2b9d205a3456ba75679aed6d15ef4d73aca8055",
+      "integrationCommit": "6f6e651603b277c52a2ea1d16de4ff32f4c8ccbb",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 69,
+      "oldHead": "bf5a8222ecc5adc20f40ef6b72154f082749ffd0",
+      "integrationCommit": "6e430eb5244f195be10c1c3d4401265bc3ab66c8"
+    },
+    {
+      "oldPr": 73,
+      "oldHead": "f299a4a26596e5b8ac24edee5b984540de83a043",
+      "integrationCommit": "77048f188a72304dfabc2695dbe629b2415a608b",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    }
+  ],
+  "policy": "Old PRs remain open for parent coverage review. All heads are retained as merge ancestry; no unimplemented features added. Catalog conflicts preserve case IDs/metadata and normalize only forwarding command paths to existing canonical owners."
+}
