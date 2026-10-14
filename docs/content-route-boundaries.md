@@ -1,0 +1,7 @@
+# Content request ownership
+
+`content.ts` dispatches frame-index URLs to `frame-index.ts` after the existing library browse/scan handlers. That handler receives only the library and request/response/URL, owns index identity/version checks, build/upload limits, progress coalescing and the pre-/post-header error lifecycle. It retains the completed 503 response fix and JS TS server-only build boundary.
+
+`index-stream.ts` owns NDJSON framing, drain/close listeners, response completion, stream lease, resume/build reset and record frontiers. The frame-index owner explicitly invokes those transport operations; neither module acquires arbitrary route-context state or a playback/analysis cursor. Wire formats, limits, timers and existing control flow are unchanged. `content.ts` still handles thumbnail requests until their independent extraction.
+
+The [fixed-base comparison](evidence/content-index-boundaries.json) records exact migrated handler/transport body hashes (excluding export keywords and final module separator blank lines). Real HTTP tests cover complete 503s, ordinary failures, post-header errors, upload disconnect/slot release, version invalidation, cached/resumed/reset streams and FLV/JS TS SQLite restart. Additional controlled ServerResponse injections cover a held backpressure write and disconnect while blocked: no next batch before drain, exact resume framing, no repeated end/write after close, and released drain/close/finish listeners. These injections supplement the HTTP tests; they are not a real slow-network throughput measurement.

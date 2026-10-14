@@ -1,0 +1,12 @@
+{
+  "base": "b526aba92963036674f68aaf3d927eb00ef56f24",
+  "frameIndexControlFlowSha256": "d02bbccd6a9e7e9a202833488c53be6a4040bfc8e1d0ef6c5f6017eef1658fd5",
+  "transportBodiesSha256": "53ebfdd9f238ef7bb9b5dd301ad21f93e77d978481029b2fc34511617632fd56",
+  "comparison": "Exact original handler block equality and transport bodies after removing only required export keywords and final module separator blank lines; imports and owner parameters moved",
+  "verification": [
+    "Registered real HTTP/SQLite/cache/worker checks 5/5",
+    "Registered controlled backpressure/disconnect and manifest checks 2/2",
+    "build passed"
+  ],
+  "remaining": "Thumbnail handler extraction is a separate follow-up"
+}
