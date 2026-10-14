@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { mkdtemp, writeFile, mkdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -8,6 +9,23 @@ import { selectAnalysisMatrixRows } from '../../scripts/testing/analysis-matrix.
 import { testManifest, validateManifest, selectCases, validateCiBrowserCoverage } from '../../scripts/testing/manifest.mjs';
 
 const clone = () => structuredClone(testManifest);
+test('npm test enumerates the complete unit catalog with no lost or repeated compatibility cases', () => {
+  const root = path.resolve(import.meta.dirname, '../..');
+  const command = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts.test.split(' ');
+  assert.equal(command[0], 'node');
+  const result = spawnSync(process.execPath, [...command.slice(1), '--list'], { cwd: root, encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, result.stderr);
+  const selection = JSON.parse(result.stdout);
+  assert.deepEqual(selection, selectCases({ suite: 'unit' }));
+  const legacy = readdirSync(path.join(root, 'test')).filter(file => /\.test\.(ts|mjs)$/.test(file)).map(file => `test/${file}`).sort();
+  for (const platform of ['linux', 'darwin', 'win32']) {
+    const selected = selectCases({ suite: 'unit', platform });
+    assert.deepEqual(selected.excluded, []);
+    assert.deepEqual(selected.selected.map(row => row.script).sort(), legacy);
+    const implementations = selected.selected.map(row => row.implementation ?? row.script);
+    assert.equal(new Set(implementations).size, legacy.length);
+  }
+});
 test('every existing test and check has an explicit registration or explained tool classification', () => assert.equal(validateManifest(), true));
 test('manifest rejects duplicate IDs, dangling paths, unknown suites/engines and missing gate declarations', () => {
   for (const mutate of [

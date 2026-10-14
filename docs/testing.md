@@ -90,7 +90,7 @@ node scripts/run-tests.mjs uncovered --prepared
 
 CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
 
-旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 继续枚举旧顶层入口，Bun 和单文件命令也保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。逐项覆盖下限见 `test/testing-coverage-baseline.json`，当前选择以统一清单为准。
+旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 委托 `node scripts/run-tests.mjs unit`，与 CI 使用相同的 case ID、准备步骤、超时及逐项结果；不再依赖顶层 glob。`npm test -- --list` 枚举适用用例，`npm test -- --case node-test-manifest` 可缩小选择。runner 逐项运行，原来的 Node `--test-concurrency=4` 不再维护另一份调度；参数使用 runner 的选择选项，单文件 Node/Bun 命令和旧脚本路径保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。逐项覆盖下限见 `test/testing-coverage-baseline.json`，当前选择以统一清单为准。
 
 ## 准备
 
