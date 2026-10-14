@@ -1,3 +1,4 @@
+import {parseOptions} from '../../scripts/testing/options.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
@@ -21,9 +22,10 @@ test('npm test enumerates the complete unit catalog with no lost or repeated com
   for (const platform of ['linux', 'darwin', 'win32']) {
     const selected = selectCases({ suite: 'unit', platform });
     assert.deepEqual(selected.excluded, []);
-    assert.deepEqual(selected.selected.map(row => row.script).sort(), legacy);
+    const retired=selected.selected.filter(row=>row.retiredAlias).map(row=>row.script);
+    assert.deepEqual(selected.selected.map(row => row.script).sort(), [...legacy,...retired].sort());
     const implementations = selected.selected.map(row => row.implementation ?? row.script);
-    assert.equal(new Set(implementations).size, legacy.length);
+    assert.equal(new Set(implementations).size, legacy.length+retired.length);
   }
 });
 test('every existing test and check has an explicit registration or explained tool classification', () => assert.equal(validateManifest(), true));
@@ -120,6 +122,11 @@ test('single-engine scripts cannot be advertised as a different browser matrix',
 
 test('compatibility entries point to registered domain implementations without changing CLI behavior', () => {
   for (const row of testManifest.cases.filter(row => row.implementation)) {
+    if(row.retiredAlias){
+      const retired=JSON.parse(readFileSync(new URL('../../docs/evidence/retired-test-entrypoints.json',import.meta.url),'utf8')).aliases;
+      assert.ok(retired.some(entry=>entry.script===row.script&&entry.implementation===row.implementation&&entry.caseIds.includes(row.id)));
+      assert.throws(()=>readFileSync(new URL('../../'+row.script,import.meta.url)),{code:'ENOENT'});continue;
+    }
     const entry = readFileSync(new URL('../../' + row.script, import.meta.url), 'utf8').replace(/^\/\/.*$/gm, '').trim();
     const match = /^(?:import|export \* from) ['"]([^'"]+)['"];?$/.exec(entry);
     assert.ok(match, `${row.id}: entry must only load its implementation`);
@@ -295,4 +302,48 @@ test('legacy npm filter arguments are forwarded literally and cannot masquerade 
   assert.throws(() => validateCiBrowserCoverage([filteredWorkflow]), /cannot claim a filtered/);
   const bad = clone(); bad.cases.find(row => row.id === 'browser-browser-webkit').npmAliases[0].argumentPrefixes = ['../unsafe'];
   assert.throws(() => validateManifest(bad), /npm alias binding/);
+});
+
+test('all remaining npm commands retain their literal legacy stages and defaults through canonical owners',()=>{
+ const baseline=JSON.parse(readFileSync(new URL('../helpers/npm-command-baseline.json',import.meta.url),'utf8'));
+ const scripts=JSON.parse(readFileSync(new URL('../../package.json',import.meta.url),'utf8')).scripts;
+ assert.equal(Object.keys(baseline).length,48);
+ const original=JSON.stringify(testManifest.cases);
+ for(const [alias,legacy]of Object.entries(baseline)){
+  assert.equal(scripts[alias],`node scripts/run-tests.mjs --alias ${alias}`);
+  const selection=selectCases({alias,platform:'win32'});
+  assert.ok(selection.selected.length,alias);assert.deepEqual(selection.excluded,[]);
+  if(alias==='test:hevc-timeline:browser'){
+   assert.equal(selection.selected.length,4);assert.deepEqual(new Set(selection.selected.flatMap(row=>row.engines)),new Set(['chromium','webkit']));
+   for(const engine of ['chromium','webkit'])for(const input of ['local','remote'])assert.equal(selectCases({alias,caseArguments:[engine,input],platform:'win32'}).selected.length,1);
+   assert.throws(()=>selectCases({alias,caseArguments:['typo'],platform:'win32'}),/Unsupported/);continue;
+  }
+  const old=legacy.split(' && ').filter(command=>command!=='npm run build').map(command=>command.split(' '));
+  assert.equal(selection.selected.length,old.length,alias);
+  old.forEach((command,i)=>{
+   const row=selection.selected[i],entry=row.implementation??row.script;
+   const at=command.findIndex(arg=>arg.startsWith('scripts/')||arg.startsWith('test/'));
+   assert.equal(command[at],row.script,`${alias}: same legacy owner`);command[at]=entry;
+   assert.deepEqual(row.command,command,alias);assert.equal(row.required,true,'legacy npm failure remains blocking even for a manual stage');
+   const canonical=testManifest.cases.find(candidate=>candidate.id===row.id);
+   for(const field of ['timeoutMs','fixtures','tools','build','platforms','artifacts','restrictions','kind'])assert.deepEqual(row[field],canonical[field],`${alias} ${field}`);
+  });
+  if(old.length>1)assert.equal(selection.stopOnFailure,true);
+ }
+ assert.equal(JSON.stringify(testManifest.cases),original,'alias projection never rewrites CI case metadata');
+});
+
+test('npm argument compatibility keeps package paths, multiple real browsers and required hardware flags',()=>{
+ for(const [alias,args]of [['test:release:browser',['/tmp/a package.tar.gz','chromium']],['test:webgpu:browser',['chrome','msedge']],['test:color:windows',['--file','/tmp/a clip.mkv','msedge']],['test:hdr:browser',['--some-future-flag']]]){
+  const options=parseOptions(['--list','--alias',alias,...args]);
+  const selected=selectCases({...options,platform:'win32'}).selected;
+  assert.deepEqual(selected.at(-1).command.slice(-args.length),args,alias);
+ }
+ const hdr=selectCases({alias:'test:hdr:color',platform:'win32'}).selected;
+ assert.ok(hdr[1].command.includes('--require-webgpu'));assert.equal(hdr[1].kind,'manual-regression');
+ assert.deepEqual(selectCases({alias:'test:hdr:native',platform:'win32'}).selected[0].command.slice(-2),['chrome','--require-native']);
+ assert.equal(selectCases({alias:'test:range:browser',caseArguments:['chromium'],platform:'darwin'}).selected[0].id,'browser-range-chromium');
+ for(const mutation of [m=>m.npmCommands['test:range:browser'].cases.push(m.npmCommands['test:range:browser'].cases[0]),m=>m.npmCommands['test:range:browser'].engineCases.chromium='node-hdr-color',m=>m.npmCommands['test:range:browser'].cases[0].id='missing']){
+  const m=clone();mutation(m);assert.throws(()=>validateManifest(m));
+ }
 });

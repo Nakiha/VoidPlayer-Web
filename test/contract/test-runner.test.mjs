@@ -402,3 +402,10 @@ test('npm compatibility filter remains a literal case argument after its engine'
   const options = parseOptions(['--alias', 'test:browser', 'chromium', '--filter=analysis recovery', '--list']);
   assert.equal(options.engine, 'chromium'); assert.deepEqual(options.caseArguments, ['--filter=analysis recovery']);
 });
+
+test('dependent npm stages stop after failure while canonical independent suites keep running',async()=>temporary(async directory=>{
+ const later=path.join(directory,'must-not-run');
+ const report=await runTestSuite({selected:[entry('manual-required','process.exit(7)',{kind:'manual-regression'}),entry('dependent',`require('node:fs').writeFileSync(${JSON.stringify(later)},'ran')`)],excluded:[],stopOnFailure:true},{root:directory,directory:path.join(directory,'serial'),output:silent});
+ assert.equal(report.passed,false);assert.equal(suiteExitCode(report),1);assert.equal(report.results[0].exitCode,7);assert.equal(report.results[1].phase,'dependency');
+ await assert.rejects(readFile(later),{code:'ENOENT'});
+}));

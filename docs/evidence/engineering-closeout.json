@@ -1,0 +1,147 @@
+{
+  "base": "edc2311c0a567f1937150b61a661aae2ac4fd6a8",
+  "scope": "One engineering closeout branch: remaining npm command aliases, explicit retirement of unreferenced forwarding entries, nativeYuvSource lifecycle. No decoder/render/color algorithm or threshold changes.",
+  "npm": {
+    "migratedCommands": 48,
+    "classification": {
+      "singleCaseOrDefault": 40,
+      "composite": 3,
+      "manualOrDiagnostic": 5
+    },
+    "contractTestsPassed": 64,
+    "allTestScriptsDelegateToRunner": true,
+    "unitCases": 147,
+    "uniqueUnitOwners": 147,
+    "retiredAliases": 139,
+    "remainingReferencedForwarders": 38
+  },
+  "converter": {
+    "oldTestsPassedBefore": 5,
+    "newAdversariesFailedBefore": 7,
+    "testsPassedAfter": 16,
+    "privateJobCorrelation": true,
+    "transportFailure": "latch only converter pool; settle jobs/slot/input waiters; detach and terminate; upstream stays independently owned",
+    "copyErrorReply": "reject picture only; worker reusable",
+    "lateSourceFrame": "close once after cancellation/disposal",
+    "browserChecks": [
+      "chromium",
+      "webkit"
+    ],
+    "browserEvidence": "Actual synthetic VideoFrame/Worker readback, plane bytes, transfer/reuse, ordering, disposal. Does not prove physical decoder hardware use."
+  },
+  "verification": {
+    "build": "passed",
+    "sourceCases": "119/119",
+    "manifestRegisteredCases": 321,
+    "browserMatrixRerun": false,
+    "rawTaskLogs": [
+      "engineering-closeout-converter-negative.log",
+      "engineering-closeout-converter-positive.log",
+      "engineering-closeout-final-entry-contract.log",
+      "engineering-closeout-source.log",
+      "engineering-closeout-final-build.log",
+      "engineering-closeout-readback-chromium.log",
+      "engineering-closeout-readback-webkit.log",
+      "engineering-closeout-focused-bench.log",
+      "engineering-closeout-baseline-bench.log"
+    ]
+  },
+  "benchmark": {
+    "repeats": 3,
+    "requestedWallMs": 8000,
+    "sameScenario": "h264_9s_1920x1080.mp4 reference mode, hardware preference, depth2, headless",
+    "originalLimitsRetained": true,
+    "candidateChromium": [
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30928033081325007,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.3100296058608691,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30475589254374336,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      }
+    ],
+    "candidateWebkit": [
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9999474616470023,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9997560052583357,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      },
+      {
+        "passed": true,
+        "failures": [],
+        "speed": 0.9999450831989537,
+        "decoder": "ffmpeg-wasm",
+        "hardwareUseVerified": false,
+        "sourceDigest": "09600fde583310e7f19d8051af66aa098e18a4acac451b595ddc1e584952da49"
+      }
+    ],
+    "baselineChromium": [
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.3099983022814913,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.31132451215135365,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      },
+      {
+        "passed": false,
+        "failures": [
+          "below-realtime"
+        ],
+        "speed": 0.30333477261169994,
+        "decoder": "webcodecs",
+        "hardwareUseVerified": false,
+        "sourceDigest": "de4f8aad5fc11fce92333e95f5507385cd855639ed04cc07bb701ebf7b3f365a"
+      }
+    ],
+    "harnessSha256": "2471b8c400b03590d8e8973a6af269b39d517666afcc20c31016ccfa9d38c02a",
+    "sampleSha256": "fb41bae79c6dc65d22cf7e4e8657be0fce45f38a3206def6b535d6d9d32dfcb2"
+  }
+}

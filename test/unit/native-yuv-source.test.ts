@@ -50,7 +50,7 @@ test('native pipeline preserves order under out-of-order copies and drains cance
  const original=globalThis.Worker;let active=0,peak=0,terminated=0,closed=0;
  class FakeWorker{
   onmessage?: (e:{data:unknown})=>void;onerror?:()=>void;timer?:ReturnType<typeof setTimeout>;
-  postMessage({frame}:{frame:{pts:number;close():void}}){active++;peak=Math.max(peak,active);this.timer=setTimeout(()=>{active--;frame.close();this.onmessage?.({data:{buffer:new ArrayBuffer(6),layout:[{offset:0,stride:2},{offset:4,stride:2}]}});},frame.pts%2?1:10);}
+  postMessage({id,frame}:{id:number;frame:{pts:number;close():void}}){active++;peak=Math.max(peak,active);this.timer=setTimeout(()=>{active--;frame.close();this.onmessage?.({data:{id,buffer:new ArrayBuffer(6),layout:[{offset:0,stride:2},{offset:4,stride:2}]}});},frame.pts%2?1:10);}
   terminate(){terminated++;clearTimeout(this.timer);}
  }
  globalThis.Worker=FakeWorker as unknown as typeof Worker;
@@ -95,4 +95,108 @@ test('HDR native witness accepts exact 10/12-bit BT.2100 planes and rejects prec
   frames[1].pixels[0]^=1;assert.throws(()=>verifyNativeWitness(frames[0],frames[1]),/核对/);frames[1].pixels[0]^=1;
   frames[1].description.yuv!.bitDepth=8;assert.throws(()=>verifyNativeWitness(frames[0],frames[1]),/核对/);
  }
+});
+
+const tick = () => new Promise<void>(resolve => setImmediate(resolve));
+function converterFixture(t: import('node:test').TestContext, depth=1, ownsSource=true) {
+ const original=globalThis.Worker, workers:FakeWorker[]=[], samples:Array<{closed:number;senderClosed:number;receiverClosed:number}>=[];
+ let disposed=0, calls=0, throwPost=false, throwDispose=false;
+ class FakeWorker {
+  onmessage:((event:{data:any})=>void)|null=null; onerror:(()=>void)|null=null; onmessageerror:(()=>void)|null=null;
+  requests:Array<{id:number;buffer?:ArrayBuffer;frame:{record:typeof samples[number];close():void}}> = []; terminated=0;
+  constructor(){workers.push(this);}
+  postMessage(request:any){if(throwPost)throw new Error('injected post failure');this.requests.push({...request,buffer:request.buffer?structuredClone(request.buffer,{transfer:[request.buffer]}):undefined});}
+  reply(request=this.requests.at(-1)!,value=10,error?:string){if(!request.frame.record.receiverClosed)request.frame.record.receiverClosed++;this.onmessage?.({data:{id:request.id,...(error?{error}:{buffer:new Uint8Array([value,20,30,40,100,120]).buffer,layout:[{offset:0,stride:2},{offset:4,stride:2}]})}});}
+  terminate(){this.terminated++;for(const r of this.requests)if(!r.frame.record.receiverClosed)r.frame.record.receiverClosed++;}
+ }
+ globalThis.Worker=FakeWorker as unknown as typeof Worker;
+ function frame(pts:number):DecodedFrame {
+  const record={closed:0,senderClosed:0,receiverClosed:0};samples.push(record);
+  return {...raw(true),ptsUs:pts,sourcePtsUs:pts,kind:'video-sample',sample:{rotation:0,toVideoFrame:()=>({record,close(){record.senderClosed++;}})} as unknown as DecodedFrame['sample'],close(){record.closed++;}};
+ }
+ const source={info:{},frameAt:async(pts:number)=>{calls++;return frame(pts);},async *framesFrom(){yield frame(0);},dispose(){disposed++;if(throwDispose)throw new Error('injected source dispose failure');}} as unknown as MediaSource;
+ const wrapped=nativeYuvSource(source,depth,1,ownsSource);
+ t.after(()=>{throwDispose=false;wrapped.dispose();globalThis.Worker=original;});
+ return {wrapped,workers,samples,source,frame,get disposed(){return disposed;},get calls(){return calls;},set throwPost(v:boolean){throwPost=v;},set throwDispose(v:boolean){throwDispose=v;}};
+}
+
+for(const event of ['onerror','onmessageerror'] as const) test(`converter ${event} rejects its pool and slot waiters without disposing the upstream source`,async t=>{
+ const f=converterFixture(t,2);const errors:unknown[]=[];
+ const requests=[0,1,2].map(pts=>f.wrapped.frameAt(pts).then(frame=>{frame.close();return null;},error=>{errors.push(error);return error;}));
+ await tick();f.workers[0][event]?.();await tick();
+ assert.equal(errors.length,3,'all in-flight jobs and queued slot acquisitions settle');
+ assert.ok(errors.every(error=>error===errors[0]));assert.equal(f.disposed,0,'conversion transport failure does not dispose the independently owned upstream source');
+ assert.ok(f.workers.every(worker=>worker.terminated===1));
+ await assert.rejects(f.wrapped.frameAt(3),/Worker/);assert.equal(f.calls,3,'latched failure cannot dispatch another source request');
+ await Promise.all(requests);
+});
+
+test('converter post failure closes the original sample once and closes only its untransferred native resource',async t=>{
+ const f=converterFixture(t);f.throwPost=true;await assert.rejects(f.wrapped.frameAt(0),/post failure|Worker/);
+ assert.equal(f.samples[0].closed,1);assert.equal(f.samples[0].senderClosed,1);assert.equal(f.samples[0].receiverClosed,0);
+ assert.equal(f.workers[0].terminated,1);
+});
+
+test('converter per-picture copy failure closes its sample once and keeps the worker usable',async t=>{
+ const f=converterFixture(t);const pending=f.wrapped.frameAt(0);const rejected=assert.rejects(pending,/copy failed/);await tick();f.workers[0].reply(undefined,10,'copy failed');await rejected;
+ assert.equal(f.samples[0].closed,1);assert.equal(f.samples[0].senderClosed,0,'successful post transfers native resource ownership');
+ assert.equal(f.workers[0].terminated,0);const next=f.wrapped.frameAt(1);await tick();f.workers[0].reply();(await next).close();
+});
+
+test('converter ignores an old reply after the slot is reused',async t=>{
+ const f=converterFixture(t);const first=f.wrapped.frameAt(0);await tick();const old=f.workers[0].requests[0];f.workers[0].reply(old);(await first).close();
+ let settled=false;const second=f.wrapped.frameAt(1).then(frame=>{settled=true;return frame;});await tick();
+ f.workers[0].reply(old,200);await tick();assert.equal(settled,false,'a late reply cannot fulfill the next job');
+ f.workers[0].reply(undefined,50);const frame=await second;assert.equal(frame.pixels![0],50);frame.close();
+});
+
+test('converter dispose settles a held upstream read and releases its late sample once',async t=>{
+ const f=converterFixture(t);let finish!:(frame:DecodedFrame)=>void;f.source.frameAt=()=>new Promise(resolve=>finish=resolve);
+ // Bind a fresh wrapper after replacing the upstream method.
+ const wrapped=nativeYuvSource(f.source,1,1,false);let rejected=false;
+ const pending=wrapped.frameAt(0).catch(error=>{rejected=true;return error;});wrapped.dispose();await tick();
+ try{assert.equal(rejected,true,'dispose must not wait for upstream to return');}
+ finally{finish(f.frame(0));await pending;wrapped.dispose();}
+ assert.equal(f.samples.at(-1)!.closed,1);assert.equal(f.disposed,0);
+});
+
+test('throwing source disposal cannot skip converter pending/handler/worker cleanup',async t=>{
+ const f=converterFixture(t);const pending=f.wrapped.frameAt(0);let rejected=false;pending.catch(()=>{rejected=true;});await tick();f.throwDispose=true;
+ assert.throws(()=>f.wrapped.dispose(),/source dispose failure/);await tick();assert.equal(rejected,true);
+ assert.equal(f.workers[0].terminated,1);assert.equal(f.workers[0].onmessage,null);assert.equal(f.workers[0].onerror,null);assert.equal(f.workers[0].onmessageerror,null);
+});
+
+test('converter returns a caller-owned buffer only after close and transfers the recycled buffer',async t=>{
+ const f=converterFixture(t);const first=f.wrapped.frameAt(0);await tick();f.workers[0].reply();const frame=await first;const pixels=frame.pixels!;
+ assert.equal(pixels.byteLength,6);frame.close();frame.close();
+ const second=f.wrapped.frameAt(1);await tick();assert.equal(pixels.byteLength,0,'the returned buffer is transferred only after caller close');
+ assert.equal(f.workers[0].requests[1].buffer!.byteLength,6);f.workers[0].reply();(await second).close();
+ assert.ok(f.samples.every(sample=>sample.closed===1&&sample.senderClosed===0&&sample.receiverClosed===1));
+});
+
+test('converter failure remains isolated from a healthy wrapper using the same upstream source',async t=>{
+ const f=converterFixture(t);const healthy=nativeYuvSource(f.source,1,1,false);
+ try{
+  const broken=f.wrapped.frameAt(0);const rejected=assert.rejects(broken,/Worker/);const good=healthy.frameAt(1);await tick();
+  f.workers[0].onmessageerror?.();await rejected;f.workers[1].reply();(await good).close();assert.equal(f.disposed,0);assert.equal(f.workers[1].terminated,0);
+ }finally{healthy.dispose();}
+});
+
+test('returning a converter iterator does not hang on its held next input and closes the late sample',async t=>{
+ const f=converterFixture(t);let finish!:(frame:DecodedFrame)=>void;
+ f.source.framesFrom=async function*(){yield f.frame(0);yield await new Promise<DecodedFrame>(resolve=>finish=resolve);};
+ const wrapped=nativeYuvSource(f.source,1,1,false),iterator=wrapped.framesFrom(0);
+ const first=iterator.next();await tick();f.workers[1].reply();(await first).value!.close();await tick();
+ let returned=false;const returning=iterator.return(undefined).then(()=>returned=true);await tick();
+ try{assert.equal(returned,true,'iterator cancellation must not wait for another upstream picture');}
+ finally{finish(f.frame(1));await returning;await tick();wrapped.dispose();}
+ assert.equal(f.samples.at(-1)!.closed,1);
+});
+
+test('malformed converter replies retire the transport and constructor failures clean partial pools',async t=>{
+ const f=converterFixture(t);const pending=f.wrapped.frameAt(0);const rejected=assert.rejects(pending,/Worker/);await tick();f.workers[0].onmessage?.({data:{id:f.workers[0].requests[0].id,buffer:new ArrayBuffer(6),layout:'bad'}});await rejected;assert.equal(f.workers[0].terminated,1);
+ let created=0,terminated=0;const old=globalThis.Worker;
+ class BrokenWorker{constructor(){if(created++)throw new Error('constructor failed');}onmessage=null;onerror=null;onmessageerror=null;terminate(){terminated++;}}
+ globalThis.Worker=BrokenWorker as unknown as typeof Worker;
+ try{assert.throws(()=>nativeYuvSource(f.source,2),/constructor failed/);assert.equal(terminated,1);}finally{globalThis.Worker=old;}
 });

@@ -1,0 +1,1005 @@
+{
+  "policy": "Unreferenced thin forwarding paths retired after npm aliases and execution commands moved to the canonical catalog. Use the listed stable case ID through scripts/run-tests.mjs or its npm alias. Public/documented/workflow/imported forwarding paths remain. Canonical implementations and cases are retained.",
+  "aliases": [
+    {
+      "script": "test/bitstream-analysis-ts.test.ts",
+      "implementation": "test/media/bitstream-analysis-ts.test.ts",
+      "caseIds": [
+        "node-bitstream-analysis-ts"
+      ]
+    },
+    {
+      "script": "test/static-assets.test.mjs",
+      "implementation": "test/contract/static-assets.test.mjs",
+      "caseIds": [
+        "node-static-assets"
+      ]
+    },
+    {
+      "script": "test/bitstream-analysis-flv.test.ts",
+      "implementation": "test/media/bitstream-analysis-flv.test.ts",
+      "caseIds": [
+        "node-bitstream-analysis-flv"
+      ]
+    },
+    {
+      "script": "scripts/check-hdr-playback-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-playback.mjs",
+      "caseIds": [
+        "browser-hdr-playback-chromium",
+        "browser-hdr-playback-webkit"
+      ]
+    },
+    {
+      "script": "test/hdr-color.test.ts",
+      "implementation": "test/unit/hdr-color.test.ts",
+      "caseIds": [
+        "node-hdr-color"
+      ]
+    },
+    {
+      "script": "scripts/check-hdr-color-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-color.mjs",
+      "caseIds": [
+        "browser-hdr-color-chromium",
+        "browser-hdr-color-webkit",
+        "manual-hdr-color-webgpu"
+      ]
+    },
+    {
+      "script": "scripts/bench-https-pair.mjs",
+      "implementation": "scripts/tools/perf/https-pair.mjs",
+      "caseIds": [
+        "perf-https-pair"
+      ]
+    },
+    {
+      "script": "scripts/check-i18n-admin-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin.mjs",
+      "caseIds": [
+        "browser-i18n-admin-chromium",
+        "browser-i18n-admin-webkit"
+      ]
+    },
+    {
+      "script": "scripts/check-i18n-guide-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-guide.mjs",
+      "caseIds": [
+        "browser-i18n-guide-chromium",
+        "browser-i18n-guide-webkit"
+      ]
+    },
+    {
+      "script": "scripts/check-i18n-admin-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin-layout.mjs",
+      "caseIds": [
+        "browser-i18n-admin-layout-chromium",
+        "browser-i18n-admin-layout-webkit"
+      ]
+    },
+    {
+      "script": "test/admin-localization.test.ts",
+      "implementation": "test/unit/admin-localization.test.ts",
+      "caseIds": [
+        "node-admin-localization"
+      ]
+    },
+    {
+      "script": "test/admin.test.ts",
+      "implementation": "test/unit/admin.test.ts",
+      "caseIds": [
+        "node-admin",
+        "bun-admin"
+      ]
+    },
+    {
+      "script": "test/analysis-adapters.test.ts",
+      "implementation": "test/unit/analysis-adapters.test.ts",
+      "caseIds": [
+        "node-analysis-adapters"
+      ]
+    },
+    {
+      "script": "test/analysis-canvas.test.ts",
+      "implementation": "test/unit/analysis-canvas.test.ts",
+      "caseIds": [
+        "node-analysis-canvas"
+      ]
+    },
+    {
+      "script": "test/analysis-contracts.test.ts",
+      "implementation": "test/contract/analysis-contracts.test.ts",
+      "caseIds": [
+        "node-analysis-contracts"
+      ]
+    },
+    {
+      "script": "test/analysis-geometry.test.ts",
+      "implementation": "test/unit/analysis-geometry.test.ts",
+      "caseIds": [
+        "node-analysis-geometry"
+      ]
+    },
+    {
+      "script": "test/analysis-grouping.test.ts",
+      "implementation": "test/unit/analysis-grouping.test.ts",
+      "caseIds": [
+        "node-analysis-grouping"
+      ]
+    },
+    {
+      "script": "test/analysis-incremental.test.ts",
+      "implementation": "test/unit/analysis-incremental.test.ts",
+      "caseIds": [
+        "node-analysis-incremental"
+      ]
+    },
+    {
+      "script": "test/analysis-inspection.test.ts",
+      "implementation": "test/unit/analysis-inspection.test.ts",
+      "caseIds": [
+        "node-analysis-inspection"
+      ]
+    },
+    {
+      "script": "test/analysis-projection.test.ts",
+      "implementation": "test/unit/analysis-projection.test.ts",
+      "caseIds": [
+        "node-analysis-projection"
+      ]
+    },
+    {
+      "script": "test/analysis-round2.test.ts",
+      "implementation": "test/unit/analysis-round2.test.ts",
+      "caseIds": [
+        "node-analysis-round2"
+      ]
+    },
+    {
+      "script": "test/analysis-selection.test.ts",
+      "implementation": "test/unit/analysis-selection.test.ts",
+      "caseIds": [
+        "node-analysis-selection"
+      ]
+    },
+    {
+      "script": "test/analysis-statistics.test.ts",
+      "implementation": "test/unit/analysis-statistics.test.ts",
+      "caseIds": [
+        "node-analysis-statistics"
+      ]
+    },
+    {
+      "script": "test/analysis-view-cache.test.ts",
+      "implementation": "test/unit/analysis-view-cache.test.ts",
+      "caseIds": [
+        "node-analysis-view-cache"
+      ]
+    },
+    {
+      "script": "test/annotation-pending.test.ts",
+      "implementation": "test/unit/annotation-pending.test.ts",
+      "caseIds": [
+        "node-annotation-pending"
+      ]
+    },
+    {
+      "script": "test/annotation.test.ts",
+      "implementation": "test/unit/annotation.test.ts",
+      "caseIds": [
+        "node-annotation"
+      ]
+    },
+    {
+      "script": "test/annotations-store.test.ts",
+      "implementation": "test/unit/annotations-store.test.ts",
+      "caseIds": [
+        "node-annotations-store"
+      ]
+    },
+    {
+      "script": "test/appearance.test.ts",
+      "implementation": "test/unit/appearance.test.ts",
+      "caseIds": [
+        "node-appearance"
+      ]
+    },
+    {
+      "script": "test/browser-regression-harness.test.mjs",
+      "implementation": "test/contract/browser-regression-harness.test.mjs",
+      "caseIds": [
+        "node-browser-regression-harness"
+      ]
+    },
+    {
+      "script": "test/chroma-reconstruction.test.ts",
+      "implementation": "test/unit/chroma-reconstruction.test.ts",
+      "caseIds": [
+        "node-chroma-reconstruction"
+      ]
+    },
+    {
+      "script": "test/clean.test.mjs",
+      "implementation": "test/unit/clean.test.mjs",
+      "caseIds": [
+        "node-clean"
+      ]
+    },
+    {
+      "script": "test/color-evidence.test.ts",
+      "implementation": "test/unit/color-evidence.test.ts",
+      "caseIds": [
+        "node-color-evidence"
+      ]
+    },
+    {
+      "script": "test/config.test.ts",
+      "implementation": "test/unit/config.test.ts",
+      "caseIds": [
+        "node-config"
+      ]
+    },
+    {
+      "script": "test/connection-guide.test.ts",
+      "implementation": "test/unit/connection-guide.test.ts",
+      "caseIds": [
+        "node-connection-guide"
+      ]
+    },
+    {
+      "script": "test/connection-routing.test.ts",
+      "implementation": "test/unit/connection-routing.test.ts",
+      "caseIds": [
+        "node-connection-routing"
+      ]
+    },
+    {
+      "script": "test/decoder-policy.test.ts",
+      "implementation": "test/unit/decoder-policy.test.ts",
+      "caseIds": [
+        "node-decoder-policy"
+      ]
+    },
+    {
+      "script": "test/fate-oracle.test.ts",
+      "implementation": "test/unit/fate-oracle.test.ts",
+      "caseIds": [
+        "node-fate-oracle"
+      ]
+    },
+    {
+      "script": "test/ffmpeg-index-cache.test.ts",
+      "implementation": "test/unit/ffmpeg-index-cache.test.ts",
+      "caseIds": [
+        "node-ffmpeg-index-cache"
+      ]
+    },
+    {
+      "script": "test/ffmpeg-media-progressive.test.ts",
+      "implementation": "test/media/ffmpeg-media-progressive.test.ts",
+      "caseIds": [
+        "node-ffmpeg-media-progressive"
+      ]
+    },
+    {
+      "script": "test/ffmpeg-media.test.ts",
+      "implementation": "test/media/ffmpeg-media.test.ts",
+      "caseIds": [
+        "node-ffmpeg-media"
+      ]
+    },
+    {
+      "script": "test/file-drop.test.ts",
+      "implementation": "test/unit/file-drop.test.ts",
+      "caseIds": [
+        "node-file-drop"
+      ]
+    },
+    {
+      "script": "test/file-handles.test.ts",
+      "implementation": "test/unit/file-handles.test.ts",
+      "caseIds": [
+        "node-file-handles"
+      ]
+    },
+    {
+      "script": "test/flv-duplicate-pts.test.ts",
+      "implementation": "test/media/flv-duplicate-pts.test.ts",
+      "caseIds": [
+        "node-flv-duplicate-pts"
+      ]
+    },
+    {
+      "script": "test/flv-index-diagnostics.test.ts",
+      "implementation": "test/unit/flv-index-diagnostics.test.ts",
+      "caseIds": [
+        "node-flv-index-diagnostics"
+      ]
+    },
+    {
+      "script": "test/flv-open-gop.test.ts",
+      "implementation": "test/media/flv-open-gop.test.ts",
+      "caseIds": [
+        "node-flv-open-gop"
+      ]
+    },
+    {
+      "script": "test/flv-server-index.test.ts",
+      "implementation": "test/unit/flv-server-index.test.ts",
+      "caseIds": [
+        "node-flv-server-index"
+      ]
+    },
+    {
+      "script": "test/flv-startup-frame.test.ts",
+      "implementation": "test/media/flv-startup-frame.test.ts",
+      "caseIds": [
+        "node-flv-startup-frame"
+      ]
+    },
+    {
+      "script": "test/frame-description.test.ts",
+      "implementation": "test/unit/frame-description.test.ts",
+      "caseIds": [
+        "node-frame-description"
+      ]
+    },
+    {
+      "script": "test/frame-index-profile.test.ts",
+      "implementation": "test/media/frame-index-profile.test.ts",
+      "caseIds": [
+        "node-frame-index-profile"
+      ]
+    },
+    {
+      "script": "test/frame-index-stream.test.ts",
+      "implementation": "test/unit/frame-index-stream.test.ts",
+      "caseIds": [
+        "node-frame-index-stream"
+      ]
+    },
+    {
+      "script": "test/frame-index-worker.test.ts",
+      "implementation": "test/unit/frame-index-worker.test.ts",
+      "caseIds": [
+        "node-frame-index-worker"
+      ]
+    },
+    {
+      "script": "test/frame-task.test.ts",
+      "implementation": "test/unit/frame-task.test.ts",
+      "caseIds": [
+        "node-frame-task"
+      ]
+    },
+    {
+      "script": "test/gpu-presentation-guard.test.ts",
+      "implementation": "test/unit/gpu-presentation-guard.test.ts",
+      "caseIds": [
+        "node-gpu-presentation-guard"
+      ]
+    },
+    {
+      "script": "test/hlg-pixel-signature.test.mjs",
+      "implementation": "test/contract/hlg-pixel-signature.test.mjs",
+      "caseIds": [
+        "node-hlg-pixel-signature"
+      ]
+    },
+    {
+      "script": "test/identity-browser-lifecycle.test.mjs",
+      "implementation": "test/contract/identity-browser-lifecycle.test.mjs",
+      "caseIds": [
+        "node-identity-browser-lifecycle"
+      ]
+    },
+    {
+      "script": "test/identity.test.ts",
+      "implementation": "test/unit/identity.test.ts",
+      "caseIds": [
+        "node-identity",
+        "bun-identity"
+      ]
+    },
+    {
+      "script": "test/index-stream-transport.test.ts",
+      "implementation": "test/unit/index-stream-transport.test.ts",
+      "caseIds": [
+        "node-index-stream-transport"
+      ]
+    },
+    {
+      "script": "test/library-incremental.test.ts",
+      "implementation": "test/unit/library-incremental.test.ts",
+      "caseIds": [
+        "node-library-incremental",
+        "bun-library-incremental"
+      ]
+    },
+    {
+      "script": "test/library-index.test.ts",
+      "implementation": "test/unit/library-index.test.ts",
+      "caseIds": [
+        "node-library-index",
+        "bun-library-index"
+      ]
+    },
+    {
+      "script": "test/library-link.test.ts",
+      "implementation": "test/unit/library-link.test.ts",
+      "caseIds": [
+        "node-library-link"
+      ]
+    },
+    {
+      "script": "test/library-storage.test.ts",
+      "implementation": "test/unit/library-storage.test.ts",
+      "caseIds": [
+        "node-library-storage",
+        "bun-library-storage"
+      ]
+    },
+    {
+      "script": "test/log-preview.test.ts",
+      "implementation": "test/unit/log-preview.test.ts",
+      "caseIds": [
+        "node-log-preview"
+      ]
+    },
+    {
+      "script": "test/log.test.ts",
+      "implementation": "test/unit/log.test.ts",
+      "caseIds": [
+        "node-log"
+      ]
+    },
+    {
+      "script": "test/media-abort.test.ts",
+      "implementation": "test/media/media-abort.test.ts",
+      "caseIds": [
+        "node-media-abort"
+      ]
+    },
+    {
+      "script": "test/media-identity.test.ts",
+      "implementation": "test/unit/media-identity.test.ts",
+      "caseIds": [
+        "node-media-identity"
+      ]
+    },
+    {
+      "script": "test/media-index-client.test.ts",
+      "implementation": "test/unit/media-index-client.test.ts",
+      "caseIds": [
+        "node-media-index-client"
+      ]
+    },
+    {
+      "script": "test/media-index-identity.test.ts",
+      "implementation": "test/unit/media-index-identity.test.ts",
+      "caseIds": [
+        "node-media-index-identity"
+      ]
+    },
+    {
+      "script": "test/media-index-session.test.ts",
+      "implementation": "test/unit/media-index-session.test.ts",
+      "caseIds": [
+        "node-media-index-session"
+      ]
+    },
+    {
+      "script": "test/media-loading.test.ts",
+      "implementation": "test/unit/media-loading.test.ts",
+      "caseIds": [
+        "node-media-loading"
+      ]
+    },
+    {
+      "script": "test/media-metadata.test.ts",
+      "implementation": "test/unit/media-metadata.test.ts",
+      "caseIds": [
+        "node-media-metadata"
+      ]
+    },
+    {
+      "script": "test/media-policy.test.ts",
+      "implementation": "test/unit/media-policy.test.ts",
+      "caseIds": [
+        "node-media-policy"
+      ]
+    },
+    {
+      "script": "test/media-reference.test.ts",
+      "implementation": "test/unit/media-reference.test.ts",
+      "caseIds": [
+        "node-media-reference"
+      ]
+    },
+    {
+      "script": "test/media-thumbnail-store.test.ts",
+      "implementation": "test/unit/media-thumbnail-store.test.ts",
+      "caseIds": [
+        "node-media-thumbnail-store"
+      ]
+    },
+    {
+      "script": "test/media.test.ts",
+      "implementation": "test/media/media.test.ts",
+      "caseIds": [
+        "node-media"
+      ]
+    },
+    {
+      "script": "test/mp4-boundary.test.ts",
+      "implementation": "test/media/mp4-boundary.test.ts",
+      "caseIds": [
+        "node-mp4-boundary"
+      ]
+    },
+    {
+      "script": "test/native-yuv-source.test.ts",
+      "implementation": "test/unit/native-yuv-source.test.ts",
+      "caseIds": [
+        "node-native-yuv-source"
+      ]
+    },
+    {
+      "script": "test/packet-timeline.test.ts",
+      "implementation": "test/unit/packet-timeline.test.ts",
+      "caseIds": [
+        "node-packet-timeline"
+      ]
+    },
+    {
+      "script": "test/panel-motion.test.ts",
+      "implementation": "test/unit/panel-motion.test.ts",
+      "caseIds": [
+        "node-panel-motion"
+      ]
+    },
+    {
+      "script": "test/pixel-grid.test.ts",
+      "implementation": "test/unit/pixel-grid.test.ts",
+      "caseIds": [
+        "node-pixel-grid"
+      ]
+    },
+    {
+      "script": "test/presentation-tick.test.ts",
+      "implementation": "test/unit/presentation-tick.test.ts",
+      "caseIds": [
+        "node-presentation-tick"
+      ]
+    },
+    {
+      "script": "test/protocol-server.test.ts",
+      "implementation": "test/unit/protocol-server.test.ts",
+      "caseIds": [
+        "node-protocol-server"
+      ]
+    },
+    {
+      "script": "test/range-bridge-large.test.ts",
+      "implementation": "test/unit/range-bridge-large.test.ts",
+      "caseIds": [
+        "node-range-bridge-large"
+      ]
+    },
+    {
+      "script": "test/reference-source.test.ts",
+      "implementation": "test/unit/reference-source.test.ts",
+      "caseIds": [
+        "node-reference-source"
+      ]
+    },
+    {
+      "script": "test/resize-gesture.test.ts",
+      "implementation": "test/unit/resize-gesture.test.ts",
+      "caseIds": [
+        "node-resize-gesture"
+      ]
+    },
+    {
+      "script": "test/resource-budget.test.ts",
+      "implementation": "test/unit/resource-budget.test.ts",
+      "caseIds": [
+        "node-resource-budget"
+      ]
+    },
+    {
+      "script": "test/saved-workspaces-ui.test.ts",
+      "implementation": "test/unit/saved-workspaces-ui.test.ts",
+      "caseIds": [
+        "node-saved-workspaces-ui"
+      ]
+    },
+    {
+      "script": "test/saved-workspaces.test.ts",
+      "implementation": "test/unit/saved-workspaces.test.ts",
+      "caseIds": [
+        "node-saved-workspaces",
+        "bun-saved-workspaces"
+      ]
+    },
+    {
+      "script": "test/seek-preview.test.ts",
+      "implementation": "test/unit/seek-preview.test.ts",
+      "caseIds": [
+        "node-seek-preview"
+      ]
+    },
+    {
+      "script": "test/server.test.ts",
+      "implementation": "test/media/server.test.ts",
+      "caseIds": [
+        "node-server"
+      ]
+    },
+    {
+      "script": "test/session-catalog.test.ts",
+      "implementation": "test/unit/session-catalog.test.ts",
+      "caseIds": [
+        "node-session-catalog"
+      ]
+    },
+    {
+      "script": "test/session-color-rollback.test.ts",
+      "implementation": "test/unit/session-color-rollback.test.ts",
+      "caseIds": [
+        "node-session-color-rollback"
+      ]
+    },
+    {
+      "script": "test/session-decode-cancel.test.ts",
+      "implementation": "test/unit/session-decode-cancel.test.ts",
+      "caseIds": [
+        "node-session-decode-cancel"
+      ]
+    },
+    {
+      "script": "test/session-failure-diagnostics.test.ts",
+      "implementation": "test/unit/session-failure-diagnostics.test.ts",
+      "caseIds": [
+        "node-session-failure-diagnostics"
+      ]
+    },
+    {
+      "script": "test/agent-tool-contract.test.ts",
+      "implementation": "test/unit/agent-tool-contract.test.ts",
+      "caseIds": [
+        "node-agent-tool-contract"
+      ]
+    },
+    {
+      "script": "test/shared-workspaces.test.ts",
+      "implementation": "test/unit/shared-workspaces.test.ts",
+      "caseIds": [
+        "node-shared-workspaces"
+      ]
+    },
+    {
+      "script": "test/stream-tail.test.ts",
+      "implementation": "test/media/stream-tail.test.ts",
+      "caseIds": [
+        "node-stream-tail"
+      ]
+    },
+    {
+      "script": "test/thumbnail-offer.test.ts",
+      "implementation": "test/unit/thumbnail-offer.test.ts",
+      "caseIds": [
+        "node-thumbnail-offer"
+      ]
+    },
+    {
+      "script": "test/thumbnail-session.test.ts",
+      "implementation": "test/unit/thumbnail-session.test.ts",
+      "caseIds": [
+        "node-thumbnail-session"
+      ]
+    },
+    {
+      "script": "test/thumbnails-contract.test.ts",
+      "implementation": "test/contract/thumbnails-contract.test.ts",
+      "caseIds": [
+        "node-thumbnails-contract"
+      ]
+    },
+    {
+      "script": "test/time-input.test.ts",
+      "implementation": "test/unit/time-input.test.ts",
+      "caseIds": [
+        "node-time-input"
+      ]
+    },
+    {
+      "script": "test/track-toasts.test.ts",
+      "implementation": "test/unit/track-toasts.test.ts",
+      "caseIds": [
+        "node-track-toasts"
+      ]
+    },
+    {
+      "script": "test/tls.test.ts",
+      "implementation": "test/unit/tls.test.ts",
+      "caseIds": [
+        "node-tls"
+      ]
+    },
+    {
+      "script": "test/uuid.test.ts",
+      "implementation": "test/unit/uuid.test.ts",
+      "caseIds": [
+        "node-uuid"
+      ]
+    },
+    {
+      "script": "test/view-recovery.test.ts",
+      "implementation": "test/unit/view-recovery.test.ts",
+      "caseIds": [
+        "node-view-recovery"
+      ]
+    },
+    {
+      "script": "test/viewport-gestures.test.ts",
+      "implementation": "test/unit/viewport-gestures.test.ts",
+      "caseIds": [
+        "node-viewport-gestures"
+      ]
+    },
+    {
+      "script": "test/viewport.test.ts",
+      "implementation": "test/unit/viewport.test.ts",
+      "caseIds": [
+        "node-viewport"
+      ]
+    },
+    {
+      "script": "test/vite-routing.test.ts",
+      "implementation": "test/unit/vite-routing.test.ts",
+      "caseIds": [
+        "node-vite-routing"
+      ]
+    },
+    {
+      "script": "test/wasm-memory.test.ts",
+      "implementation": "test/unit/wasm-memory.test.ts",
+      "caseIds": [
+        "node-wasm-memory"
+      ]
+    },
+    {
+      "script": "test/workspace-file.test.ts",
+      "implementation": "test/unit/workspace-file.test.ts",
+      "caseIds": [
+        "node-workspace-file"
+      ]
+    },
+    {
+      "script": "test/workspace-storage.test.ts",
+      "implementation": "test/unit/workspace-storage.test.ts",
+      "caseIds": [
+        "node-workspace-storage"
+      ]
+    },
+    {
+      "script": "test/workspace.test.ts",
+      "implementation": "test/unit/workspace.test.ts",
+      "caseIds": [
+        "node-workspace"
+      ]
+    },
+    {
+      "script": "test/yuv-channel.test.ts",
+      "implementation": "test/unit/yuv-channel.test.ts",
+      "caseIds": [
+        "node-yuv-channel"
+      ]
+    },
+    {
+      "script": "test/yuv-color.test.ts",
+      "implementation": "test/unit/yuv-color.test.ts",
+      "caseIds": [
+        "node-yuv-color"
+      ]
+    },
+    {
+      "script": "test/yuv-core.test.ts",
+      "implementation": "test/media/yuv-core.test.ts",
+      "caseIds": [
+        "node-yuv-core"
+      ]
+    },
+    {
+      "script": "test/yuv-frame.test.ts",
+      "implementation": "test/unit/yuv-frame.test.ts",
+      "caseIds": [
+        "node-yuv-frame"
+      ]
+    },
+    {
+      "script": "scripts/check-annotation-browser.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation.mjs",
+      "caseIds": [
+        "browser-annotation-webkit",
+        "browser-annotation-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-annotation-rendering.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation-rendering.mjs",
+      "caseIds": [
+        "browser-annotation-rendering-webkit",
+        "browser-annotation-rendering-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-color-settings-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/color-settings.mjs",
+      "caseIds": [
+        "browser-color-settings-webkit"
+      ]
+    },
+    {
+      "script": "scripts/check-feedback-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/feedback.mjs",
+      "caseIds": [
+        "browser-feedback-webkit",
+        "browser-feedback-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-mark-cards-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/mark-cards.mjs",
+      "caseIds": [
+        "browser-mark-cards-webkit",
+        "browser-mark-cards-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-menu-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/menu.mjs",
+      "caseIds": [
+        "browser-menu-webkit",
+        "browser-menu-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-metadata-browser.mjs",
+      "implementation": "scripts/testing/browser/media/metadata.mjs",
+      "caseIds": [
+        "browser-metadata-webkit",
+        "browser-metadata-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-settings-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/settings.mjs",
+      "caseIds": [
+        "browser-settings-webkit",
+        "browser-settings-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-shortcuts-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/shortcuts.mjs",
+      "caseIds": [
+        "browser-shortcuts-webkit",
+        "browser-shortcuts-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-stepping-browser.mjs",
+      "implementation": "scripts/testing/browser/media/stepping.mjs",
+      "caseIds": [
+        "browser-stepping-webkit",
+        "browser-stepping-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-theme-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/theme.mjs",
+      "caseIds": [
+        "browser-theme-webkit",
+        "browser-theme-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-timeline-browser.mjs",
+      "implementation": "scripts/testing/browser/media/timeline.mjs",
+      "caseIds": [
+        "browser-timeline-webkit",
+        "browser-timeline-chromium"
+      ]
+    },
+    {
+      "script": "scripts/check-workspace-browser.mjs",
+      "implementation": "scripts/testing/browser/workspace/workspace.mjs",
+      "caseIds": [
+        "browser-workspace-webkit",
+        "browser-workspace-chromium"
+      ]
+    },
+    {
+      "script": "test/test-runner.test.mjs",
+      "implementation": "test/contract/test-runner.test.mjs",
+      "caseIds": [
+        "node-test-runner"
+      ]
+    },
+    {
+      "script": "test/browser-fixture.test.mjs",
+      "implementation": "test/contract/browser-fixture.test.mjs",
+      "caseIds": [
+        "node-browser-fixture"
+      ]
+    },
+    {
+      "script": "test/i18n.test.ts",
+      "implementation": "test/unit/i18n.test.ts",
+      "caseIds": [
+        "node-i18n"
+      ]
+    },
+    {
+      "script": "test/i18n-build.test.mjs",
+      "implementation": "test/contract/i18n-build.test.mjs",
+      "caseIds": [
+        "node-i18n-build"
+      ]
+    },
+    {
+      "script": "scripts/check-i18n-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n.mjs",
+      "caseIds": [
+        "browser-i18n-chromium",
+        "browser-i18n-webkit"
+      ]
+    },
+    {
+      "script": "scripts/bench-i18n.mjs",
+      "implementation": "scripts/tools/perf/i18n.mjs",
+      "caseIds": [
+        "perf-i18n-chromium",
+        "perf-i18n-webkit"
+      ]
+    },
+    {
+      "script": "scripts/check-i18n-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-layout.mjs",
+      "caseIds": [
+        "browser-i18n-layout-chromium",
+        "browser-i18n-layout-webkit"
+      ]
+    },
+    {
+      "script": "test/cached-track-metadata.test.ts",
+      "implementation": "test/unit/cached-track-metadata.test.ts",
+      "caseIds": [
+        "node-cached-track-metadata"
+      ]
+    },
+    {
+      "script": "test/native-client-lifecycle.test.ts",
+      "implementation": "test/contract/native-client-lifecycle.test.ts",
+      "caseIds": [
+        "node-native-client-lifecycle"
+      ]
+    },
+    {
+      "script": "test/cached-audio-client.test.ts",
+      "implementation": "test/unit/cached-audio-client.test.ts",
+      "caseIds": [
+        "node-cached-audio-client"
+      ]
+    },
+    {
+      "script": "test/playback-trace.test.mjs",
+      "implementation": "test/contract/playback-trace.test.mjs",
+      "caseIds": [
+        "node-playback-trace"
+      ]
+    }
+  ]
+}

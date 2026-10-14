@@ -34,18 +34,63 @@ export function verifyNativeWitness(native:DecodedFrame,reference:DecodedFrame){
 
 /** A source owns its workers; yielded buffers belong to frames until close(). */
 export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:number|null=null,ownsSource=true):MediaSource{
-  let disposed=false;
+  if(!Number.isSafeInteger(depth)||depth<1)throw new RangeError('Invalid native readback depth');
+  let disposed=false,failure:Error|undefined,nextId=0;
   let signature:string|undefined;
   const sourceFrameAt=source.frameAt.bind(source),sourceFramesFrom=source.framesFrom.bind(source),sourceFramesFollowing=source.framesFollowing?.bind(source);
-  type Slot={worker:Worker;buffer?:ArrayBuffer;reject?: (error:Error)=>void};
-  const slots:Slot[]=[];
-  try{for(let i=0;i<depth;i++)slots.push({worker:new Worker(new URL('./native-yuv-worker.ts',import.meta.url),{type:'module'})});}
-  catch(error){slots.forEach(s=>s.worker.terminate());throw error;}
-  const free=[...slots],waiters:Array<(slot:Slot)=>void>=[];
+  type Reply={buffer:ArrayBuffer;layout:PlaneLayout[]};
+  type Job={id:number;resolve:(reply:Reply)=>void;reject:(error:Error)=>void};
+  type Slot={worker:Worker;buffer?:ArrayBuffer;job?:Job;terminated?:boolean};
+  const slots:Slot[]=[],free:Slot[]=[],waiters:Array<{resolve:(slot:Slot)=>void;reject:(error:Error)=>void}>=[];
+  const inputWaiters=new Set<(error:Error)=>void>();
   const aborted=()=>new DOMException('媒体已释放。','AbortError');
-  const release=(slot:Slot)=>{slot.reject=undefined;const next=waiters.shift();if(next)next(slot);else free.push(slot);};
+  const terminal=()=>disposed?aborted():failure;
+  const assertActive=()=>{const error=terminal();if(error)throw error;};
+  const terminate=(slot:Slot)=>{
+    if(slot.terminated)return;slot.terminated=true;
+    slot.worker.onmessage=null;slot.worker.onerror=null;slot.worker.onmessageerror=null;
+    slot.worker.terminate();slot.buffer=undefined;
+  };
+  const stop=(error:Error)=>{
+    for(const reject of [...inputWaiters])reject(error);
+    for(const waiter of waiters.splice(0))waiter.reject(error);
+    free.length=0;
+    for(const slot of slots){const job=slot.job;slot.job=undefined;job?.reject(error);terminate(slot);}
+  };
+  const fail=(error:Error)=>{if(terminal())return;failure=error;stop(error);};
+  try{for(let i=0;i<depth;i++){
+    const slot:Slot={worker:new Worker(new URL('./native-yuv-worker.ts',import.meta.url),{type:'module'})};slots.push(slot);free.push(slot);
+    slot.worker.onerror=()=>fail(new MediaOpenError('decode','硬件平面读回 Worker 失败。'));
+    slot.worker.onmessageerror=()=>fail(new MediaOpenError('decode','硬件平面读回 Worker 消息无法反序列化。'));
+    slot.worker.onmessage=({data})=>{
+      if(terminal()||!slot.job)return;
+      if(!data||!Number.isSafeInteger(data.id)||data.id>slot.job.id){fail(new MediaOpenError('decode','硬件平面读回 Worker 回复无效。'));return;}
+      if(data.id!==slot.job.id)return;
+      const job=slot.job;slot.job=undefined;
+      if(typeof data.error==='string'){job.reject(new MediaOpenError('decode',data.error));return;}
+      if(!(data.buffer instanceof ArrayBuffer)||!Array.isArray(data.layout)||!data.layout.every((p:PlaneLayout)=>Number.isSafeInteger(p?.offset)&&p.offset>=0&&Number.isSafeInteger(p?.stride)&&p.stride>0)){
+        slot.job=job;fail(new MediaOpenError('decode','硬件平面读回 Worker 平面无效。'));return;
+      }
+      job.resolve(data);
+    };
+  }}catch(error){slots.forEach(terminate);throw error;}
+  const release=(slot:Slot)=>{if(terminal()||slot.terminated)return;const next=waiters.shift();if(next)next.resolve(slot);else free.push(slot);};
+  // A cancelled upstream read may resolve later. Its frame remains ours to
+  // close, but cannot keep a disposed wrapper or iterator waiting indefinitely.
+  function readInput<T>(work:Promise<T>,discard:(value:T)=>void,signal?:AbortSignal):Promise<T>{
+    return new Promise((resolve,reject)=>{
+      let cancelled=false;
+      const cleanup=()=>{inputWaiters.delete(cancel);signal?.removeEventListener('abort',abort);};
+      const cancel=(error:Error)=>{cancelled=true;cleanup();reject(error);};
+      const abort=()=>cancel(signal?.reason??aborted());
+      inputWaiters.add(cancel);signal?.addEventListener('abort',abort,{once:true});
+      const error=terminal();if(error)cancel(error);else if(signal?.aborted)abort();
+      work.then(value=>{cleanup();if(cancelled)discard(value);else resolve(value);},error=>{cleanup();reject(error);}).catch(reject);
+    });
+  }
   async function convert(frame:DecodedFrame):Promise<DecodedFrame>{
-    if(disposed){frame.close();throw aborted();}
+    let sampleClosed=false;const closeSample=()=>{if(!sampleClosed){sampleClosed=true;frame.close();}};
+    const stopped=terminal();if(stopped){closeSample();throw stopped;}
     if(frame.kind==='yuv')return frame;
     const d=frame.description;
     const sourceColor=d.sourceColor;
@@ -55,39 +100,41 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     const format=d.format??'',bitDepth=format.endsWith('P10')?10:format.endsWith('P12')?12:8;
     // Keep the initial capability boundary deliberately narrow. Public native
     // APIs do not expose chroma siting; unknown uses the shared center policy.
-    if(!frame.sample||conflicting||sourceUnsupported||(sourceHdr&&sourceHdr!==resourceHdr)||!['NV12','I420','I420P10','I420P12'].includes(format)||!resolveYuvColor(d).supported||(bitDepth!==8&&!resourceHdr)||(resourceHdr&&bitDepth<10)){frame.close();throw new MediaOpenError('decode','硬件帧无法提供色彩标签与位深一致的原始平面。');}
+    if(!frame.sample||conflicting||sourceUnsupported||(sourceHdr&&sourceHdr!==resourceHdr)||!['NV12','I420','I420P10','I420P12'].includes(format)||!resolveYuvColor(d).supported||(bitDepth!==8&&!resourceHdr)||(resourceHdr&&bitDepth<10)){closeSample();throw new MediaOpenError('decode','硬件帧无法提供色彩标签与位深一致的原始平面。');}
     const key=JSON.stringify([d.format,d.codedWidth,d.codedHeight,d.visibleRect,d.color]);
-    if(signature!==undefined&&signature!==key){frame.close();throw new MediaOpenError('decode','硬件输出格式或色彩标签发生变化，请切换软件解码。');}signature=key;
-    const slot=free.shift()??await new Promise<Slot>(r=>waiters.push(r));
-    if(disposed){frame.close();release(slot);throw aborted();}
+    if(signature!==undefined&&signature!==key){closeSample();throw new MediaOpenError('decode','硬件输出格式或色彩标签发生变化，请切换软件解码。');}signature=key;
+    let slot:Slot;try{slot=free.shift()??await new Promise<Slot>((resolve,reject)=>waiters.push({resolve,reject}));}catch(error){closeSample();throw error;}
+    const stoppedAfterWait=terminal();if(stoppedAfterWait){closeSample();release(slot);throw stoppedAfterWait;}
     const start=performance.now();let resource:VideoFrame|undefined;
     try{
-      resource=frame.sample.toVideoFrame();const rotation=frame.sample.rotation;frame.close();
-      const reply=await new Promise<{buffer:ArrayBuffer;layout:PlaneLayout[]}>((done,fail)=>{
-        slot.reject=fail;slot.worker.onmessage=e=>e.data.error?fail(new MediaOpenError('decode',e.data.error)):done(e.data);
-        slot.worker.onerror=()=>fail(new MediaOpenError('decode','硬件平面读回 Worker 失败。'));
+      resource=frame.sample.toVideoFrame();const rotation=frame.sample.rotation;closeSample();
+      const reply=await new Promise<Reply>((resolve,reject)=>{
+        const id=++nextId;slot.job={id,resolve,reject};
         const buffer=slot.buffer;slot.buffer=undefined;
-        slot.worker.postMessage({frame:resource,buffer},buffer?[resource!,buffer]:[resource!]);
+        try{slot.worker.postMessage({id,frame:resource,buffer},buffer?[resource!,buffer]:[resource!]);resource=undefined;}
+        catch(error){fail(new MediaOpenError('decode',`硬件平面读回 Worker 发送失败：${String(error)}`));}
       });
       const pixels=new Uint8ClampedArray(reply.buffer);
       const description={...d,byteLength:pixels.byteLength,byteLengthEstimated:false,yuv:{bitDepth,bitShift:0,subsampleX:1,subsampleY:1,semiplanar:d.format==='NV12',chromaLocation,
         planes:reply.layout.map((p,i)=>({...p,width:Math.ceil(d.codedWidth/(i?2:1)),height:Math.ceil(d.codedHeight/(i?2:1))}))}};
       validateYuv(description,pixels.byteLength);
-      if(disposed)throw aborted();
+      assertActive();
       let closed=false;
       return {...frame,sample:undefined,rotation,kind:'yuv',description,pixels,byteSize:pixels.byteLength,copyMs:performance.now()-start,
-        close(){if(closed)return;closed=true;if(!disposed&&!slot.buffer)slot.buffer=reply.buffer;}};
-    }catch(error){frame.close();throw error;}
+        close(){if(closed)return;closed=true;if(!terminal()&&!slot.buffer)slot.buffer=reply.buffer;}};
+    }catch(error){closeSample();throw error;}
     finally{resource?.close();release(slot);}
   }
   async function* pipeline(iterator:AsyncGenerator<DecodedFrame>){
-    const pending:Promise<DecodedFrame>[]=[];let ended=false,cancelled=false,failure:unknown;
+    const pending:Promise<DecodedFrame>[]=[];let ended=false,cancelled=false,failure:unknown,inputPending=false;
+    const controller=new AbortController();
     let wakeConsumer:(()=>void)|undefined,wakeProducer:(()=>void)|undefined;
     const producer=(async()=>{
       try{while(!cancelled){
         while(pending.length>=depth&&!cancelled)await new Promise<void>(r=>wakeProducer=r);
         if(cancelled)break;
-        const next=await iterator.next();if(next.done)break;
+        inputPending=true;const input=iterator.next();input.then(()=>inputPending=false,()=>inputPending=false);
+        const next=await readInput(input,next=>{if(!next.done)next.value.close();},controller.signal);if(next.done)break;
         if(cancelled){next.value.close();break;}
         const p=convert(next.value);p.catch(()=>{});pending.push(p);wakeConsumer?.();wakeConsumer=undefined;
       }}catch(error){failure=error;}finally{ended=true;wakeConsumer?.();}
@@ -99,7 +146,11 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
         yield frame;
       }
       if(failure)throw failure;
-    }finally{cancelled=true;wakeProducer?.();await producer;await iterator.return(undefined);await Promise.all(pending.map(p=>p.then(f=>f.close(),()=>{})));}
+    }finally{
+      cancelled=true;controller.abort(aborted());wakeProducer?.();await producer;
+      const returning=iterator.return(undefined);if(inputPending)void returning.catch(()=>{});else await returning;
+      await Promise.all(pending.map(p=>p.then(f=>f.close(),()=>{})));
+    }
   }
   return {
     get info(){return source.info;},set info(info){source.info=info;},
@@ -116,10 +167,10 @@ export function nativeYuvSource(source:MediaSource,depth:number,chromaLocation:n
     rankAnalysisTime:source.rankAnalysisTime?.bind(source),
     analysisSampleAtNumber:source.analysisSampleAtNumber?.bind(source),
     locateAnalysisSample:source.locateAnalysisSample?.bind(source),
-    frameAt:async pts=>convert(await sourceFrameAt(pts)),
+    frameAt:async pts=>{assertActive();return convert(await readInput(sourceFrameAt(pts),frame=>frame.close()));},
     async framesAfter(pts,count){const result:DecodedFrame[]=[];try{for await(const frame of pipeline(sourceFramesFrom(pts))){if(frame.ptsUs<=pts){frame.close();continue;}result.push(frame);if(result.length>=count)break;}return result;}catch(error){result.forEach(f=>f.close());throw error;}},
     framesFrom:pts=>pipeline(sourceFramesFrom(pts)),
     ...(sourceFramesFollowing?{framesFollowing:(pts:number)=>pipeline(sourceFramesFollowing(pts))}:{}),
-    dispose(){if(disposed)return;disposed=true;if(ownsSource)source.dispose();for(const slot of slots){slot.reject?.(aborted());slot.worker.terminate();}while(waiters.length)waiters.shift()!(slots[0]);},
+    dispose(){if(disposed)return;disposed=true;stop(aborted());if(ownsSource)source.dispose();},
   };
 }
