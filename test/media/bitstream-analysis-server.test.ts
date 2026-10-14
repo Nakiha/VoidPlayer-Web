@@ -163,7 +163,7 @@ test("HTTP writes require same origin and version; server failures never downloa
     url = `${base}/api/media/${f.entry.id}/bitstream-analysis/requests?v=${f.entry.version}`;
   try {
     const body = JSON.stringify({
-      version: f.entry.version,
+      version: f.entry.version!,
       target: target(f.entry),
     });
     assert.equal(
@@ -486,10 +486,15 @@ test('shared library index discovers GOPs before all batches arrive; cancel deta
   const streamTarget = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 10000000, indexIdentity: identity };
   const call = f.library.indexJobs.call.bind(f.library.indexJobs);
   let release = false;
-  f.library.indexJobs.call = async (op, data = {}, ...args) => {
-    if (op === 'stream-batches' && Number(data.after) >= 0 && !release) return [];
-    const result = await call(op, data, ...args);
-    return op === 'stream-batches' && !release ? result.slice(0, 1) : result;
+  f.library.indexJobs.call = async (op, ...args) => {
+    const result = await call(op, ...args);
+    if (op === 'stream-batches' && !release) {
+      const data = args[0];
+      assert.ok(data && 'after' in data);
+      assert.ok(Array.isArray(result));
+      result.splice(Number(data.after) >= 0 ? 0 : 1);
+    }
+    return result;
   };
   try {
     const request = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'owner');
@@ -516,7 +521,8 @@ test('shared library index discovers GOPs before all batches arrive; cancel deta
       await new Promise(r => setTimeout(r, 10));
     }
     assert.equal(cursor, 300); scheduler.release(request.requestId, 'owner');
-    const manifest = await call('stream-manifest', { id: f.entry.id, version: f.entry.version, identity });
+    const manifest = await call('stream-manifest', { id: f.entry.id, version: f.entry.version!, identity });
+    assert.ok(manifest.manifest);
     assert.equal(manifest.manifest.complete, true, 'shared index survives analysis release');
     release = false;
     const cancelled = await scheduler.submit(f.entry.id, f.entry.version!, streamTarget, 'cancel');
@@ -527,7 +533,9 @@ test('shared library index discovers GOPs before all batches arrive; cancel deta
       if (state.chunks.length) { scheduler.release(cancelled.requestId, 'cancel'); break; }
       await new Promise(r => setTimeout(r, 10));
     }
-    assert.equal((await call('stream-manifest', { id: f.entry.id, version: f.entry.version, identity })).manifest.complete, true);
+    const afterCancel = await call('stream-manifest', { id: f.entry.id, version: f.entry.version!, identity });
+    assert.ok(afterCancel.manifest);
+    assert.equal(afterCancel.manifest.complete, true);
   } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
 });
 
