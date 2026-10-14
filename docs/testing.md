@@ -275,3 +275,10 @@ npm run test:fate:browser
 `node scripts/make-analysis-fmp4-fixtures.ts` 生成三 codec 的 byte-identical fragment remux 与真实视频复制/AAC traf 片源。`test/bitstream-analysis-fmp4.test.ts` 覆盖 payload/config、独立 codec/VTM 答案、真实播放 AU、跨非关键片 range、whole drain、取消、实际 Blob IO、媒体库缓存重启/补缺与 edit-list/raw ticks。`test/mp4-fragments.test.ts` 校验 addressing/defaults、64 位时间、合法 CTO 及越界/截断/时间断裂等拒绝边界。
 
 `ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
+
+
+## Canonical execution and compatibility paths
+
+The manifest's `implementation` (or `script` when no forwarding alias exists) is the canonical executable. `command` invokes it exactly once; the validator rejects executing a forwarding alias or duplicating the entry. The existing `script` path is retained only as a documented compatibility alias and remains a thin import/export forwarding to that implementation. CLI arguments, engines, inputs, preparation, budgets, gate flags and reports remain unchanged. Direct legacy paths are deprecated for new automation; use stable case IDs through `scripts/run-tests.mjs`.
+
+The fixed-baseline comparison in `docs/evidence/test-entry-migration.json` records all migrated owners. The coverage contract preserves the original catalog and argument lists, allowing only the alias-to-implementation path substitution. This stage retains compatibility files while npm aliases are migrated separately; it does not claim the remaining npm preparation/list duplication is already resolved.

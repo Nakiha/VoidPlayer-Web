@@ -1,0 +1,1102 @@
+{
+  "baseline": "c92d46fa1123fdd5b0f8757bc461055e10b92275",
+  "cases": 316,
+  "migratedCommands": 217,
+  "preserved": [
+    "case ID",
+    "engine/platform/input",
+    "fixture/tool/env",
+    "suite membership",
+    "timeouts/build",
+    "required/informational",
+    "artifacts",
+    "all command flags and arguments after entry substitution"
+  ],
+  "entries": [
+    {
+      "id": "node-bitstream-analysis-ts",
+      "legacy": "test/bitstream-analysis-ts.test.ts",
+      "implementation": "test/media/bitstream-analysis-ts.test.ts"
+    },
+    {
+      "id": "browser-bitstream-ts-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-ts-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "node-mp4-fragments",
+      "legacy": "test/mp4-fragments.test.ts",
+      "implementation": "test/unit/mp4-fragments.test.ts"
+    },
+    {
+      "id": "browser-bitstream-fmp4-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-fmp4-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "node-bitstream-analysis-fmp4",
+      "legacy": "test/bitstream-analysis-fmp4.test.ts",
+      "implementation": "test/media/bitstream-analysis-fmp4.test.ts"
+    },
+    {
+      "id": "node-static-assets",
+      "legacy": "test/static-assets.test.mjs",
+      "implementation": "test/contract/static-assets.test.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-flv-legacy-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-flv-enhanced-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-diagrams-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-index-chromium",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-flv-legacy-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-flv-enhanced-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-diagrams-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-index-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "browser-bitstream-analysis-layout-webkit",
+      "legacy": "scripts/check-bitstream-analysis-browser.mjs",
+      "implementation": "scripts/testing/browser/media/bitstream-analysis.mjs"
+    },
+    {
+      "id": "node-bitstream-analysis-server",
+      "legacy": "test/bitstream-analysis-server.test.ts",
+      "implementation": "test/media/bitstream-analysis-server.test.ts"
+    },
+    {
+      "id": "node-bitstream-analysis",
+      "legacy": "test/bitstream-analysis.test.ts",
+      "implementation": "test/unit/bitstream-analysis.test.ts"
+    },
+    {
+      "id": "node-bitstream-analysis-flv",
+      "legacy": "test/bitstream-analysis-flv.test.ts",
+      "implementation": "test/media/bitstream-analysis-flv.test.ts"
+    },
+    {
+      "id": "node-bitstream-analysis-core",
+      "legacy": "test/bitstream-analysis-core.test.ts",
+      "implementation": "test/media/bitstream-analysis-core.test.ts"
+    },
+    {
+      "id": "browser-hdr-playback-chromium",
+      "legacy": "scripts/check-hdr-playback-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-playback.mjs"
+    },
+    {
+      "id": "browser-hdr-playback-webkit",
+      "legacy": "scripts/check-hdr-playback-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-playback.mjs"
+    },
+    {
+      "id": "node-hdr-color",
+      "legacy": "test/hdr-color.test.ts",
+      "implementation": "test/unit/hdr-color.test.ts"
+    },
+    {
+      "id": "browser-hdr-color-chromium",
+      "legacy": "scripts/check-hdr-color-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-color.mjs"
+    },
+    {
+      "id": "browser-hdr-color-webkit",
+      "legacy": "scripts/check-hdr-color-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-color.mjs"
+    },
+    {
+      "id": "manual-native-hdr-browser",
+      "legacy": "scripts/check-native-hdr-browser.mjs",
+      "implementation": "scripts/testing/browser/media/native-hdr.mjs"
+    },
+    {
+      "id": "manual-hdr-color-webgpu",
+      "legacy": "scripts/check-hdr-color-browser.mjs",
+      "implementation": "scripts/testing/browser/media/hdr-color.mjs"
+    },
+    {
+      "id": "node-worker-rpc",
+      "legacy": "test/worker-rpc.test.ts",
+      "implementation": "test/contract/worker-rpc.test.ts"
+    },
+    {
+      "id": "perf-https-pair",
+      "legacy": "scripts/bench-https-pair.mjs",
+      "implementation": "scripts/tools/perf/https-pair.mjs"
+    },
+    {
+      "id": "browser-i18n-admin-chromium",
+      "legacy": "scripts/check-i18n-admin-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin.mjs"
+    },
+    {
+      "id": "browser-i18n-admin-webkit",
+      "legacy": "scripts/check-i18n-admin-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin.mjs"
+    },
+    {
+      "id": "browser-i18n-guide-chromium",
+      "legacy": "scripts/check-i18n-guide-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-guide.mjs"
+    },
+    {
+      "id": "browser-i18n-guide-webkit",
+      "legacy": "scripts/check-i18n-guide-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-guide.mjs"
+    },
+    {
+      "id": "browser-i18n-admin-layout-chromium",
+      "legacy": "scripts/check-i18n-admin-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin-layout.mjs"
+    },
+    {
+      "id": "browser-i18n-admin-layout-webkit",
+      "legacy": "scripts/check-i18n-admin-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-admin-layout.mjs"
+    },
+    {
+      "id": "node-admin-localization",
+      "legacy": "test/admin-localization.test.ts",
+      "implementation": "test/unit/admin-localization.test.ts"
+    },
+    {
+      "id": "node-admin",
+      "legacy": "test/admin.test.ts",
+      "implementation": "test/unit/admin.test.ts"
+    },
+    {
+      "id": "bun-admin",
+      "legacy": "test/admin.test.ts",
+      "implementation": "test/unit/admin.test.ts"
+    },
+    {
+      "id": "node-analysis-adapters",
+      "legacy": "test/analysis-adapters.test.ts",
+      "implementation": "test/unit/analysis-adapters.test.ts"
+    },
+    {
+      "id": "node-analysis-canvas",
+      "legacy": "test/analysis-canvas.test.ts",
+      "implementation": "test/unit/analysis-canvas.test.ts"
+    },
+    {
+      "id": "node-analysis-contracts",
+      "legacy": "test/analysis-contracts.test.ts",
+      "implementation": "test/contract/analysis-contracts.test.ts"
+    },
+    {
+      "id": "node-analysis-geometry",
+      "legacy": "test/analysis-geometry.test.ts",
+      "implementation": "test/unit/analysis-geometry.test.ts"
+    },
+    {
+      "id": "node-analysis-grouping",
+      "legacy": "test/analysis-grouping.test.ts",
+      "implementation": "test/unit/analysis-grouping.test.ts"
+    },
+    {
+      "id": "node-analysis-incremental",
+      "legacy": "test/analysis-incremental.test.ts",
+      "implementation": "test/unit/analysis-incremental.test.ts"
+    },
+    {
+      "id": "node-analysis-inspection",
+      "legacy": "test/analysis-inspection.test.ts",
+      "implementation": "test/unit/analysis-inspection.test.ts"
+    },
+    {
+      "id": "node-analysis-projection",
+      "legacy": "test/analysis-projection.test.ts",
+      "implementation": "test/unit/analysis-projection.test.ts"
+    },
+    {
+      "id": "node-analysis-round2",
+      "legacy": "test/analysis-round2.test.ts",
+      "implementation": "test/unit/analysis-round2.test.ts"
+    },
+    {
+      "id": "node-analysis-selection",
+      "legacy": "test/analysis-selection.test.ts",
+      "implementation": "test/unit/analysis-selection.test.ts"
+    },
+    {
+      "id": "node-analysis-statistics",
+      "legacy": "test/analysis-statistics.test.ts",
+      "implementation": "test/unit/analysis-statistics.test.ts"
+    },
+    {
+      "id": "node-analysis-view-cache",
+      "legacy": "test/analysis-view-cache.test.ts",
+      "implementation": "test/unit/analysis-view-cache.test.ts"
+    },
+    {
+      "id": "node-annotation-pending",
+      "legacy": "test/annotation-pending.test.ts",
+      "implementation": "test/unit/annotation-pending.test.ts"
+    },
+    {
+      "id": "node-annotation",
+      "legacy": "test/annotation.test.ts",
+      "implementation": "test/unit/annotation.test.ts"
+    },
+    {
+      "id": "node-annotations-store",
+      "legacy": "test/annotations-store.test.ts",
+      "implementation": "test/unit/annotations-store.test.ts"
+    },
+    {
+      "id": "node-appearance",
+      "legacy": "test/appearance.test.ts",
+      "implementation": "test/unit/appearance.test.ts"
+    },
+    {
+      "id": "node-avc-geometry",
+      "legacy": "test/avc-geometry.test.ts",
+      "implementation": "test/media/avc-geometry.test.ts"
+    },
+    {
+      "id": "node-browser-regression-harness",
+      "legacy": "test/browser-regression-harness.test.mjs",
+      "implementation": "test/contract/browser-regression-harness.test.mjs"
+    },
+    {
+      "id": "node-chroma-reconstruction",
+      "legacy": "test/chroma-reconstruction.test.ts",
+      "implementation": "test/unit/chroma-reconstruction.test.ts"
+    },
+    {
+      "id": "node-clean",
+      "legacy": "test/clean.test.mjs",
+      "implementation": "test/unit/clean.test.mjs"
+    },
+    {
+      "id": "node-color-evidence",
+      "legacy": "test/color-evidence.test.ts",
+      "implementation": "test/unit/color-evidence.test.ts"
+    },
+    {
+      "id": "node-config",
+      "legacy": "test/config.test.ts",
+      "implementation": "test/unit/config.test.ts"
+    },
+    {
+      "id": "node-connection-guide",
+      "legacy": "test/connection-guide.test.ts",
+      "implementation": "test/unit/connection-guide.test.ts"
+    },
+    {
+      "id": "node-connection-routing",
+      "legacy": "test/connection-routing.test.ts",
+      "implementation": "test/unit/connection-routing.test.ts"
+    },
+    {
+      "id": "node-decoder-policy",
+      "legacy": "test/decoder-policy.test.ts",
+      "implementation": "test/unit/decoder-policy.test.ts"
+    },
+    {
+      "id": "node-fate-oracle",
+      "legacy": "test/fate-oracle.test.ts",
+      "implementation": "test/unit/fate-oracle.test.ts"
+    },
+    {
+      "id": "node-ffmpeg-index-cache",
+      "legacy": "test/ffmpeg-index-cache.test.ts",
+      "implementation": "test/unit/ffmpeg-index-cache.test.ts"
+    },
+    {
+      "id": "node-ffmpeg-media-progressive",
+      "legacy": "test/ffmpeg-media-progressive.test.ts",
+      "implementation": "test/media/ffmpeg-media-progressive.test.ts"
+    },
+    {
+      "id": "node-ffmpeg-media",
+      "legacy": "test/ffmpeg-media.test.ts",
+      "implementation": "test/media/ffmpeg-media.test.ts"
+    },
+    {
+      "id": "node-file-drop",
+      "legacy": "test/file-drop.test.ts",
+      "implementation": "test/unit/file-drop.test.ts"
+    },
+    {
+      "id": "node-file-handles",
+      "legacy": "test/file-handles.test.ts",
+      "implementation": "test/unit/file-handles.test.ts"
+    },
+    {
+      "id": "node-flv-background",
+      "legacy": "test/flv-background.test.ts",
+      "implementation": "test/media/flv-background.test.ts"
+    },
+    {
+      "id": "node-flv-duplicate-pts",
+      "legacy": "test/flv-duplicate-pts.test.ts",
+      "implementation": "test/media/flv-duplicate-pts.test.ts"
+    },
+    {
+      "id": "node-flv-index-diagnostics",
+      "legacy": "test/flv-index-diagnostics.test.ts",
+      "implementation": "test/unit/flv-index-diagnostics.test.ts"
+    },
+    {
+      "id": "node-flv-open-gop",
+      "legacy": "test/flv-open-gop.test.ts",
+      "implementation": "test/media/flv-open-gop.test.ts"
+    },
+    {
+      "id": "node-flv-recovery",
+      "legacy": "test/flv-recovery.test.ts",
+      "implementation": "test/unit/flv-recovery.test.ts"
+    },
+    {
+      "id": "node-flv-resolution",
+      "legacy": "test/flv-resolution.test.ts",
+      "implementation": "test/media/flv-resolution.test.ts"
+    },
+    {
+      "id": "node-flv-server-index",
+      "legacy": "test/flv-server-index.test.ts",
+      "implementation": "test/unit/flv-server-index.test.ts"
+    },
+    {
+      "id": "node-flv-startup-frame",
+      "legacy": "test/flv-startup-frame.test.ts",
+      "implementation": "test/media/flv-startup-frame.test.ts"
+    },
+    {
+      "id": "node-flv-startup",
+      "legacy": "test/flv-startup.test.ts",
+      "implementation": "test/unit/flv-startup.test.ts"
+    },
+    {
+      "id": "node-flv",
+      "legacy": "test/flv.test.ts",
+      "implementation": "test/media/flv.test.ts"
+    },
+    {
+      "id": "node-frame-description",
+      "legacy": "test/frame-description.test.ts",
+      "implementation": "test/unit/frame-description.test.ts"
+    },
+    {
+      "id": "node-frame-index-build-policy",
+      "legacy": "test/frame-index-build-policy.test.ts",
+      "implementation": "test/unit/frame-index-build-policy.test.ts"
+    },
+    {
+      "id": "node-frame-index-cache",
+      "legacy": "test/frame-index-cache.test.ts",
+      "implementation": "test/unit/frame-index-cache.test.ts"
+    },
+    {
+      "id": "bun-frame-index-cache",
+      "legacy": "test/frame-index-cache.test.ts",
+      "implementation": "test/unit/frame-index-cache.test.ts"
+    },
+    {
+      "id": "node-frame-index-profile",
+      "legacy": "test/frame-index-profile.test.ts",
+      "implementation": "test/media/frame-index-profile.test.ts"
+    },
+    {
+      "id": "node-frame-index-scan-modes",
+      "legacy": "test/frame-index-scan-modes.test.ts",
+      "implementation": "test/media/frame-index-scan-modes.test.ts"
+    },
+    {
+      "id": "node-frame-index-stream",
+      "legacy": "test/frame-index-stream.test.ts",
+      "implementation": "test/unit/frame-index-stream.test.ts"
+    },
+    {
+      "id": "node-frame-index-worker",
+      "legacy": "test/frame-index-worker.test.ts",
+      "implementation": "test/unit/frame-index-worker.test.ts"
+    },
+    {
+      "id": "node-frame-task",
+      "legacy": "test/frame-task.test.ts",
+      "implementation": "test/unit/frame-task.test.ts"
+    },
+    {
+      "id": "node-gpu-presentation-guard",
+      "legacy": "test/gpu-presentation-guard.test.ts",
+      "implementation": "test/unit/gpu-presentation-guard.test.ts"
+    },
+    {
+      "id": "node-hevc-geometry",
+      "legacy": "test/hevc-geometry.test.ts",
+      "implementation": "test/media/hevc-geometry.test.ts"
+    },
+    {
+      "id": "node-hevc-timeline",
+      "legacy": "test/hevc-timeline.test.ts",
+      "implementation": "test/media/hevc-timeline.test.ts"
+    },
+    {
+      "id": "node-hlg-pixel-signature",
+      "legacy": "test/hlg-pixel-signature.test.mjs",
+      "implementation": "test/contract/hlg-pixel-signature.test.mjs"
+    },
+    {
+      "id": "node-identity-browser-lifecycle",
+      "legacy": "test/identity-browser-lifecycle.test.mjs",
+      "implementation": "test/contract/identity-browser-lifecycle.test.mjs"
+    },
+    {
+      "id": "node-identity",
+      "legacy": "test/identity.test.ts",
+      "implementation": "test/unit/identity.test.ts"
+    },
+    {
+      "id": "bun-identity",
+      "legacy": "test/identity.test.ts",
+      "implementation": "test/unit/identity.test.ts"
+    },
+    {
+      "id": "node-index-stream-transport",
+      "legacy": "test/index-stream-transport.test.ts",
+      "implementation": "test/unit/index-stream-transport.test.ts"
+    },
+    {
+      "id": "node-library-incremental",
+      "legacy": "test/library-incremental.test.ts",
+      "implementation": "test/unit/library-incremental.test.ts"
+    },
+    {
+      "id": "bun-library-incremental",
+      "legacy": "test/library-incremental.test.ts",
+      "implementation": "test/unit/library-incremental.test.ts"
+    },
+    {
+      "id": "node-library-index",
+      "legacy": "test/library-index.test.ts",
+      "implementation": "test/unit/library-index.test.ts"
+    },
+    {
+      "id": "bun-library-index",
+      "legacy": "test/library-index.test.ts",
+      "implementation": "test/unit/library-index.test.ts"
+    },
+    {
+      "id": "node-library-link",
+      "legacy": "test/library-link.test.ts",
+      "implementation": "test/unit/library-link.test.ts"
+    },
+    {
+      "id": "node-library-storage",
+      "legacy": "test/library-storage.test.ts",
+      "implementation": "test/unit/library-storage.test.ts"
+    },
+    {
+      "id": "bun-library-storage",
+      "legacy": "test/library-storage.test.ts",
+      "implementation": "test/unit/library-storage.test.ts"
+    },
+    {
+      "id": "node-log-preview",
+      "legacy": "test/log-preview.test.ts",
+      "implementation": "test/unit/log-preview.test.ts"
+    },
+    {
+      "id": "node-log",
+      "legacy": "test/log.test.ts",
+      "implementation": "test/unit/log.test.ts"
+    },
+    {
+      "id": "node-measurement",
+      "legacy": "test/measurement.test.ts",
+      "implementation": "test/unit/measurement.test.ts"
+    },
+    {
+      "id": "bun-measurement",
+      "legacy": "test/measurement.test.ts",
+      "implementation": "test/unit/measurement.test.ts"
+    },
+    {
+      "id": "node-media-abort",
+      "legacy": "test/media-abort.test.ts",
+      "implementation": "test/media/media-abort.test.ts"
+    },
+    {
+      "id": "node-media-diagnostics",
+      "legacy": "test/media-diagnostics.test.ts",
+      "implementation": "test/unit/media-diagnostics.test.ts"
+    },
+    {
+      "id": "node-media-identity",
+      "legacy": "test/media-identity.test.ts",
+      "implementation": "test/unit/media-identity.test.ts"
+    },
+    {
+      "id": "node-media-index-client",
+      "legacy": "test/media-index-client.test.ts",
+      "implementation": "test/unit/media-index-client.test.ts"
+    },
+    {
+      "id": "node-media-index-identity",
+      "legacy": "test/media-index-identity.test.ts",
+      "implementation": "test/unit/media-index-identity.test.ts"
+    },
+    {
+      "id": "node-media-index-session",
+      "legacy": "test/media-index-session.test.ts",
+      "implementation": "test/unit/media-index-session.test.ts"
+    },
+    {
+      "id": "node-media-loading",
+      "legacy": "test/media-loading.test.ts",
+      "implementation": "test/unit/media-loading.test.ts"
+    },
+    {
+      "id": "node-media-metadata",
+      "legacy": "test/media-metadata.test.ts",
+      "implementation": "test/unit/media-metadata.test.ts"
+    },
+    {
+      "id": "node-media-policy",
+      "legacy": "test/media-policy.test.ts",
+      "implementation": "test/unit/media-policy.test.ts"
+    },
+    {
+      "id": "node-media-reference",
+      "legacy": "test/media-reference.test.ts",
+      "implementation": "test/unit/media-reference.test.ts"
+    },
+    {
+      "id": "node-media-state",
+      "legacy": "test/media-state.test.ts",
+      "implementation": "test/media/media-state.test.ts"
+    },
+    {
+      "id": "node-media-thumbnail-store",
+      "legacy": "test/media-thumbnail-store.test.ts",
+      "implementation": "test/unit/media-thumbnail-store.test.ts"
+    },
+    {
+      "id": "node-media",
+      "legacy": "test/media.test.ts",
+      "implementation": "test/media/media.test.ts"
+    },
+    {
+      "id": "node-mp4-boundary",
+      "legacy": "test/mp4-boundary.test.ts",
+      "implementation": "test/media/mp4-boundary.test.ts"
+    },
+    {
+      "id": "node-mp4-packets",
+      "legacy": "test/mp4-packets.test.ts",
+      "implementation": "test/media/mp4-packets.test.ts"
+    },
+    {
+      "id": "node-native-yuv-source",
+      "legacy": "test/native-yuv-source.test.ts",
+      "implementation": "test/unit/native-yuv-source.test.ts"
+    },
+    {
+      "id": "node-packet-timeline",
+      "legacy": "test/packet-timeline.test.ts",
+      "implementation": "test/unit/packet-timeline.test.ts"
+    },
+    {
+      "id": "node-panel-motion",
+      "legacy": "test/panel-motion.test.ts",
+      "implementation": "test/unit/panel-motion.test.ts"
+    },
+    {
+      "id": "node-pixel-grid",
+      "legacy": "test/pixel-grid.test.ts",
+      "implementation": "test/unit/pixel-grid.test.ts"
+    },
+    {
+      "id": "node-playback",
+      "legacy": "test/playback.test.ts",
+      "implementation": "test/unit/playback.test.ts"
+    },
+    {
+      "id": "node-preroll",
+      "legacy": "test/preroll.test.ts",
+      "implementation": "test/media/preroll.test.ts"
+    },
+    {
+      "id": "node-presentation-tick",
+      "legacy": "test/presentation-tick.test.ts",
+      "implementation": "test/unit/presentation-tick.test.ts"
+    },
+    {
+      "id": "node-protocol-server",
+      "legacy": "test/protocol-server.test.ts",
+      "implementation": "test/unit/protocol-server.test.ts"
+    },
+    {
+      "id": "node-range-bridge-large",
+      "legacy": "test/range-bridge-large.test.ts",
+      "implementation": "test/unit/range-bridge-large.test.ts"
+    },
+    {
+      "id": "node-range-media",
+      "legacy": "test/range-media.test.ts",
+      "implementation": "test/media/range-media.test.ts"
+    },
+    {
+      "id": "node-range-reader",
+      "legacy": "test/range-reader.test.ts",
+      "implementation": "test/media/range-reader.test.ts"
+    },
+    {
+      "id": "node-reference-source",
+      "legacy": "test/reference-source.test.ts",
+      "implementation": "test/unit/reference-source.test.ts"
+    },
+    {
+      "id": "node-release-pipeline",
+      "legacy": "test/release-pipeline.test.mjs",
+      "implementation": "test/contract/release-pipeline.test.mjs"
+    },
+    {
+      "id": "node-resize-gesture",
+      "legacy": "test/resize-gesture.test.ts",
+      "implementation": "test/unit/resize-gesture.test.ts"
+    },
+    {
+      "id": "node-resource-budget",
+      "legacy": "test/resource-budget.test.ts",
+      "implementation": "test/unit/resource-budget.test.ts"
+    },
+    {
+      "id": "node-saved-workspaces-ui",
+      "legacy": "test/saved-workspaces-ui.test.ts",
+      "implementation": "test/unit/saved-workspaces-ui.test.ts"
+    },
+    {
+      "id": "node-saved-workspaces",
+      "legacy": "test/saved-workspaces.test.ts",
+      "implementation": "test/unit/saved-workspaces.test.ts"
+    },
+    {
+      "id": "bun-saved-workspaces",
+      "legacy": "test/saved-workspaces.test.ts",
+      "implementation": "test/unit/saved-workspaces.test.ts"
+    },
+    {
+      "id": "node-seek-preview",
+      "legacy": "test/seek-preview.test.ts",
+      "implementation": "test/unit/seek-preview.test.ts"
+    },
+    {
+      "id": "node-server",
+      "legacy": "test/server.test.ts",
+      "implementation": "test/media/server.test.ts"
+    },
+    {
+      "id": "node-session-catalog",
+      "legacy": "test/session-catalog.test.ts",
+      "implementation": "test/unit/session-catalog.test.ts"
+    },
+    {
+      "id": "node-session-color-rollback",
+      "legacy": "test/session-color-rollback.test.ts",
+      "implementation": "test/unit/session-color-rollback.test.ts"
+    },
+    {
+      "id": "node-session-decode-cancel",
+      "legacy": "test/session-decode-cancel.test.ts",
+      "implementation": "test/unit/session-decode-cancel.test.ts"
+    },
+    {
+      "id": "node-session-failure-diagnostics",
+      "legacy": "test/session-failure-diagnostics.test.ts",
+      "implementation": "test/unit/session-failure-diagnostics.test.ts"
+    },
+    {
+      "id": "node-agent-tool-contract",
+      "legacy": "test/agent-tool-contract.test.ts",
+      "implementation": "test/unit/agent-tool-contract.test.ts"
+    },
+    {
+      "id": "node-session",
+      "legacy": "test/session.test.ts",
+      "implementation": "test/unit/session.test.ts"
+    },
+    {
+      "id": "node-shared-workspaces",
+      "legacy": "test/shared-workspaces.test.ts",
+      "implementation": "test/unit/shared-workspaces.test.ts"
+    },
+    {
+      "id": "node-startup",
+      "legacy": "test/startup.test.ts",
+      "implementation": "test/unit/startup.test.ts"
+    },
+    {
+      "id": "node-stream-tail",
+      "legacy": "test/stream-tail.test.ts",
+      "implementation": "test/media/stream-tail.test.ts"
+    },
+    {
+      "id": "node-thumbnail-offer",
+      "legacy": "test/thumbnail-offer.test.ts",
+      "implementation": "test/unit/thumbnail-offer.test.ts"
+    },
+    {
+      "id": "node-thumbnail-session",
+      "legacy": "test/thumbnail-session.test.ts",
+      "implementation": "test/unit/thumbnail-session.test.ts"
+    },
+    {
+      "id": "node-thumbnails-contract",
+      "legacy": "test/thumbnails-contract.test.ts",
+      "implementation": "test/contract/thumbnails-contract.test.ts"
+    },
+    {
+      "id": "node-time-input",
+      "legacy": "test/time-input.test.ts",
+      "implementation": "test/unit/time-input.test.ts"
+    },
+    {
+      "id": "node-track-toasts",
+      "legacy": "test/track-toasts.test.ts",
+      "implementation": "test/unit/track-toasts.test.ts"
+    },
+    {
+      "id": "node-tls",
+      "legacy": "test/tls.test.ts",
+      "implementation": "test/unit/tls.test.ts"
+    },
+    {
+      "id": "node-uuid",
+      "legacy": "test/uuid.test.ts",
+      "implementation": "test/unit/uuid.test.ts"
+    },
+    {
+      "id": "node-view-recovery",
+      "legacy": "test/view-recovery.test.ts",
+      "implementation": "test/unit/view-recovery.test.ts"
+    },
+    {
+      "id": "node-viewport-gestures",
+      "legacy": "test/viewport-gestures.test.ts",
+      "implementation": "test/unit/viewport-gestures.test.ts"
+    },
+    {
+      "id": "node-viewport",
+      "legacy": "test/viewport.test.ts",
+      "implementation": "test/unit/viewport.test.ts"
+    },
+    {
+      "id": "node-vite-routing",
+      "legacy": "test/vite-routing.test.ts",
+      "implementation": "test/unit/vite-routing.test.ts"
+    },
+    {
+      "id": "node-wasm-memory",
+      "legacy": "test/wasm-memory.test.ts",
+      "implementation": "test/unit/wasm-memory.test.ts"
+    },
+    {
+      "id": "node-workspace-file",
+      "legacy": "test/workspace-file.test.ts",
+      "implementation": "test/unit/workspace-file.test.ts"
+    },
+    {
+      "id": "node-workspace-storage",
+      "legacy": "test/workspace-storage.test.ts",
+      "implementation": "test/unit/workspace-storage.test.ts"
+    },
+    {
+      "id": "node-workspace",
+      "legacy": "test/workspace.test.ts",
+      "implementation": "test/unit/workspace.test.ts"
+    },
+    {
+      "id": "node-yuv-channel",
+      "legacy": "test/yuv-channel.test.ts",
+      "implementation": "test/unit/yuv-channel.test.ts"
+    },
+    {
+      "id": "node-yuv-color",
+      "legacy": "test/yuv-color.test.ts",
+      "implementation": "test/unit/yuv-color.test.ts"
+    },
+    {
+      "id": "node-yuv-core",
+      "legacy": "test/yuv-core.test.ts",
+      "implementation": "test/media/yuv-core.test.ts"
+    },
+    {
+      "id": "node-yuv-frame",
+      "legacy": "test/yuv-frame.test.ts",
+      "implementation": "test/unit/yuv-frame.test.ts"
+    },
+    {
+      "id": "browser-annotation-webkit",
+      "legacy": "scripts/check-annotation-browser.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation.mjs"
+    },
+    {
+      "id": "browser-annotation-chromium",
+      "legacy": "scripts/check-annotation-browser.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation.mjs"
+    },
+    {
+      "id": "browser-annotation-rendering-webkit",
+      "legacy": "scripts/check-annotation-rendering.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation-rendering.mjs"
+    },
+    {
+      "id": "browser-annotation-rendering-chromium",
+      "legacy": "scripts/check-annotation-rendering.mjs",
+      "implementation": "scripts/testing/browser/annotations/annotation-rendering.mjs"
+    },
+    {
+      "id": "browser-color-settings-webkit",
+      "legacy": "scripts/check-color-settings-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/color-settings.mjs"
+    },
+    {
+      "id": "browser-feedback-webkit",
+      "legacy": "scripts/check-feedback-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/feedback.mjs"
+    },
+    {
+      "id": "browser-feedback-chromium",
+      "legacy": "scripts/check-feedback-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/feedback.mjs"
+    },
+    {
+      "id": "browser-mark-cards-webkit",
+      "legacy": "scripts/check-mark-cards-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/mark-cards.mjs"
+    },
+    {
+      "id": "browser-mark-cards-chromium",
+      "legacy": "scripts/check-mark-cards-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/mark-cards.mjs"
+    },
+    {
+      "id": "browser-menu-webkit",
+      "legacy": "scripts/check-menu-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/menu.mjs"
+    },
+    {
+      "id": "browser-menu-chromium",
+      "legacy": "scripts/check-menu-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/menu.mjs"
+    },
+    {
+      "id": "browser-metadata-webkit",
+      "legacy": "scripts/check-metadata-browser.mjs",
+      "implementation": "scripts/testing/browser/media/metadata.mjs"
+    },
+    {
+      "id": "browser-metadata-chromium",
+      "legacy": "scripts/check-metadata-browser.mjs",
+      "implementation": "scripts/testing/browser/media/metadata.mjs"
+    },
+    {
+      "id": "browser-settings-webkit",
+      "legacy": "scripts/check-settings-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/settings.mjs"
+    },
+    {
+      "id": "browser-settings-chromium",
+      "legacy": "scripts/check-settings-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/settings.mjs"
+    },
+    {
+      "id": "browser-shortcuts-webkit",
+      "legacy": "scripts/check-shortcuts-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/shortcuts.mjs"
+    },
+    {
+      "id": "browser-shortcuts-chromium",
+      "legacy": "scripts/check-shortcuts-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/shortcuts.mjs"
+    },
+    {
+      "id": "browser-stepping-webkit",
+      "legacy": "scripts/check-stepping-browser.mjs",
+      "implementation": "scripts/testing/browser/media/stepping.mjs"
+    },
+    {
+      "id": "browser-stepping-chromium",
+      "legacy": "scripts/check-stepping-browser.mjs",
+      "implementation": "scripts/testing/browser/media/stepping.mjs"
+    },
+    {
+      "id": "browser-theme-webkit",
+      "legacy": "scripts/check-theme-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/theme.mjs"
+    },
+    {
+      "id": "browser-theme-chromium",
+      "legacy": "scripts/check-theme-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/theme.mjs"
+    },
+    {
+      "id": "browser-timeline-webkit",
+      "legacy": "scripts/check-timeline-browser.mjs",
+      "implementation": "scripts/testing/browser/media/timeline.mjs"
+    },
+    {
+      "id": "browser-timeline-chromium",
+      "legacy": "scripts/check-timeline-browser.mjs",
+      "implementation": "scripts/testing/browser/media/timeline.mjs"
+    },
+    {
+      "id": "browser-workspace-webkit",
+      "legacy": "scripts/check-workspace-browser.mjs",
+      "implementation": "scripts/testing/browser/workspace/workspace.mjs"
+    },
+    {
+      "id": "browser-workspace-chromium",
+      "legacy": "scripts/check-workspace-browser.mjs",
+      "implementation": "scripts/testing/browser/workspace/workspace.mjs"
+    },
+    {
+      "id": "tool-bench-frame-index",
+      "legacy": "scripts/bench-frame-index.mjs",
+      "implementation": "scripts/tools/perf/bench-frame-index.mjs"
+    },
+    {
+      "id": "tool-repro-native-yuv-color",
+      "legacy": "scripts/repro-native-yuv-color.mjs",
+      "implementation": "scripts/tools/diagnostics/repro-native-yuv-color.mjs"
+    },
+    {
+      "id": "node-test-manifest",
+      "legacy": "test/test-manifest.test.mjs",
+      "implementation": "test/contract/test-manifest.test.mjs"
+    },
+    {
+      "id": "node-test-runner",
+      "legacy": "test/test-runner.test.mjs",
+      "implementation": "test/contract/test-runner.test.mjs"
+    },
+    {
+      "id": "node-browser-fixture",
+      "legacy": "test/browser-fixture.test.mjs",
+      "implementation": "test/contract/browser-fixture.test.mjs"
+    },
+    {
+      "id": "tool-make-library-fixtures",
+      "legacy": "scripts/make-library-fixtures.mjs",
+      "implementation": "scripts/tools/fixtures/make-library-fixtures.mjs"
+    },
+    {
+      "id": "tool-sync-fate-samples",
+      "legacy": "scripts/sync-fate-samples.mjs",
+      "implementation": "scripts/tools/fixtures/sync-fate-samples.mjs"
+    },
+    {
+      "id": "tool-release-version",
+      "legacy": "scripts/release-version.mjs",
+      "implementation": "scripts/tools/release/release-version.mjs"
+    },
+    {
+      "id": "tool-make-icons",
+      "legacy": "scripts/make-icons.mjs",
+      "implementation": "scripts/tools/development/make-icons.mjs"
+    },
+    {
+      "id": "node-i18n",
+      "legacy": "test/i18n.test.ts",
+      "implementation": "test/unit/i18n.test.ts"
+    },
+    {
+      "id": "node-i18n-build",
+      "legacy": "test/i18n-build.test.mjs",
+      "implementation": "test/contract/i18n-build.test.mjs"
+    },
+    {
+      "id": "browser-i18n-chromium",
+      "legacy": "scripts/check-i18n-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n.mjs"
+    },
+    {
+      "id": "browser-i18n-webkit",
+      "legacy": "scripts/check-i18n-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n.mjs"
+    },
+    {
+      "id": "perf-i18n-chromium",
+      "legacy": "scripts/bench-i18n.mjs",
+      "implementation": "scripts/tools/perf/i18n.mjs"
+    },
+    {
+      "id": "perf-i18n-webkit",
+      "legacy": "scripts/bench-i18n.mjs",
+      "implementation": "scripts/tools/perf/i18n.mjs"
+    },
+    {
+      "id": "browser-i18n-layout-chromium",
+      "legacy": "scripts/check-i18n-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-layout.mjs"
+    },
+    {
+      "id": "browser-i18n-layout-webkit",
+      "legacy": "scripts/check-i18n-layout-browser.mjs",
+      "implementation": "scripts/testing/browser/ui/i18n-layout.mjs"
+    },
+    {
+      "id": "node-cached-track-metadata",
+      "legacy": "test/cached-track-metadata.test.ts",
+      "implementation": "test/unit/cached-track-metadata.test.ts"
+    },
+    {
+      "id": "node-opportunistic-audio",
+      "legacy": "test/opportunistic-audio.test.ts",
+      "implementation": "test/unit/opportunistic-audio.test.ts"
+    }
+  ]
+}
