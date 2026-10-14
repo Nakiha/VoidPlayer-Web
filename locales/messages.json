@@ -5389,7 +5389,7 @@
     "source": "标注地址无效。",
     "params": {},
     "locations": [
-      "src/main.ts:624"
+      "src/main.ts:625"
     ]
   },
   "player.lastSeekMs": {
@@ -5521,7 +5521,7 @@
     "source": "这条标注已在回收站。",
     "params": {},
     "locations": [
-      "src/main.ts:626"
+      "src/main.ts:627"
     ]
   },
   "player.trackDisabledFrameUpdatesHaveStoppedPlease": {

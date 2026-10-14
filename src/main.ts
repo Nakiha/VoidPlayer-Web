@@ -616,6 +616,7 @@ const api = {
     if (viewport.channel !== before && state.tracks.length && !state.playing && !state.busy) await session.seek(state.positionUs);
   }),
   tools: reviewTools(session, workspaceTransfer),
+  subscribePresentedFrames: (listener: Parameters<ReviewSession['subscribePresentedFrames']>[0]) => session.subscribePresentedFrames(listener),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 const annotationLink = new URL(location.href).searchParams;
