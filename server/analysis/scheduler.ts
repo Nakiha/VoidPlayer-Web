@@ -214,7 +214,7 @@ export class AnalysisScheduler {
       .update(
         JSON.stringify([
           target.sourceVersion,
-          target.indexIdentity ?? null,
+          ...('mode' in target || 'startUs' in target ? [target.indexIdentity ?? null] : []),
           "mode" in target ? ['stream', target.firstPtsUs, target.durationUs] : "startUs" in target
             ? [target.firstPtsUs, target.startUs, target.endUs]
             : target.picture
