@@ -2,6 +2,7 @@ import { serializeFlvIndex } from './flv-index-cache.ts';
 import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
+import {JsContainerEngine} from './js-container-engine.ts';
 import { TsEngine } from './ts-engine.ts';
 import { TsCombinationNotMigrated } from './ts-packet-source.ts';
 import { randomUUID } from './uuid.ts';
@@ -17,7 +18,7 @@ async function start() {
     ? (await import('node:worker_threads')).parentPort : null;
   const reply = workerReply<PacketCommands>();
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
-  let engine: FlvEngine | Mp4Engine | TsEngine | undefined;
+  let engine: FlvEngine | Mp4Engine | JsContainerEngine | undefined;
   let tsSession: string | undefined;
   let chain = Promise.resolve();
   let audioTimer: ReturnType<typeof setTimeout> | undefined;
@@ -58,9 +59,10 @@ async function start() {
       send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
+    if(message.type==='analysis-js-index'){const index=engine instanceof JsContainerEngine?engine.packetIndex:undefined;if(!index){send({id:message.id,ok:false,error:'JS packet index unavailable',stage:'container'});return;}send(reply(message,index));return;}
     if (message.type === 'analysis-ts-index') {
-      const index=engine instanceof TsEngine?engine.packetIndex:undefined;
-      if(!index){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
+      const index=engine instanceof JsContainerEngine?engine.packetIndex:undefined;
+      if(!index||index.kind!=='js-ts-packets'){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
       send(reply(message,index));
       return;
     }
@@ -84,12 +86,13 @@ async function start() {
     chain = chain.then(async () => {
       const { id, type } = message;
       try {
-        if (type === 'prepare-ts') {
+        if (type === 'prepare-ts'||type==='prepare-js') {
           engine?.close(); engine = undefined; tsSession = undefined;
-          const candidate = new TsEngine(message.input, message.sourceVersion);
+          const candidate = type==='prepare-ts'?new TsEngine(message.input,message.sourceVersion):new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.format);
           try {
             const index = await candidate.prepare(data => send({id,type:'index-progress',data})); engine = candidate; tsSession = randomUUID();
-            send(reply(message, {admitted:true, session:tsSession, index}));
+            if(type==='prepare-ts'){if(index.kind!=='js-ts-packets')throw new MediaOpenError('input','TS index kind changed');send(reply(message,{admitted:true,session:tsSession,index}));}
+            else send(reply(message,{admitted:true,session:tsSession,index}));
           } catch (error) {
             candidate.close();
             if (!(error instanceof TsCombinationNotMigrated)) throw error;
@@ -102,27 +105,27 @@ async function start() {
           const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
-          const preparedTs = message.container === 'ts' && message.preparedTsSession !== undefined;
-          if (preparedTs && (!(engine instanceof TsEngine) || message.preparedTsSession !== tsSession
-            || engine.packetIndex?.sourceVersion !== message.sourceVersion)) throw new MediaOpenError('input','JS TS admission session changed');
+          const preparedTs = (message.container === 'ts'||message.container==='matroska') && message.preparedTsSession !== undefined;
+          if (preparedTs && (!(engine instanceof JsContainerEngine) || message.preparedTsSession !== tsSession
+            || engine.packetIndex?.sourceVersion !== message.sourceVersion || (message.container==='ts')!==(engine.packetIndex?.kind==='js-ts-packets'))) throw new MediaOpenError('input','JS TS admission session changed');
           if (!(engine instanceof FlvEngine && message.container === 'flv') && !preparedTs) {
-            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : message.container === 'ts' ? new TsEngine(message.input, message.sourceVersion) : new FlvEngine(message.input, message.prepared);
+            engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : (message.container==='ts'||message.container==='matroska')?new JsContainerEngine(message.input,message.sourceVersion,{persistent:message.persistent},message.container): new FlvEngine(message.input, 'prepared' in message?message.prepared:undefined);
           }
           tsSession = undefined;
           if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');
           const progress = (progress: import('./media-progress.ts').MediaLoadStage) => send({id,type:'progress',progress});
-          const data = engine instanceof TsEngine
+          const data = engine instanceof JsContainerEngine
             ? await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress,data=>send({id,type:'index-progress',data}))
             : await engine.open(message.glueURL,message.wasmBinary,message.forceWasm,message.threads,progress);
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));
-        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
+        } else if (type === 'reference-witness' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
           const frame = await engine.referenceWitness(message.glueURL, message.wasmBinary, message.threads);
           try { send(reply(message, frame), frame.frame ? [frame.frame] : [frame.pixels!]); }
           finally { frame.frame?.close(); }
-        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
+        } else if (type === 'switch-software' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
           send(reply(message, await engine.switchToSoftware(message.glueURL, message.wasmBinary, message.threads)));
-        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof TsEngine)) {
+        } else if (type === 'switch-native' && (engine instanceof FlvEngine || engine instanceof Mp4Engine || engine instanceof JsContainerEngine)) {
           send(reply(message, await engine.switchToNative()));
         } else if (type === 'dispose') {
           engine?.close(); engine = undefined; send(reply(message, null));
@@ -147,7 +150,7 @@ async function start() {
             mediaId, sourceVersion: `${mediaId}@${packets.length}${complete ? '' : '+'}`, indexRevision: packets.length,
             firstPtsUs: message.firstPtsUs ?? 0, durationUs: message.durationUs ?? 0,
             capability: {
-              hasSize: true, hasDts: engine instanceof TsEngine ? packets.some(p=>p.dts!==null) : true, keySource: engine instanceof TsEngine ? 'verified' : 'container',
+              hasSize: true, hasDts: engine instanceof JsContainerEngine ? packets.some(p=>p.dts!==null) : true, keySource: engine instanceof JsContainerEngine ? 'verified' : 'container',
               pictureType: 'key-only', qp: 'unsupported',
               indexState: complete ? 'complete' : 'building',
             },

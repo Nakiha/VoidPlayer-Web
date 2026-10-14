@@ -55,7 +55,7 @@ function hevcSpsHeader(nal: Uint8Array) {
   }
   return { b, pocBits, maxReorderFrames, codedWidth, codedHeight, left, top, width, height };
 }
-export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
+function parseSpsGeometry(nal: Uint8Array,fieldSequence?:(field:boolean)=>void): HevcGeometry {
   const { b, pocBits, codedWidth, codedHeight, left, top, width, height } = hevcSpsHeader(nal);
   for (let i = 0; i < 6; i++) b.ue(32);
   if (b.read(1) && b.read(1)) {
@@ -80,15 +80,27 @@ export function parseHevcSpsGeometry(nal: Uint8Array): HevcGeometry {
   if (b.read(1)) { const count = b.ue(32); for (let i = 0; i < count; i++) b.skip(pocBits+1); }
   b.skip(2);
   let sarNum = 1, sarDen = 1;
-  if (b.read(1) && b.read(1)) {
-    const id = b.read(8);
-    if (id === 255) { sarNum = b.read(16); sarDen = b.read(16); }
-    else if (ratios[id]) [sarNum, sarDen] = ratios[id];
-    else throw new Error('reserved aspect ratio');
-  }
+  const vui=!!b.read(1);
+  if(vui){
+    if(b.read(1)){
+      const id = b.read(8);
+      if (id === 255) { sarNum = b.read(16); sarDen = b.read(16); }
+      else if (ratios[id]) [sarNum, sarDen] = ratios[id];
+      else throw new Error('reserved aspect ratio');
+    }
+    if(fieldSequence){
+      if(b.read(1))b.skip(1); // overscan
+      if(b.read(1)){b.skip(4);if(b.read(1))b.skip(24);} // video signal / colour description
+      if(b.read(1)){b.ue();b.ue();} // chroma locations
+      b.skip(1);fieldSequence(!!b.read(1)); // neutral_chroma_indication / field_seq_flag
+    }
+  }else fieldSequence?.(false);
   if (!sarNum || !sarDen) throw new Error('invalid sample aspect ratio');
   return { codedWidth, codedHeight, x: left, y: top, width, height, sarNum, sarDen };
 }
+export function parseHevcSpsGeometry(nal:Uint8Array):HevcGeometry{return parseSpsGeometry(nal);}
+/** Raw SPS field syntax, independent of container keys and output dimensions. */
+export function hevcFieldPictures(description:Uint8Array){let fields=false;for(const sps of hevcSpses(description))parseSpsGeometry(sps,value=>{fields ||=value;});return fields;}
 function hevcSpses(description: Uint8Array) {
   if (isAnnexB(description)) {
     const spses = nalRanges('hevc', description, description)

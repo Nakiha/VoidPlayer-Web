@@ -1,3 +1,4 @@
+import {sealJsIndex} from '../../src/js-index-proof.ts';
 import { validateAnalysisCore } from '../../src/bitstream-analysis/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
 import { readSync } from "node:fs";
@@ -20,6 +21,7 @@ try {
   let closed = false;
   const reader = {
     size: stat.size,
+    ...(workerData.jsSnapshot?{jsIndex:async()=>sealJsIndex(workerData.jsSnapshot)}:{}),
     ...(workerData.ffmpegSnapshot ? {ffmpegIndex: async () => workerData.ffmpegSnapshot} : {}),
     readSync(offset: number, length: number) {
       if(closed || !Number.isSafeInteger(offset) || offset<0 || length<0 || length>256*1024 || offset+length>stat.size)throw new AnalysisFailure('resource-limit','Analysis sync read bounds');

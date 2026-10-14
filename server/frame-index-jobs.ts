@@ -235,7 +235,7 @@ export class FrameIndexJobs {
       };
       resetIdleTimer();
       absoluteTimer = setTimeout(() => finish(new AdminError(503, '媒体索引构建超过绝对安全期限。')), policy.absoluteTimeoutMs);
-      worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number }) => {
+      worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number;code?:string }) => {
         if (settled) return;
         if (result.type === 'progress') {
           const progress = result.data as IndexBuildProgress;
@@ -252,7 +252,7 @@ export class FrameIndexJobs {
           return;
         }
         if (result.type === 'manifest' || result.type === 'batch' || result.type === 'complete') { onUpdate(); return; }
-        if (result.error) finish(new AdminError(result.status ?? 500, result.error));
+        if (result.error) finish(new AdminError(result.status ?? 500, result.error,result.code));
         else {
           const value = result.value as { built?: boolean; profile?: Record<string, unknown> } | undefined;
           if (value?.built && value.profile) {

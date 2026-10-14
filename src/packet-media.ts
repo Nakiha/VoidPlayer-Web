@@ -1,4 +1,4 @@
-import { JS_TS_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
+import { JS_TS_MEDIA_INDEX_IDENTITY, JS_MATROSKA_MEDIA_INDEX_IDENTITY, FLV_MEDIA_INDEX_IDENTITY } from './media-index-identity.ts';
 import { coreAssetUrl } from './core-url.ts';
 import { referenceVersion } from './media-reference.ts';
 import { attachCachedTrackMetadata } from './cached-track-metadata-client.ts';
@@ -26,9 +26,9 @@ import { resolveYuvColor } from './yuv-color.ts';
 import type { MediaInfo } from './model.ts';
 import type { AnalysisAxis, AnalysisCapability, AnalysisQuery, AnalysisRank, AnalysisResult, AnalysisSample } from './analysis/types.ts';
 
-export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
+export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matroska', input: FlvInput, meta: MediaMeta, deps: FallbackDeps & { forceWasm?: boolean; sourceVersion?: string; preparedTs?: {rpc:WorkerRpc<PacketCommands>; session:string; hasDts:boolean} } = {}): Promise<MediaSource> {
   loadAborted(deps.signal);
-  if(container==='ts' && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
+  if((container==='ts'||container==='matroska') && !deps.sourceVersion)throw new MediaOpenError('input','JS TS source namespace is required');
   let reservation = reserveFallbackThreads();
   let reservationHeld = true;
   const holdReservation = () => { if (!reservationHeld) { reservation = reserveFallbackThreads(); reservationHeld = true; } };
@@ -71,8 +71,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
         if (container !== 'flv') deps.onProgress?.('inspect');
         init = await rpc.call('init', { input, glueURL, wasmBinary: deps.wasmBinary,
           forceWasm: container === 'flv' || !!deps.forceWasm, threads: reservation.threads,
-          ...(container==='ts'?{container,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
-          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000, container==='ts');
+          ...((container==='ts'||container==='matroska')?{container,persistent:true,sourceVersion:deps.sourceVersion!,preparedTsSession:rpc===deps.preparedTs?.rpc?deps.preparedTs?.session:undefined}:{container,prepared:restore}) }, [],
+          container === 'flv' && glueURL.includes('core-mt.') ? 10000 : 60000, (container==='ts'||container==='matroska'));
         selected = glueURL;
       } catch (error) {
         rpc.terminate(); rpc = undefined; failure = error;
@@ -90,8 +90,8 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
     const activeRpc = rpc;
     if (init.decoder === 'webcodecs' && !deps.rawNative) releaseReservation();
     let { times, durations, ...details } = init;
-    const info: MediaInfo = { id: container==='ts'?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
-      indexSource: 'client', indexState: 'complete', indexKind: container==='ts'?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
+    const info: MediaInfo = { id: (container==='ts'||container==='matroska')?deps.sourceVersion!:randomUUID(), name: meta.name, size: meta.size, lastModified: meta.lastModified,
+      indexSource: 'client', indexState: 'complete', indexKind: (container==='ts'||container==='matroska')?'packet-locators':'packet-offsets', seekStrategy: 'packet-anchor',
       ...details, ...(init.decoder === 'ffmpeg-wasm' ? { coreVariant: selected.includes('core-mt.') ? 'multi-thread' as const : 'single-thread' as const } : {}) };
     let presentationMode: ColorMode = deps.rawNative ? 'reference' : deps.nativeColorMode ?? (getColorMode() === 'reference' ? 'reference' : 'browser');
     let nativeWitnessReadback = false;
@@ -259,7 +259,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
     let stopAudio = () => {};
     const source: MediaSource = {
       info, ensureIndexed,
-      ...(container==='ts'?{bitstreamIndexIdentity:JS_TS_MEDIA_INDEX_IDENTITY}:{}),
+      ...((container==='ts'||container==='matroska')?{bitstreamIndexIdentity:container==='ts'?JS_TS_MEDIA_INDEX_IDENTITY:JS_MATROSKA_MEDIA_INDEX_IDENTITY}:{}),
       ...(container === 'flv' ? {
         requestCachedAudio(ptsUs: number, generation: number) { if (!disposed) activeRpc.requestCachedAudio(ptsUs + info.firstPtsUs, generation); },
       } : {}),
@@ -284,7 +284,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
       },
       getAnalysisCapability(): AnalysisCapability {
         return {
-          hasSize: true, hasDts: container==='ts'?!!deps.preparedTs?.hasDts:true, keySource: container==='ts'?'verified':'container',
+          hasSize: true, hasDts: (container==='ts'||container==='matroska')?!!deps.preparedTs?.hasDts:true, keySource: (container==='ts'||container==='matroska')?'verified':'container',
           pictureType: 'key-only', qp: 'unsupported',
           indexState: info.indexState ?? 'complete',
           ...(info.indexError ? { indexError: info.indexError } : {}),
@@ -398,7 +398,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts', input: Fl
     };
     const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
-    if (container === 'mp4') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
+    if (container === 'mp4'||container==='matroska') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     return source;
   } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

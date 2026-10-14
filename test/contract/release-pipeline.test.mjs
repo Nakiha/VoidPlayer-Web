@@ -108,7 +108,7 @@ test('analysis matrix runs as independent required jobs with distinct evidence',
   assert.deepEqual(matrix.needs, ['decoder', 'analysis-core']);
   assert.match(matrix.body, /timeout-minutes: 30/);
   assert.match(matrix.body, /fail-fast: false/);
-  assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4, ts\]/);
+  assert.match(matrix.body, /engine: \[chromium, webkit\]\n        part: \[mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers\]/);
   assert.match(matrix.body, /run: node scripts\/run-tests.mjs ci-analysis-matrix-\$\{\{ matrix.part \}\} --engine \$\{\{ matrix.engine \}\} --prepared/);
   assert.match(matrix.body, /if: always\(\)[\s\S]*name: analysis-matrix-reports-\$\{\{ matrix.engine \}\}-\$\{\{ matrix.part \}\}/);
   assert.match(matrix.body, /\.run\/test-suites\/ci-analysis-matrix-\$\{\{ matrix.part \}\}\//);

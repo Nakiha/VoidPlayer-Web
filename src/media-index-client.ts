@@ -20,6 +20,7 @@ export class MediaIndexClient {
   private controller = new AbortController();
   private endpoint?: string;
   private lookup: Promise<ServerIndexResult | null>;
+  private serverFailure?:{code?:string;message:string};
   private transport: IndexStreamTransport;
   private ffmpegConsumer?: FfmpegIndexConsumer;
   private readonly kind: MediaIndexKind;
@@ -125,6 +126,7 @@ export class MediaIndexClient {
           return 'complete';
         }
         if (event?.type === 'error') {
+          this.serverFailure={code:typeof event.code==='string'?event.code:undefined,message:typeof event.message==='string'?event.message.slice(0,4096):'Index build failed'};
           return 'stop';
         }
         throw new Error('索引流事件类型未知。');
@@ -153,6 +155,7 @@ export class MediaIndexClient {
   }
 
   get hasEndpoint(): boolean { return !!this.endpoint; }
+  get failureReason(){return this.serverFailure?{...this.serverFailure}:undefined;}
 
   async read() {
     const result = await this.lookup;

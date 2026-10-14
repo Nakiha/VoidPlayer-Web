@@ -57,18 +57,20 @@ export interface FfmpegCommands {
   extract: Command<{ ctx: number; index: number; recycle?: ArrayBuffer }, WasmFrameOutput & { seek?: { decodedFrames: number; restarts: number } }>;
   dispose: Command<{ ctx: number; path: string }, null>;
 }
-export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount'>;
+export type PacketInitResult = (NonNullable<Awaited<ReturnType<FlvEngine['open']>>> | Awaited<ReturnType<Mp4Engine['open']>> | Awaited<ReturnType<TsEngine['open']>>) & Pick<MediaInfo, 'timelineSource' | 'seekAnchorCount' | 'jsIndexReused' | 'jsIndexPacketsScanned'>;
 type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'prepare-js':Command<{input:FlvInput;sourceVersion:string;format:'ts'|'matroska';persistent?:boolean},{admitted:true;session:string;index:import('./matroska-packet-index.ts').JsPacketIndex}|{admitted:false;reason:string}>;
+  'analysis-js-index':Command<Empty,import('./matroska-packet-index.ts').JsPacketIndex>;
   'prepare-ts': Command<{input: FlvInput; sourceVersion: string},
     {admitted: true; session: string; index: import('./ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
-  init: Command<SoftwareOptions & { input: FlvInput; forceWasm?: boolean } & ({container: 'ts'; sourceVersion: string; preparedTsSession?: string} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
+  init: Command<SoftwareOptions & { input: FlvInput; forceWasm?: boolean } & ({container: 'ts'|'matroska'; sourceVersion: string; preparedTsSession?: string;persistent?:boolean} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
   'analysis-ts-index': Command<Empty, import('./ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('./flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;

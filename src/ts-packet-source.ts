@@ -5,6 +5,9 @@ import { MediaOpenError } from './media-errors.ts';
 import { inspectPacketPicture } from './packet-picture.ts';
 import { isAnnexB, nalRanges } from './nal-framing.ts';
 import { parseAvcSps } from './avc-geometry.ts';
+import {sealJsIndex,isSealedJsIndex} from './js-index-proof.ts';
+import {HevcPictureOrder,UnsupportedHevcPictureStructure} from './hevc-timeline.ts';
+import {hevcFieldPictures} from './hevc-geometry.ts';
 
 import { TS_PACKET_BUILD, parseTsPacketIndex } from './ts-packet-index.ts';
 import type { TsPacketIndex, TsPacketRecord } from './ts-packet-index.ts';
@@ -27,14 +30,14 @@ function sealCompleteIndex(index: TsPacketIndex): TsPacketIndex {
   sealedIndexes.add(index);
   verifiedIndexes.push(new WeakRef(index));
   if (verifiedIndexes.length > 32) verifiedIndexes.shift();
-  return index;
+  return sealJsIndex(index);
 }
 /** Exact metadata equality to a still-live, immutable complete scan. Serialized
  * documents alone (including self-reported completeness) are untrusted. */
 export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
-  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || index.codec !== 'h264' || index.streamKey !== 'video:0'
+  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || !['h264','hevc'].includes(index.codec) || index.streamKey !== 'video:0'
     || index.completeness?.state !== 'complete' || index.completeness.packets !== index.packets.length) return false;
-  if (sealedIndexes.has(index)) return true;
+  if (sealedIndexes.has(index)||isSealedJsIndex(index)) return true;
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
@@ -124,6 +127,7 @@ export class TsPacketSource {
   private closed = false;
   private cursor?: { au: number; packet: EncodedPacket };
   private sets = new Map<number, Uint8Array>();
+  private codec: 'h264' | 'hevc' = 'h264';
   index?: TsPacketIndex;
   nativeConfig?: VideoDecoderConfig;
   bytesRead = 0;
@@ -176,16 +180,16 @@ export class TsPacketSource {
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
-    const evidence = inspectPacketPicture('h264', configuration, bytes);
+    const evidence = inspectPacketPicture(this.codec, configuration, bytes);
     if (!evidence.singlePicture) {
       if (evidence.reason === 'unsupported-ts-multiple-slices'
-        && nalRanges('h264',configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
+        && nalRanges(this.codec,configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
         throw new TsCombinationNotMigrated(`unverified picture layout: ${evidence.reason}`);
       fail(`unverified picture layout: ${evidence.reason}`);
     }
-    for (const nal of nalRanges('h264', configuration, bytes)) {
-      const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
-      if (type !== 7 && type !== 8) continue;
+    for (const nal of nalRanges(this.codec, configuration, bytes)) {
+      const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
+      if (!(this.codec==='h264'?[7,8]:[32,33,34]).includes(type)) continue;
       const stored = this.sets.get(type);
       if (!stored || !equal(stored, data)) throw new TsCombinationNotMigrated('parameter-set changes are outside static admission');
     }
@@ -196,27 +200,32 @@ export class TsPacketSource {
       this.indexBytesRead=0;this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
       const tracks = await this.input.getVideoTracks();
-      if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') throw new TsCombinationNotMigrated('requires one H.264 video track');
+      if (tracks.length !== 1) throw new TsCombinationNotMigrated('requires one H.264/HEVC video track');
+      const codec = await tracks[0].getCodec();
+      if(codec!=='avc'&&codec!=='hevc')throw new TsCombinationNotMigrated('requires H.264/HEVC video');
+      this.codec=codec==='avc'?'h264':'hevc';
       const track = tracks[0];
       this.nativeConfig = await track.getDecoderConfig() ?? undefined;
       this.sink = new EncodedPacketSink(track);
       const first = await this.sink.getFirstPacket(); this.check();
       if (!first || !isAnnexB(first.data)) fail('missing Annex-B first packet');
       if (first.byteLength > 32*1024*1024) throw new MediaOpenError('resource', 'JS TS: access-unit size budget exceeded');
-      for (const nal of nalRanges('h264', new Uint8Array([0, 0, 1]), first.data)) {
-        const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
-        if (type !== 7 && type !== 8) continue;
+      for (const nal of nalRanges(this.codec, new Uint8Array([0, 0, 1]), first.data)) {
+        const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
+        if (!(this.codec==='h264'?[7,8]:[32,33,34]).includes(type)) continue;
         if (this.sets.has(type)) throw new TsCombinationNotMigrated('multiple parameter sets are outside initial admission');
-        if (type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
+        if (this.codec==='h264' && type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
         this.sets.set(type, data.slice());
       }
-      if (this.sets.size !== 2) fail('missing static SPS/PPS');
-      const configuration = new Uint8Array([...new Uint8Array([0, 0, 0, 1]), ...this.sets.get(7)!, 0, 0, 0, 1, ...this.sets.get(8)!]);
+      const setTypes=this.codec==='h264'?[7,8]:[32,33,34];
+      if (this.sets.size !== setTypes.length) fail('missing static parameter sets');
+      const configuration = Uint8Array.from(setTypes.flatMap(type=>[0,0,0,1,...this.sets.get(type)!]));
       if (configuration.length > 4096) fail('configuration budget exceeded');
+      if(this.codec==='hevc')try{new HevcPictureOrder(configuration);if(hevcFieldPictures(configuration))throw new UnsupportedHevcPictureStructure('HEVC field pictures require separate admission');}catch(error){if(error instanceof UnsupportedHevcPictureStructure)throw new TsCombinationNotMigrated(error.message);fail('invalid progressive HEVC configuration');}
       if (!this.validatePicture(first.data, configuration).closedRandomAccess) fail('first picture must prove IDR');
       const restored = parseTsPacketIndex(cached, this.sourceVersion, this.reader.size);
       if (restored && isVerifiedCompleteTsIndex(restored)) {
-        if (restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
+        if (restored.codec !== this.codec || restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
           || restored.packets[0].locator !== first.sequenceNumber || restored.packets[0].size !== first.byteLength
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
@@ -245,7 +254,7 @@ export class TsPacketSource {
       clocks.clear();
       if (!packets.length || new Set(packets.map(p => p.ptsUs)).size !== packets.length) fail('missing or ambiguous packet presentation timestamps');
       this.index = { schema: 2, completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
-        streamKey: 'video:0', pid: track.id, codec: 'h264', configuration: [...configuration], packets };
+        streamKey: 'video:0', pid: track.id, codec: this.codec, configuration: [...configuration], packets };
       this.index = sealCompleteIndex(this.index);this.publishProgress(true);
       this.cursor = { au: 0, packet: first };
       return this.index;
@@ -287,6 +296,6 @@ export function tsDecodeIndex(index: TsPacketIndex): import('./flv-decoder.ts').
   const order = packets.map((_, au) => au).sort((a, b) => packets[a].pts - packets[b].pts);
   const firstPts = packets[order[0]].pts;
   const durations = order.map((au, i) => i + 1 < order.length ? packets[order[i + 1]].pts - packets[au].pts : index.packets[au].durationUs);
-  return { codec: 'h264', description: Uint8Array.from(index.configuration), configurations: [Uint8Array.from(index.configuration)], packets, order, firstPts,
+  return { codec: index.codec, description: Uint8Array.from(index.configuration), configurations: [Uint8Array.from(index.configuration)], packets, order, firstPts,
     duration: packets[order.at(-1)!].pts - firstPts + durations.at(-1)!, durations };
 }

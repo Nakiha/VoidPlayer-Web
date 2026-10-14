@@ -15,12 +15,16 @@ import { loadCore } from './wasm-core.ts';
  * may use a shifted decoder clock and must never be used as frame identity. */
 export interface FlvFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; identityKnown?: boolean };
-export type PacketDecodeIndex = Omit<FlvIndex, 'packets'> & { packets: PacketDecodePacket[] };
+export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9'; packets: PacketDecodePacket[] };
+type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description'>;
+function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
+  return index.codec === 'vp8' ? {codec:'vp8'} : index.codec === 'vp9' ? {codec:'vp09.00.10.08'} : flvDecoderConfig({...index,codec:index.codec});
+}
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
   metadata?(): Pick<MediaInfo, 'color' | 'colorSource' | 'pixelFormat'>;
-  reconfigure?(index: Pick<FlvIndex, 'codec' | 'description'>): Promise<void>;
+  reconfigure?(index: PacketConfiguration): Promise<void>;
   reset(): void;
   /** false means input was not accepted: drain receive() and retry this packet. */
   send(bytes: Uint8Array, packet: PacketDecodePacket): Promise<void | boolean>;
@@ -34,7 +38,7 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }
   const initialReorder = index.codec === 'hevc' ? hevcReorderFrames(index.description) : 0;
   if (initialReorder === null) { diagnostic({ reason: 'hevc-reorder-unknown', codec: index.codec }); return null; }
-  const parsed = initialConfig ?? flvDecoderConfig(index);
+  const parsed = initialConfig ?? packetDecoderConfig(index);
   if (!parsed || typeof VideoDecoder === 'undefined') { diagnostic({ reason: !parsed ? 'no-native-config' : 'webcodecs-unavailable', codec: index.codec }); return null; }
   let config = await preferredVideoConfig({ ...parsed, optimizeForLatency: true }, async candidate => {
     const result = await VideoDecoder.isConfigSupported(candidate);
@@ -48,7 +52,7 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
   // preroll). Shift only at the WebCodecs boundary, restoring source time on
   // output so indexing, seeking and other backends keep the same clock.
   const timestampOrigin = Math.min(0, index.firstPts);
-  let currentIndex: Pick<FlvIndex, 'codec' | 'description'> = index;
+  let currentIndex: PacketConfiguration = index;
   const frames: { frame: VideoFrame; pts: number; description: FrameDescription }[] = [];
   let reorderFrames = initialReorder, drained = false;
   const inputWindow = () => Math.max(8, reorderFrames + 1), maxFrames = () => Math.max(32, reorderFrames + inputWindow());
@@ -107,7 +111,7 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
       if(next.codec==='h264'&&!nativeAvcCompatible(avcGeometry(next.description)))throw new MediaOpenError('decode','此 AVC 配置需要保守软件重排/隔行解码。');
       const nextReorder = next.codec === 'hevc' ? hevcReorderFrames(next.description) : 0;
       if (nextReorder === null) throw new MediaOpenError('decode', '无法确定 HEVC 配置的帧重排上限。');
-      const parsed = flvDecoderConfig(next);
+      const parsed = packetDecoderConfig(next);
       const nextConfig = parsed && await preferredVideoConfig({ ...parsed, optimizeForLatency: true });
       if (!nextConfig) throw new MediaOpenError('decode', `浏览器不支持切换后的 ${next.codec} 视频配置。`);
       clearFrames(); decoder.reset(); decoder.configure(nextConfig); needsKey = true;
@@ -170,7 +174,7 @@ export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?:
 
 // Emscripten's generated module has a dynamically named C API.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'description'>, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
+export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string, wasmBinary?: Uint8Array, threads = 1): Promise<PacketDecoder> {
   const { core, heap } = await loadCore(glueURL, wasmBinary);
   requireFrameAbi(core);
   if (typeof core._vp_packet_open !== 'function') throw new MediaOpenError('decode', 'WASM core 版本过旧，请同步带 FLV 压缩包接口的产物。');
@@ -178,7 +182,7 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
   call('vp_set_threads', ['number'], [threads], null);
   const ctx = call('vp_create', [], []);
   if (!ctx) throw new MediaOpenError('resource', '无法创建 FLV 解码上下文。');
-  const configure = (next: Pick<FlvIndex, 'codec' | 'description'>) => {
+  const configure = (next: PacketConfiguration) => {
     const description = next.codec === 'av1' ? next.description.subarray(4) : next.description;
     const extra = core._malloc(Math.max(1, description.length));
     try {

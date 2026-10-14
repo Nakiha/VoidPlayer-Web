@@ -14,7 +14,11 @@ export type ColorInfo = {
 export type MediaInfo = {
   trackMetadata?: import('./cached-track-metadata.ts').CachedTrackMetadata;
   opportunisticAudio?: 'flv-aac' | 'cached-container';
-  container?: 'flv' | 'isobmff' | 'mpegts' | 'other';
+  jsIndexReused?:boolean;
+  jsIndexPacketsScanned?:number;
+  demuxBackend?:string;
+  indexBackend?:string;
+  container?: 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
   indexKind?: 'packet-offsets' | 'packet-locators' | 'timestamps' | 'container';
   seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';
   seekAnchorCount?: number;

@@ -1,6 +1,6 @@
 import { MediaOpenError } from './media-errors.ts';
 
-export type RandomAccessInput = { file: Blob } | { url: string; size: number };
+export type RandomAccessInput = { file: Blob } | { url: string; size: number; library?:import('./library-index-reference.ts').LibraryIndexReference };
 export interface RangeVersion { validator?: string; ifRange?: string; }
 const BLOCK = 256 * 1024;
 const CACHE_BYTES = 8 * 1024 * 1024;

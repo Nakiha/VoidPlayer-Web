@@ -75,7 +75,7 @@ export interface ContainerHeader {
 /** Configuration NALs remain out of band; offsets are relative to the record,
  * sizes exclude its two-byte length fields. No payload is retained or injected. */
 export function readContainerHeader(codec: AnalysisResult['codec'], description: Uint8Array): ContainerHeader {
-  if (codec === 'h264' && isAnnexB(description)) return {box: 'annexb', byteLength: description.length, nalus: readNalus(codec, description, description)};
+  if ((codec === 'h264'||codec==='hevc') && isAnnexB(description)) return {box: 'annexb', byteLength: description.length, nalus: readNalus(codec, description, description)};
   let at = 0;
   const take = (count: number) => { if (at + count > description.length) throw new Error('Truncated container configuration'); const start = at; at += count; return start; };
   const byte = () => description[take(1)];
@@ -119,7 +119,7 @@ export function readContainerHeader(codec: AnalysisResult['codec'], description:
   return { box: codec === 'h264' ? 'avcC' : codec === 'hevc' ? 'hvcC' : 'vvcC', byteLength: description.length, nalus };
 }
 export function validateContainerHeader(codec: AnalysisResult['codec'], header: ContainerHeader) {
-  if (!header || !(codec === 'h264' ? ['avcC','annexb'] : [codec === 'hevc' ? 'hvcC' : 'vvcC']).includes(header.box) ||
+  if (!header || !(codec === 'h264' ? ['avcC','annexb'] : codec==='hevc'?['hvcC','annexb']:['vvcC']).includes(header.box) ||
       !Number.isSafeInteger(header.byteLength) || header.byteLength < 1 || header.byteLength > 1024 * 1024 || !Array.isArray(header.nalus) || header.nalus.length > 256) throw new Error('Invalid container header');
   let end = 0;
   for (const n of header.nalus) {

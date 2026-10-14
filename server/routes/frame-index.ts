@@ -20,7 +20,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
     let indexStreamTimer: ReturnType<typeof setTimeout> | undefined;
     try {
       const kindParam = url.searchParams.get('kind') ?? 'flv';
-      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts') throw new AdminError(400, '未知帧索引类型。');
+      if (kindParam !== 'flv' && kindParam !== 'ffmpeg' && kindParam !== 'js-ts' && kindParam!=='js-matroska') throw new AdminError(400, '未知帧索引类型。');
       const kind = kindParam as MediaIndexKind;
       let identity: MediaIndexIdentity;
       try {
@@ -29,7 +29,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
           : parseMediaIndexIdentity(kind, url.searchParams);
       } catch (error) { throw new AdminError(400, (error as Error).message); }
       if (!['GET', 'POST'].includes(req.method ?? '')) throw new AdminError(405, '不支持的帧索引操作。');
-      if (req.method === 'POST' && kind === 'js-ts') throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
+      if (req.method === 'POST' && (kind === 'js-ts'||kind==='js-matroska')) throw new AdminError(405,'JS TS 索引只能由服务端完整扫描构建。');
       if (req.method === 'POST' && !adminWriteAllowed(req, 'frame-index')) throw new AdminError(403, '请从同源播放器提交帧索引。');
       const version = url.searchParams.get('v'), entry = library.metadata(indexMatch[1]);
       if (!version) throw new AdminError(400, '帧索引需要媒体版本。');
@@ -119,7 +119,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
         }
         releaseUpload = library.indexJobs.acquireUpload();
         if (!String(req.headers['content-type']).startsWith('application/json')) throw new AdminError(400, '请提交 JSON 索引。');
-        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : kind === 'js-ts' ? JS_TS_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
+        const limit = (kind === 'ffmpeg' ? FFMPEG_INDEX_BYTES : (kind === 'js-ts'||kind==='js-matroska') ? JS_TS_INDEX_BYTES : FLV_INDEX_BYTES) + 1024;
         if (Number(req.headers['content-length']) > limit) throw new AdminError(413, '帧索引过大。');
         const chunks: Buffer[] = []; let size = 0;
         const timeout = setTimeout(() => req.destroy(new Error('索引上传超时。')), 30000);
@@ -145,7 +145,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
     } catch (error) {
       if (indexStreamStarted && !res.destroyed) {
         try {
-          await writeMediaIndexEvent(res, { type: 'error', message: (error as Error).message || '服务端索引构建失败。' });
+          await writeMediaIndexEvent(res, { type: 'error', message: (error as Error).message || '服务端索引构建失败。',...(error instanceof AdminError?{code:error.code}:{}) });
           res.end();
         } catch {}
       } else if (!res.headersSent && !res.destroyed) {

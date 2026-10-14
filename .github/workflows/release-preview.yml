@@ -266,7 +266,7 @@ jobs:
       fail-fast: false
       matrix:
         engine: [chromium, webkit]
-        part: [mp4, flv-legacy, flv-enhanced, fmp4, ts]
+        part: [mp4, flv-legacy, flv-enhanced, fmp4, ts, js-containers]
     steps:
       - uses: actions/checkout@v4
       - name: Use primary Ubuntu package archive
@@ -303,6 +303,9 @@ jobs:
       - name: Verify TS packet, raw timing, whole, cache and cancellation contracts
         if: matrix.part == 'ts' && matrix.engine == 'chromium'
         run: node scripts/run-tests.mjs --case node-bitstream-analysis-ts --prepared
+      - name: Verify JS container decode, index authority, restart and corruption contracts
+        if: matrix.part == 'js-containers' && matrix.engine == 'chromium'
+        run: node scripts/run-tests.mjs --case node-js-container-matrix,node-js-container-server-cache --prepared
       - name: Verify ${{ matrix.part }} analysis matrix on ${{ matrix.engine }}
         run: node scripts/run-tests.mjs ci-analysis-matrix-${{ matrix.part }} --engine ${{ matrix.engine }} --prepared
       - uses: actions/upload-artifact@v4
@@ -315,6 +318,7 @@ jobs:
             .run/analysis-reports/${{ matrix.engine }}/
             .run/test-suites/ci-analysis-matrix-${{ matrix.part }}/
             .run/browser-fixtures/bitstream-analysis-matrix-${{ matrix.part }}-${{ matrix.engine }}/
+            .run/browser-fixtures/js-containers-${{ matrix.engine }}/
           if-no-files-found: error
           retention-days: 14
 

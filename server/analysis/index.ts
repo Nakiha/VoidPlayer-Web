@@ -1,4 +1,5 @@
-import { parseTsPacketIndex } from '../../src/ts-packet-index.ts';
+import {parseJsPacketIndex} from '../../src/js-packet-index-cache.ts';
+import type {JsPacketIndex} from '../../src/matroska-packet-index.ts';
 import { parseFlvIndex, FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../library.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
@@ -13,6 +14,7 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
   if (!metadata || metadata.version !== version) throw new AnalysisFailure('source-changed', 'Index source changed');
   const epoch = await library.indexJobs.call('epoch');
   let buildError: unknown;
+  let jsDocument:JsPacketIndex|undefined;
   let flvPrefix = 0, flvComplete = false;
   let flvDocument: import("../../src/flv-index-cache.ts").FlvIndexDocument | undefined;
   const build = library.indexJobs.startBuild({ id, version, size: metadata.size, filePath, epoch, identity }, {
@@ -64,16 +66,16 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
         }
         return { packets: flvPrefix, complete: flvComplete };
       }
-      if(identity.kind==='js-ts') {
+      if(identity.kind==='js-ts'||identity.kind==='js-matroska') {
         const snapshot=await library.indexJobs.call('stream-manifest',{id,version,identity});
         if(snapshot.epoch!==epoch)throw new AnalysisFailure('source-changed','Index cache reset');
         if(!snapshot.manifest?.complete)return {packets:0,complete:false};
         const bytes=await library.indexJobs.call('get',{id,version,identity});
         if(!bytes||bytes.length>64*1024*1024)throw new AnalysisFailure('resource-limit','Invalid JS TS index document');
         const envelope=JSON.parse(Buffer.from(bytes).toString('utf8'));
-        const document=parseTsPacketIndex(envelope.index??envelope,`${id}@${version}`,metadata.size);
+        const document=parseJsPacketIndex(envelope.index??envelope,`${id}@${version}`,metadata.size);
         if(!document)throw new AnalysisFailure('incomplete-reference-state','Invalid JS TS index identity');
-        return {packets:document.packets.length,complete:true};
+        jsDocument=document;return {packets:document.packets.length,complete:true};
       }
       const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
       if (snapshot.epoch !== epoch) throw new AnalysisFailure('source-changed', 'Index cache reset');
@@ -112,6 +114,11 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
         await new Promise(resolve => setTimeout(resolve, 20));
       }
       return flvDocument!;
+    },
+    async jsSnapshot(active:()=>boolean=()=>true){
+      if(identity.kind!=='js-ts'&&identity.kind!=='js-matroska')throw new AnalysisFailure('unsupported-container','JS snapshot required');
+      const started=performance.now();while(!(await this.read()).complete){if(!active())throw new AnalysisFailure('cancelled','JS index subscriber closed');if(performance.now()-started>120000)throw new AnalysisFailure('resource-limit','JS snapshot stalled');await new Promise(resolve=>setTimeout(resolve,20));}
+      if(!await library.resolve(id,version))throw new AnalysisFailure('source-changed','JS snapshot source changed');return jsDocument!;
     },
     async ffmpegSnapshot(active: () => boolean = () => true) {
       if(identity.kind !== 'ffmpeg')throw new AnalysisFailure('unsupported-container','FFmpeg snapshot required');
