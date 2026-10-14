@@ -41,7 +41,7 @@ export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
-    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
+    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.exactPictureMapping !== index.exactPictureMapping || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
       || known.build !== index.build || known.schema !== index.schema || known.packets.length !== index.packets.length
       || known.configuration.length !== index.configuration.length || known.configuration.some((v,i)=>v!==index.configuration[i])) return false;
     return known.packets.every((p,i)=>{
@@ -128,6 +128,7 @@ export class TsPacketSource {
   private cursor?: { au: number; packet: EncodedPacket };
   private sets = new Map<number, Uint8Array>();
   private codec: 'h264' | 'hevc' = 'h264';
+  private exactPictureMapping=true;
   index?: TsPacketIndex;
   nativeConfig?: VideoDecoderConfig;
   bytesRead = 0;
@@ -180,12 +181,19 @@ export class TsPacketSource {
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
-    const evidence = inspectPacketPicture(this.codec, configuration, bytes);
+    let evidence = inspectPacketPicture(this.codec, configuration, bytes);
     if (!evidence.singlePicture) {
-      if (evidence.reason === 'unsupported-ts-multiple-slices'
-        && nalRanges(this.codec,configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
-        throw new TsCombinationNotMigrated(`unverified picture layout: ${evidence.reason}`);
-      fail(`unverified picture layout: ${evidence.reason}`);
+      const slices=this.codec==='h264'?nalRanges(this.codec,configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)):[];
+      // Preserve the former TS playback capability. Multiple slices in one
+      // demuxed packet are decoder input, not proof of one exact picture.
+      // Require one first slice and homogeneous IDR/non-IDR coding before
+      // using an IDR packet as a closed seek anchor.
+      if(evidence.reason==='unsupported-ts-multiple-slices'&&slices.length>1
+        &&slices.every(n=>n.size>=2)&&slices.filter(n=>bytes[n.offset+1]&128).length===1
+        &&slices.every(n=>(bytes[n.offset]&31)===(bytes[slices[0].offset]&31))){
+        this.exactPictureMapping=false;
+        evidence={singlePicture:false,closedRandomAccess:(bytes[slices[0].offset]&31)===5};
+      }else fail(`unverified picture layout: ${evidence.reason}`);
     }
     for (const nal of nalRanges(this.codec, configuration, bytes)) {
       const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
@@ -214,7 +222,7 @@ export class TsPacketSource {
         const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
         if (!(this.codec==='h264'?[7,8]:[32,33,34]).includes(type)) continue;
         if (this.sets.has(type)) throw new TsCombinationNotMigrated('multiple parameter sets are outside initial admission');
-        if (this.codec==='h264' && type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
+        if (this.codec==='h264' && type === 7 && parseAvcSps(data).interlaced) this.exactPictureMapping=false;
         this.sets.set(type, data.slice());
       }
       const setTypes=this.codec==='h264'?[7,8]:[32,33,34];
@@ -225,7 +233,7 @@ export class TsPacketSource {
       if (!this.validatePicture(first.data, configuration).closedRandomAccess) fail('first picture must prove IDR');
       const restored = parseTsPacketIndex(cached, this.sourceVersion, this.reader.size);
       if (restored && isVerifiedCompleteTsIndex(restored)) {
-        if (restored.codec !== this.codec || restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
+        if (!this.exactPictureMapping && restored.exactPictureMapping!==false || restored.codec !== this.codec || restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
           || restored.packets[0].locator !== first.sequenceNumber || restored.packets[0].size !== first.byteLength
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
@@ -253,7 +261,7 @@ export class TsPacketSource {
       }
       clocks.clear();
       if (!packets.length || new Set(packets.map(p => p.ptsUs)).size !== packets.length) fail('missing or ambiguous packet presentation timestamps');
-      this.index = { schema: 2, completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
+      this.index = { schema: 2, ...(!this.exactPictureMapping?{exactPictureMapping:false as const}:{}), completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
         streamKey: 'video:0', pid: track.id, codec: this.codec, configuration: [...configuration], packets };
       this.index = sealCompleteIndex(this.index);this.publishProgress(true);
       this.cursor = { au: 0, packet: first };
@@ -291,7 +299,7 @@ export class TsPacketSource {
 export function tsDecodeIndex(index: TsPacketIndex): import('./flv-decoder.ts').PacketDecodeIndex {
   if (!isVerifiedCompleteTsIndex(index)) fail('unverified complete index cannot mint decode identities');
   const packets = index.packets.map(packet => ({ sequenceNumber: packet.au, configuration: packet.configuration,
-    offset: packet.locator, size: packet.size, pts: packet.ptsUs, identityKnown: packet.timing.pts !== null,
+    offset: packet.locator, size: packet.size, pts: packet.ptsUs, identityKnown: index.exactPictureMapping!==false && packet.timing.pts !== null,
     dts: packet.timing.dts === null ? null : Math.round(packet.timing.dts * 1e6 / 90000), key: packet.key }));
   const order = packets.map((_, au) => au).sort((a, b) => packets[a].pts - packets[b].pts);
   const firstPts = packets[order[0]].pts;

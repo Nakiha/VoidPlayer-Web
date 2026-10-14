@@ -43,3 +43,20 @@ for(const [name,codec] of [['mpeg4.mp4','mpeg4'],['mjpeg.mov','mjpeg'],['prores.
   while((frame=await engine.next(last))){assert.ok(frame.pts>last);last=frame.pts;count++;frame.frame?.close();assert.ok(count<=24);}assert.equal(count,24);
  }finally{engine.close();}
 });
+
+for(const [name,count] of [['progressive-two-slices.ts',25],['mbaff.ts',50],['mbaff-frame-sei.ts',50]] as const)
+for(const threads of [1,2])test(`JS ${name} ST/MT ${threads}: retain all ${count} native frames without exact picture identity`,async()=>{
+ const path=resolve('fixtures/ts-analysis',name),bytes=await readFile(path),engine=new JsContainerEngine({file:new Blob([bytes])},name);
+ try{
+  const suffix=threads===1?'':'-mt',opened=await engine.open(pathToFileURL(resolve(`public/vendor/voidplayer-core/voidplayer-core${suffix}.js`)).href,await readFile(`public/vendor/voidplayer-core/voidplayer-core${suffix}.wasm`),true,threads);
+  assert.equal(opened.times.length,count);assert.equal(opened.demuxBackend,'js-ts-packets');
+  const {isVerifiedCompleteTsIndex,tsDecodeIndex}=await import('../../src/ts-packet-source.ts');
+  const doc=engine.packetIndex!;assert.equal(doc.kind,'js-ts-packets');
+  if(doc.kind==='js-ts-packets'){assert.equal(doc.exactPictureMapping,false);const forged={...structuredClone(doc),exactPictureMapping:undefined};assert.equal(isVerifiedCompleteTsIndex(forged),false);assert.throws(()=>tsDecodeIndex(forged),/unverified complete index/);}
+  const positions=Array.from({length:count},(_,i)=>i),first=await engine.extract(0),expected=nativeFrames(path,positions,first.description.sourcePixelFormat!,first.pixels!.byteLength);first.frame?.close();
+  let frame:Awaited<ReturnType<typeof engine.next>>=await engine.extract(0),last=-Infinity,outputs=0;
+  while(frame){assert.ok(frame.pts>last);assert.equal(frame.packetPicture,undefined,'unverified coding layout cannot mint exact AU identity');assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected.get(outputs)!),`native display ${outputs}`);last=frame.pts;outputs++;frame.frame?.close();assert.ok(outputs<=count);frame=await engine.next(last);}
+  assert.equal(outputs,count);assert.equal(await engine.next(last),null);
+  for(const position of [count-2,3,0,count-1]){const frame=await engine.extract(position);assert.equal(frame.packetPicture,undefined);assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected.get(position)!),`seek native ${position}`);frame.frame?.close();}
+ }finally{engine.close();}
+});

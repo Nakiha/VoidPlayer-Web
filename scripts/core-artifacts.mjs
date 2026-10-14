@@ -51,7 +51,11 @@ export async function syncPlaybackCore(source, target, lock) {
       const name = `voidplayer-core${suffix}.${extension}`;
       await cp(path.join(suffix ? multi : source, name), path.join(staged, name));
     }
-    for(const suffix of hasMulti?['','-mt']:[''])for(const name of [`capabilities${suffix}.json`,`voidplayer-ffmpeg-manifest${suffix}.json`]){const folder=prepared?source:suffix?multi:source;if(await exists(path.join(folder,name)))await cp(path.join(folder,name),path.join(staged,name));}
+    for(const suffix of hasMulti?['','-mt']:[''])for(const name of [`capabilities${suffix}.json`,`voidplayer-ffmpeg-manifest${suffix}.json`]){
+      const folder=prepared?source:suffix?multi:source;
+      const sourceName=!prepared&&suffix&&name===`voidplayer-ffmpeg-manifest${suffix}.json`?'voidplayer-ffmpeg-manifest.json':name;
+      if(await exists(path.join(folder,sourceName)))await cp(path.join(folder,sourceName),path.join(staged,name));
+    }
     if (await exists(path.join(source, 'LICENSES'))) await cp(path.join(source, 'LICENSES'), path.join(staged, 'LICENSES'), { recursive: true });
     if (prepared) {
       await cp(path.join(source, 'provenance.json'), path.join(staged, 'provenance.json'));

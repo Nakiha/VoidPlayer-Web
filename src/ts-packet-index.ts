@@ -1,6 +1,6 @@
 /** Versioned JS TS metadata shape; complete-source verification belongs to TsPacketSource. */
 export const JS_TS_INDEX_BYTES = 64 * 1024 * 1024;
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v4';
+export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v5';
 export interface TsPacketRecord {
   au: number;
   transportEnd?:number;
@@ -18,6 +18,8 @@ export interface TsPacketRecord {
 }
 export interface TsPacketIndex {
   schema: 2;
+  /** Playback packets are usable even when exact coding-picture mapping is unverified. */
+  exactPictureMapping?: false;
   /** Source parsing is terminal; damage is separate from enumeration state. */
   indexIntegrity?:'prefix';
   indexTruncatedAt?:number;
@@ -47,6 +49,7 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
   if (doc.completeness?.state !== 'complete' || doc.completeness.packets !== doc.packets.length) return;
   if(doc.indexIntegrity!==undefined&&(doc.indexIntegrity!=='prefix'||!Number.isSafeInteger(doc.indexTruncatedAt)||doc.indexTruncatedAt!<188||doc.indexTruncatedAt!>=size||!Number.isSafeInteger(doc.transportLimit)||doc.transportLimit!==doc.indexTruncatedAt||doc.transportLimit!%188))return;
   if(doc.indexIntegrity===undefined&&(doc.indexTruncatedAt!==undefined||doc.transportLimit!==undefined))return;
+  if(doc.exactPictureMapping!==undefined&&doc.exactPictureMapping!==false)return;
   const times = new Set<number>();
   for (let au = 0; au < doc.packets.length; au++) {
     const p = doc.packets[au];

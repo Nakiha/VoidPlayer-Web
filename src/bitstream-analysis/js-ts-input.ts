@@ -28,6 +28,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     if(!reusable)await saveLocalJsIndex(index,signal);
     payloadPhase=true;
     if(index.codec!=='h264'&&index.codec!=='hevc')throw new AnalysisFailure('unsupported-codec',`Block/QP analysis does not support ${index.codec}; JS packet/index statistics remain available`);
+    if(index.kind==='js-ts-packets'&&index.exactPictureMapping===false)throw new AnalysisFailure('ambiguous-picture-identity','This TS coding layout is playable but has no verified exact picture mapping');
     const codec=index.codec;
     let opened = !reusable;
     let opening: Promise<void> | undefined;

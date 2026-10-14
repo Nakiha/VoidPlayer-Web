@@ -119,7 +119,7 @@ test('whole TS can consume more than 64 MiB while each advancement and result re
   assert.equal(count,600);assert.ok(reader.actualBytes>64*1024*1024);assert.ok(reader.closed);assert.equal(core._vpa_record_bytes(),0);
  }finally{f.close();}
 });
-test('JS demux preserves HRD input clocks and rejects coding MBAFF despite FRAME presentation',async()=>{
+test('JS demux preserves HRD clocks and playable coding layouts without inventing exact identities',async()=>{
  let baseline:Map<number,{pts:number|null;dts:number|null}>|undefined,pid=256;
  for(const name of ['hrd.ts','hrd-missing.ts']) {
   const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),reader={size:bytes.length,async read(at:number,n:number){return bytes.subarray(at,at+n);},close(){}},source=new TsPacketSource(reader,sourceVersion,signal());
@@ -127,10 +127,13 @@ test('JS demux preserves HRD input clocks and rejects coding MBAFF despite FRAME
    else{const clocks=await readTsPesClocks(reader,pid,signal());assert.equal(clocks.size,100);for(const [au,[position,clock]] of [...clocks].entries()){if([10,11,40,41].includes(au)){assert.equal(clock.pts,null);assert.equal(clock.dts,null);}else assert.deepEqual(clock,baseline!.get(position));}await assert.rejects(source.open(),/missing PTS/i);}
   }finally{source.close();}
  }
- for(const [name,count,expected] of [['progressive-single.ts',25,25],['progressive-two-slices.ts',25,0],['mbaff.ts',50,0],['mbaff-frame-sei.ts',50,0]] as const){
+ for(const [name,count,expected] of [['progressive-single.ts',25,25],['progressive-two-slices.ts',25,25],['mbaff.ts',50,50],['mbaff-frame-sei.ts',50,50]] as const){
   const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),source=new TsPacketSource({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},sourceVersion,signal());
   const {execFileSync}=await import('node:child_process');const frames=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','frame=interlaced_frame','-of','json','fixtures/ts-analysis/'+name],{encoding:'utf8'})).frames;assert.equal(frames.length,count);
-  try{if(expected){const index=await source.open();assert.equal(index.packets.length,expected);}else await assert.rejects(source.open());if(name==='mbaff-frame-sei.ts')assert.equal(frames.filter((f:any)=>!f.interlaced_frame).length,50,'FRAME presentation cannot override coding SPS evidence');}finally{source.close();}
+  try{const index=await source.open();assert.equal(index.packets.length,expected);
+   if(name==='progressive-single.ts')assert.equal(index.exactPictureMapping,undefined);
+   else{assert.equal(index.exactPictureMapping,false);await assert.rejects(openAnalysisInput({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},signal(),false,{sourceVersion}),/no verified exact picture mapping/);}
+   if(name==='mbaff-frame-sei.ts')assert.equal(frames.filter((f:any)=>!f.interlaced_frame).length,50,'FRAME presentation cannot override coding SPS evidence');}finally{source.close();}
  }
 });
 test('unconsumed whole IO remains bounded until a result is acknowledged',async()=>{

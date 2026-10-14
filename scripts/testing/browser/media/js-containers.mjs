@@ -11,7 +11,19 @@ const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv',
 assert.ok(!filter||names.includes(filter),'known focused fixture');
 await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots:[path.join(repositoryRoot,'fixtures/js-container')]},async({page,ready,artifact})=>{
  const rows=[],errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push({url:r.url(),method:r.method()}));
- await page.addInitScript(()=>{window.__vpAnalysisQA=true;});
+ const blobDiagnostics=[];await page.exposeFunction('__vpReportBlob',row=>blobDiagnostics.push(row));
+ await page.addInitScript(()=>{
+  window.__vpAnalysisQA=true;
+  // Preserve actual URL/Worker behavior while recording which owner created
+  // a failed blob. WebKit may truncate an access-control error before its URL.
+  window.__vpBlobDiagnostics=[];
+  const rows=window.__vpBlobDiagnostics,create=URL.createObjectURL.bind(URL),revoke=URL.revokeObjectURL.bind(URL),WorkerBase=window.Worker;
+  URL.createObjectURL=blob=>{const url=create(blob),row={url,createdAt:performance.now(),stack:new Error().stack,type:blob.type,size:blob.size};rows.push(row);void window.__vpReportBlob({event:'create',...row});if(blob.type.includes('javascript')&&blob.size<65536)void blob.text().then(text=>{row.prefix=text.slice(0,160);void window.__vpReportBlob({event:'script',...row});});return url;};
+  URL.revokeObjectURL=url=>{const row=rows.find(row=>row.url===url);if(row)row.revokedAt=performance.now();void window.__vpReportBlob({event:'revoke',url,at:performance.now()});return revoke(url);};
+  window.Worker=class extends WorkerBase{constructor(url,options){super(url,options);const row=rows.find(row=>row.url===String(url));if(row){row.workerAt=performance.now();this.addEventListener('error',event=>{row.workerError={message:event.message,filename:event.filename,at:performance.now()};});}}};
+  window.addEventListener('unhandledrejection',event=>{void window.__vpReportBlob({event:'unhandledrejection',message:String(event.reason),stack:event.reason?.stack,at:performance.now()});});
+  window.addEventListener('error',event=>{const record={pageError:{message:event.message,filename:event.filename,stack:event.error?.stack,at:performance.now()},owners:rows.filter(row=>row.url).slice(-8)};rows.push(record);void window.__vpReportBlob(record);});
+ });
  // Product packet decoding must never reach any container-WASM open ABI,
  // including after native decode is unavailable. The independent Node oracle
  // is outside this browser path.
@@ -71,6 +83,7 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  let restored=(await call('get_review_session')).tracks[0];assert.equal(restored.jsIndexReused,false);assert.equal(restored.jsIndexPacketsScanned,600,'invalid persisted receipt rebuilds actual EOF coverage');
  await call('remove_review_track',{slot:'A'});await page.reload();await page.waitForFunction(()=>window.voidPlayer?.tools);
  await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();restored=(await call('get_review_session')).tracks[0];assert.equal(restored.jsIndexReused,true);assert.equal(restored.jsIndexPacketsScanned,0,'complete rebuilt index survives page and Worker restarts');
+ await writeFile(artifact('blob-diagnostics.json'),JSON.stringify({errors:blobDiagnostics,lastDocument:await page.evaluate(()=>window.__vpBlobDiagnostics)},null,2));
  assert.deepEqual(errors,[]);await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors,persistence:{corruptRebuilt:true,freshRuntimeReused:true}},null,2));
  console.log(`PASS ${engine}: ${rows.length} actual JS-container local/library decoder/analysis cases plus corrupt-cache rebuild and fresh-runtime reuse; hardware use not inferred`);
 });
