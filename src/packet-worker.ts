@@ -49,17 +49,21 @@ async function start() {
       }, 0);
       return;
     }
-    if (message.type === 'analysis-flv-index' && engine instanceof FlvEngine) {
+    if (message.type === 'analysis-flv-index') {
+      if(!(engine instanceof FlvEngine)){send({id:message.id,ok:false,error:'FLV index is not ready (worker 未初始化)',stage:'container'});return;}
       if (!engine.indexComplete) { send({ id: message.id, ok: false, error: 'FLV index is incomplete' }); return; }
       send(reply(message, serializeFlvIndex(engine.index, engine.reader.size)));
       return;
     }
-    if (message.type === 'analysis-ts-index' && engine instanceof TsEngine) {
-      send(reply(message, engine.packetIndex!));
+    if (message.type === 'analysis-ts-index') {
+      const index=engine instanceof TsEngine?engine.packetIndex:undefined;
+      if(!index){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
+      send(reply(message, index));
       return;
     }
-    if (message.type === 'analysis-index' && engine) {
-      const packets = engine instanceof FlvEngine ? engine.index.packets : engine.analysisIndex!.packets;
+    if (message.type === 'analysis-index') {
+      const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
+      if(!packets){send({id:message.id,ok:false,error:'Packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
       send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
       return;
     }
@@ -113,7 +117,7 @@ async function start() {
         } else if (type === 'analysis' && engine) {
           // 只读统计：复用当前 demux 包表，不启动第二套扫描、不转移底层缓冲。
           // 查询走同一串行 chain 保序，但只做区间二分与有界物化，不重算全片。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const complete = engine instanceof FlvEngine ? engine.indexComplete : true;
           const mediaId = message.mediaId ?? '';
@@ -140,14 +144,14 @@ async function start() {
           send(reply(message, data));
         } else if (type === 'analysis-locate' && engine) {
           // 按样本身份的有界定位：O(1) 反查包表，不扫描、不新建索引。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = locateSampleById(packets, message.mediaId ?? '', message.firstPtsUs ?? 0, message.sampleId ?? '');
           send(reply(message, data));
         } else if (type === 'analysis-rank' && engine) {
           // 展示序排名：与 analysis 分支共用同一份有序轴缓存，O(log N) 二分，
           // 不物化样本数组、不解码。complete 由主线程按索引状态判定。
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const axis = message.axis === 'dts' ? 'dts' : 'pts';
           const tUs = Number(message.tUs);
@@ -155,7 +159,7 @@ async function start() {
           const data = querier.rank(packets, message.firstPtsUs ?? 0, axis, tUs);
           send(reply(message, data));
         } else if (type === 'analysis-number' && engine) {
-          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine.analysisIndex?.packets;
+          const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
           if (!packets?.length) throw new MediaOpenError('container', '索引尚未建立，暂无分析数据。');
           const data = querier.sampleAtNumber(packets, message.firstPtsUs ?? 0, message.axis === 'dts' ? 'dts' : 'pts', Number(message.number));
           send(reply(message, data));

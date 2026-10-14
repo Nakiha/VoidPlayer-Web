@@ -21,10 +21,15 @@ export class TsEngine {
   private primed: FlvFrame | null = null;
   private closed = false;
   private outputSize?: { width: number; height: number };
+  private createNative:typeof nativeFlvDecoder;
+  private createSoftware:typeof wasmFlvDecoder;
 
-  constructor(input: RandomAccessInput, sourceVersion: string) {
+  constructor(input: RandomAccessInput, sourceVersion: string,
+    decoders: {native?:typeof nativeFlvDecoder;software?:typeof wasmFlvDecoder} = {}) {
     this.reader = new RangeReader(input);
     this.source = new TsPacketSource(this.reader, sourceVersion, this.controller.signal);
+    this.createNative=decoders.native??nativeFlvDecoder;
+    this.createSoftware=decoders.software??wasmFlvDecoder;
   }
   cachedWindows() { return this.reader.cachedWindows(); }
   peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length); }
@@ -38,12 +43,9 @@ export class TsEngine {
       true, () => !this.closed, tsPictureStream(this.document!));
   }
   private async first(timeline: PacketTimeline, pts: number) {
-    try {
-      const frame = await timeline.at(pts);
-      if (this.closed) { frame.frame?.close(); this.check(); }
-      return frame;
-    }
-    catch (error) { timeline.close(); throw error; }
+    const frame = await timeline.at(pts);
+    if (this.closed) { frame.frame?.close(); this.check(); }
+    return frame;
   }
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress) {
     try {
@@ -54,15 +56,17 @@ export class TsEngine {
       this.statistics = {packets: this.document.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,
         dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6/90000),size:packet.size,key:packet.key}))};
       onProgress?.('decoder');
-      const native = !forceWasm ? await nativeFlvDecoder(this.index, this.source.nativeConfig) : null;
-      const decoder = native ?? await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
+      const native = !forceWasm ? await this.createNative(this.index, this.source.nativeConfig) : null;
+      const decoder = native ?? await this.createSoftware(this.index, glueURL, wasmBinary, threads);
       this.timeline = this.makeTimeline(decoder);
       onProgress?.('first-frame');
       try { this.primed = await this.first(this.timeline, this.index.firstPts); }
       catch (error) {
+        const failed = this.timeline;
         this.timeline = undefined;
+        failed?.close();
         if (decoder.kind !== 'webcodecs' || !(error instanceof MediaOpenError) || error.stage !== 'decode') throw error;
-        const software = await wasmFlvDecoder(this.index, glueURL, wasmBinary, threads);
+        const software = await this.createSoftware(this.index, glueURL, wasmBinary, threads);
         this.timeline = this.makeTimeline(software);
         this.primed = await this.first(this.timeline, this.index.firstPts);
       }
@@ -94,14 +98,16 @@ export class TsEngine {
   async referenceWitness(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
     this.check();
     if (this.timeline?.decoder.kind !== 'webcodecs') throw new MediaOpenError('decode', 'JS TS native decoder is not ready');
-    const decoder = await wasmFlvDecoder(this.index!, glueURL, wasmBinary, threads);
+    const decoder = await this.createSoftware(this.index!, glueURL, wasmBinary, threads);
     const witness = this.makeTimeline(decoder);
     try { return await witness.at(this.index!.firstPts); }
     finally { witness.close(); }
   }
   private async replaceDecoder(decoder: PacketDecoder) {
     const next = this.makeTimeline(decoder);
-    const first = await this.first(next, this.index!.firstPts);
+    let first:FlvFrame;
+    try {first=await this.first(next,this.index!.firstPts);}
+    catch(error){next.close();throw error;}
     // Commit only after the candidate produced a valid actual frame. A failed
     // candidate leaves the previous decoder/source usable for transaction rollback.
     this.primed?.frame?.close(); this.timeline!.close();
@@ -111,13 +117,13 @@ export class TsEngine {
   async switchToSoftware(glueURL: string, wasmBinary?: Uint8Array, threads = 1) {
     this.check();
     if (this.timeline!.decoder.kind === 'webcodecs')
-      await this.replaceDecoder(await wasmFlvDecoder(this.index!, glueURL, wasmBinary, threads));
+      await this.replaceDecoder(await this.createSoftware(this.index!, glueURL, wasmBinary, threads));
     return this.decoderInfo();
   }
   async switchToNative() {
     this.check();
     if (this.timeline!.decoder.kind === 'ffmpeg-wasm') {
-      const native = await nativeFlvDecoder(this.index!, this.source.nativeConfig);
+      const native = await this.createNative(this.index!, this.source.nativeConfig);
       if (native) await this.replaceDecoder(native);
     }
     return this.decoderInfo();

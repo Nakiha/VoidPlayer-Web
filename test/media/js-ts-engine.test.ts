@@ -82,3 +82,56 @@ test('TS admission failures never load a decoder or silently open a container co
     } finally { rpc.terminate(); }
   }
 });
+
+test('native and software first-frame failures release each actual timeline decoder once', async () => {
+  const {TsEngine}=await import('../../src/ts-engine.ts');
+  const {MediaOpenError}=await import('../../src/media-errors.ts');
+  const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
+  const closed={native:0,software:0};
+  const failed=(name:'native'|'software'):import('../../src/flv-decoder.ts').PacketDecoder=>({
+    kind:name==='native'?'webcodecs':'ffmpeg-wasm',reset(){},receive(){return null;},drain:async()=>{},
+    async send(){throw new MediaOpenError('decode',`${name} first frame failed`);},close(){closed[name]++;},
+  });
+  const engine=new TsEngine({file:new Blob([bytes])},'failed-firsts',{
+    native:async()=>failed('native'),software:async()=>failed('software'),
+  });
+  try {await assert.rejects(engine.open('unused-core',undefined,false),/software first frame failed/);}
+  finally {engine.close();}
+  assert.deepEqual(closed,{native:1,software:1});
+  assert.equal(engine.packetIndex,undefined);assert.equal(engine.analysisIndex,undefined);
+});
+
+test('real Worker concurrent index requests reject during initialization and remain usable after ready and disposal', async () => {
+  const {createServer}=await import('node:http');
+  const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
+  let release!:()=>void,entered!:()=>void;
+  const gate=new Promise<void>(resolve=>{release=resolve;});
+  const requested=new Promise<void>(resolve=>{entered=resolve;});
+  const server=createServer(async(req,res)=>{
+    entered();await gate;if(res.destroyed)return;
+    const range=/^bytes=(\d+)-(\d+)$/.exec(req.headers.range??'');
+    const start=range?Number(range[1]):0,end=range?Math.min(Number(range[2]),bytes.length-1):bytes.length-1;
+    res.writeHead(range?206:200,{'content-length':end-start+1,'accept-ranges':'bytes',etag:'"ts-ready"',
+      ...(range?{'content-range':`bytes ${start}-${end}/${bytes.length}`}:{})});res.end(bytes.subarray(start,end+1));
+  });
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
+  const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+  const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+  try {
+    const init=rpc.call('init',{container:'ts',sourceVersion:'ready-race',input:{url:`http://127.0.0.1:${(server.address() as import('node:net').AddressInfo).port}/video`,size:bytes.length},
+      forceWasm:true,glueURL:pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href,
+      wasmBinary:new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm'))},[],60000);
+    void init.catch(()=>{});
+    let timer:ReturnType<typeof setTimeout>;
+    try {await Promise.race([requested,new Promise<never>((_,reject)=>{timer=setTimeout(()=>reject(new Error('HTTP gate was not entered')),1500);})]);}
+    finally{clearTimeout(timer!);}
+    const early=await Promise.allSettled([rpc.call('analysis-ts-index',{}),rpc.call('analysis-index',{})]);
+    for(const result of early){assert.equal(result.status,'rejected');if(result.status==='rejected')assert.match(String(result.reason),/not ready/);}
+    release();await init;
+    assert.equal((await rpc.call('analysis-ts-index',{})).packets.length,600);
+    assert.deepEqual(await rpc.call('analysis-index',{}),{packets:600,complete:true});
+    await rpc.call('dispose',{});
+    await assert.rejects(rpc.call('analysis-ts-index',{}),/未初始化/);
+    await assert.rejects(rpc.call('analysis-index',{}),/未初始化/);
+  } finally {release();rpc.terminate();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
