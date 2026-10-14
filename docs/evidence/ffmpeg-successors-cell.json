@@ -1,0 +1,24 @@
+{
+  "case": "Chromium local-file/software H264 TS using main legacy FFmpeg container path with strict successors",
+  "requestedWallMs": 2000,
+  "functionalCellPassed": true,
+  "performancePassed": false,
+  "failures": [
+    "below-realtime",
+    "A:presentation-stall"
+  ],
+  "drawn": 13,
+  "speed": 0.13307681750853903,
+  "maxGapMs": 163.74000000953674,
+  "hardwareUseVerified": false,
+  "sourceDigest": "3d074e249abb0bc1e968934363fc9e350d55ba21d04db4467574b68f2c2db3cd",
+  "wasmDigests": {
+    "voidplayer-core.wasm": "7c71f847fee0f5e1afa27022d0bf45b6fb29fea1a1c69313a25594a7dadf9b44",
+    "voidplayer-core-mt.wasm": "8fe821a5739b2149e4857d4d202bc305692110bc196040c3adfa5d5c93413a65"
+  },
+  "limitations": [
+    "One actual cell, not full browser/performance/physical hardware acceptance",
+    "No claim that GL upload/draw long tasks are fixed",
+    "Same 2000ms and hard draw/stale/error assertions retained"
+  ]
+}
