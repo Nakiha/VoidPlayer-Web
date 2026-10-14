@@ -30,7 +30,7 @@ function makeOpenGopHevcFixture(directory: string): string | null {
   return fixture;
 }
 
-test('demux-only MPEG-TS scan matches decoder-backed records and seek pixels across codecs', async t => {
+test('JS demux-only MPEG-TS index matches full-decode diagnostic records and seek pixels across codecs', async t => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
   if (!existsSync(path.join(coreDir, 'voidplayer-core.js')) || !existsSync(path.join(coreDir, 'voidplayer-core.wasm'))) {
     t.skip('WASM core is not synced');

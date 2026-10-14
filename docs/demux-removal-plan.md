@@ -51,3 +51,48 @@ The existing report startupMs and firstPresentationMs are playback-start measure
 Chromium baseline and candidate both fail the absolute0.9x threshold, while WebKit software passes. This observation is neither proof of no regression nor a reason to halt other implementation. Separate baseline absolute failure from paired changes, report distributions with backend/policy/configuration, and diagnose material new regressions. The published existing baseline used the former accepted main f5826f4, so it is not mislabeled as a fresh107c baseline.
 
 See [source inventory](evidence/demux-removal/source-inventory.json), [actual QA fixture inventory](evidence/demux-removal/qa-fixture-inventory.json), and [bounded performance ledger](evidence/demux-removal/performance-ledger.json).
+
+## Actual coordinated implementation
+
+Core draft: https://github.com/Nakiha/VoidPlayer-FFmpeg-Build/pull/7
+Immutable source/artifact pin: `e88064cb20e4ae4dfad5395a6bf1103a9efa0154`.
+ST and pthread playback binaries instantiate with only AVI, MPEG-PS and MPEG
+video demuxers. Analysis instantiates with no demuxer and links avcodec/avutil.
+All three capability manifests record actual binary registries and SHA-256;
+`vpd_*` is absent. Web preparation checks live registries and packages both
+variant manifests/capabilities under byte provenance. Old overlapping caches
+rebuild under JS packet build v4; no removed container route remains as a
+whole-container decoder fallback.
+
+Existing product cases retained: H264/HEVC static TS (including interleaved
+AAC), H264/HEVC/VP8/VP9 Matroska/WebM, FFV1 8/10/16-bit Matroska (odd geometry,
+SAR and source tags), MPEG-2 TS and AV1 WebM. Small MPEG-4/MJPEG/ProRes MOV/MP4
+fixtures retain already compiled decoder capability through sample tables.
+AV1 temporal units preserve hidden/show-existing decoder input without claiming
+one-AU exact picture identity. Block/QP support still covers the admitted AVC
+and HEVC cases; other codecs keep explicit existing analysis limits.
+
+The original damaged-tail assertions run on JS owners: TS short tails retain
+confirmed AUs, larger transport gaps quarantine the last GOP, and HEVC CRA is a
+quarantine boundary without being promoted to a closed seek anchor. Finished
+index enumeration is separate from `indexIntegrity: prefix`; truncated bounds
+and warnings survive authenticated cold/warm server cache reuse. IO failures,
+unknown clocks and unsupported coding layouts are not treated as truncation.
+A finite Matroska Segment can retain its declared frames when foreign bytes
+follow the Segment; linked/multiple Segments and damage inside its declared
+bounds still fail closed.
+
+Validation ownership is explicit. The old C-only TS progressive-prefix counters
+belong to an intentionally removed container API; historical scripts remain in
+the core repository and are not claimed as passing against the new binary.
+Web regressions retain damage/prefix pixel, imported cache boundary, full EOF,
+seek, independent readers and resource assertions. Residual C demux/index tests
+retain AVIO/CPU/storage counters, original packet timestamps and atomic untimed
+index import on AVI/PS/elementary inputs. Existing FATE geometry, sample-description
+changes, cropped AVC, interlaced MP4 and frozen sample fingerprints are retained.
+
+Final acceptance still requires the registered full suites, both headless
+engines, portable packaging, original benchmark thresholds and measured
+cold/warm/late-seek IO/memory evidence. No statistical no-regression or physical
+hardware claim is inferred from headless results; unmeasured ledger fields stay
+null. Neither issue closure nor a release is requested by this draft group.

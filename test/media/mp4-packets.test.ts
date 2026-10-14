@@ -4,7 +4,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
 import { Mp4Engine } from '../../src/mp4-engine.ts';
-import { openFFmpegMedia } from '../../src/ffmpeg-media.ts';
+import {nativeFrames,nativeVisibleHash,nativeVisibleFrameBytes} from '../helpers/media/native-pixels.ts';
+import {mkdtemp,writeFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
 const core = new URL('../../public/vendor/voidplayer-core/', import.meta.url);
 
 for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'hevc-packet-1080p.mp4']) {
@@ -17,20 +21,18 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
     }
     const engine = new Mp4Engine({ file: new ChunkBlob([bytes]) });
     const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)) };
-    const reference = await openFFmpegMedia(new File([bytes], name), deps);
+    const directory=await mkdtemp(join(tmpdir(),'vp-mp4-oracle-')),file=join(directory,name);await writeFile(file,bytes);
     try {
       const init = await engine.open(deps.glueURL, deps.wasmBinary);
-      assert.equal(init.codec, reference.info.codec); assert.equal(init.pixelFormat, reference.info.pixelFormat);
+      const probe=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','stream=codec_name,pix_fmt','-of','json',file],{encoding:'utf8'})).streams[0];assert.equal(init.codec,probe.codec_name);assert.equal(init.pixelFormat,probe.pix_fmt);
+      const positions=[0,1,2,Math.floor(init.times.length*.6),0,init.times.length-1],first=await engine.extract(0),native=nativeFrames(file,positions,first.description.sourcePixelFormat!,nativeVisibleFrameBytes(first.description));first.frame?.close();
       if (name.startsWith('h266')) assert.ok(readBytes < bytes.length / 2, `initial read ${readBytes}/${bytes.length}`);
-      for (const position of [0, 1, 2, Math.floor(init.times.length * .6), 0, init.times.length - 1]) {
+      for (const position of positions) {
         const actual = await engine.extract(position);
-        const expected = await reference.frameAt(init.times[position]);
-        try {
-          assert.equal(actual.pts, init.firstPtsUs + init.times[position]);
-          assert.equal(visiblePixelHash(actual.description, actual.pixels!), visiblePixelHash(expected.description, expected.pixels!), `frame ${position}`);
-        } finally { expected.close(); }
+        assert.equal(actual.pts, init.firstPtsUs + init.times[position]);
+        assert.equal(visiblePixelHash(actual.description, actual.pixels!), nativeVisibleHash(actual.description,native.get(position)!),`frame ${position}`);actual.frame?.close();
       }
-    } finally { engine.close(); reference.dispose(); }
+    } finally { engine.close(); await rm(directory,{recursive:true,force:true}); }
   });
 }
 

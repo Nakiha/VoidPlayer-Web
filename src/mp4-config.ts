@@ -4,6 +4,22 @@ import type { RangeReader } from './range-reader.ts';
 
 interface Box { start: number; type: string; data: number; end: number; truncated?: boolean; declaredEnd?: number; ignoredTail?: boolean; }
 const invalid = (message: string): never => { throw new MediaOpenError('container', `MP4：${message}`); };
+/** ISO/IEC 14496-1 ES_Descriptor -> DecoderConfig -> DecoderSpecificInfo.
+ * Descriptor sizes are bounded by the already bounded stsd configuration box. */
+function mpeg4DecoderSpecificInfo(bytes:Uint8Array):Uint8Array {
+  const walk=(start:number,end:number,depth:number):Uint8Array|undefined=>{
+    if(depth>3)return invalid('esds 嵌套越界。');
+    for(let at=start;at<end;){const tag=bytes[at++];let size=0,done=false;
+      for(let i=0;i<4&&at<end;i++){const b=bytes[at++];size=size*128+(b&127);if(!(b&128)){done=true;break;}}
+      if(!done||at+size>end)return invalid('esds 长度无效。');const next=at+size;
+      if(tag===5){if(!size)return invalid('MPEG-4 配置为空。');return bytes.slice(at,next);}
+      if(tag===3){if(size<3)return invalid('ES descriptor 被截断。');const flags=bytes[at+2];let child=at+3;if(flags&128)child+=2;if(flags&64){if(child>=next)return invalid('ES URL 被截断。');child+=1+bytes[child];}if(flags&32)child+=2;if(child>next)return invalid('ES descriptor 越界。');const found=walk(child,next,depth+1);if(found)return found;}
+      if(tag===4){if(size<13||bytes[at]!==0x20)return invalid('MPEG-4 Visual decoder descriptor 无效。');const found=walk(at+13,next,depth+1);if(found)return found;}
+      at=next;
+    }
+  };
+  return walk(4,bytes.length,0)??invalid('缺少 MPEG-4 DecoderSpecificInfo。');
+}
 async function boxes(reader: RangeReader, start: number, end: number, root = false): Promise<Box[]> {
   const result: Box[] = [];
   let fragmented = false;
@@ -70,7 +86,7 @@ export async function readVvcConfig(reader: RangeReader, trackId: number): Promi
   return invalid('未找到对应的 VVC 视频轨道。');
 }
 
-export interface Mp4Configurations { warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; decodeTimes?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; fragmentSequenceNumbers?: number[]; sampleDurations?: number[]; sampleKeys?: boolean[]; }
+export interface Mp4Configurations { displayBounds?:{width:number;height:number}[]; codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters[]; warning?: string; indexIntegrity?: import('./index-integrity.ts').IndexIntegrity; indexTruncatedAt?: number; availableSamples?: number; descriptions: Uint8Array[]; sampleConfigurations?: number[]; compositionOffsets?:number[]; decodeTimes?:number[]; sampleOffsets?:number[]; sampleSizes?:number[]; fragmentSequenceNumbers?: number[]; sampleDurations?: number[]; sampleKeys?: boolean[]; }
 /** Keep stsd entries and stsc's per-chunk description selection together. The
  * public packet API remains responsible for edit lists and timestamps; these
  * tables own validated byte offsets and the available decode-order prefix. */
@@ -89,21 +105,35 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
     const stsd=nested.find(b=>b.type==='stsd');if(!stsd||stsd.end-stsd.data<8)return invalid('缺少 stsd。');
     const entries=await boxes(reader,stsd.data+8,stsd.end);
     const head=await reader.read(stsd.data,8);if(entries.length!==new DataView(head.buffer,head.byteOffset).getUint32(4)||!entries.length||entries.length>256)return invalid('stsd 项数量无效。');
-    const descriptions=[];let kind:string|undefined;
+    const descriptions=[],displayBounds:{width:number;height:number}[]=[],codecParameters:import('./matroska-clocks.ts').PacketCodecParameters[]=[];let kind:string|undefined;
     for(const entry of entries){
-      const codec=({avc1:'avcC',avc3:'avcC',hvc1:'hvcC',hev1:'hvcC',av01:'av1C',vvc1:'vvcC',vvi1:'vvcC'} as Record<string,string>)[entry.type];
+      const codec=({avc1:'avcC',avc3:'avcC',hvc1:'hvcC',hev1:'hvcC',av01:'av1C',vvc1:'vvcC',vvi1:'vvcC',mp4v:'esds',jpeg:'none',mjpa:'none',mjpb:'none',apch:'none',apcn:'none',apcs:'none',apco:'none',ap4h:'none',ap4x:'none'} as Record<string,string>)[entry.type];
       if(!codec||entry.end-entry.data<78)return invalid('视频 sample description 需要容器解码路径。');
       if(kind&&kind!==codec)return invalid('sample description 跨编码切换需要容器解码路径。');kind=codec;
+      const visual=await reader.read(entry.data,28),dimensions=new DataView(visual.buffer,visual.byteOffset,visual.byteLength),width=dimensions.getUint16(24),height=dimensions.getUint16(26);if(!width||!height)return invalid('sample entry 尺寸无效。');displayBounds.push({width,height});
       const entryBoxes=await boxes(reader,entry.data+78,entry.end);
       if(root.some(b=>b.type==='moof') && entryBoxes.some(b=>b.type==='sinf'))return invalid('加密分片 MP4 暂不支持。');
+      if(codec==='none'||codec==='esds'){
+        if(root.some(b=>b.type==='moof'))return invalid('分片的此视频编码尚未验证。');
+        const fields=await reader.read(entry.data,78),view=new DataView(fields.buffer,fields.byteOffset,fields.byteLength);
+        const parameters={width:view.getUint16(24),height:view.getUint16(26),sarNum:1,sarDen:1,colorPrimaries:2,colorTransfer:2,colorSpace:2,colorRange:0};
+        const pasp=entryBoxes.find(b=>b.type==='pasp');if(pasp){if(pasp.end-pasp.data!==8)return invalid('pasp 长度无效。');const raw=await reader.read(pasp.data,8),v=new DataView(raw.buffer,raw.byteOffset,8);parameters.sarNum=v.getUint32(0);parameters.sarDen=v.getUint32(4);}
+        const colr=entryBoxes.find(b=>b.type==='colr');if(colr){const raw=await reader.read(colr.data,Math.min(11,colr.end-colr.data)),type=String.fromCharCode(...raw.subarray(0,4));
+          if(type==='nclx'||type==='nclc'){if(raw.length<(type==='nclx'?11:10))return invalid('colr 被截断。');const v=new DataView(raw.buffer,raw.byteOffset,raw.byteLength);parameters.colorPrimaries=v.getUint16(4);parameters.colorTransfer=v.getUint16(6);parameters.colorSpace=v.getUint16(8);if(type==='nclx')parameters.colorRange=raw[10]&128?2:1;}
+          else return invalid('此颜色 profile 尚未接入压缩包路径。');
+        }
+        if(!parameters.width||!parameters.height||parameters.sarNum<1||parameters.sarDen<1||parameters.sarNum>2147483647||parameters.sarDen>2147483647||[parameters.colorPrimaries,parameters.colorTransfer,parameters.colorSpace].some(n=>n>255))return invalid('视频参数越界。');
+        codecParameters.push(parameters);
+      }
+      if(codec==='none'){descriptions.push(new Uint8Array());continue;}
       const config=entryBoxes.find(b=>b.type===codec);
       const skip=codec==='vvcC'?4:0;
       if(!config||config.end-config.data<=skip||config.end-config.data>1024*1024)return invalid('sample description 配置无效。');
-      const description=await reader.read(config.data+skip,config.end-config.data-skip);
-      if(codec==='avcC'){const g=avcGeometry(description),header=await reader.read(entry.data,28),v=new DataView(header.buffer,header.byteOffset);if(entries.length===1&&g&&(g.width!==v.getUint16(24)||g.height!==v.getUint16(26)))return invalid('AVC 像素裁剪与 sample entry 不同，需要容器解码路径。');}
+      const raw=await reader.read(config.data+skip,config.end-config.data-skip),description=codec==='esds'?mpeg4DecoderSpecificInfo(raw):raw;
+
       descriptions.push(description);
     }
-    if(root.some(b=>b.type==='moof'))return readFragmentConfigurations(reader, root, moov, nested, trackId, descriptions, maxSamples, rawTiming);
+    if(root.some(b=>b.type==='moof'))return {...await readFragmentConfigurations(reader, root, moov, nested, trackId, descriptions, maxSamples, rawTiming),displayBounds};
     const stsc=nested.find(b=>b.type==='stsc'),stsz=nested.find(b=>b.type==='stsz'),offsets=nested.find(b=>b.type==='stco'||b.type==='co64');
     if(!stsc||!stsz||!offsets||stsc.end-stsc.data<8||stsz.end-stsz.data<12||offsets.end-offsets.data<8)return invalid('多配置样本表不完整。');
     if(stsc.end-stsc.data>24*1024*1024)throw new MediaOpenError('resource','MP4 配置映射超过上限。');
@@ -187,7 +217,7 @@ export async function readMp4Configurations(reader: RangeReader, trackId: number
       if (decodeTimes.length !== samples) return invalid('STTS 样本数量不一致。');
     }
     const indexIntegrity = availableSamples < samples ? 'prefix' : recovered || ignoredTail ? 'recovered' : 'complete';
-    return {descriptions,sampleConfigurations,compositionOffsets,decodeTimes,sampleOffsets,sampleSizes,availableSamples,indexIntegrity,
+    return {descriptions,displayBounds,codecParameters,sampleConfigurations,compositionOffsets,decodeTimes,sampleOffsets,sampleSizes,availableSamples,indexIntegrity,
       ...(indexIntegrity === 'prefix' ? { indexTruncatedAt: sampleOffsets[availableSamples] } : {}),
       ...(ignoredTail ? {warning: '文件末尾存在异常数据；已验证并保留完整的视频样本。'} : recovered ? {warning: availableSamples < samples
       ? `文件尾部缺失：仅播放前 ${availableSamples} 个完整视频包（声明 ${samples} 个）；时长按有效前缀计算。`

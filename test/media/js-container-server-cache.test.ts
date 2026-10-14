@@ -44,7 +44,7 @@ test('an unregistered HTTP service with a library-shaped URL cannot authorize dr
 
 test('JS library indexes persist across server and consumer Worker restarts; corrupt complete documents rebuild without WASM demux',async t=>{
  const previousLocation=Object.getOwnPropertyDescriptor(globalThis,'location');t.after(()=>{if(previousLocation)Object.defineProperty(globalThis,'location',previousLocation);else Reflect.deleteProperty(globalThis,'location');});
- const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=resolve('fixtures/js-container'),database=join(temp,'library.sqlite');
+ const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=join(temp,'media'),database=join(temp,'library.sqlite');const {mkdir,copyFile,readdir}=await import('node:fs/promises');await mkdir(root);for(const name of await readdir('fixtures/js-container'))if(name.endsWith('.ts')||name.endsWith('.mkv')||name.endsWith('.webm'))await copyFile(join('fixtures/js-container',name),join(root,name));execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',join(root,'uncompiled-huffyuv.mkv')]);
  const originalCore=process.env.VOIDPLAYER_WASM_CORE_DIR;let library:MediaLibraryIndex|undefined,server:ReturnType<typeof createMediaServer>|undefined;
  let builds=0;
  const start=async()=>{
@@ -79,7 +79,7 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
   assert.deepEqual(await read('hevc.mkv'),documents.get('hevc.mkv'));assert.equal(builds,1,'one JS rebuild restores actual complete file coverage');
   const response=await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&kind=js-matroska&stream=video:0&schema=1&indexer=${JS_MATROSKA_MEDIA_INDEX_IDENTITY.indexerBuild}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({epoch:await library!.indexJobs.call('epoch'),index:damaged})});
   assert.equal(response.status,405,'clients cannot upload their own completeness authority');
-  const outside=library!.browse().entries.find(e=>e.name==='ffv1-unmigrated.mkv')!;
+  const outside=library!.browse().entries.find(e=>e.name==='uncompiled-huffyuv.mkv')!;
   await assert.rejects(loadServerJsIndex(`${base}/api/media/${outside.id}?v=${outside.version}`,`${outside.id}@${outside.version}`,outside.size,'matroska',new AbortController().signal,undefined,ownLibraryIndexReference(outside.id,outside.version!)),TsCombinationNotMigrated,'explicit codec admission result survives Worker/RPC/NDJSON; raw IO or corruption errors cannot select this route');
  }finally{await stop();await rm(temp,{recursive:true,force:true});}
 });

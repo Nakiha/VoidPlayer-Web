@@ -1,3 +1,4 @@
+import {verifyCoreCapabilities} from './core-capabilities.mjs';
 // Assemble upstream outputs; decoder source/build logic stays in its own repository.
 import { cp, mkdir, readFile, writeFile, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
@@ -20,13 +21,15 @@ for (const suffix of ['', '-mt']) for (const ext of ['js', 'wasm']) {
   const file = `voidplayer-core${suffix}.${ext}`;
   await cp(path.join(suffix ? multi : single, file), path.join(target, file));
 }
+for(const [folder,suffix] of [[single,''],[multi,'-mt']]){await cp(path.join(folder,`capabilities${suffix}.json`),path.join(target,`capabilities${suffix}.json`));await cp(path.join(folder,'voidplayer-ffmpeg-manifest.json'),path.join(target,`voidplayer-ffmpeg-manifest${suffix}.json`));}
 await cp(path.join(single, 'LICENSES'), path.join(target, 'LICENSES'), { recursive: true });
 const manifest=JSON.parse(await readFile(path.join(single,'voidplayer-ffmpeg-manifest.json'),'utf8'));
-for(const key of ['demuxAbi','pictureAbi','demuxCompatibility'])assert.equal(manifest[key],lock[key],`Playback ${key}`);
+for(const key of ['demuxAbi','pictureAbi'])assert.equal(manifest[key],lock[key],`Playback ${key}`);
 const create=(await import(pathToFileURL(path.join(target,'voidplayer-core.js')).href)).default;
 const core=await create({wasmBinary:await readFile(path.join(target,'voidplayer-core.wasm'))});
 assert.equal(core._vp_picture_abi_version(),lock.pictureAbi,'Received picture ABI');
-assert.equal(core._vpd_abi(),lock.demuxAbi,'Playback demux ABI');
+await verifyCoreCapabilities(target,lock,'playback','',core);
+execFileSync(process.execPath,[path.join(root,'scripts/core-capabilities.mjs'),target,path.join(root,'scripts/release-core.json'),'playback','-mt'],{stdio:'inherit'});
 assert.equal(core.ccall('vp_core_build_id','string',[],[]),lock.revision,'Compiled indexer revision');
 const files = {};
 async function hashes(folder, prefix = '') {

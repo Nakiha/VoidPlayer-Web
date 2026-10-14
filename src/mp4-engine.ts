@@ -1,13 +1,14 @@
 import type { MediaOpenProgress } from './media-progress.ts';
 import { Input, CustomSource, MP4, QTFF, EncodedPacketSink } from 'mediabunny';
 import type { EncodedPacket } from 'mediabunny';
+import {avcGeometry} from './avc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { RangeReader } from './range-reader.ts';
 import { Mp4CachedMetadata } from './mp4-cached-metadata.ts';
 import type { RandomAccessInput } from './range-reader.ts';
 import { readMp4Configurations, validateFragmentPacket } from './mp4-config.ts';
 import { wasmFlvDecoder, nativeFlvDecoder } from './flv-decoder.ts';
-import type { PacketDecoder } from './flv-decoder.ts';
+import type { PacketDecodeIndex,PacketDecoder } from './flv-decoder.ts';
 import { hevcDisplayOrder, recoveredHevcTimes } from './hevc-timeline.ts';
 import type { FlvFrame } from './flv-decoder.ts';
 import type { FlvCodec, FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -21,14 +22,20 @@ export class Mp4Engine {
   private fragmented = false;
   private sink!:EncodedPacketSink;
   private packets:EncodedPacket[]=[];
-  private index!:FlvIndex;
+  private index!:PacketDecodeIndex;
   private timeline?:PacketTimeline;
   private primed:FlvFrame|null=null;
   private nativeConfig?:VideoDecoderConfig;
+  private displayBounds:{width:number;height:number}[]=[];
   private rotation: 0 | 90 | 180 | 270 = 0;
   private displayed(frame: FlvFrame): FlvFrame {
-    const d = frame.description, swap = this.rotation === 90 || this.rotation === 270;
-    return { ...frame, rotation: this.rotation, width: swap ? d.displayHeight : d.displayWidth, height: swap ? d.displayWidth : d.displayHeight };
+    const original=frame.description,bounds=this.displayBounds[frame.packetPicture?.configuration??0];
+    let d=original;
+    if(bounds&&(bounds.width<d.width||bounds.height<d.height)){const width=Math.min(bounds.width,d.width),height=Math.min(bounds.height,d.height);
+      d={...d,width,height,visibleRect:{...d.visibleRect,width,height},displayWidth:Math.max(1,Math.round(width*d.displayWidth/d.width)),displayHeight:Math.max(1,Math.round(height*d.displayHeight/d.height))};
+    }
+    const swap = this.rotation === 90 || this.rotation === 270;
+    return { ...frame,description:d, rotation: this.rotation, width: swap ? d.displayHeight : d.displayWidth, height: swap ? d.displayWidth : d.displayHeight };
   }
   constructor(source:RandomAccessInput){
     this.reader=new RangeReader(source);
@@ -47,10 +54,10 @@ export class Mp4Engine {
       if(![0,90,180,270].includes(track.rotation))throw new MediaOpenError('container','MP4 旋转角度不受支持。');
       this.rotation=track.rotation as typeof this.rotation;
       const id=await track.getInternalCodecId(),known=await track.getCodec();
-      const codec:FlvCodec=id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
+      const codec:PacketDecodeIndex['codec']=id==='mp4v'?'mpeg4':['jpeg','mjpa','mjpb'].includes(String(id))?'mjpeg':['apch','apcn','apcs','apco','ap4h','ap4x'].includes(String(id))?'prores':id==='vvc1'||id==='vvi1'?'vvc':({avc:'h264',hevc:'hevc',av1:'av1'} as Record<string,FlvCodec>)[known??''];
       if(!codec)throw new MediaOpenError('codec','此 MP4 编码需要 FFmpeg 解封装。');
       const configs=await readMp4Configurations(this.reader,track.id);
-      this.fragmented = !!configs.fragmentSequenceNumbers;
+      this.fragmented = !!configs.fragmentSequenceNumbers;this.displayBounds=configs.descriptions.length===1?configs.displayBounds??[]:[];
       let available = configs.availableSamples ?? configs.sampleSizes!.length;
       onProgress?.('index');this.sink=new EncodedPacketSink(track);
       for await(const packet of this.sink.packets(undefined,undefined,{metadataOnly:true})){
@@ -84,9 +91,10 @@ export class Mp4Engine {
       if(pts.some((p,i)=>i>0&&p<=pts[i-1]))throw new MediaOpenError('container','MP4 包时间戳存在歧义，需要容器解码路径。');
       const durations=order.map((p,i)=>(recovered||configs.fragmentSequenceNumbers)&&i+1<pts.length?pts[i+1]-pts[i]:Math.round((configs.sampleDurations?.[p] !== undefined ? configs.sampleDurations[p]/resolution : this.packets[p].duration)*1e6)||(i+1<pts.length?pts[i+1]-pts[i]:i?pts[i]-pts[i-1]:40000));
       const firstPts=pts[0],duration=pts.at(-1)!-firstPts+durations.at(-1)!;
-      this.index={codec,description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
+      this.index={codec,...(['mpeg4','mjpeg','prores'].includes(codec)?{codecParameters:configs.codecParameters![0],codecConfigurations:configs.codecParameters}:{}),description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
         ...(configs.indexIntegrity === 'prefix' ? { truncatedAt: configs.indexTruncatedAt } : {})};
-      this.nativeConfig=await track.getDecoderConfig()??undefined;
+      const containerCrop=codec==='h264'&&configs.descriptions.some((description,i)=>{const g=avcGeometry(description),bounds=this.displayBounds[i];return g&&bounds&&(bounds.width<g.width||bounds.height<g.height);});
+      this.nativeConfig=containerCrop||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
       const decoder:PacketDecoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);
@@ -112,7 +120,7 @@ export class Mp4Engine {
     }catch(error){this.close();throw error;}
   }
   /** 只读分析查询共用：返回 demux 包表，不转移底层缓冲。 */
-  get analysisIndex(): FlvIndex | undefined { return (this as unknown as { index?: FlvIndex }).index; }
+  get analysisIndex(): PacketDecodeIndex | undefined { return this.index; }
   async at(pts:number,recycle?:ArrayBuffer){
     if(this.primed&&this.primed.pts===pts){const f=this.primed;this.primed=null;return this.displayed(f);}
     this.primed?.frame?.close();this.primed=null;return this.displayed(await this.timeline!.at(pts,recycle));

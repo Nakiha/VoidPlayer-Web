@@ -5,7 +5,8 @@ const u32 = (...values: number[]) => { const b = Buffer.alloc(values.length * 4)
 const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(n); return b; };
 const box = (type: string, ...parts: Uint8Array[]) => { const b = Buffer.concat(parts); return Buffer.concat([u32(b.length + 8), Buffer.from(type), b]); };
 function init(extraSamples = 0, descriptions = 1) {
-  const sample = box('hvc1', Buffer.alloc(78), box('hvcC', Buffer.from([1])));
+  const visual=Buffer.alloc(78);visual.writeUInt16BE(16,24);visual.writeUInt16BE(16,26);
+  const sample = box('hvc1', visual, box('hvcC', Buffer.from([1])));
   const track = box('trak', box('tkhd', u32(0, 0, 0, 1)), box('mdia', box('hdlr', u32(0, 0), Buffer.from('vide')),
     box('minf', box('stbl', box('stsd', u32(0, descriptions), ...Array(descriptions).fill(sample)), box('stsz', u32(0, 0, extraSamples))))));
   return box('moov', track, box('mvex', box('trex', u32(0, 1, 1, 10, 3, 0x10000))));

@@ -10,7 +10,7 @@ import {openJsPacketAnalysisInput} from '../../src/bitstream-analysis/js-ts-inpu
 import {analyzePicture} from '../../src/bitstream-analysis/runner.ts';
 import {jsPictureStream} from '../../src/matroska-packet-index.ts';
 import {loadTsCore} from '../helpers/media/ts-analysis.ts';
-import {readWasmFrame} from '../../src/wasm-frame.ts';
+import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
 import {visiblePixelHash} from '../helpers/visible-pixels.ts';
 import type {MatroskaPacketIndex} from '../../src/matroska-packet-index.ts';
 import {MatroskaPacketSource} from '../../src/matroska-packet-source.ts';
@@ -70,15 +70,9 @@ for(const name of names)test(`JS ${name}: real 600-picture packet decode, raw cl
  const directory=await mkdtemp(join(tmpdir(),'vp-js-container-matrix-')),wrapper=join(directory,'packet-only.mjs');
  const glue=pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href;
  await writeFile(wrapper,`import load from ${JSON.stringify(glue)};export default async options=>{const c=await load(options);c._vp_open=c._vp_open_blob=c._vp_open_range=()=>{throw new Error('Product WASM container forbidden');};return c;};`);
- const engine=new JsContainerEngine({file:new Blob([bytes])},`matrix-${name}`,{},format),oracle=await loadTsCore(true);
- const ctx=oracle._vp_create();
- oracle.vpBlobs=new Map([[1,{blob:{slice:(start:number,end:number)=>({start,end})},reader:{readAsArrayBuffer:({start,end}:any)=>bytes.subarray(start,end)}}]]);
+ const engine=new JsContainerEngine({file:new Blob([bytes])},`matrix-${name}`,{},format);
  let input:Awaited<ReturnType<typeof openJsPacketAnalysisInput>>|undefined;
  try{
-  assert.equal(oracle._vp_open_blob(ctx,1,BigInt(bytes.length)),0);assert.equal(oracle._vp_index_build(ctx),600);
-  const length=oracle._vp_index_export_bytes(ctx),pointer=oracle._malloc(length);oracle._vp_index_export(ctx,pointer,length);
-  const records=oracle.HEAPU8.slice(pointer,pointer+length);oracle._free(pointer);const view=new DataView(records.buffer),original:bigint[]=[];
-  for(let at=0;at<records.length;at+=48)original[Number(view.getBigUint64(at+40,true))]=view.getBigInt64(at,true);
   const opened=await engine.open(pathToFileURL(wrapper).href,new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),false);
   assert.equal(opened.decoder,'ffmpeg-wasm','Node native-unavailable fallback consumes JS packets');assert.equal(opened.times.length,600);
   const index=engine.packetIndex!;assert.equal(index.packets.length,600);assert.equal(index.completeness.state,'complete');
@@ -86,11 +80,12 @@ for(const name of names)test(`JS ${name}: real 600-picture packet decode, raw cl
   assert.deepEqual(index.packets.map(p=>p.ptsUs),probe.packets.map((p:any)=>Math.round(Number(p.pts_time)*1e6)),'original presentation clock and decode ordinal agree with independent ffprobe');
   if(format==='matroska')assert.ok(index.packets.every(p=>p.timing.dts===null),'Matroska has no raw DTS field; never substitute PTS');
   else assert.ok(index.packets.some(p=>p.timing.dts===null),'missing PES DTS stays unknown');
-  for(const au of [0,3,200,560,599,0]){
+  const checks=[0,3,200,560,599,0],rank=(au:number)=>index.packets.filter(p=>p.ptsUs<index.packets[au].ptsUs).length;
+  const first=await engine.at(index.packets[0].ptsUs),native=nativeFrames(`fixtures/js-container/${name}`,checks.map(rank),first.description.sourcePixelFormat!,first.pixels!.byteLength);first.frame?.close();
+  for(const au of checks){
    const frame=await engine.at(index.packets[au].ptsUs);assert.equal(frame.pts,index.packets[au].ptsUs);
    assert.deepEqual(frame.packetPicture,{au,configuration:0,stream:jsPictureStream(index)});
-   assert.equal(oracle._vp_extract(ctx,original[au]),1);const expected=readWasmFrame(oracle,()=>oracle.HEAPU8,ctx);
-   assert.equal(visiblePixelHash(frame.description,frame.pixels!),visiblePixelHash(expected.description,expected.pixels!),`${name} AU${au}: complete visible planes`);frame.frame?.close();
+   assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,native.get(rank(au))!),`${name} AU${au}: complete native visible planes`);frame.frame?.close();
   }
   const reader=()=>{let closed=false;return{size:bytes.length,async read(at:number,n:number){assert.equal(closed,false);return bytes.subarray(at,at+n);},close(){closed=true;},get closed(){return closed;}};};
   if(index.codec==='h264'||index.codec==='hevc'){
@@ -109,7 +104,7 @@ for(const name of names)test(`JS ${name}: real 600-picture packet decode, raw cl
   let frame=await engine.at(index.packets[0].ptsUs);const seen=new Set<number>();
   while(frame){assert.ok(frame.packetPicture);assert.equal(seen.has(frame.packetPicture.au),false);seen.add(frame.packetPicture.au);const pts=frame.pts;frame.frame?.close();frame=await engine.next(pts) as typeof frame;}
   assert.equal(seen.size,600,'EOF is 600 real output pictures, not index rows');
- }finally{input?.close();engine.close();oracle._vp_destroy(ctx);await rm(directory,{recursive:true,force:true});}
+ }finally{input?.close();engine.close();await rm(directory,{recursive:true,force:true});}
 });
 test('native codec startup failure retains the JS packet path; input failure never becomes a decoder fallback',async()=>{
  const bytes=new Uint8Array(await readFile('fixtures/js-container/hevc.ts'));
@@ -124,6 +119,9 @@ test('untrusted serialized Matroska completeness rebuilds from actual blocks; co
  for(const tail of [false,true]){const forged:MatroskaPacketIndex=structuredClone(index);forged.packets.splice(tail?599:2,1);forged.packets.forEach((p,i)=>p.au=i);forged.completeness.packets=599;const fresh=source();try{assert.deepEqual(await fresh.open(forged),index);assert.equal(fresh.indexReused,false);assert.equal(fresh.packetsRead,600);}finally{fresh.close();}}
  const corrupted=new JsContainerEngine({file:new Blob([bytes.subarray(0,bytes.length-80)])},'truncated',{},'matroska');
  try{await assert.rejects(corrupted.prepare(),(error:unknown)=>error instanceof Error&&!(error instanceof TsCombinationNotMigrated));}finally{corrupted.close();}
- const unadmitted=new JsContainerEngine({file:new Blob([await readFile('fixtures/js-container/ffv1-unmigrated.mkv')])},'unmigrated',{},'matroska');
- try{await assert.rejects(unadmitted.prepare(),TsCombinationNotMigrated);}finally{unadmitted.close();}
+ const directory=await mkdtemp(join(tmpdir(),'vp-uncompiled-codec-')),file=join(directory,'huffyuv.mkv');
+ try{execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=32x32:rate=5:duration=1','-c:v','huffyuv','-pix_fmt','yuv422p',file]);
+  const unadmitted=new JsContainerEngine({file:new Blob([await readFile(file)])},'uncompiled-huffyuv',{},'matroska');
+  try{await assert.rejects(unadmitted.prepare(),TsCombinationNotMigrated);}finally{unadmitted.close();}
+ }finally{await rm(directory,{recursive:true,force:true});}
 });

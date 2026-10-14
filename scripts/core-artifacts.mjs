@@ -1,11 +1,12 @@
+import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import assert from 'node:assert/strict';
 import { cp, lstat, mkdir, mkdtemp, readFile, rename, rm } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export const playbackFiles = ['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING'];
-export const analysisFiles = ['voidplayer-analysis.js', 'voidplayer-analysis.wasm', 'manifest.json', 'LICENSE'];
+export const playbackFiles = ['voidplayer-core.js', 'voidplayer-core.wasm', 'voidplayer-core-mt.js', 'voidplayer-core-mt.wasm', 'LICENSES/COPYING.LGPLv2.1', 'LICENSES/dav1d-COPYING', 'capabilities.json', 'capabilities-mt.json', 'voidplayer-ffmpeg-manifest.json', 'voidplayer-ffmpeg-manifest-mt.json'];
+export const analysisFiles = ['voidplayer-analysis.js', 'voidplayer-analysis.wasm', 'manifest.json', 'LICENSE', 'capabilities.json'];
 export async function verifyCoreArtifact(directory, lock, schema, required) {
   const provenance = JSON.parse(await readFile(path.join(directory, 'provenance.json'), 'utf8'));
   assert.equal(provenance.schema, schema, 'Core provenance schema');
@@ -20,12 +21,13 @@ export async function verifyCoreArtifact(directory, lock, schema, required) {
   }
   if (schema === 'voidplayer-analysis-build') {
     const manifest = JSON.parse(await readFile(path.join(directory, 'manifest.json'), 'utf8'));
-    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi', 'demuxAbi', 'demuxCompatibility'])
+    for (const key of ['repository', 'revision', 'ffmpegRepository', 'ffmpegRevision', 'abi', 'semanticVersion', 'referenceAbi', 'demuxAbi'])
       assert.equal(manifest[key], lock[key], `Analysis manifest ${key} differs from release lock`);
     assert.ok(!manifest.dirty, 'Unpublished analysis manifest');
     assert.equal(provenance.buildId, manifest.buildId ?? manifest.revision, 'Analysis build ID differs');
     assert.equal(provenance.referenceAbi, lock.referenceAbi, 'Analysis reference ABI differs');
   }
+  if(lock.capabilityAbi===1){if(schema==='voidplayer-analysis-build')await verifyCoreCapabilities(directory,lock,'analysis');else for(const suffix of ['', '-mt'])await verifyCoreCapabilities(directory,lock,'playback',suffix);}
   return provenance;
 }
 
@@ -49,6 +51,7 @@ export async function syncPlaybackCore(source, target, lock) {
       const name = `voidplayer-core${suffix}.${extension}`;
       await cp(path.join(suffix ? multi : source, name), path.join(staged, name));
     }
+    for(const suffix of hasMulti?['','-mt']:[''])for(const name of [`capabilities${suffix}.json`,`voidplayer-ffmpeg-manifest${suffix}.json`]){const folder=prepared?source:suffix?multi:source;if(await exists(path.join(folder,name)))await cp(path.join(folder,name),path.join(staged,name));}
     if (await exists(path.join(source, 'LICENSES'))) await cp(path.join(source, 'LICENSES'), path.join(staged, 'LICENSES'), { recursive: true });
     if (prepared) {
       await cp(path.join(source, 'provenance.json'), path.join(staged, 'provenance.json'));

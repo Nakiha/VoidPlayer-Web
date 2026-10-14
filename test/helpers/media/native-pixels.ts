@@ -15,3 +15,10 @@ export function nativeVisibleHash(description:FrameDescription,raw:Uint8Array){
  const y=description.yuv;assert.ok(y&&!y.semiplanar,'native oracle comparison requires the actual planar source format');
  return createHash('sha256').update(JSON.stringify([description.width,description.height,description.format,[y.bitDepth,y.bitShift,y.subsampleX,y.subsampleY,y.semiplanar]])).update(raw).digest('hex');
 }
+
+export function nativeVisibleFrameBytes(description:FrameDescription){
+ const y=description.yuv;assert.ok(y&&!y.semiplanar);const r=description.visibleRect;
+ return y.planes.reduce((sum,_plane,i)=>{const sx=i?2**y.subsampleX:1,sy=i?2**y.subsampleY:1;
+  return sum+(Math.ceil((r.x+r.width)/sx)-Math.floor(r.x/sx))*(Math.ceil((r.y+r.height)/sy)-Math.floor(r.y/sy))*(y.bitDepth>8?2:1);
+ },0);
+}

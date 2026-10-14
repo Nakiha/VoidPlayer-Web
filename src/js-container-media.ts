@@ -1,3 +1,4 @@
+import {MediaOpenError} from './media-errors.ts';
 import { openPacketMedia } from './packet-media.ts';
 import { WorkerRpc } from './worker-rpc.ts';
 import type { PacketCommands } from './worker-protocol.ts';
@@ -7,7 +8,7 @@ import type { FallbackDeps } from './ffmpeg-media.ts';
 import { loadAborted, onLoadAbort } from './media-abort.ts';
 import { contextLog } from './log.ts';
 
-export type JsContainerAdmission = {kind:'unmigrated'; reason:string} | {
+export type JsContainerAdmission = {
   kind:'js-packet-static'; open(forceWasm:boolean):Promise<MediaSource>; close():void;
 };
 /** Select the declared combination before decoding. Successful admission keeps
@@ -26,8 +27,7 @@ export async function admitJsContainerMedia(format:'ts'|'matroska',input:RandomA
     loadAborted(deps.signal);
     if(!prepared.admitted) {
       rpc.terminate();
-      contextLog().info('media','JS 容器组合尚未迁移，保留已声明路径',{reason:prepared.reason});
-      return {kind:'unmigrated',reason:prepared.reason};
+      throw new MediaOpenError('container',`JS ${format} unsupported combination: ${prepared.reason}`);
     }
     let consumed=false;
     return {kind:'js-packet-static',close(){if(!consumed)rpc.terminate();},async open(forceWasm){

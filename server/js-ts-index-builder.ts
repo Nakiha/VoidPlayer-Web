@@ -1,3 +1,4 @@
+import {TsContainerPacketSource} from '../src/mpeg2-ts-packet-source.ts';
 import { open, stat } from 'node:fs/promises';
 import {MatroskaPacketSource} from '../src/matroska-packet-source.ts';
 import { TsPacketSource } from '../src/ts-packet-source.ts';
@@ -43,10 +44,10 @@ export async function buildJsTsIndexDocument(filePath: string, size: number, ver
     },
     close() { closed = true; blocks.clear(); },
   };
-  let source: TsPacketSource | MatroskaPacketSource | undefined;
+  let source: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource | undefined;
   try {
     await assertVersion();
-    const Source=format==='ts'?TsPacketSource:MatroskaPacketSource;source = new Source(reader, sourceVersion, signal);
+    source=format==='ts'?new TsContainerPacketSource(reader,sourceVersion,signal):new MatroskaPacketSource(reader,sourceVersion,signal);
     onProgress?.({ packets: 0, scannedBytes: 0, totalBytes: size });
     const document = await source.open(undefined,onProgress);
     await assertVersion();

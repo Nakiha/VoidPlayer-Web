@@ -1,3 +1,4 @@
+import {openPacketMedia} from '../../src/packet-media.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -33,7 +34,7 @@ async function nodeCoreDeps(): Promise<FallbackDeps> {
 async function openSample(name: string, onProgress?: import('../../src/media-progress.ts').MediaOpenProgress): Promise<MediaSource> {
   const deps = await nodeCoreDeps();
   const data = await readFile(new URL(`../../fixtures/video/${name}`, import.meta.url));
-  return openFFmpegMedia(new File([data], name), { ...deps, onProgress });
+  const file=new File([data],name);return openPacketMedia(name.endsWith('.mkv')?'matroska':name.endsWith('.ts')?'ts':'mp4',{file},file,{...deps,onProgress,forceWasm:true,sourceVersion:name});
 }
 
 test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', async () => {
@@ -58,10 +59,10 @@ test('WASM fallback indexes and decodes an FFV1 Matroska sample frame-exactly', 
   } finally { source.dispose(); }
 });
 
-test('WASM fallback handles an MPEG-2 TS sample mediabunny cannot demux', async () => {
+test('WASM fallback handles an MPEG-2 TS sample through the finite JS PES adapter', async () => {
   const stages: string[] = [];
   const source = await openSample('mpeg2_10s_1280x720.ts', stage => stages.push(stage));
-  assert.deepEqual(stages.filter((stage, i) => stage !== stages[i - 1]), ['decoder', 'inspect', 'index']);
+  assert.deepEqual(stages.filter((stage, i) => stage !== stages[i - 1]), ['inspect', 'index', 'decoder', 'first-frame']);
   try {
     assert.equal(source.info.codec, 'mpeg2video');
     assert.equal(source.info.width, 1280); assert.equal(source.info.height, 720);
@@ -114,20 +115,23 @@ test('WASM fallback decodes H.266/VVC through the n9.0.1 core', async () => {
   } finally { source.dispose(); }
 });
 
-test('openMedia falls back to WASM decoding for tracks WebCodecs cannot handle', async () => {
-  // Node has no WebCodecs, so the native path declines early here; in the
-  // browser the same fallback is reached when mediabunny exposes no decodable
-  // track (FFV1) or the browser cannot decode it. The fallback loader is
-  // injected because the default browser loader fetches public/ assets.
-  const deps = await nodeCoreDeps();
-  const data = await readFile(new URL('../../fixtures/video/ffv1_yuv422p10le.mkv', import.meta.url));
-  const source = await openMedia(new File([data], 'ffv1_yuv422p10le.mkv'), f => openFFmpegMedia(f, deps));
-  try {
-    assert.equal(source.info.decoder, 'ffmpeg-wasm');
-    assert.equal(source.info.codec, 'ffv1');
-    const frame = await source.frameAt(0);
-    assert.equal((frame as { pixels?: Uint8ClampedArray }).pixels?.length, source.info.width * source.info.height * 4);
-  } finally { source.dispose(); }
+test('openMedia keeps FFV1 on JS packets and never invokes a container fallback', async () => {
+  const {Worker:NodeWorker}=await import('node:worker_threads'),deps=await nodeCoreDeps();
+  const globals=globalThis as unknown as {document?:{baseURI:string};Worker?:unknown};
+  const priorDocument=globals.document,priorWorker=globals.Worker;
+  globals.document={baseURI:new URL('../../public/index.html',import.meta.url).href};
+  class PacketWorker extends NodeWorker {
+    constructor(url:URL){super(url);}
+    override postMessage(message:any,transfers:any[]=[]){super.postMessage(message.type==='init'?{...message,wasmBinary:deps.wasmBinary}:message,transfers);}
+  }
+  globals.Worker=PacketWorker;
+  try{
+    const data=await readFile(new URL('../../fixtures/video/ffv1_yuv422p10le.mkv',import.meta.url));let fallback=0;
+    const source=await openMedia(new File([data],'ffv1_yuv422p10le.mkv'),async()=>{fallback++;throw new Error('Container fallback forbidden');});
+    try{assert.equal(fallback,0);assert.equal(source.info.decoder,'ffmpeg-wasm');assert.equal(source.info.codec,'ffv1');assert.equal(source.info.demuxBackend,'js-matroska-packets');
+      const frame=await source.frameAt(0);assert.equal(frame.pixels?.length,source.info.width*source.info.height*4);frame.close();
+    }finally{source.dispose();}
+  }finally{if(priorDocument===undefined)delete globals.document;else globals.document=priorDocument;if(priorWorker===undefined)delete globals.Worker;else globals.Worker=priorWorker;}
 });
 
 test('WASM source metadata retains 10-bit layout and decoded BT.709 tags in original YUV planes', async () => {

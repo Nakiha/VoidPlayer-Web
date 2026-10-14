@@ -5,7 +5,7 @@ import {updateMediaInfo,recordPresentedFrame} from '../../src/media-state.ts';
 import {rgbaDescription} from '../../src/frame-description.ts';
 import type {DecodedFrame,MediaSource} from '../../src/media.ts';
 import {ReviewSession} from '../../src/session.ts';
-import {openFFmpegMedia} from '../../src/ffmpeg-media.ts';
+import {openPacketMedia} from '../../src/packet-media.ts';
 import type {MediaInfo} from '../../src/model.ts';
 import type {MediaInfoChange} from '../../src/media-state.ts';
 test('metadata changes increment one revision and emit detached complete snapshots',()=>{
@@ -32,7 +32,7 @@ test('presented source tags retain provenance without replacing resource tags',(
 });
 test('real WASM prefetch never changes displayed metadata; seek changes UI/Agent state after drawing',async()=>{
   const file=new File([await readFile(new URL('../../fixtures/fate/h264--extradata-reload-multi-stsd.mov',import.meta.url))],'multi.mov');
-  const source=await openFFmpegMedia(file,{glueURL:new URL('../../public/vendor/voidplayer-core/voidplayer-core.js',import.meta.url).href,wasmBinary:await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm',import.meta.url))});
+  const source=await openPacketMedia('mp4',{file},file,{forceWasm:true,glueURL:new URL('../../public/vendor/voidplayer-core/voidplayer-core.js',import.meta.url).href,wasmBinary:await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm',import.meta.url))});
   let drawn=0;const session=new ReviewSession((_slot,f)=>{drawn=f.width;});
   try{
     await session.load('A',async()=>source);assert.equal(drawn,256);

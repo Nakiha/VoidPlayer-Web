@@ -1,10 +1,27 @@
+/** AV1 temporal units may contain hidden pictures and show-existing frames.
+ * They remain packet playback inputs, with no exact one-AU picture identity.
+ * A key anchor must contain a sequence header and one visible KEY_FRAME; the
+ * remaining candidates never become seek anchors merely from container flags. */
+function av1ClosedAnchor(bytes:Uint8Array){
+  let at=0,reduced:boolean|undefined,frames=0,closed=false;
+  while(at<bytes.length){const header=bytes[at++],type=header>>3&15;
+    if(header&0x81||!(header&2))throw new MediaOpenError('container','Invalid sized AV1 OBU');
+    if(header&4){if(at>=bytes.length||bytes[at]!==0)throw new MediaOpenError('container','Invalid AV1 OBU extension');at++;}
+    let size=0,factor=1,done=false;for(let i=0;i<8;i++){if(at>=bytes.length)break;const b=bytes[at++];size+=(b&127)*factor;if(!(b&128)){done=true;break;}factor*=128;}
+    if(!done||!Number.isSafeInteger(size)||at+size>bytes.length)throw new MediaOpenError('container','Truncated AV1 OBU');
+    if(type===1){if(!size)throw new MediaOpenError('container','Truncated AV1 sequence header');reduced=!!(bytes[at]&8);}
+    if(type===3||type===6){frames++;if(size&&reduced!==undefined)closed=reduced||!(bytes[at]&128)&&(bytes[at]>>5&3)===0&&!!(bytes[at]&16);}
+    at+=size;
+  }
+  return frames===1&&closed;
+}
 import {CustomSource,Input,MATROSKA,WEBM,EncodedPacketSink} from 'mediabunny';
 import type {EncodedPacket} from 'mediabunny';
 import type {TsPacketReader} from './ts-packet-source.ts';
 import {TsCombinationNotMigrated,TsSourceChangedError} from './ts-packet-source.ts';
 import {MediaOpenError} from './media-errors.ts';
 import {abortableWait} from './media-abort.ts';
-import {matroskaClocks} from './matroska-clocks.ts';
+import {matroskaStructure} from './matroska-clocks.ts';
 import {MATROSKA_PACKET_BUILD,parseMatroskaPacketIndex} from './matroska-packet-index.ts';
 import type {MatroskaPacketIndex,MatroskaPacketRecord} from './matroska-packet-index.ts';
 import {inspectPacketPicture} from './packet-picture.ts';
@@ -37,7 +54,14 @@ export class MatroskaPacketSource {
       this.scannedBytes=Math.max(this.scannedBytes,at+length);const now=performance.now();if(this.progress&&now-this.lastProgress>=25){this.lastProgress=now;this.progress({packets:this.packetsRead,scannedBytes:this.scannedBytes,totalBytes:this.reader.size,bytesRead:this.bytesRead});}}
     return bytes;}
   private picture(bytes:Uint8Array,codec:MatroskaPacketIndex['codec'],configuration:Uint8Array){
-    const evidence=inspectPacketPicture(codec,configuration,bytes);
+    if(codec==='av1')return {singlePicture:false,closedRandomAccess:av1ClosedAnchor(bytes),reason:'unsupported-av1-picture-identity'};
+    const evidence:ReturnType<typeof inspectPacketPicture>=codec==='ffv1'?(()=>{
+      // FFV1 initializes its range decoder at range=0xff00 and state=128;
+      // the first symbol is key_frame (FFmpeg ffv1dec.c/read_header).
+      if(bytes.length<2)throw new MediaOpenError('container','Truncated FFV1 frame');
+      const low=bytes[0]*256+bytes[1];if(low>=0xff00)throw new MediaOpenError('container','Invalid FFV1 range decoder start');
+      return {singlePicture:true,closedRandomAccess:low>=0x7f80};
+    })():inspectPacketPicture(codec,configuration,bytes);
     if(!evidence.singlePicture){if(evidence.reason?.startsWith('unsupported-'))throw new TsCombinationNotMigrated(`Matroska picture layout: ${evidence.reason}`);throw new MediaOpenError('container',`Invalid Matroska picture: ${evidence.reason}`);}
     if(codec==='h264'||codec==='hevc')for(const nal of nalRanges(codec,configuration,bytes)){
       const data=bytes.subarray(nal.offset,nal.offset+nal.size),type=codec==='h264'?data[0]&31:data[0]>>1&63;
@@ -57,11 +81,12 @@ export class MatroskaPacketSource {
   async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void):Promise<MatroskaPacketIndex>{
     try{this.indexingBytes=0;this.progress=progress;this.check();await this.input.getFormat();const tracks=await this.input.getVideoTracks();
       if(tracks.length!==1)throw new TsCombinationNotMigrated('Matroska requires one video track');
-      const track=tracks[0],name=await track.getCodec(),codec=name==='avc'?'h264':name;
-      if(track.rotation!==0||track.squarePixelWidth!==track.codedWidth||track.squarePixelHeight!==track.codedHeight)throw new TsCombinationNotMigrated('Matroska display transforms require separate admission');
-      if(codec!=='h264'&&codec!=='hevc'&&codec!=='vp8'&&codec!=='vp9')throw new TsCombinationNotMigrated(`Matroska codec ${await track.getInternalCodecId()} is not migrated`);
-      this.nativeConfig=await track.getDecoderConfig()??undefined;
-      const raw=this.nativeConfig?.description,configuration=raw?ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength).slice():new Uint8Array(raw).slice():new Uint8Array();
+      const track=tracks[0],name=await track.getCodec(),codec=name==='avc'?'h264':await track.getInternalCodecId()==='V_FFV1'?'ffv1':name;
+      if(track.rotation!==0||codec!=='ffv1'&&(track.squarePixelWidth!==track.codedWidth||track.squarePixelHeight!==track.codedHeight))throw new TsCombinationNotMigrated('Matroska display transforms require separate admission');
+      if(codec!=='h264'&&codec!=='hevc'&&codec!=='vp8'&&codec!=='vp9'&&codec!=='ffv1'&&codec!=='av1')throw new TsCombinationNotMigrated(`Matroska codec ${await track.getInternalCodecId()} is not migrated`);
+      const structure=await matroskaStructure({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal,!!cached);
+      this.nativeConfig=codec==='ffv1'?undefined:await track.getDecoderConfig()??undefined;
+      const raw=codec==='ffv1'||codec==='av1'?structure.configuration.description:this.nativeConfig?.description,configuration=raw?ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength).slice():new Uint8Array(raw).slice():new Uint8Array();
       if((codec==='h264'||codec==='hevc')&&!configuration.length)throw new MediaOpenError('container','Missing Matroska CodecPrivate');
       if(configuration.length>4096)throw new MediaOpenError('resource','Matroska configuration budget');
       this.configurationSets(codec,configuration);
@@ -71,10 +96,10 @@ export class MatroskaPacketSource {
       if(!first||!this.picture(first.data,codec,configuration).closedRandomAccess)throw new MediaOpenError('container','Matroska first picture must prove closed random access');
       const restored=parseMatroskaPacketIndex(cached,this.version,this.reader.size);
       if(restored&&isSealedJsIndex(restored)){
-        if(restored.pid!==track.id||restored.codec!==codec||!equal(Uint8Array.from(restored.configuration),configuration)||restored.packets[0].locator!==first.sequenceNumber||restored.packets[0].size!==first.byteLength||restored.packets[0].timestamp!==first.timestamp)throw new TsSourceChangedError();
+        if(restored.pid!==track.id||restored.codec!==codec||codec==='ffv1'&&JSON.stringify(restored.codecParameters)!==JSON.stringify(structure.configuration.parameters)||!equal(Uint8Array.from(restored.configuration),configuration)||restored.packets[0].locator!==first.sequenceNumber||restored.packets[0].size!==first.byteLength||restored.packets[0].timestamp!==first.timestamp)throw new TsSourceChangedError();
         this.index=sealJsIndex(restored);this.indexReused=true;this.cursor={au:0,packet:first};return this.index;
       }
-      const clocks=await matroskaClocks({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal),packets:MatroskaPacketRecord[]=[];
+      const clocks=cached?(await matroskaStructure({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal)).clocks:structure.clocks,packets:MatroskaPacketRecord[]=[];
       for await(const packet of this.sink.packets()){
         this.check();if(packets.length>=250000||packet.byteLength>32*1024*1024)throw new MediaOpenError('resource','Matroska index/AU budget');
         const raw=clocks.get(packet.sequenceNumber),ptsUs=Math.round(packet.timestamp*1e6),durationUs=Math.round(packet.duration*1e6);
@@ -84,7 +109,7 @@ export class MatroskaPacketSource {
         if(packets.length%128===0)progress?.({packets:packets.length,scannedBytes:this.scannedBytes,totalBytes:this.reader.size,bytesRead:this.bytesRead});
       }
       if(!packets.length||packets.length!==clocks.size||new Set(packets.map(p=>p.ptsUs)).size!==packets.length)throw new MediaOpenError('container','Incomplete or ambiguous Matroska packet enumeration');
-      this.index=sealJsIndex<MatroskaPacketIndex>({schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:this.version,size:this.reader.size,streamKey:'video:0',pid:track.id,codec,configuration:[...configuration],packets,completeness:{state:'complete',packets:packets.length}});
+      this.index=sealJsIndex<MatroskaPacketIndex>({schema:1,kind:'js-matroska-packets',build:MATROSKA_PACKET_BUILD,sourceVersion:this.version,size:this.reader.size,...(structure.trailingOffset!==undefined?{indexIntegrity:'prefix' as const,indexTruncatedAt:structure.trailingOffset}:{}),streamKey:'video:0',pid:track.id,codec,...(codec==='ffv1'?{codecParameters:structure.configuration.parameters}:{}),configuration:[...configuration],packets,completeness:{state:'complete',packets:packets.length}});
       this.cursor={au:0,packet:first};progress?.({packets:packets.length,scannedBytes:this.reader.size,totalBytes:this.reader.size,bytesRead:this.bytesRead});return this.index;
     }catch(error){this.close();this.signal.throwIfAborted();throw error;}finally{this.indexingBytes=undefined;this.progress=undefined;}
   }

@@ -1,8 +1,9 @@
 /** Versioned JS TS metadata shape; complete-source verification belongs to TsPacketSource. */
 export const JS_TS_INDEX_BYTES = 64 * 1024 * 1024;
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v3';
+export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v4';
 export interface TsPacketRecord {
   au: number;
+  transportEnd?:number;
   /** Opaque Mediabunny locator. Never used as a payload byte offset. */
   locator: number;
   configuration: 0;
@@ -17,6 +18,10 @@ export interface TsPacketRecord {
 }
 export interface TsPacketIndex {
   schema: 2;
+  /** Source parsing is terminal; damage is separate from enumeration state. */
+  indexIntegrity?:'prefix';
+  indexTruncatedAt?:number;
+  transportLimit?:number;
   completeness: { state: 'complete'; packets: number };
   kind: 'js-ts-packets';
   build: typeof TS_PACKET_BUILD;
@@ -24,7 +29,7 @@ export interface TsPacketIndex {
   size: number;
   streamKey: 'video:0';
   pid: number;
-  codec: 'h264' | 'hevc';
+  codec: 'h264' | 'hevc' | 'mpeg2video';
   configuration: number[];
   packets: TsPacketRecord[];
 }
@@ -36,10 +41,12 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
   if (!value || typeof value !== 'object') return;
   const doc = value as Partial<TsPacketIndex>;
   if (doc.schema !== 2 || doc.kind !== 'js-ts-packets' || doc.build !== TS_PACKET_BUILD || doc.sourceVersion !== sourceVersion || doc.size !== size
-    || doc.streamKey !== 'video:0' || !['h264','hevc'].includes(doc.codec ?? '') || !Number.isSafeInteger(doc.pid) || doc.pid! < 1 || doc.pid! > 8190
+    || doc.streamKey !== 'video:0' || !['h264','hevc','mpeg2video'].includes(doc.codec ?? '') || !Number.isSafeInteger(doc.pid) || doc.pid! < 1 || doc.pid! > 8190
     || !Array.isArray(doc.configuration) || !doc.configuration.length || doc.configuration.length > 4096 || !doc.configuration.every(n=>Number.isInteger(n)&&n>=0&&n<=255)
     || !Array.isArray(doc.packets) || !doc.packets.length || doc.packets.length > 250000) return;
   if (doc.completeness?.state !== 'complete' || doc.completeness.packets !== doc.packets.length) return;
+  if(doc.indexIntegrity!==undefined&&(doc.indexIntegrity!=='prefix'||!Number.isSafeInteger(doc.indexTruncatedAt)||doc.indexTruncatedAt!<188||doc.indexTruncatedAt!>=size||!Number.isSafeInteger(doc.transportLimit)||doc.transportLimit!==doc.indexTruncatedAt||doc.transportLimit!%188))return;
+  if(doc.indexIntegrity===undefined&&(doc.indexTruncatedAt!==undefined||doc.transportLimit!==undefined))return;
   const times = new Set<number>();
   for (let au = 0; au < doc.packets.length; au++) {
     const p = doc.packets[au];
@@ -47,6 +54,8 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
       || au > 0 && p.locator <= doc.packets[au - 1].locator || !Number.isFinite(p.timestamp) || !Number.isSafeInteger(p.ptsUs) || Math.round(p.timestamp*1e6)!==p.ptsUs
       || !Number.isSafeInteger(p.durationUs) || p.durationUs < 0 || !Number.isSafeInteger(p.size) || p.size <= 0 || p.size > 32*1024*1024 || typeof p.key !== 'boolean'
       || times.has(p.ptsUs) || !p.timing || p.timing.timebase?.[0] !== 1 || p.timing.timebase?.[1] !== 90000) return;
+    if(doc.codec==='mpeg2video'&&(!Number.isSafeInteger(p.transportEnd)||p.transportEnd!<=p.locator||p.transportEnd!>size||p.transportEnd!%188||p.pesOffset!==p.locator))return;
+    if(doc.transportLimit!==undefined&&(p.pesOffset===null||p.pesOffset>=doc.transportLimit))return;
     times.add(p.ptsUs);
     for (const clock of [p.timing.pts,p.timing.dts]) if(clock!==null&&(!Number.isSafeInteger(clock)||clock<0||clock>=2**33))return;
     if(p.pesOffset!==null&&(!Number.isSafeInteger(p.pesOffset)||p.pesOffset<0||p.pesOffset%188||p.pesOffset+188>size))return;

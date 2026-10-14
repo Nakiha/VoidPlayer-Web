@@ -1,3 +1,4 @@
+import {TsContainerPacketSource} from '../mpeg2-ts-packet-source.ts';
 import { TsPacketSource, tsPictureStream, parseTsPacketIndex, retainVerifiedTsIndex, TsSourceChangedError } from '../ts-packet-source.ts';
 import {MatroskaPacketSource} from '../matroska-packet-source.ts';
 import {parseJsPacketIndex,loadLocalJsIndex,saveLocalJsIndex} from '../js-packet-index-cache.ts';
@@ -15,7 +16,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     if(payloadPhase&&operationBytes+n>64*1024*1024)throw new AnalysisFailure('resource-limit','JS analysis advancement IO budget exceeded');
     const bytes=await reader.read(at,n);bytesRead+=bytes.length;if(payloadPhase)operationBytes+=bytes.length;return bytes;
   },close:()=>reader.close()};
-  const source=format==='ts'?new TsPacketSource(observed,sourceVersion,signal):new MatroskaPacketSource(observed,sourceVersion,signal);
+  const source=format==='ts'?new TsContainerPacketSource(observed,sourceVersion,signal):new MatroskaPacketSource(observed,sourceVersion,signal);
   try {
     signal.throwIfAborted();
     const restored=parseJsPacketIndex(cached,sourceVersion,reader.size);
@@ -47,7 +48,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
       return source.readUnit(packet.au);
     };
     return { rawTiming: true, codec, configurations: [configuration], packets, sealedEnd: packets.length,
-      indexComplete: true, indexIntegrity: 'complete', totalPackets: packets.length,
+      indexComplete: true,indexIntegrity:index.indexIntegrity??'complete',indexTruncatedAt:index.indexTruncatedAt, totalPackets: packets.length,
       sourceEndUs: index.packets.reduce((end,p)=>Math.max(end,p.ptsUs+p.durationUs),0), reader,
       acknowledge(){operationBytes=0;},read: (offset, length) => observed.read(offset,length), readUnit, picture,
       get bytesRead() { return bytesRead; }, close() { source.close(); },

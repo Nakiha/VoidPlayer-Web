@@ -68,28 +68,20 @@ test('real packet decoding retains a usable overdeclared mdat and exposes its wa
   } finally { engine.close(); }
 });
 
-for (const variant of ['valid', 'oversized'] as const) test(`real FFmpeg Range AVIO opens 9 MiB moov, ${variant} mdat and seeks`, { timeout: 30000 }, async t => {
+for (const variant of ['valid', 'oversized'] as const) test(`real JS packet Range opens 9 MiB moov, ${variant} mdat and seeks`, { timeout: 30000 }, async t => {
   const bytes = fixture[variant]; let requests = 0;
   t.mock.method(globalThis, 'fetch', async (_url: unknown, options: RequestInit) => {
     const [, a, b] = /^bytes=(\d+)-(\d+)$/.exec((options.headers as Record<string, string>).Range)!;
     assert.ok(+b - +a + 1 <= 256 * 1024); requests++;
     return new Response(bytes.subarray(+a, +b + 1), { status: 206, headers: { 'Content-Range': `bytes ${a}-${b}/${bytes.length}` } });
   });
-  const worker = new Worker(new URL('../../src/ffmpeg-worker.ts', import.meta.url));
-  const bridge = createRangeBridge(worker as unknown as globalThis.Worker, 'https://test.invalid/video', bytes.length);
-  const rpc = new WorkerRpc(worker as unknown as globalThis.Worker, () => bridge.close());
-  try {
-    const info = await rpc.call('init', { name: 'test',
-      glueURL: new URL('../../public/vendor/voidplayer-core/voidplayer-core.js', import.meta.url).href,
-      wasmBinary: await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm', import.meta.url)), range: { shared: bridge.shared, size: bytes.length },
-    });
-    assert.equal(info.ticks.length, 20);
-    for (const index of [0, 15, 19, 0]) {
-      const frame = await rpc.call('extract', { ctx: info.ctx, index });
-      assert.equal(frame.pixels.byteLength, 160 * 96 * 1.5);
-    }
-    assert.ok(requests > 0);
-  } finally { rpc.terminate(); }
+  const engine=new Mp4Engine({url:'https://test.invalid/video',size:bytes.length});
+  try{
+    const info=await engine.open(new URL('../../public/vendor/voidplayer-core/voidplayer-core.js',import.meta.url).href,await readFile(new URL('../../public/vendor/voidplayer-core/voidplayer-core.wasm',import.meta.url)),true);
+    assert.equal(info.times.length,20);
+    for(const index of [0,15,19,0]){const frame=await engine.extract(index);assert.equal(frame.pixels!.byteLength,160*96*1.5);frame.frame?.close();}
+    assert.ok(requests>0);
+  }finally{engine.close();}
 });
 
 

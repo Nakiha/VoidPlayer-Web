@@ -35,19 +35,19 @@ function sealCompleteIndex(index: TsPacketIndex): TsPacketIndex {
 /** Exact metadata equality to a still-live, immutable complete scan. Serialized
  * documents alone (including self-reported completeness) are untrusted. */
 export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
-  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || !['h264','hevc'].includes(index.codec) || index.streamKey !== 'video:0'
+  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || !['h264','hevc','mpeg2video'].includes(index.codec) || index.streamKey !== 'video:0'
     || index.completeness?.state !== 'complete' || index.completeness.packets !== index.packets.length) return false;
   if (sealedIndexes.has(index)||isSealedJsIndex(index)) return true;
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
-    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid
+    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
       || known.build !== index.build || known.schema !== index.schema || known.packets.length !== index.packets.length
       || known.configuration.length !== index.configuration.length || known.configuration.some((v,i)=>v!==index.configuration[i])) return false;
     return known.packets.every((p,i)=>{
       const candidate = index.packets[i];
       return p.au === candidate.au && p.locator === candidate.locator && p.configuration === candidate.configuration
-        && p.pesOffset === candidate.pesOffset && p.timestamp === candidate.timestamp && p.ptsUs === candidate.ptsUs
+        && p.pesOffset === candidate.pesOffset && p.transportEnd === candidate.transportEnd && p.timestamp === candidate.timestamp && p.ptsUs === candidate.ptsUs
         && p.durationUs === candidate.durationUs && p.size === candidate.size && p.key === candidate.key
         && p.timing.pts === candidate.timing.pts && p.timing.dts === candidate.timing.dts
         && p.timing.origin === candidate.timing.origin && p.timing.timebase[0] === candidate.timing.timebase[0]

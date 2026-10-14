@@ -1,3 +1,4 @@
+import {openPacketMedia} from '../../src/packet-media.ts';
 import {createHash} from 'node:crypto';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,7 +28,7 @@ for(const [kind,encoder] of [['ts','mpeg2video'],['ts','libx264'],['ts','libx265
     let firstPixels:Uint8ClampedArray|undefined;
     for(const input of inputs){
       const f=new File([input],`video.${kind}`);
-      const source=kind==='ts'?await openFFmpegMedia(f,deps):await openFlvMedia({file:f},f,{...deps,forceWasm:true});
+      const source=kind==='ts'?await openPacketMedia('ts',{file:f},f,{...deps,forceWasm:true,sourceVersion:'tail-'+input.length}):await openFlvMedia({file:f},f,{...deps,forceWasm:true});
       try{
         const first=await source.frameAt(0);
         try{firstPixels??=first.pixels!.slice();assert.deepEqual(first.pixels,firstPixels);}finally{first.close();}
@@ -70,7 +71,8 @@ test(`${kind} shares corruption policy without losing readable frames to an appe
     execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x96:rate=25', '-t', '2',
       '-c:v', encoder, '-threads', '1', '-g', '12', '-y', file]);
     const bytes = await readFile(file);
-    const original = await openFFmpegMedia(new File([bytes], `original.${kind}`), deps);
+    const load=(data:Uint8Array<ArrayBuffer>,name:string)=>{const file=new File([data],name);return kind==='mkv'||kind==='webm'?openPacketMedia('matroska',{file},file,{...deps,forceWasm:true,sourceVersion:name}):openFFmpegMedia(file,deps);};
+    const original = await load(bytes,`original.${kind}`);
     const expected = new Map<string, string>();
     try {
       for await (const frame of original.framesFrom(0)) {
@@ -78,7 +80,7 @@ test(`${kind} shares corruption policy without losing readable frames to an appe
         finally { frame.close(); }
       }
     } finally { original.dispose(); }
-    const source = await openFFmpegMedia(new File([bytes, Buffer.alloc(190 * 1024, 0xa5)], `tail.${kind}`), deps);
+    const source = await load(Buffer.concat([bytes,Buffer.alloc(190*1024,0xa5)]),`tail.${kind}`);
     try {
       await source.ensureIndexed?.();
       assert.equal(source.info.indexState, 'complete');

@@ -46,7 +46,7 @@ export class TsCachedAudio {
     };
     for (const range of [...new Map(chosen.map(r => [r.offset, r])).values()]) {
       const bytes = await this.peek(range.offset, Math.min(range.length, 65536)); if (!bytes) continue;
-      if (range.offset !== previousEnd) { parts = []; pesTime = undefined; continuity = undefined; }
+      if (range.offset !== previousEnd) { flush(); parts = []; pesTime = undefined; continuity = undefined; }
       previousEnd = range.offset + bytes.length;
       let sync = -1, stride = 188;
       findSync: for (let p = 0; p < Math.min(204, bytes.length); p++) for (const step of [188, 192, 204])

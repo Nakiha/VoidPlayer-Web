@@ -44,7 +44,7 @@ export class PacketTimeline {
   replaceIndex(index:PacketDecodeIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
-      if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,description:this.index.configurations?.[id]??this.index.description});
+      if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,codecParameters:this.index.codecConfigurations?.[id]??this.index.codecParameters,description:this.index.configurations?.[id]??this.index.description});
       this.configuration=id;
     }
     this.pictures.clear();this.decoder.reset();this.drained=false;
@@ -86,7 +86,7 @@ export class PacketTimeline {
       this.actualPacket=packet;
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
-      if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.codec==='mpeg2video'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
       const bytes=await this.read(packet);
       if (this.identifyPictures && this.pictures.size < 512) {
         const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);

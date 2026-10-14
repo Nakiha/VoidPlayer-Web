@@ -1,4 +1,4 @@
-import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
@@ -187,11 +187,19 @@ export class AnalysisScheduler {
     // FFmpeg AU ordinals cannot be reinterpreted in the JS picture namespace.
     const probe = await open(filePath, 'r');
     try {
-      const header = Buffer.alloc(1); await probe.read(header, 0, 1, 0);
+      const header = Buffer.alloc(9); await probe.read(header, 0, 9, 0);
       if (header[0] === 0x47 && target.indexIdentity?.kind !== 'js-ts') {
         if ('picture' in target && target.picture)
           throw new AnalysisFailure('ambiguous-picture-identity', 'TS picture requires the current JS playback identity');
         target = {...target, indexIdentity: JS_TS_MEDIA_INDEX_IDENTITY};
+      }
+      if(header.readUInt32BE(0)===0x1a45dfa3&&target.indexIdentity?.kind!=='js-matroska'){
+        if('picture' in target&&target.picture)throw new AnalysisFailure('ambiguous-picture-identity','Matroska picture requires the current JS playback identity');
+        target={...target,indexIdentity:JS_MATROSKA_MEDIA_INDEX_IDENTITY};
+      }
+      if(target.indexIdentity?.kind==='ffmpeg'&&['ftyp','moov','moof','mdat','free','wide'].includes(header.toString('ascii',4,8))){
+        if('picture' in target&&target.picture)throw new AnalysisFailure('ambiguous-picture-identity','MP4 picture requires the current JS playback identity');
+        target={...target,indexIdentity:undefined};
       }
     } finally { await probe.close(); }
     const manifest = JSON.parse(
@@ -206,6 +214,7 @@ export class AnalysisScheduler {
       .update(
         JSON.stringify([
           target.sourceVersion,
+          target.indexIdentity ?? null,
           "mode" in target ? ['stream', target.firstPtsUs, target.durationUs] : "startUs" in target
             ? [target.firstPtsUs, target.startUs, target.endUs]
             : target.picture

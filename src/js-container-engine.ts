@@ -1,5 +1,6 @@
 import { RangeReader, type RandomAccessInput } from './range-reader.ts';
 import { TsPacketSource } from './ts-packet-source.ts';
+import {TsContainerPacketSource} from './mpeg2-ts-packet-source.ts';
 import {MatroskaPacketSource} from './matroska-packet-source.ts';
 import type {JsPacketIndex} from './matroska-packet-index.ts';
 import {jsPictureStream} from './matroska-packet-index.ts';
@@ -24,7 +25,7 @@ export class JsContainerEngine {
   private reader: RangeReader;
   private format:'ts'|'matroska';
   private controller = new AbortController();
-  private source?: TsPacketSource | MatroskaPacketSource;
+  private source?: TsPacketSource | TsContainerPacketSource | MatroskaPacketSource;
   private input:RandomAccessInput;private sourceVersion:string;private persistent:boolean;
   private index?: PacketDecodeIndex;
   private document?: JsPacketIndex;
@@ -47,7 +48,11 @@ export class JsContainerEngine {
     this.createNative=decoders.native??nativeFlvDecoder;
     this.createSoftware=decoders.software??wasmFlvDecoder;
   }
-  cachedWindows() { return this.reader.cachedWindows(); }
+  cachedWindows() {
+    const windows=new Map(this.reader.cachedWindows().map(w=>[w.offset,w]));
+    for(let offset=0;offset<(this.prefix?.length??0);offset+=65536)windows.set(offset,{offset,length:Math.min(65536,this.prefix!.length-offset)});
+    return [...windows.values()].sort((a,b)=>a.offset-b.offset);
+  }
   peekCachedBytes(offset: number, length: number) {
     return this.reader.peek(offset,length)??(Number.isSafeInteger(offset)&&Number.isSafeInteger(length)&&offset>=0&&length>=0
       &&length<=65536&&this.prefix&&offset+length<=this.prefix.length?this.prefix.slice(offset,offset+length):undefined);
@@ -70,14 +75,17 @@ export class JsContainerEngine {
     this.check();
     if (this.document) return this.document;
     if(this.format==='ts'){
-    const prefix = await this.reader.read(0, Math.min(65536, this.reader.size));
-    this.checkPsi=staticTsPsi(prefix);
+    let prefix = await this.reader.read(0, Math.min(65536, this.reader.size));
+    const tracks=await inspectCachedTracks(this.reader.size,async(at,n)=>this.reader.peek(at,n));
+    // Retain a bounded startup window already needed by video indexing, so
+    // optional AAC observation survives the full scan evicting early windows.
+    if(tracks.audio.presence==='present')prefix=await this.reader.read(0,Math.min(1024*1024,this.reader.size));
+    let validPrefix=0;while(validPrefix+188<=prefix.length&&prefix[validPrefix]===0x47)validPrefix+=188;
+    this.checkPsi=staticTsPsi(prefix.subarray(0,validPrefix));
     const codecs = probeTsVideo(prefix);
-    const tracks = await inspectCachedTracks(this.reader.size, async (at,length)=>this.reader.peek(at,length));
-    // Keep existing audio and other TS combinations on their declared,
-    // unmigrated route. Do not silently lose a stream ignored by Mediabunny.
-    if(codecs.length!==1||!['H.264 / AVC','H.265 / HEVC'].includes(codecs[0]))throw new TsCombinationNotMigrated('initial product migration requires one declared H.264/HEVC video stream');
-    if(tracks.audio.presence!=='absent'||!tracks.audio.complete)throw new TsCombinationNotMigrated('initial product migration requires confirmed video-only H.264/HEVC TS');
+    // Select one known video track; interleaved audio retains the same optional
+    // cache-only observer as the former container path, with its own cursor.
+    if(codecs.length!==1||!['H.264 / AVC','H.265 / HEVC','MPEG-2 Video'].includes(codecs[0]))throw new TsCombinationNotMigrated('initial product migration requires one declared H.264/HEVC video stream');
     this.prefix=prefix.slice();
     }
     let cached:JsPacketIndex|undefined;
@@ -85,12 +93,12 @@ export class JsContainerEngine {
       if('file' in this.input){this.sourceVersion=await localJsSourceVersion(this.reader,this.controller.signal,bytes=>onIndexProgress?.({packets:0,scannedBytes:bytes,totalBytes:this.reader.size,bytesRead:bytes}));cached=await loadLocalJsIndex(this.reader,this.sourceVersion,this.format,this.controller.signal,true);}
       else {cached=await loadServerJsIndex(this.input.url,this.sourceVersion,this.reader.size,this.format,this.controller.signal,onIndexProgress,this.input.library);if(cached)this.indexOrigin='server';}
     }
-    const Source=this.format==='ts'?TsPacketSource:MatroskaPacketSource;
-    this.source = new Source({size:this.reader.size,read:async(at,length)=>{
+    const sourceReader={size:this.reader.size,read:async(at:number,length:number)=>{
       const bytes=await this.reader.read(at,length);
-      if(this.checkPsi&&at%188===0&&length%188===0)this.checkPsi(bytes);
+      if(this.checkPsi&&at%188===0&&length%188===0){let valid=0;while(valid<bytes.length&&bytes[valid]===0x47)valid+=188;this.checkPsi(bytes.subarray(0,valid));}
       return bytes;
-    },close:()=>this.reader.close()}, this.sourceVersion, this.controller.signal);
+    },close:()=>this.reader.close()};
+    this.source=this.format==='ts'?new TsContainerPacketSource(sourceReader,this.sourceVersion,this.controller.signal):new MatroskaPacketSource(sourceReader,this.sourceVersion,this.controller.signal);
     this.document = await this.source!.open(cached,onIndexProgress);
     this.indexPacketsScanned=this.source!.packetsRead;
     if(this.persistent)await saveLocalJsIndex(this.document,this.controller.signal);
@@ -130,7 +138,7 @@ export class JsContainerEngine {
         durationUs: this.index.firstPts + this.index.duration - this.primed.pts,
         times: this.index.order.map(au => this.index!.packets[au].pts - this.primed!.pts),
         seekAnchorCount: this.index.packets.filter(packet=>packet.key).length,
-        durations: this.index.durations, indexIntegrity: 'complete' as const, indexWarning: undefined };
+        durations: this.index.durations,indexIntegrity:this.document.indexIntegrity==='prefix'?'prefix' as const:'complete' as const,indexTruncatedAt:this.document.indexTruncatedAt,indexWarning:this.document.indexIntegrity==='prefix'?'封装损坏：仅保留已确认的有效前段。':undefined };
     } catch (error) { this.close(); throw error; }
   }
   private decoderInfo() {

@@ -14,7 +14,7 @@ for (const item of manifest) {
   const bytes = await readFile(new URL('../fixtures/fate/' + item.file, import.meta.url));
   assert.equal(createHash('sha256').update(bytes).digest('hex'), item.sha256);
   const ref=reference.samples[item.path];assert.equal(ref.sha256,item.sha256);
-  for (const backend of ['container-single', 'container-multi', ...(item.file.endsWith('.flv') ? ['flv-packets'] : /\.(mp4|mov)$/.test(item.file) ? ['mp4-packets'] : [])]) {
+  for (const backend of item.file.endsWith('.flv')?['flv-single','flv-multi','flv-packets']:/\.(mp4|mov)$/.test(item.file)?['mp4-single','mp4-multi','mp4-packets']:['container-single','container-multi']) {
     const file = new File([bytes], item.file), variant = backend.endsWith('multi') ? '-mt' : '';
     const deps = {glueURL: new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.js`,import.meta.url).href,
       wasmBinary:await readFile(new URL(`../public/vendor/voidplayer-core/voidplayer-core${variant}.wasm`,import.meta.url)),forceWasm:true};
@@ -32,7 +32,7 @@ for (const item of manifest) {
     };
     let source;
     try {
-      source = await (backend==='flv-packets' ? openFlvMedia({file},file,deps) : backend==='mp4-packets' ? openPacketMedia('mp4',{file},file,deps) : openFFmpegMedia(file,deps));
+      source = await (backend.startsWith('flv-') ? openFlvMedia({file},file,deps) : backend.startsWith('mp4-') ? openPacketMedia('mp4',{file},file,deps) : openFFmpegMedia(file,deps));
       row.info=structuredClone(source.info); row.phase='first';
       const first=await source.frameAt(0);try{row.failures.push(...checkFrame(observe(first),ref.frames[0],'first'));}finally{first.close();}
       row.phase='index'; await source.ensureIndexed?.();row.phase='play';

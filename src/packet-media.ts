@@ -398,7 +398,7 @@ export async function openPacketMedia(container: 'flv' | 'mp4' | 'ts' | 'matrosk
     };
     const stopMetadata = attachCachedTrackMetadata(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
     activeRpc.onCachedAudio = (generation, batch) => { if (!disposed) source.onCachedAudio?.(generation, batch); };
-    if (container === 'mp4'||container==='matroska') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length));
+    if (container === 'mp4'||container==='matroska'||container==='ts') stopAudio = attachCachedContainerAudio(source, (offset, length) => activeRpc.requestCachedBytes(offset, length),undefined,()=>activeRpc.requestCachedWindows());
     return source;
   } catch (error) { releaseReservation(); rpc?.terminate(); throw error; }
 }

@@ -210,3 +210,20 @@ chroma cell exactly, including boundary cells, with no numeric tolerance.
 Different coded allocations may therefore pass when only their padding differs.
 PTS, crop, packing validity, bit depth, siting and resolved color checks remain
 mandatory. This does not certify arbitrary differences in decoded edge pixels.
+
+### Packet-fed container metadata
+
+JavaScript demux adapters retain container metadata independently of decoder
+selection. FFV1 Matroska and the migrated MPEG-4/MJPEG/ProRes sample-table path
+pass coded dimensions, rational SAR and original numeric color enums through
+`vp_packet_open_config` (ABI v1, 40 bytes) before opening libavcodec. Unspecified
+primaries/transfer/matrix remain enum 2 and unspecified range remains 0; no
+scene-specific color default is inserted. Decoded frame tags continue to own
+the output resource contract. Source/container provenance remains separate.
+
+A single MP4 visual sample entry can constrain the visible rectangle inside a
+larger coded AVC allocation. That rectangle is applied to the descriptor and
+presentation geometry without rewriting decoded samples. This shape uses the
+packet-fed software decoder when a native decoder cannot express the container
+crop. Multiple sample descriptions retain actual decoded geometry per frame;
+the first entry's dimensions must not crop subsequent configurations.
