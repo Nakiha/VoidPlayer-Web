@@ -76,14 +76,18 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
   } finally { rpc.terminate();  await rm(directory, { recursive: true, force: true }); }
 });
 
-test('TS admission failures never load a decoder or silently open a container core', async () => {
-  for (const [name, reason] of [['progressive-two-slices.ts', /picture layout/], ['mbaff.ts', /interlaced/]] as const) {
+test('admitted multislice and MBAFF TS prepare without a decoder and never claim exact picture identity', async () => {
+  for (const name of ['progressive-two-slices.ts','mbaff.ts']) {
     const worker = new Worker(new URL('../../src/packet-worker.ts', import.meta.url));
     const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
     try {
       const bytes = await readFile(`fixtures/ts-analysis/${name}`);
-      await assert.rejects(rpc.call('init', {container:'ts',sourceVersion:`negative-${name}`,input:{file:new Blob([bytes])},
-        forceWasm:false,glueURL:'file:///deliberately-missing-container-core.js'}, [], 60000), reason);
+      const result=await rpc.call('prepare-ts',{sourceVersion:`admitted-${name}`,input:{file:new Blob([bytes])}},[],60000);
+      assert.equal(result.admitted,true);
+      assert.equal(result.index.kind,'js-ts-packets');
+      assert.equal(result.index.sourceVersion,`admitted-${name}`);
+      assert.equal(result.index.exactPictureMapping,false);
+      assert.ok(result.index.packets.length>0);
       await rpc.call('dispose', {});
     } finally { rpc.terminate(); }
   }

@@ -9,6 +9,26 @@ import path from 'node:path';
 import {openFFmpegMedia} from '../../src/ffmpeg-media.ts';
 import {openFlvMedia} from '../../src/flv-media.ts';
 
+// Keep encoded pictures unchanged while exercising both Matroska codec mappings.
+// Rebuild element lengths and omit offset-based seek tables after rewriting tracks.
+function ffv1Representation(bytes:Buffer,legacy:boolean):Buffer<ArrayBuffer>{
+ const integer=(data:Buffer,at:number,id=false)=>{let width=1,mask=128;while(!(data[at]&mask)){width++;mask>>=1;assert.ok(width<=8);}let value=id?data[at]:data[at]&(mask-1),unknown=!id&&(data[at]&(mask-1))===mask-1;for(let i=1;i<width;i++){value=value*256+data[at+i];unknown=unknown&&data[at+i]===255;}return {width,value,unknown};};
+ const elements=(data:Buffer)=>{const result:{id:number;tag:Buffer;data:Buffer}[]=[];for(let at=0;at<data.length;){const id=integer(data,at,true),size=integer(data,at+id.width),start=at+id.width+size.width,end=size.unknown?data.length:start+size.value;assert.ok(end<=data.length);result.push({id:id.value,tag:data.subarray(at,at+id.width),data:data.subarray(start,end)});at=end;}return result;};
+ const wrap=(tag:Buffer,data:Buffer)=>{let width=1;while(data.length>=2**(7*width)-1)width++;const size=Buffer.alloc(width);let value=data.length;for(let i=width-1;i>=0;i--){size[i]=value%256;value=Math.floor(value/256);}size[0]|=1<<(8-width);return Buffer.concat([tag,size,data]);};
+ const rewrite=(data:Buffer,parent=0):Buffer=>{
+  let items=elements(data).filter(item=>![0x114d9b74,0x1c53bb6b,0xbf].includes(item.id));
+  if(parent===0xae&&items.some(item=>item.id===0x86&&['V_FFV1','V_MS/VFW/FOURCC'].includes(item.data.toString()))){
+   const codec=items.find(item=>item.id===0x86)!,priv=items.find(item=>item.id===0x63a2),video=elements(items.find(item=>item.id===0xe0)!.data),uint=(id:number)=>{let n=0;for(const b of video.find(item=>item.id===id)!.data)n=n*256+b;return n;};
+   let extra=priv?.data??Buffer.alloc(0);if(codec.data.toString()==='V_MS/VFW/FOURCC'){assert.equal(extra.toString('ascii',16,20),'FFV1');const size=extra.readUInt32LE();extra=extra.subarray(40,size>40?size:extra.length);}
+   codec.data=Buffer.from(legacy?'V_MS/VFW/FOURCC':'V_FFV1');
+   if(legacy){const header=Buffer.alloc(40);header.writeUInt32LE(40+extra.length);header.writeInt32LE(uint(0xb0),4);header.writeInt32LE(uint(0xba),8);header.writeUInt16LE(1,12);header.writeUInt16LE(24,14);header.write('FFV1',16);extra=Buffer.concat([header,extra,...(extra.length%2?[Buffer.alloc(1)]:[])]);}
+   items=items.filter(item=>item.id!==0x63a2);items.push({id:0x63a2,tag:Buffer.from('63a2','hex'),data:extra});
+  }
+  return Buffer.concat(items.map(item=>wrap(item.tag,[0x18538067,0x1654ae6b,0xae].includes(item.id)?rewrite(item.data,item.id):item.data)));
+ };
+ return Buffer.from(rewrite(bytes));
+}
+
 const core=new URL('../../public/vendor/voidplayer-core/',import.meta.url);
 for(const [kind,encoder] of [['ts','mpeg2video'],['ts','libx264'],['ts','libx265'],['flv','libx264']] as const)test(`${kind}/${encoder} damaged tails retain real decoded frames, playback and backward seek`,{timeout:60000},async()=>{
   const dir=await mkdtemp(path.join(tmpdir(),'vp-tail-'));
@@ -62,15 +82,15 @@ for(const [kind,encoder] of [['ts','mpeg2video'],['ts','libx264'],['ts','libx265
   }finally{await rm(dir,{recursive:true,force:true});}
 });
 
-for (const [kind, encoder] of [['mkv', 'ffv1'], ['webm', 'libvpx-vp9'], ['avi', 'mpeg4'], ['mpg', 'mpeg2video']] as const)
-test(`${kind} shares corruption policy without losing readable frames to an appended tail`, { timeout: 60000 }, async () => {
+for (const [kind, encoder, legacy] of [['mkv', 'ffv1', false], ['mkv', 'ffv1', true], ['webm', 'libvpx-vp9', false], ['avi', 'mpeg4', false], ['mpg', 'mpeg2video', false]] as const)
+test(`${kind}${legacy?' VFW FFV1':''} shares corruption policy without losing readable frames to an appended tail`, { timeout: 60000 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'vp-container-tail-'));
   const deps = { glueURL: new URL('voidplayer-core.js', core).href, wasmBinary: await readFile(new URL('voidplayer-core.wasm', core)) };
   try {
     const file = path.join(dir, `video.${kind}`);
     execFileSync('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x96:rate=25', '-t', '2',
       '-c:v', encoder, '-threads', '1', '-g', '12', '-y', file]);
-    const bytes = await readFile(file);
+    const generated=await readFile(file),bytes=kind==='mkv'?ffv1Representation(generated,legacy):generated;
     const load=(data:Uint8Array<ArrayBuffer>,name:string)=>{const file=new File([data],name);return kind==='mkv'||kind==='webm'?openPacketMedia('matroska',{file},file,{...deps,forceWasm:true,sourceVersion:name}):openFFmpegMedia(file,deps);};
     const original = await load(bytes,`original.${kind}`);
     const expected = new Map<string, string>();

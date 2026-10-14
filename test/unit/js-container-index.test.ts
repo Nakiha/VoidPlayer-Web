@@ -5,7 +5,7 @@ import {jsDecodeIndex} from '../../src/js-decode-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../../src/matroska-packet-index.ts';
 import {readContainerHeader,validateContainerHeader} from '../../src/bitstream-analysis/diagrams.ts';
 import {inspectPacketPicture} from '../../src/packet-picture.ts';
-import {matroskaClocks,matroskaStructure} from '../../src/matroska-clocks.ts';
+import {matroskaClocks,matroskaStructure,matroskaFfv1Configuration} from '../../src/matroska-clocks.ts';
 import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
 
 const ebml=(id:string,...parts:Uint8Array[])=>{const data=Buffer.concat(parts);assert.ok(data.length<127);return Buffer.concat([Buffer.from(id,'hex'),Buffer.from([0x80|data.length]),data]);};
@@ -72,4 +72,15 @@ test('Matroska packet configuration retains coded dimensions, rational SAR and o
  const {configuration}=await matroskaStructure({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},1,new AbortController().signal);
  assert.equal(configuration.codecId,'V_FFV1');assert.deepEqual([...configuration.description],[42]);
  assert.deepEqual(configuration.parameters,{width:5,height:3,sarNum:4,sarDen:3,colorPrimaries:9,colorTransfer:16,colorSpace:9,colorRange:2});
+});
+
+test('legacy FFV1 BITMAPINFOHEADER strips only validated headers and optional padding',()=>{
+ const parameters={width:160,height:96,sarNum:1,sarDen:1,colorPrimaries:2,colorTransfer:2,colorSpace:2,colorRange:0};
+ const extra=Uint8Array.of(1,2,3),header=Buffer.alloc(44);header.writeUInt32LE(43);header.writeInt32LE(160,4);header.writeInt32LE(96,8);header.writeUInt16LE(1,12);header.writeUInt16LE(24,14);header.write('FFV1',16);header.set(extra,40);
+ const config={codecId:'V_MS/VFW/FOURCC',description:header,parameters};
+ assert.deepEqual([...matroskaFfv1Configuration(config)!],[...extra]);
+ assert.deepEqual(matroskaFfv1Configuration({...config,codecId:'V_FFV1',description:extra}),extra);
+ for(const offset of [0,4,8,12,14]){const damaged=Buffer.from(header);if(offset>=12)damaged.writeUInt16LE(65535,offset);else damaged.writeUInt32LE(65535,offset);assert.throws(()=>matroskaFfv1Configuration({...config,description:damaged}),/BITMAPINFOHEADER/);}
+ assert.throws(()=>matroskaFfv1Configuration({...config,description:header.subarray(0,39)}),/Truncated/);
+ const other=Buffer.from(header);other.write('H264',16);assert.equal(matroskaFfv1Configuration({...config,description:other}),undefined);
 });

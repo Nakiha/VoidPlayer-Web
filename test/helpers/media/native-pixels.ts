@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import {dirname,join} from 'node:path';
 import {createHash} from 'node:crypto';
 import type {FrameDescription} from '../../../src/frame-description.ts';
 
@@ -21,4 +22,12 @@ export function nativeVisibleFrameBytes(description:FrameDescription){
  return y.planes.reduce((sum,_plane,i)=>{const sx=i?2**y.subsampleX:1,sy=i?2**y.subsampleY:1;
   return sum+(Math.ceil((r.x+r.width)/sx)-Math.floor(r.x/sx))*(Math.ceil((r.y+r.height)/sy)-Math.floor(r.y/sy))*(y.bitDepth>8?2:1);
  },0);
+}
+
+/** Metadata must come from the same pinned native build as the pixel oracle. */
+export function nativeVideoMetadata(file:string){
+ const probe=process.env.VOIDPLAYER_FFPROBE_ORACLE||(process.env.VOIDPLAYER_FFMPEG_ORACLE?join(dirname(process.env.VOIDPLAYER_FFMPEG_ORACLE),'ffprobe'):'ffprobe');
+ const result=JSON.parse(execFileSync(probe,['-v','error','-select_streams','v:0','-show_entries','stream=codec_name,pix_fmt','-of','json',file],{encoding:'utf8'})).streams?.[0];
+ assert.ok(result&&typeof result.codec_name==='string'&&typeof result.pix_fmt==='string','native oracle must identify the codec and decoded pixel format');
+ return result as {codec_name:string;pix_fmt:string};
 }

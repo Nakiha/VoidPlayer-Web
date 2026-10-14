@@ -21,7 +21,7 @@ import type {TsPacketReader} from './ts-packet-source.ts';
 import {TsCombinationNotMigrated,TsSourceChangedError} from './ts-packet-source.ts';
 import {MediaOpenError} from './media-errors.ts';
 import {abortableWait} from './media-abort.ts';
-import {matroskaStructure} from './matroska-clocks.ts';
+import {matroskaStructure,matroskaFfv1Configuration} from './matroska-clocks.ts';
 import {MATROSKA_PACKET_BUILD,parseMatroskaPacketIndex} from './matroska-packet-index.ts';
 import type {MatroskaPacketIndex,MatroskaPacketRecord} from './matroska-packet-index.ts';
 import {inspectPacketPicture} from './packet-picture.ts';
@@ -81,12 +81,13 @@ export class MatroskaPacketSource {
   async open(cached?:unknown,progress?:(p:{packets:number;scannedBytes:number;totalBytes:number;bytesRead:number})=>void):Promise<MatroskaPacketIndex>{
     try{this.indexingBytes=0;this.progress=progress;this.check();await this.input.getFormat();const tracks=await this.input.getVideoTracks();
       if(tracks.length!==1)throw new TsCombinationNotMigrated('Matroska requires one video track');
-      const track=tracks[0],name=await track.getCodec(),codec=name==='avc'?'h264':await track.getInternalCodecId()==='V_FFV1'?'ffv1':name;
+      const track=tracks[0],name=await track.getCodec();
+      const structure=await matroskaStructure({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal,!!cached);
+      const ffv1=matroskaFfv1Configuration(structure.configuration),codec=ffv1!==undefined?'ffv1':name==='avc'?'h264':name;
       if(track.rotation!==0||codec!=='ffv1'&&(track.squarePixelWidth!==track.codedWidth||track.squarePixelHeight!==track.codedHeight))throw new TsCombinationNotMigrated('Matroska display transforms require separate admission');
       if(codec!=='h264'&&codec!=='hevc'&&codec!=='vp8'&&codec!=='vp9'&&codec!=='ffv1'&&codec!=='av1')throw new TsCombinationNotMigrated(`Matroska codec ${await track.getInternalCodecId()} is not migrated`);
-      const structure=await matroskaStructure({size:this.reader.size,read:(at,n)=>this.read(at,n),close(){}},track.id,this.signal,!!cached);
       this.nativeConfig=codec==='ffv1'?undefined:await track.getDecoderConfig()??undefined;
-      const raw=codec==='ffv1'||codec==='av1'?structure.configuration.description:this.nativeConfig?.description,configuration=raw?ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength).slice():new Uint8Array(raw).slice():new Uint8Array();
+      const raw=codec==='ffv1'?ffv1:codec==='av1'?structure.configuration.description:this.nativeConfig?.description,configuration=raw?ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength).slice():new Uint8Array(raw).slice():new Uint8Array();
       if((codec==='h264'||codec==='hevc')&&!configuration.length)throw new MediaOpenError('container','Missing Matroska CodecPrivate');
       if(configuration.length>4096)throw new MediaOpenError('resource','Matroska configuration budget');
       this.configurationSets(codec,configuration);

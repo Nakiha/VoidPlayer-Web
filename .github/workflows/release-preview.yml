@@ -564,10 +564,14 @@ jobs:
       - name: Verify FLV startup in each engine independently
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs flv-startup --prepared
-      - name: Verify FATE frame contracts and metadata regressions
+      - name: Verify FATE browser frame contracts
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-fate --prepared
+        run: node scripts/run-tests.mjs --case fate-browser --prepared --directory .run/test-suites/ci-fate-browser
+      - name: Verify FATE native metadata and frame regressions
+        timeout-minutes: 6
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs --case fate --prepared --directory .run/test-suites/ci-fate-native
       - name: Audit FATE transport-stream clock faults (exploratory report)
         timeout-minutes: 8
         run: |

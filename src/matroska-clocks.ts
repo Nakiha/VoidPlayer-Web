@@ -10,6 +10,23 @@ export interface PacketCodecParameters {
   colorPrimaries:number;colorTransfer:number;colorSpace:number;colorRange:number;
 }
 export interface MatroskaTrackConfiguration { codecId:string;description:Uint8Array;parameters:PacketCodecParameters; }
+/** Narrow legacy FFV1 mapping; other VFW codecs stay outside admission. */
+export function matroskaFfv1Configuration(configuration:MatroskaTrackConfiguration){
+  if(configuration.codecId==='V_FFV1')return configuration.description;
+  if(configuration.codecId!=='V_MS/VFW/FOURCC')return;
+  const bytes=configuration.description;
+  if(bytes.length<40)throw new MediaOpenError('container','Truncated Matroska BITMAPINFOHEADER');
+  const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength),size=view.getUint32(0,true);
+  if(String.fromCharCode(...bytes.subarray(16,20))!=='FFV1')return;
+  // FFmpeg writes biSize=40+extradata, with an optional final even-byte pad.
+  // A bare 40-byte header is also valid; extradata always begins at offset 40.
+  if(size<40||size>bytes.length||size!==40&&size!==bytes.length&&!(size%2===1&&size===bytes.length-1)
+    ||view.getInt32(4,true)!==configuration.parameters.width||view.getInt32(8,true)!==configuration.parameters.height
+    ||view.getUint16(12,true)!==1||![0,8,16,24,32,48].includes(view.getUint16(14,true)))
+    throw new MediaOpenError('container','Invalid Matroska FFV1 BITMAPINFOHEADER');
+  const end=size>40?size:bytes.length;
+  return bytes.slice(40,end);
+}
 export async function matroskaStructure(reader:TsPacketReader,trackId:number,signal:AbortSignal,metadataOnly=false) {
   const bad=(message:string):never=>{throw new MediaOpenError('container',`JS Matroska: ${message}`);};
   const outside=(message:string):never=>{throw new TsCombinationNotMigrated(`Matroska: ${message}`);};
