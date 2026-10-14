@@ -1269,5 +1269,17 @@
         "log": "../pr96-http-integration.log"
       }
     }
-  ]
+  ],
+  "compatibilityFollowup": {
+    "change": "Non-SimpleBlock reserved mask0xf1→0xf0; bit0 UNU is permitted, high reserved bits remain invalid. No other admission changes.",
+    "regression": "Visible ReferenceBlock group with UNU1: failed before, passed after; high reserved bit0x10 still rejected.",
+    "targetedTests": {
+      "passed": 13,
+      "beforeLog": "../pr96-unu-before.log",
+      "afterLog": "../pr96-unu-after.log",
+      "typecheck": "../pr96-unu-type.log"
+    },
+    "fullMatrixRerun": false,
+    "reason": "Review requested a minimal load-admission correction, without broad matrix expansion; prior full product evidence remains versioned above."
+  }
 }

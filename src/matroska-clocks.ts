@@ -62,7 +62,7 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
       // show-frame bit. Pinned Mediabunny does not carry it in EncodedPacket.
       if(flags&8)outside('invisible video blocks require decode-without-display mapping');
       if(flags&6)outside('laced video blocks require verified multi-picture mapping');
-      if(flags&(simple?0x70:0xf1))bad('reserved video block flags');
+      if(flags&(simple?0x70:0xf0))bad('reserved video block flags');
       const relative=new DataView(bytes.buffer,bytes.byteOffset).getInt16(id.width),pts=timestamp!+relative;
       if(!Number.isSafeInteger(pts))bad('block clock exceeds safe range');
       const locator=start+ordinal++;
