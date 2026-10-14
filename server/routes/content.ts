@@ -379,8 +379,10 @@ export async function handleContentRoutes(ctx: RouteContext, req: IncomingMessag
           await writeMediaIndexEvent(res, { type: 'error', message: (error as Error).message || '服务端索引构建失败。' });
           res.end();
         } catch {}
-      } else if (!res.headersSent && error instanceof AdminError && error.status === 503) res.setHeader('retry-after', '1');
-      else if (!res.headersSent && !res.destroyed) sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
+      } else if (!res.headersSent && !res.destroyed) {
+        if (error instanceof AdminError && error.status === 503) res.setHeader('retry-after', '1');
+        sendJson(res, error instanceof AdminError ? error.status : 500, adminErrorBody(error));
+      }
       return true;
     } finally {
       if (indexStreamTimer) clearTimeout(indexStreamTimer);

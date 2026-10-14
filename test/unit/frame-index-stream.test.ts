@@ -4,6 +4,8 @@ import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { MediaLibraryIndex } from '../../server/library.ts';
+import { request } from 'node:http';
+import { AdminError } from '../../server/admin-error.ts';
 import { AdminController } from '../../server/admin.ts';
 import { loadConfig } from '../../server/config.ts';
 import { createMediaServer } from '../../server/app.ts';
@@ -116,5 +118,120 @@ test('FFmpeg record batches persist by identity and stream as NDJSON with build 
   } finally {
     server.closeAllConnections(); await new Promise<void>(r => server.close(() => r()));
     await admin.close(); await library.close(); await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('frame-index HTTP failures finish before the deadline and release request resources', async t => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'vp-index-http-errors-'));
+  const media = path.join(root, 'media'); await mkdir(media); await mkdir(path.join(root, 'data'));
+  await writeFile(path.join(media, 'clip.flv'), syntheticFlv());
+  const library = new MediaLibraryIndex([media], { database: path.join(root, 'data', 'library.sqlite'), watch: false });
+  await library.refresh();
+  const entry = library.browse().entries[0];
+  const logs: Record<string, unknown>[] = [];
+  const server = createMediaServer({ roots: [media], library, onLog: value => logs.push(value) });
+  await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+  const endpoint = `${base}/api/media/${entry.id}/frame-index?v=${entry.version}`;
+  const post = { method: 'POST', headers: { origin: base, 'x-voidplayer-action': 'frame-index', 'content-type': 'application/json' }, body: '{}' };
+  async function response(url: string, init: RequestInit = {}) {
+    const result = await fetch(url, { ...init, signal: AbortSignal.timeout(1500) });
+    const body = await result.text(); // Includes the response end, not just headers.
+    assert.ok(logs.at(-1)?.completed, 'HTTP finish was observed');
+    return { result, body };
+  }
+  async function busy(url: string, init: RequestInit, message: string) {
+    const { result, body } = await response(url, init);
+    assert.equal(result.status, 503);
+    assert.equal(result.headers.get('retry-after'), '1');
+    assert.deepEqual(JSON.parse(body), { error: message, code: 'http-503' });
+  }
+  try {
+    await t.test('upload concurrency limit returns a complete JSON 503', async () => {
+      const release = [library.indexJobs.acquireUpload(), library.indexJobs.acquireUpload()];
+      try { await busy(endpoint, post, '索引上传繁忙，请稍后重试。'); }
+      finally { release.forEach(done => done()); }
+    });
+    await t.test('full build queue returns 503 before starting the stream', async () => {
+      // Saturate the real queue admission check without starting unrelated media Workers.
+      Reflect.set(library.indexJobs, 'activeBuilds', 1);
+      Reflect.set(library.indexJobs, 'buildQueue', Array(8).fill(null));
+      try {
+        await busy(endpoint + `&kind=ffmpeg&stream=video%3A0&schema=3&indexer=${indexerBuild}&build=1`,
+          { headers: { accept: 'application/x-ndjson' } }, '索引构建队列已满，请稍后重试。');
+      } finally {
+        Reflect.set(library.indexJobs, 'activeBuilds', 0);
+        Reflect.set(library.indexJobs, 'buildQueue', []);
+      }
+    });
+    await t.test('ordinary errors finish without Retry-After and release upload slots', async () => {
+      const bad = await response(endpoint, { ...post, headers: { ...post.headers, 'content-type': 'text/plain' } });
+      assert.equal(bad.result.status, 400);
+      assert.equal(bad.result.headers.get('retry-after'), null);
+      const mocked = t.mock.method(library.indexJobs, 'call', async () => { throw new Error('injected database failure'); });
+      try {
+        const failed = await response(endpoint, post);
+        assert.equal(failed.result.status, 500);
+        assert.deepEqual(JSON.parse(failed.body), { error: 'injected database failure' });
+        assert.equal(failed.result.headers.get('retry-after'), null);
+      } finally { mocked.mock.restore(); }
+      const release = [library.indexJobs.acquireUpload(), library.indexJobs.acquireUpload()];
+      release.forEach(done => done());
+    });
+    await t.test('post-header failure remains a terminated NDJSON error', async () => {
+      const mocked = t.mock.method(library.indexJobs, 'buildIndex', async () => { throw new AdminError(503, 'injected build failure'); });
+      try {
+        const streamed = await response(endpoint + '&build=1', { headers: { accept: 'application/x-ndjson' } });
+        assert.equal(streamed.result.status, 200);
+        assert.equal(streamed.result.headers.get('retry-after'), null);
+        assert.deepEqual(streamed.body.trim().split('\n').map(line => JSON.parse(line).type), ['manifest', 'error']);
+      } finally { mocked.mock.restore(); }
+    });
+    await t.test('disconnected upload releases its slot and timer without a second response', async () => {
+      let acquired!: () => void;
+      const ready = new Promise<void>(resolve => { acquired = resolve; });
+      const acquire = library.indexJobs.acquireUpload.bind(library.indexJobs);
+      const mocked = t.mock.method(library.indexJobs, 'acquireUpload', () => { const release = acquire(); acquired(); return release; });
+      const client = request(endpoint, { method: 'POST', headers: { ...post.headers, 'content-length': '100' } });
+      client.on('error', () => {});
+      try {
+        client.write('{');
+        let readinessTimer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          await Promise.race([ready, new Promise<never>((_, reject) => {
+            readinessTimer = setTimeout(() => reject(new Error('upload slot was not acquired')), 1500);
+          })]);
+        } finally { clearTimeout(readinessTimer); }
+        client.destroy();
+        await new Promise<void>((resolve, reject) => {
+          const poll = setInterval(() => {
+            if (Reflect.get(library.indexJobs, 'uploads') === 0) {
+              clearInterval(poll); clearTimeout(deadline); resolve();
+            }
+          }, 5);
+          const deadline = setTimeout(() => {
+            clearInterval(poll); reject(new Error('upload abort was not released'));
+          }, 1500);
+        });
+      } finally { client.destroy(); mocked.mock.restore(); }
+    });
+    await t.test('database deadline returns a complete 503 for JSON and NDJSON requests', async () => {
+      const call = library.indexJobs.call.bind(library.indexJobs);
+      const worker = Reflect.get(library.indexJobs, 'worker');
+      // Suppress the database reply while exercising the real RPC deadline/cleanup.
+      const stalled = t.mock.method(worker, 'postMessage', () => {});
+      const mocked = t.mock.method(library.indexJobs, 'call', (...[op, data, transfer]: Parameters<typeof call>) => call(op, data, transfer, 10));
+      try {
+        await busy(endpoint, {}, '索引数据库操作超时，请稍后重试。');
+        // Closed service is another pre-header 503, including an NDJSON request.
+        assert.equal(Reflect.get(library.indexJobs, 'pending').size, 0);
+        stalled.mock.restore();
+        await library.indexJobs.close();
+        await busy(endpoint, { headers: { accept: 'application/x-ndjson' } }, '索引服务已关闭。');
+      } finally { mocked.mock.restore(); stalled.mock.restore(); }
+    });
+  } finally {
+    server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve()));
+    await library.close(); await rm(root, { recursive: true, force: true });
   }
 });

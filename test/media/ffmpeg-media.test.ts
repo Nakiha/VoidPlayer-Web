@@ -72,6 +72,14 @@ test('WASM fallback handles an MPEG-2 TS sample mediabunny cannot demux', async 
     const after = await source.framesAfter(0, 2);
     assert.equal(after.length, 2);
     assert.ok(Math.abs(after[0].ptsUs - 16667) <= 2 && Math.abs(after[1].ptsUs - 33333) <= 2);
+    assert.ok(source.framesFollowing, 'actual FFmpeg source supplies strict playback successors');
+    const stream=source.framesFollowing!(0),sequence:number[]=[];
+    for(let i=0;i<3;i++){const next=await stream.next();assert.equal(next.done,false);sequence.push(next.value!.ptsUs);next.value!.close();}
+    await stream.return(undefined);
+    const resumed=source.framesFollowing!(sequence.at(-1)!);const following=await resumed.next();assert.equal(following.done,false);
+    assert.ok(following.value!.ptsUs>sequence.at(-1)!);assert.ok(Math.abs(following.value!.ptsUs-66667)<=2);
+    following.value!.close();await resumed.return(undefined);assert.ok(Math.abs(sequence[0]-16667)<=2);assert.ok(Math.abs(sequence[2]-50000)<=2);
+    assert.equal((await source.framesFollowing!(source.info.durationUs).next()).done,true);
     // Backward/random access must recover through a fresh GOP decode.
     const late = await source.frameAt(5000000);
     const back = await source.frameAt(0);
