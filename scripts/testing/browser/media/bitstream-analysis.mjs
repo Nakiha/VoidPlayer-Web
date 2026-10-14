@@ -815,6 +815,15 @@ await withBrowserFixture(
             await call('seek_review', { ptsUs: 0 });
           }
           const report = await call("benchmark_review", { durationMs: 2000 });
+          // Persist each row before asserting: a no-presentation report has no
+          // track measurements and must produce a useful failure, not a TypeError.
+          const playbackEvidence = { engine, input, decoding, fixture: row.fixture, report };
+          const drawn = report.measurements.tracks.A?.drawn ?? 0;
+          if (report.error !== null || report.staleAfterPause || drawn === 0) {
+            playbackEvidence.state = await call('get_review_session');
+            playbackEvidence.logs = await call('get_review_logs', { level: 'debug', limit: 2000 });
+          }
+          await writeFile(artifact(`playback-${input}-${decoding}-${row.codec}.json`), JSON.stringify(playbackEvidence, null, 2));
           const playbackRow = {
             codec: row.codec,
             input,
