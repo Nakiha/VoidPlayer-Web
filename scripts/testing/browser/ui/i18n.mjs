@@ -87,13 +87,40 @@ await withBrowserFixture({caseName:'i18n',engine,pageOptions:{viewport:{width:12
  assert.equal(await tooltip.evaluate(e=>document.activeElement===e),true,'scroll does not move keyboard focus');
  await page.evaluate(()=>{window.__tooltipEventsAbort.abort();HTMLElement.prototype.hidePopover=window.__tooltipOriginalHide;window.setTimeout=window.__tooltipOriginalTimeout;const port=document.querySelector('#track-properties');port.style.maxHeight=window.__tooltipOriginalMaxHeight;port.scrollTop=0;});
  await writeFile(artifact('tooltip-report.json'),JSON.stringify(tooltipEvidence,null,2));
+ // A no-preview card is a real transient state: the paused-frame backfill
+ // replaces its text with an image after JPEG encoding. Hold that async boundary
+ // while checking both translations, then release and verify the real image.
+ await page.evaluate(()=>{
+  const original=HTMLCanvasElement.prototype.toBlob;
+  const pending=[];window.__previewEvents=[];
+  window.__recordPreview=label=>{const e=window.__emptyThumbnail;window.__previewEvents.push({at:performance.now(),label,lang:document.documentElement.lang,connected:e?.isConnected,text:e?.textContent,image:e?.querySelector('img')?{complete:e.querySelector('img').complete,naturalWidth:e.querySelector('img').naturalWidth,alt:e.querySelector('img').alt}:null});};
+  HTMLCanvasElement.prototype.toBlob=function(callback,type,quality){
+   if(type==='image/jpeg'&&this.width===320&&quality===.78){pending.push({canvas:this,callback,type,quality});window.__recordPreview('encode-held');return;}
+   return original.call(this,callback,type,quality);
+  };
+  window.__heldPreviewCount=()=>pending.length;
+  window.__releasePreviews=()=>{HTMLCanvasElement.prototype.toBlob=original;for(const job of pending.splice(0))original.call(job.canvas,job.callback,job.type,job.quality);window.__recordPreview('encode-released');};
+ });
  await page.evaluate(()=>window.voidPlayer.addMark({slot:'A',text:'',drawings:[{id:'empty-preview',tool:'rect',color:'#ff3b30',strokeWidth:4,points:[{x:.2,y:.2},{x:.4,y:.4}]}]}));
  await page.locator('#toggle-marks').click();
  const emptyThumbnail=page.locator('.mark-thumbnail').filter({hasText:'No preview'});
  await emptyThumbnail.waitFor();await emptyThumbnail.evaluate(e=>{window.__emptyThumbnail=e;});
- await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'暂无预览');
- await switchLanguage('en');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'No preview');
- assert.equal(await page.evaluate(()=>window.__emptyThumbnail.isConnected),true);
+ try {
+  await page.waitForFunction(()=>window.__heldPreviewCount()>0);
+  assert.equal(await page.evaluate(()=>window.__emptyThumbnail.querySelector('img')),null,'fixture retains the no-preview branch while encoding is pending');
+  await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'暂无预览');
+  await page.evaluate(()=>window.__recordPreview('Chinese-placeholder'));
+  await switchLanguage('en');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.textContent),'No preview');
+  await page.evaluate(()=>window.__recordPreview('English-placeholder'));
+  assert.equal(await page.evaluate(()=>window.__emptyThumbnail.isConnected),true);
+ } finally { await page.evaluate(()=>window.__releasePreviews()); }
+ await page.waitForFunction(()=>{const image=window.__emptyThumbnail.querySelector('img');return image?.complete&&image.naturalWidth>0;});
+ assert.equal(await page.evaluate(()=>window.__emptyThumbnail.isConnected),true,'backfill updates the original thumbnail node');
+ await page.evaluate(()=>window.__recordPreview('image-ready'));
+ await switchLanguage('zh-CN');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.querySelector('img').alt),'标注画面');
+ await switchLanguage('en');assert.equal(await page.evaluate(()=>window.__emptyThumbnail.querySelector('img').alt),'Annotated frame');
+ await page.evaluate(()=>window.__recordPreview('English-image'));
+ await writeFile(artifact('thumbnail-transition.json'),JSON.stringify(await page.evaluate(()=>window.__previewEvents),null,2));
  await page.locator('#settings-open').click();await page.locator('#settings-tab-workspace').click();
  await page.locator('#saved-workspace-name').fill('未保存 Workspace name');await page.locator('#saved-workspace-name').evaluate(e=>{e.focus();e.setSelectionRange(2,6);window.__edit=e;});
  await switchLanguage('zh-CN');

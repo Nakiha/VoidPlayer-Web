@@ -1,0 +1,44 @@
+{
+  "kind": "actual-backfill-race-reproduction",
+  "base": "fd5a86f40fb6384031db9988e725690bd0a247fb",
+  "engine": "chromium",
+  "delayMs": 400,
+  "assertion": {
+    "expected": "No preview",
+    "actual": ""
+  },
+  "events": [
+    {
+      "at": 1139.800000011921,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "connected": true,
+      "text": "暂无预览",
+      "image": null
+    },
+    {
+      "at": 1451.2450000047684,
+      "label": "mutation",
+      "lang": "zh-CN",
+      "connected": true,
+      "text": "",
+      "image": {
+        "complete": false,
+        "naturalWidth": 0,
+        "alt": "标注画面"
+      }
+    },
+    {
+      "at": 1575.2450000047684,
+      "label": "mutation",
+      "lang": "en",
+      "connected": true,
+      "text": "",
+      "image": {
+        "complete": true,
+        "naturalWidth": 320,
+        "alt": "Annotated frame"
+      }
+    }
+  ]
+}
