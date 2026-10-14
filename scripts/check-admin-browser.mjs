@@ -24,7 +24,8 @@ try {
   const log = await uploaded.json(); assert.equal(uploaded.status, 201);
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true });
   const context = await browser.newContext({locale:'zh-CN',  viewport: { width: 1200, height: 820 }, reducedMotion: 'reduce', colorScheme: 'light' });
-  const player = await context.newPage(); const errors = [];
+  const player = await context.newPage(); const errors = [],clockTrace=[];let clockPhase='real-ui';
+  context.on('requestfailed',request=>{let owner='unknown';try{owner=request.frame().page()===player?'player':'admin';}catch{}clockTrace.push({phase:clockPhase,event:'requestfailed',page:owner,url:request.url(),failure:request.failure(),at:Date.now()});});
   player.on('pageerror', e => errors.push(e.message));
   await player.goto(base); await chooseTestGuest(player); await player.waitForFunction(() => document.getElementById('server-status')?.dataset.state === 'connected');
   await player.locator('#server-status').hover();
@@ -172,11 +173,18 @@ try {
   const backBox = await page.getByRole('link', { name: '返回播放器', exact: true }).boundingBox();
   assert.ok(backBox.x >= 0 && backBox.x + backBox.width <= 390, 'mobile return link stays inside the viewport');
   // The entry is always a link, even for a non-admin or an unavailable service.
+  await player.waitForLoadState('networkidle');
   await player.clock.install();
   let healthReads = 0;
   await player.route('**/api/health', async route => { healthReads++; await route.fulfill({ json: { service: 'voidplayer-media', capabilities: { admin: false } } }); });
   await player.reload();
   await player.waitForFunction(() => document.querySelector('#server-status')?.dataset.state === 'connected');
+  // Settle real library IO before pausing the page clock. Advancing a whole
+  // poll interval in one leap can fire an unrelated request's10s abort timer
+  // while its actual localhost response is still in flight.
+  await player.waitForLoadState('networkidle');
+  await player.clock.pauseAt(new Date(Date.now()+1000));
+  const advancePoll=async()=>{for(const ms of [5000,5100]){clockTrace.push({phase:clockPhase,event:'advance',ms,at:Date.now()});await player.clock.runFor(ms);await player.waitForLoadState('networkidle');}};
   const beforeClick = healthReads;
   const [management] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   await management.getByRole('heading', { name: '概览', exact: true }).waitFor();
@@ -185,14 +193,15 @@ try {
   await management.close();
   await player.bringToFront();
   const beforePoll = healthReads;
-  await player.clock.runFor(10100);
+  clockPhase='connected-poll';await advancePoll();
   await player.waitForFunction(() => document.querySelector('#server-status')?.dataset.state === 'connected');
   assert.ok(healthReads > beforePoll, 'connection polling continues automatically');
   await player.route('**/api/health', route => route.fulfill({ status: 503, json: {} }));
-  await player.clock.runFor(10100);
+  clockPhase='disconnected-poll';await advancePoll();
   await player.waitForFunction(() => document.querySelector('#server-status')?.dataset.state === 'disconnected');
   const [offlineAdmin] = await Promise.all([context.waitForEvent('page'), player.locator('#server-status').click()]);
   await offlineAdmin.waitForURL(base + '/admin'); await offlineAdmin.close();
+  if(errors.length)console.error(JSON.stringify({browserName,clockPhase,errors,clockTrace}));
   assert.deepEqual(errors, []);
   await context.close();
   console.log(`PASS admin ${browserName}: new-tab entry, real status, offline roots, persistent root editing, cross-tab theme, JSON/download/delete, four bounded measurements and cancellation, aligned directory fields, status recovery, and 390/720/1200/1280/1512 px layout`);

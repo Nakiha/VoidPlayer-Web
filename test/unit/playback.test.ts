@@ -115,7 +115,8 @@ test('suspending an in-flight oversized frame retains its successor without pull
   q.stop(); await q.done; assert.equal(closed, produced);
 });
 
-test('readiness diagnostics keep missing advancement/presentation explicit and retain the first actual draw time', () => {
+test('readiness diagnostics keep missing advancement/presentation explicit and retain the first actual draw time', t => {
+  t.mock.method(performance,'now',()=>1000);
   const measurements=new PlaybackMeasurements();
   assert.equal(measurements.snapshot().firstAdvanceMs,null);assert.equal(measurements.snapshot().firstPresentationMs,null);
   measurements.firstAdvanceMs=250;
