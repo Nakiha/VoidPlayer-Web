@@ -22,7 +22,8 @@ test('final sampling failure preserves evidence and releases every diagnostic ho
 test('trace/profile/state diagnostic failures do not replace the original benchmark error or discard its artifact',async()=>{
   const source=await readFile('scripts/testing/browser/media/bitstream-analysis.mjs','utf8');
   const start=source.indexOf("          if (row.container === 'ts') await page.evaluate(beginPlaybackTrace);");
-  const end=source.indexOf('          rows.push({',start);
+  const end=source.indexOf('          const playbackRow = {',start);
+  assert.ok(start >= 0 && end > start, 'diagnostic block boundaries must exist');
   const body=source.slice(start,end);
   const original=new Error('original benchmark failed'),written=[];
   const page={evaluate:async fn=>{if(fn===beginPlaybackTrace)return;throw new Error('diagnostic finish failed');},context:()=>({newCDPSession:async()=>({send:async method=>{if(method==='Profiler.stop')throw new Error('stop failed');},detach:async()=>{throw new Error('detach failed');}})})};

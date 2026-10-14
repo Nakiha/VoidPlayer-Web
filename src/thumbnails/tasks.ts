@@ -109,10 +109,15 @@ function encodePixels(accepted: AcceptedOffer): Promise<{ width: number; height:
     let done = false;
     const finish = (result: { width: number; height: number; blob: Blob } | null) => {
       if (done) return;
-      done = true; worker.terminate(); accepted.onExpire = undefined; resolve(result);
+      done = true;
+      worker.onmessage = worker.onerror = worker.onmessageerror = null;
+      accepted.onExpire = undefined;
+      worker.terminate();
+      resolve(result);
     };
     accepted.onExpire = () => finish(null);
     worker.onerror = () => finish(null);
+    worker.onmessageerror = () => finish(null);
     worker.onmessage = event => {
       const value = event.data;
       finish(value ? { width: value.width, height: value.height, blob: new Blob([value.bytes], { type: 'image/jpeg' }) } : null);
