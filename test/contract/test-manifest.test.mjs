@@ -234,3 +234,65 @@ test('canonical commands bypass compatibility aliases and reject ambiguous execu
     assert.throws(()=>validateManifest(copy),/canonical implementation exactly once/);
   }
 });
+
+test('legacy basic-browser npm alias selects exactly its original engine case on every platform', () => {
+  const root = path.resolve(import.meta.dirname, '../..');
+  const command = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts['test:browser'].split(' ');
+  assert.equal(command[0], 'node', 'npm alias must delegate preparation and execution to the runner');
+  for (const platform of ['linux', 'darwin', 'win32']) for (const engine of [undefined, 'webkit', 'chromium']) {
+    const selection = selectCases({ alias: 'test:browser', engine, platform });
+    assert.deepEqual(selection.selected.map(row => row.id), [`browser-browser-${engine ?? 'webkit'}`]);
+    assert.deepEqual(selection.excluded, []);
+    const row = selection.selected[0];
+    assert.deepEqual(row.command, ['node', 'scripts/check-browser.mjs', engine ?? 'webkit']);
+    assert.equal(row.build, true);
+    assert.equal(row.required, true);
+    assert.equal(row.timeoutMs, 300000);
+  }
+  for (const engine of [undefined, 'webkit', 'chromium']) {
+    const result = spawnSync(process.execPath, [...command.slice(1), ...(engine ? [engine] : []), '--list'], { cwd: root, encoding: 'utf8', timeout: 30000 });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), selectCases({ alias: 'test:browser', engine }));
+  }
+  for (const options of [{ alias: 'test:unknown' }, { alias: 'test:browser', engine: 'chrome' },
+    { alias: 'test:browser', suite: 'browser' }, { alias: 'test:browser', caseIds: ['node-i18n'] }]) assert.throws(() => selectCases(options));
+});
+
+test('npm alias bindings reject missing/duplicate defaults, engine ambiguity and independent package execution', () => {
+  const row = manifest => manifest.cases.find(row => row.id === 'browser-browser-webkit');
+  const other = manifest => manifest.cases.find(row => row.id === 'browser-browser-chromium');
+  for (const mutate of [
+    manifest => { row(manifest).npmAliases[0].default = false; },
+    manifest => { other(manifest).npmAliases[0].default = true; },
+    manifest => { other(manifest).engines = ['webkit']; },
+    manifest => { row(manifest).npmAliases = {}; },
+    manifest => { row(manifest).npmAliases[0].name = '../unsafe'; },
+    manifest => { delete row(manifest).npmAliases[0].default; },
+    manifest => { for (const item of [row(manifest), other(manifest)]) item.npmAliases[0].name = 'test:unknown'; },
+  ]) { const manifest = clone(); mutate(manifest); assert.throws(() => validateManifest(manifest), /npm alias/); }
+});
+
+test('CI coverage expands aliases through the actual runner parser instead of assuming their default engine', () => {
+  const manifest = { ...testManifest, cases: testManifest.cases.filter(row => row.npmAliases?.some(binding => binding.name === 'test:browser')) };
+  const workflow = 'jobs:\n  basic:\n    strategy:\n      matrix:\n        engine: [chromium, webkit]\n    steps:\n      - run: node scripts/run-tests.mjs --alias test:browser ${{ matrix.engine }}\n';
+  assert.equal(validateCiBrowserCoverage([workflow], manifest), true);
+  const defaultOnly = 'jobs:\n  basic:\n    steps:\n      - run: node scripts/run-tests.mjs --alias test:browser\n';
+  assert.throws(() => validateCiBrowserCoverage([defaultOnly], manifest), /browser-browser-chromium/);
+  assert.throws(() => validateCiBrowserCoverage([workflow.replace('chromium, webkit', 'chrome, webkit')], manifest), /unsupported engine/);
+});
+
+test('legacy npm filter arguments are forwarded literally and cannot masquerade as full CI coverage', () => {
+  const arg = '--filter=analysis recovery';
+  const selection = selectCases({ alias: 'test:browser', engine: 'chromium', caseArguments: [arg] });
+  assert.deepEqual(selection.selected[0].command, ['node', 'scripts/check-browser.mjs', 'chromium', arg]);
+  assert.equal(selection.selected[0].executionScope, 'filtered');
+  const root = path.resolve(import.meta.dirname, '../..');
+  const command = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')).scripts['test:browser'].split(' ');
+  const result = spawnSync(process.execPath, [...command.slice(1), 'chromium', arg, '--list'], { cwd: root, encoding: 'utf8', timeout: 30000 });
+  assert.equal(result.status, 0, result.stderr); assert.deepEqual(JSON.parse(result.stdout), selection);
+  assert.throws(() => selectCases({ alias: 'test:browser', caseArguments: ['--unsupported=value'] }), /Unsupported case argument/);
+  const filteredWorkflow = 'jobs:\n  basic:\n    steps:\n      - run: node scripts/run-tests.mjs --alias test:browser chromium --filter=partial\n';
+  assert.throws(() => validateCiBrowserCoverage([filteredWorkflow]), /cannot claim a filtered/);
+  const bad = clone(); bad.cases.find(row => row.id === 'browser-browser-webkit').npmAliases[0].argumentPrefixes = ['../unsafe'];
+  assert.throws(() => validateManifest(bad), /npm alias binding/);
+});

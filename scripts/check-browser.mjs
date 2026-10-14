@@ -38,6 +38,7 @@ try {
   const base = `http://127.0.0.1:${server.address().port}`;
   browser = await (browserName === 'webkit' ? webkit : chromium).launch({ headless: true,...(browserName==='chromium'&&process.env.CHROME_EXECUTABLE_PATH?{executablePath:process.env.CHROME_EXECUTABLE_PATH}:{}) });
 
+  let completedChecks = 0;
   async function check(name, run, options = {}) {
     const filter = process.argv.find(arg => arg.startsWith('--filter='))?.slice(9);
     if (filter && !name.includes(filter)) return;
@@ -52,7 +53,7 @@ try {
       await run(page);
       await settle(page);
       assert.deepEqual(errors, [], `${name}: unexpected browser errors`);
-      console.log(`PASS ${name}`);
+      completedChecks++; console.log(`PASS ${name}`);
     } finally { await page.close(); }
   }
   async function settle(page) {
@@ -1324,6 +1325,7 @@ try {
     await settle(page);
     assert.equal(await page.locator('#grid-A').evaluate(e=>Number(e.dataset.gridDraws)),after,'no continuous redraw while paused');
   });
+  assert.ok(completedChecks > 0, 'Browser filter matched no checks');
   console.log(`Browser regressions passed (${browserName}); status screenshots saved under artifacts/source-activity.`);
 } finally {
   try { await browser?.close(); }
