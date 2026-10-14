@@ -34,3 +34,6 @@ export function workerProtocolTypeChecks(ffmpeg: WorkerRpc, packet: WorkerRpc<Pa
   // @ts-expect-error An extraction response must contain its frame descriptor and pixels.
   wasmReply({ id: 1, type: 'extract', ctx: 1, index: 0 }, { pixels: new ArrayBuffer(0) });
 }
+
+// @ts-expect-error TS decoding must carry the same source/build namespace
+const missingTsIdentity: import('../../src/worker-protocol.ts').WorkerRequest<import('../../src/worker-protocol.ts').PacketCommands,'init'> = {id:1,type:'init',container:'ts',input:{file:new Blob()},glueURL:'core.js'};
