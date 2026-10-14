@@ -5,13 +5,16 @@ import type { NativeAnalysisCommands, NativeAnalysisReply } from './native-proto
 export class NativeAnalysisClient {
   private worker?: Worker;
   private opening?: Promise<Worker>;
+  private detachListeners?:()=>void;
+  private factory?:()=>Worker;
+  constructor(factory?:()=>Worker){this.factory=factory;}
   private nextId = 0;
   private failure?: Error;
   private pending = new Map<number, { resolve(value: unknown): void; reject(error: unknown): void; cleanup(): void }>();
 
   private open() {
     return this.opening ??= (async () => {
-      const worker = typeof Worker !== 'undefined'
+      const worker = this.factory ? this.factory() : typeof Worker !== 'undefined'
         ? new Worker(new URL('./native-worker.ts', import.meta.url), { type: 'module' })
         : new (await import('node:worker_threads')).Worker(new URL('./native-worker.ts', import.meta.url)) as unknown as Worker;
       if (this.failure) { void worker.terminate(); throw this.failure; }
@@ -23,13 +26,18 @@ export class NativeAnalysisClient {
         if (reply.ok) request.resolve(reply.data); else { const error = new Error(reply.error); error.name = reply.name ?? 'Error'; request.reject(error); }
       };
       if (typeof worker.addEventListener === 'function') {
-        worker.addEventListener('message', event => receive(event.data));
-        worker.addEventListener('error', event => this.close(new Error(event.message)));
-        worker.addEventListener('messageerror', () => this.close(new Error('Invalid native analysis worker reply.')));
+        const message=(event:MessageEvent)=>receive(event.data);
+        const error=(event:ErrorEvent)=>this.close(new Error(event.message));
+        const invalid=()=>this.close(new Error('Invalid native analysis worker reply.'));
+        worker.addEventListener('message',message);worker.addEventListener('error',error);worker.addEventListener('messageerror',invalid);
+        this.detachListeners=()=>{worker.removeEventListener('message',message);worker.removeEventListener('error',error);worker.removeEventListener('messageerror',invalid);};
       } else {
         const node = worker as unknown as import('node:worker_threads').Worker;
-        node.on('message', receive); node.on('error', error => this.close(error instanceof Error ? error : new Error(String(error))));
-        node.on('exit', code => this.close(new Error(`Native analysis worker exit ${code}.`)));
+        const error=(error:unknown)=>this.close(error instanceof Error?error:new Error(String(error)));
+        const exit=(code:number)=>this.close(new Error(`Native analysis worker exit ${code}.`));
+        const invalid=()=>this.close(new Error('Invalid native analysis worker reply.'));
+        node.on('message',receive);node.on('error',error);node.on('exit',exit);node.on('messageerror',invalid);
+        this.detachListeners=()=>{node.off('message',receive);node.off('error',error);node.off('exit',exit);node.off('messageerror',invalid);};
       }
       return worker;
     })();
@@ -59,6 +67,13 @@ export class NativeAnalysisClient {
     if (this.failure) return;
     this.failure = error;
     for (const request of this.pending.values()) { request.cleanup(); request.reject(error); }
-    this.pending.clear(); void this.worker?.terminate();
+    this.pending.clear();
+    const detach=this.detachListeners;this.detachListeners=undefined;
+    const worker=this.worker;this.worker=undefined;
+    // Keep Node's error handler until termination completes so a late event
+    // cannot become an unhandled EventEmitter error. Browser terminate is synchronous.
+    try {const ended=worker?.terminate();if(ended&&typeof (ended as unknown as Promise<unknown>).then==='function')
+      void Promise.resolve(ended).then(()=>detach?.(),()=>detach?.());else detach?.();}
+    catch(error){detach?.();throw error;}
   }
 }
