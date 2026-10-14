@@ -279,3 +279,9 @@ npm run test:fate:browser
 ### 媒体与 Worker 的翻译依赖边界
 
 `node-i18n-build` 使用 `scripts/testing/i18n-architecture.mjs` 检查 media、presenter、FFmpeg/packet Worker 与实际 `src/thumbnails/pixel-worker.ts` 根入口。必检根入口或递归依赖缺失必须报出路径并失败。扫描相对运行时 import、re-export 和字符串字面量 dynamic import；type-only import/export 与包依赖不递归。Worker URL 单独列为根入口，计算式 import、require 和未列出的 Worker URL 不属于这个扫描器的覆盖范围。临时工程负例验证缺失入口、缩略图直接/间接引入翻译依赖均被拒绝；现有 progress callback 限制保持。
+
+### 可丢弃像素缩略图 Worker
+
+`src/thumbnails/tasks.ts` 每个像素候选拥有一个一次性 browser Worker。正常结果、`error`、`messageerror`、`postMessage` 抛错或候选到期均走单次结束：解除三个事件属性与到期回调，终止该 Worker，随后仅释放候选自己的帧和预算、清除 in-flight。失败不会标记 completed，也不触碰播放原帧或下一任务；已捕获的迟到回调不能再次提交或清理。既有 hold deadline、队列上限和复制/transfer 路径保持。
+
+`node-thumbnail-offer` 从实际 offer/task 入口验证这些分支、成功回包、到期计时器清理与恢复任务。受控 browser-like Worker 使用真实 `structuredClone` transfer，验证播放像素数组仍完整；测试主动派发 `messageerror`，并不声称复现浏览器底层损坏消息。浏览器缩略图套件继续验证实际编码、存储与显示；此一次性客户端不增加 Node Worker 适配层。
