@@ -150,3 +150,42 @@ test('build Worker messageerror rejects joined demand and releases the queued in
     assert.equal((await jobs.startBuild(request).promise).built, true);
   } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
 });
+
+for (const terminal of ['messageerror', 'error'] as const) {
+  test(`settled build ${terminal} ignores queued progress/update messages without allocating a timer`, async t => {
+    const root = await mkdtemp(path.join(tmpdir(), 'vp-build-late-progress-'));
+    const mediaRoot = path.join(root, 'media'); await mkdir(mediaRoot);
+    const bytes = syntheticFlv(), filePath = path.join(mediaRoot, 'one.flv'); await writeFile(filePath, bytes);
+    const library = new MediaLibraryIndex([mediaRoot], { watch: false });
+    let timeout;
+    try {
+      await library.refresh(); const entry = library.browse().entries[0]; assert.ok(entry.version);
+      const jobs = library.indexJobs, epoch = await jobs.call('epoch') as number;
+      let progress = 0, updates = 0;
+      timeout = t.mock.method(globalThis, 'setTimeout');
+      const active = jobs.startBuild({ id: entry.id, version: entry.version, size: entry.size, filePath, epoch, identity: FLV_MEDIA_INDEX_IDENTITY },
+        { onProgress: () => progress++, onUpdate: () => updates++ });
+      const rejected = assert.rejects(active.promise, /injected|反序列化/);
+      const worker = [...(jobs as any).buildWorkers][0] as import('node:worker_threads').Worker;
+      const exited = new Promise<void>(resolve => worker.once('exit', () => resolve()));
+      const message = (packets: number) => ({ type: 'progress', data: { phase: 'scan', packets, scannedBytes: packets * 10, totalBytes: bytes.length } });
+      worker.emit('message', message(1)); assert.equal(progress, 1);
+      worker.emit(terminal, new Error('injected mid-build failure'));
+      const allocated = timeout.mock.callCount(), before = { progress, updates };
+      // Termination is asynchronous. Node may drain queued messages, and all
+      // paths sharing finish must ignore them, including non-progress updates.
+      for (let packets = 2; packets < 21; packets++) worker.emit('message', message(packets));
+      for (const type of ['manifest', 'batch', 'complete']) worker.emit('message', { type, data: {} });
+      assert.deepEqual({ progress, updates }, before);
+      assert.equal(timeout.mock.callCount(), allocated, 'a settled build must never resurrect its idle timer');
+      await rejected; await exited; await jobs.close();
+      assert.equal(timeout.mock.callCount(), allocated);
+      assert.equal((jobs as any).buildWorkers.size, 0);
+    } finally {
+      await library.close();
+      // Negative runs must not leave the known resurrected watchdog alive.
+      for (const call of timeout?.mock.calls ?? []) clearTimeout(call.result);
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}

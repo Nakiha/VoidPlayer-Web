@@ -235,6 +235,7 @@ export class FrameIndexJobs {
       resetIdleTimer();
       absoluteTimer = setTimeout(() => finish(new AdminError(503, '媒体索引构建超过绝对安全期限。')), policy.absoluteTimeoutMs);
       worker.on('message', (result: { type?: string; data?: unknown; value?: unknown; error?: string; status?: number }) => {
+        if (settled) return;
         if (result.type === 'progress') {
           const progress = result.data as IndexBuildProgress;
           if (progress.packets > latestPackets || progress.scannedBytes > latestScannedBytes) {
