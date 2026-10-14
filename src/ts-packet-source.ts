@@ -41,7 +41,7 @@ export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
-    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.exactPictureMapping !== index.exactPictureMapping || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
+    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.exactPictureMapping !== index.exactPictureMapping || known.recovery !== index.recovery || known.transportOffset !== index.transportOffset || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
       || known.build !== index.build || known.schema !== index.schema || known.packets.length !== index.packets.length
       || known.configuration.length !== index.configuration.length || known.configuration.some((v,i)=>v!==index.configuration[i])) return false;
     return known.packets.every((p,i)=>{

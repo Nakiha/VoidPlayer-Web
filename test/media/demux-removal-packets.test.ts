@@ -60,3 +60,21 @@ for(const threads of [1,2])test(`JS ${name} ST/MT ${threads}: retain all ${count
   for(const position of [count-2,3,0,count-1]){const frame=await engine.extract(position);assert.equal(frame.packetPicture,undefined);assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected.get(position)!),`seek native ${position}`);frame.frame?.close();}
  }finally{engine.close();}
 });
+
+for(const threads of [1,2])test(`JS broadcast loewe TS ${threads}: preserve six actual native outputs, physical offsets and original clocks`,async()=>{
+ const path=resolve('fixtures/fate/mpegts--loewe.ts'),bytes=await readFile(path),{createHash}=await import('node:crypto');
+ assert.equal(createHash('sha256').update(bytes).digest('hex'),'f93d2b5d78e4f04027c635e8e1dd866dcf35c233a0fa508f3bcc6a656fba286e');
+ const engine=new JsContainerEngine({file:new Blob([bytes])},'broadcast-loewe');
+ try{
+  const suffix=threads===1?'':'-mt',opened=await engine.open(pathToFileURL(resolve(`public/vendor/voidplayer-core/voidplayer-core${suffix}.js`)).href,await readFile(`public/vendor/voidplayer-core/voidplayer-core${suffix}.wasm`),true,threads);
+  assert.equal(opened.demuxBackend,'js-ts-packets');assert.equal(opened.indexIntegrity,'prefix');assert.match(opened.indexWarning!,/身份未验证/);
+  const index=engine.packetIndex!;assert.equal(index.kind,'js-ts-packets');if(index.kind!=='js-ts-packets')throw Error('TS');assert.equal(index.transportOffset,1);assert.equal(index.exactPictureMapping,false);assert.equal(index.recovery,'hevc-late-psi');assert.equal(index.packets[0].pesOffset,30457);
+  const {parseTsPacketIndex}=await import('../../src/ts-packet-index.ts');assert.ok(parseTsPacketIndex(structuredClone(index),index.sourceVersion,bytes.length));
+  const {readTsPesClocks}=await import('../../src/ts-packet-source.ts'),raw=await readTsPesClocks({size:Math.floor((bytes.length-1)/188)*188,async read(at,n){return bytes.subarray(at+1,at+1+n);},close(){}},index.pid,new AbortController().signal);
+  for(const p of index.packets){assert.deepEqual({pts:p.timing.pts,dts:p.timing.dts},raw.get(p.pesOffset!-1));assert.equal(bytes[p.pesOffset!],0x47);}
+  let frame:Awaited<ReturnType<typeof engine.next>>=await engine.extract(0),last=-Infinity,count=0;const first=frame!,expected=nativeFrames(path,[0,1,2,3,4,5],first.description.sourcePixelFormat!,first.pixels!.byteLength),times=[];
+  while(frame){assert.ok(frame.pts>last);assert.equal(frame.packetPicture,undefined);assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected.get(count)!),`native output ${count}`);times.push(frame.pts);last=frame.pts;count++;frame.frame?.close();assert.ok(count<=6);frame=await engine.next(last);}
+  assert.equal(count,6);for(const position of [5,0,3]){const frame=await engine.at(times[position]);assert.equal(frame.pts,times[position]);assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected.get(position)!));frame.frame?.close();}
+  const {RecoveredHevcTsPacketSource}=await import('../../src/recovered-hevc-ts-packet-source.ts');const reader={size:bytes.length,async read(at:number,n:number){return bytes.subarray(at,at+n);},close(){}};const source=new RecoveredHevcTsPacketSource(reader,index.sourceVersion,new AbortController().signal);try{await source.open(index);assert.equal(source.indexReused,true);assert.deepEqual(await source.readUnit(0),await source.readUnit(0));}finally{source.close();}
+ }finally{engine.close();}
+});

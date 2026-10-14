@@ -1,6 +1,6 @@
 /** Versioned JS TS metadata shape; complete-source verification belongs to TsPacketSource. */
 export const JS_TS_INDEX_BYTES = 64 * 1024 * 1024;
-export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v5';
+export const TS_PACKET_BUILD = 'mediabunny-1.55.7-ts-packets-v6';
 export interface TsPacketRecord {
   au: number;
   transportEnd?:number;
@@ -20,6 +20,9 @@ export interface TsPacketIndex {
   schema: 2;
   /** Playback packets are usable even when exact coding-picture mapping is unverified. */
   exactPictureMapping?: false;
+  /** Physical source alignment of bounded late-PSI broadcast recovery. */
+  transportOffset?: number;
+  recovery?: 'hevc-late-psi';
   /** Source parsing is terminal; damage is separate from enumeration state. */
   indexIntegrity?:'prefix';
   indexTruncatedAt?:number;
@@ -47,7 +50,11 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
     || !Array.isArray(doc.configuration) || !doc.configuration.length || doc.configuration.length > 4096 || !doc.configuration.every(n=>Number.isInteger(n)&&n>=0&&n<=255)
     || !Array.isArray(doc.packets) || !doc.packets.length || doc.packets.length > 250000) return;
   if (doc.completeness?.state !== 'complete' || doc.completeness.packets !== doc.packets.length) return;
-  if(doc.indexIntegrity!==undefined&&(doc.indexIntegrity!=='prefix'||!Number.isSafeInteger(doc.indexTruncatedAt)||doc.indexTruncatedAt!<188||doc.indexTruncatedAt!>=size||!Number.isSafeInteger(doc.transportLimit)||doc.transportLimit!==doc.indexTruncatedAt||doc.transportLimit!%188))return;
+  const alignment=doc.transportOffset??0;
+  if(!Number.isSafeInteger(alignment)||alignment<0||alignment>=188||alignment&&doc.exactPictureMapping!==false)return;
+  if(doc.recovery!==undefined&&(doc.recovery!=='hevc-late-psi'||doc.codec!=='hevc'||doc.exactPictureMapping!==false||doc.transportOffset===undefined))return;
+  if(doc.transportOffset!==undefined&&doc.recovery===undefined)return;
+  if(doc.indexIntegrity!==undefined&&(doc.indexIntegrity!=='prefix'||!Number.isSafeInteger(doc.indexTruncatedAt)||doc.indexTruncatedAt!<188||doc.indexTruncatedAt!>=size||!Number.isSafeInteger(doc.transportLimit)||doc.transportLimit!==doc.indexTruncatedAt||(doc.transportLimit!-alignment)%188))return;
   if(doc.indexIntegrity===undefined&&(doc.indexTruncatedAt!==undefined||doc.transportLimit!==undefined))return;
   if(doc.exactPictureMapping!==undefined&&doc.exactPictureMapping!==false)return;
   const times = new Set<number>();
@@ -57,11 +64,12 @@ export function parseTsPacketIndex(value: unknown, sourceVersion: string, size: 
       || au > 0 && p.locator <= doc.packets[au - 1].locator || !Number.isFinite(p.timestamp) || !Number.isSafeInteger(p.ptsUs) || Math.round(p.timestamp*1e6)!==p.ptsUs
       || !Number.isSafeInteger(p.durationUs) || p.durationUs < 0 || !Number.isSafeInteger(p.size) || p.size <= 0 || p.size > 32*1024*1024 || typeof p.key !== 'boolean'
       || times.has(p.ptsUs) || !p.timing || p.timing.timebase?.[0] !== 1 || p.timing.timebase?.[1] !== 90000) return;
-    if(doc.codec==='mpeg2video'&&(!Number.isSafeInteger(p.transportEnd)||p.transportEnd!<=p.locator||p.transportEnd!>size||p.transportEnd!%188||p.pesOffset!==p.locator))return;
+    if(p.transportEnd!==undefined&&(!Number.isSafeInteger(p.transportEnd)||p.transportEnd<=p.locator||p.transportEnd>size||(p.transportEnd-alignment)%188))return;
+    if(doc.codec==='mpeg2video'&&(!Number.isSafeInteger(p.transportEnd)||p.transportEnd!<=p.locator||p.transportEnd!>size||(p.transportEnd!-alignment)%188||p.pesOffset!==p.locator))return;
     if(doc.transportLimit!==undefined&&(p.pesOffset===null||p.pesOffset>=doc.transportLimit))return;
     times.add(p.ptsUs);
     for (const clock of [p.timing.pts,p.timing.dts]) if(clock!==null&&(!Number.isSafeInteger(clock)||clock<0||clock>=2**33))return;
-    if(p.pesOffset!==null&&(!Number.isSafeInteger(p.pesOffset)||p.pesOffset<0||p.pesOffset%188||p.pesOffset+188>size))return;
+    if(p.pesOffset!==null&&(!Number.isSafeInteger(p.pesOffset)||p.pesOffset<0||(p.pesOffset-alignment)%188||p.pesOffset+188>size))return;
     if(p.timing.pts!==null&&p.timing.dts!==null&&Math.abs(p.timing.pts-p.timing.dts)>2**32)return;
     if(p.timing.origin==='pes') {if(p.timing.pts===null||p.pesOffset===null||Math.round(p.timing.pts*1e6/90000)!==p.ptsUs)return;}
     else if(p.timing.origin!=='derived'||p.timing.pts!==null||p.timing.dts!==null)return;

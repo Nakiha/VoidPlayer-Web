@@ -11,7 +11,7 @@ const names=['h264.ts','hevc.ts','h264.mkv','hevc.mkv','hevc10.ts','hevc10.mkv',
 assert.ok(!filter||names.includes(filter),'known focused fixture');
 await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots:[path.join(repositoryRoot,'fixtures/js-container')]},async({page,ready,artifact})=>{
  const rows=[],errors=[],requests=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>requests.push({url:r.url(),method:r.method()}));
- const blobDiagnostics=[];await page.exposeFunction('__vpReportBlob',row=>blobDiagnostics.push(row));
+ const blobDiagnostics=[];page.on('pageerror',error=>blobDiagnostics.push({event:'pageerror',message:error.message,stack:error.stack,at:Date.now()}));await page.exposeFunction('__vpReportBlob',row=>blobDiagnostics.push(row));
  await page.addInitScript(()=>{
   window.__vpAnalysisQA=true;
   // Preserve actual URL/Worker behavior while recording which owner created

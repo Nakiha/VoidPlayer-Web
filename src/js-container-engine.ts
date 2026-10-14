@@ -14,8 +14,6 @@ import type { IndexProgress } from './worker-protocol.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { TsCombinationNotMigrated } from './ts-packet-source.ts';
 import { inspectCachedTracks } from './cached-track-metadata.ts';
-import { probeTsVideo } from './media-diagnostics.ts';
-import { staticTsPsi } from './ts-static-psi.ts';
 import {localJsSourceVersion,loadLocalJsIndex,saveLocalJsIndex} from './js-packet-index-cache.ts';
 import {loadServerJsIndex} from './js-packet-index-client.ts';
 
@@ -38,7 +36,6 @@ export class JsContainerEngine {
   private outputSize?: { width: number; height: number };
   private createNative:typeof nativeFlvDecoder;
   private createSoftware:typeof wasmFlvDecoder;
-  private checkPsi?: (bytes:Uint8Array)=>void;
   private prefix?:Uint8Array;
 
   constructor(input: RandomAccessInput, sourceVersion: string,
@@ -80,12 +77,8 @@ export class JsContainerEngine {
     // Retain a bounded startup window already needed by video indexing, so
     // optional AAC observation survives the full scan evicting early windows.
     if(tracks.audio.presence==='present')prefix=await this.reader.read(0,Math.min(1024*1024,this.reader.size));
-    let validPrefix=0;while(validPrefix+188<=prefix.length&&prefix[validPrefix]===0x47)validPrefix+=188;
-    this.checkPsi=staticTsPsi(prefix.subarray(0,validPrefix));
-    const codecs = probeTsVideo(prefix);
-    // Select one known video track; interleaved audio retains the same optional
-    // cache-only observer as the former container path, with its own cursor.
-    if(codecs.length!==1||!['H.264 / AVC','H.265 / HEVC','MPEG-2 Video'].includes(codecs[0]))throw new TsCombinationNotMigrated('initial product migration requires one declared H.264/HEVC video stream');
+    // TS source owns bounded synchronization/PSI recovery and validation.
+    // Decoder preference never selects a container fallback.
     this.prefix=prefix.slice();
     }
     let cached:JsPacketIndex|undefined;
@@ -95,7 +88,6 @@ export class JsContainerEngine {
     }
     const sourceReader={size:this.reader.size,read:async(at:number,length:number)=>{
       const bytes=await this.reader.read(at,length);
-      if(this.checkPsi&&at%188===0&&length%188===0){let valid=0;while(valid<bytes.length&&bytes[valid]===0x47)valid+=188;this.checkPsi(bytes.subarray(0,valid));}
       return bytes;
     },close:()=>this.reader.close()};
     this.source=this.format==='ts'?new TsContainerPacketSource(sourceReader,this.sourceVersion,this.controller.signal):new MatroskaPacketSource(sourceReader,this.sourceVersion,this.controller.signal);
@@ -138,7 +130,7 @@ export class JsContainerEngine {
         durationUs: this.index.firstPts + this.index.duration - this.primed.pts,
         times: this.index.order.map(au => this.index!.packets[au].pts - this.primed!.pts),
         seekAnchorCount: this.index.packets.filter(packet=>packet.key).length,
-        durations: this.index.durations,indexIntegrity:this.document.indexIntegrity==='prefix'?'prefix' as const:'complete' as const,indexTruncatedAt:this.document.indexTruncatedAt,indexWarning:this.document.indexIntegrity==='prefix'?'封装损坏：仅保留已确认的有效前段。':undefined };
+        durations: this.index.durations,indexIntegrity:this.document.indexIntegrity==='prefix'?'prefix' as const:'complete' as const,indexTruncatedAt:this.document.indexTruncatedAt,indexWarning:this.document.kind==='js-ts-packets'&&this.document.recovery?'广播采集恢复：保留原始时钟；部分尾包，画面身份未验证。':this.document.indexIntegrity==='prefix'?'封装损坏：仅保留已确认的有效前段。':undefined };
     } catch (error) { this.close(); throw error; }
   }
   private decoderInfo() {
@@ -198,7 +190,7 @@ export class JsContainerEngine {
     this.primed?.frame?.close(); this.primed = null;
     try { this.timeline?.close(); }
     finally {
-      this.timeline = undefined; this.document = undefined; this.index = undefined; this.statistics = undefined;this.prefix=undefined;this.checkPsi=undefined;
+      this.timeline = undefined; this.document = undefined; this.index = undefined; this.statistics = undefined;this.prefix=undefined;
       this.controller.abort();try{this.source?.close();}finally{this.reader.close();}
     }
   }

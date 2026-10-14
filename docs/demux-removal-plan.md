@@ -96,3 +96,28 @@ engines, portable packaging, original benchmark thresholds and measured
 cold/warm/late-seek IO/memory evidence. No statistical no-regression or physical
 hardware claim is inferred from headless results; unmeasured ledger fields stay
 null. Neither issue closure nor a release is requested by this draft group.
+
+
+### Review corrections
+
+Multi-slice AVC and coding MBAFF TS retain their original 25/50/50 decoded
+frames through JS packets. Every ST/MT frame matches the native oracle, and
+seeks/EOF remain covered. Such packet layouts carry `exactPictureMapping:false`;
+analysis rejects exact-picture requests, including after cache reuse. TS build
+v6 invalidates prior receipts and also binds broadcast recovery metadata.
+
+The unchanged FATE `mpegts--loewe.ts` has one leading byte, PSI at about96KiB,
+an initial undecodable GOP and a partial transport tail. Its bounded recovery
+reads at most1MiB to establish CRC-validated static PSI and selects a declared
+HEVC PID, then uses existing bounded PES reassembly, original clocks, actual
+in-band parameter sets and IRAP input. It retains physical source offsets;
+there is no container-WASM open. The six actual decoded outputs and seeks match
+the native oracle on ST/MT. Its partial capture warning and unverified picture
+identity are explicit. This does not admit arbitrary dynamic broadcast/live TS.
+
+The incremental browser regression now uses real asynchronous FLV indexing,
+with a validated128-packet analysis frontier and held playback completion. It
+retains the existing pending-prefix, completed-GOP, cancellation, continuation
+to300pictures and independent playback-state assertions. Multiple MP4 sample
+descriptions are supported by the sample-table adapter and no longer trigger
+the former FFmpeg streaming-index path.
