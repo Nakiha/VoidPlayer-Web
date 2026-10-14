@@ -426,11 +426,10 @@ export class AnalysisScheduler {
         };
         armTimer();
         const acknowledge = (value: unknown) => {
+          if (work.state !== 'running' || !work.consumers.size) return;
           try {
             worker.postMessage(value);
-          } catch {
-            /* A cancelled worker may already be gone. */
-          }
+          } catch (error) { reject(error); }
         };
         worker.on("message", async (m) => {
           if (m.type === 'cache') {
@@ -565,6 +564,7 @@ export class AnalysisScheduler {
           } else m.ok ? resolve() : reject(restoreFailure(m.reason, m.error));
         });
         worker.once("error", reject);
+        worker.once("messageerror", () => reject(new Error("Analysis Worker reply could not be deserialized")));
         worker.once("exit", () => reject(new Error("Analysis worker exited")));
       });
       if (work.state !== "running" || !work.consumers.size) return;

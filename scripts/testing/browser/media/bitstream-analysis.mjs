@@ -5,6 +5,7 @@ import { execFileSync } from "node:child_process";
 import { withBrowserFixture } from "../../browser-fixture.mjs";
 import { selectAnalysisMatrixRows } from "../../analysis-matrix.mjs";
 import { repositoryRoot } from "../../manifest.mjs";
+import { assertBenchmarkCorrectness, verifyPlaybackPresentation } from "../../playback-presentation.mjs";
 
 async function selectDiagrams(page, choice) {
   if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
@@ -757,35 +758,19 @@ await withBrowserFixture(
             await analyze();
             await overlay.waitFor({ state: "visible" });
             await setMode("qp");
-            const sustained = await page.evaluate(async () => {
-              const api = window.voidPlayer,
-                canvas = document.querySelector("#bitstream-overlay-A"),
-                before = canvas.analysisMetrics;
-              let playingWallMs = 0;
-              for (let i = 0; i < 20; i++) {
-                await api.seek(0);
-                await api.play();
-                const start = performance.now();
-                while (
-                  performance.now() - start < 60 ||
-                  !api.getState().tracks.every((t) => t.frame?.ptsUs > 0)
-                ) {
-                  if (performance.now() - start > 2000)
-                    throw new Error("No advancing cached presentation");
-                  await new Promise((r) => setTimeout(r, 5));
-                }
-                playingWallMs += performance.now() - start;
-                await api.pause();
-              }
-              const after = canvas.analysisMetrics;
-              return {
-                playingWallMs,
-                presentations: after.presentations - before.presentations,
-                hits: after.cacheHits - before.cacheHits,
-                draws: after.draws - before.draws,
-                resizes: after.resizes - before.resizes,
-              };
-            });
+            const beforeSustained = await page.evaluate(() => ({...document.getElementById('bitstream-overlay-A').analysisMetrics}));
+            let playingWallMs = 0;
+            for (let i = 0; i < 20; i++) {
+              await call('seek_review', {ptsUs:0});
+              const proof = await verifyPlaybackPresentation(page, { minPlayingMs:60 }, {engine,caseName:'sustained-cache',targetPtsUs:0});
+              playingWallMs += proof.playingMs;
+            }
+            const afterSustained = await page.evaluate(() => ({...document.getElementById('bitstream-overlay-A').analysisMetrics}));
+            const sustained = { playingWallMs,
+              presentations:afterSustained.presentations-beforeSustained.presentations,
+              hits:afterSustained.cacheHits-beforeSustained.cacheHits,
+              draws:afterSustained.draws-beforeSustained.draws,
+              resizes:afterSustained.resizes-beforeSustained.resizes };
             assert.ok(
               sustained.playingWallMs >= 1000 &&
                 sustained.presentations >= 20 &&
@@ -830,11 +815,7 @@ await withBrowserFixture(
             await call('seek_review', { ptsUs: 0 });
           }
           const report = await call("benchmark_review", { durationMs: 2000 });
-          assert.equal(report.error, null);
-
-          assert.equal(report.staleAfterPause, false);
-          assert.ok(report.measurements.tracks.A.drawn > 0);
-          rows.push({
+          const playbackRow = {
             codec: row.codec,
             input,
             decoding,
@@ -843,7 +824,24 @@ await withBrowserFixture(
             metrics: result.metrics,
             range,
             playback: report,
-          });
+            functionalPresentation: { status: 'waiting' },
+          };
+          rows.push(playbackRow);
+          // Preserve the original fixed-window sample even if the independent
+          // functional proof fails. Never replace it with the longer wait.
+          await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
+          try {
+            assert.equal(report.error, null);
+            assert.equal(report.staleAfterPause, false);
+            assertBenchmarkCorrectness(report);
+            await call('seek_review', { ptsUs: 0 });
+            playbackRow.functionalPresentation = { status: 'passed', ...await verifyPlaybackPresentation(page, {}, { engine, caseName: `${row.container}-${row.codec}-${input}-${decoding}`, targetPtsUs: 0 }) };
+            await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
+          } catch (error) {
+            playbackRow.functionalPresentation = { status: 'failed', error: error.message };
+            await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
+            throw error;
+          }
         }
     // A response for a frame superseded during the request must never become visible.
     await hideOverlay();
