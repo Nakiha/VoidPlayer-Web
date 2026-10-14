@@ -1,0 +1,955 @@
+{
+  "issue": 63,
+  "status": "partial-functional-group-ready-for-review; global acceptance remains open",
+  "acceptedBase": "107c30056cac8cb66cc1c69bde5b77e2ce67a840",
+  "verifiedProductRevision": "eeb1da2ba371300a758ed1aee40ffdbf12f917d4",
+  "noUnmergedPrerequisite": true,
+  "corePin": "353088620d08ee4ec2669842508f0fc84da2db28",
+  "support": [
+    "Finite static single-video video-only 188-byte TS: H264, progressive HEVC Main/Main10",
+    "Single-video Matroska H264/HEVC Main/Main10 including interleaved audio",
+    "Visible single-picture VP8/VP9 WebM; block/QP analysis explicitly unsupported-codec"
+  ],
+  "fixtures": {
+    "picturesPerFixture": 600,
+    "actualFiles": [
+      "h264.ts",
+      "hevc.ts",
+      "hevc10.ts",
+      "h264.mkv",
+      "hevc.mkv",
+      "hevc10.mkv",
+      "hevc-audio.mkv",
+      "vp8.webm",
+      "vp9.webm"
+    ],
+    "generator": "scripts/make-js-container-fixtures.ts",
+    "oracle": "Independent container WASM full visible planes and ffprobe original timestamps; product is guarded against container-open ABI use"
+  },
+  "ownership": {
+    "playback": "Own reader/Input/cursor/cancel/decoder",
+    "analysis": "Independent local or server reader/Input/cursor/cancel/decoder; actual presented source/stream/config/AU identity",
+    "library": "Source/build-bound server index required; no client full-scan fallback when required endpoint fails",
+    "local": "No upload; all-byte bounded-memory identity pass remains required on warm open"
+  },
+  "identity": {
+    "ts": "schema2 / mediabunny-1.55.7-ts-packets-v3",
+    "matroska": "schema1 / mediabunny-1.55.7-matroska-packets-v2",
+    "oldCaches": "Explicit build/schema/source invalidation and JS rebuild; never load old WASM demux",
+    "rawClocks": "Original TS PES ticks with missingness; Matroska cluster/block ticks and TimestampScale; Matroska raw DTS=null, never synthesized from PTS",
+    "reuse": "Complete-scan runtime seal; local separately-keyed nonextractable HMAC receipt; library server-generated separately sealed document"
+  },
+  "verification": {
+    "build": "tsc --noEmit and Vite production build passed at verifiedProductRevision",
+    "newNodeCases": {
+      "passed": 3,
+      "testFunctions": 17,
+      "log": "../js-container-node-final.log",
+      "cases": [
+        "node-js-container-index",
+        "node-js-container-matrix",
+        "node-js-container-server-cache"
+      ]
+    },
+    "existingTs": {
+      "passedTests": 26,
+      "log": "../js-container-existing-ts.log"
+    },
+    "sourceSuite": {
+      "passedCases": 123,
+      "log": "../js-container-source-authorized.log",
+      "note": "Run with authorized localhost capability; initial restricted-sandbox EPERM attempt is not counted as passing"
+    },
+    "postMainIntegrationContracts": {
+      "passedTests": 81,
+      "log": "../js-container-integration-contract.log"
+    },
+    "indexStreamIntegration": {
+      "passedTests": 13,
+      "log": "../js-container-index-integration.log"
+    },
+    "browsers": [
+      {
+        "engine": "chromium",
+        "artifact": ".run/test-suites/js-containers-integrated-chromium/browser-js-containers-chromium/matrix.json",
+        "passedCases": 36,
+        "errors": [],
+        "persistence": {
+          "corruptRebuilt": true,
+          "freshRuntimeReused": true
+        },
+        "hardwareUseVerified": false,
+        "actualBackends": [
+          [
+            "js-matroska-packets",
+            "js-matroska-packet-index",
+            "ffmpeg-wasm"
+          ],
+          [
+            "js-matroska-packets",
+            "js-matroska-packet-index",
+            "webcodecs"
+          ],
+          [
+            "js-ts-packets",
+            "js-ts-packet-index",
+            "ffmpeg-wasm"
+          ],
+          [
+            "js-ts-packets",
+            "js-ts-packet-index",
+            "webcodecs"
+          ]
+        ]
+      },
+      {
+        "engine": "webkit",
+        "artifact": ".run/test-suites/js-containers-integrated-webkit/browser-js-containers-webkit/matrix.json",
+        "passedCases": 36,
+        "errors": [],
+        "persistence": {
+          "corruptRebuilt": true,
+          "freshRuntimeReused": true
+        },
+        "hardwareUseVerified": false,
+        "actualBackends": [
+          [
+            "js-matroska-packets",
+            "js-matroska-packet-index",
+            "ffmpeg-wasm"
+          ],
+          [
+            "js-matroska-packets",
+            "js-matroska-packet-index",
+            "webcodecs"
+          ],
+          [
+            "js-ts-packets",
+            "js-ts-packet-index",
+            "ffmpeg-wasm"
+          ],
+          [
+            "js-ts-packets",
+            "js-ts-packet-index",
+            "webcodecs"
+          ]
+        ]
+      }
+    ],
+    "checks": [
+      "Full 600-output EOF and visible pixel-plane oracle; first/tail/random 0,3,200,560,599,0",
+      "Exact actual presented token and independent H264/HEVC analysis; WebM deep-analysis unavailable explicitly",
+      "Local/library by software/browser decoder policy; actual decoder recorded separately from preference",
+      "Late pending range cancellation leaves playback picture/position committed",
+      "Drop/renumber complete claims and receipt corruption rebuild in JS; fresh page/Worker reuses verified index",
+      "Server restart/new Worker reuse; persisted payload corruption rebuild; JS index upload rejected 405",
+      "Native decoder failure retains JS packets for software decode; IO/input failure cannot silently change container route",
+      "Truncated Matroska hard failure and explicit FFV1-unmigrated admission result"
+    ]
+  },
+  "registry": {
+    "acceptedMainCasesPreservedExactly": 328,
+    "cases": 333,
+    "unitCases": 156,
+    "sourceCases": 123,
+    "newCaseIds": [
+      "node-js-container-index",
+      "node-js-container-matrix",
+      "node-js-container-server-cache",
+      "browser-js-containers-chromium",
+      "browser-js-containers-webkit"
+    ],
+    "npmCommandsUnchanged": true,
+    "ci": "Existing Chromium/WebKit analysis matrix adds js-containers partition; original jobs and thresholds retained"
+  },
+  "performance": {
+    "verdict": "Chromium below-realtime remains an acceptance limitation, reproduced on old baseline; no statistical no-regression or hardware claim. Original thresholds retained. WebKit packet-software result cannot establish native hardware speed.",
+    "baseline": {
+      "artifact": "../VoidPlayer-Web-js-container-baseline/.run/js-container-bench-chromium.json",
+      "revision": "f5826f4a68fa8edd661d4b31c21b686d30ee5f4d",
+      "sourceDigest": "e7fec86aa6d6584320963bebccd35f0df52e3a8f5e5519a1ebc27dfcef4a552c",
+      "cleanBuild": false,
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "requestedWallMs": 8000,
+      "repetitions": 3,
+      "headless": true,
+      "hardwareUseVerified": false,
+      "results": [
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.30312231976944665,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.3063632332711867,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.29813363288662253,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7340773642933577,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7151331915067255,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7288782625354294,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7248576396925737,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7293351396877746,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7264557292262438,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7340523326261704,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7252467965255622,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.6786126474493556,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        }
+      ]
+    },
+    "earlierCandidateControl": {
+      "artifact": ".run/js-container-bench-chromium.json",
+      "revision": "6fc601d0b4b35e75ba73b8a3997e6931401bba80",
+      "sourceDigest": "9d3fdc257355bdea09681b8dfb3acc7cfbfb7a6811459c6f6d09bf448741535c",
+      "cleanBuild": true,
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "requestedWallMs": 8000,
+      "repetitions": 3,
+      "headless": true,
+      "hardwareUseVerified": false,
+      "results": [
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.3087791508069341,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.31180433832668786,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.3102189064974766,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.739313298354092,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7326793336959865,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7209404898976575,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7201251696685849,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7328515501330819,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7343944312661806,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7389599076682478,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7435386826821155,
+          "decoders": [
+            "webcodecs"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "error": null,
+          "speed": 0.7420229097873637,
+          "decoders": [
+            "webcodecs"
+          ]
+        }
+      ]
+    },
+    "earlierCandidateWebkit": {
+      "artifact": ".run/js-container-bench-webkit.json",
+      "revision": "6fc601d0b4b35e75ba73b8a3997e6931401bba80",
+      "sourceDigest": "9d3fdc257355bdea09681b8dfb3acc7cfbfb7a6811459c6f6d09bf448741535c",
+      "cleanBuild": true,
+      "limits": {
+        "minWallMs": 1000,
+        "minSpeed": 0.9,
+        "maxFrameLagUs": 100000,
+        "maxFrameSkewUs": 100000,
+        "maxP95GapMs": 75,
+        "maxGapMs": 250,
+        "maxPauseMs": 100
+      },
+      "requestedWallMs": 8000,
+      "repetitions": 3,
+      "headless": true,
+      "hardwareUseVerified": false,
+      "results": [
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.999942655260881,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999250810997096,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "control-mp4-h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.999772493743578,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9994669907894017,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999775352135529,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-hevc-ts",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9995916151620343,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9995723139565711,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.999539386213456,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-main10-mkv",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999477381832296,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9994789693065557,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999475384281016,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        },
+        {
+          "scenario": "js-vp9-webm",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "error": null,
+          "speed": 0.9999054959102112,
+          "decoders": [
+            "ffmpeg-wasm"
+          ]
+        }
+      ]
+    },
+    "integrated": [
+      {
+        "artifact": ".run/js-container-bench-integrated-chromium.json",
+        "revision": "eeb1da2ba371300a758ed1aee40ffdbf12f917d4",
+        "sourceDigest": "9087873c5fc838f6637bae5ff34d5ed9c74f363531abce8a4e66b9ec20101a7b",
+        "cleanBuild": true,
+        "limits": {
+          "minWallMs": 1000,
+          "minSpeed": 0.9,
+          "maxFrameLagUs": 100000,
+          "maxFrameSkewUs": 100000,
+          "maxP95GapMs": 75,
+          "maxGapMs": 250,
+          "maxPauseMs": 100
+        },
+        "requestedWallMs": 8000,
+        "repetitions": 3,
+        "headless": true,
+        "hardwareUseVerified": false,
+        "results": [
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 1,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7578685818284767,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 2,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7682362276453554,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 3,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7549196573543863,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 1,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7452461985199987,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 2,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7375871712279701,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 3,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7277867820510333,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 1,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7354452784625982,
+            "decoders": [
+              "webcodecs"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 2,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7337237127648831,
+            "decoders": [
+              "webcodecs"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 3,
+            "passed": false,
+            "failures": [
+              "below-realtime"
+            ],
+            "error": null,
+            "speed": 0.7333516244174088,
+            "decoders": [
+              "webcodecs"
+            ]
+          }
+        ]
+      },
+      {
+        "artifact": ".run/js-container-bench-integrated-webkit.json",
+        "revision": "eeb1da2ba371300a758ed1aee40ffdbf12f917d4",
+        "sourceDigest": "9087873c5fc838f6637bae5ff34d5ed9c74f363531abce8a4e66b9ec20101a7b",
+        "cleanBuild": true,
+        "limits": {
+          "minWallMs": 1000,
+          "minSpeed": 0.9,
+          "maxFrameLagUs": 100000,
+          "maxFrameSkewUs": 100000,
+          "maxP95GapMs": 75,
+          "maxGapMs": 250,
+          "maxPauseMs": 100
+        },
+        "requestedWallMs": 8000,
+        "repetitions": 3,
+        "headless": true,
+        "hardwareUseVerified": false,
+        "results": [
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 1,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9996750950347022,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 2,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9994663328337476,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-hevc-ts",
+            "repeat": 3,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9996564241220143,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 1,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9999303982957525,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 2,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9995840680634007,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-main10-mkv",
+            "repeat": 3,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9999200515667395,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 1,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9995196160911186,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 2,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9999975065515359,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          },
+          {
+            "scenario": "js-vp9-webm",
+            "repeat": 3,
+            "passed": true,
+            "failures": [],
+            "error": null,
+            "speed": 0.9999650333057759,
+            "decoders": [
+              "ffmpeg-wasm"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "remainingIssueAcceptance": [
+    "Cross-repository playback+analysis WASM demux/ABI removal and published artifact manifest guards; unchanged core intentionally retains still-used unmigrated combinations",
+    "Disposition or separate JS codec/config work for MPEG2/VVC TS and FFV1/VVC/AV1/ProRes Matroska; TS with audio/dynamic PSI and unsupported layouts remain explicitly unmigrated",
+    "Broader CRA/RASL, multilayer/interlaced and dynamic configuration evidence outside current admission; safe IDR-only closed fixtures are not a CRA acceptance claim",
+    "Sparse damaged indexes conservatively rebuild completely; partial repair not implemented",
+    "Full cold/late-seek IO, packet, memory, first-frame/seek/cancel comparative performance ledger and original Chromium performance acceptance",
+    "Physical hardware evidence and full release/color/portable regression CI before alpha"
+  ],
+  "issue64": {
+    "state": "CLOSED by parent after independent verification",
+    "acceptedMain": "107c30056cac8cb66cc1c69bde5b77e2ce67a840",
+    "proof": "docs/evidence/issue-64-completion.json",
+    "engineeringTestsRerun": false,
+    "optionalFormattingBlocksClosure": false
+  },
+  "authority": {
+    "mergedByThisTask": false,
+    "issuesClosedByThisTask": false,
+    "releaseCreated": false
+  }
+}
