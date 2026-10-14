@@ -47,6 +47,8 @@ assert.ok(!desktopPerformance || engine==='chromium' && matrixOnly && matrixPart
 const matrixCase = `bitstream-analysis-matrix${matrixPart ? '-' + matrixPart : ''}`;
 assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
 let gatedId, releaseIndexGate = true, heldBatches = 0;
+const indexGateWaiters=new Set();
+const releaseGate=()=>{releaseIndexGate=true;for(const resolve of indexGateWaiters)resolve();indexGateWaiters.clear();};
 const limitsDir = path.join(
   repositoryRoot,
   ".run",
@@ -91,28 +93,9 @@ await copyFile(path.join(limitsDir, 'stream.mp4'), path.join(limitsDir, 'stream-
 execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
   'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
   '-x264-params', 'scenecut=0:open-gop=0', path.join(limitsDir, 'incremental.mp4')]);
-// Two valid sample descriptions keep this fixture on the container index
-// adapter. Right-angle rotation now correctly uses the packet MP4 adapter.
-const incremental = await readFile(path.join(limitsDir, 'incremental.mp4'));
-const containers = new Set(['moov','trak','mdia','minf','stbl']);
-function duplicateDescription(bytes) {
-  const boxes=[];
-  for(let at=0;at<bytes.length;) {
-    const size=bytes.readUInt32BE(at),type=bytes.toString('ascii',at+4,at+8);
-    assert.ok(size>=8 && at+size<=bytes.length);
-    let payload=bytes.subarray(at+8,at+size);
-    if(containers.has(type))payload=duplicateDescription(payload);
-    if(type==='stsd') {
-      assert.equal(payload.readUInt32BE(4),1);
-      payload=Buffer.concat([payload,payload.subarray(8)]);payload.writeUInt32BE(2,4);
-    }
-    const header=Buffer.from(bytes.subarray(at,at+8));header.writeUInt32BE(payload.length+8);
-    boxes.push(Buffer.concat([header,payload]));at+=size;
-    if(type==='moov')assert.equal(at,bytes.length,'moov must follow mdat so sample offsets stay valid');
-  }
-  return Buffer.concat(boxes);
-}
-for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`incremental-${action}.mp4`),duplicateDescription(incremental));
+// MP4 descriptions now use a complete sample-table adapter. FLV retains
+// asynchronous playback indexing and an independent append-only analysis cursor.
+for(const action of ['continue','cancel'])execFileSync('ffmpeg',['-y','-v','error','-i',path.join(limitsDir,'incremental.mp4'),'-an','-c:v','copy','-f','flv',path.join(limitsDir,`incremental-${action}.flv`)]);
 await withBrowserFixture(
   {
     caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase+(desktopPerformance?'-desktop':'') : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
@@ -125,16 +108,25 @@ await withBrowserFixture(
       const { MediaLibraryIndex } = await import('../../../../server/library.ts');
       const { createMediaServer } = await import('../../../../server/app.ts');
       const library = new MediaLibraryIndex(roots, { database: path.join(temp, 'library.sqlite'), watch: false });
-      const call = library.indexJobs.call.bind(library.indexJobs);
-      library.indexJobs.call = async (op, data = {}, ...args) => {
-        if (data.id === gatedId && op === 'stream-batches' && !releaseIndexGate && Number(data.after) >= 0) { heldBatches++; return []; }
-        const result = await call(op, data, ...args);
-        return data.id === gatedId && op === 'stream-batches' && !releaseIndexGate ? result.slice(0, 1) : result;
+      const call=library.indexJobs.call.bind(library.indexJobs),startBuild=library.indexJobs.startBuild.bind(library.indexJobs);
+      library.indexJobs.startBuild=(request,options={})=>{
+        const held=()=>request.id===gatedId&&!releaseIndexGate;
+        const handle=startBuild(request,{...options,onProgress(progress){options.onProgress?.(held()?{...progress,packets:Math.min(progress.packets,128)}:progress);}});
+        // A joining subscriber must receive the held validated frontier even
+        // if the tiny fixture scan finished before it attached.
+        void handle.promise.then(()=>{if(held())options.onProgress?.({phase:'scan',packets:128,scannedBytes:request.size,totalBytes:request.size});}).catch(()=>{});
+        return handle;
+      };
+      library.indexJobs.call=async(op,data={},...args)=>{
+        if(data.id===gatedId&&op==='get'&&!releaseIndexGate){heldBatches++;await new Promise(resolve=>indexGateWaiters.add(resolve));}
+        const result=await call(op,data,...args);
+        if(data.id===gatedId&&op==='stream-manifest'&&!releaseIndexGate&&result?.manifest){heldBatches++;return {...result,manifest:{...result.manifest,complete:false}};}
+        return result;
       };
       const server = createMediaServer({ roots, library, staticDir: path.join(repositoryRoot, 'dist'), onLog() {} });
       let closed = false;
       const close = async () => {
-        if (closed) return; closed = true;
+        if (closed) return; closed = true;releaseGate();
         try { server.closeAllConnections(); if (server.listening) await new Promise((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
         finally { await library.close(); }
       };
@@ -2069,13 +2061,13 @@ await withBrowserFixture(
       await page.setViewportSize(cardViewport);
     }
 
-    // Multiple sample descriptions exercise the FFmpeg streaming index path. Gate
-    // shared persisted batches after the first 128 records for both playback
-    // and analysis; neither subscriber can treat this prefix as index EOF.
+    // Hold real FLV playback completion and the independent analysis frontier
+    // at 128 validated packets, beyond several complete GOPs. Neither
+    // subscriber may treat this prefix as EOF.
     for (const cancel of diagramsOnly ? [] : [false, true]) {
       await call('remove_review_track', { slot: 'A' });
       await call('set_review_color_mode', { mode: 'browser' });
-      gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.mp4`).id;
+      gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.flv`).id;
       releaseIndexGate = false; heldBatches = 0;
       await call('load_library_item', { slot: 'A', id: gatedId });
       await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(t => t.slot === 'A' && !t.failure));
@@ -2098,7 +2090,7 @@ await withBrowserFixture(
         await call('cancel_bitstream_analysis',{});
         assert.equal((await call('get_bitstream_analysis_state')).state, 'cancelled');
       }
-      releaseIndexGate = true;
+      releaseGate();
       if (!cancel) {
         await page.waitForFunction(() => {
           const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});

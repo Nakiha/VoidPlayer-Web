@@ -3,8 +3,6 @@ export interface AnalysisReader {
   readonly size: number;
   /** Trusted server-cache reader. Consumer still requires a runtime authority seal. */
   jsIndex?():Promise<import('../matroska-packet-index.ts').JsPacketIndex>;
-  readSync?(offset: number, length: number): Uint8Array;
-  ffmpegIndex?(): Promise<import('../ffmpeg-index-cache.ts').FfmpegIndexDocument>;
   /** Source-bound immutable metadata; payload IO remains independently owned. */
   flvIndex?(): Promise<import("../flv-index-cache.ts").FlvIndexDocument>;
   readMetadata?(offset: number, length: number): Promise<Uint8Array>;
@@ -26,13 +24,11 @@ export interface AnalysisPacket {
 export interface AnalysisInputOptions {
   sourceVersion?: string;
   indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
-  demuxCore?: any;
   frontier?: () => Promise<AnalysisIndexFrontier>;
   waiting?: (waiting: boolean) => Promise<void>;
 }
 
 export interface AnalysisInput {
-  analysisCore?: any;
   /** Packet clocks carry explicit missingness; feed_known must preserve it. */
   rawTiming?: boolean;
   /** Reset only bounded unconsumed IO after the consumer acknowledges a result. */

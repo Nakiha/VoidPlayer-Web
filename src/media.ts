@@ -117,44 +117,6 @@ export async function inspectVideoTrack(input: Input) {
 }
 export interface MediaMeta { name: string; size: number; lastModified: number; }
 
-type Mp4DemuxPlan = 'packet' | 'ffmpeg';
-
-/** Pick the MP4 adapter from container capabilities only. Decoder availability,
- * hardware preference, and color mode are deliberately not inputs here. */
-async function chooseMp4DemuxPlan(input: RandomAccessInput, signal?: AbortSignal, onProgress?: MediaOpenProgress): Promise<Mp4DemuxPlan> {
-  const source = 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url);
-  const media = new Input({ source, formats: ALL_FORMATS });
-  const reader = new RangeReader(input);
-  const detach = onLoadAbort(signal, () => { media.dispose(); reader.close(); });
-  try {
-    loadAborted(signal);
-    onProgress?.('inspect');
-    if (!(await media.getFormat() instanceof IsobmffInputFormat)) return 'ffmpeg';
-    const track = await media.getPrimaryVideoTrack();
-    if (!track || ![0, 90, 180, 270].includes(track.rotation)) return 'ffmpeg';
-    const id = await track.getInternalCodecId();
-    const codec = await track.getCodec();
-    const packetCodecs = ['avc', 'hevc', 'av1', 'vvc'];
-    if (!packetCodecs.includes(codec ?? '') && !['vvc1', 'vvi1'].includes(String(id))) return 'ffmpeg';
-    const configs = await readMp4Configurations(reader, track.id);
-    // The packet engine currently represents one decoder configuration per
-    // stream. More complex sample-description changes stay with Mediabunny.
-    return configs.descriptions.length === 1 ? 'packet' : 'ffmpeg';
-  } catch (error) {
-    if (error instanceof MediaOpenError && (error.stage === 'input' || error.stage === 'resource')) throw error;
-    return 'ffmpeg';
-  } finally {
-    detach(); media.dispose(); reader.close();
-  }
-}
-
-/** Codec/container admission stays independent of decoder availability. */
-async function matroskaMigrated(input:RandomAccessInput,signal?:AbortSignal){
-  const media=new Input({source:'file' in input?new BlobSource(input.file):new UrlSource(input.url),formats:ALL_FORMATS}),detach=onLoadAbort(signal,()=>media.dispose());
-  try{loadAborted(signal);await media.getFormat();const tracks=await media.getVideoTracks();loadAborted(signal);if(tracks.length!==1||tracks[0].rotation!==0||tracks[0].squarePixelWidth!==tracks[0].codedWidth||tracks[0].squarePixelHeight!==tracks[0].codedHeight)return false;return ['avc','hevc','vp8','vp9'].includes(await tracks[0].getCodec()??'');}
-  finally{detach();media.dispose();}
-}
-
 // Where opening failed decides whether the WASM fallback can help: container
 // and codec stages can (mediabunny/WebCodecs gaps); input and resource stages
 // cannot (a network error or an oversized file fails identically on retry).
@@ -165,13 +127,13 @@ export type { OpenStage } from './media-errors.ts';
 async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftware?: () => Promise<MediaSource>, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   const pipelineStartedAt = performance.now();
   const container = await probeContainer(input, signal);
-  const mp4DemuxPlan = container === 'isobmff' ? await chooseMp4DemuxPlan(input, signal, onProgress) : null;
+  const mp4DemuxPlan = container === 'isobmff' ? 'packet' : null;
   const reference = getColorMode() === 'reference', preference = getReferenceDecode();
   const colorMode = reference ? 'reference' : 'browser';
   let nativeOpens = 0, softwareOpens = 0;
   const libraryReference='url' in input?input.library:undefined;
   const libraryId=libraryReference?.id,mediaVersion=libraryReference?.version;
-  const tsAdmission = container==='matroska'&&!await matroskaMigrated(input,signal)?{kind:'unmigrated' as const,reason:'Declared Matroska codec/track layout not yet migrated'}:container==='mpegts'||container==='matroska' ? await (await import('./js-container-media.ts')).admitJsContainerMedia(container==='mpegts'?'ts':'matroska',input,meta,
+  const tsAdmission = container==='mpegts'||container==='matroska' ? await (await import('./js-container-media.ts')).admitJsContainerMedia(container==='mpegts'?'ts':'matroska',input,meta,
     libraryId&&mediaVersion?`${libraryId}@${mediaVersion}`:randomUUID(),{signal,onProgress,rawNative:reference,
       ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
   try {

@@ -17,7 +17,7 @@ for(const mt of [false,true])test(`real ${mt?'mt':'single'} core planes equal in
   for(const name of ['ffv1_yuv422p_8bit.mkv','ffv1_yuv444p10le.mkv','mhw_hevc_fullrange_bt709_3s.mp4','h266_10s_1920x1080.mp4']){
     const url=new URL(`../../fixtures/video/${name}`,import.meta.url);
     const file=new File([await readFile(url)],name);
-    const source=name.endsWith('.mp4')?await openPacketMedia('mp4',{file},file,{...deps,forceWasm:true}):await openFFmpegMedia(file,deps);
+    const source=name.endsWith('.mp4')?await openPacketMedia('mp4',{file},file,{...deps,forceWasm:true}):await openPacketMedia('matroska',{file},file,{...deps,forceWasm:true,sourceVersion:name});
     try{
       const first=await source.frameAt(0);
       assert.equal(first.kind,'yuv',name);validateDescription(first.description,first.pixels!.byteLength);
@@ -47,10 +47,11 @@ test('real core retains odd-sized 16-bit planes and SAR without RGBA quantizatio
     execFileSync(ffmpeg,['-v','error','-f','rawvideo','-pixel_format','yuv444p16le','-video_size','5x3','-i','pipe:0','-frames:v','1','-vf','setsar=4/3','-c:v','ffv1','-level','3','-color_primaries','bt709','-color_trc','bt709','-colorspace','bt709',path],{input:raw});
     const data=await readFile(path);
     const decoded=execFileSync(ffmpeg,['-v','error','-i',path,'-frames:v','1','-f','rawvideo','-pix_fmt','yuv444p16le','pipe:1']);
+    const tags=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','stream=color_primaries,color_transfer,color_space','-of','json',path],{encoding:'utf8'})).streams[0];
     for(const suffix of ['', '-mt']){
       const core=new URL('../../public/vendor/voidplayer-core/',import.meta.url);
-      const source=await openFFmpegMedia(new File([data],'odd.mkv'),{glueURL:new URL(`voidplayer-core${suffix}.js`,core).href,wasmBinary:await readFile(new URL(`voidplayer-core${suffix}.wasm`,core))});
-      try{const frame=await source.frameAt(0);assert.equal(frame.description.yuv!.bitDepth,16);assert.equal(frame.description.width,5);assert.equal(frame.description.height,3);assert.equal(frame.description.displayWidth,7);assert.equal(hash(frame.pixels!),hash(decoded),JSON.stringify({actual:[...frame.pixels!.slice(0,24)],reference:[...decoded.slice(0,24)],input:[...raw.slice(0,24)]}));frame.close();}finally{source.dispose();}
+      const odd=new File([data],'odd.mkv');const source=await openPacketMedia('matroska',{file:odd},odd,{forceWasm:true,sourceVersion:'odd-16-bit',glueURL:new URL(`voidplayer-core${suffix}.js`,core).href,wasmBinary:await readFile(new URL(`voidplayer-core${suffix}.wasm`,core))});
+      try{assert.equal(source.info.color?.primaries,tags.color_primaries??null);assert.equal(source.info.color?.transfer,tags.color_transfer??null);assert.equal(source.info.color?.matrix,tags.color_space??null);const frame=await source.frameAt(0);assert.equal(frame.description.yuv!.bitDepth,16);assert.equal(frame.description.width,5);assert.equal(frame.description.height,3);assert.equal(frame.description.displayWidth,7);assert.equal(hash(frame.pixels!),hash(decoded),JSON.stringify({actual:[...frame.pixels!.slice(0,24)],reference:[...decoded.slice(0,24)],input:[...raw.slice(0,24)]}));frame.close();}finally{source.dispose();}
     }
   }finally{await rm(dir,{recursive:true,force:true});}
 });

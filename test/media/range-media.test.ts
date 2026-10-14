@@ -1,3 +1,4 @@
+import {openPacketMedia} from '../../src/packet-media.ts';
 import { packetFixture } from '.././packet-fixture.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -61,10 +62,10 @@ for (const name of ['h266_10s_1920x1080.mp4', 'h264_high422p_1s_320x180.mp4', 'h
   test(`Remote WASM ${name}: bounded Range IO and frame-exact random/forward/backward/tail decoding`, { timeout: 120000 }, async () => {
     const bytes = await packetFixture(name), host = await serve(bytes);
     const coreDeps = await deps();
-    const reference = await openFFmpegMedia(new File([bytes], name), coreDeps);
+    const format=name.endsWith('.mp4')?'mp4':name.endsWith('.mkv')?'matroska':'ts',file=new File([bytes],name);const reference=await openPacketMedia(format,{file},file,{...coreDeps,forceWasm:true,sourceVersion:name});
     let source;
     try {
-      source = await openFFmpegMediaFromUrl(host.url, { name, size: bytes.length, lastModified: 0 }, coreDeps);
+      source=await openPacketMedia(format,{url:host.url,size:bytes.length},{name,size:bytes.length,lastModified:0},{...coreDeps,forceWasm:true,sourceVersion:name});
       assert.equal(source.info.decoder, 'ffmpeg-wasm'); assert.equal(source.info.codec, reference.info.codec);
       assert.equal(source.info.width, reference.info.width); assert.equal(source.info.pixelFormat, reference.info.pixelFormat);
       if (name.startsWith('h266')) {
@@ -89,7 +90,7 @@ test('MP4 metadata can address a source larger than 4 GiB without downloading it
   const size = 5 * 1024 ** 3, host = await serve(padded, size);
   let source;
   try {
-    source = await openFFmpegMediaFromUrl(host.url, { name: 'large.mp4', size, lastModified: 0 }, await deps());
+    source=await openPacketMedia('mp4',{url:host.url,size},{name:'large.mp4',size,lastModified:0},{...await deps(),forceWasm:true});
     const frame = await source.frameAt(0); frame.close();
     assert.equal(source.info.size, size);
     assert.ok(host.requests.reduce((n, r) => n + r.end - r.start + 1, 0) < 2 * 1024 ** 2);

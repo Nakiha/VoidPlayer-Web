@@ -1,8 +1,9 @@
+import {isAnnexB} from './nal-framing.ts';
 import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { videoFrameDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
-import { hevcGeometry, hevcReorderFrames, verifyHevcFrame } from './hevc-geometry.ts';
+import { hevcGeometry, hevcReorderFrames, verifyHevcFrame, hevcAnnexBDecoderConfig } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -15,10 +16,12 @@ import { loadCore } from './wasm-core.ts';
  * may use a shifted decoder clock and must never be used as frame identity. */
 export interface FlvFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
 export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; identityKnown?: boolean };
-export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9'; packets: PacketDecodePacket[] };
-type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description'>;
+export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9' | 'ffv1' | 'mpeg2video' | 'mpeg4' | 'mjpeg' | 'prores'; codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters; codecConfigurations?:import('./matroska-clocks.ts').PacketCodecParameters[]; packets: PacketDecodePacket[] };
+type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
-  return index.codec === 'vp8' ? {codec:'vp8'} : index.codec === 'vp9' ? {codec:'vp09.00.10.08'} : flvDecoderConfig({...index,codec:index.codec});
+  if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);
+  if(['ffv1','mpeg2video','mpeg4','mjpeg','prores'].includes(index.codec))return null;
+  return index.codec === 'vp8' ? {codec:'vp8'} : index.codec === 'vp9' ? {codec:'vp09.00.10.08'} : flvDecoderConfig({...index,codec:index.codec as FlvIndex['codec']});
 }
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
@@ -188,7 +191,16 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
     try {
       if (!extra) throw new MediaOpenError('resource', '无法分配 FLV 配置头内存。');
       checkedHeap(heap(), extra, description.length, '写入配置头').set(description, extra);
-      if (call('vp_packet_open', ['number', 'string', 'number', 'number'], [ctx, next.codec, extra, description.length]) !== 0) throw new MediaOpenError('decode', `WASM 无法初始化 ${next.codec} 解码器。`);
+      let status:number;
+      if(next.codecParameters){
+        if(typeof core._vp_packet_open_config!=='function'||core._vp_packet_config_bytes?.()!==40)throw new MediaOpenError('decode','WASM packet configuration ABI unavailable');
+        const ptr=core._malloc(40);if(!ptr)throw new MediaOpenError('resource','Cannot allocate packet parameters');
+        const p=next.codecParameters;
+        try{const view=new DataView(heap().buffer);[1,40,p.width,p.height,p.sarNum,p.sarDen,p.colorPrimaries,p.colorTransfer,p.colorSpace,p.colorRange].forEach((v,i)=>view.setInt32(ptr+i*4,v,true));
+          status=call('vp_packet_open_config',['number','string','number','number','number'],[ctx,next.codec,extra,description.length,ptr]);
+        }finally{core._free(ptr);}
+      }else status=call('vp_packet_open', ['number', 'string', 'number', 'number'], [ctx, next.codec, extra, description.length]);
+      if(status!==0) throw new MediaOpenError('decode', `WASM 无法初始化 ${next.codec} 解码器。`);
     } finally { core._free(extra); }
   };
   try { configure(index); } catch (error) { call('vp_destroy', ['number'], [ctx], null); throw error; }

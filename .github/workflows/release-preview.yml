@@ -53,7 +53,7 @@ jobs:
         id: analysis-cache
         with:
           path: public/vendor/voidplayer-analysis
-          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs') }}
+          key: release-analysis-v1-${{ hashFiles('scripts/release-analysis.json', 'scripts/prepare-analysis-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
       - uses: actions/checkout@v4
         if: steps.analysis-cache.outputs.cache-hit != 'true'
         with:
@@ -107,7 +107,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: public/vendor/voidplayer-core
-          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs') }}
+          key: release-core-v1-${{ runner.os }}-${{ hashFiles('scripts/release-core.json', 'scripts/prepare-release-core.mjs', 'scripts/core-capabilities.mjs', 'scripts/core-artifacts.mjs') }}
       - name: Checkout decoder build source
         if: steps.cache.outputs.cache-hit != 'true'
         uses: actions/checkout@v4
@@ -354,7 +354,7 @@ jobs:
       - name: Prepare identical media, dependencies and core
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npx playwright install --with-deps chromium
           node scripts/make-playback-fixtures.mjs
           baseline="$PWD/.run/i18n-https-baseline"
@@ -427,7 +427,7 @@ jobs:
       - name: Prepare complete unit-test fixtures
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
@@ -498,7 +498,7 @@ jobs:
       - name: Prepare complete unit-test fixtures
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
@@ -543,7 +543,7 @@ jobs:
         id: playback-inputs
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
@@ -564,10 +564,14 @@ jobs:
       - name: Verify FLV startup in each engine independently
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
         run: node scripts/run-tests.mjs flv-startup --prepared
-      - name: Verify FATE frame contracts and metadata regressions
+      - name: Verify FATE browser frame contracts
         timeout-minutes: 6
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
-        run: node scripts/run-tests.mjs ci-fate --prepared
+        run: node scripts/run-tests.mjs ci-fate --case fate-browser --prepared --directory .run/test-suites/ci-fate-browser
+      - name: Verify FATE native metadata and frame regressions
+        timeout-minutes: 6
+        if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}
+        run: node scripts/run-tests.mjs ci-fate --case fate --prepared --directory .run/test-suites/ci-fate-native
       - name: Audit FATE transport-stream clock faults (exploratory report)
         timeout-minutes: 8
         run: |

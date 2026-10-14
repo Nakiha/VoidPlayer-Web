@@ -44,7 +44,7 @@ export class PacketTimeline {
   replaceIndex(index:PacketDecodeIndex){this.index=index;this.pending?.frame?.close();this.pending=null;this.started=false;this.deliveredPts=null;}
   private async configure(id:number){
     if(id!==this.configuration){
-      if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,description:this.index.configurations?.[id]??this.index.description});
+      if(this.configuration!==-1||id!==0)await this.decoder.reconfigure?.({codec:this.index.codec,codecParameters:this.index.codecConfigurations?.[id]??this.index.codecParameters,description:this.index.configurations?.[id]??this.index.description});
       this.configuration=id;
     }
     this.pictures.clear();this.decoder.reset();this.drained=false;
@@ -65,10 +65,10 @@ export class PacketTimeline {
     this.segmentStart=this.cursor;
     await this.configure(config);this.started=true;this.lastPts=-Infinity;
   }
-  private async pull(recycle?:ArrayBuffer):Promise<FlvFrame|null>{
+  private async pull(recycle?:ArrayBuffer,minimum=Number.MIN_SAFE_INTEGER):Promise<FlvFrame|null>{
     if(this.pending){const f=this.pending;this.pending=null;if(f.packetPicture&&!this.validPicture(f.pts,f.packetPicture))f.packetPicture=undefined;return f;}
     for(;;){
-      const frame=this.decoder.receive(Number.MIN_SAFE_INTEGER,recycle);
+      const frame=this.decoder.receive(minimum,recycle);
       if(frame){
         if(!Number.isSafeInteger(frame.pts)||frame.pts<this.lastPts){frame.frame?.close();throw new MediaOpenError('decode',`解码输出显示顺序无效：${frame.pts} < ${this.lastPts}`);}
         if(frame.pts===this.lastPts){frame.frame?.close();continue;}
@@ -86,7 +86,7 @@ export class PacketTimeline {
       this.actualPacket=packet;
       // Random access starts at a CRA; negative-leading HEVC/VVC pictures can
       // reference the previous GOP, so retain the explicit anchor boundary.
-      if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
+      if((this.index.codec==='hevc'||this.index.codec==='vvc'||this.index.codec==='mpeg2video'||this.index.packets[this.anchorIndex()].discontinuity)&&packet.pts<this.index.packets[this.anchorIndex()].pts){this.cursor++;continue;}
       const bytes=await this.read(packet);
       if (this.identifyPictures && this.pictures.size < 512) {
         const evidence=inspectPacketPicture(this.index.codec,this.index.configurations?.[this.configuration]??this.index.description,bytes);
@@ -103,10 +103,27 @@ export class PacketTimeline {
   async at(target:number,recycle?:ArrayBuffer):Promise<FlvFrame>{
     return this.run(target,async()=>{
       await this.start(target);this.anchor=this.cursor;
+      // The finite MPEG-2 adapter proves one frame picture per PES with known
+      // source PTS. Let the existing WASM receive ABI discard earlier decoded
+      // outputs before conversion/copy. Other layouts retain output-led seeks.
+      let minimum=Number.MIN_SAFE_INTEGER;
+      if(this.index.codec==='mpeg2video'&&this.decoder.kind==='ffmpeg-wasm'){
+        const {packets,order}=this.index;let lo=0,hi=order.length;
+        while(lo<hi){const m=(lo+hi)>>>1;if(packets[order[m]].pts<=target)lo=m+1;else hi=m;}
+        const floor=packets[order[Math.max(0,lo-1)]];
+        if(floor&&floor.identityKnown!==false)minimum=floor.pts;
+      }
       let previous:FlvFrame|null=null;
       try{
         for(;;){
-          const f=await this.pull(recycle);recycle=undefined;
+          const f=await this.pull(recycle,minimum);recycle=undefined;
+          if(minimum!==Number.MIN_SAFE_INTEGER&&!previous&&(!f||f.pts>target)){
+            // A decoder may omit an indexed picture. Re-decode without any
+            // discard threshold to retain the actual preceding output, or the
+            // first actual frame when the target precedes all outputs.
+            f?.frame?.close();minimum=Number.MIN_SAFE_INTEGER;
+            await this.start(target);this.anchor=this.cursor;continue;
+          }
           if(!f){if(previous){this.deliveredPts=previous.pts;return previous;}throw new MediaOpenError('decode','解码器没有输出可显示帧。');}
           if(f.pts>=target){if(f.pts===target||!previous){previous?.frame?.close();this.deliveredPts=f.pts;return f;}this.pending=f;this.deliveredPts=previous.pts;return previous;}
           previous?.frame?.close();previous=f;

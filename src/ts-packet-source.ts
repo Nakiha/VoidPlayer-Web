@@ -35,19 +35,19 @@ function sealCompleteIndex(index: TsPacketIndex): TsPacketIndex {
 /** Exact metadata equality to a still-live, immutable complete scan. Serialized
  * documents alone (including self-reported completeness) are untrusted. */
 export function isVerifiedCompleteTsIndex(index: TsPacketIndex): boolean {
-  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || !['h264','hevc'].includes(index.codec) || index.streamKey !== 'video:0'
+  if (index.schema !== 2 || index.kind !== 'js-ts-packets' || !['h264','hevc','mpeg2video'].includes(index.codec) || index.streamKey !== 'video:0'
     || index.completeness?.state !== 'complete' || index.completeness.packets !== index.packets.length) return false;
   if (sealedIndexes.has(index)||isSealedJsIndex(index)) return true;
   return verifiedIndexes.some(reference => {
     const known = reference.deref();
     if (known === index) return true;
-    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid
+    if (!known || known.sourceVersion !== index.sourceVersion || known.size !== index.size || known.pid !== index.pid || known.codec !== index.codec || known.exactPictureMapping !== index.exactPictureMapping || known.recovery !== index.recovery || known.transportOffset !== index.transportOffset || known.transportLimit !== index.transportLimit || known.indexIntegrity !== index.indexIntegrity
       || known.build !== index.build || known.schema !== index.schema || known.packets.length !== index.packets.length
       || known.configuration.length !== index.configuration.length || known.configuration.some((v,i)=>v!==index.configuration[i])) return false;
     return known.packets.every((p,i)=>{
       const candidate = index.packets[i];
       return p.au === candidate.au && p.locator === candidate.locator && p.configuration === candidate.configuration
-        && p.pesOffset === candidate.pesOffset && p.timestamp === candidate.timestamp && p.ptsUs === candidate.ptsUs
+        && p.pesOffset === candidate.pesOffset && p.transportEnd === candidate.transportEnd && p.timestamp === candidate.timestamp && p.ptsUs === candidate.ptsUs
         && p.durationUs === candidate.durationUs && p.size === candidate.size && p.key === candidate.key
         && p.timing.pts === candidate.timing.pts && p.timing.dts === candidate.timing.dts
         && p.timing.origin === candidate.timing.origin && p.timing.timebase[0] === candidate.timing.timebase[0]
@@ -78,7 +78,7 @@ const ticks = (b: Uint8Array, at: number, prefix: number): number => {
 
 /** Raw-clock supplement only. Mediabunny still owns PSI, PES payload reassembly,
  * AU demux and packet seeking. This first admission is finite 188-byte TS. */
-async function pesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
+export async function readTsPesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
   if (reader.size % 188) fail('truncated or non-188-byte transport');
   const clocks = new Map<number, { pts: number | null; dts: number | null }>();
   let previousCounter: number | undefined;
@@ -128,6 +128,7 @@ export class TsPacketSource {
   private cursor?: { au: number; packet: EncodedPacket };
   private sets = new Map<number, Uint8Array>();
   private codec: 'h264' | 'hevc' = 'h264';
+  private exactPictureMapping=true;
   index?: TsPacketIndex;
   nativeConfig?: VideoDecoderConfig;
   bytesRead = 0;
@@ -180,12 +181,19 @@ export class TsPacketSource {
   }
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
-    const evidence = inspectPacketPicture(this.codec, configuration, bytes);
+    let evidence = inspectPacketPicture(this.codec, configuration, bytes);
     if (!evidence.singlePicture) {
-      if (evidence.reason === 'unsupported-ts-multiple-slices'
-        && nalRanges(this.codec,configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
-        throw new TsCombinationNotMigrated(`unverified picture layout: ${evidence.reason}`);
-      fail(`unverified picture layout: ${evidence.reason}`);
+      const slices=this.codec==='h264'?nalRanges(this.codec,configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)):[];
+      // Preserve the former TS playback capability. Multiple slices in one
+      // demuxed packet are decoder input, not proof of one exact picture.
+      // Require one first slice and homogeneous IDR/non-IDR coding before
+      // using an IDR packet as a closed seek anchor.
+      if(evidence.reason==='unsupported-ts-multiple-slices'&&slices.length>1
+        &&slices.every(n=>n.size>=2)&&slices.filter(n=>bytes[n.offset+1]&128).length===1
+        &&slices.every(n=>(bytes[n.offset]&31)===(bytes[slices[0].offset]&31))){
+        this.exactPictureMapping=false;
+        evidence={singlePicture:false,closedRandomAccess:(bytes[slices[0].offset]&31)===5};
+      }else fail(`unverified picture layout: ${evidence.reason}`);
     }
     for (const nal of nalRanges(this.codec, configuration, bytes)) {
       const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
@@ -214,7 +222,7 @@ export class TsPacketSource {
         const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = this.codec==='h264' ? data[0] & 31 : (data[0] >> 1) & 63;
         if (!(this.codec==='h264'?[7,8]:[32,33,34]).includes(type)) continue;
         if (this.sets.has(type)) throw new TsCombinationNotMigrated('multiple parameter sets are outside initial admission');
-        if (this.codec==='h264' && type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
+        if (this.codec==='h264' && type === 7 && parseAvcSps(data).interlaced) this.exactPictureMapping=false;
         this.sets.set(type, data.slice());
       }
       const setTypes=this.codec==='h264'?[7,8]:[32,33,34];
@@ -225,12 +233,12 @@ export class TsPacketSource {
       if (!this.validatePicture(first.data, configuration).closedRandomAccess) fail('first picture must prove IDR');
       const restored = parseTsPacketIndex(cached, this.sourceVersion, this.reader.size);
       if (restored && isVerifiedCompleteTsIndex(restored)) {
-        if (restored.codec !== this.codec || restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
+        if (!this.exactPictureMapping && restored.exactPictureMapping!==false || restored.codec !== this.codec || restored.pid !== track.id || !equal(Uint8Array.from(restored.configuration), configuration)
           || restored.packets[0].locator !== first.sequenceNumber || restored.packets[0].size !== first.byteLength
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
       }
-      const clocks = await pesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
+      const clocks = await readTsPesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
       const packets: TsPacketRecord[] = [];
       for await (const packet of this.sink.packets()) {
         this.check();
@@ -253,7 +261,7 @@ export class TsPacketSource {
       }
       clocks.clear();
       if (!packets.length || new Set(packets.map(p => p.ptsUs)).size !== packets.length) fail('missing or ambiguous packet presentation timestamps');
-      this.index = { schema: 2, completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
+      this.index = { schema: 2, ...(!this.exactPictureMapping?{exactPictureMapping:false as const}:{}), completeness: { state: 'complete', packets: packets.length }, kind: 'js-ts-packets', build: TS_PACKET_BUILD, sourceVersion: this.sourceVersion, size: this.reader.size,
         streamKey: 'video:0', pid: track.id, codec: this.codec, configuration: [...configuration], packets };
       this.index = sealCompleteIndex(this.index);this.publishProgress(true);
       this.cursor = { au: 0, packet: first };
@@ -275,7 +283,7 @@ export class TsPacketSource {
     // length and timestamp equality, not nearest-PTS association.
     if (!packet || packet.sequenceNumber !== target.locator || packet.byteLength !== target.size || Math.round(packet.timestamp * 1e6) !== target.ptsUs) fail('packet/index identity mismatch');
     if (target.pesOffset !== null) {
-      const actual = (await pesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, this.index!.pid, this.signal)).get(0);
+      const actual = (await readTsPesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, this.index!.pid, this.signal)).get(0);
       if (!actual || actual.pts !== target.timing.pts || actual.dts !== target.timing.dts) fail('cached PES clock identity mismatch');
     }
     const evidence = this.validatePicture(packet.data, Uint8Array.from(this.index!.configuration));
@@ -291,7 +299,7 @@ export class TsPacketSource {
 export function tsDecodeIndex(index: TsPacketIndex): import('./flv-decoder.ts').PacketDecodeIndex {
   if (!isVerifiedCompleteTsIndex(index)) fail('unverified complete index cannot mint decode identities');
   const packets = index.packets.map(packet => ({ sequenceNumber: packet.au, configuration: packet.configuration,
-    offset: packet.locator, size: packet.size, pts: packet.ptsUs, identityKnown: packet.timing.pts !== null,
+    offset: packet.locator, size: packet.size, pts: packet.ptsUs, identityKnown: index.exactPictureMapping!==false && packet.timing.pts !== null,
     dts: packet.timing.dts === null ? null : Math.round(packet.timing.dts * 1e6 / 90000), key: packet.key }));
   const order = packets.map((_, au) => au).sort((a, b) => packets[a].pts - packets[b].pts);
   const firstPts = packets[order[0]].pts;

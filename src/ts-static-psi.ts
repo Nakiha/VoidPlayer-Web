@@ -3,7 +3,7 @@ import { TsCombinationNotMigrated } from './ts-packet-source.ts';
 
 /** Product admission supplements the shared demuxer with stable, bounded PSI
  * evidence. No payload, AU or codec parsing is implemented here. */
-export function staticTsPsi(prefix: Uint8Array): (bytes: Uint8Array) => void {
+export function staticTsPsi(prefix: Uint8Array): ((bytes: Uint8Array) => void) & {videoStreams:{pid:number;type:number}[]} {
   const malformed = (reason: string): never => { throw new MediaOpenError('container', `JS TS: ${reason}`); };
   const outside = (reason: string): never => { throw new TsCombinationNotMigrated(reason); };
   if (![0, 188, 376].every(at => prefix[at] === 0x47)) outside('product migration requires 188-byte TS');
@@ -67,6 +67,15 @@ export function staticTsPsi(prefix: Uint8Array): (bytes: Uint8Array) => void {
   if (programs.length !== 1) outside('single-program TS is required for product admission');
   const pmtPid = programs[0], pmt = first(pmtPid);
   if (pmt[0] !== 2) malformed('invalid startup PMT');
+  const videoStreams:{pid:number;type:number}[]=[];
+  let streamAt=12+((pmt[10]&15)*256+pmt[11]);
+  while(streamAt<pmt.length-4){
+    if(streamAt+5>pmt.length-4)malformed('truncated PMT stream');
+    const type=pmt[streamAt],pid=(pmt[streamAt+1]&31)*256+pmt[streamAt+2],end=streamAt+5+((pmt[streamAt+3]&15)*256+pmt[streamAt+4]);
+    if(end>pmt.length-4)malformed('invalid PMT descriptor length');
+    if([1,2,16,27,36,51].includes(type))videoStreams.push({type,pid});
+    streamAt=end;
+  }
   const check = (bytes: Uint8Array) => {
     if (bytes.length % 188) malformed('partial PSI transport read');
     for (let at = 0; at < bytes.length; at += 188) {
@@ -81,5 +90,5 @@ export function staticTsPsi(prefix: Uint8Array): (bytes: Uint8Array) => void {
     }
   };
   check(prefix.subarray(0, Math.floor(prefix.length / 188) * 188));
-  return check;
+  return Object.assign(check,{videoStreams});
 }

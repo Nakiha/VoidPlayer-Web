@@ -15,8 +15,8 @@ export function containerFromHeader(bytes: Uint8Array): ContainerKind {
   }
   // TS, M2TS and protected 204-byte transport packets. Three sync bytes
   // avoid mistaking an arbitrary initial 0x47 for an entire container.
-  for (const [stride, start] of [[188, 0], [192, 4], [204, 0]]) {
-    if ([0, 1, 2].every(i => bytes[start + stride * i] === 0x47)) return 'mpegts';
+  for(const stride of [188,192,204])for(let start=0;start<stride&&start+stride*2<bytes.length;start++) {
+    if([0,1,2].every(i=>bytes[start+stride*i]===0x47))return 'mpegts';
   }
   return 'other';
 }

@@ -5,6 +5,9 @@ import {createServer} from 'vite';
 import {chromium,webkit} from 'playwright';
 import {classify} from './fate-oracle.ts';
 const manifest=JSON.parse(await readFile(new URL('./fate-samples.json',import.meta.url))).filter(s=>/multi-stsd|4bf|brokensps|interlaced_crop/.test(s.file));
+const onlyEngine=process.argv.find(arg=>arg.startsWith('--engine='))?.slice('--engine='.length),onlySample=process.argv.find(arg=>arg.startsWith('--sample='))?.slice('--sample='.length);
+assert.ok(!onlyEngine||['chromium','webkit'].includes(onlyEngine),'known focused engine');
+assert.ok(!onlySample||manifest.some(sample=>sample.path===onlySample),'known focused FATE sample');
 const reference=JSON.parse(await readFile(new URL('./fate-reference.json',import.meta.url)));
 const expectations=JSON.parse(await readFile(new URL('./fate-expectations.json',import.meta.url)));
 for(const sample of manifest)assert.equal(createHash('sha256').update(await readFile(new URL('../fixtures/fate/'+sample.file,import.meta.url))).digest('hex'),reference.samples[sample.path].sha256);
@@ -13,8 +16,10 @@ await server.listen();const base=`http://127.0.0.1:${server.httpServer.address()
 await mkdir('.run/playback-reports',{recursive:true});
 try {
 for(const [browserName,engine] of Object.entries({chromium,webkit})){
+  if(onlyEngine&&onlyEngine!==browserName)continue;
   const browser=await engine.launch({headless:true});
   try {for(const sample of manifest)for(const remote of [false,true]){
+    if(onlySample&&onlySample!==sample.path)continue;
     const page=await browser.newPage({locale:'zh-CN'});let timer;
     try {
       await page.route('**/fate-test',r=>r.fulfill({

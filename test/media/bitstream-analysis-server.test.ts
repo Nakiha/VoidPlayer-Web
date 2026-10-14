@@ -476,24 +476,19 @@ test('continuous server stream pages GOP chunks, backpressures each consumer and
 
 test('shared library index discovers GOPs before all batches arrive; cancel detaches only the analysis subscriber', async () => {
   const { execFileSync } = await import('node:child_process');
-  const media = await mkdtemp(join(tmpdir(), 'vp-incremental-analysis-')), name = 'incremental.mp4';
+  const media = await mkdtemp(join(tmpdir(), 'vp-incremental-analysis-')), name = 'incremental.flv';
   execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-    'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    'testsrc2=size=128x64:rate=30:duration=10', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '0',
     '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
   const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
-  const provenance = JSON.parse(await readFile(resolve('public/vendor/voidplayer-core/provenance.json'), 'utf8'));
-  const identity = { kind: 'ffmpeg' as const, streamKey: 'video:0', schemaVersion: 3, indexerBuild: provenance.source.revision };
+  const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../src/media-index-identity.ts');
   const streamTarget = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 10000000, indexIdentity: identity };
-  const call = f.library.indexJobs.call.bind(f.library.indexJobs);
+  const call = f.library.indexJobs.call.bind(f.library.indexJobs),startBuild=f.library.indexJobs.startBuild.bind(f.library.indexJobs);
   let release = false;
-  f.library.indexJobs.call = async (op, ...args) => {
-    const result = await call(op, ...args);
-    if (op === 'stream-batches' && !release) {
-      const data = args[0];
-      assert.ok(data && 'after' in data);
-      assert.ok(Array.isArray(result));
-      result.splice(Number(data.after) >= 0 ? 0 : 1);
-    }
+  f.library.indexJobs.startBuild=(request,options={})=>{const handle=startBuild(request,{...options,onProgress(progress){options.onProgress?.({...progress,packets:release?progress.packets:Math.min(progress.packets,128)});}});void handle.promise.then(()=>{if(!release)options.onProgress?.({phase:'scan',packets:128,scannedBytes:f.entry.size,totalBytes:f.entry.size});});return handle;};
+  f.library.indexJobs.call=async(op,...args)=>{
+    const result=await call(op,...args);
+    if(op==='stream-manifest'&&!release&&result&&typeof result==='object'&&'manifest' in result&&result.manifest&&typeof result.manifest==='object')return {...result,manifest:{...result.manifest,complete:false}};
     return result;
   };
   try {

@@ -23,6 +23,39 @@ if (!Number.isSafeInteger(packetBudget) || packetBudget < 1 || packetBudget > 16
 
 const inputPath = path.resolve(inputArg);
 const fileStat = statSync(inputPath);
+// TS indexing belongs to JS after container trimming. Keep the legacy report
+// keys for consumers, but explicitly distinguish a complete JS index plus a
+// diagnostic full decode from the retired C progressive-prefix implementation.
+const signatureFd=openSync(inputPath,'r'),signature=Buffer.alloc(1);try{readSync(signatureFd,signature,0,1,0);}finally{closeSync(signatureFd);}
+if(signature[0]===0x47){
+  const {JsContainerEngine}=await import('../src/js-container-engine.ts');
+  const {wasmFlvDecoder}=await import('../src/flv-decoder.ts');
+  const directory=process.env.WASM_CORE_DIR||path.resolve('public/vendor/voidplayer-core'),url=pathToFileURL(path.join(directory,'voidplayer-core.js')).href,binary=readFileSync(path.join(directory,'voidplayer-core.wasm'));
+  const run=async diagnostic=>{
+    const fd=openSync(inputPath,'r');let bytesRead=0,reads=0,decoded=0,softwareOpens=0;
+    class DiskBlob extends Blob {
+      get size(){return fileStat.size;}
+      arrayBuffer(){throw new Error('Whole-file materialization forbidden');}
+      slice(start=0,end=fileStat.size){const n=Math.min(end,fileStat.size)-start;assert.ok(n>=0&&n<=256*1024);const bytes=Buffer.alloc(n);let count=0;while(count<n){const got=readSync(fd,bytes,count,n-count,start+count);if(!got)throw new Error('short diagnostic read');count+=got;}reads++;bytesRead+=n;return new Blob([bytes]);}
+    }
+    const engine=new JsContainerEngine({file:new DiskBlob()},'js-index-scan-diagnostic',{software:async(...args)=>{softwareOpens++;const decoder=await wasmFlvDecoder(...args);return {...decoder,async send(bytes,packet){const result=await decoder.send(bytes,packet);if(result!==false)decoded++;return result;}};}});
+    try{
+      const started=performance.now(),index=await engine.prepare(),indexWallMs=performance.now()-started;
+      assert.equal(softwareOpens,0,'Indexing itself must not instantiate a WASM decoder');
+      const records=Buffer.from(JSON.stringify(index)),indexBytesRead=bytesRead,indexReadCalls=reads;
+      const opened=await engine.open(url,binary,true);let diagnosticOutputs=0;
+      if(diagnostic){let frame=await engine.extract(0);while(frame){diagnosticOutputs++;const pts=frame.pts;frame.frame?.close();frame=await engine.next(pts);}assert.equal(diagnosticOutputs,index.packets.length);}
+      const scanDecodedPackets=diagnostic?decoded:0,scanWallMs=diagnostic?performance.now()-started:indexWallMs;
+      const first=await engine.extract(0),firstFrameHash=createHash('sha256').update(new Uint8Array(first.pixels)).digest('hex');first.frame?.close();
+      const seekHashes=[];for(const position of [0,Math.floor(index.packets.length*.25),Math.floor(index.packets.length*.5),Math.floor(index.packets.length*.75),index.packets.length-1]){const frame=await engine.extract(position);seekHashes.push({position,pts:frame.pts,hash:createHash('sha256').update(new Uint8Array(frame.pixels)).digest('hex')});frame.frame?.close();}
+      return {records,result:{mode:diagnostic?'js-index-and-decode-diagnostic':'js-demux-only',indexBackend:'js-ts-packet-index',progressiveSupported:false,firstStableBatchMs:null,scanWallMs,indexWallMs,indexBytesRead,indexReadCalls,scanDecodedPackets,diagnosticOutputs,recordCount:index.packets.length,recordHash:createHash('sha256').update(records).digest('hex'),seekAnchorCount:index.packets.filter(p=>p.key).length,firstPts:opened.firstPtsUs,durationTicks:opened.durationUs,firstFrameHash,seekHashes}};
+    }finally{engine.close();closeSync(fd);}
+  };
+  const progressive=await run(true),demuxOnly=await run(false),comparison={sameRecordBytes:progressive.records.equals(demuxOnly.records),sameCount:progressive.result.recordCount===demuxOnly.result.recordCount,sameSeekAnchors:progressive.result.seekAnchorCount===demuxOnly.result.seekAnchorCount,sameFirstPts:progressive.result.firstPts===demuxOnly.result.firstPts,sameDuration:progressive.result.durationTicks===demuxOnly.result.durationTicks,sameFirstFrame:progressive.result.firstFrameHash===demuxOnly.result.firstFrameHash,sameRandomSeekPixels:JSON.stringify(progressive.result.seekHashes)===JSON.stringify(demuxOnly.result.seekHashes),allRandomSeekProbesSucceeded:[...progressive.result.seekHashes,...demuxOnly.result.seekHashes].every(p=>'hash'in p)};
+  console.log('JS index mode diagnostic; no before-EOF prefix claim.');
+  console.log(JSON.stringify({progressive:progressive.result,demuxOnly:demuxOnly.result,comparison},null,2));
+  process.exit(Object.values(comparison).every(Boolean)?0:1);
+}
 const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
 const gluePath = path.join(coreDir, 'voidplayer-core.js');
 const wasmPath = path.join(coreDir, 'voidplayer-core.wasm');

@@ -5,13 +5,13 @@ import {jsDecodeIndex} from '../../src/js-decode-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../../src/matroska-packet-index.ts';
 import {readContainerHeader,validateContainerHeader} from '../../src/bitstream-analysis/diagrams.ts';
 import {inspectPacketPicture} from '../../src/packet-picture.ts';
-import {matroskaClocks} from '../../src/matroska-clocks.ts';
+import {matroskaClocks,matroskaStructure,matroskaFfv1Configuration} from '../../src/matroska-clocks.ts';
 import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
 
 const ebml=(id:string,...parts:Uint8Array[])=>{const data=Buffer.concat(parts);assert.ok(data.length<127);return Buffer.concat([Buffer.from(id,'hex'),Buffer.from([0x80|data.length]),data]);};
 const block=(flags=0,track=1)=>Buffer.from([0x80|track,0,0,flags,0x82,0]);
 const clocksFor=(...blocks:Uint8Array[])=>{
- const bytes=ebml('18538067',ebml('1654ae6b',ebml('ae',ebml('d7',Buffer.from([1])),ebml('83',Buffer.from([1])))),ebml('1f43b675',ebml('e7',Buffer.from([0])),...blocks));
+ const bytes=ebml('18538067',ebml('1654ae6b',ebml('ae',ebml('d7',Buffer.from([1])),ebml('83',Buffer.from([1])),ebml('e0',ebml('b0',Buffer.from([16])),ebml('ba',Buffer.from([16]))))),ebml('1f43b675',ebml('e7',Buffer.from([0])),...blocks));
  return matroskaClocks({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},1,new AbortController().signal);
 };
 for(const group of [false,true])test(`Matroska ${group?'BlockGroup':'SimpleBlock'} invisible video cannot become a presented picture`,async()=>{
@@ -63,4 +63,24 @@ test('VP8/VP9 admission rejects hidden, show-existing and multiple-output superf
  assert.equal(inspectPacketPicture('vp9',new Uint8Array(),Uint8Array.of(0x88,0)).singlePicture,false);
  assert.equal(inspectPacketPicture('vp9',new Uint8Array(),Uint8Array.of(0x84,0)).singlePicture,false);
  const superframe=Uint8Array.of(0x82,0,0,0xc1,1,2,0xc1);assert.equal(inspectPacketPicture('vp9',new Uint8Array(),superframe).reason,'unsupported-vp9-superframe');
+});
+
+test('Matroska packet configuration retains coded dimensions, rational SAR and original color enums',async()=>{
+ const byte=(n:number)=>Buffer.from([n]);
+ const video=ebml('e0',ebml('b0',byte(5)),ebml('ba',byte(3)),ebml('54b0',byte(20)),ebml('54ba',byte(9)),ebml('55b0',ebml('55bb',byte(9)),ebml('55ba',byte(16)),ebml('55b1',byte(9)),ebml('55b9',byte(2))));
+ const bytes=ebml('18538067',ebml('1654ae6b',ebml('ae',ebml('d7',byte(1)),ebml('83',byte(1)),ebml('86',Buffer.from('V_FFV1')),ebml('63a2',byte(42)),video)));
+ const {configuration}=await matroskaStructure({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},1,new AbortController().signal);
+ assert.equal(configuration.codecId,'V_FFV1');assert.deepEqual([...configuration.description],[42]);
+ assert.deepEqual(configuration.parameters,{width:5,height:3,sarNum:4,sarDen:3,colorPrimaries:9,colorTransfer:16,colorSpace:9,colorRange:2});
+});
+
+test('legacy FFV1 BITMAPINFOHEADER strips only validated headers and optional padding',()=>{
+ const parameters={width:160,height:96,sarNum:1,sarDen:1,colorPrimaries:2,colorTransfer:2,colorSpace:2,colorRange:0};
+ const extra=Uint8Array.of(1,2,3),header=Buffer.alloc(44);header.writeUInt32LE(43);header.writeInt32LE(160,4);header.writeInt32LE(96,8);header.writeUInt16LE(1,12);header.writeUInt16LE(24,14);header.write('FFV1',16);header.set(extra,40);
+ const config={codecId:'V_MS/VFW/FOURCC',description:header,parameters};
+ assert.deepEqual([...matroskaFfv1Configuration(config)!],[...extra]);
+ assert.deepEqual(matroskaFfv1Configuration({...config,codecId:'V_FFV1',description:extra}),extra);
+ for(const offset of [0,4,8,12,14]){const damaged=Buffer.from(header);if(offset>=12)damaged.writeUInt16LE(65535,offset);else damaged.writeUInt32LE(65535,offset);assert.throws(()=>matroskaFfv1Configuration({...config,description:damaged}),/BITMAPINFOHEADER/);}
+ assert.throws(()=>matroskaFfv1Configuration({...config,description:header.subarray(0,39)}),/Truncated/);
+ const other=Buffer.from(header);other.write('H264',16);assert.equal(matroskaFfv1Configuration({...config,description:other}),undefined);
 });

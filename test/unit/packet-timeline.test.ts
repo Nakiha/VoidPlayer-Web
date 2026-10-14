@@ -161,3 +161,19 @@ test('uncompleted FLV identity cannot escape as an already presented exact token
   assert.deepEqual((await timeline.at(100)).packetPicture, { au: 0, configuration: 0, stream: 'video' });
   timeline.close();
 });
+
+test('MPEG-2 preroll discard keeps actual floor/EOF when an indexed picture produces no output',async()=>{
+ for(const omitted of [undefined,80,120]){
+  const packets=[0,40,80,120].map((pts,offset)=>({pts,dts:pts,offset,size:1,key:offset===0,identityKnown:true}));
+  const index:PacketDecodeIndex={...buildFlvIndex('h264',new Uint8Array([0]),packets),codec:'mpeg2video',packets};
+  let ready:number[]=[],resets=0;const minimums:number[]=[],copied:number[]=[];
+  const decoder:PacketDecoder={kind:'ffmpeg-wasm',reset(){ready=[];resets++;},close(){ready=[];},async drain(){},async send(_bytes,p){if(p.pts!==omitted)ready.push(p.pts);},receive(minimum){minimums.push(minimum);while(ready.length&&ready[0]<minimum)ready.shift();const pts=ready.shift();if(pts===undefined)return null;copied.push(pts);return{pts,width:2,height:2,description:rgbaDescription(2,2),pixels:new ArrayBuffer(16)};}};
+  const timeline=new PacketTimeline(index,decoder,async()=>new Uint8Array(1));
+  try{
+   const frame=await timeline.at(90);assert.equal(frame.pts,omitted===80?40:80);
+   assert.equal((await timeline.at(999)).pts,omitted===120?80:120,'missing final indexed frame cannot erase the actual EOF floor');
+   if(omitted===undefined){assert.ok(minimums.includes(80));assert.equal(copied.includes(0),false,'preroll pixels stay inside the decoder');}
+   else assert.ok(resets>=3,'a missing indexed floor performs a complete output-led retry');
+  }finally{timeline.close();}
+ }
+});

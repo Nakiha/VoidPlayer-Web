@@ -11,8 +11,8 @@ import { WorkerRpc } from '../../src/worker-rpc.ts';
 import type { PacketCommands } from '../../src/worker-protocol.ts';
 import { tsPictureStream } from '../../src/ts-packet-index.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
-import { readWasmFrame } from '../../src/wasm-frame.ts';
-import { tsFixture, loadTsCore } from '../helpers/media/ts-analysis.ts';
+import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
+import { loadTsCore } from '../helpers/media/ts-analysis.ts';
 import { openJsTsAnalysisInput } from '../../src/bitstream-analysis/js-ts-input.ts';
 import { analyzePicture } from '../../src/bitstream-analysis/runner.ts';
 
@@ -25,7 +25,6 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
   await writeFile(wrapper, `import load from ${JSON.stringify(glue)}; export default async function(options) { const core = await load(options); core._vp_open = () => { throw new Error('container WASM forbidden'); }; return core; }`);
   const worker = new Worker(new URL('../../src/packet-worker.ts', import.meta.url));
   const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
-  const oracle = await tsFixture();
   try {
     const admitted = await rpc.call('prepare-ts', {input:{file:new Blob([bytes])},sourceVersion:'engine-ts-v1'});
     assert.equal(admitted.admitted,true);
@@ -39,13 +38,14 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
     assert.equal(index.sourceVersion, 'engine-ts-v1'); assert.equal(index.packets.length, 600);
     assert.equal(initialized.seekAnchorCount,index.packets.filter(packet=>packet.key).length);assert.ok(initialized.seekAnchorCount!>0);
     assert.equal(index.packets.filter(p => p.timing.dts === null).length, 138);
-    for (const au of [0, 3, 200, 560, 599, 0]) {
+    const checks=[0,3,200,560,599,0],display=checks.map(au=>index.packets.filter(p=>p.ptsUs<index.packets[au].ptsUs).length);
+    const expectedFrames=nativeFrames('fixtures/ts-analysis/h264-static.ts',display,'yuv420p',1920*1080*3/2);
+    for (const au of checks) {
       const frame = await rpc.call('at', { pts: index.packets[au].ptsUs }); assert.ok(frame);
       assert.deepEqual(frame.packetPicture, { au, configuration: 0, stream: tsPictureStream(index) });
       assert.equal(frame.pts, index.packets[au].ptsUs);
-      assert.equal(oracle.play._vp_extract(oracle.ctx, oracle.ordered[au].pts), 1);
-      const expected = readWasmFrame(oracle.play, () => oracle.play.HEAPU8, oracle.ctx);
-      assert.equal(visiblePixelHash(frame.description, frame.pixels!), visiblePixelHash(expected.description, expected.pixels!), `AU ${au}: full visible planes`);
+      const position=index.packets.filter(p=>p.ptsUs<index.packets[au].ptsUs).length;
+      assert.equal(visiblePixelHash(frame.description, frame.pixels!),nativeVisibleHash(frame.description,expectedFrames.get(position)!), `AU ${au}: full visible planes`);
       frame.frame?.close();
     }
     const ids = new Set<number>();
@@ -73,17 +73,21 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
     assert.equal((await rpc.call('analysis-index', {})).complete, true, 'failed input request leaves the source intact');
     await rpc.call('dispose', {});
     await assert.rejects(rpc.call('at', { pts: index.packets[0].ptsUs }), /未初始化/);
-  } finally { rpc.terminate(); oracle.close(); await rm(directory, { recursive: true, force: true }); }
+  } finally { rpc.terminate();  await rm(directory, { recursive: true, force: true }); }
 });
 
-test('TS admission failures never load a decoder or silently open a container core', async () => {
-  for (const [name, reason] of [['progressive-two-slices.ts', /picture layout/], ['mbaff.ts', /interlaced/]] as const) {
+test('admitted multislice and MBAFF TS prepare without a decoder and never claim exact picture identity', async () => {
+  for (const name of ['progressive-two-slices.ts','mbaff.ts']) {
     const worker = new Worker(new URL('../../src/packet-worker.ts', import.meta.url));
     const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
     try {
       const bytes = await readFile(`fixtures/ts-analysis/${name}`);
-      await assert.rejects(rpc.call('init', {container:'ts',sourceVersion:`negative-${name}`,input:{file:new Blob([bytes])},
-        forceWasm:false,glueURL:'file:///deliberately-missing-container-core.js'}, [], 60000), reason);
+      const result=await rpc.call('prepare-ts',{sourceVersion:`admitted-${name}`,input:{file:new Blob([bytes])}},[],60000);
+      assert.equal(result.admitted,true);
+      assert.equal(result.index.kind,'js-ts-packets');
+      assert.equal(result.index.sourceVersion,`admitted-${name}`);
+      assert.equal(result.index.exactPictureMapping,false);
+      assert.ok(result.index.packets.length>0);
       await rpc.call('dispose', {});
     } finally { rpc.terminate(); }
   }
@@ -182,17 +186,15 @@ test('native first-frame decode failure uses real packet WASM with the same veri
   const engine=new TsEngine({file:new Blob([bytes])},'native-failure-real-wasm',{
     native:async()=>({kind:'webcodecs',reset(){},receive(){return null;},drain:async()=>{},async send(){throw new MediaOpenError('decode','injected native decode failure');},close(){nativeClosed++;}}),
   });
-  const oracle=await tsFixture();
   try {
     const index=await engine.prepare();
     const info=await engine.open(pathToFileURL(wrapper).href,new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),false);
     assert.equal(info.decoder,'ffmpeg-wasm');assert.equal(nativeClosed,1);assert.equal(engine.packetIndex,index,'fallback retains the actual verified JS index');
     const frame=await engine.at(index.packets[200].ptsUs);
     assert.deepEqual(frame.packetPicture,{au:200,configuration:0,stream:tsPictureStream(index)});
-    assert.equal(oracle.play._vp_extract(oracle.ctx,oracle.ordered[200].pts),1);
-    const expected=readWasmFrame(oracle.play,()=>oracle.play.HEAPU8,oracle.ctx);
-    assert.equal(visiblePixelHash(frame.description,frame.pixels!),visiblePixelHash(expected.description,expected.pixels!));frame.frame?.close();
-  } finally {engine.close();oracle.close();await rm(directory,{recursive:true,force:true});}
+    const position=index.packets.filter(p=>p.ptsUs<index.packets[200].ptsUs).length,expected=nativeFrames('fixtures/ts-analysis/h264-static.ts',[position],'yuv420p',1920*1080*3/2).get(position)!;
+    assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expected));frame.frame?.close();
+  } finally {engine.close();await rm(directory,{recursive:true,force:true});}
 });
 
 // These use the actual product packet Worker and actual HTTP Range reads, not

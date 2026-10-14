@@ -1,3 +1,4 @@
+import {TsContainerPacketSource} from '../mpeg2-ts-packet-source.ts';
 import { TsPacketSource, tsPictureStream, parseTsPacketIndex, retainVerifiedTsIndex, TsSourceChangedError } from '../ts-packet-source.ts';
 import {MatroskaPacketSource} from '../matroska-packet-source.ts';
 import {parseJsPacketIndex,loadLocalJsIndex,saveLocalJsIndex} from '../js-packet-index-cache.ts';
@@ -11,8 +12,11 @@ import { AnalysisFailure } from './failure.ts';
 
 /** Independent packet source; shared semantics never borrow a playback cursor. */
 export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: AnalysisReader, sourceVersion: string, signal: AbortSignal, cached?: unknown): Promise<AnalysisInput> {
-  let bytesRead=0;const observed={size:reader.size,async read(at:number,n:number){const bytes=await reader.read(at,n);bytesRead+=bytes.length;return bytes;},close:()=>reader.close()};
-  const Source=format==='ts'?TsPacketSource:MatroskaPacketSource;const source=new Source(observed,sourceVersion,signal);
+  let bytesRead=0,operationBytes=0,payloadPhase=false;const observed={size:reader.size,async read(at:number,n:number){
+    if(payloadPhase&&operationBytes+n>64*1024*1024)throw new AnalysisFailure('resource-limit','JS analysis advancement IO budget exceeded');
+    const bytes=await reader.read(at,n);bytesRead+=bytes.length;if(payloadPhase)operationBytes+=bytes.length;return bytes;
+  },close:()=>reader.close()};
+  const source=format==='ts'?new TsContainerPacketSource(observed,sourceVersion,signal):new MatroskaPacketSource(observed,sourceVersion,signal);
   try {
     signal.throwIfAborted();
     const restored=parseJsPacketIndex(cached,sourceVersion,reader.size);
@@ -22,7 +26,9 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     const index = reusable ?? await source.open();
     signal.throwIfAborted();
     if(!reusable)await saveLocalJsIndex(index,signal);
+    payloadPhase=true;
     if(index.codec!=='h264'&&index.codec!=='hevc')throw new AnalysisFailure('unsupported-codec',`Block/QP analysis does not support ${index.codec}; JS packet/index statistics remain available`);
+    if(index.kind==='js-ts-packets'&&index.exactPictureMapping===false)throw new AnalysisFailure('ambiguous-picture-identity','This TS coding layout is playable but has no verified exact picture mapping');
     const codec=index.codec;
     let opened = !reusable;
     let opening: Promise<void> | undefined;
@@ -43,9 +49,9 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
       return source.readUnit(packet.au);
     };
     return { rawTiming: true, codec, configurations: [configuration], packets, sealedEnd: packets.length,
-      indexComplete: true, indexIntegrity: 'complete', totalPackets: packets.length,
+      indexComplete: true,indexIntegrity:index.indexIntegrity??'complete',indexTruncatedAt:index.indexTruncatedAt, totalPackets: packets.length,
       sourceEndUs: index.packets.reduce((end,p)=>Math.max(end,p.ptsUs+p.durationUs),0), reader,
-      read: (offset, length) => reader.read(offset, length), readUnit, picture,
+      acknowledge(){operationBytes=0;},read: (offset, length) => observed.read(offset,length), readUnit, picture,
       get bytesRead() { return bytesRead; }, close() { source.close(); },
       async plan(target) {
         if (target.sourceVersion !== sourceVersion) throw new AnalysisFailure('source-changed', 'JS packet source version mismatch');

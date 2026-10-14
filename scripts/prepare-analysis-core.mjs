@@ -1,3 +1,4 @@
+import {verifyCoreCapabilities} from './core-capabilities.mjs';
 import { pathToFileURL } from 'node:url';
 import { validateAnalysisCore } from '../src/bitstream-analysis/core-abi.ts';
 import { readFile, mkdir, cp, writeFile } from "node:fs/promises";
@@ -22,7 +23,7 @@ for (const key of [
   "ffmpegRevision",
   "abi",
   "semanticVersion",
-  "referenceAbi", "demuxAbi", "demuxCompatibility",
+  "referenceAbi", "demuxAbi",
 ])
   assert.equal(manifest[key], lock[key], `Analysis provenance ${key}`);
 assert.ok(
@@ -33,7 +34,7 @@ assert.ok(!manifest.dirty || process.env.ANALYSIS_ALLOW_LOCAL_BUILD === '1', 'Un
 const create = (await import(pathToFileURL(path.join(source, 'voidplayer-analysis.js')).href)).default;
 const core=await create({wasmBinary:await readFile(path.join(source,'voidplayer-analysis.wasm'))});
 validateAnalysisCore(core);
-assert.equal(core._vpd_abi(),lock.demuxAbi,'Analysis demux ABI');
+await verifyCoreCapabilities(source,lock,'analysis','',core);
 assert.equal(typeof core._vpa_feed_known,'function','Known timestamp feed ABI');
 await mkdir(target, { recursive: true });
 const hashes = {};
@@ -42,6 +43,7 @@ for (const file of [
   "voidplayer-analysis.wasm",
   "LICENSE",
   "manifest.json",
+  "capabilities.json",
 ]) {
   const bytes = await readFile(path.join(source, file));
   hashes[file] = createHash("sha256").update(bytes).digest("hex");

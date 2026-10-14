@@ -334,3 +334,18 @@ test('core sync replaces both variants, drops stale unpinned metadata and preser
     assert.equal(await readFile(path.join(target, 'voidplayer-core.js'), 'utf8'), 'new voidplayer-core.js');
   } finally { await rm(root, { recursive: true, force: true }); }
 });
+
+
+test('raw upstream MT sync renames its unsuffixed build manifest',async()=>{
+ const {syncPlaybackCore}=await import('../../scripts/core-artifacts.mjs');
+ const root=await mkdtemp(path.join(os.tmpdir(),'vp-raw-mt-sync-'));
+ try{
+  const source=path.join(root,'voidplayer-ffmpeg-wasm-test'),multi=path.join(root,'voidplayer-ffmpeg-wasm-mt-test'),target=path.join(root,'target');
+  await mkdir(source);await mkdir(multi);
+  for(const suffix of ['', '-mt']){const dir=suffix?multi:source;for(const ext of ['js','wasm'])await writeFile(path.join(dir,`voidplayer-core${suffix}.${ext}`),'fixture');await writeFile(path.join(dir,`capabilities${suffix}.json`),JSON.stringify({variant:suffix||'st'}));await writeFile(path.join(dir,'voidplayer-ffmpeg-manifest.json'),JSON.stringify({variant:suffix||'st'}));}
+  await syncPlaybackCore(source,target,{ffmpegRef:'test'});
+  assert.deepEqual(JSON.parse(await readFile(path.join(target,'voidplayer-ffmpeg-manifest.json'),'utf8')),{variant:'st'});
+  assert.deepEqual(JSON.parse(await readFile(path.join(target,'voidplayer-ffmpeg-manifest-mt.json'),'utf8')),{variant:'-mt'});
+  assert.deepEqual(JSON.parse(await readFile(path.join(target,'capabilities-mt.json'),'utf8')),{variant:'-mt'});
+ }finally{await rm(root,{recursive:true,force:true});}
+});

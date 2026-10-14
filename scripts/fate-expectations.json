@@ -1,51 +1,45 @@
 {
   "node": {
     "h264/brokensps.flv": {
-      "container-single": {
-        "reject": "container"
-      },
-      "container-multi": {
-        "reject": "container"
-      },
-      "flv-packets": {}
+      "flv-packets": {},
+      "flv-single": {},
+      "flv-multi": {}
     },
     "h264/test-4867.flv": {
-      "container-single": {
-        "reject": "container"
-      },
-      "container-multi": {
-        "reject": "container"
-      },
       "flv-packets": {
+        "reject": "container"
+      },
+      "flv-single": {
+        "reject": "container"
+      },
+      "flv-multi": {
         "reject": "container"
       }
     },
     "h264/extradata-reload-multi-stsd.mov": {
-      "container-single": {},
-      "container-multi": {},
-      "mp4-packets": {}
+      "mp4-packets": {},
+      "mp4-single": {},
+      "mp4-multi": {}
     },
     "hevc/extradata-reload-multi-stsd.mov": {
-      "container-single": {},
-      "container-multi": {},
-      "mp4-packets": {}
+      "mp4-packets": {},
+      "mp4-single": {},
+      "mp4-multi": {}
     },
     "h264/crop-to-container-dims-canon.mov": {
-      "container-single": {},
-      "container-multi": {},
-      "mp4-packets": {
-        "reject": "container"
-      }
+      "mp4-packets": {},
+      "mp4-single": {},
+      "mp4-multi": {}
     },
     "h264/h264_4bf_pyramid_nobsrestriction.mp4": {
-      "container-single": {},
-      "container-multi": {},
-      "mp4-packets": {}
+      "mp4-packets": {},
+      "mp4-single": {},
+      "mp4-multi": {}
     },
     "h264/interlaced_crop.mp4": {
-      "container-single": {},
-      "container-multi": {},
-      "mp4-packets": {}
+      "mp4-packets": {},
+      "mp4-single": {},
+      "mp4-multi": {}
     },
     "hevc/paramchange_yuv420p_yuv420p10.hevc": {
       "container-single": {
@@ -76,7 +70,9 @@
       "chromium/http": {},
       "webkit/local": {},
       "webkit/http": {
-        "known": ["open:resource"]
+        "known": [
+          "open:resource"
+        ]
       }
     },
     "hevc/extradata-reload-multi-stsd.mov": {
@@ -84,7 +80,9 @@
       "chromium/http": {},
       "webkit/local": {},
       "webkit/http": {
-        "known": ["open:resource"]
+        "known": [
+          "open:resource"
+        ]
       }
     },
     "h264/h264_4bf_pyramid_nobsrestriction.mp4": {

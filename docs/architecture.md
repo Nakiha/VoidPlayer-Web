@@ -74,9 +74,10 @@ UI 和 Agent 都通过 `session.updateMark` 修改对象，保留 ID 与帧锚�
 - `packet-timeline.ts` 是 MP4/FLV 的配置和显示游标。压缩包表用于找随机访问
   起点，实际 receive 输出决定显示 PTS；顺序读取到 drain 结束，不按包数量
   截断显示帧。定位保留一帧前瞻并返回目标时刻之前最近的实际帧。
+- 多 stsd MP4 沿用保守的软件解码策略，由 JS 包表驱动 packet-fed WASM，完整保留配置切换；原生多配置的元数据与像素尚未完成验证。见 [回归证据](evidence/demux-removal/multi-stsd-regression.md)。
 - MP4 的 stsd/stsc/ctts/样本偏移映射在 `mp4-config.ts` 中验证；公共解封装
   接口继续负责读取包和应用 edit list。分片 MP4 的 DTS/配置映射、容器独有
-  裁剪等不满足包路径约定时，在 container 阶段选择普通容器回退。
+  裁剪等不满足包路径验证要求时明确拒绝，不重新打开 FFmpeg 容器解封装。
 - AVC 原生能力判断包括 SPS 的隔行和重排约束，不能只依赖 isConfigSupported。
   带内参数集切换先完成旧配置输出，防止预读配置改变旧画面。普通兼容流仍优先
   WebCodecs；无重排约束/隔行使用保守的软件路径。

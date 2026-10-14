@@ -1,3 +1,5 @@
+import {openPacketMedia} from '../../src/packet-media.ts';
+import {Worker} from 'node:worker_threads';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
@@ -20,7 +22,7 @@ test('cold and warm server corruption prefixes import the same decode boundary a
   await writeFile(path.join(root, 'damaged.ts'), damaged);
   const library = new MediaLibraryIndex([root], { watch: false });
   const server = createMediaServer({ roots: [root], library, onLog() {} });
-  const original = await openFFmpegMedia(new File([bytes], 'original.ts'), deps);
+  const originalFile=new File([bytes],'original.ts'),original=await openPacketMedia('ts',{file:originalFile},originalFile,{...deps,forceWasm:true,sourceVersion:'original-ts'});
   try {
     await library.refresh();
     const entry = library.browse().entries[0];
@@ -28,7 +30,9 @@ test('cold and warm server corruption prefixes import the same decode boundary a
     const url = `http://127.0.0.1:${(server.address() as { port: number }).port}/api/media/${entry.id}?v=${entry.version}`;
     let boundary: number | undefined, duration: number | undefined;
     for (const phase of ['cold', 'warm']) {
-      const source = await openFFmpegContainerFromUrl(url, { name: 'damaged.ts', size: damaged.length, lastModified: 0 }, deps);
+      const origin=new URL(url).origin;
+      const workerFactory=()=>new Worker(new URL('data:text/javascript,'+encodeURIComponent(`globalThis.location={origin:${JSON.stringify(origin)},href:${JSON.stringify(origin+'/')}};await import(${JSON.stringify(new URL('../../src/packet-worker.ts',import.meta.url).href)});`))) as unknown as globalThis.Worker;
+      const source=await openPacketMedia('ts',{url,size:damaged.length,library:{origin,id:entry.id,version:entry.version!}},{name:'damaged.ts',size:damaged.length,lastModified:0},{...deps,workerFactory,forceWasm:true,sourceVersion:`${entry.id}@${entry.version}`});
       try {
         await source.ensureIndexed?.();
         assert.equal(source.info.indexSource, 'server');
@@ -70,8 +74,8 @@ test('cold server index build returns AVIO, scan, storage and CPU profile counte
   const root = await mkdtemp(path.join(os.tmpdir(), 'vp-frame-index-profile-'));
   const mediaDir = path.join(root, 'media');
   await mkdir(mediaDir);
-  const filePath = path.join(mediaDir, 'sample.ts');
-  await copyFile(path.resolve('fixtures/fate/mpegts--h264small.ts'), filePath);
+  const filePath = path.join(mediaDir, 'sample.avi');
+  execFileSync('ffmpeg',['-y','-v','error','-i','fixtures/video/ffv1_yuv422p_8bit.mkv','-an','-c:v','copy','-f','avi',filePath]);
   const library = new MediaLibraryIndex([mediaDir], { watch: false });
   try {
     await library.refresh();
@@ -124,14 +128,15 @@ import { execFileSync } from 'node:child_process';
 import { buildFfmpegIndexDocument } from '../../server/frame-index-builder.ts';
 import { FfmpegPacketIndex } from '../../src/analysis/ffmpeg-adapter.ts';
 
-test('shared WebM/TS/MKV records match ffprobe packet identity and compressed bytes without scan decoding', async t => {
+test('shared residual AVI/PS/elementary records match ffprobe packet identity and compressed bytes without scan decoding', async t => {
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
   const glue = await import(pathToFileURL(path.join(coreDir, 'voidplayer-core.js')).href);
   const { core } = await instantiateCore(glue.default, new Uint8Array(await readFile(path.join(coreDir, 'voidplayer-core.wasm'))));
   const indexerBuild = core.ccall('vp_core_build_id', 'string', [], []);
-  for (const name of ['av1_10s_1920x1080.webm', 'mpeg2_10s_1280x720.ts', 'ffv1_yuv422p_8bit.mkv']) {
+  const temporary=await mkdtemp(path.join(os.tmpdir(),'vp-residual-records-'));t.after(()=>rm(temporary,{recursive:true,force:true}));
+  for (const name of ['residual.avi','residual.mpg','residual.m2v']) {
     await t.test(name, async () => {
-      const file = path.resolve('fixtures/video', name), stat = statSync(file);
+      const file=path.join(temporary,name);execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=160x96:rate=25','-frames:v','24','-an','-c:v',name.endsWith('.avi')?'ffv1':'mpeg2video',file]);const stat=statSync(file);
       const version = createHash('sha256').update(stat.size + ':' + Math.round(stat.mtimeMs) + ':' + Math.round(stat.ctimeMs) + ':' + stat.ino).digest('hex').slice(0, 24);
       const probe = JSON.parse(execFileSync('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_packets', '-show_entries', 'packet=pts,dts,size', '-of', 'json', file], { encoding: 'utf8', maxBuffer: 8 * 1024 * 1024 }));
       const records: Uint8Array[] = [];
@@ -159,7 +164,8 @@ test('core imports untimed tail batches atomically with original ordinal uniquen
   const coreDir = process.env.WASM_CORE_DIR || path.resolve('public/vendor/voidplayer-core');
   const glue = await import(pathToFileURL(path.join(coreDir, 'voidplayer-core.js')).href);
   const { core, heap } = await instantiateCore(glue.default, new Uint8Array(await readFile(path.join(coreDir, 'voidplayer-core.wasm'))));
-  const bytes = new Uint8Array(await readFile('fixtures/video/ffv1_yuv422p_8bit.mkv'));
+  const temporary=await mkdtemp(path.join(os.tmpdir(),'vp-atomic-import-')),file=path.join(temporary,'ffv1.avi');execFileSync('ffmpeg',['-y','-v','error','-i','fixtures/video/ffv1_yuv422p_8bit.mkv','-an','-c:v','copy','-f','avi',file]);
+  const bytes=new Uint8Array(await readFile(file));
   const ctx = core.ccall('vp_create', 'number', [], []);
   core.vpBlobs = new Map([[ctx, { blob: { size: bytes.length, slice(start: number, end: number) { return bytes.slice(start, end); } }, reader: { readAsArrayBuffer(value: Uint8Array) { return value.buffer; } } }]]);
   const ptr = core._malloc(144);
@@ -185,5 +191,5 @@ test('core imports untimed tail batches atomically with original ordinal uniquen
     assert.equal(core.ccall('vp_index_export', 'number', ['number', 'number', 'number'], [ctx, ptr, 144]), 3);
     assert.equal(view.getBigUint64(ptr + 40, true), 1n);
     assert.equal(view.getBigUint64(ptr + 136, true), 2n);
-  } finally { core._free(ptr); core.ccall('vp_destroy', null, ['number'], [ctx]); }
+  } finally { core._free(ptr); core.ccall('vp_destroy', null, ['number'], [ctx]);await rm(temporary,{recursive:true,force:true}); }
 });
