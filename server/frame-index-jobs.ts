@@ -111,6 +111,7 @@ export class FrameIndexJobs {
       else entry.resolve(result.value);
     });
     worker.on('error', fail);
+    worker.on('messageerror', () => fail(new Error('索引数据库 Worker 消息无法反序列化。')));
     worker.on('exit', code => fail(new Error('索引数据库 Worker 已退出 (' + code + ')')));
     return worker;
   }
@@ -258,6 +259,7 @@ export class FrameIndexJobs {
         }
       });
       worker.once('error', error => finish(error instanceof Error ? error : new Error(String(error))));
+      worker.once('messageerror', () => finish(new Error('媒体索引构建 Worker 消息无法反序列化。')));
       worker.once('exit', code => { if (!settled) finish(new Error('媒体索引构建 Worker 已退出 (' + code + ')')); });
       try { worker.postMessage(request); }
       catch (error) { finish(error instanceof Error ? error : new Error(String(error))); }
