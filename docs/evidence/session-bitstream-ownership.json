@@ -1,0 +1,18 @@
+{
+  "base": "1b9c1bc55dbb100599196d13cfb0de4e69d87fd4",
+  "unchangedMethods": {
+    "setColorMode": "445188381fd28db76683140a0ef83a2cf3c7540bfb7fdd20676f25183c266b6e",
+    "setColorOutput": "de494c416a2fbd00e12d15d2a8d629ae5e6f9641b707d417d235c342975d295c",
+    "setReferenceDecode": "c70907e6666b43633ac85c37fcc4949df7e85ab74bf67e5bd130cccb141208c3",
+    "refreshColorOutput": "95062a4309fa1ada0b0f7b93a495b7fc5ea2dcdfad0d9f57cbb84ef76f90e0e8",
+    "rollbackPresentation": "66c8f08931bc2e72d1aae1c50be74383e0bb4b03c239adbd30d9af3e3065716a",
+    "getPresentedFrame": "703a3e8c3ceaa42b27bd13328a69e8d1ef84b0582200bbec59a0bdb563a3946c",
+    "requestBitstreamAnalysis": "b685ded87f5505e138c56d8e902fd4a2008af09431ffc03068391eedc721abff",
+    "requestBitstreamRange": "084d888386dc93abe86a0ca708adda1bebecaa4897c2a6f5c723e607655d1c7a"
+  },
+  "presentedFrameConstructorSha256": "57185e27057b2ada83148157d229ce8aaf8609c2f7d5ff9ea826560130c7545d",
+  "existingTestAssertionBodies": "unchanged; two internal cache-eviction fixture paths updated",
+  "relatedTestsPassed": 124,
+  "build": "passed",
+  "scope": "bookkeeping extraction; transport and color transactions unchanged"
+}

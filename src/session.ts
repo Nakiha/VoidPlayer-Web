@@ -1,7 +1,7 @@
 import type { PresentedFrameToken } from './bitstream-analysis/contract.ts';
 import type { BitstreamAnalysisService, DeepAnalysisState } from './bitstream-analysis/service.ts';
-import { AnalysisFailure, failureInfo } from './bitstream-analysis/failure.ts';
-import { AnalysisTaskPool } from './bitstream-analysis/task-pool.ts';
+import { AnalysisFailure } from './bitstream-analysis/failure.ts';
+import { BitstreamSessionCoordinator } from './session/bitstream.ts';
 import { OpportunisticAudio } from './opportunistic-audio.ts';
 import { mediaDiagnostic } from './media-errors.ts';
 import type { MediaDiagnostic } from './media-errors.ts';
@@ -279,55 +279,20 @@ export class ReviewSession {
   private draw: (slot: Slot, frame: DecodedFrame) => void;
   private presentedFrames = new Map<Slot, PresentedFrameToken>();
   private frameListeners = new Set<(slot:Slot,token:PresentedFrameToken)=>void>();
-  private bitstream?: BitstreamAnalysisService;
-  private bitstreamLoading?: Promise<BitstreamAnalysisService>;
-  private bitstreamPool = new AnalysisTaskPool();
-  private bitstreamLastSlot?: Slot;
-  private bitstreamCompleted = new Map<Slot, { generation: number; progress: NonNullable<DeepAnalysisState['completedStream']> }>();
-  private bitstreamTasks = new Map<Slot, { generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState }>();
-  getBitstreamAnalysisConcurrency() { return this.bitstreamPool.concurrency; }
-  setBitstreamAnalysisConcurrency(value: number) { this.bitstreamPool.setConcurrency(value); this.emit(); }
+  private bitstream = new BitstreamSessionCoordinator({
+    track: slot => {
+      const track = this.tracks.get(slot);
+      return track ? { instance: track, generation: track.sourceGen, available: !track.failure } : undefined;
+    },
+    subscribeInvalidation: listener => this.subscribe(listener),
+    changed: () => this.emit(),
+  });
+  getBitstreamAnalysisConcurrency() { return this.bitstream.concurrency; }
+  setBitstreamAnalysisConcurrency(value: number) { this.bitstream.setConcurrency(value); }
   private async runBitstreamTask<T>(slot: Slot, signal: AbortSignal | undefined,
     initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>): Promise<T> {
     slotValue(slot);
-    const track = this.tracks.get(slot);
-    if (!track || track.failure) throw new AnalysisFailure('invalid-request', 'Track unavailable');
-    signal?.throwIfAborted();
-    this.cancelBitstreamAnalysis(slot);
-    const controller = new AbortController();
-    const task: { generation: number; controller?: AbortController; state?: DeepAnalysisState; service?: BitstreamAnalysisService } =
-      { generation: track.sourceGen, controller, state: { ...initial, queued: true } };
-    this.bitstreamTasks.set(slot, task); this.bitstreamLastSlot = slot;
-    const abort = () => controller.abort(signal?.reason);
-    signal?.addEventListener('abort', abort, { once: true });
-    const off = this.subscribe(() => {
-      if (this.tracks.get(slot) !== track || track.failure)
-        controller.abort(new AnalysisFailure('source-changed', 'Analysis source changed'));
-    });
-    this.emit();
-    let release: (() => void) | undefined;
-    try {
-      release = await this.bitstreamPool.acquire(controller.signal);
-      if (!this.bitstreamLoading) this.bitstreamLoading = import('./bitstream-analysis/service.ts').then(({ BitstreamAnalysisService }) =>
-        this.bitstream = new BitstreamAnalysisService(() => this.emit()));
-      const root = await this.bitstreamLoading;
-      controller.signal.throwIfAborted();
-      task.service = root.fork(() => this.emit());
-      // From here the track service publishes its own running/terminal state.
-      task.state = undefined;
-      return await run(task.service, controller.signal);
-    } catch (error) {
-      if (!task.service || task.service.state.state === 'idle') {
-        const reason = failureInfo(controller.signal.aborted ? controller.signal.reason : error);
-        task.state = { ...initial, state: reason.kind, reason, message: reason.message };
-        this.emit();
-      }
-      throw error;
-    } finally {
-      off(); signal?.removeEventListener('abort', abort);
-      if (this.bitstreamTasks.get(slot) === task) task.controller = undefined;
-      release?.();
-    }
+    return this.bitstream.run(slot, signal, initial, run);
   }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
@@ -357,23 +322,11 @@ export class ReviewSession {
   }
   getBitstreamAnalysisState(slot?: Slot): DeepAnalysisState {
     if (slot !== undefined) slotValue(slot);
-    const selected = slot ?? this.bitstreamLastSlot!;
-    const generation = this.tracks.get(selected)?.sourceGen;
-    const task = this.bitstreamTasks.get(selected);
-    const completion = this.bitstreamCompleted.get(selected);
-    const state = task && (slot === undefined || task.generation === generation) ? task.state ?? task.service?.state ?? { state: 'idle' as const } : { state: 'idle' as const };
-    return structuredClone({ ...state, ...(completion && completion.generation === generation ? { completedStream: completion.progress } : {}) });
+    return this.bitstream.state(slot);
   }
   cancelBitstreamAnalysis(slot?: Slot) {
     if (slot !== undefined) slotValue(slot);
-    for (const [key, task] of this.bitstreamTasks) {
-      if (slot !== undefined && key !== slot) continue;
-      if (!task.controller) continue;
-      const reason = new AnalysisFailure('cancelled', 'Analysis cancelled');
-      task.controller.abort(reason);
-      if (task.state?.queued) { task.state = { ...task.state, state: 'cancelled', queued: false, reason: reason.info }; this.emit(); }
-      task.service?.cancel();
-    }
+    this.bitstream.cancel(slot);
   }
   async requestBitstreamStream(slot: Slot, signal?: AbortSignal) {
     const track = this.tracks.get(slot);
@@ -385,8 +338,7 @@ export class ReviewSession {
     });
     if (this.tracks.get(slot) === track) {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
-      this.bitstreamCompleted.set(slot, { generation: track!.sourceGen, progress: { slot, sourceVersion, ...progress } });
-      this.emit();
+      this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });
     }
     return progress;
   }
@@ -397,7 +349,7 @@ export class ReviewSession {
     if (!track || track.failure) return null;
     const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
     const token = this.getPresentedFrame(slot);
-    const data = this.bitstream?.queryDiagrams(version, token?.picture?.au ?? null, token?.sourcePtsUs ?? track.source.info.firstPtsUs, startAu, limit);
+    const data = this.bitstream.queries?.queryDiagrams(version, token?.picture?.au ?? null, token?.sourcePtsUs ?? track.source.info.firstPtsUs, startAu, limit);
     return data ? { ...data, sourceVersion: version, firstPtsUs: track.source.info.firstPtsUs, offsetUs: track.offsetUs } : null;
   }
   bitstreamChartDomain(slot: Slot, axis: import('./analysis/types.ts').AnalysisAxis = 'pts') {
@@ -406,7 +358,7 @@ export class ReviewSession {
     const track = this.tracks.get(slot);
     if (!track || track.failure) return null;
     const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
-    const bounds = this.bitstream?.chartBounds(version, axis);
+    const bounds = this.bitstream.queries?.chartBounds(version, axis);
     const shift = track.offsetUs - track.source.info.firstPtsUs;
     return { start: Math.min(track.offsetUs, bounds ? bounds.start + shift : track.offsetUs), end: Math.max(track.offsetUs + Math.max(1, track.source.info.durationUs), bounds ? bounds.end + shift : -Infinity) };
   }
@@ -422,12 +374,12 @@ export class ReviewSession {
     if (end <= start) throw new AnalysisFailure('invalid-request', 'Empty diagram viewport');
     const version = track.source.info.source ? `${track.source.info.source.id}@${referenceVersion(track.source.info.source.url)}` : track.source.info.id;
     const firstPtsUs = track.source.info.firstPtsUs, offsetUs = track.offsetUs;
-    const data = this.bitstream?.queryChart(version, start + firstPtsUs - offsetUs, end + firstPtsUs - offsetUs, pixelWidth, axis) ??
+    const data = this.bitstream.queries?.queryChart(version, start + firstPtsUs - offsetUs, end + firstPtsUs - offsetUs, pixelWidth, axis) ??
       { revision: 0, count: 0, codec: null, containerHeaders: [], types: [], pictures: [], buckets: [], aggregated: false, detailMissing: false };
     return { ...data, axis, sourceVersion: version, firstPtsUs, offsetUs, domain, startUs: start, endUs: end,
       anchorAu: this.getPresentedFrame(slot)?.picture?.au ?? null };
   }
-  cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream?.cached(token)??null:null;}
+  cachedBitstreamAnalysis(slot:Slot,presented?:PresentedFrameToken){const token=presented??this.getPresentedFrame(slot);return token?this.bitstream.queries?.cached(token)??null:null;}
   async requestBitstreamAnalysis(slot: Slot, signal?: AbortSignal) {
     const track = this.tracks.get(slot), token = this.getPresentedFrame(slot);
     return this.runBitstreamTask(slot, signal, { state: 'pending' }, (service, taskSignal) => {
@@ -1471,7 +1423,7 @@ export class ReviewSession {
       media: [...this.catalog.values()], marks: this.marks });
   }
   async dispose() {
-    this.cancelLoad(); this.pause();this.cancelBitstreamAnalysis();this.bitstreamTasks.clear();this.bitstreamCompleted.clear();this.bitstream?.dispose();this.frameListeners.clear();this.presentedFrames.clear();
+    this.cancelLoad(); this.pause();this.bitstream.dispose();this.frameListeners.clear();this.presentedFrames.clear();
     this.releaseReaders('dispose');
     // pagehide cannot await the session queue. Terminate owned workers and
     // audio synchronously, while the departing document can still run cleanup.

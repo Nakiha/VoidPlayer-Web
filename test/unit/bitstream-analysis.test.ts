@@ -572,7 +572,7 @@ test('session preserves source completion across eviction, multiple picture task
     const completed=session.getBitstreamAnalysisState('A').completedStream!;
     assert.equal(completed.sourceVersion,'local:uuid'); assert.equal(completed.pictures,3);
     // Remove full frame records exactly as the bounded cache does; completion is independent.
-    (session as any).bitstream.cache.clear();
+    (session as any).bitstream.root.cache.clear();
     for (const time of [100,200]) {
       await session.seek(time);
       assert.equal(session.cachedBitstreamAnalysis('A'),null);
@@ -582,7 +582,7 @@ test('session preserves source completion across eviction, multiple picture task
     }
     assert.equal(requests.filter(target=>target.mode==='stream').length,1);
     assert.equal(requests.filter(target=>target.picture).length,2);
-    (session as any).bitstream.cache.clear(); failPicture=true;
+    (session as any).bitstream.root.cache.clear(); failPicture=true;
     await assert.rejects(session.requestBitstreamAnalysis('A'));
     assert.equal(session.getBitstreamAnalysisState('A').state,'error');
     assert.deepEqual(session.getBitstreamAnalysisState('A').completedStream,completed);
