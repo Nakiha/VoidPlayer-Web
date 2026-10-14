@@ -96,6 +96,7 @@ export class BitstreamAnalysisService {
       sourcePtsUs: token.sourcePtsUs,
       normalizedMediaUs: token.normalizedMediaUs,
       picture: token.picture,
+      ...(source.bitstreamIndexIdentity?{indexIdentity:source.bitstreamIndexIdentity}:{}),
     };
     validateTarget(target);
     signal?.throwIfAborted();
@@ -179,6 +180,7 @@ export class BitstreamAnalysisService {
     target: AnalysisRangeTarget,
     signal?: AbortSignal,
   ): Promise<{ pictures: number }> {
+    target={...target,...(source.bitstreamIndexIdentity?{indexIdentity:source.bitstreamIndexIdentity}:{})};
     try {
       validateRange(target);
     } catch (error) {

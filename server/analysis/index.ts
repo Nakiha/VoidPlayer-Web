@@ -1,3 +1,4 @@
+import { parseTsPacketIndex } from '../../src/ts-packet-index.ts';
 import { parseFlvIndex, FLV_INDEX_BYTES } from '../../src/flv-index-cache.ts';
 import type { MediaLibraryIndex } from '../library.ts';
 import type { MediaIndexIdentity } from '../../src/media-index-identity.ts';
@@ -62,6 +63,17 @@ export async function libraryAnalysisIndex(library: MediaLibraryIndex, id: strin
           }
         }
         return { packets: flvPrefix, complete: flvComplete };
+      }
+      if(identity.kind==='js-ts') {
+        const snapshot=await library.indexJobs.call('stream-manifest',{id,version,identity});
+        if(snapshot.epoch!==epoch)throw new AnalysisFailure('source-changed','Index cache reset');
+        if(!snapshot.manifest?.complete)return {packets:0,complete:false};
+        const bytes=await library.indexJobs.call('get',{id,version,identity});
+        if(!bytes||bytes.length>64*1024*1024)throw new AnalysisFailure('resource-limit','Invalid JS TS index document');
+        const envelope=JSON.parse(Buffer.from(bytes).toString('utf8'));
+        const document=parseTsPacketIndex(envelope.index??envelope,`${id}@${version}`,metadata.size);
+        if(!document)throw new AnalysisFailure('incomplete-reference-state','Invalid JS TS index identity');
+        return {packets:document.packets.length,complete:true};
       }
       const snapshot = await library.indexJobs.call('stream-manifest', { id, version, identity });
       if (snapshot.epoch !== epoch) throw new AnalysisFailure('source-changed', 'Index cache reset');

@@ -1,3 +1,4 @@
+import { isAnnexB, nalRanges } from './nal-framing.ts';
 /** Bounded H.264 SPS/VUI parsing for geometry and native reorder capability. */
 import type { HevcGeometry } from './hevc-geometry.ts';
 export interface AvcGeometry extends HevcGeometry { interlaced: boolean; maxReorderFrames: number | null; }
@@ -42,6 +43,10 @@ export function parseAvcSps(nal:Uint8Array):AvcGeometry {
 }
 export function avcGeometry(description:Uint8Array):AvcGeometry|null {
   try{
+    if(isAnnexB(description)){
+      const values=nalRanges('h264',description,description).filter(n=>(description[n.offset]&31)===7).map(n=>parseAvcSps(description.subarray(n.offset,n.offset+n.size)));
+      return values.length&&values.every(v=>JSON.stringify(v)===JSON.stringify(values[0]))?values[0]:null;
+    }
     if(description.length<7||description[0]!==1)return null;
     let offset=6;const values:AvcGeometry[]=[];
     for(let i=0;i<(description[5]&31);i++){
@@ -58,6 +63,7 @@ export const nativeAvcCompatible=(g:AvcGeometry|null)=>!!g&&!g.interlaced&&g.max
 /** AVC samples may repeat/change parameter sets in-band without a new FLV
  * sequence header. Select those sets before handing a key picture to WebCodecs. */
 export function avcInBandDescription(bytes:Uint8Array,current:Uint8Array):Uint8Array|null {
+  if(isAnnexB(current))return null; // Static TS source validates each in-band set before decode.
   if(current.length<7)return null;
   const lengthBytes=(current[4]&3)+1;let offset=0;
   const sps:Uint8Array[]=[],pps:Uint8Array[]=[];
@@ -81,6 +87,7 @@ export function avcInBandDescription(bytes:Uint8Array,current:Uint8Array):Uint8A
 /** A container sync/recovery flag is not WebCodecs' AVC key-chunk contract.
  * Inspect length-prefixed NAL units; only IDR slices establish a fresh DPB. */
 export function avcHasIdr(bytes: Uint8Array, description: Uint8Array): boolean {
+  if(isAnnexB(description))return nalRanges('h264',description,bytes).some(n=>(bytes[n.offset]&31)===5);
   if (description.length < 7 || description[0] !== 1) throw new Error('invalid AVC configuration');
   const lengthBytes = (description[4] & 3) + 1;
   let offset = 0, idr = false;

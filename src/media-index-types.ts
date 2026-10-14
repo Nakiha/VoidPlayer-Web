@@ -1,7 +1,7 @@
 import type { MediaIndexIdentity } from './media-index-identity.ts';
 
 export interface ServerIndexResult { epoch: number; index: unknown | null; }
-export interface MediaIndexScanProgress { scannedBytes: number; totalBytes: number; packets: number; }
+export interface MediaIndexScanProgress { scannedBytes: number; totalBytes: number; packets: number; bytesRead?: number; }
 export interface MediaIndexRecordManifest {
   epoch: number; buildId: string; kind: 'ffmpeg'; state: 'building' | 'streaming' | 'complete' | 'failed';
   identity: MediaIndexIdentity; metadata: Record<string, unknown>; recordBytes: number; lastSeq: number;

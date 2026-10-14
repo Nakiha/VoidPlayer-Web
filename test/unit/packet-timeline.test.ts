@@ -1,3 +1,4 @@
+import type { PacketDecodeIndex } from '../../src/flv-decoder.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {PacketTimeline} from '../../src/packet-timeline.ts';
@@ -118,7 +119,7 @@ test('a growing decode frontier waits without drain/reset and resumes at the sam
 
 test('a recovery boundary drains the prefix, resets even without a config change, and isolates seeks',async()=>{
  const {timeline,closed}=fixture();
- const index:FlvIndex={...timeline.index,configurations:undefined,packets:timeline.index.packets.map((p,i)=>({...p,configuration:undefined,...(i?{discontinuity:true}:{})}))};
+ const index:PacketDecodeIndex={...timeline.index,configurations:undefined,packets:timeline.index.packets.map((p,i)=>({...p,configuration:undefined,...(i?{discontinuity:true}:{})}))};
  timeline.replaceIndex(index);let resets=0;
  const reset=timeline.decoder.reset.bind(timeline.decoder);timeline.decoder.reset=()=>{resets++;reset();};
  try{

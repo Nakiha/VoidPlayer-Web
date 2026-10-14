@@ -1,0 +1,113 @@
+{
+  "baseEngineering": "edc2311c0a567f1937150b61a661aae2ac4fd6a8",
+  "baseMain": "cf4f379d72bde9fc2de501a2550a287632c5b1aa",
+  "coveredOldPrs": [
+    {
+      "baseRefName": "codex/ts-playback-diagnostics",
+      "headRefName": "codex/js-h264-ts-packets",
+      "headRefOid": "7abbe61009be47ff5539cf45105b57128172fad9",
+      "isDraft": true,
+      "number": 70,
+      "title": "feat(media): add independent JS H264 TS packet adapter",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/70"
+    },
+    {
+      "baseRefName": "codex/js-h264-ts-packets",
+      "headRefName": "codex/js-ts-index-cache",
+      "headRefOid": "0f1aaaee66ac06bee2c95586de40d0f9047d0696",
+      "isDraft": true,
+      "number": 71,
+      "title": "feat(index): persist source-bound JS TS library indexes",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/71"
+    },
+    {
+      "baseRefName": "codex/js-ts-index-cache",
+      "headRefName": "codex/js-ts-playback-engine",
+      "headRefOid": "728252ea7553ba9890a854704f2ba054ea11e6db",
+      "isDraft": true,
+      "number": 75,
+      "title": "Add JS H.264 TS playback engine to packet Worker",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/75"
+    },
+    {
+      "baseRefName": "codex/js-ts-playback-engine",
+      "headRefName": "codex/js-ts-product-route",
+      "headRefOid": "5f2b52a15aab0ace874dcd85c7ade5bd7e01b2bb",
+      "isDraft": true,
+      "number": 79,
+      "title": "feat(media): admit static H264 TS through shared JS packets",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/79"
+    },
+    {
+      "baseRefName": "codex/js-ts-product-route",
+      "headRefName": "codex/hevc-annexb-metadata",
+      "headRefOid": "b80df26ef1dc46da2b23c23eee747b44b0e17fd5",
+      "isDraft": true,
+      "number": 83,
+      "title": "feat(codec): read HEVC Annex-B picture and SPS metadata",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/83"
+    },
+    {
+      "baseRefName": "codex/js-ts-index-cache",
+      "headRefName": "codex/content-index-handler",
+      "headRefOid": "9e94e463811c251f87c02ebb4a3db61c018846e6",
+      "isDraft": true,
+      "number": 81,
+      "title": "refactor(server): isolate frame index request and stream ownership",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/81"
+    },
+    {
+      "baseRefName": "codex/content-index-handler",
+      "headRefName": "codex/content-thumbnail-handler",
+      "headRefOid": "6e16f4aef712aeb9f0ebd452f65f34420f6d20a3",
+      "isDraft": true,
+      "number": 82,
+      "title": "refactor(server): isolate thumbnail HTTP request ownership",
+      "url": "https://github.com/Nakiha/VoidPlayer-Web/pull/82"
+    }
+  ],
+  "integrationCommits": [
+    {
+      "oldPr": 70,
+      "oldHead": "7abbe61009be47ff5539cf45105b57128172fad9",
+      "integrationCommit": "e46085c4aef6f4e4aa95234c039886581d79d367",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 71,
+      "oldHead": "0f1aaaee66ac06bee2c95586de40d0f9047d0696",
+      "integrationCommit": "91ef9ee71227198eef3ef21c5400c5e4f3ec92ce",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 75,
+      "oldHead": "728252ea7553ba9890a854704f2ba054ea11e6db",
+      "integrationCommit": "3584354303994927d2a726a6de0aba5fc89b858f",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 79,
+      "oldHead": "5f2b52a15aab0ace874dcd85c7ade5bd7e01b2bb",
+      "integrationCommit": "553db919c07208646dd4169788b179c00f3ec443",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 83,
+      "oldHead": "b80df26ef1dc46da2b23c23eee747b44b0e17fd5",
+      "integrationCommit": "3241ff5d2c574b09db63b6e1f42fda36c88050cd",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 81,
+      "oldHead": "9e94e463811c251f87c02ebb4a3db61c018846e6",
+      "integrationCommit": "e0c8fce8a9e5c3cd5a2e3d05274a06cb0c770ed1",
+      "resolution": "Preserve both reviewed behaviors and canonical test registration."
+    },
+    {
+      "oldPr": 82,
+      "oldHead": "6e16f4aef712aeb9f0ebd452f65f34420f6d20a3",
+      "integrationCommit": "26345d4f0a45db36d573115c522b8acef06430a3"
+    }
+  ],
+  "scope": "Existing finite H264 TS adapter/index/cache/packet-engine/product-route and HEVC Annex-B metadata only, plus dependent index/thumbnail HTTP modules. No new HEVC TS/Matroska admission or demuxer removal. Index product-level cross-worker restart reuse remains incomplete. Old PRs remain open until parent coverage review."
+}
