@@ -107,10 +107,12 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
     if (typeof worker.addEventListener === 'function') {
       worker.addEventListener('message', (event: MessageEvent<WorkerMessage<C>>) => onMessage(event.data));
       worker.addEventListener('error', event => fail(event.message ?? 'unknown'));
+      worker.addEventListener('messageerror', () => fail('Invalid worker reply (反序列化失败)'));
     } else {
       const nodeWorker = worker as unknown as import('node:worker_threads').Worker;
       nodeWorker.on('message', onMessage);
       nodeWorker.on('error', error => fail(error instanceof Error ? error.message : String(error)));
+      nodeWorker.on('messageerror', () => fail('Invalid worker reply (反序列化失败)'));
       nodeWorker.on('exit', code => fail(`exit ${code}`));
     }
   }
