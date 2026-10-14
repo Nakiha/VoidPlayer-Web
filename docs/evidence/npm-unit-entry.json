@@ -9,7 +9,7 @@
     "darwin",
     "win32"
   ],
-  "contractAssertionsPassed": 30,
+  "contractTestCasesPassed": 30,
   "npmSelectedCasesPassed": 2,
   "initialCompleteRun": {
     "passed": 131,
