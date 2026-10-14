@@ -29,6 +29,10 @@ test('Matroska ordinary references/discardable pictures remain valid, and audio 
  const clocks=await clocksFor(ebml('a0',ebml('a1',block()),ebml('fb',Buffer.from([0xff])),ebml('9b',Buffer.from([33])),ebml('75a2',Buffer.from([0]))),ebml('a3',block(0x81)),ebml('a0',ebml('a1',block(0,2)),ebml('75a2',Buffer.from([1]))));
  assert.equal(clocks.size,2);
 });
+test('Matroska visible reference Block accepts UNU bit0=1 while high reserved bits remain invalid',async()=>{
+ const clocks=await clocksFor(ebml('a0',ebml('a1',block(1)),ebml('fb',Buffer.from([0xff]))));assert.equal(clocks.size,1);
+ await assert.rejects(clocksFor(ebml('a0',ebml('a1',block(0x10)),ebml('fb',Buffer.from([0xff])))),/reserved video block flags/);
+});
 
 test('local JS identity covers every byte, is independent of read cursors and bounds each allocation',async()=>{
  const bytes=new Uint8Array(2*1024*1024+19),reads:number[]=[];
