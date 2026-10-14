@@ -14,6 +14,9 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  const blobDiagnostics=[];page.on('pageerror',error=>blobDiagnostics.push({event:'pageerror',message:error.message,stack:error.stack,at:Date.now()}));await page.exposeFunction('__vpReportBlob',row=>blobDiagnostics.push(row));
  await page.addInitScript(()=>{
   window.__vpAnalysisQA=true;
+  window.__vpJpegBlobReads=0;
+  const readBlob=Blob.prototype.arrayBuffer;
+  Blob.prototype.arrayBuffer=function(...args){if(this.type==='image/jpeg')window.__vpJpegBlobReads++;return readBlob.apply(this,args);};
   // Preserve actual URL/Worker behavior while recording which owner created
   // a failed blob. WebKit may truncate an access-control error before its URL.
   window.__vpBlobDiagnostics=[];
@@ -75,15 +78,27 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
  // Persisted receipt validation runs in a new source Worker after a full page
  // reload. A self-consistent dropped/renumbered row cannot authorize reuse.
  const name=filter??'hevc.mkv';
+ const clearThumbnails=()=>page.evaluate(async()=>{
+  const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-thumbnails');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+  try{if(db.objectStoreNames.contains('thumbs'))await new Promise((resolve,reject)=>{const tx=db.transaction(['thumbs','lru'],'readwrite');tx.objectStore('thumbs').clear();tx.objectStore('lru').clear();tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);});}finally{db.close();}
+ });
+ const thumbnailPersisted=async()=>{
+  await page.waitForFunction(async()=>{
+   const db=await new Promise((resolve,reject)=>{const request=indexedDB.open('voidplayer-thumbnails');request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);});
+   try{if(!db.objectStoreNames.contains('thumbs'))return false;return await new Promise((resolve,reject)=>{const request=db.transaction('thumbs').objectStore('thumbs').getAll();request.onsuccess=()=>resolve(request.result.some(row=>row.sourcePtsUs===0&&row.width>0&&row.height>0&&row.bytes instanceof ArrayBuffer&&row.bytes.byteLength>2&&new Uint8Array(row.bytes)[0]===255&&new Uint8Array(row.bytes)[1]===216));request.onerror=()=>reject(request.error);});}finally{db.close();}
+  });
+  assert.equal(await page.evaluate(()=>window.__vpJpegBlobReads),0,'fresh software thumbnail persists Worker JPEG bytes without reading a Blob');
+ };
  await call('remove_review_track',{slot:'A'});
+ await call('set_review_color_mode',{mode:'reference'});await call('set_reference_decode',{decoder:'software',depth:2});
  await page.evaluate(async()=>{const db=await new Promise((ok,bad)=>{const r=indexedDB.open('voidplayer-js-packet-index-v1',1);r.onsuccess=()=>ok(r.result);r.onerror=()=>bad(r.error);});
   try{await new Promise((ok,bad)=>{const tx=db.transaction('indexes','readwrite'),s=tx.objectStore('indexes'),cursor=s.openCursor();cursor.onsuccess=()=>{const c=cursor.result;if(!c)return;const record=c.value,d=JSON.parse(record.payload);d.packets.splice(2,1);d.packets.forEach((p,i)=>p.au=i);d.completeness.packets=d.packets.length;record.payload=JSON.stringify(d);c.update(record);c.continue();};tx.oncomplete=ok;tx.onerror=()=>bad(tx.error);});}finally{db.close();}});
- await page.reload();await page.waitForFunction(()=>window.voidPlayer?.tools);
+ await page.reload();await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
  await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();
- let restored=(await call('get_review_session')).tracks[0];assert.equal(restored.jsIndexReused,false);assert.equal(restored.jsIndexPacketsScanned,600,'invalid persisted receipt rebuilds actual EOF coverage');
- await call('remove_review_track',{slot:'A'});await page.reload();await page.waitForFunction(()=>window.voidPlayer?.tools);
- await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();restored=(await call('get_review_session')).tracks[0];assert.equal(restored.jsIndexReused,true);assert.equal(restored.jsIndexPacketsScanned,0,'complete rebuilt index survives page and Worker restarts');
+ let restored=(await call('get_review_session')).tracks[0];assert.equal(restored.decoder,'ffmpeg-wasm');await thumbnailPersisted();assert.equal(restored.jsIndexReused,false);assert.equal(restored.jsIndexPacketsScanned,600,'invalid persisted receipt rebuilds actual EOF coverage');
+ await call('remove_review_track',{slot:'A'});await page.reload();await page.waitForFunction(()=>window.voidPlayer?.tools);await clearThumbnails();
+ await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));await stable();restored=(await call('get_review_session')).tracks[0];assert.equal(restored.decoder,'ffmpeg-wasm');await thumbnailPersisted();assert.equal(restored.jsIndexReused,true);assert.equal(restored.jsIndexPacketsScanned,0,'complete rebuilt index survives page and Worker restarts');
  await writeFile(artifact('blob-diagnostics.json'),JSON.stringify({errors:blobDiagnostics,lastDocument:await page.evaluate(()=>window.__vpBlobDiagnostics)},null,2));
- assert.deepEqual(errors,[]);await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors,persistence:{corruptRebuilt:true,freshRuntimeReused:true}},null,2));
+ assert.deepEqual(errors,[]);await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors,persistence:{corruptRebuilt:true,freshRuntimeReused:true,thumbnailBytesPersisted:true,jpegBlobReads:0}},null,2));
  console.log(`PASS ${engine}: ${rows.length} actual JS-container local/library decoder/analysis cases plus corrupt-cache rebuild and fresh-runtime reuse; hardware use not inferred`);
 });

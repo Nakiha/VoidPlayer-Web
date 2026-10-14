@@ -61,20 +61,25 @@ async function execute(accepted: AcceptedOffer): Promise<void> {
       key: key.slice(0, 48), width: rendered.width, height: rendered.height,
       renderMs: Math.round((performance.now() - renderStart) * 10) / 10,
     });
-    const blob = rendered.blob;
-    if (!blob || blob.size === 0 || blob.size > THUMB_MAX_BYTES) {
-      thumbnailState.skip(!blob || blob.size === 0 ? 'encode:failed' : 'budget:encode-bytes');
+    const bytes='bytes' in rendered?rendered.bytes:undefined;
+    const encodedBlob='blob' in rendered?rendered.blob:null;
+    const byteLength=bytes?.byteLength??encodedBlob?.size??0;
+    if (byteLength === 0 || byteLength > THUMB_MAX_BYTES) {
+      thumbnailState.skip(byteLength === 0 ? 'encode:failed' : 'budget:encode-bytes');
       settle(false);
       return;
     }
     const record = {
-      key, blob, width: rendered.width, height: rendered.height,
+      key, width: rendered.width, height: rendered.height,
       sourcePtsUs: context.sourcePtsUs, updatedAt: Date.now(),
     };
     // Local artifact first: instant display even when the server is slow,
     // offline or refusing writes. A late encode still cleans up its own
     // resources here; nothing is left for a timeout to forget.
-    await putLocalThumbnail(record);
+    // Preserve the Worker-transferred JPEG allocation through persistence;
+    // rebuilding a Blob and reading it back introduces an internal URL load.
+    await putLocalThumbnail(bytes?{...record,bytes}:{...record,blob:encodedBlob!});
+    const blob=encodedBlob??new Blob([bytes!],{type:'image/jpeg'});
     publishLocalThumbnail(key, blob);
     settle(true);
     if (context.kind === 'library' && context.libraryId && context.mediaVersion && context.epoch !== undefined) {
@@ -102,12 +107,12 @@ async function encodeSample(accepted: AcceptedOffer) {
   return { ...rendered, blob };
 }
 
-function encodePixels(accepted: AcceptedOffer): Promise<{ width: number; height: number; blob: Blob } | null> {
+function encodePixels(accepted: AcceptedOffer): Promise<{ width: number; height: number; bytes: ArrayBuffer } | null> {
   if (typeof Worker === 'undefined') return Promise.resolve(null);
   return new Promise(resolve => {
     const worker = new Worker(new URL('./pixel-worker.ts', import.meta.url), { type: 'module' });
     let done = false;
-    const finish = (result: { width: number; height: number; blob: Blob } | null) => {
+    const finish = (result: { width: number; height: number; bytes: ArrayBuffer } | null) => {
       if (done) return;
       done = true;
       worker.onmessage = worker.onerror = worker.onmessageerror = null;
@@ -120,7 +125,7 @@ function encodePixels(accepted: AcceptedOffer): Promise<{ width: number; height:
     worker.onmessageerror = () => finish(null);
     worker.onmessage = event => {
       const value = event.data;
-      finish(value ? { width: value.width, height: value.height, blob: new Blob([value.bytes], { type: 'image/jpeg' }) } : null);
+      finish(value ? { width: value.width, height: value.height, bytes: value.bytes } : null);
     };
     const { description, kind, width, height, rotation, pixels } = accepted.owned;
     try {

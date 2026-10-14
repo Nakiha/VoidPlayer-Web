@@ -197,7 +197,7 @@ for (const failure of ['messageerror', 'error', 'postMessage', 'expiry', 'succes
       if (failure === 'messageerror') worker.onmessageerror?.();
       else if (failure === 'error') worker.onerror?.();
       else if (failure === 'expiry') t.mock.timers.tick(500);
-      else if (failure === 'success') worker.onmessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]) } });
+      else if (failure === 'success') worker.onmessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer } });
       await drainThumbnailTask();
       assert.equal(worker.terminated, 1);
       assert.equal(accepted.onExpire, undefined);
@@ -211,7 +211,7 @@ for (const failure of ['messageerror', 'error', 'postMessage', 'expiry', 'succes
       assert.equal(original.pixels!.byteLength, 16);
       assert.equal(accepted.owned.pixels, undefined);
       if (failure !== 'postMessage') assert.equal(worker.transferred!.pixels.byteLength, 16);
-      lateMessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([1, 2]) } });
+      lateMessage?.({ data: { width: 2, height: 2, bytes: new Uint8Array([1, 2]).buffer } });
       lateError?.();
       await drainThumbnailTask();
       assert.equal(worker.terminated, 1);
@@ -243,3 +243,31 @@ for (const failure of ['messageerror', 'error', 'postMessage', 'expiry', 'succes
     }
   });
 }
+
+test('pixel thumbnail task persists transferred JPEG bytes after worker termination without reading a Blob',async t=>{
+  const {IDBFactory}=await import('fake-indexeddb');
+  const {runThumbnailTask}=await import('../../src/thumbnails/tasks.ts');
+  const {getLocalThumbnail,closeThumbnailDatabase}=await import('../../src/thumbnails/local-store.ts');
+  const descriptors=new Map(['Worker','indexedDB'].map(name=>[name,Object.getOwnPropertyDescriptor(globalThis,name)]));
+  closeThumbnailDatabase();thumbnailState.reset();ThumbnailTestWorker.instances=[];ThumbnailTestWorker.failPost=false;
+  Object.defineProperty(globalThis,'Worker',{configurable:true,value:ThumbnailTestWorker});
+  Object.defineProperty(globalThis,'indexedDB',{configurable:true,value:new IDBFactory()});
+  t.after(()=>{closeThumbnailDatabase();for(const [name,descriptor] of descriptors){if(descriptor)Object.defineProperty(globalThis,name,descriptor);else Reflect.deleteProperty(globalThis,name);}});
+  let reads=0;
+  const read=t.mock.method(Blob.prototype,'arrayBuffer',async()=>{reads++;throw new Error('byte-backed task must not load an internal Blob URL');});
+  const accepted=offerFirstFrameCandidate(context({cacheKey:'worker-byte-storage'}),rgbaFrame());assert.equal(typeof accepted,'object');if(typeof accepted!=='object')return;
+  try{
+    runThumbnailTask(accepted);await new Promise<void>(resolve=>setTimeout(resolve,0));
+    const worker=ThumbnailTestWorker.instances[0];assert.ok(worker);
+    const jpeg=Uint8Array.of(0xff,0xd8,0xff,0xd9),expected=jpeg.slice();
+    worker.onmessage?.({data:{width:2,height:2,bytes:jpeg.buffer}});
+    assert.equal(worker.terminated,1,'worker is already disposed before persistence completes');
+    const deadline=Date.now()+2000;while(thumbnailState.inFlight.size&&Date.now()<deadline)await drainThumbnailTask();
+    assert.equal(thumbnailState.inFlight.size,0);assert.equal(thumbnailState.holdingFull,false);
+    assert.equal(reads,0,'the whole task and persistence path use the returned ArrayBuffer directly');
+    assert.ok(thumbnailState.completed.has('worker-byte-storage'));
+    read.mock.restore();jpeg.fill(0);closeThumbnailDatabase();
+    const stored=await getLocalThumbnail('worker-byte-storage');assert.ok(stored,'actual IndexedDB bytes survive closing and reopening the connection');
+    assert.deepEqual(new Uint8Array(await stored.blob.arrayBuffer()),expected);assert.equal(stored.width,2);assert.equal(stored.height,2);
+  }finally{accepted.onExpire?.();accepted.release();settleOffer(accepted.context.cacheKey,false);}
+});

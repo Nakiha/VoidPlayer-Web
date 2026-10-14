@@ -75,10 +75,20 @@ export async function getLocalThumbnail(key: string): Promise<StoredThumbnail | 
     });
   } catch { return undefined; }
 }
-export async function putLocalThumbnail(entry: StoredThumbnail): Promise<boolean> {
+/** Worker JPEG bytes stay owned by the task until IndexedDB clones them.
+ * Legacy callers may still provide a Blob; that conversion is kept separate. */
+export async function putLocalThumbnail(entry: StoredThumbnail | (Omit<StoredThumbnail,'blob'> & {bytes:ArrayBuffer})): Promise<boolean> {
   try {
-    if (entry.blob.size > LOCAL_THUMB_BYTES) return false;
-    const { blob, ...metadata } = entry, bytes = await blob.arrayBuffer();
+    let bytes:ArrayBuffer;
+    if('bytes' in entry){
+      if(entry.bytes.byteLength>LOCAL_THUMB_BYTES)return false;
+      bytes=entry.bytes;
+    }else{
+      if(entry.blob.size>LOCAL_THUMB_BYTES)return false;
+      bytes=await entry.blob.arrayBuffer();
+    }
+    const {key,width,height,sourcePtsUs,updatedAt}=entry;
+    const metadata={key,width,height,sourcePtsUs,updatedAt};
     await transact<void>(tx => {
       tx.objectStore(STORE).put({ ...metadata, bytes });
       tx.objectStore(META).put({ key: entry.key, bytes: bytes.byteLength, accessedAt: Date.now() }); trim(tx);
