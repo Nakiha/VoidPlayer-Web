@@ -151,7 +151,7 @@ async function chooseMp4DemuxPlan(input: RandomAccessInput, signal?: AbortSignal
 /** Codec/container admission stays independent of decoder availability. */
 async function matroskaMigrated(input:RandomAccessInput,signal?:AbortSignal){
   const media=new Input({source:'file' in input?new BlobSource(input.file):new UrlSource(input.url),formats:ALL_FORMATS}),detach=onLoadAbort(signal,()=>media.dispose());
-  try{loadAborted(signal);await media.getFormat();const tracks=await media.getVideoTracks();loadAborted(signal);if(tracks.length!==1||tracks[0].rotation!==0)return false;return ['avc','hevc','vp8','vp9'].includes(await tracks[0].getCodec()??'');}
+  try{loadAborted(signal);await media.getFormat();const tracks=await media.getVideoTracks();loadAborted(signal);if(tracks.length!==1||tracks[0].rotation!==0||tracks[0].squarePixelWidth!==tracks[0].codedWidth||tracks[0].squarePixelHeight!==tracks[0].codedHeight)return false;return ['avc','hevc','vp8','vp9'].includes(await tracks[0].getCodec()??'');}
   finally{detach();media.dispose();}
 }
 
@@ -221,7 +221,7 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
     contextLog().info('media', '媒体管线追踪', {
       phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
-      indexBackend: source.info.indexSource ?? source.info.indexKind ?? 'container',
+      indexBackend: source.info.indexBackend ?? source.info.indexSource ?? source.info.indexKind ?? 'container',
       decoderBackend: source.info.decoder, colorMode,
       firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
       stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,

@@ -37,7 +37,14 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
     for(let at=start;at<end;){const h=await header(at,end);if(h.unknown)bad('unknown track element length');
       if(h.id===0xd7)id=await uint(h.data,h.end);
       if(h.id===0x83)type=await uint(h.data,h.end);
-      if(h.id===0x6d80||h.id===0x23314f||h.id===0x6624)unsupported=true; // encodings / timestamp scale / codec state
+      if(h.id===0x6d80||h.id===0x23314f||h.id===0x6624||h.id===0xe2)unsupported=true; // encodings / timestamp scale / codec state / track operations
+      // Matroska element semantics: https://www.matroska.org/technical/elements.html
+      if(h.id===0xe0)for(let q=h.data;q<h.end;){const video=await header(q,h.end);if(video.unknown)bad('unknown video metadata length');
+        if(video.id===0x7670)unsupported=true;
+        if([0x54aa,0x54bb,0x54cc,0x54dd,0x53b8,0x53c0,0x54b2].includes(video.id)&&await uint(video.data,video.end)!==0)unsupported=true;
+        if(video.id===0x9a&&await uint(video.data,video.end)===1)unsupported=true;
+        q=video.end;
+      }
       if((h.id===0x56aa||h.id===0x56bb)&&await uint(h.data,h.end)!==0)unsupported=true;
       at=h.end;
     }
@@ -47,7 +54,7 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
     let timestamp:number|undefined,ordinal=0,at=start;
     const block=async(data:number,blockEnd:number,offset:number)=>{
       const bytes=await read(data,Math.min(12,blockEnd-data)),id=vint(bytes,0);
-      if(id.value!==trackId)return;
+      if(id.value!==trackId)return false;
       if(bytes.length<id.width+3)bad('truncated block header');
       if(timestamp===undefined)bad('block precedes cluster timestamp');
       if(bytes[id.width+2]&6)outside('laced video blocks require verified multi-picture mapping');
@@ -56,14 +63,15 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
       const locator=start+ordinal++;
       if(clocks.size>=250000)throw new MediaOpenError('resource','JS Matroska packet budget');
       clocks.set(locator,{pts,blockOffset:offset,size:blockEnd-data-id.width-3,timebase:[scale,1e9]});
+      return true;
     };
     while(at<end){const h=await header(at,end);
       if(unknown&&[0x1f43b675,0x1549a966,0x1654ae6b,0x1c53bb6b,0x1254c367,0x114d9b74,0x1941a469,0x1043a770].includes(h.id))break;
       if(h.id===0xe7)timestamp=await uint(h.data,h.end);
       else if(h.id===0xa3)await block(h.data,h.end,at);
-      else if(h.id===0xa0){for(let p=h.data;p<h.end;){const child=await header(p,h.end);if(child.unknown)bad('unknown block group member length');
-        if(child.id===0xa4||child.id===0x75a1)outside('codec state / block additions require separate admission');
-        if(child.id===0xa1)await block(child.data,child.end,p);p=child.end;}}
+      else if(h.id===0xa0){let selected=false,transformed=false;for(let p=h.data;p<h.end;){const child=await header(p,h.end);if(child.unknown)bad('unknown block group member length');
+        if(child.id===0xa4||child.id===0x75a1)transformed=true;
+        if(child.id===0xa1)selected=await block(child.data,child.end,p);p=child.end;}if(selected&&transformed)outside('video codec state / block additions require separate admission');}
       else if(h.unknown)bad('unknown cluster member length');
       at=h.end;
     }

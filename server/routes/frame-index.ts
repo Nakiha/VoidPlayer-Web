@@ -145,7 +145,7 @@ export async function handleFrameIndexRoute(library: RouteContext['library'], re
     } catch (error) {
       if (indexStreamStarted && !res.destroyed) {
         try {
-          await writeMediaIndexEvent(res, { type: 'error', message: (error as Error).message || '服务端索引构建失败。' });
+          await writeMediaIndexEvent(res, { type: 'error', message: (error as Error).message || '服务端索引构建失败。',...(error instanceof AdminError?{code:error.code}:{}) });
           res.end();
         } catch {}
       } else if (!res.headersSent && !res.destroyed) {

@@ -1,4 +1,5 @@
 import { buildJsTsIndexDocument } from './js-ts-index-builder.ts';
+import {TsCombinationNotMigrated} from '../src/ts-packet-source.ts';
 import { parentPort, workerData } from 'node:worker_threads';
 import { openIndexDatabase } from './sqlite.ts';
 import { prepareFrameIndex, FrameIndexStore } from './frame-index-store.ts';
@@ -86,7 +87,8 @@ parentPort!.on('message', async (request: {
     }
     parentPort!.postMessage({
       error: (error as Error).message,
-      status: error instanceof AdminError ? error.status : 500,
+      status: error instanceof TsCombinationNotMigrated?422:error instanceof AdminError ? error.status : 500,
+      code:error instanceof TsCombinationNotMigrated?'js-combination-not-migrated':error instanceof AdminError?error.code:undefined,
     });
   } finally {
     db.close();

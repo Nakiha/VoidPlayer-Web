@@ -33,6 +33,7 @@ export class JsContainerEngine {
   private primed: FlvFrame | null = null;
   private closed = false;
   private indexPacketsScanned=0;
+  private indexOrigin:'client'|'server'='client';
   private outputSize?: { width: number; height: number };
   private createNative:typeof nativeFlvDecoder;
   private createSoftware:typeof wasmFlvDecoder;
@@ -82,7 +83,7 @@ export class JsContainerEngine {
     let cached:JsPacketIndex|undefined;
     if(this.persistent){
       if('file' in this.input){this.sourceVersion=await localJsSourceVersion(this.reader,this.controller.signal,bytes=>onIndexProgress?.({packets:0,scannedBytes:bytes,totalBytes:this.reader.size,bytesRead:bytes}));cached=await loadLocalJsIndex(this.reader,this.sourceVersion,this.format,this.controller.signal,true);}
-      else cached=await loadServerJsIndex(this.input.url,this.sourceVersion,this.reader.size,this.format,this.controller.signal,onIndexProgress);
+      else {cached=await loadServerJsIndex(this.input.url,this.sourceVersion,this.reader.size,this.format,this.controller.signal,onIndexProgress);if(cached)this.indexOrigin='server';}
     }
     const Source=this.format==='ts'?TsPacketSource:MatroskaPacketSource;
     this.source = new Source({size:this.reader.size,read:async(at,length)=>{
@@ -125,7 +126,7 @@ export class JsContainerEngine {
         this.primed = await this.first(this.timeline, this.index.firstPts);
       }
       this.outputSize = { width: this.primed.width, height: this.primed.height };
-      return { ...this.decoderInfo(), indexSource:this.persistent&&'url' in this.input?'server' as const:'client' as const,jsIndexReused:this.source!.indexReused,jsIndexPacketsScanned:this.indexPacketsScanned, firstPtsUs: this.primed.pts,
+      return { ...this.decoderInfo(), indexSource:this.indexOrigin,jsIndexReused:this.source!.indexReused,jsIndexPacketsScanned:this.indexPacketsScanned, firstPtsUs: this.primed.pts,
         durationUs: this.index.firstPts + this.index.duration - this.primed.pts,
         times: this.index.order.map(au => this.index!.packets[au].pts - this.primed!.pts),
         seekAnchorCount: this.index.packets.filter(packet=>packet.key).length,
@@ -134,7 +135,7 @@ export class JsContainerEngine {
   }
   private decoderInfo() {
     const decoder = this.timeline!.decoder;
-    return { codec: this.document!.codec, decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
+    return { codec: this.document!.codec,demuxBackend:this.document!.kind,indexBackend:this.document!.kind==='js-ts-packets'?'js-ts-packet-index':'js-matroska-packet-index', decoder: decoder.kind, hardwareAcceleration: decoder.hardwareAcceleration,
       width: this.outputSize!.width, height: this.outputSize!.height, ...decoder.metadata?.() };
   }
   async at(pts: number, recycle?: ArrayBuffer) {

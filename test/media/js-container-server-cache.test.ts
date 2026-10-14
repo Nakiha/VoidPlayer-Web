@@ -11,6 +11,8 @@ import {JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY} from '../..
 import {MediaIndexClient} from '../../src/media-index-client.ts';
 import {WorkerRpc} from '../../src/worker-rpc.ts';
 import type {PacketCommands} from '../../src/worker-protocol.ts';
+import {loadServerJsIndex} from '../../src/js-packet-index-client.ts';
+import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
 
 test('JS library indexes persist across server and consumer Worker restarts; corrupt complete documents rebuild without WASM demux',async()=>{
  const temp=await mkdtemp(join(tmpdir(),'vp-js-container-store-')),root=resolve('fixtures/js-container'),database=join(temp,'library.sqlite');
@@ -46,5 +48,7 @@ test('JS library indexes persist across server and consumer Worker restarts; cor
   assert.deepEqual(await read('hevc.mkv'),documents.get('hevc.mkv'));assert.equal(builds,1,'one JS rebuild restores actual complete file coverage');
   const response=await fetch(`${base}/api/media/${e.id}/frame-index?v=${e.version}&kind=js-matroska&stream=video:0&schema=1&indexer=${JS_MATROSKA_MEDIA_INDEX_IDENTITY.indexerBuild}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({epoch:await library!.indexJobs.call('epoch'),index:damaged})});
   assert.equal(response.status,405,'clients cannot upload their own completeness authority');
+  const outside=library!.browse().entries.find(e=>e.name==='ffv1-unmigrated.mkv')!;
+  await assert.rejects(loadServerJsIndex(`${base}/api/media/${outside.id}?v=${outside.version}`,`${outside.id}@${outside.version}`,outside.size,'matroska',new AbortController().signal),TsCombinationNotMigrated,'explicit codec admission result survives Worker/RPC/NDJSON; raw IO or corruption errors cannot select this route');
  }finally{await stop();await rm(temp,{recursive:true,force:true});}
 });

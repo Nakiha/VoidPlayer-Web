@@ -33,6 +33,7 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
   if(input==='local')await page.locator('#file-A').setInputFiles(path.join(repositoryRoot,'fixtures/js-container',name));
   else {const entry=library.entries.find(e=>e.name===name);assert.ok(entry,`${name} indexed in media library`);await call('load_library_item',{id:entry.id,slot:'A'});}
   await stable();const state=await call('get_review_session'),track=state.tracks[0];assert.equal(state.error,null);assert.equal(track.indexKind,'packet-locators');
+  assert.equal(track.demuxBackend,name.endsWith('.ts')?'js-ts-packets':'js-matroska-packets');assert.equal(track.indexBackend,name.endsWith('.ts')?'js-ts-packet-index':'js-matroska-packet-index');
   assert.equal(track.indexIntegrity,'complete');assert.equal(track.codec,name.startsWith('hevc')?'hevc':name.split('.')[0]);
   if(policy==='software')assert.equal(track.decoder,'ffmpeg-wasm');
   if(input==='library'||policy==='browser'){assert.equal(track.jsIndexReused,true,'independent Worker reuses authenticated complete metadata');assert.equal(track.jsIndexPacketsScanned,0);}
@@ -56,7 +57,7 @@ await withBrowserFixture({caseName:'js-containers',engine,timeoutMs:600000,roots
   }
   if(input==='local')assert.equal(requests.slice(start).some(r=>r.method==='POST'&&/bitstream-analysis/.test(r.url)),false,'local analysis never uploads media');
   await call('seek_review',{ptsUs:0});const presentation=await verifyPlaybackPresentation(page,{}, {engine,caseName:`js-${name}-${input}-${policy}`,targetPtsUs:0});
-  rows.push({name,input,policy,decoder:track.decoder,hardwareAcceleration:track.hardwareAcceleration,hardwareUseVerified:false,indexSource:track.indexSource,indexReused:track.jsIndexReused,indexPacketsScanned:track.jsIndexPacketsScanned,picture:token.picture,analysis,presentation});
+  rows.push({name,input,policy,demuxBackend:track.demuxBackend,indexBackend:track.indexBackend,decoder:track.decoder,hardwareAcceleration:track.hardwareAcceleration,hardwareUseVerified:false,indexSource:track.indexSource,indexReused:track.jsIndexReused,indexPacketsScanned:track.jsIndexPacketsScanned,picture:token.picture,analysis,presentation});
   await writeFile(artifact('matrix.json'),JSON.stringify({engine,rows,errors},null,2));
  }
  // Persisted receipt validation runs in a new source Worker after a full page

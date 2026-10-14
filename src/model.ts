@@ -16,6 +16,8 @@ export type MediaInfo = {
   opportunisticAudio?: 'flv-aac' | 'cached-container';
   jsIndexReused?:boolean;
   jsIndexPacketsScanned?:number;
+  demuxBackend?:string;
+  indexBackend?:string;
   container?: 'flv' | 'isobmff' | 'mpegts' | 'matroska' | 'other';
   indexKind?: 'packet-offsets' | 'packet-locators' | 'timestamps' | 'container';
   seekStrategy?: 'packet-anchor' | 'demuxer-keyframe' | 'demuxer-timestamp' | 'browser';

@@ -8,7 +8,7 @@ import {matroskaClocks} from './matroska-clocks.ts';
 import {MATROSKA_PACKET_BUILD,parseMatroskaPacketIndex} from './matroska-packet-index.ts';
 import type {MatroskaPacketIndex,MatroskaPacketRecord} from './matroska-packet-index.ts';
 import {inspectPacketPicture} from './packet-picture.ts';
-import {avcGeometry} from './avc-geometry.ts';
+import {parseAvcSps} from './avc-geometry.ts';
 import {nalRanges} from './nal-framing.ts';
 import {HevcPictureOrder,UnsupportedHevcPictureStructure} from './hevc-timeline.ts';
 import {hevcFieldPictures} from './hevc-geometry.ts';
@@ -49,7 +49,7 @@ export class MatroskaPacketSource {
   private configurationSets(codec:string,description:Uint8Array){
     if(codec!=='h264'&&codec!=='hevc')return;let at=codec==='h264'?6:23;
     const read=(length:number)=>{if(at+length>description.length)throw new MediaOpenError('container','Truncated Matroska configuration');const result=description.subarray(at,at+length);at+=length;return result;};
-    const add=(type:number,count:number)=>{for(let i=0;i<count;i++){const n=read(2),data=read(n[0]*256+n[1]);if(this.sets.has(type))throw new TsCombinationNotMigrated('Multiple Matroska parameter sets require separate admission');this.sets.set(type,data.slice());}};
+    const add=(type:number,count:number)=>{for(let i=0;i<count;i++){const n=read(2),data=read(n[0]*256+n[1]);if(codec==='h264'&&(!data.length||data[0]&128||(data[0]&31)!==type))throw new MediaOpenError('container','Invalid Matroska AVC parameter set');if(this.sets.has(type))throw new TsCombinationNotMigrated('Multiple Matroska parameter sets require separate admission');this.sets.set(type,data.slice());}};
     if(codec==='h264'){if(description.length<7||description[0]!==1)throw new MediaOpenError('container','Invalid Matroska avcC');add(7,description[5]&31);add(8,read(1)[0]);}
     else{if(description.length<23||description[0]!==1)throw new MediaOpenError('container','Invalid Matroska hvcC');for(let i=0;i<description[22];i++){const type=read(1)[0]&63,n=read(2),count=n[0]*256+n[1];if([32,33,34].includes(type))add(type,count);else for(let j=0;j<count;j++){const len=read(2);read(len[0]*256+len[1]);}}}
     if(!(codec==='h264'?[7,8]:[32,33,34]).every(type=>this.sets.has(type)))throw new MediaOpenError('container','Missing Matroska static parameter sets');
@@ -58,6 +58,7 @@ export class MatroskaPacketSource {
     try{this.indexingBytes=0;this.progress=progress;this.check();await this.input.getFormat();const tracks=await this.input.getVideoTracks();
       if(tracks.length!==1)throw new TsCombinationNotMigrated('Matroska requires one video track');
       const track=tracks[0],name=await track.getCodec(),codec=name==='avc'?'h264':name;
+      if(track.rotation!==0||track.squarePixelWidth!==track.codedWidth||track.squarePixelHeight!==track.codedHeight)throw new TsCombinationNotMigrated('Matroska display transforms require separate admission');
       if(codec!=='h264'&&codec!=='hevc'&&codec!=='vp8'&&codec!=='vp9')throw new TsCombinationNotMigrated(`Matroska codec ${await track.getInternalCodecId()} is not migrated`);
       this.nativeConfig=await track.getDecoderConfig()??undefined;
       const raw=this.nativeConfig?.description,configuration=raw?ArrayBuffer.isView(raw)?new Uint8Array(raw.buffer,raw.byteOffset,raw.byteLength).slice():new Uint8Array(raw).slice():new Uint8Array();
@@ -65,7 +66,7 @@ export class MatroskaPacketSource {
       if(configuration.length>4096)throw new MediaOpenError('resource','Matroska configuration budget');
       this.configurationSets(codec,configuration);
       if(codec==='hevc')try{new HevcPictureOrder(configuration);if(hevcFieldPictures(configuration))throw new UnsupportedHevcPictureStructure('HEVC field pictures require separate admission');}catch(error){if(error instanceof UnsupportedHevcPictureStructure)throw new TsCombinationNotMigrated(error.message);throw new MediaOpenError('container','Invalid Matroska HEVC configuration');}
-      if(codec==='h264'&&avcGeometry(configuration)?.interlaced)throw new TsCombinationNotMigrated('Interlaced Matroska AVC requires separate admission');
+      if(codec==='h264'){let interlaced=false;try{interlaced=parseAvcSps(this.sets.get(7)!).interlaced;}catch{throw new MediaOpenError('container','Invalid Matroska AVC SPS');}if(interlaced)throw new TsCombinationNotMigrated('Interlaced Matroska AVC requires separate admission');}
       this.sink=new EncodedPacketSink(track);const first=await this.sink.getFirstPacket();this.check();
       if(!first||!this.picture(first.data,codec,configuration).closedRandomAccess)throw new MediaOpenError('container','Matroska first picture must prove closed random access');
       const restored=parseMatroskaPacketIndex(cached,this.version,this.reader.size);
