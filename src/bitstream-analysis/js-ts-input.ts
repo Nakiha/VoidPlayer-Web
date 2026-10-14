@@ -11,8 +11,11 @@ import { AnalysisFailure } from './failure.ts';
 
 /** Independent packet source; shared semantics never borrow a playback cursor. */
 export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: AnalysisReader, sourceVersion: string, signal: AbortSignal, cached?: unknown): Promise<AnalysisInput> {
-  let bytesRead=0;const observed={size:reader.size,async read(at:number,n:number){const bytes=await reader.read(at,n);bytesRead+=bytes.length;return bytes;},close:()=>reader.close()};
-  const Source=format==='ts'?TsPacketSource:MatroskaPacketSource;const source=new Source(observed,sourceVersion,signal);
+  let bytesRead=0,operationBytes=0,payloadPhase=false;const observed={size:reader.size,async read(at:number,n:number){
+    if(payloadPhase&&operationBytes+n>64*1024*1024)throw new AnalysisFailure('resource-limit','JS analysis advancement IO budget exceeded');
+    const bytes=await reader.read(at,n);bytesRead+=bytes.length;if(payloadPhase)operationBytes+=bytes.length;return bytes;
+  },close:()=>reader.close()};
+  const source=format==='ts'?new TsPacketSource(observed,sourceVersion,signal):new MatroskaPacketSource(observed,sourceVersion,signal);
   try {
     signal.throwIfAborted();
     const restored=parseJsPacketIndex(cached,sourceVersion,reader.size);
@@ -22,6 +25,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     const index = reusable ?? await source.open();
     signal.throwIfAborted();
     if(!reusable)await saveLocalJsIndex(index,signal);
+    payloadPhase=true;
     if(index.codec!=='h264'&&index.codec!=='hevc')throw new AnalysisFailure('unsupported-codec',`Block/QP analysis does not support ${index.codec}; JS packet/index statistics remain available`);
     const codec=index.codec;
     let opened = !reusable;
@@ -45,7 +49,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     return { rawTiming: true, codec, configurations: [configuration], packets, sealedEnd: packets.length,
       indexComplete: true, indexIntegrity: 'complete', totalPackets: packets.length,
       sourceEndUs: index.packets.reduce((end,p)=>Math.max(end,p.ptsUs+p.durationUs),0), reader,
-      read: (offset, length) => reader.read(offset, length), readUnit, picture,
+      acknowledge(){operationBytes=0;},read: (offset, length) => observed.read(offset,length), readUnit, picture,
       get bytesRead() { return bytesRead; }, close() { source.close(); },
       async plan(target) {
         if (target.sourceVersion !== sourceVersion) throw new AnalysisFailure('source-changed', 'JS packet source version mismatch');

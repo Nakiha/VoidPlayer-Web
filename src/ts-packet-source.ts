@@ -78,7 +78,7 @@ const ticks = (b: Uint8Array, at: number, prefix: number): number => {
 
 /** Raw-clock supplement only. Mediabunny still owns PSI, PES payload reassembly,
  * AU demux and packet seeking. This first admission is finite 188-byte TS. */
-async function pesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
+export async function readTsPesClocks(reader: TsPacketReader, pid: number, signal: AbortSignal, scanned?: (bytes: number) => void) {
   if (reader.size % 188) fail('truncated or non-188-byte transport');
   const clocks = new Map<number, { pts: number | null; dts: number | null }>();
   let previousCounter: number | undefined;
@@ -230,7 +230,7 @@ export class TsPacketSource {
           || restored.packets[0].timestamp !== first.timestamp) throw new TsSourceChangedError();
         this.index = sealCompleteIndex(restored); this.indexReused = true; this.cursor = { au: 0, packet: first }; return restored;
       }
-      const clocks = await pesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
+      const clocks = await readTsPesClocks({ size: this.reader.size, read: (at, length) => this.read(at, length), close() {} }, track.id, this.signal, bytes=>{this.scannedBytes=bytes;this.publishProgress();});
       const packets: TsPacketRecord[] = [];
       for await (const packet of this.sink.packets()) {
         this.check();
@@ -275,7 +275,7 @@ export class TsPacketSource {
     // length and timestamp equality, not nearest-PTS association.
     if (!packet || packet.sequenceNumber !== target.locator || packet.byteLength !== target.size || Math.round(packet.timestamp * 1e6) !== target.ptsUs) fail('packet/index identity mismatch');
     if (target.pesOffset !== null) {
-      const actual = (await pesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, this.index!.pid, this.signal)).get(0);
+      const actual = (await readTsPesClocks({ size: 188, read: () => this.read(target.pesOffset!, 188), close() {} }, this.index!.pid, this.signal)).get(0);
       if (!actual || actual.pts !== target.timing.pts || actual.dts !== target.timing.dts) fail('cached PES clock identity mismatch');
     }
     const evidence = this.validatePicture(packet.data, Uint8Array.from(this.index!.configuration));

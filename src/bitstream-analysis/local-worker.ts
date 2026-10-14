@@ -37,11 +37,8 @@ scope.onmessage = async ({ data }) => {
       snapshotReply = resolve; scope.postMessage({event:'snapshot'});
     });
     const makeReader = () => {
-      const sync = typeof FileReaderSync !== 'undefined' ? new FileReaderSync() : undefined;
       return Object.assign(new RangeReader({file:data.file}), {
-        ...(sync ? {readSync: (offset: number, length: number) => new Uint8Array(sync.readAsArrayBuffer(data.file.slice(offset,offset+length)))} : {}),
-        ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../flv-index-cache.ts').FlvIndexDocument,
-          ffmpegIndex: async () => await snapshot() as import('../ffmpeg-index-cache.ts').FfmpegIndexDocument} : {}),
+        ...(data.externalSnapshot ? {flvIndex: async () => await snapshot() as import('../flv-index-cache.ts').FlvIndexDocument} : {}),
       });
     };
     if (data.target.mode === 'stream' || 'startUs' in data.target) {

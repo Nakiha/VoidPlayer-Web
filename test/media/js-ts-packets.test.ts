@@ -11,11 +11,11 @@ import { RangeReader } from '../../src/range-reader.ts';
 import { PacketTimeline } from '../../src/packet-timeline.ts';
 import { wasmFlvDecoder } from '../../src/flv-decoder.ts';
 import { visiblePixelHash } from '../helpers/visible-pixels.ts';
-import { readWasmFrame } from '../../src/wasm-frame.ts';
+import {nativeFrames,nativeVisibleHash} from '../helpers/media/native-pixels.ts';
 import { openJsTsAnalysisInput } from '../../src/bitstream-analysis/js-ts-input.ts';
 import { analyzePicture } from '../../src/bitstream-analysis/runner.ts';
 import { pictureId } from '../../src/bitstream-analysis/contract.ts';
-import { tsFixture, loadTsCore } from '../helpers/media/ts-analysis.ts';
+import { loadTsCore } from '../helpers/media/ts-analysis.ts';
 
 const version = 'js-ts-static-source-v1';
 const signal = () => new AbortController().signal;
@@ -239,7 +239,7 @@ test('hostile PES clock count is rejected before allocating beyond the index bud
 });
 
 test('JS TS packet-fed WASM produces the same real pictures and stable source tokens as the independent container oracle', async () => {
-  const { source } = await fixture(), js = source(), oracle = await tsFixture();
+  const { source } = await fixture(), js = source();
   let timeline: PacketTimeline | undefined;
   try {
     const index = await js.open(), decoded = tsDecodeIndex(index);
@@ -248,13 +248,14 @@ test('JS TS packet-fed WASM produces the same real pictures and stable source to
       new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')));
     timeline = new PacketTimeline(decoded, decoder, packet => js.readUnit(packet.sequenceNumber!), true, () => true, tsPictureStream(index));
     const checks = [0, 3, 200, 560, 599, 0];
+    const display=checks.map(au=>index.packets.filter(p=>p.ptsUs<index.packets[au].ptsUs).length);
+    const expectedFrames=nativeFrames('fixtures/ts-analysis/h264-static.ts',display,'yuv420p',1920*1080*3/2);
     for (const au of checks) {
       const frame = await timeline.at(index.packets[au].ptsUs);
       assert.equal(frame.pts, index.packets[au].ptsUs);
       assert.deepEqual(frame.packetPicture, { au, configuration: 0, stream: tsPictureStream(index) });
-      assert.equal(oracle.play._vp_extract(oracle.ctx, oracle.ordered[au].pts), 1);
-      const expected = readWasmFrame(oracle.play, () => oracle.play.HEAPU8, oracle.ctx);
-      assert.equal(visiblePixelHash(frame.description,frame.pixels!), visiblePixelHash(expected.description,expected.pixels!), `AU ${au} all visible full-precision source planes`);
+      const position=index.packets.filter(p=>p.ptsUs<index.packets[au].ptsUs).length;
+      assert.equal(visiblePixelHash(frame.description,frame.pixels!),nativeVisibleHash(frame.description,expectedFrames.get(position)!), `AU ${au} all visible full-precision source planes`);
       frame.frame?.close();
     }
     const ids = new Set<number>();
@@ -265,7 +266,7 @@ test('JS TS packet-fed WASM produces the same real pictures and stable source to
       const next = await timeline.next(pts); if (!next) break; frame = next;
     }
     assert.equal(ids.size, 600, 'real EOF drain returns every picture once');
-  } finally { timeline?.close(); js.close(); oracle.close(); }
+  } finally { timeline?.close(); js.close(); }
 });
 
 test('independent JS TS analysis shares packet identity, preserves missing DTS and matches frozen codec answers', async () => {

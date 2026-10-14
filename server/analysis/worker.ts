@@ -1,7 +1,6 @@
 import {sealJsIndex} from '../../src/js-index-proof.ts';
 import { validateAnalysisCore } from '../../src/bitstream-analysis/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
-import { readSync } from "node:fs";
 import { open, readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import path from "node:path";
@@ -22,13 +21,6 @@ try {
   const reader = {
     size: stat.size,
     ...(workerData.jsSnapshot?{jsIndex:async()=>sealJsIndex(workerData.jsSnapshot)}:{}),
-    ...(workerData.ffmpegSnapshot ? {ffmpegIndex: async () => workerData.ffmpegSnapshot} : {}),
-    readSync(offset: number, length: number) {
-      if(closed || !Number.isSafeInteger(offset) || offset<0 || length<0 || length>256*1024 || offset+length>stat.size)throw new AnalysisFailure('resource-limit','Analysis sync read bounds');
-      const bytes=new Uint8Array(length);let count=0;
-      while(count<length){const got=readSync(file.fd,bytes,count,length-count,offset+count);if(!got)throw new AnalysisFailure('source-changed','Analysis source changed');count+=got;}
-      return bytes;
-    },
     ...(workerData.flvSnapshot ? { flvIndex: async () => workerData.flvSnapshot } : {}),
     async read(offset: number, length: number) {
       if (

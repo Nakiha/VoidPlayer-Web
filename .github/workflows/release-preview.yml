@@ -354,7 +354,7 @@ jobs:
       - name: Prepare identical media, dependencies and core
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npx playwright install --with-deps chromium
           node scripts/make-playback-fixtures.mjs
           baseline="$PWD/.run/i18n-https-baseline"
@@ -427,7 +427,7 @@ jobs:
       - name: Prepare complete unit-test fixtures
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
@@ -498,7 +498,7 @@ jobs:
       - name: Prepare complete unit-test fixtures
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           npm run fixtures:flv
           npm run fixtures:hlg
           node scripts/sync-fate-samples.mjs
@@ -543,7 +543,7 @@ jobs:
         id: playback-inputs
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg libnss3-tools
+          sudo apt-get install -y ffmpeg libnss3-tools libdav1d-dev
           node scripts/make-playback-fixtures.mjs
       - name: Verify annotation persistence and unified cache management
         if: ${{ !cancelled() && steps.browser-inputs.outcome == 'success' }}

@@ -1,4 +1,4 @@
-import { FLV_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
+import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
 import { randomUUID, createHash } from "node:crypto";
@@ -183,6 +183,17 @@ export class AnalysisScheduler {
         "source-changed",
         "Analysis media version changed",
       );
+    // Resolve legacy TS requests before cache lookup or index subscription. Old
+    // FFmpeg AU ordinals cannot be reinterpreted in the JS picture namespace.
+    const probe = await open(filePath, 'r');
+    try {
+      const header = Buffer.alloc(1); await probe.read(header, 0, 1, 0);
+      if (header[0] === 0x47 && target.indexIdentity?.kind !== 'js-ts') {
+        if ('picture' in target && target.picture)
+          throw new AnalysisFailure('ambiguous-picture-identity', 'TS picture requires the current JS playback identity');
+        target = {...target, indexIdentity: JS_TS_MEDIA_INDEX_IDENTITY};
+      }
+    } finally { await probe.close(); }
     const manifest = JSON.parse(
       await readFile(path.join(this.coreDir, "manifest.json"), "utf8"),
     );
@@ -380,24 +391,20 @@ export class AnalysisScheduler {
         );
       if (this.closed || work.state !== "running" || !work.consumers.size)
         return;
-      let flvSnapshot, ffmpegSnapshot, jsSnapshot;
+      let flvSnapshot, jsSnapshot;
       if ('mode' in work.target && work.target.indexIdentity)
         index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, work.target.indexIdentity);
       {
         const probe = await open(work.filePath, 'r');
-        let flv = false, ts = false;
-        try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; ts=header[0]===0x47; }
+        let flv = false;
+        try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; }
         finally { await probe.close(); }
         if (flv && !('mode' in work.target)) {
           index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, FLV_MEDIA_INDEX_IDENTITY);
           flvSnapshot = await index.snapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
           if (!await this.library.resolve(work.mediaId, work.version)) throw new AnalysisFailure('source-changed', 'Analysis source changed during indexing');
         }
-        if(ts && work.target.indexIdentity?.kind!=='js-ts') {
-          if(work.target.indexIdentity?.kind!=='ffmpeg')throw new AnalysisFailure('ambiguous-picture-identity','TS requires the playback index identity');
-          index ??= await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);
-          ffmpegSnapshot=await index.ffmpegSnapshot(()=>!this.closed && work.state==='running' && !!work.consumers.size);
-        }
+
       }
       if(work.target.indexIdentity?.kind==='js-ts'||work.target.indexIdentity?.kind==='js-matroska'){index??=await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);jsSnapshot=await index.jsSnapshot(()=>!this.closed&&work.state==='running'&&!!work.consumers.size);}
       if (this.closed || work.state !== 'running' || !work.consumers.size) return;
@@ -414,7 +421,7 @@ export class AnalysisScheduler {
             coreDir: this.coreDir,
             target: work.target,
             externalIndex: !!index,
-            flvSnapshot, ffmpegSnapshot, jsSnapshot,
+            flvSnapshot, jsSnapshot,
           },
         },
       ));

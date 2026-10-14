@@ -7,11 +7,16 @@ import {analyzePicture,analyzeRange,analyzeStream} from '../../src/bitstream-ana
 import {openAnalysisInput} from '../../src/bitstream-analysis/input.ts';
 import {isAnnexB,nalRanges} from '../../src/nal-framing.ts';
 import {pictureId} from '../../src/bitstream-analysis/contract.ts';
+import {TsPacketSource,readTsPesClocks} from '../../src/ts-packet-source.ts';
+import {JsContainerEngine} from '../../src/js-container-engine.ts';
+import {JS_TS_MEDIA_INDEX_IDENTITY} from '../../src/media-index-identity.ts';
+import {resolve} from 'node:path';
+import {pathToFileURL} from 'node:url';
 const signal=()=>new AbortController().signal;
 const sourceVersion='static-ts-fixture';
 test('lossless TS preserves all source VCLs, static config and independent block answers',async()=>{
  const f=await tsFixture(),core=await loadTsCore();
- const input=await openAnalysisInput(f.reader(),signal(),false,{demuxCore:core});
+ const input=await openAnalysisInput(f.reader(),signal(),false,{sourceVersion});
  const source=fs.readFileSync('fixtures/video/h264_9s_1920x1080.mp4');
  const mp4=await openAnalysisInput({size:source.length,read:async(o,n)=>source.subarray(o,o+n),close(){}},signal());
  try {
@@ -30,7 +35,8 @@ test('lossless TS preserves all source VCLs, static config and independent block
   const result=await analyzePicture(f.reader(),{sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0},core,'ts-test',signal());
   assert.equal(result.confidence,'exact');assert.equal(result.containerHeader?.box,'annexb');
   for(const block of answer.firstBlocks)assert.deepEqual(result.blocks.find(b=>b.x===block.x&&b.y===block.y),block);
-  assert.equal(f.play._vp_extract(f.ctx,f.ordered[0].pts),1);const id=f.play._vp_picture_info(f.ctx);assert.ok(id);assert.equal(Number(new DataView(f.play.HEAPU8.buffer,id,56).getBigUint64(24,true)),result.picture.au);
+  const engine=new JsContainerEngine({file:new Blob([f.bytes])},sourceVersion);
+  try{await engine.open(pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href,new Uint8Array(fs.readFileSync('public/vendor/voidplayer-core/voidplayer-core.wasm')),true);const shown=await engine.at(f.pts(0));assert.equal(shown.packetPicture?.au,result.picture.au);assert.equal(shown.packetPicture?.stream,result.picture.stream);shown.frame?.close();}finally{engine.close();}
  } finally {f.close();}
 });
 test('two independent rear TS GOP requests restore original AU with bounded physical IO',async()=>{
@@ -70,39 +76,21 @@ test('TS whole consumes exactly 600 distinct actual pictures and drains once; ca
   const result=await analyzePicture(f.reader(),{sourceVersion,sourcePtsUs:f.pts(560),normalizedMediaUs:0},core,'ts-test',signal());assert.equal(result.picture.au,560);
  }finally{f.close();}
 });
-test('missing/duplicate timestamps, prefix, missing config and mismatched indexer fail closed',async()=>{
+test('old FFmpeg and malformed JS cache documents rebuild from source instead of authorizing exact AU identities',async()=>{
  const f=await tsFixture();try {
-  const variants:any[]=[{...f.snapshot,indexIntegrity:'prefix',indexTruncatedAt:f.bytes.length-1,indexEndDts:String(f.ordered.at(-1).dts)}, {...f.snapshot,analysisConfiguration:undefined}, {...f.snapshot,indexerBuild:'0'.repeat(40)}];
-  for(const kind of ['missing-dts','duplicate-pts']) {
-    const bytes=f.records.slice(),v=new DataView(bytes.buffer);if(kind==='missing-dts')v.setBigInt64(8,-9223372036854775808n,true);else v.setBigInt64(48,v.getBigInt64(0,true),true);
-    variants.push({...f.snapshot,records:Buffer.from(bytes).toString('base64')});
-  }
-  for(const snapshot of variants)await assert.rejects(analyzePicture(f.reader(snapshot),{sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0},await loadTsCore(),'ts-test',signal()));
+  const variants:any[]=[{schema:3,kind:'ffmpeg-container',indexIntegrity:'prefix'}, {...f.index,configuration:[]}, {...f.index,build:'old-indexer-build'}];
+  const missing=structuredClone(f.index);missing.packets[0].timing.dts=null;variants.push(missing);
+  const duplicate=structuredClone(f.index);duplicate.packets[1].ptsUs=duplicate.packets[0].ptsUs;duplicate.packets[1].timestamp=duplicate.packets[0].timestamp;variants.push(duplicate);
+  for(const doc of variants){const reader=f.reader(doc),input=await openAnalysisInput(reader,signal(),false,{sourceVersion});try{assert.equal(input.packets.length,600);assert.equal(input.packets[1].pts,f.pts(1));assert.equal(input.packets[0].timing?.dts,f.index.packets[0].timing.dts);assert.ok(reader.actualBytes>9,'untrusted old or changed metadata must not skip a source scan');}finally{input.close();}}
  }finally{f.close();}
 });
 test('real PES missing timestamps stay unknown; duplicate PES PTS produce no exact token',async()=>{
- const f=await tsFixture();try {
-  for(const name of ['h264-missing-timestamps.ts','h264-duplicate-pts.ts']) {
-    const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),core=await loadTsCore();
-    core.vpDemuxRead=(_h:number,o:number,n:number)=>bytes.subarray(o,o+n);
-    const ctx=core._vpd_open(-1,BigInt(bytes.length));assert.ok(ctx);
-    try {
-      const packets:any[]=[];
-      while(packets.length<2) {
-        const status=core._vpd_read(ctx,128);assert.ok(status>0);if(status===2)continue;
-        const ptr=core._vpd_packet(ctx),v=new DataView(core.HEAPU8.buffer,ptr,72);packets.push({pts:v.getBigInt64(0,true),dts:v.getBigInt64(8,true),flags:v.getUint32(44,true)});core._vpd_release(ctx);
-      }
-      if(name.includes('missing')) {assert.equal(packets[0].flags&3,0);assert.equal(packets[0].pts,-9223372036854775808n);assert.equal(packets[0].dts,-9223372036854775808n);}
-      else {
-        assert.equal(packets[0].pts,packets[1].pts);
-        f.play.FS.writeFile('/negative.ts',bytes);const playCtx=f.play._vp_create();
-        try {assert.equal(f.play.ccall('vp_open','number',['number','string'],[playCtx,'/negative.ts']),0);assert.equal(f.play._vp_index_build(playCtx),600);
-          const status=f.play._vp_extract(playCtx,packets[0].pts);assert.ok([1,2].includes(status));assert.equal(f.play._vp_picture_info(playCtx),0,'duplicate raw PTS cannot attach a receive identity');
-        }finally{f.play._vp_destroy(playCtx);f.play.FS.unlink('/negative.ts');}
-      }
-    }finally{core._vpd_close(ctx);}
-  }
- }finally{f.close();}
+ const fixture=await tsFixture();try{for(const name of ['h264-missing-timestamps.ts','h264-duplicate-pts.ts']) {
+  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),reader={size:bytes.length,async read(at:number,n:number){return bytes.subarray(at,at+n);},close(){}},raw=await readTsPesClocks(reader,fixture.index.pid,signal()),clocks=[...raw.values()],source=new TsPacketSource(reader,sourceVersion,signal());
+  try{if(name.includes('duplicate')){assert.equal(clocks[0].pts,clocks[1].pts);await assert.rejects(source.open(),/timestamp|clock/i);}else{
+   assert.equal(clocks[0].pts,null);assert.equal(clocks[0].dts,null);await assert.rejects(source.open(),/missing PTS/i,'pinned demuxer cannot produce an exact picture for this missing-clock input');
+  }}finally{source.close();}
+ }}finally{fixture.close();}
 });
 test('a range miss allocates one shared WASM session; complete cache hit allocates none',async()=>{
  const f=await tsFixture();try {
@@ -113,58 +101,47 @@ test('a range miss allocates one shared WASM session; complete cache hit allocat
   assert.equal(loads,1);
  }finally{f.close();}
 });
-test('actual WASM IO failures unwind C allocations before propagating, then the module reopens',async()=>{
+test('actual JS reader failures close their source before propagating, then the codec module reopens',async()=>{
  const f=await tsFixture(),core=await loadTsCore();try {
-  const injected=new Error('injected synchronous reader failure');const target={sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0};
-  for(let i=0;i<3;i++) {
-   const reader=f.reader();reader.readSync=()=>{throw injected;};
-   await assert.rejects(analyzePicture(reader,target,core,'ts-test',signal()),error=>error===injected);
-   assert.ok(reader.closed);assert.equal(core._vpd_live_contexts(),0);
+  const injected=new Error('injected asynchronous reader failure'),target={sourceVersion,sourcePtsUs:f.pts(0),normalizedMediaUs:0},initialHeap=core.HEAPU8.byteLength;
+  for(let i=0;i<300;i++){
+   const reader=f.reader(),read=reader.read;reader.read=async(at,n)=>{if(n>9)throw injected;return read(at,n);};
+   await assert.rejects(analyzePicture(reader,target,core,'ts-test',signal()),error=>error===injected);assert.ok(reader.closed);assert.equal(reader.closes,1);assert.equal(core._vpa_record_bytes(),0);
   }
-  const initialHeap=core.HEAPU8.byteLength;
-  for(let i=0;i<300;i++) {
-   core.vpDemuxRead=()=>{throw injected;};core.vpDemuxError=undefined;
-   assert.equal(core._vpd_open(-1,BigInt(f.bytes.length)),0);assert.equal(core.vpDemuxError,injected);assert.equal(core._vpd_live_contexts(),0);
-  }
-  assert.equal(core.HEAPU8.byteLength,initialHeap,'repeated pre-return failures retain no growing C heap');
-  const result=await analyzePicture(f.reader(),target,core,'ts-test',signal());assert.equal(result.picture.au,0);assert.equal(core._vpd_live_contexts(),0);
+  assert.equal(core.HEAPU8.byteLength,initialHeap,'pre-codec IO failures cannot allocate a growing C demux heap');
+  const result=await analyzePicture(f.reader(),target,core,'ts-test',signal());assert.equal(result.picture.au,0);assert.equal(core._vpa_record_bytes(),0);
  }finally{f.close();}
 });
 test('whole TS can consume more than 64 MiB while each advancement and result remains bounded',async()=>{
  const f=await tsFixture('h264-padded-long.ts');try {
   assert.ok(f.bytes.length>64*1024*1024);const reader=f.reader(),core=await loadTsCore();let count=0;
   await analyzeStream(reader,{mode:'stream',sourceVersion,firstPtsUs:f.pts(0),durationUs:10000000},core,'ts-test',signal(),async r=>{assert.equal(r.confidence,'exact');count++;assert.ok(core._vpa_record_bytes()<32*1024*1024);},async()=>{});
-  assert.equal(count,600);assert.ok(reader.actualBytes>64*1024*1024);assert.ok(reader.closed);assert.equal(core._vpd_live_contexts(),0);
+  assert.equal(count,600);assert.ok(reader.actualBytes>64*1024*1024);assert.ok(reader.closed);assert.equal(core._vpa_record_bytes(),0);
  }finally{f.close();}
 });
-test('paired pinned WASMs preserve HRD input clocks and reject coding MBAFF despite FRAME presentation',async()=>{
- // CI prepares only artifacts, so this repository carries the same assertion
- // below rather than depending on a sibling checkout.
- const play=await loadTsCore(true),analyzer=await loadTsCore();
- for(const core of [play,analyzer])for(const name of ['hrd.ts','hrd-missing.ts']) {
-  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name);core.vpDemuxRead=(_h:number,o:number,n:number)=>bytes.subarray(o,o+n);const ctx=core._vpd_open(-1,BigInt(bytes.length));assert.ok(ctx);let count=0;
-  try{for(;;){const status=core._vpd_read(ctx,128);if(!status)break;assert.ok(status>0);if(status===2)continue;
-   const ptr=core._vpd_packet(ctx),v=new DataView(core.HEAPU8.buffer,ptr,72),au=Number(v.getBigUint64(32,true));assert.equal(au,count++);
-   if(name==='hrd-missing.ts' && [10,11,40,41].includes(au)){assert.equal(v.getUint32(44,true)&3,0);assert.equal(v.getBigInt64(0,true),-9223372036854775808n);assert.equal(v.getBigInt64(8,true),-9223372036854775808n);}
-   else assert.equal(v.getUint32(44,true)&3,3);core._vpd_release(ctx);
-  }}finally{core._vpd_close(ctx);}assert.equal(count,100);
+test('JS demux preserves HRD input clocks and rejects coding MBAFF despite FRAME presentation',async()=>{
+ let baseline:Map<number,{pts:number|null;dts:number|null}>|undefined,pid=256;
+ for(const name of ['hrd.ts','hrd-missing.ts']) {
+  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),reader={size:bytes.length,async read(at:number,n:number){return bytes.subarray(at,at+n);},close(){}},source=new TsPacketSource(reader,sourceVersion,signal());
+  try{if(name==='hrd.ts'){const index=await source.open();pid=index.pid;baseline=await readTsPesClocks(reader,pid,signal());assert.equal(index.packets.length,100);assert.equal(baseline.size,100);for(const packet of index.packets)assert.deepEqual({pts:packet.timing.pts,dts:packet.timing.dts},baseline.get(packet.pesOffset!),'HRD cannot synthesize a DTS omitted from its physical PES');}
+   else{const clocks=await readTsPesClocks(reader,pid,signal());assert.equal(clocks.size,100);for(const [au,[position,clock]] of [...clocks].entries()){if([10,11,40,41].includes(au)){assert.equal(clock.pts,null);assert.equal(clock.dts,null);}else assert.deepEqual(clock,baseline!.get(position));}await assert.rejects(source.open(),/missing PTS/i);}
+  }finally{source.close();}
  }
- for(const [name,count,expected] of [['progressive-single.ts',25,25],['progressive-two-slices.ts',25,0],['mbaff.ts',50,0],['mbaff-frame-sei.ts',50,0]] as const) {
-  play.FS.writeFile('/admission.ts',fs.readFileSync('fixtures/ts-analysis/'+name));const ctx=play._vp_create();let admitted=0,shownProgressive=0;
-  try{assert.equal(play.ccall('vp_open','number',['number','string'],[ctx,'/admission.ts']),0);assert.equal(play._vp_index_build(ctx),count);
-   for(let i=0;i<count;i++){assert.equal(play._vp_extract(ctx,play._vp_index_ticks(ctx,i)),1);admitted+=+!!play._vp_picture_info(ctx);shownProgressive+=+(play._vp_frame_interlaced(ctx)===0);}
-   assert.equal(admitted,expected);if(name==='mbaff-frame-sei.ts')assert.equal(shownProgressive,50);
-  }finally{play._vp_destroy(ctx);play.FS.unlink('/admission.ts');}
+ for(const [name,count,expected] of [['progressive-single.ts',25,25],['progressive-two-slices.ts',25,0],['mbaff.ts',50,0],['mbaff-frame-sei.ts',50,0]] as const){
+  const bytes=fs.readFileSync('fixtures/ts-analysis/'+name),source=new TsPacketSource({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},sourceVersion,signal());
+  const {execFileSync}=await import('node:child_process');const frames=JSON.parse(execFileSync('ffprobe',['-v','error','-select_streams','v:0','-show_entries','frame=interlaced_frame','-of','json','fixtures/ts-analysis/'+name],{encoding:'utf8'})).frames;assert.equal(frames.length,count);
+  try{if(expected){const index=await source.open();assert.equal(index.packets.length,expected);}else await assert.rejects(source.open());if(name==='mbaff-frame-sei.ts')assert.equal(frames.filter((f:any)=>!f.interlaced_frame).length,50,'FRAME presentation cannot override coding SPS evidence');}finally{source.close();}
  }
 });
 test('unconsumed whole IO remains bounded until a result is acknowledged',async()=>{
  const f=await tsFixture(),core=await loadTsCore();try {
-  const reader=f.reader(),input=await openAnalysisInput(reader,signal(),true,{demuxCore:core});
+  const reader=f.reader(),input=await openAnalysisInput(reader,signal(),true,{sourceVersion});
   try {
-    await assert.rejects(async()=>{for(let i=0;i<200;i++)await input.readUnit(input.packets[560]);},/IO budget/);
-    assert.ok(input.bytesRead<=64*1024*1024);
+    for(let i=0;i<100;i++)await input.readUnit(input.packets[560]);
+    await assert.rejects(async()=>{for(let i=0;i<65;i++)await input.read(0,1024*1024);},/IO budget/);
+    assert.ok(input.bytesRead<=64*1024*1024);input.acknowledge?.();await input.read(0,1024*1024);
   }finally{input.close();}
-  assert.equal(core._vpd_live_contexts(),0);
+  assert.equal(core._vpa_record_bytes(),0);
  }finally{f.close();}
 });
 test('library TS whole, cache restart and corrupt-hole repair use independent source-bound demux',async()=>{
@@ -173,8 +150,8 @@ test('library TS whole, cache restart and corrupt-hole repair use independent so
  const temp=await mkdtemp(join(tmpdir(),'vp-ts-library-')),media=join(temp,'media');await mkdir(media);
  execFileSync('ffmpeg',['-y','-v','error','-copyts','-i','fixtures/ts-analysis/h264-static.ts','-map','0:v:0','-an','-c:v','copy','-frames:v','120','-mpegts_copyts','1','-f','mpegts',join(media,'short.ts')]);
  const library=new MediaLibraryIndex([media],{database:join(temp,'library.sqlite'),watch:false}),coreDir=resolve('public/vendor/voidplayer-analysis'),directory=join(temp,'analysis');let scheduler=new AnalysisScheduler(library,coreDir,directory);
- await library.refresh();const entry=(await library.list()).entries.find(e=>e.name==='short.ts')!;const lock=JSON.parse(fs.readFileSync('scripts/release-core.json','utf8'));
- const target={mode:'stream' as const,sourceVersion:`${entry.id}@${entry.version}`,firstPtsUs:1433333,durationUs:2000000,indexIdentity:{kind:'ffmpeg' as const,streamKey:'video:0',schemaVersion:3,indexerBuild:lock.revision}};
+ await library.refresh();const entry=(await library.list()).entries.find(e=>e.name==='short.ts')!;
+ const target={mode:'stream' as const,sourceVersion:`${entry.id}@${entry.version}`,firstPtsUs:1433333,durationUs:2000000};
  const consume=async(requestId:string,expected?:Map<number,any>)=>{
   const results=new Map<number,any>();let cursor=0;const deadline=performance.now()+120000;
   for(;;){assert.ok(performance.now()<deadline);const state=await scheduler.streamStatus(requestId,'owner',cursor);assert.ok(state && ['queued','running','complete'].includes(state.state),JSON.stringify(state));
@@ -186,7 +163,7 @@ test('library TS whole, cache restart and corrupt-hole repair use independent so
  try {
   const expected=await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId);await scheduler.close();
   const manifestOnly=join(temp,'manifest-only');await mkdir(manifestOnly);await copyFile(join(coreDir,'manifest.json'),join(manifestOnly,'manifest.json'));scheduler=new AnalysisScheduler(library,manifestOnly,directory);
-  assert.deepEqual(await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId,expected),expected,'restart keeps all 120 finite-source records without JS/WASM');
-  await scheduler.close();scheduler=new AnalysisScheduler(library,coreDir,directory);await writeFile(scheduler.store.chunkFile(expected.get(60).id),'{broken');await consume((await scheduler.submit(entry.id,entry.version!,target,'owner')).requestId,expected);
+  assert.deepEqual(await consume((await scheduler.submit(entry.id,entry.version!,{...target,indexIdentity:JS_TS_MEDIA_INDEX_IDENTITY},'owner')).requestId,expected),expected,'restart keeps all 120 finite-source records without JS/WASM');
+  await scheduler.close();scheduler=new AnalysisScheduler(library,coreDir,directory);await writeFile(scheduler.store.chunkFile(expected.get(60).id),'{broken');await consume((await scheduler.submit(entry.id,entry.version!,{...target,indexIdentity:JS_TS_MEDIA_INDEX_IDENTITY},'owner')).requestId,expected);
  }finally{await scheduler.close();await library.close();await rm(temp,{recursive:true,force:true});}
 });
