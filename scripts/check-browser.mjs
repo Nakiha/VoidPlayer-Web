@@ -851,8 +851,12 @@ try {
         for(let au=0;au<3;au++)consume(result(au));
       };
       BitstreamAnalysisService.prototype.local=async function(_file,target){recovery.pictures++;(recovery.targets??=[]).push(target.picture.au);fail();return result(target.picture.au);};
-      const root=new BitstreamAnalysisService(()=>{}), session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++recovery.commit;});
-      session.bitstream=root;session.bitstreamLoading=Promise.resolve(root);recovery.session=session;recovery.root=root;
+      const session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++recovery.commit;});
+      recovery.session=session;
+      // Exercise production lazy construction; only backend methods are mocked.
+      // Cache eviction below follows the coordinator's read-only query owner.
+      Object.defineProperty(recovery,'root',{get:()=>session.bitstream.queries});
+      if(session.getBitstreamAnalysisState('A').state!=='idle'||recovery.root!==undefined)throw Error('Recovery fixture must begin with the real idle coordinator');
       document.getElementById('analysis-panel').replaceChildren();document.getElementById('analysis-panel').hidden=false;
       const life=new AbortController();
       const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'});
@@ -863,7 +867,9 @@ try {
       const source={info:{id:sourceVersion,name:'recovery.mp4',container:'isobmff',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['fixture']),
         async frameAt(time){const au=Math.min(2,Math.floor(time/100));return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:result(au).picture,close(){}};},
         async framesAfter(){return[];},async *framesFrom(){},dispose(){}};
-      await session.load('A',async()=>source);chart.setOpen(true);overlay.setOpen(true);
+      await session.load('A',async()=>source);
+      if(session.getBitstreamAnalysisState('A').state!=='idle'||recovery.root!==undefined)throw Error('Loading must preserve lazy analysis ownership');
+      chart.setOpen(true);overlay.setOpen(true);
     });
     await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
     await page.locator('#analysis-retry-A').waitFor({state:'visible'});
