@@ -94,7 +94,11 @@ export class Mp4Engine {
       this.index={codec,...(['mpeg4','mjpeg','prores'].includes(codec)?{codecParameters:configs.codecParameters![0],codecConfigurations:configs.codecParameters}:{}),description:configs.descriptions[0],configurations:configs.descriptions,packets,order,firstPts,duration,durations,
         ...(configs.indexIntegrity === 'prefix' ? { truncatedAt: configs.indexTruncatedAt } : {})};
       const containerCrop=codec==='h264'&&configs.descriptions.some((description,i)=>{const g=avcGeometry(description),bounds=this.displayBounds[i];return g&&bounds&&(bounds.width<g.width||bounds.height<g.height);});
-      this.nativeConfig=containerCrop||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
+      // Multi-stsd previously used software decoding. Track-level WebCodecs
+      // metadata describes the last entry, and reconfiguring from descriptions
+      // alone does not preserve per-entry color interpretation on every engine.
+      // Keep those inputs on the JS packet table with the verified WASM decoder.
+      this.nativeConfig=containerCrop||configs.descriptions.length>1||['mpeg4','mjpeg','prores'].includes(codec)?undefined:await track.getDecoderConfig()??undefined;
       onProgress?.('decoder');
       const native=!forceWasm&&this.nativeConfig?await nativeFlvDecoder(this.index,this.nativeConfig):null;
       const decoder:PacketDecoder=native||await wasmFlvDecoder(this.index,glueURL,wasmBinary,threads);

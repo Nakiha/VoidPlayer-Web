@@ -31,3 +31,11 @@ export function nativeVideoMetadata(file:string){
  assert.ok(result&&typeof result.codec_name==='string'&&typeof result.pix_fmt==='string','native oracle must identify the codec and decoded pixel format');
  return result as {codec_name:string;pix_fmt:string};
 }
+
+/** Seek before opening the output encoder so changing source dimensions do not
+ * get scaled back to the first segment's rawvideo geometry. */
+export function nativeSeekFrame(file:string,timeUs:number,format:string,frameBytes:number){
+ assert.ok(Number.isSafeInteger(timeUs)&&timeUs>=0);
+ const raw=execFileSync(process.env.VOIDPLAYER_FFMPEG_ORACLE||'ffmpeg',['-v','error','-threads','1','-ss',String(timeUs/1e6),'-i',file,'-map','0:v:0','-frames:v','1','-pix_fmt',format,'-f','rawvideo','pipe:1'],{maxBuffer:Math.max(64*1024*1024,frameBytes+1024)});
+ assert.equal(raw.length,frameBytes,'native seek oracle must preserve this segment geometry');return raw;
+}
