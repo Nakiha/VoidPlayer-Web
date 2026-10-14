@@ -40,7 +40,9 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     for (const engine of row.engines) if (!engines.has(engine)) fail(`${row.id}: unknown engine ${engine}`);
     if (!row.platforms.length || row.platforms.some(p => !['linux', 'darwin', 'win32'].includes(p))) fail(`${row.id}: invalid platforms`);
     if (!row.inputs.length || !row.artifacts.length || !(row.timeoutMs > 0) || typeof row.build !== 'boolean') fail(`${row.id}: missing execution metadata`);
-    if (!Array.isArray(row.command) || row.command.length < 2 || !row.command.includes(row.script) && !row.command.includes('./' + row.script)) fail(`${row.id}: command does not execute its script`);
+    const entry = row.implementation ?? row.script;
+    if (!Array.isArray(row.command) || row.command.length < 2 || row.command.filter(arg => arg === entry || arg === './' + entry).length !== 1
+      || row.implementation && row.command.some(arg => arg === row.script || arg === './' + row.script)) fail(`${row.id}: command does not execute its canonical implementation exactly once`);
     for (const fixture of row.fixtures) if (!manifest.fixtures[fixture]) fail(`${row.id}: unknown fixture ${fixture}`);
     if (row.suites.some(suite => ['fast', 'source'].includes(suite)) && (row.fixtures.length || row.tools.length || row.build || row.engines.join() !== 'node')) fail(`${row.id}: source/fast requires source-only Node checks`);
     if (row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node' && !row.suites.includes('source')) fail(`${row.id}: source-only Node check missing from source suite`);

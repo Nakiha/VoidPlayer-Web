@@ -58,7 +58,10 @@ test('coverage floor retains original commands, required cells and CI membership
   for (const cell of baseline) {
     const row = testManifest.cases.find(row => row.id === cell.id);
     assert.ok(row, `lost case ${cell.id}`);
-    for (const key of ['script', 'command', 'engines', 'platforms', 'inputs', 'required', 'env']) assert.deepEqual(row[key], cell[key], `${cell.id}: changed ${key}`);
+    for (const key of ['script', 'engines', 'platforms', 'inputs', 'required', 'env']) assert.deepEqual(row[key], cell[key], `${cell.id}: changed ${key}`);
+    const canonical = row.implementation ?? row.script;
+    const expectedCommand = cell.command.map(arg => arg === cell.script ? canonical : arg === './' + cell.script ? './' + canonical : arg);
+    assert.deepEqual(row.command, expectedCommand, `${cell.id}: changed command arguments beyond the entry migration`);
     for (const suite of cell.ci) assert.ok(row.suites.includes(suite), `${cell.id}: removed from ${suite}`);
   }
 });
@@ -198,4 +201,18 @@ test('all source-only Node checks run before media dependencies are prepared', (
   assert.deepEqual(selectCases({ suite: 'source' }).selected.map(row => row.id), eligible.map(row => row.id));
   const missing = clone(); missing.cases.find(row => row.id === 'node-workspace-storage').suites = ['unit'];
   assert.throws(() => validateManifest(missing), /missing from source suite/);
+});
+
+
+test('canonical commands bypass compatibility aliases and reject ambiguous execution paths',()=>{
+  for(const row of testManifest.cases){
+    const entry=row.implementation??row.script;
+    assert.equal(row.command.filter(arg=>arg===entry||arg==='./'+entry).length,1);
+    if(row.implementation)assert.ok(!row.command.includes(row.script));
+  }
+  const owner=testManifest.cases.find(row=>row.implementation);
+  for(const command of [owner.command.map(arg=>arg===owner.implementation?owner.script:arg),[...owner.command,owner.implementation]]) {
+    const copy=clone();copy.cases.find(row=>row.id===owner.id).command=command;
+    assert.throws(()=>validateManifest(copy),/canonical implementation exactly once/);
+  }
 });

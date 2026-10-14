@@ -278,6 +278,13 @@ npm run test:fate:browser
 
 `ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
 
+
+## Canonical execution and compatibility paths
+
+The manifest's `implementation` (or `script` when no forwarding alias exists) is the canonical executable. `command` invokes it exactly once; the validator rejects executing a forwarding alias or duplicating the entry. The existing `script` path is retained only as a documented compatibility alias and remains a thin import/export forwarding to that implementation. CLI arguments, engines, inputs, preparation, budgets, gate flags and reports remain unchanged. Direct legacy paths are deprecated for new automation; use stable case IDs through `scripts/run-tests.mjs`.
+
+The fixed-baseline comparison in `docs/evidence/test-entry-migration.json` records all migrated owners. The coverage contract preserves the original catalog and argument lists, allowing only the alias-to-implementation path substitution. This stage retains compatibility files while npm aliases are migrated separately; it does not claim the remaining npm preparation/list duplication is already resolved.
+
 ### 媒体与 Worker 的翻译依赖边界
 
 `node-i18n-build` 使用 `scripts/testing/i18n-architecture.mjs` 检查 media、presenter、FFmpeg/packet Worker 与实际 `src/thumbnails/pixel-worker.ts` 根入口。必检根入口或递归依赖缺失必须报出路径并失败。扫描相对运行时 import、re-export 和字符串字面量 dynamic import；type-only import/export 与包依赖不递归。Worker URL 单独列为根入口，计算式 import、require 和未列出的 Worker URL 不属于这个扫描器的覆盖范围。临时工程负例验证缺失入口、缩略图直接/间接引入翻译依赖均被拒绝；现有 progress callback 限制保持。
