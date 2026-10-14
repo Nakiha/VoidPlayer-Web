@@ -2032,7 +2032,14 @@ await withBrowserFixture(
       await page.waitForFunction(() => { const charts=document.querySelector('.analysis-charts'); return charts.scrollHeight<=charts.clientHeight+1; });
       await page.locator('#settings-open').click(); await page.locator('#settings-tab-appearance').click();
       await page.locator('#chart-hover-style').click(); await page.locator('#chart-hover-style-menu [data-value="separate"]').click(); await page.locator('#settings-close').click();
-      await page.locator('#settings').waitFor({state:'hidden'});
+      // Hidden can precede the queued close event, whose handler returns focus
+      // to the invoker. Wait for that handler before focusing the chart, or its
+      // later blur can clear the keyboard hover cards we are about to inspect.
+      await page.waitForFunction(() => {
+        const settings = document.querySelector('#settings');
+        return !settings.open && !settings.hasAttribute('data-closing') && document.querySelector('#settings-open').getAttribute('aria-expanded') === 'false';
+      });
+      await target.focus();
       await target.press('ArrowRight');
       await page.waitForFunction(()=>document.querySelectorAll('.analysis-view-card:not([hidden])').length===4);
       assert.equal(await page.locator('.analysis-view-card:visible').count(),4,'one NALU and one reference card per selected track');

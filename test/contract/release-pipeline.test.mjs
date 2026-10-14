@@ -99,6 +99,7 @@ test('browser workflow collects independent outcomes and uploads failure evidenc
   assert.match(jobs['uncovered-regressions'].body, /if: always\(\)[\s\S]*name: uncovered-browser-reports[\s\S]*\.run\/test-suites\/uncovered\//);
   assert.match(jobs.playback.body, /if: \$\{\{ !cancelled\(\) && steps\.browser-inputs\.outcome == 'success' \}\}\n        run: node scripts\/run-tests\.mjs flv-startup --prepared/);
   assert.match(jobs.playback.body, /\.run\/test-suites\//);
+  assert.match(jobs.playback.body, /if: always\(\)[\s\S]*name: https-playback-reports[\s\S]*\.run\/native-yuv-lifecycle\//);
 });
 
 test('analysis matrix runs as independent required jobs with distinct evidence', async () => {
