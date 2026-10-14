@@ -424,6 +424,20 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     return decoded;
   };
 
+  // Each iterator owns only its ordinal. Index updates/disposal use the
+  // existing source waiters; returned frame buffers remain caller-owned.
+  async function* streamFromIndex(idx: number) {
+    while (!disposed) {
+      while (!disposed && idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
+      if (disposed) throw new Error('媒体已释放。');
+      if (idx >= ticks.length) {
+        if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+        break;
+      }
+      yield await extract(idx++);
+    }
+  }
+
   source = {
     info, ensureIndexed,
     bitstreamIndexIdentity: init.indexIdentity,
@@ -491,16 +505,18 @@ async function openFFmpegMediaInner(file: FallbackInput, deps: FallbackDeps, ope
     },
     async *framesFrom(ptsUs) {
       await ensureIndexed(ptsUs);
-      let idx = floorIndex(relUs, ptsUs);
-      while (!disposed) {
-        while (!disposed && idx >= ticks.length && info.indexState === 'building') await waitForIndexUpdate();
-        if (disposed) throw new Error('媒体已释放。');
-        if (idx >= ticks.length) {
-          if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
-          break;
-        }
-        yield await extract(idx++);
+      yield* streamFromIndex(floorIndex(relUs, ptsUs));
+    },
+    async *framesFollowing(ptsUs) {
+      await ensureIndexed(ptsUs);
+      while (!disposed && info.indexState === 'building' && nextIndex(relUs, ptsUs) < 0) await waitForIndexUpdate();
+      if (disposed) throw new Error('媒体已释放。');
+      const start = nextIndex(relUs, ptsUs);
+      if (start < 0) {
+        if (info.indexState === 'error') throw new Error(info.indexError ?? 'FFmpeg 索引失败。');
+        return;
       }
+      yield* streamFromIndex(start);
     },
     dispose() {
       if (disposed) return;
