@@ -1,0 +1,697 @@
+{
+  "scope": "one owned headless Chromium local/software H264 TS checkpoint, optional intrusive CPU profiler; not performance acceptance",
+  "build": {
+    "version": "1.0.0-preview.a3fec372.dirty",
+    "revision": "a3fec372a46289e2780824078731588118d2e5ef",
+    "dirty": true,
+    "tag": "",
+    "coreAssetDigests": {
+      "/vendor/voidplayer-core/provenance.json": "359e2253f9e280bd43a50a600b1bb6e6df4d6f37ed4038afb59f823a58d4db13",
+      "/vendor/voidplayer-core/voidplayer-core-mt.js": "5a937ccf07f739b4c6aa1e06ef877da6d556ae3c037a52645f8862962fd8f4a0",
+      "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4a9866cab144b5fa07d0708d20c5159f0a893d2d09fde6bf07b890b056c66262",
+      "/vendor/voidplayer-core/voidplayer-core.js": "4891e96eee73e7e5c1eeb72b9f1129c747c5a91750621b6b7aae6ebb2a1dfede",
+      "/vendor/voidplayer-core/voidplayer-core.wasm": "2d429b2584a3b462380074a92276c1de213ad0a1b2eba4069b1485828a0ac46a",
+      "/vendor/voidplayer-analysis/manifest.json": "9ec974de5e29bbea5775147d743b9bce28605ac74be7fd29b2569cb363fa6bb3",
+      "/vendor/voidplayer-analysis/provenance.json": "22028998da80667c8d8c4a25a0b122da4c5568c3c91cd53cf86f32871c2ffd23",
+      "/vendor/voidplayer-analysis/voidplayer-analysis.js": "ff879afe59a4b316feacb7354c59543b15caaf5b514371e4498201b7882b36eb",
+      "/vendor/voidplayer-analysis/voidplayer-analysis.wasm": "5ab1865c66e0789e6c38bc6b93df05ccbec8d5cb7eefa0624701a9d44fac25ef"
+    },
+    "builtAt": "2026-10-13T21:22:42.842Z",
+    "sourceDigest": "6144d149869a226c96f7c8aae4a4052bc979b3c63a6eaef63ca7311bef1c7c17",
+    "wasmDigests": {
+      "voidplayer-core.wasm": "2d429b2584a3b462380074a92276c1de213ad0a1b2eba4069b1485828a0ac46a",
+      "voidplayer-core-mt.wasm": "4a9866cab144b5fa07d0708d20c5159f0a893d2d09fde6bf07b890b056c66262"
+    }
+  },
+  "fixture": "h264-static.ts",
+  "input": "local-file",
+  "decoding": "software",
+  "report": {
+    "passed": false,
+    "failures": [
+      "below-realtime",
+      "A:presentation-stall"
+    ],
+    "requestedWallMs": 2000,
+    "startupMs": 1.0699999928474426,
+    "measurements": {
+      "wallMs": 1988.1899999976158,
+      "mediaUs": 216656,
+      "waitingMs": 1771.1840000333789,
+      "firstAdvanceMs": 151.33999997377396,
+      "firstPresentationMs": 151.80500000715256,
+      "buffers": {
+        "A": {
+          "ended": false,
+          "suspended": false,
+          "stopped": false,
+          "error": null,
+          "frames": 1,
+          "bytes": 3110400,
+          "peakFrames": 1,
+          "peakBytes": 3110400,
+          "firstPtsUs": 216656,
+          "lastPtsUs": 216656,
+          "producerWaitMs": 0.4449999928474426,
+          "capacity": 4,
+          "budgetBytes": 67108864,
+          "effectiveBudgetBytes": 67108864
+        }
+      },
+      "speed": 0.10897147656927145,
+      "maxFrameLagUs": 0,
+      "maxFrameSkewUs": 0,
+      "tracks": {
+        "A": {
+          "drawn": 13,
+          "dropped": 0,
+          "fps": 6.538610494980656,
+          "maxGapMs": 155.51499998569489,
+          "p95GapMs": 155.51499998569489
+        }
+      }
+    }
+  },
+  "traceSummary": {
+    "longTasks": [
+      {
+        "atMs": 54.02500003576279,
+        "durationMs": 154
+      },
+      {
+        "atMs": 224.16500002145767,
+        "durationMs": 314
+      },
+      {
+        "atMs": 538.6299999952316,
+        "durationMs": 152
+      },
+      {
+        "atMs": 841.5300000309944,
+        "durationMs": 150
+      },
+      {
+        "atMs": 992.160000026226,
+        "durationMs": 155
+      },
+      {
+        "atMs": 1147.5250000357628,
+        "durationMs": 152
+      },
+      {
+        "atMs": 1300.1650000214577,
+        "durationMs": 154
+      },
+      {
+        "atMs": 1455.2350000143051,
+        "durationMs": 152
+      },
+      {
+        "atMs": 1607.6000000238419,
+        "durationMs": 153
+      },
+      {
+        "atMs": 1761.699999988079,
+        "durationMs": 152
+      },
+      {
+        "atMs": 1914.699999988079,
+        "durationMs": 155
+      },
+      {
+        "atMs": 2070.225000023842,
+        "durationMs": 151
+      },
+      {
+        "atMs": 2222.310000002384,
+        "durationMs": 151
+      },
+      {
+        "atMs": 2373.625,
+        "durationMs": 148
+      },
+      {
+        "atMs": 2522.275000035763,
+        "durationMs": 153
+      },
+      {
+        "atMs": 2675.6200000047684,
+        "durationMs": 152
+      },
+      {
+        "atMs": 2828.0550000071526,
+        "durationMs": 155
+      }
+    ],
+    "longTasksSupported": true,
+    "workerEvents": [
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 20,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 0,
+        "pts": null,
+        "started": 5429.045000016689,
+        "atMs": 210.60000002384186
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 21,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 0,
+        "pts": null,
+        "started": 5432.900000035763,
+        "atMs": 214.45500004291534
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 20,
+        "atMs": 214.50499999523163,
+        "elapsedMs": 3.9049999713897705,
+        "ok": true,
+        "pts": "129000",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 22,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 1,
+        "pts": null,
+        "started": 5433.324999988079,
+        "atMs": 214.87999999523163
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 21,
+        "atMs": 214.89000004529953,
+        "elapsedMs": 0.4350000023841858,
+        "ok": true,
+        "pts": "129000",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 23,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 2,
+        "pts": null,
+        "started": 5434.055000007153,
+        "atMs": 215.61000001430511
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 22,
+        "atMs": 215.62000000476837,
+        "elapsedMs": 0.7400000095367432,
+        "ok": true,
+        "pts": "130499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 24,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 3,
+        "pts": null,
+        "started": 5434.564999997616,
+        "atMs": 216.12000000476837
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 23,
+        "atMs": 216.12999999523163,
+        "elapsedMs": 0.5199999809265137,
+        "ok": true,
+        "pts": "131999",
+        "error": null
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 24,
+        "atMs": 216.55500000715256,
+        "elapsedMs": 0.4350000023841858,
+        "ok": true,
+        "pts": "133499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 25,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 4,
+        "pts": null,
+        "started": 5465.240000009537,
+        "atMs": 246.7950000166893
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 26,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 5,
+        "pts": null,
+        "started": 5757.050000011921,
+        "atMs": 538.6050000190735
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 25,
+        "atMs": 538.6299999952316,
+        "elapsedMs": 291.8349999785423,
+        "ok": true,
+        "pts": "134999",
+        "error": null
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 26,
+        "atMs": 692.1999999880791,
+        "elapsedMs": 153.59499996900558,
+        "ok": true,
+        "pts": "136499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 27,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 0,
+        "pts": null,
+        "started": 6012.694999992847,
+        "atMs": 794.25
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 28,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 0,
+        "pts": null,
+        "started": 6059.655000030994,
+        "atMs": 841.210000038147
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 27,
+        "atMs": 841.25,
+        "elapsedMs": 47,
+        "ok": true,
+        "pts": "129000",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 29,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 1,
+        "pts": null,
+        "started": 6059.944999992847,
+        "atMs": 841.5
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 28,
+        "atMs": 841.5150000452995,
+        "elapsedMs": 0.3050000071525574,
+        "ok": true,
+        "pts": "129000",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 30,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 2,
+        "pts": null,
+        "started": 6210.569999992847,
+        "atMs": 992.125
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 29,
+        "atMs": 992.1500000357628,
+        "elapsedMs": 150.6500000357628,
+        "ok": true,
+        "pts": "130499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 31,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 3,
+        "pts": null,
+        "started": 6365.949999988079,
+        "atMs": 1147.5049999952316
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 30,
+        "atMs": 1147.5200000405312,
+        "elapsedMs": 155.39500004053116,
+        "ok": true,
+        "pts": "131999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 32,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 4,
+        "pts": null,
+        "started": 6518.585000038147,
+        "atMs": 1300.1400000452995
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 31,
+        "atMs": 1300.1550000309944,
+        "elapsedMs": 152.6500000357628,
+        "ok": true,
+        "pts": "133499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 33,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 5,
+        "pts": null,
+        "started": 6673.660000026226,
+        "atMs": 1455.2150000333786
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 32,
+        "atMs": 1455.2300000190735,
+        "elapsedMs": 155.08999997377396,
+        "ok": true,
+        "pts": "134999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 34,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 6,
+        "pts": null,
+        "started": 6826.014999985695,
+        "atMs": 1607.5699999928474
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 33,
+        "atMs": 1607.5900000333786,
+        "elapsedMs": 152.375,
+        "ok": true,
+        "pts": "136499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 35,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 7,
+        "pts": null,
+        "started": 6980.125,
+        "atMs": 1761.6800000071526
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 34,
+        "atMs": 1761.6949999928474,
+        "elapsedMs": 154.125,
+        "ok": true,
+        "pts": "137999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 36,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 8,
+        "pts": null,
+        "started": 7133.120000004768,
+        "atMs": 1914.675000011921
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 35,
+        "atMs": 1914.6949999928474,
+        "elapsedMs": 153.01499998569489,
+        "ok": true,
+        "pts": "139499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 37,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 9,
+        "pts": null,
+        "started": 7288.6449999809265,
+        "atMs": 2070.199999988079
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 36,
+        "atMs": 2070.2200000286102,
+        "elapsedMs": 155.5450000166893,
+        "ok": true,
+        "pts": "140999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 38,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 10,
+        "pts": null,
+        "started": 7440.7300000190735,
+        "atMs": 2222.285000026226
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 37,
+        "atMs": 2222.300000011921,
+        "elapsedMs": 152.10000002384186,
+        "ok": true,
+        "pts": "142499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 39,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 11,
+        "pts": null,
+        "started": 7592.050000011921,
+        "atMs": 2373.6050000190735
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 38,
+        "atMs": 2373.6200000047684,
+        "elapsedMs": 151.33499997854233,
+        "ok": true,
+        "pts": "143999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 40,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 12,
+        "pts": null,
+        "started": 7740.689999997616,
+        "atMs": 2522.2450000047684
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 39,
+        "atMs": 2522.2650000452995,
+        "elapsedMs": 148.66000002622604,
+        "ok": true,
+        "pts": "145499",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 41,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 13,
+        "pts": null,
+        "started": 7894.045000016689,
+        "atMs": 2675.600000023842
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 40,
+        "atMs": 2675.610000014305,
+        "elapsedMs": 153.36500000953674,
+        "ok": true,
+        "pts": "146999",
+        "error": null
+      },
+      {
+        "event": "request",
+        "worker": 1,
+        "id": 42,
+        "type": "extract",
+        "ctx": 6531408,
+        "index": 14,
+        "pts": null,
+        "started": 8046.47000002861,
+        "atMs": 2828.025000035763
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 41,
+        "atMs": 2828.0450000166893,
+        "elapsedMs": 152.44499999284744,
+        "ok": true,
+        "pts": "148499",
+        "error": null
+      },
+      {
+        "event": "reply",
+        "worker": 1,
+        "id": 42,
+        "atMs": 2984.9150000214577,
+        "elapsedMs": 156.88999998569489,
+        "ok": true,
+        "pts": "149999",
+        "error": null
+      }
+    ],
+    "outstanding": []
+  },
+  "cpuSelfMs": [
+    {
+      "ms": 2768.27,
+      "name": "(program)",
+      "source": ""
+    },
+    {
+      "ms": 252.403,
+      "name": "(idle)",
+      "source": ""
+    },
+    {
+      "ms": 12.945,
+      "name": "getPointAtLength",
+      "source": ""
+    },
+    {
+      "ms": 7.517,
+      "name": "getPointAtLength",
+      "source": ""
+    },
+    {
+      "ms": 4.536,
+      "name": "texSubImage2D",
+      "source": ""
+    },
+    {
+      "ms": 3.03,
+      "name": "getBoundingClientRect",
+      "source": ""
+    },
+    {
+      "ms": 3.009,
+      "name": "snapshot",
+      "source": "log-CEvdRhGT.js"
+    },
+    {
+      "ms": 1.56,
+      "name": "getState",
+      "source": "main-D2sLM8jy.js"
+    },
+    {
+      "ms": 1.526,
+      "name": "abort",
+      "source": ""
+    },
+    {
+      "ms": 1.521,
+      "name": "Gm",
+      "source": "main-D2sLM8jy.js"
+    },
+    {
+      "ms": 1.517,
+      "name": "querySelectorAll",
+      "source": ""
+    },
+    {
+      "ms": 1.516,
+      "name": "Worker.postMessage",
+      "source": ""
+    }
+  ],
+  "limitation": "Most main-thread CPU samples are native (program); this does not establish a GPU or decoder causal root. CI zero-presentation remains unresolved."
+}

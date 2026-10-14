@@ -90,7 +90,7 @@ node scripts/run-tests.mjs uncovered --prepared
 
 CI 细分套件是统一清单的标签，本地执行相同标签会枚举相同的平台适用 case；不是第二份脚本列表。发布依赖测试继续确保所有 required job 成功才能汇总和创建草稿。`ci-native-http` / `ci-identity-http` 使用隔离数据模拟远程 HTTP 入口；`ci-native-https` 与 `ci-https` 涉及临时证书信任，入口要求 `CI=true` 的一次性主机，普通本地运行会明确失败而不会修改信任。
 
-旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 仍只运行原来的基础 UI 检查；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 继续枚举旧顶层入口，Bun 和单文件命令也保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。逐项覆盖下限见 `test/testing-coverage-baseline.json`，当前选择以统一清单为准。
+旧 npm 命令和脚本路径保持兼容，包括它们的既有默认引擎、参数和构建行为。例如 `npm run test:browser` 委托 runner 的 `--alias test:browser`，由现有清单 case 的 `npmAliases` 绑定选择默认 WebKit，传入 `chromium` 只选择原来的 Chromium 基础 UI case；准备步骤、默认参数和执行命令来自唯一 case 定义，别名不再独立编排 build。`npm run test:browser -- chromium --filter=子用例名` 保留原筛选参数，并在选择记录标记部分执行；未匹配任何检查必须失败，CI 覆盖枚举不能把筛选后的 case 算成完整覆盖。它仍不是完整浏览器套件；连续执行旧带 build 的命令仍会重复构建，需要完整或组合检查时使用新套件入口。浏览器领域实现归入 `scripts/testing/browser/{ui,annotations,media,workspace}/`；127 个 Node 文件分批归入 `test/{unit,contract,media}/`，可复用模块归入 `test/helpers/`。顶层旧脚本和 Node 文件保留薄入口，清单的 `implementation` 记录实际文件。只选择旧入口或实际文件中的一处执行，不能同时枚举两处导致重复用例；`npm test` 委托 `node scripts/run-tests.mjs unit`，与 CI 使用相同的 case ID、准备步骤、超时及逐项结果；不再依赖顶层 glob。`npm test -- --list` 枚举适用用例，`npm test -- --case node-test-manifest` 可缩小选择。runner 逐项运行，原来的 Node `--test-concurrency=4` 不再维护另一份调度；参数使用 runner 的选择选项，单文件 Node/Bun 命令和旧脚本路径保持兼容。契约检查旧入口指向、唯一实现归属，以及漏登记或悬空实现。开发、夹具、诊断、性能和发布工具分列于 `scripts/tools/`，入口与保留专用工具见 [脚本职责索引](../scripts/README.md)。逐项覆盖下限见 `test/testing-coverage-baseline.json`，当前选择以统一清单为准。
 
 ## 准备
 
@@ -288,6 +288,10 @@ The fixed-baseline comparison in `docs/evidence/test-entry-migration.json` recor
 ### 媒体与 Worker 的翻译依赖边界
 
 `node-i18n-build` 使用 `scripts/testing/i18n-architecture.mjs` 检查 media、presenter、FFmpeg/packet Worker 与实际 `src/thumbnails/pixel-worker.ts` 根入口。必检根入口或递归依赖缺失必须报出路径并失败。扫描相对运行时 import、re-export 和字符串字面量 dynamic import；type-only import/export 与包依赖不递归。Worker URL 单独列为根入口，计算式 import、require 和未列出的 Worker URL 不属于这个扫描器的覆盖范围。临时工程负例验证缺失入口、缩略图直接/间接引入翻译依赖均被拒绝；现有 progress callback 限制保持。
+
+### 服务端索引数据库 RPC
+
+`server/frame-index-protocol.ts` 绑定六个数据库操作的字段与结果，`FrameIndexJobs.call` 从操作名推导返回值，Worker 使用 `frameIndexReply` 检查响应。HTTP JSON 和磁盘索引的既有运行时校验仍在入口执行；数据库 Worker 消息布局、transfer、超时、并发与关闭策略保持。`test/helpers/frame-index-protocol-types.ts` 的负例随 build 和 `node-frame-index-worker` 编译，拒绝未知操作、缺失/错误字段及请求/响应错配；这些测试不在媒体逐帧路径增加校验或复制。
 
 ### 可丢弃像素缩略图 Worker
 

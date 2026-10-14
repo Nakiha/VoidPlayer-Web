@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
@@ -20,7 +21,7 @@ test('identity-aware cache RPC checks media version and clear epoch', async () =
     const put = async (epoch: number, target = entry, value: unknown = index) => {
       const body = new TextEncoder().encode(JSON.stringify({ epoch, index: value }));
       return library.indexJobs.call('put', {
-        id: target.id, version: target.version, size: target.size, identity: FLV_MEDIA_INDEX_IDENTITY, bytes: body,
+        id: target.id, version: target.version!, size: target.size, identity: FLV_MEDIA_INDEX_IDENTITY, bytes: body,
       }, [body.buffer]);
     };
     await put(0);
@@ -32,13 +33,13 @@ test('identity-aware cache RPC checks media version and clear epoch', async () =
     await writeFile(file, bytes); await library.refresh(); entry = library.browse().entries[0];
     await put(1);
     const [encoded, present, epoch] = await Promise.all([
-      library.indexJobs.call('get', { id: entry.id, version: entry.version, identity: FLV_MEDIA_INDEX_IDENTITY }),
-      library.indexJobs.call('has', { id: entry.id, version: entry.version, identity: FLV_MEDIA_INDEX_IDENTITY }),
+      library.indexJobs.call('get', { id: entry.id, version: entry.version!, identity: FLV_MEDIA_INDEX_IDENTITY }),
+      library.indexJobs.call('has', { id: entry.id, version: entry.version!, identity: FLV_MEDIA_INDEX_IDENTITY }),
       library.indexJobs.call('epoch'),
     ]);
     assert.equal(present, true);
     assert.equal(epoch, 1);
-    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded as Uint8Array)), { epoch: 1, index });
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded)), { epoch: 1, index });
   } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
 });
 
@@ -71,19 +72,24 @@ test('manifest identity keeps FLV and FFmpeg payloads separate for one media ver
     const put = async (identity: typeof ffmpegIdentity | typeof FLV_MEDIA_INDEX_IDENTITY, document: unknown) => {
       const body = new TextEncoder().encode(JSON.stringify({ epoch: 0, index: document }));
       await library.indexJobs.call('put', {
-        id: entry.id, version: entry.version, size: entry.size, identity, bytes: body,
+        id: entry.id, version: entry.version!, size: entry.size, identity, bytes: body,
       }, [body.buffer]);
     };
     await put(ffmpegIdentity, ffmpegDocument);
     await put(FLV_MEDIA_INDEX_IDENTITY, flvDocument);
     const encoded = await library.indexJobs.call('get', {
-      id: entry.id, version: entry.version, identity: ffmpegIdentity,
+      id: entry.id, version: entry.version!, identity: ffmpegIdentity,
     });
-    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded as Uint8Array)), { epoch: 0, index: ffmpegDocument });
+    assert.deepEqual(JSON.parse(new TextDecoder().decode(encoded)), { epoch: 0, index: ffmpegDocument });
     assert.equal(library.frameIndexes.has(entry.id, entry.version!, 'ffmpeg', ffmpegIdentity), true);
     assert.equal(library.frameIndexes.has(entry.id, entry.version!, 'flv'), true);
     assert.equal(library.frameIndexes.list().count, 2);
   } finally { await library.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('server index request and responder compile-time negative contracts remain enforced', () => {
+  const result = spawnSync(process.execPath, ['node_modules/typescript/bin/tsc', '--noEmit'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
 });
 
 test('database Worker messageerror rejects every pending RPC and isolates late events from recovery', async () => {

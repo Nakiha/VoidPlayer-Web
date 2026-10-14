@@ -388,3 +388,17 @@ test('an identical token still requires matching committed track state', async t
   fixture.present('A', fixture.tokens.get('A')); fixture.state.tracks[0].frame.ptsUs = 1234;
   await rejected; assert.equal(fixture.stateListeners.size, 0);
 });
+
+test('npm alias CLI accepts its one legacy engine argument without mixing another suite', () => {
+  assert.equal(parseOptions(['--alias', 'test:browser', '--list']).alias, 'test:browser');
+  assert.equal(parseOptions(['--alias', 'test:browser', 'chromium']).engine, 'chromium');
+  assert.equal(parseOptions(['--alias', 'test:browser', '--engine', 'webkit']).engine, 'webkit');
+  for (const args of [['--alias'], ['--alias', 'test:browser', 'chromium', 'webkit'],
+    ['--alias', 'test:browser', '--prepare'], ['--alias', 'test:browser', '--check'],
+    ['--alias', 'test:browser', 'chromium', '--engine', 'webkit'], ['--alias', 'test:browser', '--alias', 'test:other']]) assert.throws(() => parseOptions(args));
+});
+
+test('npm compatibility filter remains a literal case argument after its engine', () => {
+  const options = parseOptions(['--alias', 'test:browser', 'chromium', '--filter=analysis recovery', '--list']);
+  assert.equal(options.engine, 'chromium'); assert.deepEqual(options.caseArguments, ['--filter=analysis recovery']);
+});

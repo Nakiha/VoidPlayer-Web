@@ -1,0 +1,63 @@
+{
+  "kind": "held-real-JPEG-boundary-then-release",
+  "engine": "webkit",
+  "base": "5e6b65365c5afe5eb804ca064ae2d540303f77f0",
+  "events": [
+    {
+      "at": 2125.6,
+      "label": "encode-held",
+      "lang": "en",
+      "connected": true,
+      "text": "No preview",
+      "image": null
+    },
+    {
+      "at": 2143.98,
+      "label": "Chinese-placeholder",
+      "lang": "zh-CN",
+      "connected": true,
+      "text": "暂无预览",
+      "image": null
+    },
+    {
+      "at": 2173.02,
+      "label": "English-placeholder",
+      "lang": "en",
+      "connected": true,
+      "text": "No preview",
+      "image": null
+    },
+    {
+      "at": 2180.74,
+      "label": "encode-released",
+      "lang": "en",
+      "connected": true,
+      "text": "No preview",
+      "image": null
+    },
+    {
+      "at": 2196.24,
+      "label": "image-ready",
+      "lang": "en",
+      "connected": true,
+      "text": "",
+      "image": {
+        "complete": true,
+        "naturalWidth": 320,
+        "alt": "Annotated frame"
+      }
+    },
+    {
+      "at": 2239.48,
+      "label": "English-image",
+      "lang": "en",
+      "connected": true,
+      "text": "",
+      "image": {
+        "complete": true,
+        "naturalWidth": 320,
+        "alt": "Annotated frame"
+      }
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "base": "227c98a292e2ddf9b15f3da8a3725ec09ec819d4",
+  "scope": "npm test delegates to existing unit runner; other npm aliases and shim retirement remain separate",
+  "catalogUnchangedSha256": "390ba64f635a4fad63c489522c645f4d2871eb99d2945f108f5f047f1d175feb",
+  "unitCases": 144,
+  "legacyGlobCases": 144,
+  "platformsVerified": [
+    "linux",
+    "darwin",
+    "win32"
+  ],
+  "contractTestCasesPassed": 30,
+  "npmSelectedCasesPassed": 2,
+  "initialCompleteRun": {
+    "passed": 131,
+    "failed": 13,
+    "complete": 144,
+    "failures": [
+      "node-ffmpeg-media",
+      "node-flv-background",
+      "node-flv-duplicate-pts",
+      "node-flv-startup-frame",
+      "node-flv",
+      "node-frame-index-profile",
+      "node-frame-index-scan-modes",
+      "node-media-state",
+      "node-media",
+      "node-mp4-packets",
+      "node-range-media",
+      "node-range-reader",
+      "node-yuv-core"
+    ],
+    "reason": "absent Mac QA/FATE/FLV fixtures; failures retained in local original logs"
+  },
+  "retryAfterPinnedFixturePreparation": {
+    "passed": 13,
+    "failed": 0,
+    "caseIds": [
+      "node-ffmpeg-media",
+      "node-flv-background",
+      "node-flv-duplicate-pts",
+      "node-flv-startup-frame",
+      "node-flv",
+      "node-frame-index-profile",
+      "node-frame-index-scan-modes",
+      "node-media-state",
+      "node-media",
+      "node-mp4-packets",
+      "node-range-media",
+      "node-range-reader",
+      "node-yuv-core"
+    ]
+  },
+  "combinedCoveragePassed": 144,
+  "qaRevision": "881eb5ccd706c33aa1ff35ab3a67ac3a226ccfba",
+  "fixtureChecks": "Git blob SHA-1 checked against pinned GitHub listing; LFS SHA-256 and byte size verified; FATE via existing pinned downloader; FLV via existing generator",
+  "coreSha256": {
+    "voidplayer-core.wasm": "7c71f847fee0f5e1afa27022d0bf45b6fb29fea1a1c69313a25594a7dadf9b44",
+    "voidplayer-core-mt.wasm": "8fe821a5739b2149e4857d4d202bc305692110bc196040c3adfa5d5c93413a65"
+  },
+  "build": "passed",
+  "browserRerun": "none; no product changes",
+  "scheduling": "existing runner runs cases serially with manifest timeouts, prerequisites and reports; previous npm-only concurrency=4 removed"
+}

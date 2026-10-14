@@ -3,8 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { AdminError } from './admin-error.ts';
 import { mediaIndexIdentityKey } from '../src/media-index-identity.ts';
 import type { MediaIndexIdentity } from '../src/media-index-identity.ts';
+import type { FrameIndexOperation, FrameIndexCallArgs, FrameIndexResult, FrameIndexResponse } from './frame-index-protocol.ts';
 
-type PendingRequest = { resolve(value: any): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
+type PendingRequest = { resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> };
 type BuildRequest = {
   id: string;
   version: string;
@@ -101,7 +102,7 @@ export class FrameIndexJobs {
       }
       void worker.terminate();
     };
-    worker.on('message', (result: { rpcId: number; value?: unknown; error?: string; status?: number }) => {
+    worker.on('message', (result: FrameIndexResponse) => {
       if (this.worker !== worker) return;
       const entry = this.pending.get(result.rpcId);
       if (!entry) return;
@@ -116,7 +117,8 @@ export class FrameIndexJobs {
     return worker;
   }
 
-  async call(op: string, data: Record<string, unknown> = {}, transfer: ArrayBuffer[] = [], timeoutMs = 60000): Promise<any> {
+  async call<K extends FrameIndexOperation>(op: K, ...args: FrameIndexCallArgs<K>): Promise<FrameIndexResult<K>> {
+    const [data = {}, transfer = [], timeoutMs = 60000] = args;
     if (this.closed) throw new AdminError(503, '索引服务已关闭。');
     const worker = this.databaseWorker();
     const id = this.nextId++;
@@ -125,7 +127,7 @@ export class FrameIndexJobs {
         this.pending.delete(id);
         reject(new AdminError(503, '索引数据库操作超时，请稍后重试。'));
       }, timeoutMs);
-      this.pending.set(id, { resolve, reject, timer });
+      this.pending.set(id, { resolve: value => resolve(value as FrameIndexResult<K>), reject, timer });
       try { worker.postMessage({ rpcId: id, op, ...data }, transfer); }
       catch (error) {
         clearTimeout(timer);
