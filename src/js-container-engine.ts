@@ -93,7 +93,7 @@ export class JsContainerEngine {
     },close:()=>this.reader.close()}, this.sourceVersion, this.controller.signal);
     this.document = await this.source!.open(cached,onIndexProgress);
     this.indexPacketsScanned=this.source!.packetsRead;
-    if(this.persistent)await saveLocalJsIndex(this.document);
+    if(this.persistent)await saveLocalJsIndex(this.document,this.controller.signal);
     this.check();
     this.index = jsDecodeIndex(this.document);
     this.statistics = {packets: this.document.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,

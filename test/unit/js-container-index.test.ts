@@ -5,6 +5,30 @@ import {jsDecodeIndex} from '../../src/js-decode-index.ts';
 import {MATROSKA_PACKET_BUILD} from '../../src/matroska-packet-index.ts';
 import {readContainerHeader,validateContainerHeader} from '../../src/bitstream-analysis/diagrams.ts';
 import {inspectPacketPicture} from '../../src/packet-picture.ts';
+import {matroskaClocks} from '../../src/matroska-clocks.ts';
+import {TsCombinationNotMigrated} from '../../src/ts-packet-source.ts';
+
+const ebml=(id:string,...parts:Uint8Array[])=>{const data=Buffer.concat(parts);assert.ok(data.length<127);return Buffer.concat([Buffer.from(id,'hex'),Buffer.from([0x80|data.length]),data]);};
+const block=(flags=0,track=1)=>Buffer.from([0x80|track,0,0,flags,0x82,0]);
+const clocksFor=(...blocks:Uint8Array[])=>{
+ const bytes=ebml('18538067',ebml('1654ae6b',ebml('ae',ebml('d7',Buffer.from([1])),ebml('83',Buffer.from([1])))),ebml('1f43b675',ebml('e7',Buffer.from([0])),...blocks));
+ return matroskaClocks({size:bytes.length,async read(at,n){return bytes.subarray(at,at+n);},close(){}},1,new AbortController().signal);
+};
+for(const group of [false,true])test(`Matroska ${group?'BlockGroup':'SimpleBlock'} invisible video cannot become a presented picture`,async()=>{
+ await assert.rejects(clocksFor(group?ebml('a0',ebml('a1',block(8))):ebml('a3',block(8))),TsCombinationNotMigrated);
+});
+for(const [name,member] of [
+ ['discard-padding',ebml('75a2',Buffer.from([1]))],
+ ['virtual-reference',ebml('fd',Buffer.from([1]))],
+ ['virtual-block',ebml('a2',block())],
+ ['time-slices',ebml('8e',ebml('e8',ebml('cd',Buffer.from([2]))))],
+] as const)test(`Matroska selected-video BlockGroup ${name} requires explicit admission`,async()=>{
+ await assert.rejects(clocksFor(ebml('a0',member,ebml('a1',block()))),TsCombinationNotMigrated);
+});
+test('Matroska ordinary references/discardable pictures remain valid, and audio transforms do not reject video',async()=>{
+ const clocks=await clocksFor(ebml('a0',ebml('a1',block()),ebml('fb',Buffer.from([0xff])),ebml('9b',Buffer.from([33])),ebml('75a2',Buffer.from([0]))),ebml('a3',block(0x81)),ebml('a0',ebml('a1',block(0,2)),ebml('75a2',Buffer.from([1]))));
+ assert.equal(clocks.size,2);
+});
 
 test('local JS identity covers every byte, is independent of read cursors and bounds each allocation',async()=>{
  const bytes=new Uint8Array(2*1024*1024+19),reads:number[]=[];
@@ -23,6 +47,7 @@ test('a structurally valid serialized Matroska index cannot mint decode identiti
  const fake=structuredClone(doc);fake.packets.pop();fake.completeness.packets=1;const partial=parseJsPacketIndex(fake,'source',1024);assert.ok(partial);assert.throws(()=>jsDecodeIndex(partial),/Unverified complete/,'self-consistent truncation still has no scan authority');
  const wrong=structuredClone(doc);wrong.packets[0].timing.dts=0 as unknown as null;assert.equal(parseJsPacketIndex(wrong,'source',1024),undefined,'Matroska cannot invent a raw DTS field');
  assert.equal(parseJsPacketIndex({...doc,build:'old-js-build'},'source',1024),undefined);assert.equal(parseJsPacketIndex(doc,'other-source',1024),undefined);
+ assert.equal(parseJsPacketIndex({...doc,build:'mediabunny-1.55.7-matroska-packets-v2'},'source',1024),undefined,'pre-Invisible-admission cache must rebuild');
 });
 test('HEVC Annex-B configuration stays Annex-B in diagram/cache validation',()=>{
  const configuration=Uint8Array.from([0,0,0,1,64,1,0,0,0,1,66,1,0,0,0,1,68,1]);

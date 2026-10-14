@@ -52,12 +52,17 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
   };
   const cluster=async(start:number,end:number,unknown:boolean)=>{
     let timestamp:number|undefined,ordinal=0,at=start;
-    const block=async(data:number,blockEnd:number,offset:number)=>{
+    const block=async(data:number,blockEnd:number,offset:number,simple:boolean)=>{
       const bytes=await read(data,Math.min(12,blockEnd-data)),id=vint(bytes,0);
       if(id.value!==trackId)return false;
       if(bytes.length<id.width+3)bad('truncated block header');
       if(timestamp===undefined)bad('block precedes cluster timestamp');
-      if(bytes[id.width+2]&6)outside('laced video blocks require verified multi-picture mapping');
+      const flags=bytes[id.width+2];
+      // Invisible is a container output constraint, independent of the codec's
+      // show-frame bit. Pinned Mediabunny does not carry it in EncodedPacket.
+      if(flags&8)outside('invisible video blocks require decode-without-display mapping');
+      if(flags&6)outside('laced video blocks require verified multi-picture mapping');
+      if(flags&(simple?0x70:0xf1))bad('reserved video block flags');
       const relative=new DataView(bytes.buffer,bytes.byteOffset).getInt16(id.width),pts=timestamp!+relative;
       if(!Number.isSafeInteger(pts))bad('block clock exceeds safe range');
       const locator=start+ordinal++;
@@ -68,10 +73,15 @@ export async function matroskaClocks(reader:TsPacketReader,trackId:number,signal
     while(at<end){const h=await header(at,end);
       if(unknown&&[0x1f43b675,0x1549a966,0x1654ae6b,0x1c53bb6b,0x1254c367,0x114d9b74,0x1941a469,0x1043a770].includes(h.id))break;
       if(h.id===0xe7)timestamp=await uint(h.data,h.end);
-      else if(h.id===0xa3)await block(h.data,h.end,at);
-      else if(h.id===0xa0){let selected=false,transformed=false;for(let p=h.data;p<h.end;){const child=await header(p,h.end);if(child.unknown)bad('unknown block group member length');
-        if(child.id===0xa4||child.id===0x75a1)transformed=true;
-        if(child.id===0xa1)selected=await block(child.data,child.end,p);p=child.end;}if(selected&&transformed)outside('video codec state / block additions require separate admission');}
+      else if(h.id===0xa3)await block(h.data,h.end,at,true);
+      else if(h.id===0xa0){let selected=false,transformed=false,blocks=0;for(let p=h.data;p<h.end;){const child=await header(p,h.end);if(child.unknown)bad('unknown block group member length');
+        if([0xa4,0x75a1,0xa2,0xfd,0x8e,0xc8].includes(child.id))transformed=true;
+        if(child.id===0x75a2){if(child.end-child.data<1||child.end-child.data>8)bad('invalid discard padding');if((await read(child.data,child.end-child.data)).some(b=>b!==0))transformed=true;}
+        if(child.id===0xa2){const bytes=await read(child.data,Math.min(8,child.end-child.data));selected=vint(bytes,0).value===trackId||selected;}
+        if(child.id===0xa1){blocks++;selected=await block(child.data,child.end,p,false)||selected;}
+        p=child.end;}
+        if(selected&&transformed)outside('video BlockGroup output transforms require separate admission');
+        if(selected&&blocks!==1)bad('BlockGroup requires one video block');}
       else if(h.unknown)bad('unknown cluster member length');
       at=h.end;
     }

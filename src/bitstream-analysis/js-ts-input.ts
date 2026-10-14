@@ -21,7 +21,7 @@ export async function openJsPacketAnalysisInput(format:'ts'|'matroska',reader: A
     reusable??=await loadLocalJsIndex(observed,sourceVersion,format,signal);
     const index = reusable ?? await source.open();
     signal.throwIfAborted();
-    if(!reusable)await saveLocalJsIndex(index);
+    if(!reusable)await saveLocalJsIndex(index,signal);
     if(index.codec!=='h264'&&index.codec!=='hevc')throw new AnalysisFailure('unsupported-codec',`Block/QP analysis does not support ${index.codec}; JS packet/index statistics remain available`);
     const codec=index.codec;
     let opened = !reusable;
