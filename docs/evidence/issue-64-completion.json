@@ -1,0 +1,418 @@
+{
+  "issue": 64,
+  "acceptedMain": "107c30056cac8cb66cc1c69bde5b77e2ce67a840",
+  "finalEngineeringPr": 95,
+  "head": "63dddaa57cf73de6bb3a465ff6913b87ca7e6e38",
+  "merge": "107c30056cac8cb66cc1c69bde5b77e2ce67a840",
+  "ci": {
+    "success": 31,
+    "expectedSkipped": [
+      "Stage verified release draft"
+    ],
+    "freshChecksRerun": false
+  },
+  "verdict": "All23 hard checklist requirements have accepted-main evidence; only item24 optional formatting remains. Ready for parent closure; no claim of an exhaustive theoretical Worker fault Cartesian product.",
+  "items": [
+    {
+      "item": 1,
+      "requirement": "保留已开始流的异常路径；未发头且未销毁时，让 503 设置 `Retry-After: 1` 后进入正常错误响应出口，实际发送状态/JSON 并结束响应。",
+      "status": "complete-main",
+      "group": "P1-A",
+      "prs": [
+        65
+      ],
+      "evidence": "真实HTTP8项；修改前失败/修复后通过，503状态/JSON/Retry-After与响应结束，流式错误/断连保持。",
+      "files": [
+        "test/unit/index-stream-response.test.ts"
+      ]
+    },
+    {
+      "item": 2,
+      "requirement": "通过真实 HTTP 请求覆盖上传并发超限、队列满、数据库超时等可控注入，断言 503、错误体、Retry-After 以及响应在测试期限内正常结束；不能只验证抛出 AdminError。",
+      "status": "complete-main",
+      "group": "P1-A",
+      "prs": [
+        65
+      ],
+      "evidence": "真实HTTP8项；修改前失败/修复后通过，503状态/JSON/Retry-After与响应结束，流式错误/断连保持。",
+      "files": [
+        "test/unit/index-stream-response.test.ts"
+      ]
+    },
+    {
+      "item": 3,
+      "requirement": "普通 4xx/500、客户端断连、已发头后的流式错误仍正确收尾，不重复写头/结束；上传槽位和计时器释放。不与 content 拆分捆绑。",
+      "status": "complete-main",
+      "group": "P1-A",
+      "prs": [
+        65
+      ],
+      "evidence": "真实HTTP8项；修改前失败/修复后通过，503状态/JSON/Retry-After与响应结束，流式错误/断连保持。",
+      "files": [
+        "test/unit/index-stream-response.test.ts"
+      ]
+    },
+    {
+      "item": 4,
+      "requirement": "改用实际 thumbnail Worker 根入口；所有声明为必检的根入口不存在时必须失败，并报告路径。",
+      "status": "complete-main",
+      "group": "P1-B",
+      "prs": [
+        66
+      ],
+      "evidence": "13项含必检入口缺失、实际pixel-worker根、直接/间接禁止翻译依赖的负例。",
+      "files": [
+        "test/contract/i18n-build.test.mjs"
+      ]
+    },
+    {
+      "item": 5,
+      "requirement": "临时测试工程覆盖“必检入口缺失”和“根入口/其依赖人为引入禁止翻译依赖”的负例，证明检查器会拒绝，而非只证明扫描函数能执行。",
+      "status": "complete-main",
+      "group": "P1-B",
+      "prs": [
+        66
+      ],
+      "evidence": "13项含必检入口缺失、实际pixel-worker根、直接/间接禁止翻译依赖的负例。",
+      "files": [
+        "test/contract/i18n-build.test.mjs"
+      ]
+    },
+    {
+      "item": 6,
+      "requirement": "明确扫描范围和支持的依赖边界；保留媒体、解码 Worker、presenter 和 progress callback 的现有限制。",
+      "status": "complete-main",
+      "group": "P1-B",
+      "prs": [
+        66
+      ],
+      "evidence": "13项含必检入口缺失、实际pixel-worker根、直接/间接禁止翻译依赖的负例。",
+      "files": [
+        "test/contract/i18n-build.test.mjs"
+      ]
+    },
+    {
+      "item": 7,
+      "requirement": "先定义唯一 case 实现入口，并同步调整清单、校验器、执行器、测试发现和文档，再移除不再需要的 shim。",
+      "status": "complete-main",
+      "group": "P2-A",
+      "prs": [
+        93,
+        95
+      ],
+      "evidence": "58个test npm入口全部委托runner；剩余48命令完整迁移；139条显式退役、44引用入口保留；328case/153唯一unitowner；67合同及父任务17个实际CLI探针；原326 main case字段保持。",
+      "files": [
+        "docs/evidence/engineering-closeout.json",
+        "docs/evidence/retired-test-entrypoints.json",
+        "test/contract/test-manifest.test.mjs",
+        "test/contract/test-runner.test.mjs"
+      ]
+    },
+    {
+      "item": 8,
+      "requirement": "npm 别名只委托 runner，不独立维护另一份准备步骤、默认参数和执行列表。旧命令在兼容期正确转发，之后明确弃用，不能静默少跑。",
+      "status": "complete-main",
+      "group": "P2-A",
+      "prs": [
+        93,
+        95
+      ],
+      "evidence": "58个test npm入口全部委托runner；剩余48命令完整迁移；139条显式退役、44引用入口保留；328case/153唯一unitowner；67合同及父任务17个实际CLI探针；原326 main case字段保持。",
+      "files": [
+        "docs/evidence/engineering-closeout.json",
+        "docs/evidence/retired-test-entrypoints.json",
+        "test/contract/test-manifest.test.mjs",
+        "test/contract/test-runner.test.mjs"
+      ]
+    },
+    {
+      "item": 9,
+      "requirement": "提供迁移前后 case ID × engine × platform × input 对照，保留 fixture/tool、超时、required/informational、产物和报告/退出码语义，覆盖刚合入的 TS 项。",
+      "status": "complete-main",
+      "group": "P2-A",
+      "prs": [
+        93,
+        95
+      ],
+      "evidence": "58个test npm入口全部委托runner；剩余48命令完整迁移；139条显式退役、44引用入口保留；328case/153唯一unitowner；67合同及父任务17个实际CLI探针；原326 main case字段保持。",
+      "files": [
+        "docs/evidence/engineering-closeout.json",
+        "docs/evidence/retired-test-entrypoints.json",
+        "test/contract/test-manifest.test.mjs",
+        "test/contract/test-runner.test.mjs"
+      ]
+    },
+    {
+      "item": 10,
+      "requirement": "验证单套件一次 build、准备凭据失效、不完整/取消/超时结果阻断规则和跨平台 CI 归属；不以删除文件数或播放器提速作为验收。",
+      "status": "complete-main",
+      "group": "P2-A",
+      "prs": [
+        93,
+        95
+      ],
+      "evidence": "58个test npm入口全部委托runner；剩余48命令完整迁移；139条显式退役、44引用入口保留；328case/153唯一unitowner；67合同及父任务17个实际CLI探针；原326 main case字段保持。",
+      "files": [
+        "docs/evidence/engineering-closeout.json",
+        "docs/evidence/retired-test-entrypoints.json",
+        "test/contract/test-manifest.test.mjs",
+        "test/contract/test-runner.test.mjs"
+      ]
+    },
+    {
+      "item": 11,
+      "requirement": "操作名决定请求字段与返回值，数据库 Worker 回包也接受编译期检查，调用点不再靠手写 `as` 维持对应关系。",
+      "status": "complete-main",
+      "group": "P2-B",
+      "prs": [
+        93
+      ],
+      "evidence": "六操作请求/返回映射与responder类型检查；未知操作/缺字段/错请求响应编译负例，HTTP/磁盘运行时边界和transfer/超时保持。",
+      "files": [
+        "server/frame-index-protocol.ts",
+        "test/helpers/frame-index-protocol-types.ts",
+        "test/unit/frame-index-worker.test.ts"
+      ]
+    },
+    {
+      "item": 12,
+      "requirement": "编译期负例拒绝未知操作、遗漏字段、错误请求/响应组合；HTTP、磁盘缓存等外部输入继续在边界做必要运行时校验。",
+      "status": "complete-main",
+      "group": "P2-B",
+      "prs": [
+        93
+      ],
+      "evidence": "六操作请求/返回映射与responder类型检查；未知操作/缺字段/错请求响应编译负例，HTTP/磁盘运行时边界和transfer/超时保持。",
+      "files": [
+        "server/frame-index-protocol.ts",
+        "test/helpers/frame-index-protocol-types.ts",
+        "test/unit/frame-index-worker.test.ts"
+      ]
+    },
+    {
+      "item": 13,
+      "requirement": "保留超时、关闭、并发限额、transfer 和缓存/索引协议；不新增每帧深度校验或额外复制。",
+      "status": "complete-main",
+      "group": "P2-B",
+      "prs": [
+        93
+      ],
+      "evidence": "六操作请求/返回映射与responder类型检查；未知操作/缺字段/错请求响应编译负例，HTTP/磁盘运行时边界和transfer/超时保持。",
+      "files": [
+        "server/frame-index-protocol.ts",
+        "test/helpers/frame-index-protocol-types.ts",
+        "test/unit/frame-index-worker.test.ts"
+      ]
+    },
+    {
+      "item": 14,
+      "requirement": "先列各客户端的请求关联、pending 清理、error/exit/messageerror、取消、迟到结果、transferable 所有权矩阵，补差异对应的测试。",
+      "status": "complete-main",
+      "group": "P2-C",
+      "prs": [
+        85,
+        88,
+        89,
+        90,
+        93,
+        95
+      ],
+      "evidence": "各业务失败域独立；error/exit/messageerror/post/cancel/late资源与pending清理覆盖已识别差异；converter26单测和对齐I420双引擎真实Worker检查；ACK、索引ready/complete、可丢任务和独立实例保持。",
+      "files": [
+        "docs/worker-failure-contract.md",
+        "test/contract/worker-rpc.test.ts",
+        "test/contract/native-client-lifecycle.test.ts",
+        "test/unit/cached-audio-client.test.ts",
+        "test/unit/thumbnail-offer.test.ts",
+        "test/unit/frame-index-worker.test.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/native-yuv-source.test.ts"
+      ]
+    },
+    {
+      "item": 15,
+      "requirement": "注入 Worker 崩溃、反序列化失败、postMessage 失败、超时、取消与迟到回包，验证调用者正确收尾、pending/timer/listener 释放，以及需要关闭的迟到帧只释放一次。",
+      "status": "complete-main",
+      "group": "P2-C",
+      "prs": [
+        85,
+        88,
+        89,
+        90,
+        93,
+        95
+      ],
+      "evidence": "各业务失败域独立；error/exit/messageerror/post/cancel/late资源与pending清理覆盖已识别差异；converter26单测和对齐I420双引擎真实Worker检查；ACK、索引ready/complete、可丢任务和独立实例保持。",
+      "files": [
+        "docs/worker-failure-contract.md",
+        "test/contract/worker-rpc.test.ts",
+        "test/contract/native-client-lifecycle.test.ts",
+        "test/unit/cached-audio-client.test.ts",
+        "test/unit/thumbnail-offer.test.ts",
+        "test/unit/frame-index-worker.test.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/native-yuv-source.test.ts"
+      ]
+    },
+    {
+      "item": 16,
+      "requirement": "保留每类业务策略：是否杀 Worker、失败影响范围、任务可丢弃性、索引 ready/完成语义及 ACK 背压。不把流式分析压成单次 call，不让音频/分析/缩略图故障影响视频播放。",
+      "status": "complete-main",
+      "group": "P2-C",
+      "prs": [
+        85,
+        88,
+        89,
+        90,
+        93,
+        95
+      ],
+      "evidence": "各业务失败域独立；error/exit/messageerror/post/cancel/late资源与pending清理覆盖已识别差异；converter26单测和对齐I420双引擎真实Worker检查；ACK、索引ready/complete、可丢任务和独立实例保持。",
+      "files": [
+        "docs/worker-failure-contract.md",
+        "test/contract/worker-rpc.test.ts",
+        "test/contract/native-client-lifecycle.test.ts",
+        "test/unit/cached-audio-client.test.ts",
+        "test/unit/thumbnail-offer.test.ts",
+        "test/unit/frame-index-worker.test.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/native-yuv-source.test.ts"
+      ]
+    },
+    {
+      "item": 17,
+      "requirement": "只有测试证明有收益时才抽共享传输底座；thumbnail 可保留简单专用实现。保留浏览器与 Node worker_threads 支持、消息布局及独立实例。",
+      "status": "complete-main",
+      "group": "P2-C",
+      "prs": [
+        85,
+        88,
+        89,
+        90,
+        93,
+        95
+      ],
+      "evidence": "各业务失败域独立；error/exit/messageerror/post/cancel/late资源与pending清理覆盖已识别差异；converter26单测和对齐I420双引擎真实Worker检查；ACK、索引ready/complete、可丢任务和独立实例保持。",
+      "files": [
+        "docs/worker-failure-contract.md",
+        "test/contract/worker-rpc.test.ts",
+        "test/contract/native-client-lifecycle.test.ts",
+        "test/unit/cached-audio-client.test.ts",
+        "test/unit/thumbnail-offer.test.ts",
+        "test/unit/frame-index-worker.test.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/native-yuv-source.test.ts"
+      ]
+    },
+    {
+      "item": 18,
+      "requirement": "在 A 的行为测试之后，分别提取帧索引处理器、索引流传输和缩略图处理器，顶层仅分派；路由表是可选写法。",
+      "status": "complete-main",
+      "group": "P3-A",
+      "prs": [
+        93
+      ],
+      "evidence": "帧索引处理、索引流传输、缩略图分别提取；真实HTTP/背压/断流/续传/进度终止/版本失效/已发头错误与原body保持。",
+      "files": [
+        "server/routes/frame-index.ts",
+        "server/routes/index-stream.ts",
+        "server/routes/thumbnail.ts",
+        "test/unit/index-stream-response.test.ts",
+        "test/unit/frame-index-stream.test.ts"
+      ]
+    },
+    {
+      "item": 19,
+      "requirement": "验证 NDJSON 背压/断流/续传、进度结束、上传限额、媒体版本失效、已发送响应头后的错误以及缩略图行为保持一致。",
+      "status": "complete-main",
+      "group": "P3-A",
+      "prs": [
+        93
+      ],
+      "evidence": "帧索引处理、索引流传输、缩略图分别提取；真实HTTP/背压/断流/续传/进度终止/版本失效/已发头错误与原body保持。",
+      "files": [
+        "server/routes/frame-index.ts",
+        "server/routes/index-stream.ts",
+        "server/routes/thumbnail.ts",
+        "test/unit/index-stream-response.test.ts",
+        "test/unit/frame-index-stream.test.ts"
+      ]
+    },
+    {
+      "item": 20,
+      "requirement": "先写明谁拥有 task pool、每轨任务/generation/controller/service/completed 状态，谁有权提交、拒绝旧异步结果、释放帧/source。",
+      "status": "complete-main",
+      "group": "P3-B",
+      "prs": [
+        87,
+        93
+      ],
+      "evidence": "独立分析协调器通过窄host/轨道快照/源失效/实际presented picture协作；Session唯一facade及色彩事务所有者保持；迟到结果/换源/seek/cancel/排队/资源与两引擎恢复通过。",
+      "files": [
+        "src/session.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/session-color-rollback.test.ts",
+        "test/unit/session-decode-cancel.test.ts"
+      ]
+    },
+    {
+      "item": 21,
+      "requirement": "可先提取 bitstream 会话协调器，通过轨道快照、source 失效通知和实际 presented-frame 身份协作；不把整个 session 传给新模块继续任意改字段。",
+      "status": "complete-main",
+      "group": "P3-B",
+      "prs": [
+        87,
+        93
+      ],
+      "evidence": "独立分析协调器通过窄host/轨道快照/源失效/实际presented picture协作；Session唯一facade及色彩事务所有者保持；迟到结果/换源/seek/cancel/排队/资源与两引擎恢复通过。",
+      "files": [
+        "src/session.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/session-color-rollback.test.ts",
+        "test/unit/session-decode-cancel.test.ts"
+      ]
+    },
+    {
+      "item": 22,
+      "requirement": "UI 与 Agent 仍共用唯一 session facade。色彩准备/提交/回滚保持一个清晰事务所有者，保留失败轨道隔离和回滚错误可见性。",
+      "status": "complete-main",
+      "group": "P3-B",
+      "prs": [
+        87,
+        93
+      ],
+      "evidence": "独立分析协调器通过窄host/轨道快照/源失效/实际presented picture协作；Session唯一facade及色彩事务所有者保持；迟到结果/换源/seek/cancel/排队/资源与两引擎恢复通过。",
+      "files": [
+        "src/session.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/session-color-rollback.test.ts",
+        "test/unit/session-decode-cancel.test.ts"
+      ]
+    },
+    {
+      "item": 23,
+      "requirement": "覆盖换源、seek、取消、切色彩、任务排队/完成、迟到结果、资源释放和实际帧身份；并保持播放/分析状态互不阻塞。",
+      "status": "complete-main",
+      "group": "P3-B",
+      "prs": [
+        87,
+        93
+      ],
+      "evidence": "独立分析协调器通过窄host/轨道快照/源失效/实际presented picture协作；Session唯一facade及色彩事务所有者保持；迟到结果/换源/seek/cancel/排队/资源与两引擎恢复通过。",
+      "files": [
+        "src/session.ts",
+        "test/unit/bitstream-analysis.test.ts",
+        "test/unit/session-color-rollback.test.ts",
+        "test/unit/session-decode-cancel.test.ts"
+      ]
+    }
+  ],
+  "optional": [
+    {
+      "item": 24,
+      "status": "optional-pending",
+      "blocksClosure": false
+    }
+  ],
+  "source": "https://github.com/Nakiha/VoidPlayer-Web/issues/64"
+}

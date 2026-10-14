@@ -1,6 +1,6 @@
 # JS container packets and reusable indexes
 
-This delivery extends #63 on accepted main `f5826f4`, without depending on #95. It consumes the unchanged playback/analysis core pin `353088620d08ee4ec2669842508f0fc84da2db28`. Container parsing, indexing, clock metadata and packet selection stay in JS. WebCodecs and packet-fed WASM receive the same packets and index; choosing a decoder does not choose another demuxer.
+This delivery started from accepted main `f5826f4` and integrates accepted main `107c3005` (including #95). There is no dependency on an unmerged PR. It consumes the unchanged playback/analysis core pin `353088620d08ee4ec2669842508f0fc84da2db28`. Container parsing, indexing, clock metadata and packet selection stay in JS. WebCodecs and packet-fed WASM receive the same packets and index; choosing a decoder does not choose another demuxer.
 
 ## Admitted and verified combinations
 
@@ -30,7 +30,7 @@ Self-reported `complete`, packet count and checksums are structural data, not co
 - **Local:** a bounded-memory SHA-256 chunk tree includes every source byte and size. IndexedDB stores a receipt signed by a separately persisted non-extractable HMAC key after a completed scan. New Workers/pages verify that receipt and the current source identity before using the index. Shape/build/source mismatch, dropped/renumbered records or modified receipts cause a new **JS** scan. Warm local opens still perform the all-byte identity pass; this is reuse of demux/index computation, not a claim of zero media IO. Storage failure keeps the independent JS scan path.
 - **Library:** the server alone constructs JS indexes, checks file version before/after scanning, and persists a separate integrity seal. Uploading JS completeness claims is rejected. Source/build-bound HTTP delivery and internal server analysis snapshots authorize reuse in a new consumer Worker. A server restart preserves valid indexes; damaged documents are invalidated and rebuilt by the same JS parser. Library clients do not replace a missing required server index with a client full-track scan or container WASM.
 
-The local cache is bounded to 32 documents / 256 MiB, with a 64 MiB document limit. Full rebuild is conservative: sparse repair of partially damaged indexes is not claimed. The TS JS build changes from v2 to v3, so earlier JS and FFmpeg identities rebuild rather than silently reuse changed semantics.
+The local cache is bounded to 32 documents / 256 MiB, with a 64 MiB document limit. Full rebuild is conservative: sparse repair of partially damaged indexes is not claimed. The TS JS build changes from v2 to v3, so earlier JS and FFmpeg identities rebuild rather than silently reuse changed semantics. Matroska uses its separate v2 JS build identity after the final display-transform admission checks.
 
 ## Reproduce
 
