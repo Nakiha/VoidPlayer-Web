@@ -133,7 +133,8 @@ test('duplicate FLV source timestamps reject analysis and actual playback omits 
   const bytes = await readFile('fixtures/flv-analysis/legacy-h264.flv');
   const source = () => ({ size: bytes.length, async read(o: number, n: number) { return bytes.subarray(o, o + n); }, close() {} });
   const original = await openAnalysisInput(source(), signal), a = original.packets[30], b = original.packets[31];
-  bytes.writeUIntBE(((a.pts - b.dts) / 1000) & 0xffffff, b.offset - 3, 3); original.close();
+  assert.notEqual(b.dts,null);
+  bytes.writeUIntBE(((a.pts - b.dts!) / 1000) & 0xffffff, b.offset - 3, 3); original.close();
   await assert.rejects(analyzePicture(source(), target(a), await core(), 'test', signal), (e: any) => e.code === 'ambiguous-picture-identity');
   const engine = new FlvEngine({ file: new Blob([Uint8Array.from(bytes)]) });
   try {

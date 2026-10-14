@@ -14,6 +14,8 @@ import { loadCore } from './wasm-core.ts';
 /** pts is the logical source clock; a platform resource's internal timestamp
  * may use a shifted decoder clock and must never be used as frame identity. */
 export interface FlvFrame { rotation?: 0 | 90 | 180 | 270; packetPicture?: import('./packet-picture.ts').PacketPicture; durationUs?: number; description: FrameDescription; pts: number; width: number; height: number; frame?: VideoFrame; pixels?: ArrayBuffer; }
+export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; identityKnown?: boolean };
+export type PacketDecodeIndex = Omit<FlvIndex, 'packets'> & { packets: PacketDecodePacket[] };
 export interface PacketDecoder {
   kind: 'webcodecs' | 'ffmpeg-wasm';
   hardwareAcceleration?: MediaInfo['hardwareAcceleration'];
@@ -21,14 +23,14 @@ export interface PacketDecoder {
   reconfigure?(index: Pick<FlvIndex, 'codec' | 'description'>): Promise<void>;
   reset(): void;
   /** false means input was not accepted: drain receive() and retry this packet. */
-  send(bytes: Uint8Array, packet: FlvPacket): Promise<void | boolean>;
+  send(bytes: Uint8Array, packet: PacketDecodePacket): Promise<void | boolean>;
   snapshot?(): Record<string, unknown>;
   receive(minimum: number, recycle?: ArrayBuffer): FlvFrame | null;
   drain(): Promise<void>;
   close(): void;
 }
 
-export async function nativeFlvDecoder(index: FlvIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
+export async function nativeFlvDecoder(index: PacketDecodeIndex, initialConfig?: VideoDecoderConfig, diagnostic: (event: Record<string, unknown>) => void = () => {}): Promise<PacketDecoder | null> {
   if(index.codec==='h264'&&!nativeAvcCompatible(avcGeometry(index.description))){ diagnostic({ reason: 'avc-reorder-policy', codec: index.codec }); return null; }
   const initialReorder = index.codec === 'hevc' ? hevcReorderFrames(index.description) : 0;
   if (initialReorder === null) { diagnostic({ reason: 'hevc-reorder-unknown', codec: index.codec }); return null; }
@@ -199,7 +201,7 @@ export async function wasmFlvDecoder(index: Pick<FlvIndex, 'codec' | 'descriptio
       const ptr = call('vp_packet_alloc', ['number', 'number'], [ctx, bytes.length]);
       if (!ptr) throw new MediaOpenError('resource', '无法分配 FLV 压缩包内存。');
       checkedHeap(heap(), ptr, bytes.length, '写入压缩视频包').set(bytes, ptr);
-      if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, BigInt(packet.pts), BigInt(packet.dts), +packet.key, 0]) !== 0) throw new MediaOpenError('decode', 'WASM 拒绝 FLV 视频包。');
+      if (call('vp_packet_send', ['number', 'i64', 'i64', 'number', 'number'], [ctx, BigInt(packet.pts), packet.dts === null ? -9223372036854775808n : BigInt(packet.dts), +packet.key, 0]) !== 0) throw new MediaOpenError('decode', 'WASM 拒绝 FLV 视频包。');
     },
     receive(minimum, recycle) {
       const status = call('vp_packet_receive', ['number', 'i64'], [ctx, BigInt(minimum)]);

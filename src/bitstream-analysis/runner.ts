@@ -458,10 +458,14 @@ export async function analyzePicture(
         );
       try {
         core.HEAPU8.set(bytes, pointer);
-        const ret = input.analysisCore
-          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts,
+        if (input.rawTiming && packet.timing?.pts == null)
+          throw new AnalysisFailure('ambiguous-picture-identity', 'Derived packet time cannot stand in for original container PTS');
+        if (packet.dts === null && !input.analysisCore && !input.rawTiming)
+          throw new AnalysisFailure('internal-error', 'Unknown packet clocks require the explicit feed-known contract');
+        const ret = input.analysisCore || input.rawTiming
+          ? core._vpa_feed_known(pointer, bytes.length, packet.pts, packet.dts ?? 0,
               (packet.timing?.pts != null ? 1 : 0) | (packet.timing?.dts != null ? 2 : 0), packet.au)
-          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts, packet.au);
+          : core._vpa_feed(pointer, bytes.length, packet.pts, packet.dts ?? 0, packet.au);
         if (ret === 2) continue;
         if (ret < 0) throw coreFailure(ret, "Analysis packet failed");
       } finally {
