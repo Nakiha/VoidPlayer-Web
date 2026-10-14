@@ -1,0 +1,383 @@
+{
+  "scope": "Partial finite static video-only H.264 TS product admission; not issue #63 completion",
+  "productSourceDigest": "06a1ca036e75b96fc0244673a223efc9cb1d2625ba0b4fa65ee9e5747892d43b",
+  "corePin": "353088620d08ee4ec2669842508f0fc84da2db28",
+  "hardwareUseVerified": false,
+  "matrix": [
+    {
+      "engine": "webkit",
+      "input": "library",
+      "decoding": "software",
+      "passed": true,
+      "failures": [],
+      "decoder": "ffmpeg-wasm",
+      "indexKind": "packet-locators",
+      "speed": 0.9989385025942182,
+      "drawn": 120,
+      "environment": "headless"
+    },
+    {
+      "engine": "webkit",
+      "input": "library",
+      "decoding": "browser",
+      "passed": true,
+      "failures": [],
+      "decoder": "webcodecs",
+      "indexKind": "packet-locators",
+      "speed": 0.9913250963277532,
+      "drawn": 102,
+      "environment": "headless"
+    },
+    {
+      "engine": "webkit",
+      "input": "local-file",
+      "decoding": "browser",
+      "passed": true,
+      "failures": [],
+      "decoder": "webcodecs",
+      "indexKind": "packet-locators",
+      "speed": 0.9998515498198808,
+      "drawn": 121,
+      "environment": "headless"
+    },
+    {
+      "engine": "webkit",
+      "input": "local-file",
+      "decoding": "software",
+      "passed": true,
+      "failures": [],
+      "decoder": "ffmpeg-wasm",
+      "indexKind": "packet-locators",
+      "speed": 0.9999901369971089,
+      "drawn": 121,
+      "environment": "headless"
+    },
+    {
+      "engine": "chromium",
+      "input": "library",
+      "decoding": "software",
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "decoder": "ffmpeg-wasm",
+      "indexKind": "packet-locators",
+      "speed": 0.12205838553508061,
+      "drawn": 13,
+      "environment": "headless"
+    },
+    {
+      "engine": "chromium",
+      "input": "library",
+      "decoding": "browser",
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "decoder": "webcodecs",
+      "indexKind": "packet-locators",
+      "speed": 0.878212301446773,
+      "drawn": 97,
+      "environment": "headless"
+    },
+    {
+      "engine": "chromium",
+      "input": "local-file",
+      "decoding": "browser",
+      "passed": false,
+      "failures": [
+        "below-realtime"
+      ],
+      "decoder": "webcodecs",
+      "indexKind": "packet-locators",
+      "speed": 0.8845918526689869,
+      "drawn": 98,
+      "environment": "headless"
+    },
+    {
+      "engine": "chromium",
+      "input": "local-file",
+      "decoding": "software",
+      "passed": false,
+      "failures": [
+        "below-realtime",
+        "A:presentation-stall"
+      ],
+      "decoder": "ffmpeg-wasm",
+      "indexKind": "packet-locators",
+      "speed": 0.12400463301488909,
+      "drawn": 13,
+      "environment": "headless"
+    },
+    {
+      "input": "library",
+      "decoding": "browser",
+      "passed": true,
+      "failures": [],
+      "speed": 0.9819082059897972,
+      "drawn": 120,
+      "visibility": "visible",
+      "environment": "desktop"
+    },
+    {
+      "input": "library",
+      "decoding": "software",
+      "passed": true,
+      "failures": [],
+      "speed": 0.9853598976214958,
+      "drawn": 120,
+      "visibility": "visible",
+      "environment": "desktop"
+    },
+    {
+      "input": "local-file",
+      "decoding": "browser",
+      "passed": true,
+      "failures": [],
+      "speed": 0.9941025033141536,
+      "drawn": 121,
+      "visibility": "visible",
+      "environment": "desktop"
+    },
+    {
+      "input": "local-file",
+      "decoding": "software",
+      "passed": true,
+      "failures": [],
+      "speed": 0.9926427276973682,
+      "drawn": 121,
+      "visibility": "visible",
+      "environment": "desktop"
+    }
+  ],
+  "legacyBench": {
+    "webkit": {
+      "passed": 12,
+      "count": 12,
+      "rows": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9989187027099097
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9987389356937189
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9945032554373436
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9991964874311232
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9999450650978591
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.999760009599616
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9999452932282964
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9999450938894493
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9994889271708753
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9995683729656769
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9996273671501783
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": true,
+          "failures": [],
+          "speed": 0.9999352283201712
+        }
+      ]
+    },
+    "chromium": {
+      "passed": 0,
+      "count": 12,
+      "rows": [
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.27992423909992703
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.27593163427793843
+        },
+        {
+          "scenario": "hevc-4k-solo",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.26678124650450064
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.27353241484860186
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "A:presentation-stall"
+          ],
+          "speed": 0.2636535020558013
+        },
+        {
+          "scenario": "vvc-wasm-solo",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime"
+          ],
+          "speed": 0.27248235624473494
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.2636119481489429
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.2626769786158298
+        },
+        {
+          "scenario": "vvc+hevc-4k",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.2624555465911704
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 1,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.5543734143888136
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 2,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.5573864190023384
+        },
+        {
+          "scenario": "mpeg2ts+h264",
+          "repeat": 3,
+          "passed": false,
+          "failures": [
+            "below-realtime",
+            "B:presentation-stall"
+          ],
+          "speed": 0.5660642960337855
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Independent JS analysis currently rebuilds metadata across runtimes; no zero-IO index reuse claim",
+    "HEVC/audio/multi-config/Matroska migration and actual WASM container removal remain pending",
+    "Headless Chromium functional assertions pass but performance limits fail; desktop success does not replace those negatives"
+  ],
+  "coreAssetDigests": {
+    "/vendor/voidplayer-core/provenance.json": "359e2253f9e280bd43a50a600b1bb6e6df4d6f37ed4038afb59f823a58d4db13",
+    "/vendor/voidplayer-core/voidplayer-core-mt.js": "5a937ccf07f739b4c6aa1e06ef877da6d556ae3c037a52645f8862962fd8f4a0",
+    "/vendor/voidplayer-core/voidplayer-core-mt.wasm": "4a9866cab144b5fa07d0708d20c5159f0a893d2d09fde6bf07b890b056c66262",
+    "/vendor/voidplayer-core/voidplayer-core.js": "4891e96eee73e7e5c1eeb72b9f1129c747c5a91750621b6b7aae6ebb2a1dfede",
+    "/vendor/voidplayer-core/voidplayer-core.wasm": "2d429b2584a3b462380074a92276c1de213ad0a1b2eba4069b1485828a0ac46a",
+    "/vendor/voidplayer-analysis/manifest.json": "9ec974de5e29bbea5775147d743b9bce28605ac74be7fd29b2569cb363fa6bb3",
+    "/vendor/voidplayer-analysis/provenance.json": "22028998da80667c8d8c4a25a0b122da4c5568c3c91cd53cf86f32871c2ffd23",
+    "/vendor/voidplayer-analysis/voidplayer-analysis.js": "ff879afe59a4b316feacb7354c59543b15caaf5b514371e4498201b7882b36eb",
+    "/vendor/voidplayer-analysis/voidplayer-analysis.wasm": "5ab1865c66e0789e6c38bc6b93df05ccbec8d5cb7eefa0624701a9d44fac25ef"
+  }
+}

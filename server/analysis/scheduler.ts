@@ -393,7 +393,7 @@ export class AnalysisScheduler {
           flvSnapshot = await index.snapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
           if (!await this.library.resolve(work.mediaId, work.version)) throw new AnalysisFailure('source-changed', 'Analysis source changed during indexing');
         }
-        if(ts) {
+        if(ts && work.target.indexIdentity?.kind!=='js-ts') {
           if(work.target.indexIdentity?.kind!=='ffmpeg')throw new AnalysisFailure('ambiguous-picture-identity','TS requires the playback index identity');
           index ??= await libraryAnalysisIndex(this.library,work.mediaId,work.version,work.filePath,work.target.indexIdentity);
           ffmpegSnapshot=await index.ffmpegSnapshot(()=>!this.closed && work.state==='running' && !!work.consumers.size);

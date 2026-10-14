@@ -35,11 +35,13 @@ const layoutOnly = overlayOnly || process.argv.includes('--layout-only');
 const diagramsOnly = process.argv.includes('--diagrams-only');
 const incrementalOnly = process.argv.includes('--incremental-only');
 const matrixOnly = process.argv.includes('--matrix-only');
+const desktopPerformance=process.argv.includes('--desktop-performance');
 const matrixPart = process.argv.find(arg => arg.startsWith('--matrix-part='))?.slice('--matrix-part='.length);
 const matrixFixture = process.argv.find(arg => arg.startsWith('--matrix-fixture='))?.slice('--matrix-fixture='.length);
 const matrixRows = selectAnalysisMatrixRows(matrix.rows, process.argv).filter(row => !matrixFixture || row.fixture === matrixFixture);
 assert.ok(matrixRows.length, 'Matrix filter matches a fixture');
 assert.ok(!matrixPart || matrixOnly, 'Matrix partition requires --matrix-only');
+assert.ok(!desktopPerformance || engine==='chromium' && matrixOnly && matrixPart==='ts', 'Desktop performance is an explicit Chromium TS matrix check');
 const matrixCase = `bitstream-analysis-matrix${matrixPart ? '-' + matrixPart : ''}`;
 assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
 let gatedId, releaseIndexGate = true, heldBatches = 0;
@@ -111,9 +113,10 @@ function duplicateDescription(bytes) {
 for(const action of ['continue','cancel'])await writeFile(path.join(limitsDir,`incremental-${action}.mp4`),duplicateDescription(incremental));
 await withBrowserFixture(
   {
-    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
+    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase+(desktopPerformance?'-desktop':'') : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
     roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), path.join(repositoryRoot, "fixtures/fmp4-analysis"), path.join(repositoryRoot, "fixtures/ts-analysis"), limitsDir],
     engine,
+    ...(desktopPerformance?{launchOptions:{headless:false}}:{}),
     pageOptions: { deviceScaleFactor: 2 },
     timeoutMs: layoutOnly ? 300000 : 600000,
     dependencies: { async startService({ temp, roots, defer }) {

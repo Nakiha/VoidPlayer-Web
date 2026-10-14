@@ -25,7 +25,10 @@ test('real packet Worker TS engine drains, seeks and shares exact identity with 
   const rpc = new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
   const oracle = await tsFixture();
   try {
-    const initialized = await rpc.call('init', { container: 'ts', input: { file: new Blob([bytes]) }, sourceVersion: 'engine-ts-v1',
+    const admitted = await rpc.call('prepare-ts', {input:{file:new Blob([bytes])},sourceVersion:'engine-ts-v1'});
+    assert.equal(admitted.admitted,true);
+    assert.deepEqual(await rpc.call('analysis-index',{}),{packets:600,complete:true});
+    const initialized = await rpc.call('init', { container: 'ts', input: { file: new Blob([bytes]) }, sourceVersion: 'engine-ts-v1', preparedTsSession:admitted.session,
       glueURL: pathToFileURL(wrapper).href, wasmBinary: new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),
       forceWasm: false, threads: 1 }, [], 60000);
     assert.equal(initialized.decoder, 'ffmpeg-wasm', 'Node native-unavailable fallback is packet-fed');
@@ -83,6 +86,34 @@ test('TS admission failures never load a decoder or silently open a container co
   }
 });
 
+
+test('real late PSI changes defer the declared combination, while bad CRC remains a hard input failure', async () => {
+  const original = new Uint8Array(await readFile('fixtures/ts-analysis/h264-static.ts'));
+  let found = -1, sectionStart = 0, sectionEnd = 0;
+  for(let at=Math.floor(original.length/2/188)*188;at+188<=original.length;at+=188) {
+    if(!(original[at+1]&64)||!(original[at+3]&16))continue;
+    let pos=at+4;if(original[at+3]&32)pos+=1+original[pos];if(pos>=at+188)continue;
+    pos+=1+original[pos];if(pos+3>=at+188||original[pos]!==2)continue;
+    const end=pos+3+((original[pos+1]&15)*256+original[pos+2]);
+    if(end<=at+188){found=at;sectionStart=pos;sectionEnd=end;break;}
+  }
+  assert.ok(found>=0,'actual PMT after the startup prefix');
+  for(const badCrc of [false,true]) {
+    const bytes=original.slice();bytes[sectionStart+5]^=2;
+    let crc=0xffffffff;
+    for(const b of bytes.subarray(sectionStart,sectionEnd-4)){crc^=b<<24;for(let i=0;i<8;i++)crc=(crc<<1)^(crc&0x80000000?0x04c11db7:0);}
+    new DataView(bytes.buffer).setUint32(sectionEnd-4,(crc>>>0)^(badCrc?1:0));
+    const worker=new Worker(new URL('../../src/packet-worker.ts',import.meta.url));
+    const rpc=new WorkerRpc<PacketCommands>(worker as unknown as globalThis.Worker);
+    try {
+      const request=rpc.call('prepare-ts',{input:{file:new Blob([bytes])},sourceVersion:'psi-boundary'},[],60000);
+      if(badCrc)await assert.rejects(request,/invalid PSI CRC/);
+      else {const result=await request;assert.equal(result.admitted,false);if(!result.admitted)assert.match(result.reason,/program-map changes/);}
+      await rpc.call('dispose',{});
+    } finally {rpc.terminate();}
+  }
+});
+
 test('native and software first-frame failures release each actual timeline decoder once', async () => {
   const {TsEngine}=await import('../../src/ts-engine.ts');
   const {MediaOpenError}=await import('../../src/media-errors.ts');
@@ -134,4 +165,29 @@ test('real Worker concurrent index requests reject during initialization and rem
     await assert.rejects(rpc.call('analysis-ts-index',{}),/未初始化/);
     await assert.rejects(rpc.call('analysis-index',{}),/未初始化/);
   } finally {release();rpc.terminate();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}
+});
+
+test('native first-frame decode failure uses real packet WASM with the same verified JS index',async()=>{
+  const {TsEngine}=await import('../../src/ts-engine.ts');
+  const {MediaOpenError}=await import('../../src/media-errors.ts');
+  const bytes=await readFile('fixtures/ts-analysis/h264-static.ts');
+  const directory=await mkdtemp(join(tmpdir(),'voidplayer-ts-native-failure-'));
+  const glue=pathToFileURL(resolve('public/vendor/voidplayer-core/voidplayer-core.js')).href;
+  const wrapper=join(directory,'packet-only.mjs');
+  await writeFile(wrapper,`import load from ${JSON.stringify(glue)};export default async options=>{const core=await load(options);core._vp_open=()=>{throw Error('container demux forbidden');};return core;};`);
+  let nativeClosed=0;
+  const engine=new TsEngine({file:new Blob([bytes])},'native-failure-real-wasm',{
+    native:async()=>({kind:'webcodecs',reset(){},receive(){return null;},drain:async()=>{},async send(){throw new MediaOpenError('decode','injected native decode failure');},close(){nativeClosed++;}}),
+  });
+  const oracle=await tsFixture();
+  try {
+    const index=await engine.prepare();
+    const info=await engine.open(pathToFileURL(wrapper).href,new Uint8Array(await readFile('public/vendor/voidplayer-core/voidplayer-core.wasm')),false);
+    assert.equal(info.decoder,'ffmpeg-wasm');assert.equal(nativeClosed,1);assert.equal(engine.packetIndex,index,'fallback retains the actual verified JS index');
+    const frame=await engine.at(index.packets[200].ptsUs);
+    assert.deepEqual(frame.packetPicture,{au:200,configuration:0,stream:tsPictureStream(index)});
+    assert.equal(oracle.play._vp_extract(oracle.ctx,oracle.ordered[200].pts),1);
+    const expected=readWasmFrame(oracle.play,()=>oracle.play.HEAPU8,oracle.ctx);
+    assert.equal(visiblePixelHash(frame.description,frame.pixels!),visiblePixelHash(expected.description,expected.pixels!));frame.frame?.close();
+  } finally {engine.close();oracle.close();await rm(directory,{recursive:true,force:true});}
 });

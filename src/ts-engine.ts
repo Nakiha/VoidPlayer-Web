@@ -7,6 +7,10 @@ import type { FlvFrame, PacketDecodeIndex, PacketDecoder } from './flv-decoder.t
 import type { PacketView } from './analysis/adapters.ts';
 import type { MediaOpenProgress } from './media-progress.ts';
 import { MediaOpenError } from './media-errors.ts';
+import { TsCombinationNotMigrated } from './ts-packet-source.ts';
+import { inspectCachedTracks } from './cached-track-metadata.ts';
+import { probeTsVideo } from './media-diagnostics.ts';
+import { staticTsPsi } from './ts-static-psi.ts';
 
 /** H.264 finite/static TS admission. Both decoders consume this one JS source;
  * the engine has no FFmpeg container entry or alternative demux path. */
@@ -23,16 +27,25 @@ export class TsEngine {
   private outputSize?: { width: number; height: number };
   private createNative:typeof nativeFlvDecoder;
   private createSoftware:typeof wasmFlvDecoder;
+  private checkPsi?: (bytes:Uint8Array)=>void;
+  private prefix?:Uint8Array;
 
   constructor(input: RandomAccessInput, sourceVersion: string,
     decoders: {native?:typeof nativeFlvDecoder;software?:typeof wasmFlvDecoder} = {}) {
     this.reader = new RangeReader(input);
-    this.source = new TsPacketSource(this.reader, sourceVersion, this.controller.signal);
+    this.source = new TsPacketSource({size:this.reader.size,read:async(at,length)=>{
+      const bytes=await this.reader.read(at,length);
+      if(this.checkPsi&&at%188===0&&length%188===0)this.checkPsi(bytes);
+      return bytes;
+    },close:()=>this.reader.close()}, sourceVersion, this.controller.signal);
     this.createNative=decoders.native??nativeFlvDecoder;
     this.createSoftware=decoders.software??wasmFlvDecoder;
   }
   cachedWindows() { return this.reader.cachedWindows(); }
-  peekCachedBytes(offset: number, length: number) { return this.reader.peek(offset, length); }
+  peekCachedBytes(offset: number, length: number) {
+    return this.reader.peek(offset,length)??(Number.isSafeInteger(offset)&&Number.isSafeInteger(length)&&offset>=0&&length>=0
+      &&length<=65536&&this.prefix&&offset+length<=this.prefix.length?this.prefix.slice(offset,offset+length):undefined);
+  }
   get analysisIndex() { return this.statistics; }
   /** Untrusted when serialized across runtimes; recipients must verify/rebuild. */
   get packetIndex() { return this.document; }
@@ -47,14 +60,30 @@ export class TsEngine {
     if (this.closed) { frame.frame?.close(); this.check(); }
     return frame;
   }
+  async prepare() {
+    this.check();
+    if (this.document) return this.document;
+    const prefix = await this.reader.read(0, Math.min(65536, this.reader.size));
+    const codecs = probeTsVideo(prefix);
+    const tracks = await inspectCachedTracks(this.reader.size, async (at,length)=>this.reader.peek(at,length));
+    // Keep existing audio and other TS combinations on their declared,
+    // unmigrated route. Do not silently lose a stream ignored by Mediabunny.
+    if(codecs.length!==1||codecs[0]!=='H.264 / AVC')throw new TsCombinationNotMigrated('initial product migration requires one declared H.264 video stream');
+    this.checkPsi=staticTsPsi(prefix);
+    if(tracks.audio.presence!=='absent'||!tracks.audio.complete)throw new TsCombinationNotMigrated('initial product migration requires confirmed video-only H.264 TS');
+    this.prefix=prefix.slice();
+    this.document = await this.source.open();
+    this.index = tsDecodeIndex(this.document);
+    this.statistics = {packets: this.document.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,
+      dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6/90000),size:packet.size,key:packet.key}))};
+    return this.document;
+  }
   async open(glueURL: string, wasmBinary?: Uint8Array, forceWasm = true, threads = 1, onProgress?: MediaOpenProgress) {
     try {
       this.check();
       onProgress?.('index');
-      this.document = await this.source.open();
+      this.document = await this.prepare();
       this.index = tsDecodeIndex(this.document);
-      this.statistics = {packets: this.document.packets.map(packet=>({pts:packet.timing.pts===null?null:packet.ptsUs,
-        dts:packet.timing.dts===null?null:Math.round(packet.timing.dts*1e6/90000),size:packet.size,key:packet.key}))};
       onProgress?.('decoder');
       const native = !forceWasm ? await this.createNative(this.index, this.source.nativeConfig) : null;
       const decoder = native ?? await this.createSoftware(this.index, glueURL, wasmBinary, threads);
@@ -134,7 +163,7 @@ export class TsEngine {
     this.primed?.frame?.close(); this.primed = null;
     try { this.timeline?.close(); }
     finally {
-      this.timeline = undefined; this.document = undefined; this.index = undefined; this.statistics = undefined;
+      this.timeline = undefined; this.document = undefined; this.index = undefined; this.statistics = undefined;this.prefix=undefined;this.checkPsi=undefined;
       this.controller.abort(); this.source.close();
     }
   }

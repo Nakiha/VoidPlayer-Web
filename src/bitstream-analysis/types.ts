@@ -22,6 +22,8 @@ export interface AnalysisPacket {
   timing?: { pts: number | null; dts: number | null; timebase: [number, number] };
 }
 export interface AnalysisInputOptions {
+  sourceVersion?: string;
+  indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   demuxCore?: any;
   frontier?: () => Promise<AnalysisIndexFrontier>;
   waiting?: (waiting: boolean) => Promise<void>;

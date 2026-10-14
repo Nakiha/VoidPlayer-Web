@@ -170,53 +170,59 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
       mediaVersion = url.searchParams.get('v') ?? undefined;
     } catch { /* Non-library URLs have no stable library identity. */ }
   }
-  const packetMp4 = container === 'isobmff' && mp4DemuxPlan === 'packet';
-  const ffmpegPlan = container !== 'flv' && !packetMp4;
-  const openMp4Packet = async (forceWasm: boolean) => {
-    const { openPacketMedia } = await import('./packet-media.ts');
-    return openPacketMedia('mp4', input, meta, { signal, onProgress, rawNative: reference,
-      ...(reference ? {} : { nativeColorMode: 'browser' as const }), forceWasm });
-  };
-  const openFfmpeg = async () => {
-    const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./ffmpeg-media.ts');
-    return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
-      : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
-  };
-  const software = customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
-    : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
-  const countedSoftware = async () => { softwareOpens++; return software(); };
-  const native = async () => {
-    nativeOpens++;
-    return container === 'flv'
-      ? (async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
-      : packetMp4 ? openMp4Packet(false)
-        : ffmpegPlan && !customSoftware ? openFfmpeg()
-          : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
-  };
-  contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, input: 'file' in input ? 'local' : 'remote', reference,
-    preference: reference ? preference.decoder : 'hardware', software: container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
-  contextLog().info('media', '媒体管线追踪', {
-    phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
-    demuxBackend: container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
-    indexBackend: container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
-    decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
-  });
-  const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
-    native, software: countedSoftware, nativeOwnsFallback: (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
-  source.info.container = container;
-  if ('file' in input) source.bitstreamFile = input.file;
-  const demuxBackend = container === 'flv' ? 'flv-engine'
-    : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
-  contextLog().info('media', '媒体管线追踪', {
-    phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
-    indexBackend: source.info.indexSource ?? source.info.indexKind ?? 'container',
-    decoderBackend: source.info.decoder, colorMode,
-    firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
-    stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,
-    firstFrameReadyMs: Math.round(performance.now() - pipelineStartedAt),
-    nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
-  });
-  return source;
+  const tsAdmission = container==='mpegts' ? await (await import('./ts-media.ts')).admitTsMedia(input,meta,
+    libraryId&&mediaVersion?`${libraryId}@${mediaVersion}`:randomUUID(),{signal,onProgress,rawNative:reference,
+      ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
+  try {
+    const packetTs=tsAdmission?.kind==='js-h264-static';
+    const packetMp4 = container === 'isobmff' && mp4DemuxPlan === 'packet';
+    const ffmpegPlan = container !== 'flv' && !packetMp4 && !packetTs;
+    const openMp4Packet = async (forceWasm: boolean) => {
+      const { openPacketMedia } = await import('./packet-media.ts');
+      return openPacketMedia('mp4', input, meta, { signal, onProgress, rawNative: reference,
+        ...(reference ? {} : { nativeColorMode: 'browser' as const }), forceWasm });
+    };
+    const openFfmpeg = async () => {
+      const { openFFmpegMedia, openFFmpegContainerFromUrl } = await import('./ffmpeg-media.ts');
+      return 'file' in input ? openFFmpegMedia(input.file as File, { signal, onProgress })
+        : openFFmpegContainerFromUrl(input.url, meta, { signal, onProgress });
+    };
+    const software = packetTs ? () => tsAdmission.open(true) : customSoftware ?? (packetMp4 ? () => openMp4Packet(true)
+      : ffmpegPlan ? openFfmpeg : () => openSoftwareMedia(input, meta, { signal, onProgress }, container));
+    const countedSoftware = async () => { softwareOpens++; return software(); };
+    const native = async () => {
+      nativeOpens++;
+      return container === 'flv'
+        ? (async () => { const { openFlvMedia } = await import('./flv-media.ts'); return openFlvMedia(input, meta, { signal, onProgress, rawNative: reference }); })()
+        : packetTs ? tsAdmission.open(false) : packetMp4 ? openMp4Packet(false)
+          : ffmpegPlan && !customSoftware ? openFfmpeg()
+            : openWebCodecsInput(new Input({ source: 'file' in input ? new BlobSource(input.file) : new UrlSource(input.url), formats: ALL_FORMATS }), meta, signal, onProgress, input, reference);
+    };
+    contextLog().info('media', '媒体适配器选择', { container, mp4DemuxPlan, tsDemuxPlan:tsAdmission?.kind, input: 'file' in input ? 'local' : 'remote', reference,
+      preference: reference ? preference.decoder : 'hardware', software: packetTs?'packet-ts':container === 'flv' ? 'packet-flv' : container === 'isobmff' ? 'packet-mp4' : 'ffmpeg-container' });
+    contextLog().info('media', '媒体管线追踪', {
+      phase: 'container-selected', mediaId: libraryId, mediaVersion, container,
+      demuxBackend: packetTs?'js-ts-packets':container === 'flv' ? 'flv-engine' : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm',
+      indexBackend: packetTs?'js-ts-packet-index':container === 'flv' ? 'flv-packet-index' : container === 'isobmff' && packetMp4 ? 'mp4-sample-index' : 'ffmpeg-index',
+      decoderPreference: reference ? preference.decoder : 'hardware', colorMode,
+    });
+    const source = await openMediaPlan({ meta, input, reference, softwareOnly: reference && preference.decoder === 'software', depth: preference.depth,
+      native, software: countedSoftware, nativeOwnsFallback: packetTs || (packetMp4 || ffmpegPlan) && !customSoftware, onProgress, signal });
+    source.info.container = container;
+    if ('file' in input) source.bitstreamFile = input.file;
+    const demuxBackend = packetTs?'js-ts-packets':container === 'flv' ? 'flv-engine'
+      : container === 'isobmff' && packetMp4 ? 'mp4-packet' : 'ffmpeg-wasm';
+    contextLog().info('media', '媒体管线追踪', {
+      phase: 'first-frame-ready', mediaId: libraryId, mediaVersion, container, demuxBackend,
+      indexBackend: source.info.indexSource ?? source.info.indexKind ?? 'container',
+      decoderBackend: source.info.decoder, colorMode,
+      firstPtsUs: source.info.firstPtsUs, durationUs: source.info.durationUs,
+      stableCoverageUs: source.info.stableCoverageUs, seekAnchorCount: source.info.seekAnchorCount,
+      firstFrameReadyMs: Math.round(performance.now() - pipelineStartedAt),
+      nativeOpenCount: nativeOpens, softwareOpenCount: softwareOpens,
+    });
+    return source;
+  } finally {if(tsAdmission?.kind==='js-h264-static')tsAdmission.close();}
 }
 
 export async function openMedia(file: File, openFallback: ((file: File) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {

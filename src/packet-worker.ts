@@ -3,6 +3,8 @@ import { workerReply } from './worker-protocol.ts';
 import type { PacketCommands, WorkerRequest, WorkerMessage } from './worker-protocol.ts';
 
 import { TsEngine } from './ts-engine.ts';
+import { TsCombinationNotMigrated } from './ts-packet-source.ts';
+import { randomUUID } from './uuid.ts';
 import { Mp4Engine } from './mp4-engine.ts';
 import { FlvEngine } from './flv-engine.ts';
 import { MediaOpenError } from './media-errors.ts';
@@ -16,6 +18,7 @@ async function start() {
   const reply = workerReply<PacketCommands>();
   const send = (value: WorkerMessage<PacketCommands>, transfer: Transferable[] = []) => parent ? parent.postMessage(value, { transfer: transfer as ArrayBuffer[] }) : (globalThis as unknown as { postMessage(v: unknown, t: Transferable[]): void }).postMessage(value, transfer);
   let engine: FlvEngine | Mp4Engine | TsEngine | undefined;
+  let tsSession: string | undefined;
   let chain = Promise.resolve();
   let audioTimer: ReturnType<typeof setTimeout> | undefined;
   let audioRequest: { pts: number; generation: number } | undefined;
@@ -58,12 +61,12 @@ async function start() {
     if (message.type === 'analysis-ts-index') {
       const index=engine instanceof TsEngine?engine.packetIndex:undefined;
       if(!index){send({id:message.id,ok:false,error:'TS packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
-      send(reply(message, index));
+      send(reply(message,index));
       return;
     }
     if (message.type === 'analysis-index') {
       const packets = engine instanceof FlvEngine ? engine.index?.packets : engine?.analysisIndex?.packets;
-      if(!packets){send({id:message.id,ok:false,error:'Packet index is not ready (worker 未初始化 or closed)',stage:'container'});return;}
+      if (!packets) { send({id:message.id,ok:false,error:'Packet index is not ready (worker 未初始化 or closed)',stage:'container'});return; }
       send(reply(message, { packets: packets.length, complete: engine instanceof FlvEngine ? engine.indexComplete : true }));
       return;
     }
@@ -81,16 +84,32 @@ async function start() {
     chain = chain.then(async () => {
       const { id, type } = message;
       try {
-        if (type === 'prepare') {
+        if (type === 'prepare-ts') {
+          engine?.close(); engine = undefined; tsSession = undefined;
+          const candidate = new TsEngine(message.input, message.sourceVersion);
+          try {
+            const index = await candidate.prepare(); engine = candidate; tsSession = randomUUID();
+            send(reply(message, {admitted:true, session:tsSession, index}));
+          } catch (error) {
+            candidate.close();
+            if (!(error instanceof TsCombinationNotMigrated)) throw error;
+            send(reply(message, {admitted:false, reason:error.message}));
+          }
+        } else if (type === 'prepare') {
           engine?.close(); engine = new FlvEngine(message.input);
           send(reply(message, await engine.prepare(progress => send({ id, type: 'progress', progress }))));
         } else if (type === 'native' && engine instanceof FlvEngine) {
           const data = await engine.open('', undefined, false, 1, progress => send({ id, type: 'progress', progress }), true);
           send(reply(message, data, engine.nativeDiagnostics));
         } else if (type === 'init') {
-          if (!(engine instanceof FlvEngine && message.container === 'flv')) {
+          const preparedTs = message.container === 'ts' && message.preparedTsSession !== undefined;
+          if (preparedTs && (!(engine instanceof TsEngine) || message.preparedTsSession !== tsSession
+            || engine.packetIndex?.sourceVersion !== message.sourceVersion)) throw new MediaOpenError('input','JS TS admission session changed');
+          if (!(engine instanceof FlvEngine && message.container === 'flv') && !preparedTs) {
             engine?.close(); engine = message.container === 'mp4' ? new Mp4Engine(message.input) : message.container === 'ts' ? new TsEngine(message.input, message.sourceVersion) : new FlvEngine(message.input, message.prepared);
           }
+          tsSession = undefined;
+          if (!engine) throw new MediaOpenError('input','Packet engine is not initialized');
           const data = await engine.open(message.glueURL, message.wasmBinary, message.forceWasm, message.threads, progress => send({ id, type: 'progress', progress }));
           if (!data) throw new MediaOpenError('decode', '压缩包 worker 未能初始化解码器。');
           send(reply(message, data));

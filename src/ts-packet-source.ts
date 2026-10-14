@@ -60,6 +60,11 @@ export function retainVerifiedTsIndex(index: TsPacketIndex): TsPacketIndex | und
 export class TsSourceChangedError extends MediaOpenError {
   constructor() { super('input', 'JS TS: source changed after complete index verification'); }
 }
+/** A declared combination outside this migration stage. Corruption, IO,
+ * clocks, cancellation and resource failures never use this classification. */
+export class TsCombinationNotMigrated extends MediaOpenError {
+  constructor(reason: string) { super('container', `JS TS: ${reason}`); }
+}
 
 function fail(message: string): never { throw new MediaOpenError('container', `JS TS: ${message}`); }
 const equal = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((value, i) => value === b[i]);
@@ -163,12 +168,17 @@ export class TsPacketSource {
   private validatePicture(bytes: Uint8Array, configuration: Uint8Array) {
     if (!isAnnexB(bytes)) fail('expected Annex-B access unit');
     const evidence = inspectPacketPicture('h264', configuration, bytes);
-    if (!evidence.singlePicture) fail(`unverified picture layout: ${evidence.reason}`);
+    if (!evidence.singlePicture) {
+      if (evidence.reason === 'unsupported-ts-multiple-slices'
+        && nalRanges('h264',configuration,bytes).filter(n=>[1,5].includes(bytes[n.offset]&31)).length>1)
+        throw new TsCombinationNotMigrated(`unverified picture layout: ${evidence.reason}`);
+      fail(`unverified picture layout: ${evidence.reason}`);
+    }
     for (const nal of nalRanges('h264', configuration, bytes)) {
       const data = bytes.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
       if (type !== 7 && type !== 8) continue;
       const stored = this.sets.get(type);
-      if (!stored || !equal(stored, data)) fail('parameter-set changes are outside static admission');
+      if (!stored || !equal(stored, data)) throw new TsCombinationNotMigrated('parameter-set changes are outside static admission');
     }
     return evidence;
   }
@@ -177,7 +187,7 @@ export class TsPacketSource {
       this.progress=progress; this.publishProgress(true);
       this.check(); await this.input.getFormat(); this.check();
       const tracks = await this.input.getVideoTracks();
-      if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') fail('requires one H.264 video track');
+      if (tracks.length !== 1 || await tracks[0].getCodec() !== 'avc') throw new TsCombinationNotMigrated('requires one H.264 video track');
       const track = tracks[0];
       this.nativeConfig = await track.getDecoderConfig() ?? undefined;
       this.sink = new EncodedPacketSink(track);
@@ -187,8 +197,8 @@ export class TsPacketSource {
       for (const nal of nalRanges('h264', new Uint8Array([0, 0, 1]), first.data)) {
         const data = first.data.subarray(nal.offset, nal.offset + nal.size), type = data[0] & 31;
         if (type !== 7 && type !== 8) continue;
-        if (this.sets.has(type)) fail('multiple parameter sets are outside initial admission');
-        if (type === 7 && parseAvcSps(data).interlaced) fail('interlaced H.264 is outside initial admission');
+        if (this.sets.has(type)) throw new TsCombinationNotMigrated('multiple parameter sets are outside initial admission');
+        if (type === 7 && parseAvcSps(data).interlaced) throw new TsCombinationNotMigrated('interlaced H.264 is outside initial admission');
         this.sets.set(type, data.slice());
       }
       if (this.sets.size !== 2) fail('missing static SPS/PPS');

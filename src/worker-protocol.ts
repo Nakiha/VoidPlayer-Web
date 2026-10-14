@@ -62,11 +62,13 @@ type Empty = Record<string, never>;
 type SoftwareOptions = { glueURL: string; wasmBinary?: Uint8Array; threads?: number };
 type AnalysisOrigin = { mediaId?: string; firstPtsUs?: number };
 export interface PacketCommands {
+  'prepare-ts': Command<{input: FlvInput; sourceVersion: string},
+    {admitted: true; session: string; index: import('./ts-packet-index.ts').TsPacketIndex} | {admitted: false; reason: string}>;
   'peek-audio': Command<{ offset: number; length: number; ctx?: number; windows?: boolean }, null>;
   'cached-audio': Command<{ pts: number; generation: number }, null>;
   prepare: Command<{ input: FlvInput }, PreparedFlv>;
   native: Command<Empty, PacketInitResult | null>;
-  init: Command<SoftwareOptions & { input: FlvInput; forceWasm?: boolean } & ({container: 'ts'; sourceVersion: string} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
+  init: Command<SoftwareOptions & { input: FlvInput; forceWasm?: boolean } & ({container: 'ts'; sourceVersion: string; preparedTsSession?: string} | {container?: 'flv' | 'mp4'; prepared?: PreparedFlv}), PacketInitResult>;
   'analysis-ts-index': Command<Empty, import('./ts-packet-index.ts').TsPacketIndex>;
   'analysis-flv-index': Command<Empty, import('./flv-index-cache.ts').FlvIndexDocument>;
   'analysis-index': Command<Empty, import('./bitstream-analysis/stream.ts').AnalysisIndexFrontier>;
