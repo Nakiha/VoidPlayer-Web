@@ -830,12 +830,13 @@ await withBrowserFixture(
           // Preserve the original fixed-window sample even if the independent
           // functional proof fails. Never replace it with the longer wait.
           await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
-          assert.equal(report.error, null);
-          assert.equal(report.staleAfterPause, false);
-          assertBenchmarkCorrectness(report);
-          await call('seek_review', { ptsUs: 0 });
           try {
+            assert.equal(report.error, null);
+            assert.equal(report.staleAfterPause, false);
+            assertBenchmarkCorrectness(report);
+            await call('seek_review', { ptsUs: 0 });
             playbackRow.functionalPresentation = { status: 'passed', ...await verifyPlaybackPresentation(page, {}, { engine, caseName: `${row.container}-${row.codec}-${input}-${decoding}`, targetPtsUs: 0 }) };
+            await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));
           } catch (error) {
             playbackRow.functionalPresentation = { status: 'failed', error: error.message };
             await writeFile(artifact('matrix.json'), JSON.stringify({ engine, rows, errors }, null, 2));

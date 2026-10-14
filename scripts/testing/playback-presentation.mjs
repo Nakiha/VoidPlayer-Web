@@ -12,7 +12,7 @@ export function waitForPlaybackPresentation(options = {}) {
   const pauseGuardMs = options.pauseGuardMs ?? 100, pollMs = options.pollMs ?? 250, minAdvanceUs = options.minAdvanceUs ?? 0, minPlayingMs = options.minPlayingMs ?? 0;
   if (![idleMs, totalMs, pauseGuardMs, pollMs].every(value => Number.isSafeInteger(value) && value > 0) || totalMs < idleMs || !Number.isFinite(minAdvanceUs) || minAdvanceUs < 0 || !Number.isFinite(minPlayingMs) || minPlayingMs < 0 || minPlayingMs >= totalMs)
     throw new Error('Invalid functional presentation watchdog');
-  if (!api?.subscribePresentedFrames) throw new Error('Actual presentation subscription unavailable');
+  if (!api?.subscribePresentedFrames || !api?.subscribeState) throw new Error('Actual presentation subscription unavailable');
   const getToken = slot => api.tools.find(tool => tool.name === 'get_presented_frame').execute({ slot });
   const initial = api.getState(), slots = options.slots ?? initial.tracks.map(track => track.slot);
   if (!slots.length || new Set(slots).size !== slots.length || initial.playing || initial.busy || initial.error)
@@ -27,7 +27,7 @@ export function waitForPlaybackPresentation(options = {}) {
   return new Promise((resolve, reject) => {
     const started = clock.now(), pending = new Set(slots), advanced = new Map(), seen = new Map([...baseline].map(([slot, value]) => [slot, value.token]));
     let lastProgress = started, phase = 'waiting', terminal = false, playResolved = false;
-    let unsubscribe, polling, guard, holding, pausedSignature, playingMs;
+    let unsubscribe, unsubscribeState, polling, guard, holding, pausedSignature, playingMs, playingStarted;
     const signature = state => JSON.stringify([state.positionUs, slots.map(slot => {
       const track = state.tracks.find(track => track.slot === slot);
       return [sourceKey(track), track.frame?.ptsUs, getToken(slot)];
@@ -35,7 +35,7 @@ export function waitForPlaybackPresentation(options = {}) {
     const stop = error => {
       if (terminal) return;
       terminal = true;
-      unsubscribe?.(); clock.clearInterval(polling); clock.clearTimeout(guard); clock.clearTimeout(holding);
+      unsubscribe?.(); unsubscribeState?.(); clock.clearInterval(polling); clock.clearTimeout(guard); clock.clearTimeout(holding);
       options.signal?.removeEventListener('abort', abort);
       try { api.pause(); } catch (cause) { error ??= cause; }
       if (error) reject(error);
@@ -72,14 +72,17 @@ export function waitForPlaybackPresentation(options = {}) {
             throw new Error(`Presented source picture mismatch: ${slot}`);
           if (typeof token.normalizedMediaUs !== 'number' || typeof token.sourcePtsUs !== 'number' || !Number.isFinite(token.normalizedMediaUs) || !Number.isFinite(token.sourcePtsUs) || !Number.isSafeInteger(token.commit))
             throw new Error('Unknown presentation timestamp or commit');
-          if (token.normalizedMediaUs < previous.normalizedMediaUs) throw new Error('Presented frame regressed');
-          if (token.commit <= previous.commit || token.normalizedMediaUs === previous.normalizedMediaUs) return;
-          if (token.sourcePtsUs <= previous.sourcePtsUs || Math.abs((token.sourcePtsUs - token.normalizedMediaUs) - (before.sourcePtsUs - before.normalizedMediaUs)) > 1)
+          if (Math.abs((token.sourcePtsUs - token.normalizedMediaUs) - (before.sourcePtsUs - before.normalizedMediaUs)) > 1)
             throw new Error('Presented frame time mapping mismatch');
-          if (before.picture && JSON.stringify(token.picture) === JSON.stringify(previous.picture)) throw new Error('Strict successor reused picture identity');
           const track = state.tracks.find(track => track.slot === slot);
           if (track.frame?.ptsUs !== token.normalizedMediaUs) throw new Error('Committed track does not match presented frame');
-          if (!state.playing) throw new Error('Presentation arrived after playback cancellation');
+          if (!state.playing || playingStarted === undefined) throw new Error('Presentation arrived without continuous playback');
+          // Only a completely identical, fully validated token is a harmless
+          // duplicate. A changed token cannot reuse an earlier commit/time.
+          if (JSON.stringify(token) === JSON.stringify(previous)) return;
+          if (token.commit <= previous.commit) throw new Error('Changed presentation reused or regressed its commit');
+          if (token.normalizedMediaUs <= previous.normalizedMediaUs || token.sourcePtsUs <= previous.sourcePtsUs) throw new Error('Presented frame regressed or failed to advance');
+          if (before.picture && JSON.stringify(token.picture) === JSON.stringify(previous.picture)) throw new Error('Strict successor reused picture identity');
           seen.set(slot, token);
           if (!pending.has(slot)) return;
           lastProgress = clock.now();
@@ -89,7 +92,9 @@ export function waitForPlaybackPresentation(options = {}) {
             const pause = () => {
               if (terminal) return;
               try {
-                deadline(); inspect(); playingMs = clock.now() - started;
+                deadline(); const active = inspect();
+                if (!active.playing || playingStarted === undefined) throw new Error('Playback stopped during required playing span');
+                playingMs = clock.now() - playingStarted;
                 phase = 'pausing'; api.pause(); phase = 'paused';
                 const paused = inspect(); if (paused.playing) throw new Error('Playback did not pause');
                 pausedSignature = signature(paused);
@@ -101,7 +106,7 @@ export function waitForPlaybackPresentation(options = {}) {
                 }, pauseGuardMs);
               } catch (error) { stop(error); }
             };
-            const remaining = minPlayingMs - (clock.now() - started);
+            const remaining = minPlayingMs - (clock.now() - playingStarted);
             if (remaining > 0) holding = clock.setTimeout(pause, remaining); else pause();
           }
         } catch (error) { stop(error); }
@@ -109,6 +114,16 @@ export function waitForPlaybackPresentation(options = {}) {
     };
     try {
       unsubscribe = api.subscribePresentedFrames(received);
+      unsubscribeState = api.subscribeState(() => {
+        if (terminal) return;
+        try {
+          const state = inspect();
+          if (phase === 'waiting') {
+            if (state.playing) playingStarted ??= clock.now();
+            else if (playingStarted !== undefined) throw new Error('Playback interrupted during functional verification');
+          } else if (phase === 'paused' && state.playing) throw new Error('Playback restarted after pause');
+        } catch (error) { stop(error); }
+      });
       polling = clock.setInterval(() => {
         try { deadline(); const state = inspect();
           if (phase === 'waiting' && playResolved && !state.playing) throw new Error('Playback stopped without a strict successor');
@@ -133,7 +148,8 @@ export function assertBenchmarkCorrectness(report) {
   if (failures.length) throw new Error(`Benchmark correctness failed: ${failures.join(', ')}`);
 }
 
-/** Host-side bound also terminates a check whose page event loop is blocked. */
+/** Reject the host wait even if the page event loop is blocked. The caller
+ * still owns browser/process cleanup in its surrounding finally block. */
 export async function verifyPlaybackPresentation(page, options = {}, context = {}) {
   const { withinBrowserPhase } = await import('../browser-failure-evidence.mjs');
   return withinBrowserPhase(() => page.evaluate(waitForPlaybackPresentation, options),

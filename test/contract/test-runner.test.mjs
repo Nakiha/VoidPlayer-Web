@@ -192,14 +192,16 @@ function presentationApi(slots = ['A']) {
     picture: { sourceVersion: `fixture-${slot}@v1`, stream: 'video', configuration: 0, au: 0, layer: 0, picture: 0, field: 'frame' } }]));
   const state = { error: null, busy: false, playing: false, positionUs: 0,
     tracks: slots.map(slot => ({ slot, id: `fixture-${slot}`, sourceGen: 1, frame: { ptsUs: 0 } })) };
-  const listeners = new Set();
+  const listeners = new Set(), stateListeners = new Set();
   const api = {
     getState: () => structuredClone(state),
     tools: [{ name: 'get_presented_frame', execute: ({ slot }) => structuredClone(tokens.get(slot)) }],
     subscribePresentedFrames(listener) { listeners.add(listener); return () => listeners.delete(listener); },
-    play() { state.playing = true; }, pause() { state.playing = false; },
+    subscribeState(listener) { stateListeners.add(listener); return () => stateListeners.delete(listener); },
+    play() { state.playing = true; for (const listener of stateListeners) listener(); },
+    pause() { state.playing = false; for (const listener of stateListeners) listener(); },
   };
-  return { api, state, tokens, listeners, present(slot = 'A', patch = {}) {
+  return { api, state, tokens, listeners, stateListeners, present(slot = 'A', patch = {}) {
     const before = tokens.get(slot), token = { ...before, commit: before.commit + 1, normalizedMediaUs: 40000, sourcePtsUs: 41000,
       picture: { ...before.picture, au: 1 }, ...patch };
     tokens.set(slot, token); state.tracks.find(track => track.slot === slot).frame.ptsUs = token.normalizedMediaUs;
@@ -234,7 +236,7 @@ test('slow correct presentation passes independently while the original 2-second
 test('permanent no-frame and repeated same-picture events never reset the progress watchdog', async t => {
   const fixture = presentationApi(), { pending } = await presentationGate(t, fixture, { idleMs: 300, totalMs: 900, pollMs: 50 });
   const rejected = assert.rejects(pending, /no strict frame progress/); await settlePresentation();
-  for (let n = 0; n < 3; n++) { t.mock.timers.tick(90); fixture.present('A', { normalizedMediaUs: 0, sourcePtsUs: 1000, picture: fixture.tokens.get('A').picture }); await settlePresentation(); }
+  for (let n = 0; n < 3; n++) { t.mock.timers.tick(90); fixture.present('A', fixture.tokens.get('A')); await settlePresentation(); }
   t.mock.timers.tick(30); await rejected;
   assert.equal(fixture.state.playing, false); assert.equal(fixture.listeners.size, 0);
 });
@@ -333,4 +335,56 @@ test('regressive frames cannot keep an unfinished media-span verification alive'
   const rejected = assert.rejects(pending, /regressed/); await settlePresentation(); fixture.present(); await settlePresentation();
   fixture.present('A', { normalizedMediaUs: 20000, sourcePtsUs: 21000, picture: { ...fixture.tokens.get('A').picture, au: 2 } });
   await rejected; assert.equal(fixture.listeners.size, 0);
+});
+
+for (const malformed of ['same-commit-new-time', 'same-time-wrong-source-time']) {
+  test(`a ${malformed} token fails even when a normal frame follows`, async t => {
+    const fixture = presentationApi(), { pending } = await presentationGate(t, fixture);
+    const rejected = assert.rejects(pending); await settlePresentation();
+    const base = fixture.tokens.get('A');
+    fixture.present('A', malformed === 'same-commit-new-time'
+      ? { commit: 1, normalizedMediaUs: 20000, sourcePtsUs: 21000 }
+      : { normalizedMediaUs: 0, sourcePtsUs: 99999, picture: base.picture });
+    await settlePresentation(); fixture.present(); await settlePresentation(); t.mock.timers.tick(100);
+    await rejected; assert.equal(fixture.listeners.size, 0);
+  });
+}
+
+test('external pause during the required playing span cannot be reported as continuous playback', async t => {
+  const fixture = presentationApi(), { pending } = await presentationGate(t, fixture, { minPlayingMs: 60 });
+  const rejected = assert.rejects(pending, /stopped|interrupted/); await settlePresentation(); fixture.present(); await settlePresentation();
+  t.mock.timers.tick(10); fixture.api.pause(); t.mock.timers.tick(50); await settlePresentation(); t.mock.timers.tick(100);
+  await rejected; assert.equal(fixture.listeners.size, 0);
+});
+
+
+test('a brief pause and resume cannot satisfy continuous playback', async t => {
+  const fixture = presentationApi(), { pending } = await presentationGate(t, fixture, { minPlayingMs: 60 });
+  const rejected = assert.rejects(pending, /interrupted/); await settlePresentation(); fixture.present(); await settlePresentation();
+  t.mock.timers.tick(10); fixture.api.pause(); fixture.api.play(); t.mock.timers.tick(150);
+  await rejected; assert.equal(fixture.listeners.size, 0); assert.equal(fixture.stateListeners.size, 0);
+});
+
+test('playing duration excludes the delay before actual playback starts', async t => {
+  const fixture = presentationApi(), play = fixture.api.play;
+  fixture.api.play = () => new Promise(resolve => setTimeout(() => { play(); resolve(); }, 100));
+  const { pending } = await presentationGate(t, fixture, { minPlayingMs: 60 });
+  await settlePresentation(); t.mock.timers.tick(100); await settlePresentation(); fixture.present(); await settlePresentation();
+  t.mock.timers.tick(59); assert.equal(fixture.state.playing, true); t.mock.timers.tick(1); await settlePresentation();
+  t.mock.timers.tick(100); const result = await pending;
+  assert.equal(result.playingMs, 60); assert.equal(result.elapsedMs, 260); assert.equal(fixture.stateListeners.size, 0);
+});
+
+test('a changed commit at the same timestamp is not an identical duplicate', async t => {
+  const fixture = presentationApi(), { pending } = await presentationGate(t, fixture);
+  const rejected = assert.rejects(pending, /failed to advance/); await settlePresentation();
+  fixture.present('A', { normalizedMediaUs: 0, sourcePtsUs: 1000 }); await rejected;
+  assert.equal(fixture.stateListeners.size, 0);
+});
+
+test('an identical token still requires matching committed track state', async t => {
+  const fixture = presentationApi(), { pending } = await presentationGate(t, fixture);
+  const rejected = assert.rejects(pending, /Committed track/); await settlePresentation();
+  fixture.present('A', fixture.tokens.get('A')); fixture.state.tracks[0].frame.ptsUs = 1234;
+  await rejected; assert.equal(fixture.stateListeners.size, 0);
 });

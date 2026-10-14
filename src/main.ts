@@ -617,6 +617,7 @@ const api = {
   }),
   tools: reviewTools(session, workspaceTransfer),
   subscribePresentedFrames: (listener: Parameters<ReviewSession['subscribePresentedFrames']>[0]) => session.subscribePresentedFrames(listener),
+  subscribeState: (listener: () => void) => session.subscribe(listener),
 };
 Object.defineProperty(window, 'voidPlayer', { value: Object.freeze(api), configurable: true });
 const annotationLink = new URL(location.href).searchParams;

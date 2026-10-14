@@ -56,9 +56,12 @@ async function run() {
   const functional = async (report, minAdvanceUs = 0) => {
     const row = { caseName: context.caseName, report, functionalPresentation: { status: 'waiting' } }; playbackReports.push(row);
     const save = () => writeFile(`.run/playback-reports/flv-startup-${browserName}-performance.json`, JSON.stringify({ engine: browserName, rows: playbackReports }, null, 2));
-    await save(); assert.equal(report.error, null); assert.equal(report.staleAfterPause, false); assertBenchmarkCorrectness(report);
-    await call('seek_review', { ptsUs: 0 }); phase('functional-presentation', 0);
-    try { row.functionalPresentation = { status: 'passed', ...await verifyPlaybackPresentation(page, { minAdvanceUs }, context) }; }
+    await save();
+    try {
+      assert.equal(report.error, null); assert.equal(report.staleAfterPause, false); assertBenchmarkCorrectness(report);
+      await call('seek_review', { ptsUs: 0 }); phase('functional-presentation', 0);
+      row.functionalPresentation = { status: 'passed', ...await verifyPlaybackPresentation(page, { minAdvanceUs }, context) };
+    }
     catch (error) { row.functionalPresentation = { status: 'failed', error: error.message }; await save(); throw error; }
     await save(); return row.functionalPresentation;
   };
