@@ -697,3 +697,81 @@ test('whole stream restart rebuilds lease cursors from persistent pictures witho
     }
   } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
 });
+
+for (const failure of ['messageerror', 'ack-post', 'cancelled-ack'] as const) {
+  test(`server analysis ${failure} releases its Worker admission and permits real recovery`, { timeout: 10000 }, async t => {
+    const { Worker } = await import('node:worker_threads');
+    const f = await fixture(), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'transport-failure'));
+    scheduler.setConcurrency(1);
+    let active: any;
+    let releaseCached: (() => void) | undefined;
+    let latePosts = 0;
+    let resolveWorker!: (worker: import('node:worker_threads').Worker) => void;
+    const created = new Promise<import('node:worker_threads').Worker>(resolve => { resolveWorker = resolve; });
+    const on = Worker.prototype.on;
+    // Observe listener installation, before the event loop can deliver the
+    // first actual Worker message. Only this scheduler's owned Worker matches.
+    t.mock.method(Worker.prototype, 'on', function(this: import('node:worker_threads').Worker, event: string, listener: (...args: any[]) => void) {
+      const result = on.call(this, event, listener);
+      if (event === 'message') {
+        const work = [...(scheduler as any).running].find(work => work.worker === this);
+        if (work) { active = work; resolveWorker(this); }
+      }
+      return result;
+    });
+    try {
+      const demand = failure === 'cancelled-ack'
+        ? { sourceVersion: target(f.entry).sourceVersion, firstPtsUs: 0, startUs: 0, endUs: 100000 }
+        : target(f.entry);
+      const request = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'failure-owner');
+      const worker = await created;
+      if (failure === 'messageerror') worker.emit('messageerror', new Error('injected invalid analysis reply'));
+      else if (failure === 'ack-post') {
+        let attempted!: () => void;
+        const sent = new Promise<void>(resolve => { attempted = resolve; });
+        // The worker's real first cache/chunk reply reaches the actual ACK
+        // path; failure injection is on this instance only, not other tasks.
+        t.mock.method(worker, 'postMessage', () => { attempted(); throw new Error('injected analysis ACK send failure'); });
+        await sent;
+      } else {
+        let cacheSeen!: () => void;
+        const arrived = new Promise<void>(resolve => { cacheSeen = resolve; });
+        const held = new Promise<void>(resolve => { releaseCached = resolve; });
+        // This fresh fixture has no cached pictures; delay that null lookup
+        // so cancellation wins before the actual reverse ACK callback resumes.
+        t.mock.method(scheduler.store, 'get', async () => { cacheSeen(); await held; return null; });
+        t.mock.method(worker, 'postMessage', () => { latePosts++; throw new Error('cancelled worker must not receive late ACK'); });
+        await arrived;
+        scheduler.release(request.requestId, 'failure-owner');
+        releaseCached!();
+      }
+      await new Promise<void>(resolve => setImmediate(resolve));
+      if (failure === 'cancelled-ack') {
+        assert.equal(scheduler.status(request.requestId, 'failure-owner'), null);
+        assert.equal(active.state, 'cancelled');
+        assert.equal(active.reason, undefined);
+      } else {
+        const failed = scheduler.status(request.requestId, 'failure-owner')!;
+        assert.equal(failed.state, 'error', 'live transport failure must settle before the 30-second stall deadline');
+        assert.equal(failed.reason?.code, 'internal-error');
+      }
+      await active.done;
+      assert.equal(active.worker, undefined);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      if (failure === 'cancelled-ack') assert.equal(latePosts, 0);
+      assert.deepEqual(scheduler.resources(), { concurrency: 1, running: 0, queued: 0 });
+      // Restore observations for recovery. A committed real picture survives
+      // ACK failure; other cases reopen a real decoder rather than poisoning
+      // the deduplication key or scheduler admission.
+      t.mock.restoreAll();
+      const recovery = await scheduler.submit(f.entry.id, f.entry.version!, demand, 'recovery-owner');
+      assert.equal(recovery.cacheHit, failure === 'ack-post');
+      const complete = await wait(scheduler, recovery.requestId, 'recovery-owner');
+      assert.equal(complete.state, 'complete', complete.error ?? '');
+      assert.notEqual(recovery.requestId, request.requestId);
+      assert.equal(scheduler.status(request.requestId, 'failure-owner')?.state, failure === 'cancelled-ack' ? undefined : 'error');
+    } finally {
+      releaseCached?.(); t.mock.restoreAll(); await scheduler.close(); await f.close();
+    }
+  });
+}
