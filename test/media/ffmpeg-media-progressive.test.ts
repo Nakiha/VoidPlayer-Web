@@ -14,6 +14,7 @@ class DelayedIndexWorker {
   initId = 0;
   terminated = false;
   extractRequests = 0;
+  extractedIndices:number[]=[];
   indexActions: string[] = [];
   firstDuration: number;
   constructor(firstDuration = 3_600) { this.firstDuration = firstDuration; }
@@ -42,8 +43,8 @@ class DelayedIndexWorker {
         },
       }));
     } else if (message.type === 'extract') {
-      this.extractRequests++;
-      this.emit({ id: message.id, ok: true, data: frame(message.index === 0 ? originTicks : originTicks + 3_600) });
+      this.extractRequests++;this.extractedIndices.push(message.index);
+      this.emit({ id: message.id, ok: true, data: frame(originTicks + message.index * 3_600) });
     }
   }
 
@@ -63,11 +64,11 @@ class DelayedIndexWorker {
     this.emit({ id: this.initId, type: 'index-progress', data: progress });
   }
 
-  finishIndex() {
+  finishIndex(ticks=[originTicks,originTicks+3_600]) {
     this.emit({
       id: this.initId, type: 'index-complete', data: {
-        ctx: 1, path: '/fake.ts', ticks: [originTicks, originTicks + 3_600],
-        durations: [3_600, 3_600], tbNum: 1, tbDen: 90_000,
+        ctx: 1, path: '/fake.ts', ticks,
+        durations: ticks.map(()=>3_600), tbNum: 1, tbDen: 90_000,
         width: 1, height: 1, codec: 'mpeg2video', indexMs: 10,
         indexSource: 'server', localIndexBuildCalls: 0, seekAnchorCount: 2,
       },
@@ -363,4 +364,43 @@ test('a rejected complete index releases session coverage waiters', async () => 
     await rejected;
     assert.equal(source.info.indexState, 'error');
   } finally { source.dispose(); }
+});
+
+test('strict FFmpeg successors wait for the incremental tail and never replay the displayed frame',{timeout:2000},async()=>{
+  const worker=new DelayedIndexWorker(),source=await openWith(worker);
+  try{
+    const displayed=await source.frameAt(0);displayed.close();
+    assert.equal(typeof source.framesFollowing,'function');
+    const iterator=source.framesFollowing!(0);let settled=false;
+    const pending=iterator.next().then(value=>{settled=true;return value;});
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(settled,false);assert.deepEqual(worker.extractedIndices,[]);
+    worker.publishBatch();const first=await pending;assert.equal(first.done,false);assert.equal(first.value!.ptsUs,40000);first.value!.close();
+    assert.deepEqual(worker.extractedIndices,[1],'only the strictly following ordinal is requested');
+    const tail=iterator.next();let tailSettled=false;void tail.then(()=>{tailSettled=true;});
+    await new Promise(resolve=>setImmediate(resolve));assert.equal(tailSettled,false);
+    worker.finishIndex();assert.equal((await tail).done,true);assert.deepEqual(worker.extractedIndices,[1]);
+  }finally{source.dispose();}
+});
+
+test('strict FFmpeg successor restart after pause neither replays nor skips frames',{timeout:2000},async()=>{
+  const worker=new DelayedIndexWorker(),source=await openWith(worker);
+  try{
+    worker.finishIndex([originTicks,originTicks+3600,originTicks+7200,originTicks+10800]);
+    const first=await source.frameAt(0);first.close();assert.equal(typeof source.framesFollowing,'function');
+    const beforePause=source.framesFollowing!(0),next=await beforePause.next();assert.equal(next.value!.ptsUs,40000);next.value!.close();await beforePause.return(undefined);
+    const resumed=source.framesFollowing!(40000),times:number[]=[];
+    for await(const frame of resumed){times.push(frame.ptsUs);frame.close();}
+    assert.deepEqual(times,[80000,120000]);assert.deepEqual(worker.extractedIndices,[1,2,3]);
+    assert.equal((await source.framesFollowing!(120000).next()).done,true,'complete EOF does not replay the final frame');
+  }finally{source.dispose();}
+});
+
+for(const end of ['failure','dispose']as const)test(`strict successor ${end} releases a pending index wait instead of returning false EOF`,{timeout:2000},async()=>{
+  const worker=new DelayedIndexWorker(),source=await openWith(worker);
+  try{
+    assert.equal(typeof source.framesFollowing,'function');const pending=source.framesFollowing!(0).next();
+    const rejected=assert.rejects(pending,end==='failure'?/strict scan failed/:/媒体已释放/);
+    await new Promise(resolve=>setImmediate(resolve));if(end==='failure')worker.failIndex('strict scan failed');else{source.dispose();source.dispose();}
+    await rejected;assert.deepEqual(worker.extractedIndices,[]);
+  }finally{source.dispose();}
 });

@@ -572,7 +572,7 @@ test('session preserves source completion across eviction, multiple picture task
     const completed=session.getBitstreamAnalysisState('A').completedStream!;
     assert.equal(completed.sourceVersion,'local:uuid'); assert.equal(completed.pictures,3);
     // Remove full frame records exactly as the bounded cache does; completion is independent.
-    (session as any).bitstream.cache.clear();
+    (session as any).bitstream.root.cache.clear();
     for (const time of [100,200]) {
       await session.seek(time);
       assert.equal(session.cachedBitstreamAnalysis('A'),null);
@@ -582,7 +582,7 @@ test('session preserves source completion across eviction, multiple picture task
     }
     assert.equal(requests.filter(target=>target.mode==='stream').length,1);
     assert.equal(requests.filter(target=>target.picture).length,2);
-    (session as any).bitstream.cache.clear(); failPicture=true;
+    (session as any).bitstream.root.cache.clear(); failPicture=true;
     await assert.rejects(session.requestBitstreamAnalysis('A'));
     assert.equal(session.getBitstreamAnalysisState('A').state,'error');
     assert.deepEqual(session.getBitstreamAnalysisState('A').completedStream,completed);
@@ -618,3 +618,135 @@ test('remote queue wait does not consume decoder time and repeated polling never
   assert.throws(()=>stream.observe({state:'unknown',seq:3}, 140000), /Invalid/);
   assert.throws(()=>stream.observe({state:'queued',seq:3}, 110001), /returned to queue/);
 });
+
+// Public service requests exercise the disposable browser Worker transport.
+// The snapshot is an opaque test payload, never a demux admission credential.
+const localTransportCases = [
+  ...(['picture', 'range', 'stream'] as const).flatMap(mode =>
+    ['initial-post', 'messageerror', 'error', 'snapshot-post', 'snapshot-provider', 'cancel', 'success'].map(failure => ({ mode, failure }))),
+  { mode: 'stream', failure: 'index-post' },
+  { mode: 'stream', failure: 'index-provider' },
+  { mode: 'picture', failure: 'snapshot-cancel-pending' },
+  { mode: 'stream', failure: 'snapshot-cancel-pending' },
+  { mode: 'range', failure: 'ack-post' },
+  { mode: 'stream', failure: 'ack-post' },
+  { mode: 'range', failure: 'cache-post' },
+  { mode: 'picture', failure: 'timeout' },
+  { mode: 'stream', failure: 'timeout' },
+] as const;
+for (const { mode, failure } of localTransportCases) {
+  test(`local analysis ${mode} ${failure} owns pending/timer/listeners without poisoning recovery`, async t => {
+    const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+    const { getEventListeners } = await import('node:events');
+    const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
+    const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+    let fail = true, snapshotCalls = 0;
+    let releaseSnapshot: ((value: unknown) => void) | undefined;
+    const workers: TestAnalysisWorker[] = [];
+    class TestAnalysisWorker {
+      onmessage: ((event: { data: any }) => void) | null = null;
+      onerror: ((event: { message: string }) => void) | null = null;
+      onmessageerror: (() => void) | null = null;
+      terminated = 0;
+      messages: any[] = [];
+      constructor() { workers.push(this); }
+      postMessage(data: any) {
+        if (fail && (failure === 'initial-post' && data.target || failure === 'snapshot-post' && data.event === 'snapshot'
+          || failure === 'index-post' && data.event === 'index' || failure === 'ack-post' && data.ok === true
+          || failure === 'cache-post' && data.event === 'cache')) throw new Error('injected post failure');
+        this.messages.push(data);
+      }
+      terminate() { this.terminated++; }
+    }
+    Object.defineProperty(globalThis, 'Worker', { configurable: true, value: TestAnalysisWorker });
+    Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
+    t.after(() => {
+      if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
+      if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
+    });
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const file = new Blob(['analysis fixture']);
+    const source = {
+      info: { id: 'local:uuid', firstPtsUs: 100, durationUs: 300 }, bitstreamFile: file,
+      getBitstreamFfmpegIndex() {
+        snapshotCalls++;
+        if (fail && failure === 'snapshot-provider') throw new Error('injected snapshot provider failure');
+        if (fail && failure === 'snapshot-cancel-pending') return new Promise(resolve => { releaseSnapshot = resolve; });
+        return Promise.resolve({ transportFixture: true });
+      },
+      getBitstreamIndex() {
+        if (fail && failure === 'index-provider') throw new Error('injected index provider failure');
+        return Promise.resolve({ packets: 1, complete: true });
+      },
+    } as unknown as import('../../src/media.ts').MediaSource;
+    const wireResult = mode === 'stream' ? { ...result(), picture: { ...result().picture, au: 0 },
+      gop: { startAu: 0, endAu: 1, configuration: 0, anchor: 'closed' as const } } : result();
+    const token: import('../../src/bitstream-analysis/contract.ts').PresentedFrameToken = {
+      slot: 'A', generation: 1, commit: 1, picture: result().picture, sourcePtsUs: 100, normalizedMediaUs: 0,
+      timeMapping: 'source-microseconds-minus-first-pts',
+      geometry: { codedWidth: 16, codedHeight: 16, visibleRect: { x: 0, y: 0, width: 16, height: 16 }, displayWidth: 16, displayHeight: 16, rotation: 0 },
+    };
+    const service = new BitstreamAnalysisService(() => {});
+    const start = (controller: AbortController) => mode === 'picture' ? service.request(source, token, controller.signal)
+      : mode === 'range' ? service.requestRange(source, { sourceVersion: 'local:uuid', firstPtsUs: 100, startUs: 0, endUs: 300 }, controller.signal)
+      : service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 100, durationUs: 300 }, 'A', controller.signal);
+    const flush = () => new Promise<void>(resolve => setImmediate(resolve));
+    const succeed = (worker: TestAnalysisWorker) => {
+      if (mode === 'picture') worker.onmessage?.({ data: { ok: true, result: wireResult } });
+      else {
+        if (mode === 'stream') worker.onmessage?.({ data: { event: 'progress', progress: { pictures: 0, totalPictures: 1, checkedUs: 0, totalUs: 300, indexComplete: true } } });
+        worker.onmessage?.({ data: { event: 'chunk', result: wireResult } });
+        worker.onmessage?.({ data: { ok: true } });
+      }
+    };
+    const controller = new AbortController();
+    let outcome: { ok: boolean; error?: unknown } | undefined;
+    const pending = start(controller).then(() => { outcome = { ok: true }; }, error => { outcome = { ok: false, error }; });
+    const worker = workers[0], late = worker.onmessage;
+    try {
+      if (failure === 'messageerror') worker.onmessageerror?.();
+      else if (failure === 'error') worker.onerror?.({ message: 'injected worker crash' });
+      else if (failure === 'snapshot-post' || failure === 'snapshot-provider') worker.onmessage?.({ data: { event: 'snapshot' } });
+      else if (failure === 'snapshot-cancel-pending') {
+        worker.onmessage?.({ data: { event: 'snapshot' } });
+        assert.ok(releaseSnapshot);
+        controller.abort(new DOMException('caller cancelled', 'AbortError'));
+        releaseSnapshot({ transportFixture: true });
+      }
+      else if (failure === 'index-post' || failure === 'index-provider') worker.onmessage?.({ data: { event: 'index' } });
+      else if (failure === 'cache-post') worker.onmessage?.({ data: { event: 'cache', picture: result().picture } });
+      else if (failure === 'ack-post') worker.onmessage?.({ data: { event: 'chunk', result: wireResult } });
+      else if (failure === 'cancel') controller.abort(new DOMException('caller cancelled', 'AbortError'));
+      else if (failure === 'timeout') t.mock.timers.tick(30000);
+      else if (failure === 'success') succeed(worker);
+      await flush();
+      assert.ok(outcome, 'transport must settle promptly without an uncaught send error');
+      assert.equal(outcome.ok, failure === 'success');
+      assert.equal(worker.terminated, 1);
+      for (const key of ['onmessage', 'onerror', 'onmessageerror'] as const) assert.equal(worker[key], null);
+      assert.equal(getEventListeners(controller.signal, 'abort').length, 0);
+      assert.equal(service.state.state, failure === 'success' ? 'ready' : (failure === 'cancel' || failure === 'snapshot-cancel-pending') ? 'cancelled' : failure === 'timeout' ? 'limited' : 'error');
+      assert.equal(file.size, 16);
+      if (failure === 'snapshot-cancel-pending') assert.equal(worker.messages.filter(data => data.event === 'snapshot').length, 0, 'late reverse result must not post after cancellation');
+      if (failure === 'success' && mode !== 'picture') assert.equal(worker.messages.filter(data => data.ok === true).length, 1, 'one consumed chunk owns one ACK');
+      const snapshotsBefore = snapshotCalls, stateBefore = structuredClone(service.state);
+      late?.({ data: { event: 'snapshot' } });
+      late?.({ data: { ok: true, result: wireResult } });
+      await flush(); t.mock.timers.tick(30000); await flush();
+      assert.equal(snapshotCalls, snapshotsBefore, 'late callbacks must not query a released source');
+      assert.equal(worker.terminated, 1);
+      assert.deepEqual(service.state, stateBefore);
+      // The same root can start an independent task after this failure. Clear
+      // a consumed-but-unacknowledged result so picture recovery reaches IO.
+      (service as any).cache.clear(); fail = false;
+      const recoveryController = new AbortController(), recovery = start(recoveryController);
+      const next = workers[1]; assert.ok(next);
+      succeed(next); await recovery;
+      assert.equal(next.terminated, 1);
+      assert.equal(service.state.state, 'ready');
+      assert.equal(getEventListeners(recoveryController.signal, 'abort').length, 0);
+    } finally {
+      controller.abort(); service.dispose(); t.mock.timers.tick(30000); await pending;
+    }
+  });
+}
