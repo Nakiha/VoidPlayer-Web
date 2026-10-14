@@ -199,3 +199,23 @@ export function verifyHevcFrame(frame: VideoFrame, geometry: HevcGeometry, diagn
     spsVisible: [expected.x, expected.y, expected.width, expected.height] });
   return corrected;
 }
+
+/** WebCodecs accepts in-band Annex-B HEVC with an RFC6381 codec string and
+ * no hvcC description. Read profile_tier_level from the actual SPS. */
+export function hevcAnnexBDecoderConfig(description:Uint8Array):VideoDecoderConfig|null {
+  if(!isAnnexB(description))return null;
+  try{
+    const ranges=nalRanges('hevc',description,description),sps=ranges.find(n=>(description[n.offset]>>1&63)===33);
+    if(!sps)return null;
+    const nal=description.subarray(sps.offset,sps.offset+sps.size),rbsp:number[]=[];
+    for(let i=2;i<nal.length;i++){if(i>=4&&nal[i]===3&&!nal[i-1]&&!nal[i-2]&&i+1<nal.length&&nal[i+1]<=3)continue;rbsp.push(nal[i]);}
+    if(rbsp.length<13)return null;
+    const profile=rbsp[1],constraints=rbsp.slice(6,12);let flags=0,reversed=0;
+    for(const b of rbsp.slice(2,6))flags=(flags*256+b)>>>0;
+    for(let i=0;i<32;i++){reversed=(reversed*2+(flags&1))>>>0;flags>>>=1;}
+    while(constraints.at(-1)===0)constraints.pop();
+    const geometry=hevcGeometry(description);if(!geometry)return null;
+    return{codec:`hev1.${['','A','B','C'][profile>>6]}${profile&31}.${reversed.toString(16).toUpperCase()}.${profile&32?'H':'L'}${rbsp[12]}${constraints.length?'.'+constraints.map(b=>b.toString(16).toUpperCase()).join('.'):''}`,
+      codedWidth:geometry.codedWidth,codedHeight:geometry.codedHeight,displayAspectWidth:geometry.width*geometry.sarNum,displayAspectHeight:geometry.height*geometry.sarDen};
+  }catch{return null;}
+}

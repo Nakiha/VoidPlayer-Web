@@ -1,8 +1,9 @@
+import {isAnnexB} from './nal-framing.ts';
 import { avcHasIdr, avcGeometry, nativeAvcCompatible, avcInBandDescription } from './avc-geometry.ts';
 import { readWasmFrame, requireFrameAbi } from './wasm-frame.ts';
 import { videoFrameDescription } from './frame-description.ts';
 import type { FrameDescription } from './frame-description.ts';
-import { hevcGeometry, hevcReorderFrames, verifyHevcFrame } from './hevc-geometry.ts';
+import { hevcGeometry, hevcReorderFrames, verifyHevcFrame, hevcAnnexBDecoderConfig } from './hevc-geometry.ts';
 import { MediaOpenError } from './media-errors.ts';
 import { flvDecoderConfig } from './flv-demux.ts';
 import type { FlvIndex, FlvPacket } from './flv-demux.ts';
@@ -18,6 +19,7 @@ export type PacketDecodePacket = Omit<FlvPacket, 'dts'> & { dts: number | null; 
 export type PacketDecodeIndex = Omit<FlvIndex, 'packets' | 'codec'> & { codec: FlvIndex['codec'] | 'vp8' | 'vp9' | 'ffv1' | 'mpeg2video' | 'mpeg4' | 'mjpeg' | 'prores'; codecParameters?:import('./matroska-clocks.ts').PacketCodecParameters; codecConfigurations?:import('./matroska-clocks.ts').PacketCodecParameters[]; packets: PacketDecodePacket[] };
 type PacketConfiguration = Pick<PacketDecodeIndex, 'codec' | 'description' | 'codecParameters'>;
 function packetDecoderConfig(index: PacketConfiguration): VideoDecoderConfig | null {
+  if(index.codec==='hevc'&&isAnnexB(index.description))return hevcAnnexBDecoderConfig(index.description);
   if(['ffv1','mpeg2video','mpeg4','mjpeg','prores'].includes(index.codec))return null;
   return index.codec === 'vp8' ? {codec:'vp8'} : index.codec === 'vp9' ? {codec:'vp09.00.10.08'} : flvDecoderConfig({...index,codec:index.codec as FlvIndex['codec']});
 }
