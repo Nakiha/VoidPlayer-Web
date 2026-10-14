@@ -77,6 +77,7 @@ export class IndexStreamTransport {
       try {
         response = await fetch(url, {
           cache: 'no-store',
+          redirect: 'manual', // A source-bound index must not move to another authority.
           headers: { accept: 'application/x-ndjson, application/json;q=0.8' },
           signal: requestController.signal,
         });

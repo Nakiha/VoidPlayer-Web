@@ -22,7 +22,7 @@ export async function admitJsContainerMedia(format:'ts'|'matroska',input:RandomA
   const detach = onLoadAbort(deps.signal,()=>rpc.terminate(deps.signal!.reason));
   try {
     deps.onProgress?.('index');
-    const prepared = await rpc.call('prepare-js',{input,sourceVersion,format,persistent:true},[],60000,true);
+    const prepared = await rpc.call('prepare-js',{input,sourceVersion,format,persistent:'file' in input||!!input.library},[],60000,true);
     loadAborted(deps.signal);
     if(!prepared.admitted) {
       rpc.terminate();

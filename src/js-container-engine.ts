@@ -83,7 +83,7 @@ export class JsContainerEngine {
     let cached:JsPacketIndex|undefined;
     if(this.persistent){
       if('file' in this.input){this.sourceVersion=await localJsSourceVersion(this.reader,this.controller.signal,bytes=>onIndexProgress?.({packets:0,scannedBytes:bytes,totalBytes:this.reader.size,bytesRead:bytes}));cached=await loadLocalJsIndex(this.reader,this.sourceVersion,this.format,this.controller.signal,true);}
-      else {cached=await loadServerJsIndex(this.input.url,this.sourceVersion,this.reader.size,this.format,this.controller.signal,onIndexProgress);if(cached)this.indexOrigin='server';}
+      else {cached=await loadServerJsIndex(this.input.url,this.sourceVersion,this.reader.size,this.format,this.controller.signal,onIndexProgress,this.input.library);if(cached)this.indexOrigin='server';}
     }
     const Source=this.format==='ts'?TsPacketSource:MatroskaPacketSource;
     this.source = new Source({size:this.reader.size,read:async(at,length)=>{

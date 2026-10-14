@@ -169,14 +169,8 @@ async function openInput(input: RandomAccessInput, meta: MediaMeta, customSoftwa
   const reference = getColorMode() === 'reference', preference = getReferenceDecode();
   const colorMode = reference ? 'reference' : 'browser';
   let nativeOpens = 0, softwareOpens = 0;
-  let libraryId: string | undefined, mediaVersion: string | undefined;
-  if ('url' in input) {
-    try {
-      const url = new URL(input.url, globalThis.location?.href);
-      libraryId = /^\/api\/media\/([0-9a-f]{24})$/.exec(url.pathname)?.[1];
-      mediaVersion = url.searchParams.get('v') ?? undefined;
-    } catch { /* Non-library URLs have no stable library identity. */ }
-  }
+  const libraryReference='url' in input?input.library:undefined;
+  const libraryId=libraryReference?.id,mediaVersion=libraryReference?.version;
   const tsAdmission = container==='matroska'&&!await matroskaMigrated(input,signal)?{kind:'unmigrated' as const,reason:'Declared Matroska codec/track layout not yet migrated'}:container==='mpegts'||container==='matroska' ? await (await import('./js-container-media.ts')).admitJsContainerMedia(container==='mpegts'?'ts':'matroska',input,meta,
     libraryId&&mediaVersion?`${libraryId}@${mediaVersion}`:randomUUID(),{signal,onProgress,rawNative:reference,
       ...(reference?{}:{nativeColorMode:'browser' as const})}) : undefined;
@@ -238,7 +232,7 @@ export async function openMedia(file: File, openFallback: ((file: File) => Promi
   return openInput({ file }, file, openFallback ? () => openFallback(file) : undefined, onProgress, signal);
 }
 
-export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
+export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallback: ((url: string, meta: MediaMeta) => Promise<MediaSource>) | undefined = undefined, onProgress?: MediaOpenProgress, signal?: AbortSignal, library?:import('./library-index-reference.ts').LibraryIndexReference): Promise<MediaSource> {
   loadAborted(signal);
   if (!meta.size) {
     const head = await fetch(url, { method: 'HEAD', signal });
@@ -246,7 +240,7 @@ export async function openMediaFromUrl(url: string, meta: MediaMeta, openFallbac
     meta = { ...meta, size: Number(head.headers.get('content-length')) };
   }
   if (!Number.isSafeInteger(meta.size) || meta.size <= 0) throw new MediaOpenError('input', '媒体文件长度无效。');
-  return openInput({ url, size: meta.size }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal);
+  return openInput({ url, size: meta.size, ...(library?{library}:{}) }, meta, openFallback ? () => openFallback(url, meta) : undefined, onProgress, signal);
 }
 
 async function openWebCodecsInput(input: Input, meta: MediaMeta, signal?: AbortSignal, onProgress?: MediaOpenProgress, access?:RandomAccessInput, rawNative=false): Promise<MediaSource> {

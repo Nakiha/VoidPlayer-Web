@@ -2,9 +2,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MediaIndexClient } from '../../src/media-index-client.ts';
 import { FFMPEG_INDEX_RECORD_BYTES } from '../../src/ffmpeg-index-cache.ts';
+import {createServer} from 'node:http';
 
 const ID = 'a'.repeat(24);
 const encoder = new TextEncoder();
+
+test('a source-bound HTTP index never follows a redirect to another index authority',async()=>{
+ let foreignRequests=0;const foreign=createServer((_req,res)=>{foreignRequests++;res.writeHead(200,{'content-type':'application/json'}).end(JSON.stringify({epoch:0,index:{forged:true}}));});
+ await new Promise<void>(resolve=>foreign.listen(0,'127.0.0.1',resolve));
+ const redirect=createServer((_req,res)=>res.writeHead(302,{location:`http://127.0.0.1:${(foreign.address() as {port:number}).port}/forged`}).end());
+ await new Promise<void>(resolve=>redirect.listen(0,'127.0.0.1',resolve));
+ const client=new MediaIndexClient(`http://127.0.0.1:${(redirect.address() as {port:number}).port}/api/media/${ID}?v=1`,'js-matroska',10000,1000,true);
+ try{assert.equal(await client.read(),null);assert.equal(foreignRequests,0);}finally{client.close();for(const server of [redirect,foreign]){server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}}
+});
 
 function ndjsonResponse(lines: string[], disconnect = false): Response {
   const bytes = encoder.encode(lines.join('\n') + '\n');

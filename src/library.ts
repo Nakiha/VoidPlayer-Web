@@ -2,6 +2,7 @@ import {updateMediaInfo} from './media-state.ts';
 import type { MediaSource, MediaOpenProgress } from './media.ts';
 import { openMediaFromUrl } from './media.ts';
 import { contextLog } from './log.ts';
+import {ownLibraryIndexReference} from './library-index-reference.ts';
 
 // Client side of the optional media-library service (browser/server/). The app
 // works without it: when no service answers, the library is simply unavailable.
@@ -26,7 +27,8 @@ export function mediaUrl(id: string, version?: string): string {
 export async function openLibraryItem(entry: LibraryEntry, onProgress?: MediaOpenProgress, signal?: AbortSignal): Promise<MediaSource> {
   if (entry.state && entry.state !== 'ready') throw new Error(entry.state === 'pending' ? '片源仍在写入，请稍后重试。' : '片源已从媒体库移除。');
   contextLog().info('media', '从媒体库载入', { id: entry.id, name: entry.name, root: entry.root, size: entry.size });
-  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal);
+  if(!entry.version){const current=await fetchLibraryItem(entry.id,signal);if(!current?.version)throw new Error('媒体库片源版本不可用。');entry=current;}
+  const source = await openMediaFromUrl(mediaUrl(entry.id, entry.version), entry, undefined, onProgress, signal,ownLibraryIndexReference(entry.id,entry.version!));
   updateMediaInfo(source,{source:{kind:'library',id:entry.id,url:mediaUrl(entry.id,entry.version)}},'identity');
   return source;
 }
