@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { assertBenchmarkCorrectness, verifyPlaybackPresentation } from './testing/playback-presentation.mjs';
 await mkdir('.run/playback-reports', { recursive: true });
 import { chromium, webkit } from 'playwright';
 import { resolutionFlv, prerollMp4 } from './flv-resolution-fixture.ts';
@@ -50,8 +51,20 @@ async function run() {
   // This policy suite blocks on correctness; throughput floors would only bind
   // hardware-backed environments, and the project's convention is that CI
   // runner performance is report-only (see the non-blocking bench step).
-  // Software-rendered runners still must advance several frames per window.
-  const mediaFloor = 100000;
+  // Strict committed-frame progress is verified independently of each sample.
+  const mediaFloor = 100000, playbackReports = [];
+  const functional = async (report, minAdvanceUs = 0) => {
+    const row = { caseName: context.caseName, report, functionalPresentation: { status: 'waiting' } }; playbackReports.push(row);
+    const save = () => writeFile(`.run/playback-reports/flv-startup-${browserName}-performance.json`, JSON.stringify({ engine: browserName, rows: playbackReports }, null, 2));
+    await save();
+    try {
+      assert.equal(report.error, null); assert.equal(report.staleAfterPause, false); assertBenchmarkCorrectness(report);
+      await call('seek_review', { ptsUs: 0 }); phase('functional-presentation', 0);
+      row.functionalPresentation = { status: 'passed', ...await verifyPlaybackPresentation(page, { minAdvanceUs }, context) };
+    }
+    catch (error) { row.functionalPresentation = { status: 'failed', error: error.message }; await save(); throw error; }
+    await save(); return row.functionalPresentation;
+  };
   const start = performance.now();
   const first = await within('load', 0, () => invoke('load_library_item', { id: fixture.entry.id, slot: 'A' }), 8000);
   const startupMs = Math.round(performance.now() - start);
@@ -83,7 +96,7 @@ async function run() {
   await call('load_library_item', { id: fixture.entry.id, slot: 'A' }); const reused = await call('seek_review', { ptsUs: 2500000 });
   assert.equal(reused.tracks[0].indexSource, 'server'); assert.match(reused.tracks[0].indexWarning, /尾部不完整/); assert.ok(fixture.counts().ranges - before < 10);
   await call('seek_review', { ptsUs: 0 });
-  const benchmark = await call('benchmark_review', { durationMs: 1500 }); assert.equal(benchmark.passed, true, JSON.stringify(benchmark));
+  const benchmark = await call('benchmark_review', { durationMs: 1500 }); await functional(benchmark);
   const list = await call('list_frame_indexes'); assert.equal(list.count, 1);
   context.caseName = 'frame-index-admin'; phase('cache-management');
   const admin = await browser.newPage({locale:'zh-CN'}); await admin.goto(fixture.base + '/admin');
@@ -112,9 +125,9 @@ async function run() {
       assert.equal(state.tracks[0].width, width); assert.equal(state.tracks[0].height, height);
     }
     const report = await call('benchmark_review', { durationMs: 4000 });
-    assert.equal(report.error, null); assert.ok(report.measurements.mediaUs > mediaFloor, JSON.stringify(report));
-    // A software runner may still be in the first segment after four wall
-    // seconds. Metadata must follow the drawn frame, not elapsed wall time.
+    await functional(report, mediaFloor);
+    // Metadata follows the independently proven committed frame, never the
+    // wall time of the unchanged four-second performance sample.
     const advanced = (await call('get_review_session')).tracks[0];
     assert.ok(advanced.frame.ptsUs > mediaFloor, 'resolution track must advance, not just the session clock');
     await within('resolution-info-after-playback', advanced.frame.ptsUs, () => page.waitForFunction(
@@ -139,8 +152,7 @@ async function run() {
     if (ptsUs === 0) assert.equal(state.tracks[0].frame.ptsUs, 0, 'index completion never rebases the startup frame');
   }
   const openGopBench = await call('benchmark_review', { durationMs: 4000 });
-  assert.equal(openGopBench.error, null);
-  assert.ok(openGopBench.measurements.mediaUs > mediaFloor, JSON.stringify(openGopBench));
+  await functional(openGopBench, mediaFloor);
   assert.ok((await page.evaluate(() => window.voidPlayer.getState())).tracks[0].frame.ptsUs > mediaFloor, 'track must advance, not just the session clock');
   // Exercise a real packet/WASM producer across removal of a different track.
   context.caseName = 'unrelated-track-removal'; phase('load-second-track', 0);
