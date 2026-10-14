@@ -29,7 +29,9 @@ HEVC 时间线检查保留每个输入两轮各 600 帧、每帧源尺寸截图�
 
 串行 `playback` CI job 包含完整 Node/WASM 单元、音频、播放、片源 UI、标注/缓存、FLV、FATE 和可信 HTTPS 检查。Linux 实测前序检查全部通过后，HTTPS 可在第 35 分钟才开始；该 job 总预算为 45 分钟，为后续检查和报告上传留出余量。统一清单中的各用例时限、FATE 步骤时限和必需断言均保持不变；不能将总预算取消解释为已完成 HTTPS 验证。
 
-FLV 启动回归的分辨率切换检查按实际已呈现帧核对信息面板；软件 runner 在 4 秒墙钟窗口内可能仍处于前段 320×180，不能据此要求后段 640×360。播放进度与实际轨道帧必须推进超过既有下限，再显式 seek 到后段核对 640×360 的状态和 UI；往返 seek、原有播放要求和性能阈值不变。
+analysis matrix、FLV startup 和 HDR 功能套件通过 `scripts/testing/playback-presentation.mjs` 等待真实 Session 呈现事件：commit 与实际帧时间必须严格前进，源/generation、已提交帧和可用的精确 picture 身份必须匹配。20 秒无严格进展、60 秒总期限及独立 65 秒宿主 watchdog 限制宿主等待（浏览器清理由调用方 finally 负责）；重复帧与元数据心跳不能续期。暂停后保留原 100ms 稳定性观察，并拒绝迟到呈现。playing 时长从实际进入播放起计算，中途暂停再恢复也失败。只读窗口订阅直接复用 Session 状态与呈现事件，不复制帧资源或改变渲染/解码算法。
+
+原 1/1.5/2/4 秒 benchmark 窗口、绝对性能阈值、`passed:false` 和原因保留为独立报告，不用功能等待期间的帧补写原样本。错误、错源/错帧、提前结束、异常中断和暂停残留仍阻断；短窗口无帧由独立严格呈现证明替代。FLV 分辨率/open-GOP 的实际帧仍须推进超过既有 100ms 媒体下限，再核对帧所属尺寸和显式后段 seek；缓存 workload 仍做 20 次播放、保留实际 playing 时长、命中率和几何断言。源码 benchmark 的绝对目标尚未达标不能解释成物理硬件验收；可信 HTTPS 配对脚本目前也没有候选/基线回归比值阈值。
 
 ```sh
 npm run test:manifest
@@ -275,3 +277,13 @@ npm run test:fate:browser
 `node scripts/make-analysis-fmp4-fixtures.ts` 生成三 codec 的 byte-identical fragment remux 与真实视频复制/AAC traf 片源。`test/bitstream-analysis-fmp4.test.ts` 覆盖 payload/config、独立 codec/VTM 答案、真实播放 AU、跨非关键片 range、whole drain、取消、实际 Blob IO、媒体库缓存重启/补缺与 edit-list/raw ticks。`test/mp4-fragments.test.ts` 校验 addressing/defaults、64 位时间、合法 CTO 及越界/截断/时间断裂等拒绝边界。
 
 `ci-analysis-matrix-fmp4` 在 WebKit/Chromium 各自独立 job 执行 12 个组合，保留既有每操作上限和 600 秒 case watchdog；加严跨片 seek 后的实际 presented token/遮罩精确匹配，并明确断言 VVC 的实际软件路径。原普通 MP4 与两 FLV 分区继续独立运行。
+
+### 媒体与 Worker 的翻译依赖边界
+
+`node-i18n-build` 使用 `scripts/testing/i18n-architecture.mjs` 检查 media、presenter、FFmpeg/packet Worker 与实际 `src/thumbnails/pixel-worker.ts` 根入口。必检根入口或递归依赖缺失必须报出路径并失败。扫描相对运行时 import、re-export 和字符串字面量 dynamic import；type-only import/export 与包依赖不递归。Worker URL 单独列为根入口，计算式 import、require 和未列出的 Worker URL 不属于这个扫描器的覆盖范围。临时工程负例验证缺失入口、缩略图直接/间接引入翻译依赖均被拒绝；现有 progress callback 限制保持。
+
+### 可丢弃像素缩略图 Worker
+
+`src/thumbnails/tasks.ts` 每个像素候选拥有一个一次性 browser Worker。正常结果、`error`、`messageerror`、`postMessage` 抛错或候选到期均走单次结束：解除三个事件属性与到期回调，终止该 Worker，随后仅释放候选自己的帧和预算、清除 in-flight。失败不会标记 completed，也不触碰播放原帧或下一任务；已捕获的迟到回调不能再次提交或清理。既有 hold deadline、队列上限和复制/transfer 路径保持。
+
+`node-thumbnail-offer` 从实际 offer/task 入口验证这些分支、成功回包、到期计时器清理与恢复任务。受控 browser-like Worker 使用真实 `structuredClone` transfer，验证播放像素数组仍完整；测试主动派发 `messageerror`，并不声称复现浏览器底层损坏消息。浏览器缩略图套件继续验证实际编码、存储与显示；此一次性客户端不增加 Node Worker 适配层。

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';import test from 'node:test';import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,rmSync,existsSync,readdirSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';
 import ts from 'typescript-ast';
+import {checkMediaTranslationBoundary} from '../../scripts/testing/i18n-architecture.mjs';
 import {extract,validate,parameters,pseudo,generate,validateScope,portablePath} from '../../scripts/i18n.mjs';
 import {lowerDescriptors} from '../../scripts/testing/i18n-transform.mjs';
 const root=join(import.meta.dirname,'../..');
@@ -49,14 +50,7 @@ test('scope completeness catches new hardcoded copy and does not mask unused exc
 });
 
 test('translation dependencies do not enter media/worker/presenter graphs or progress callbacks',()=>{
- const visited=new Set();
- function scan(file){
-  if(visited.has(file)||!existsSync(file))return;visited.add(file);
-  assert.ok(!file.includes('/i18n'),file);
-  const code=readFileSync(file,'utf8');
-  for(const match of code.matchAll(/import\s+(?!type\b)(?:[^;]*?from\s*)?['"](\.[^'"]+)['"]/g))scan(join(file,'..',match[1]));
- }
- for(const file of ['media.ts','presenter.ts','ffmpeg-worker.ts','packet-worker.ts','thumbnail-worker.ts'])scan(join(root,'src',file));
+ checkMediaTranslationBoundary(root);
  for(const file of ['src/main.ts','src/ui/workbench/tracks.ts']){
   const code=readFileSync(join(root,file),'utf8');const tree=ts.createSourceFile(file,code,ts.ScriptTarget.Latest,true);let body;
   function find(node){if(ts.isFunctionDeclaration(node)&&node.name?.text==='renderProgress')body=node.body.getText(tree);ts.forEachChild(node,find);}find(tree);assert.ok(body,file);
@@ -82,4 +76,41 @@ test('administration scope includes actual recursive modules and connection guid
  const tree=ts.createSourceFile('measurement.ts',readFileSync(join(root,'src/admin/measurement.ts'),'utf8'),ts.ScriptTarget.Latest,true);
  let body;function visit(n){if(ts.isFunctionDeclaration(n)&&n.name?.text==='runTransfers')body=n.body.getText(tree);ts.forEachChild(n,visit)}visit(tree);
  assert.ok(body);assert.doesNotMatch(body,/\b(?:t|th|msg|formatDate|formatNumber)\(/,'timed transfer path has no translation work');
+});
+
+// Exercise the same checker used above against complete temporary graphs.
+test('media architecture negative fixtures reject missing roots and thumbnail dependencies',async t=>{
+ const temp=mkdtempSync(join(tmpdir(),'vp-media-translation-'));
+ const actualRoots=['src/media.ts','src/presenter.ts','src/ffmpeg-worker.ts','src/packet-worker.ts','src/thumbnails/pixel-worker.ts'];
+ try{
+  mkdirSync(join(temp,'src/thumbnails'),{recursive:true});
+  for(const file of actualRoots)writeFileSync(join(temp,file),'export {};');
+  await t.test('each mandatory root must exist',()=>{
+   checkMediaTranslationBoundary(temp);
+   for(const file of actualRoots){
+    rmSync(join(temp,file));
+    try{assert.throws(()=>checkMediaTranslationBoundary(temp),error=>error.message.includes(file));}
+    finally{writeFileSync(join(temp,file),'export {};');}
+   }
+  });
+  writeFileSync(join(temp,'src/i18n.ts'),'export const msg=()=>{};');
+  const worker=join(temp,'src/thumbnails/pixel-worker.ts');
+  await t.test('thumbnail root rejects imports, re-exports and literal dynamic imports',()=>{
+   try{
+    for(const code of ["import {msg} from '../i18n.ts';","export {msg} from '../i18n.ts';","void import('../i18n.ts');"]){
+     writeFileSync(worker,code);assert.throws(()=>checkMediaTranslationBoundary(temp),/i18n/);
+    }
+   }finally{writeFileSync(worker,'export {};');}
+  });
+  await t.test('thumbnail transitive dependency rejects translation imports',()=>{
+   writeFileSync(worker,"import {pixels} from './pixels.ts';");
+   writeFileSync(join(temp,'src/thumbnails/pixels.ts'),"import {msg} from '../i18n.ts'; export const pixels=msg;");
+   try{assert.throws(()=>checkMediaTranslationBoundary(temp),/i18n/);}
+   finally{writeFileSync(worker,'export {};');}
+  });
+  await t.test('type-only imports are outside the runtime graph',()=>{
+   writeFileSync(worker,"import type {Message} from '../i18n.ts'; import {type Message2} from '../i18n.ts';");
+   checkMediaTranslationBoundary(temp);
+  });
+ }finally{rmSync(temp,{recursive:true});}
 });
