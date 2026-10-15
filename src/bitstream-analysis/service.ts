@@ -99,6 +99,22 @@ export class BitstreamAnalysisService {
     this.changed();
     throw error;
   }
+  private async currentBuild(source:MediaSource,preparationSequence:number,signal?:AbortSignal) {
+    try {
+      const url=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/manifest.json',location.href));
+      if(source.info.source)url.pathname+='/bitstream-analysis/capabilities';
+      const response=await fetch(url,{signal,cache:'no-store'});
+      if(!response.ok)throw new AnalysisFailure('source-changed','Analysis identity unavailable');
+      const manifest=await response.json(),build=manifest.buildId ?? manifest.revision;
+      if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');
+      signal?.throwIfAborted();
+      if(typeof build!=='string'||!build||build.length>128)throw Error('Invalid current analysis build identity');
+      return build as string;
+    } catch(error) {
+      if(preparationSequence===this.sequence)this.fail(restoreFailure(failureInfo(signal?.aborted?new AnalysisFailure('cancelled','Analysis cancelled'):error)));
+      throw error;
+    }
+  }
   private context(source:string,buildId:string,indexIdentity:ProductIndexIdentity|null) {
     indexIdentity=analysisIndexIdentity(indexIdentity);
     const old=this.contexts.get(source);
@@ -132,10 +148,7 @@ export class BitstreamAnalysisService {
     this.cancel();
     const preparationSequence=this.sequence;
     this.state={state:'pending'};this.changed();
-    const identityUrl=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/manifest.json',location.href));if(source.info.source)identityUrl.pathname+='/bitstream-analysis/capabilities';
-    const identityResponse=await fetch(identityUrl,{signal,cache:'no-store'});if(!identityResponse.ok)throw new AnalysisFailure('source-changed','Analysis identity unavailable');const identityManifest=await identityResponse.json();const expectedBuild=identityManifest.buildId ?? identityManifest.revision;
-    if(typeof expectedBuild!=='string'||!expectedBuild||expectedBuild.length>128)throw Error('Invalid current analysis build identity');
-    if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');signal?.throwIfAborted();
+    const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
     this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
     const cached=this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
@@ -304,16 +317,11 @@ export class BitstreamAnalysisService {
     signal?.throwIfAborted();
     this.cancel();
     const preparationSequence=this.sequence;
-    this.state={state:'pending'};this.changed();
+    this.state={state:'pending',stream:{slot,product:target.product,checkedUs:0,totalUs:target.window?target.window.endUs-target.window.startUs:target.durationUs,pictures:0,totalPictures:0,...(target.window?{window:target.window}:{})}};this.changed();
     const plan=this.plans.get(target.sourceVersion);
     let expectedBuild:string|undefined;
     if(plan && target.product==='summary') {
-      const url=source.info.source ? new URL(source.info.source.url,location.href) : new URL(coreAssetUrl('/vendor/voidplayer-analysis/manifest.json',location.href));
-      if(source.info.source)url.pathname+='/bitstream-analysis/capabilities';
-      const response=await fetch(url,{signal,cache:'no-store'});if(!response.ok)throw new AnalysisFailure('source-changed','Analysis build identity unavailable');
-      const capability=await response.json();expectedBuild=capability.buildId ?? capability.revision;
-      if(typeof expectedBuild!=='string'||!expectedBuild||expectedBuild.length>128)throw Error('Invalid current analysis build identity');
-      if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');signal?.throwIfAborted();
+      expectedBuild=await this.currentBuild(source,preparationSequence,signal);
       this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
       if(expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
     }

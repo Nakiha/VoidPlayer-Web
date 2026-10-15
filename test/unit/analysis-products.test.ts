@@ -175,6 +175,7 @@ test('exact request rejects cross-product, index and build payloads before cache
   if(mode==='old-build-after-epoch')assert.equal(service.cached(token(original)),null);
   service.dispose();
  }
+ for(const fetcher of [async()=>{throw Error('network failed');},async()=>new Response('',{status:503}),async()=>new Response('{}')]){const failed=new BitstreamAnalysisService(()=>{});globalThis.fetch=fetcher;await assert.rejects(failed.request(source,token(result())));assert.notEqual(failed.state.state,'pending');failed.dispose();}
  const service=new BitstreamAnalysisService(()=>{}),r={...result(),buildId:'replacement'};let release!:(value:Response)=>void,calls=0;
  globalThis.fetch=async()=>++calls===1?await new Promise<Response>(resolve=>{release=resolve;}):new Response(JSON.stringify({buildId:'replacement'}));
  const late=service.request(source,token(r));const rejected=assert.rejects(late,/superseded/);outgoing=packLegacy(r);await service.request(source,token(r));assert.ok(service.cached(token(r)));release(new Response(JSON.stringify({buildId:'old'})));await rejected;assert.ok(service.cached(token(r)),'late old manifest cannot invalidate current blocks');service.dispose();
