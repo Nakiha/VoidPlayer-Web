@@ -206,3 +206,5 @@ CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消�
 所有stream产品（summary、blocks和默认legacy full）均绑定本次独立读取的当前build；worker plan/cache/coverage、remote status和最终产品必须与它一致。完整stream恢复也只从当前实际owned blocks播种，旧AU仅发coverage，不重复chunk或cache.put；块被逐出则允许从仍拥有的已校验输出修复。legacy owner保留当前index namespace，不能以summary可读性替代完整产品。
 
 Legacy JSON 的显式外部 indexIdentity 同时进入 single work key 和逐帧 chunk key；合法但没有当前显式index证明的旧namespace记录不得复用。隐式MP4 v1分支保持原tuple和hash不变，旧wire仍返回完整blocks。定向回归预置真实FLV旧namespace有效记录，确认显式请求cache miss、当前namespace单帧/stream共用、重试及scheduler重启命中，并确认不同显式index生成不同key。
+
+同源多轨 fork 共享一个有界 namespace 与单调 admission ticket。只有独立 manifest/capability 预检可以切换 build/index；不同 namespace 的迟到旧 ticket、旧 plan 和旧结果在 cache、摘要与覆盖写入前失败。同 namespace 并发不会互相取消。显式 blocks 单帧若带可信 picture，使用与 stream 相同的 schema/encoding/index 产品 key；单帧文件不必伪造 GOP，stream 由已验证的 cursor descriptor 补充当前 GOP。PTS-only 请求及隐式 legacy MP4 旧 key 保留既有语义。

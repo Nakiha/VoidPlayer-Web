@@ -230,3 +230,27 @@ test('full legacy and blocks streams pause at 30 and resume by readable coverage
  const controller=new AbortController(),first=service.requestStream(source,target,'A',controller.signal);const cancelled=assert.rejects(first);await paused;controller.abort();await cancelled;assert.equal(puts.length,30);const complete=await service.requestStream(source,target,'A');assert.equal(complete.pictures,60);assert.deepEqual(fresh,Array.from({length:60},(_,i)=>i));assert.deepEqual(covered,Array.from({length:30},(_,i)=>i));assert.deepEqual(puts,fresh);assert.equal(new Set(puts).size,60);assert.equal(terminated,2);service.dispose();}}
  finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
 });
+
+test('shared forks reject late old manifest and result namespaces while same-build concurrency remains valid',async t=>{
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');
+ const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
+ const source={info:{},bitstreamFile:new Blob(['x'])} as any;
+ const token=(r:AnalysisResult)=>({picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}}) as any;
+ try{for(const late of ['manifest','result','same-build']){
+  const root=new BitstreamAnalysisService(()=>{}),a=root.fork(()=>{}),b=root.fork(()=>{});let release!:()=>void,started!:()=>void,calls=0;
+  const gate=new Promise<void>(r=>{release=r;}),ready=new Promise<void>(r=>{started=r;});const old={...result(),buildId:late==='same-build'?'new':'old'},fresh={...result(),buildId:'new',picture:{...result().picture,au:4}};
+  globalThis.fetch=async()=>{if(++calls===1){if(late==='manifest'){started();await gate;}return new Response(JSON.stringify({buildId:old.buildId}));}return new Response(JSON.stringify({buildId:'new'}));};
+  t.mock.method(a as any,'local',async()=>{if(late!=='manifest'){started();await gate;}return packLegacy(old);});t.mock.method(b as any,'local',async()=>packLegacy(fresh));
+  const pending=a.request(source,token(old));const check=late==='same-build'?pending:assert.rejects(pending,/namespace superseded/);await ready;await b.request(source,token(fresh));release();await check;assert.ok(b.cached(token(fresh)),'old fork never clears current blocks');assert.equal(!!a.cached(token(old)),late==='same-build');root.dispose();
+ }}finally{globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
+});
+
+test('shared stream forks cannot reauthorize late old summaries or manifests over a newer namespace',async t=>{
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});
+ const source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product:'summary' as const,sourceVersion:'local:uuid',firstPtsUs:0,durationUs:1000};
+ try{for(const late of ['manifest','result','same-build']){const root=new BitstreamAnalysisService(()=>{}),a=root.fork(()=>{}),b=root.fork(()=>{});let release!:()=>void,started!:()=>void,calls=0;const gate=new Promise<void>(r=>{release=r;}),ready=new Promise<void>(r=>{started=r;});const old={...result(),nalus:[{offset:0,size:1,type:5,temporalId:0,layer:0}],buildId:late==='same-build'?'new':'old',gop:{startAu:0,endAu:5,configuration:0,anchor:'closed' as const}},fresh={...old,buildId:'new',picture:{...old.picture,au:4}};
+ globalThis.fetch=async()=>{if(++calls===1){if(late==='manifest'){started();await gate;}return new Response(JSON.stringify({buildId:old.buildId}));}return new Response(JSON.stringify({buildId:'new'}));};
+ t.mock.method(a as any,'localRange',async(_f:unknown,_t:unknown,_s:unknown,consume:(r:unknown)=>void,progress:(r:unknown)=>void)=>{if(late!=='manifest'){started();await gate;}consume(summaryOf(old));progress({pictures:1,totalPictures:1,checkedUs:1000,totalUs:1000,indexComplete:true});});t.mock.method(b as any,'localRange',async(_f:unknown,_t:unknown,_s:unknown,consume:(r:unknown)=>void,progress:(r:unknown)=>void)=>{consume(summaryOf(fresh));progress({pictures:1,totalPictures:1,checkedUs:1000,totalUs:1000,indexComplete:true});});
+ const pending=a.requestStream(source,target,'A');const check=late==='same-build'?pending:assert.rejects(pending,/namespace superseded/);await ready;await b.requestStream(source,target,'B');release();await check;assert.equal((root as any).diagrams.summaryAt('local:uuid',4)?.buildId,'new');assert.equal((root as any).diagrams.summaryAt('local:uuid',3)?.buildId,late==='same-build'?'new':undefined);root.dispose();
+ }}finally{globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
+});

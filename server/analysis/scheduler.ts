@@ -217,7 +217,9 @@ export class AnalysisScheduler {
     if (!Number.isSafeInteger(manifest.heapMaxBytes) || manifest.heapMaxBytes <= 0 ||
         manifest.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
       throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
-    const id = createHash("sha256")
+    const id = target.product==='blocks' && 'picture' in target && target.picture
+      ? createHash("sha256").update(productKey(target.picture,manifest.buildId ?? manifest.revision,target.indexIdentity ?? null,'blocks')).digest("hex")
+      : createHash("sha256")
       .update(
         JSON.stringify([
           target.sourceVersion, ...(target.product ? [target.product] : []),

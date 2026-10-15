@@ -58,7 +58,8 @@ export class BitstreamAnalysisService {
   queryDiagrams(sourceVersion: string, au: number | null, sourcePtsUs: number, startAu?: number, limit?: number) { return this.diagrams.query(sourceVersion, au, sourcePtsUs, startAu, limit); }
   queryChart(sourceVersion: string, startUs: number, endUs: number, pixelWidth: number, axis: import('../analysis/types.ts').AnalysisAxis = 'pts') { return this.diagrams.queryChart(sourceVersion, startUs, endUs, pixelWidth, axis); }
   chartBounds(sourceVersion: string, axis: import('../analysis/types.ts').AnalysisAxis) { return this.diagrams.chartBounds(sourceVersion, axis); }
-  private contexts=new Map<string,{buildId:string;indexIdentity:ProductIndexIdentity|null}>();
+  private admission={next:0};
+  private contexts=new Map<string,{buildId:string;indexIdentity:ProductIndexIdentity|null;ticket:number}>();
   private displayDemandWindow?:AnalysisStreamTarget["window"];
   private counters=emptyCounters();
   private validateReception(result:AnalysisOutput) {if(isSummary(result))validateOutput(result);else validateMetadata(result);}
@@ -67,18 +68,18 @@ export class BitstreamAnalysisService {
   private activeDemand?: {target:AnalysisStreamTarget; plan:DemandPlan};
   sameDemand(window:NonNullable<AnalysisStreamTarget['window']>) { const active=this.activeDemand; if(active){try{validateStream({...active.target,window});}catch{return false;}} return !!active?.target.window && demandKey(active.plan,window) !== null && demandKey(active.plan,window) === demandKey(active.plan,active.target.window); }
   displayWindow(window:NonNullable<AnalysisStreamTarget['window']>) { this.displayDemandWindow=window;if(this.state.stream){this.state={...this.state,stream:{...this.state.stream,window}};this.changed();} }
-  private acceptPlan(plan:DemandPlan,target:AnalysisRangeTarget|AnalysisStreamTarget) { if(!('mode' in target))throw Error('Unexpected demand plan'); validateDemandPlan(plan,target);if(this.streamBuild?.sequence!==this.sequence||plan.buildId!==this.streamBuild.buildId)throw Error('Demand plan build identity mismatch');this.plans.delete(target.sourceVersion);while(this.plans.size>=8)this.plans.delete(this.plans.keys().next().value!);this.plans.set(target.sourceVersion,plan);this.activeDemand={target,plan}; }
+  private acceptPlan(plan:DemandPlan,target:AnalysisRangeTarget|AnalysisStreamTarget) { if(!('mode' in target))throw Error('Unexpected demand plan'); validateDemandPlan(plan,target);if(this.streamBuild?.sequence!==this.sequence||plan.buildId!==this.streamBuild.buildId)throw Error('Demand plan build identity mismatch');this.context(target.sourceVersion,plan.buildId,target.indexIdentity??null);this.plans.delete(target.sourceVersion);while(this.plans.size>=8)this.plans.delete(this.plans.keys().next().value!);this.plans.set(target.sourceVersion,plan);this.activeDemand={target,plan}; }
   private cancelActive?: () => void;
   private sequence = 0;
   state: DeepAnalysisState = { state: "idle" };
   private changed: () => void;
-  constructor(changed: () => void, stores?: { cache: AnalysisCache; diagrams: DiagramStore; plans:Map<string,DemandPlan>; contexts:Map<string,{buildId:string;indexIdentity:ProductIndexIdentity|null}> }) {
+  constructor(changed: () => void, stores?: { cache: AnalysisCache; diagrams: DiagramStore; plans:Map<string,DemandPlan>; contexts:Map<string,{buildId:string;indexIdentity:ProductIndexIdentity|null;ticket:number}>; admission:{next:number} }) {
     this.changed = changed;
-    if (stores) { this.cache = stores.cache; this.diagrams = stores.diagrams; this.plans=stores.plans;this.contexts=stores.contexts; }
+    if (stores) { this.cache = stores.cache; this.diagrams = stores.diagrams; this.plans=stores.plans;this.contexts=stores.contexts;this.admission=stores.admission; }
   }
   /** Each track owns its task state; all tracks retain one bounded session cache. */
   fork(changed: () => void) {
-    return new BitstreamAnalysisService(changed, { cache: this.cache, diagrams: this.diagrams, plans:this.plans,contexts:this.contexts });
+    return new BitstreamAnalysisService(changed, { cache: this.cache, diagrams: this.diagrams, plans:this.plans,contexts:this.contexts,admission:this.admission });
   }
   cancel() {
     ++this.sequence;
@@ -117,11 +118,11 @@ export class BitstreamAnalysisService {
       throw error;
     }
   }
-  private context(source:string,buildId:string,indexIdentity:ProductIndexIdentity|null) {
+  private context(source:string,buildId:string,indexIdentity:ProductIndexIdentity|null,ticket?:number) {
     indexIdentity=analysisIndexIdentity(indexIdentity);
     const old=this.contexts.get(source);
-    if(old && (old.buildId!==buildId || JSON.stringify(old.indexIdentity)!==JSON.stringify(indexIdentity)))this.cache.invalidateSource(source);
-    this.contexts.delete(source);while(this.contexts.size>=8){const stale=this.contexts.keys().next().value!;this.cache.invalidateSource(stale);this.contexts.delete(stale);}this.contexts.set(source,{buildId,indexIdentity});
+    if(old && (old.buildId!==buildId || JSON.stringify(old.indexIdentity)!==JSON.stringify(indexIdentity))){if(ticket===undefined||ticket<old.ticket)throw new AnalysisFailure('source-changed','Analysis namespace superseded');this.cache.invalidateSource(source);}else if(old){old.ticket=Math.max(old.ticket,ticket??old.ticket);return;}
+    this.contexts.delete(source);while(this.contexts.size>=8){const stale=this.contexts.keys().next().value!;this.cache.invalidateSource(stale);this.contexts.delete(stale);}this.contexts.set(source,{buildId,indexIdentity,ticket:ticket??++this.admission.next});
   }
   cached(token: PresentedFrameToken) {
     const context=token.picture?this.contexts.get(token.picture.sourceVersion):undefined;
@@ -150,9 +151,10 @@ export class BitstreamAnalysisService {
     this.cancel();
     const preparationSequence=this.sequence;
     this.state={state:'pending'};this.changed();
+    const admissionTicket=++this.admission.next;
     const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');if(signal?.aborted)this.fail(new AnalysisFailure('cancelled','Analysis cancelled'));
-    this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
+    try{this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null,admissionTicket);}catch(error){return this.fail(restoreFailure(failureInfo(error)));}
     const cached=this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
     signal?.throwIfAborted();
@@ -323,9 +325,10 @@ export class BitstreamAnalysisService {
     const preparationSequence=this.sequence;
     this.state={state:'pending',stream:{slot,product:target.product,checkedUs:0,totalUs:target.window?target.window.endUs-target.window.startUs:target.durationUs,pictures:0,totalPictures:0,...(target.window?{window:target.window}:{})}};this.changed();
     const plan=this.plans.get(target.sourceVersion);
+    const admissionTicket=++this.admission.next;
     const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');if(signal?.aborted)this.fail(new AnalysisFailure('cancelled','Analysis cancelled'));
-    this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
+    try{this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null,admissionTicket);}catch(error){return this.fail(restoreFailure(failureInfo(error)));}
     if(plan&&expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');
     signal?.throwIfAborted();
@@ -372,6 +375,7 @@ export class BitstreamAnalysisService {
     const consume = (result: AnalysisOutput, coverage=false) => {
       controller.signal.throwIfAborted(); this.validateReception(result);
       if(result.buildId!==expectedBuild)throw Error('Stream build identity mismatch');
+      this.context(target.sourceVersion,expectedBuild,target.indexIdentity??null);
       if ((isProduct(result) ? result.product !== target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) : target.product !== undefined)) throw new Error('Stream product identity mismatch');
       if (seq !== this.sequence || result.picture.sourceVersion !== target.sourceVersion || !result.gop)
         throw new Error('Stream result identity mismatch');
@@ -563,7 +567,8 @@ export class BitstreamAnalysisService {
             throw new Error("Invalid analysis chunk origin");
           const response = await fetch(url, { signal });
           const bytes = await readBoundedResponse(response, target.product ? PRODUCT_LIMIT.frame : BUDGET.resultBytes);
-          consume(target.product ? await decodeProduct(bytes) : JSON.parse(new TextDecoder().decode(bytes)));
+          const output=target.product ? await decodeProduct(bytes) : JSON.parse(new TextDecoder().decode(bytes));
+          consume(stream&&chunk.gop?{...output,gop:chunk.gop}:output);
 
           if (stream) cursor = chunk.cursor; else seen.add(chunk.id);
           budget.progress();
