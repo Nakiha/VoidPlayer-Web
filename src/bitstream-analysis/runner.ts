@@ -590,6 +590,29 @@ export async function analyzeStream(
 ) {
   validateStream(target);
   if (target.window) {
+    // Bounded GOP selection needs a sealed metadata index. Keep this wait
+    // observable and cancellable; full-film streams still consume sealed prefixes.
+    if (frontier) {
+      const started = performance.now(); let previous = -1;
+      try {
+        while (true) {
+          signal.throwIfAborted();
+          const index = await frontier();
+          if (typeof index.complete !== 'boolean' || (index.packets === null ? !index.complete : !Number.isSafeInteger(index.packets) || index.packets < previous || index.packets > 250000))
+            throw new AnalysisFailure('incomplete-reference-state', 'Invalid viewport index frontier');
+          previous = index.packets ?? previous;
+          if (index.complete) break;
+          await onProgress({ pictures: 0, totalPictures: null, totalUs: target.window.endUs - target.window.startUs, checkedUs: 0, indexComplete: false, waitingForIndex: true });
+          signal.throwIfAborted();
+          if (performance.now() - started > 120000) throw new AnalysisFailure('resource-limit', 'Viewport index stalled');
+          await new Promise<void>((resolve, reject) => {
+            const abort = () => { clearTimeout(timer); reject(signal.reason); };
+            const timer = setTimeout(() => { signal.removeEventListener('abort', abort); resolve(); }, 20);
+            signal.addEventListener('abort', abort, { once: true });
+          });
+        }
+      } catch (error) { reader.close(); throw error; }
+    }
     if (typeof core === 'function') { const factory = core; let instance: Promise<any> | undefined; core = () => instance ??= Promise.resolve().then(factory); }
     const input = await openAnalysisInput(reader, signal, false, { sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity });
     try {

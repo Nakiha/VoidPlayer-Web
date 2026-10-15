@@ -117,3 +117,12 @@ export function decideLayout(options: {
   if (options.maxAbsDtUs != null && options.toleranceUs != null && options.maxAbsDtUs > options.toleranceUs) return 'rows';
   return 'paired';
 }
+
+
+/** Fixed overview axis: center the new selection on the time under the pointer. */
+export function zoomOverviewRange(range: { start: number; end: number }, domain: { start: number; end: number }, fraction: number, factor: number, minSpan: number) {
+  const time = domain.start + Math.max(0, Math.min(1, fraction)) * (domain.end - domain.start);
+  const span = Math.min(domain.end - domain.start, Math.max(minSpan, (range.end - range.start) * factor));
+  const start = Math.max(domain.start, Math.min(domain.end - span, time - span / 2));
+  return { start: Math.floor(start), end: Math.ceil(start + span) };
+}

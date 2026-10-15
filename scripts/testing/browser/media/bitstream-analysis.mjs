@@ -542,7 +542,12 @@ await withBrowserFixture(
           if (input === 'local-file' && decoding === 'browser' && row.codec === 'h264' && row.container === 'mp4') {
             await page.locator('#toggle-analysis').click();
             await selectDiagrams(page, 'nalu-size');
-            await page.locator('.bitstream-diagram-empty').waitFor({ state: 'visible' });
+            await page.waitForFunction(() => {
+              const state = window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'});
+              return state.state === 'ready' && state.stream?.pictures > 0;
+            }, undefined, {timeout:60000});
+            assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).reason, undefined, 'automatic viewport produces real output without errors');
+            await page.locator('.bitstream-diagrams canvas').first().waitFor({state:'visible'});
             await selectDiagrams(page, 'references');
             await page.waitForFunction(() => window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'}).state!=='pending', undefined, {timeout:60000});
             assert.notEqual((await call('get_bitstream_analysis_state')).state,'pending','automatic analysis reaches a terminal state before the next inspection');
@@ -2074,12 +2079,20 @@ await withBrowserFixture(
       await call('set_review_color_mode', { mode: 'browser' });
       gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.flv`).id;
       releaseIndexGate = false; heldBatches = 0;
+      if (await page.locator('#analysis-panel').isVisible()) await page.locator('[data-seg="full"]').click();
       await call('load_library_item', { slot: 'A', id: gatedId });
       await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(t => t.slot === 'A' && !t.failure));
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
       await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'building');
       assert.equal((await call('get_analysis_capabilities'))[0].capability.indexState, 'building');
       await selectDiagrams(page,'nalu-size');
+      // The automatic viewport waits for sealed metadata before choosing local
+      // GOPs; the explicit full-film API retains incremental-prefix semantics.
+      await page.waitForFunction(() => {
+        const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'});
+        return state.state === 'pending' && state.stream?.window && state.stream.waitingForIndex;
+      });
+      await requestInspection(page, 'A');
       const before = await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing }));
       await page.waitForFunction(() => {
         const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});
@@ -2091,6 +2104,18 @@ await withBrowserFixture(
       assert.ok(partial.stream.pictures > 0 && partial.stream.pictures < 300);
       assert.match(await page.locator('.analysis-track-control[data-slot="A"] .analysis-chip').getAttribute('aria-description'), /等待索引/);
       await page.screenshot({ path: artifact(`index-wait-${cancel ? 'cancel' : 'continue'}.png`) });
+      if (!cancel) {
+        await call('pause_bitstream_analysis', {slot:'A'});
+        const paused = await call('get_bitstream_analysis_state', {slot:'A'});
+        assert.equal(paused.state, 'paused'); assert.equal(paused.stream.window, undefined, 'full-film pause keeps full-film scope');
+        await page.locator('#analysis-current').click();
+        assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).state, 'paused', 'window navigation cannot restart paused work');
+        await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='resume_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
+        await page.waitForFunction(() => {
+          const state = window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'});
+          return state.state==='pending' && !state.stream?.window && state.stream?.waitingForIndex && state.stream.pictures>0;
+        });
+      }
       if (cancel) {
         await call('cancel_bitstream_analysis',{});
         assert.equal((await call('get_bitstream_analysis_state')).state, 'cancelled');
@@ -2099,10 +2124,37 @@ await withBrowserFixture(
       if (!cancel) {
         await page.waitForFunction(() => {
           const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({});
-          return state.state === 'ready' && state.stream?.pictures === 300 && state.stream.indexComplete;
+          return state.completedStream?.pictures === 300 && state.completedStream.indexComplete;
         }, undefined, { timeout: 30000 });
       }
       await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'complete');
+      if (cancel) {
+        await page.locator('#analysis-current').click();
+        await page.waitForFunction(() => {
+          const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'});
+          return state.state === 'ready' && state.stream?.window && state.stream.pictures > 0 && state.stream.pictures < 300 && state.stream.indexComplete && !state.stream.waitingForIndex;
+        });
+      }
+      if (cancel) {
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const axis = page.locator('#analysis-shared-axis');
+        const expected = await axis.evaluate(c => {
+          const r = c.getBoundingClientRect(), left = +c.dataset.plotLeft, width = +c.dataset.plotRight-left;
+          const domainStart = +c.dataset.domainStart, span = +c.dataset.domainEnd-domainStart;
+          const oldSpan = +c.dataset.viewEnd - +c.dataset.viewStart;
+          for (const fraction of [.2,.5,.75]) c.dispatchEvent(new WheelEvent('wheel', {ctrlKey:true,deltaY:280*Math.log(.5),clientX:Math.round(r.left+left+width*fraction),bubbles:true,cancelable:true}));
+          const fraction = (Math.round(r.left+left+width*.75)-r.left-left)/width;
+          return {time:domainStart+span*fraction,span:oldSpan/8};
+        });
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+        const actual = await axis.evaluate(c => ({start:+c.dataset.viewStart,end:+c.dataset.viewEnd,domainStart:+c.dataset.domainStart,domainEnd:+c.dataset.domainEnd}));
+        assert.ok(Math.abs((actual.start+actual.end)/2-expected.time)<5 && Math.abs(actual.end-actual.start-expected.span)<5, JSON.stringify({expected,actual}));
+        await page.waitForFunction(() => {
+          const c = document.querySelector('#analysis-shared-axis');
+          const state = window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'});
+          return state.state==='ready' && state.stream?.window && Math.abs(state.stream.window.startUs-+c.dataset.viewStart)<5 && Math.abs(state.stream.window.endUs-+c.dataset.viewEnd)<5;
+        });
+      }
       await stable(); // Cancelling inspection leaves metadata indexing running.
       assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), before);
       assert.equal(await page.locator('.analysis-picture-overlay').count(), 0);

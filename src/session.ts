@@ -290,9 +290,9 @@ export class ReviewSession {
   getBitstreamAnalysisConcurrency() { return this.bitstream.concurrency; }
   setBitstreamAnalysisConcurrency(value: number) { this.bitstream.setConcurrency(value); }
   private async runBitstreamTask<T>(slot: Slot, signal: AbortSignal | undefined,
-    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>): Promise<T> {
+    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit'): Promise<T> {
     slotValue(slot);
-    return this.bitstream.run(slot, signal, initial, run);
+    return this.bitstream.run(slot, signal, initial, run, intent);
   }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
@@ -334,14 +334,17 @@ export class ReviewSession {
     if (this.getBitstreamAnalysisState(slot).state !== 'paused') throw new AnalysisFailure('invalid-request', 'Analysis is not paused');
     return this.requestBitstreamStream(slot, undefined, window ?? this.getBitstreamAnalysisState(slot).stream?.window);
   }
-  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']) {
+  requestBitstreamViewport(slot: Slot, window: NonNullable<import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']>) {
+    return this.requestBitstreamStream(slot, undefined, window, 'automatic');
+  }
+  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit') {
     const track = this.tracks.get(slot);
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
       totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
       return service.requestStream(track!.source, { mode: 'stream', sourceVersion,
         firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs), ...(window ? { window } : {}) }, slot, taskSignal);
-    });
+    }, intent);
     if (this.tracks.get(slot) === track && !window) {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
       this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });

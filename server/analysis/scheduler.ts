@@ -408,8 +408,12 @@ export class AnalysisScheduler {
         let flv = false;
         try { const header = Buffer.alloc(3); await probe.read(header, 0, 3, 0); flv = header.toString('ascii') === 'FLV'; }
         finally { await probe.close(); }
-        if (flv && !('mode' in work.target)) {
-          index = await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, FLV_MEDIA_INDEX_IDENTITY);
+        if (flv && (!('mode' in work.target) || work.target.window)) {
+          if (index && work.target.indexIdentity?.kind !== 'flv') { index.close(); index = undefined; }
+          index ??= await libraryAnalysisIndex(this.library, work.mediaId, work.version, work.filePath, FLV_MEDIA_INDEX_IDENTITY);
+          if ('mode' in work.target && work.target.window) {
+            work.progress = { pictures: 0, totalPictures: null, checkedUs: 0, totalUs: work.target.window.endUs - work.target.window.startUs, indexComplete: false, waitingForIndex: true }; work.seq++;
+          }
           flvSnapshot = await index.snapshot(() => !this.closed && work.state === 'running' && !!work.consumers.size);
           if (!await this.library.resolve(work.mediaId, work.version)) throw new AnalysisFailure('source-changed', 'Analysis source changed during indexing');
         }

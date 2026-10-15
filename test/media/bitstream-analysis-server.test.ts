@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, symlink, access } from "node:fs/promises";
+import { mkdtemp, rm, readFile, symlink, access, copyFile, open } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -813,3 +813,27 @@ for (const failure of ['messageerror', 'ack-post', 'cancelled-ack'] as const) {
     }
   });
 }
+
+
+test('large library FLV viewport reuses the shared index and decodes only intersecting GOPs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'vp-large-flv-'));
+  // Valid padding tags grow the container beyond 64 MiB without adding pictures.
+  await copyFile('fixtures/flv-analysis/legacy-h264.flv', join(root, 'large.flv'));
+  const file = await open(join(root, 'large.flv'), 'a');
+  const padding = Buffer.alloc(1024 * 1024 + 15); padding[0] = 18;
+  padding.writeUIntBE(1024 * 1024, 1, 3); padding.writeUInt32BE(1024 * 1024 + 11, padding.length - 4);
+  try { for (let i = 0; i < 65; i++) await file.write(padding); } finally { await file.close(); }
+  const f = await fixture(root, 'large.flv'), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  try {
+    const demand = await scheduler.submit(f.entry.id, f.entry.version!, {
+      mode: 'stream', sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 2000000, durationUs: 10000000,
+      indexIdentity: (await import('../../src/media-index-identity.ts')).FLV_MEDIA_INDEX_IDENTITY,
+      window: { startUs: 4000000, endUs: 4100000, axis: 'pts' },
+    }, 'viewport');
+    const state = await wait(scheduler, demand.requestId, 'viewport');
+    assert.equal(state.state, 'complete', state.error ?? '');
+    assert.ok(state.published! > 0 && state.published! < 100, 'viewport never decodes the full 600-picture film');
+    assert.equal(state.progress?.waitingForIndex, false);
+    assert.equal(state.progress?.indexComplete, true);
+  } finally { await scheduler.close(); await f.close(); await rm(root, { recursive: true, force: true }); }
+});

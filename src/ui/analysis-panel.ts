@@ -39,7 +39,7 @@ import { drawAnalysisOverlay } from './analysis/overlay.ts';
 import { installAnalysisGestures } from './analysis/gestures.ts';
 import { installChartNavigation } from './analysis/chart-navigation.ts';
 import { installFilterGestures } from './analysis/filter-gestures.ts';
-import { panTimeRange, zoomTimeRange } from '../analysis/projection.ts';
+import { panTimeRange, zoomOverviewRange } from '../analysis/projection.ts';
 import './analysis-panel.css';
 
 import type { ChartHover, AnalysisAction as Action } from './analysis/shared.ts';
@@ -658,12 +658,12 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       clearSharedHover();
       const geometry = sharedAxisGeometry(), range = viewRange();
       const fraction = Math.max(0, Math.min(1, (clientX - sharedAxis.getBoundingClientRect().left - geometry.gutter) / geometry.plotW));
-      const next = zoomTimeRange(range.start, range.end, range.start + fraction * (range.end - range.start), factor, MIN_SPAN_US, domainBounds());
+      const next = zoomOverviewRange(range, fullRange(), fraction, factor, MIN_SPAN_US);
       setView(next.start, next.end);
     },
     pan(pixels) {
       clearSharedHover();
-      const range = viewRange(), shift = Math.round(pixels / sharedAxisGeometry().plotW * (range.end - range.start));
+      const range = viewRange(), shift = Math.round(pixels / sharedAxisGeometry().plotW * (fullRange().end - fullRange().start));
       const next = panTimeRange(range.start, range.end, shift, domainBounds());
       setView(next.start, next.end);
     },
@@ -698,7 +698,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
   };
 
   const status = installAnalysisStatus({ session, act, signal, prefs, statusEl, itemsEl, live,
-    tracks: () => tracks, colors: () => slotColors, resume: slot => session.resumeBitstreamAnalysis(slot, visibleAnalysisWindow(slot)) });
+    tracks: () => tracks, colors: () => slotColors, resume: slot => session.resumeBitstreamAnalysis(slot) });
   const updateStatus = () => status.update();
 
   let diagramSlot: Slot | undefined;
@@ -746,7 +746,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
         const identity = `${track.mediaId}:${track.sourceGen}:${JSON.stringify(window)}`, state = session.getBitstreamAnalysisState(track.slot);
         if (automaticStreams.get(track.slot) === identity || state.state === 'paused' || state.completedStream || caps.get(track.slot)?.indexState === 'error') continue;
         automaticStreams.set(track.slot, identity);
-        void session.requestBitstreamStream(track.slot, undefined, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
+        void session.requestBitstreamViewport(track.slot, window).catch(() => { /* The facade publishes errors; never retry automatically. */ })
           .finally(() => { if (!signal.aborted) refreshStream(); });
       }
     });
