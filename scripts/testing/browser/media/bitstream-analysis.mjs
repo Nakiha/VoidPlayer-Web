@@ -95,6 +95,7 @@ execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi
   '-x264-params', 'scenecut=0:open-gop=0', path.join(limitsDir, 'incremental.mp4')]);
 // MP4 descriptions now use a complete sample-table adapter. FLV retains
 // asynchronous playback indexing and an independent append-only analysis cursor.
+for(const name of ['stream.mp4','incremental.mp4','stream-2.mp4'])await copyFile(path.join(limitsDir,name),path.join(limitsDir,'queue-'+name));
 for(const action of ['continue','cancel'])execFileSync('ffmpeg',['-y','-v','error','-i',path.join(limitsDir,'incremental.mp4'),'-an','-c:v','copy','-f','flv',path.join(limitsDir,`incremental-${action}.flv`)]);
 await withBrowserFixture(
   {
@@ -1218,7 +1219,7 @@ await withBrowserFixture(
       for (const input of ['local-file','library']) {
         if ((await call('get_review_session')).tracks.length) await selectDiagrams(page, 'overview');
         for (const slot of ['A','B','C']) await call('remove_review_track',{slot});
-        for (const [slot, name] of [['A','stream.mp4'],['B','incremental.mp4'],['C','stream-2.mp4']]) {
+        for (const [slot, name] of [['A','queue-stream.mp4'],['B','queue-incremental.mp4'],['C','queue-stream-2.mp4']]) {
           if (input === 'local-file') await page.locator(`#file-${slot}`).setInputFiles(path.join(limitsDir,name));
           else await call('load_library_item',{slot,id:library.entries.find(e=>e.name===name).id});
           await page.waitForFunction(slot=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.some(t=>t.slot===slot&&t.frame&&!t.failure);},slot);
