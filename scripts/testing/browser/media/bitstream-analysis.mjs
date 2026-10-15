@@ -209,6 +209,11 @@ await withBrowserFixture(
           assert.ok(result.metrics.startAu >= 90, 'rear picture starts at its verified GOP anchor');
           assert.ok(result.metrics.packets < 60, 'rear picture does not decode the whole file');
           await hideOverlay();
+          const startRequests=requests.length;
+          const shown=await page.evaluate(async slot=>{const start=performance.now();document.querySelector(`#bitstream-tracks [data-slot="${slot}"]`).click();await new Promise(resolve=>{const check=()=>{const c=document.getElementById(`bitstream-overlay-${slot}`);if(c&&!c.hidden&&c.getBoundingClientRect().width>0)resolve();else requestAnimationFrame(check);};requestAnimationFrame(check);});const c=document.getElementById(`bitstream-overlay-${slot}`);return {visibleAtAnimationFrameMs:performance.now()-start,metrics:c.analysisMetrics};},slot);
+          rows.push({kind:'overlay-cache-display',input,slot,...shown,newRequests:requests.length-startRequests});
+          console.log('overlay-cache-display',JSON.stringify(rows.at(-1)));
+          await hideOverlay();
         }
         await call('seek_review', { ptsUs: 1_000_000 });
         await selectDiagrams(page, 'bitrate');
@@ -497,6 +502,7 @@ await withBrowserFixture(
       }
       assert.deepEqual(errors,[]);
       await page.screenshot({path:artifact('stable-chart-mount.png')});
+      await writeFile(artifact('overlay-cache-timings.json'),JSON.stringify(rows,null,2));
       console.log(overlayOnly ? `PASS ${engine}: local/library dual-track overlay toolbar, shared opacity, hover details, peer avoidance and closed-toolbar frame updates` : `PASS ${engine}: five chart toggles, paired/all views, local/library dual tracks, fixed time axis during scrolling, minimum/maximum panel heights and narrow/wide first-paint stability`);
       return;
     }

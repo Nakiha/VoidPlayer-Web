@@ -365,6 +365,9 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
           assert.equal(state.reason?.kind, "unsupported");
           assert.deepEqual(state.result?.reasonCodes, local.reasonCodes);
           assert.equal((state.result && "blocks" in state.result ? state.result.blocks.length : 0), 0);
+          const productRequest=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),product:'blocks'},'owner');
+          const productState=JSON.parse(JSON.stringify(await wait(scheduler,productRequest.requestId,'owner')));
+          assert.equal(productState.result.product,'blocks');assert.equal(productState.result.validatedBlockCount,0);assert.equal(productState.result.payload,null);assert.equal(productState.result.emptyPayload,true);scheduler.release(productRequest.requestId,'owner');
           assert.equal(state.chunks.length, 0);
           assert.equal(
             state.resultUrl,
