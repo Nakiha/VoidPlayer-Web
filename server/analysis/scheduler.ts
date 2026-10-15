@@ -221,7 +221,7 @@ export class AnalysisScheduler {
       .update(
         JSON.stringify([
           target.sourceVersion, ...(target.product ? [target.product] : []),
-          ...(target.product || 'mode' in target || 'startUs' in target ? [target.product ? analysisIndexIdentity(target.indexIdentity) : target.indexIdentity ?? null] : []),
+          ...(target.product || target.indexIdentity || 'mode' in target || 'startUs' in target ? [target.product ? analysisIndexIdentity(target.indexIdentity) : target.indexIdentity ?? null] : []),
           "mode" in target ? ['stream', target.firstPtsUs, target.durationUs, target.window ?? null] : "startUs" in target
             ? [target.firstPtsUs, target.startUs, target.endUs]
             : target.picture
@@ -374,7 +374,7 @@ export class AnalysisScheduler {
       const member = work.target.product === 'summary' ? {...picture,au:Math.floor(picture.au/32)*32} : picture;
       return createHash('sha256').update(productKey(member,work.buildId,work.target.indexIdentity ?? null,work.target.product)).digest('hex');
     }
-    return createHash('sha256').update(JSON.stringify([work.target.sourceVersion,pictureId(picture),ANALYSIS_RECIPE,ANALYZER_VERSION,work.buildId])).digest('hex');
+    return createHash('sha256').update(JSON.stringify([work.target.sourceVersion,...(work.target.indexIdentity?[work.target.indexIdentity]:[]),pictureId(picture),ANALYSIS_RECIPE,ANALYZER_VERSION,work.buildId])).digest('hex');
   }
   release(id: string, owner?: string) {
     const c = this.consumers.get(id);

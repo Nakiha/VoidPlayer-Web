@@ -204,3 +204,5 @@ CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消�
 32 MiB 是每个 work 的未确认 descriptor 内容字节与下一帧最大预留的双重背压：初始下一帧 <=3 MiB（legacy8 MiB），每次 ACK 前检查 pending+next；暂停/终止前不发下一次 producer ACK。3 MiB/8 MiB 分配准入在 runner 构造 payload/legacy块对象数组之前，legacy额外按实际bounded metadata保守预算。并发默认8、最大32，因此32×N MiB仅是逻辑未确认引用上界（256/1024 MiB），并非RAM；共享128 MiB store会在保护文件无法驱逐时明确拒绝新写，重复引用不等于重复文件。实际每worker同一时刻最多一份输出（产品3 MiB/legacy8 MiB准入），另计最多两个HTTP读取slot、受限编码/解析临时拷贝和独立512 MiB WASM heap上限；不宣称全局32 MiB或RSS总上界。
 
 所有stream产品（summary、blocks和默认legacy full）均绑定本次独立读取的当前build；worker plan/cache/coverage、remote status和最终产品必须与它一致。完整stream恢复也只从当前实际owned blocks播种，旧AU仅发coverage，不重复chunk或cache.put；块被逐出则允许从仍拥有的已校验输出修复。legacy owner保留当前index namespace，不能以summary可读性替代完整产品。
+
+Legacy JSON 的显式外部 indexIdentity 同时进入 single work key 和逐帧 chunk key；合法但没有当前显式index证明的旧namespace记录不得复用。隐式MP4 v1分支保持原tuple和hash不变，旧wire仍返回完整blocks。定向回归预置真实FLV旧namespace有效记录，确认显式请求cache miss、当前namespace单帧/stream共用、重试及scheduler重启命中，并确认不同显式index生成不同key。

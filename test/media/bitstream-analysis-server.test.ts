@@ -871,3 +871,19 @@ test('large legacy chunks stop below 32 at the cumulative byte reservation and l
   assert.ok(status&&status.published!>0&&status.published!<32);assert.ok(status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)<=PRODUCT_LIMIT.inFlight && status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight);scheduler.release(request.requestId,'slow');await scheduler.close();assert.equal(scheduler.resources().running,0);
  }finally{await scheduler.close();await f.close();}
 });
+
+test('explicit legacy index namespace rejects old valid records and preserves current single/stream retry hits',async()=>{
+ const media=await mkdtemp(join(tmpdir(),'vp-legacy-index-'));(await import('node:child_process')).execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=64x64:rate=5:duration=1','-an','-c:v','libx264','-g','5','-bf','0',join(media,'namespace.flv')]);
+ const f=await fixture(media,'namespace.flv'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));
+ const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../src/media-index-identity.ts');
+ try{
+  const old=await scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'owner'),oldState=await wait(scheduler,old.requestId,'owner');assert.equal(oldState.state,'complete');const oldId=oldState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];const valid=await scheduler.store.get(oldId);assert.ok(valid,'old implicit namespace is a valid checksummed full result');
+  const next=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(next.cacheHit,false,'explicit index must not authorize the old valid namespace');const nextState=await wait(scheduler,next.requestId,'owner');assert.equal(nextState.state,'complete');const nextId=nextState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];assert.notEqual(nextId,oldId);
+  const retry=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(retry.cacheHit,true);
+  const restarted=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));try{assert.equal((await restarted.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner')).cacheHit,true,'current explicit namespace survives scheduler restart');}finally{await restarted.close();}
+  const keys=scheduler as unknown as {pictureChunk:(work:{target:{sourceVersion:string;indexIdentity:typeof identity};buildId:string},picture:NonNullable<typeof valid>['picture'])=>string};
+  const a=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:identity},buildId:valid.buildId},valid.picture),b=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:{kind:'ffmpeg',streamKey:'video:0',schemaVersion:(await import('../../src/ffmpeg-index-cache.ts')).FFMPEG_INDEX_SCHEMA,indexerBuild:'a'.repeat(40)}},buildId:valid.buildId},valid.picture);assert.equal(a,nextId);assert.notEqual(a,b);assert.equal(await scheduler.store.get(b),null);
+  const stream=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:valid.picture.sourceVersion,indexIdentity:identity,firstPtsUs:0,durationUs:10000000,window:{startUs:0,endUs:1000,axis:'pts'}},'owner');let cursor=0,seen=false;
+  for(let i=0;i<1000;i++){const status=await scheduler.streamStatus(stream.requestId,'owner',cursor);assert.ok(status);for(const ref of status.chunks){assert.notEqual(ref.id,oldId);if(ref.au===0){assert.equal(ref.id,nextId);seen=true;}cursor=ref.cursor;}if(status.state==='complete'&&cursor===status.published)break;assert.ok(!['error','limited','cancelled'].includes(status.state),JSON.stringify(status));await new Promise(r=>setTimeout(r,5));}assert.ok(seen);
+ }finally{await scheduler.close();await f.close();await rm(media,{recursive:true,force:true});}
+});
