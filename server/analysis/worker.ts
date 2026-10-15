@@ -1,3 +1,6 @@
+import { emptyCounters, countCore, countProduct } from '../../src/bitstream-analysis/counters.ts';
+import { isProduct } from '../../src/bitstream-analysis/products.ts';
+import type { AnalysisOutput } from '../../src/bitstream-analysis/products.ts';
 import {sealJsIndex} from '../../src/js-index-proof.ts';
 import { validateAnalysisCore } from '../../src/bitstream-analysis/core-abi.ts';
 import { parentPort, workerData } from "node:worker_threads";
@@ -54,10 +57,12 @@ try {
     },
   };
   try {
+    const counters=emptyCounters();const delivered=new Set<number>();
     const manifest = JSON.parse(
       await readFile(path.join(workerData.coreDir, "manifest.json"), "utf8"),
     );
     const loadCore = async () => {
+      const initStarted=performance.now();
       const module = await import(
         pathToFileURL(path.join(workerData.coreDir, "voidplayer-analysis.js"))
           .href
@@ -70,14 +75,16 @@ try {
         ),
       });
       validateAnalysisCore(core);
-      return core;
+      counters.init++;counters.initMs+=performance.now()-initStarted;return countCore(core,counters);
     };
-    let cacheReply: ((value: import('../../src/bitstream-analysis/contract.ts').AnalysisResult | null) => void) | undefined;
+    const cachedResults=new Set<string>();
+    let pendingCacheKey="";
+    let cacheReply: ((value: AnalysisOutput | null) => void) | undefined;
     let acknowledgement: { resolve(): void; reject(error: unknown): void } | undefined;
     let indexReply: { resolve(value: import('../../src/bitstream-analysis/stream.ts').AnalysisIndexFrontier): void; reject(error: unknown): void } | undefined;
     parentPort!.on('message', message => {
       if (message.type === 'cache') {
-        const reply = cacheReply; cacheReply = undefined; reply?.(message.result ?? null);
+        const reply = cacheReply; cacheReply = undefined; if(message.result)cachedResults.add(JSON.stringify([message.result.picture,message.result.buildId]));else cachedResults.delete(pendingCacheKey); reply?.(message.result ?? null);
       } else if (message.type === 'index') {
         const reply = indexReply; indexReply = undefined;
         if (message.error) reply?.reject(restoreFailure(message.reason, message.error)); else reply?.resolve(message.index);
@@ -86,8 +93,9 @@ try {
         if (message.ok) ack?.resolve(); else ack?.reject(restoreFailure(message.reason, message.error ?? 'Analysis consumer stopped'));
       }
     });
-    const publish = async (result: unknown) => {
-      parentPort!.postMessage({ type: "chunk", result });
+    const publish = async (result: AnalysisOutput) => {
+      const hit=cachedResults.has(JSON.stringify([result.picture,result.buildId]));countProduct(result,hit,counters);delivered.add(result.picture.au);counters.uniqueDelivered=delivered.size;
+      parentPort!.postMessage({ type: "chunk", result, counters:{...counters}, cacheHit:cachedResults.has(JSON.stringify([result.picture,result.buildId])) }, isProduct(result) && result.product === "blocks" ? [result.payload] : []);
       await new Promise<void>((resolve, reject) => {
         acknowledgement = { resolve, reject };
       });
@@ -98,9 +106,9 @@ try {
         async progress => parentPort!.postMessage({ type: 'progress', progress }),
         workerData.externalIndex ? () => new Promise((resolve, reject) => {
           indexReply = { resolve, reject }; parentPort!.postMessage({ type: 'index' });
-        }) : undefined, picture => new Promise(resolve => {
-          cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
-        }));
+        }) : undefined, picture => new Promise<AnalysisOutput | null>(resolve => {
+          pendingCacheKey=JSON.stringify([picture,manifest.buildId ?? manifest.revision]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+        }), plan=>parentPort!.postMessage({type:'plan',plan}));
     else if ("startUs" in workerData.target)
       await analyzeRange(
         reader,
@@ -109,8 +117,8 @@ try {
         (manifest.buildId ?? manifest.revision),
         new AbortController().signal,
         publish,
-        picture => new Promise(resolve => {
-          cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
+        picture => new Promise<AnalysisOutput | null>(resolve => {
+          pendingCacheKey=JSON.stringify([picture,manifest.buildId ?? manifest.revision]);cacheReply = resolve; parentPort!.postMessage({ type: 'cache', picture });
         }),
       );
     else
@@ -123,7 +131,7 @@ try {
           new AbortController().signal,
         ),
       );
-    parentPort!.postMessage({ ok: true, type: "complete" });
+    parentPort!.postMessage({type:"counters",counters});parentPort!.postMessage({ ok: true, type: "complete" });
   } finally {
     reader.close();
   }

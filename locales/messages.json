@@ -2348,7 +2348,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis-panel.ts:858",
-      "src/ui/bitstream-controls.ts:169"
+      "src/ui/bitstream-controls.ts:168"
     ]
   },
   "analysis.containerConfig": {
@@ -3147,7 +3147,7 @@
     },
     "locations": [
       "src/ui/analysis-panel.ts:719",
-      "src/ui/bitstream-controls.ts:215"
+      "src/ui/bitstream-controls.ts:214"
     ]
   },
   "analysis.streamQueued": {
@@ -3259,7 +3259,7 @@
     "params": {},
     "locations": [
       "src/ui/analysis/status.ts:114",
-      "src/ui/bitstream-controls.ts:218"
+      "src/ui/bitstream-controls.ts:217"
     ]
   },
   "analysis.trackUnsupported": {
@@ -3491,7 +3491,7 @@
     "source": "分析进度",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:220"
+      "src/ui/bitstream-controls.ts:219"
     ]
   },
   "bitstream.boundaries": {
@@ -3512,7 +3512,7 @@
     "source": "关闭分析遮罩",
     "params": {},
     "locations": [
-      "src/ui/bitstream-controls.ts:167"
+      "src/ui/bitstream-controls.ts:166"
     ]
   },
   "bitstream.editOpacity": {
@@ -3528,7 +3528,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/bitstream-controls.ts:217"
+      "src/ui/bitstream-controls.ts:216"
     ]
   },
   "bitstream.incompleteReferences": {
@@ -3586,7 +3586,7 @@
     "params": {},
     "locations": [
       "src/ui/bitstream-controls.ts:55",
-      "src/ui/bitstream-controls.ts:168",
+      "src/ui/bitstream-controls.ts:167",
       "src/ui/shell.ts:82",
       "src/ui/shell.ts:82",
       "src/ui/shell.ts:90"
@@ -3626,7 +3626,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/bitstream-controls.ts:217"
+      "src/ui/bitstream-controls.ts:216"
     ]
   },
   "bitstream.skip": {
@@ -6613,8 +6613,8 @@
     "source": "拖动工具条",
     "params": {},
     "locations": [
+      "src/ui/bitstream-controls.ts:164",
       "src/ui/bitstream-controls.ts:165",
-      "src/ui/bitstream-controls.ts:166",
       "src/ui/shell.ts:93",
       "src/ui/shell.ts:93"
     ]

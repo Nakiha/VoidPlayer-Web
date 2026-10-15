@@ -1,3 +1,7 @@
+import {validateDemandPlan} from '../../src/bitstream-analysis/demand.ts';
+import type {DemandPlan} from '../../src/bitstream-analysis/demand.ts';
+import { analysisIndexIdentity, isProduct, isSummary, validateOutput, productKey, metadata, metadataBudgetBytes, PRODUCT_LIMIT, encodeProduct } from '../../src/bitstream-analysis/products.ts';
+import type { AnalysisOutput } from '../../src/bitstream-analysis/products.ts';
 import { FLV_MEDIA_INDEX_IDENTITY, JS_TS_MEDIA_INDEX_IDENTITY,JS_MATROSKA_MEDIA_INDEX_IDENTITY } from '../../src/media-index-identity.ts';
 import { DEFAULT_ANALYSIS_CONCURRENCY, validAnalysisConcurrency, ANALYSIS_WORKER_HEAP_BYTES } from './limits.ts';
 import { Worker } from "node:worker_threads";
@@ -33,6 +37,8 @@ declare const VOIDPLAYER_COMPILED: boolean;
 import type { StreamChunkRef } from './store.ts';
 import type { StreamProgress } from '../../src/bitstream-analysis/stream.ts';
 type Work = {
+  counters?:import("../../src/bitstream-analysis/counters.ts").AnalysisCounters;
+  plan?:DemandPlan;
   published: number;
   pending: StreamChunkRef[];
   page: StreamChunkRef[];
@@ -57,12 +63,12 @@ type Work = {
     | "cancelled";
   error?: string;
   reason?: AnalysisFailureInfo;
-  unsupportedResult?: AnalysisResult;
+  unsupportedResult?: AnalysisOutput;
   consumers: Set<string>;
   worker?: Worker;
   seq: number;
 };
-type Consumer = { work: Work; owner: string; expires: number; cursor: number; delivered: number };
+type Consumer = { work: Work; owner: string; expires: number; cursor: number; delivered: number; planDelivered?:boolean };
 // Reserve capacity before constructing a worker, including index-waiting and
 // consumer-backpressured jobs. Per-window admission cannot bound a shared server.
 /** Bounded independent jobs; matching demands share work and consumer leases. */
@@ -137,6 +143,7 @@ export class AnalysisScheduler {
     this.leaseMs = leaseMs;
     this.store = new AnalysisStore(directory, undefined, () => this.protectedFiles());
   }
+  async buildIdentity() { const manifest=JSON.parse(await readFile(path.join(this.coreDir,'manifest.json'),'utf8'));return manifest.buildId ?? manifest.revision; }
   submit(
     mediaId: string,
     version: string,
@@ -210,11 +217,13 @@ export class AnalysisScheduler {
     if (!Number.isSafeInteger(manifest.heapMaxBytes) || manifest.heapMaxBytes <= 0 ||
         manifest.heapMaxBytes > ANALYSIS_WORKER_HEAP_BYTES)
       throw new AnalysisFailure('resource-limit', 'Analysis core exceeds server heap reservation');
-    const id = createHash("sha256")
+    const id = target.product==='blocks' && 'picture' in target && target.picture
+      ? createHash("sha256").update(productKey(target.picture,manifest.buildId ?? manifest.revision,target.indexIdentity ?? null,'blocks')).digest("hex")
+      : createHash("sha256")
       .update(
         JSON.stringify([
-          target.sourceVersion,
-          ...('mode' in target || 'startUs' in target ? [target.indexIdentity ?? null] : []),
+          target.sourceVersion, ...(target.product ? [target.product] : []),
+          ...(target.product || target.indexIdentity || 'mode' in target || 'startUs' in target ? [target.product ? analysisIndexIdentity(target.indexIdentity) : target.indexIdentity ?? null] : []),
           "mode" in target ? ['stream', target.firstPtsUs, target.durationUs, target.window ?? null] : "startUs" in target
             ? [target.firstPtsUs, target.startUs, target.endUs]
             : target.picture
@@ -230,7 +239,7 @@ export class AnalysisScheduler {
     if (work?.state === "complete") {
       let valid = true;
       for (const chunk of work.chunks)
-        if (!(await this.store.get(chunk))) {
+        if (!(await this.store.getOutput(chunk,"picture" in target ? target.picture?.au : undefined))) {
           valid = false;
           break;
         }
@@ -247,7 +256,7 @@ export class AnalysisScheduler {
       ["cancelled", "error", "unsupported", "limited"].includes(work.state)
     ) {
       const chunks = "startUs" in target ? await this.store.manifest(id) : null;
-      const cached = "startUs" in target || "mode" in target ? null : await this.store.get(id);
+      const cached = "startUs" in target || "mode" in target ? null : await this.store.getOutput(id,"picture" in target ? target.picture?.au : undefined);
       if (
         cached &&
         (cached.buildId !== (manifest.buildId ?? manifest.revision) ||
@@ -295,12 +304,16 @@ export class AnalysisScheduler {
       return null;
     consumer.expires = this.now() + this.leaseMs;
     const w = consumer.work;
+    const plan=w.plan && !consumer.planDelivered ? w.plan : undefined; if(plan)consumer.planDelivered=true;
     return {
+      ...(plan?{plan}:{}),
+      counters:w.counters,
+      buildId:w.buildId,
       state: w.state,
       seq: w.seq,
       error: w.error,
       reason: w.reason,
-      ...(w.unsupportedResult ? { result: w.unsupportedResult } : {}),
+      ...(w.unsupportedResult ? { result: isProduct(w.unsupportedResult)&&w.unsupportedResult.product==='blocks' ? {...w.unsupportedResult,payload:null,emptyPayload:true} : w.unsupportedResult } : {}),
       leaseMs: this.leaseMs,
       ...('mode' in w.target ? { published: w.published, progress: w.progress } : {}),
       chunks: w.chunks.map((id) => ({
@@ -335,13 +348,13 @@ export class AnalysisScheduler {
     }
     c.delivered = Math.max(c.delivered, cursor);
     return { ...status, chunks: refs.map(ref => ({ ...ref,
-      url: `/api/media/${w.mediaId}/bitstream-analysis/chunks/${ref.id}?v=${w.version}` })) };
+      url: `/api/media/${w.mediaId}/bitstream-analysis/chunks/${ref.id}?v=${w.version}${ref.au === undefined ? "" : `&au=${ref.au}`}` })) };
   }
   private advance(w: Work) {
     if (!('mode' in w.target)) return;
     const acknowledged = Math.min(...[...w.consumers].map(id => this.consumers.get(id)?.cursor ?? w.published));
     while (w.pending.length && w.pending[0].cursor <= acknowledged) w.pending.shift();
-    if (w.pending.length < 32) { const wake = w.wake; w.wake = undefined; wake?.(); }
+    if (w.pending.length < 32 && w.pending.reduce((sum,ref)=>sum+(ref.bytes ?? BUDGET.resultBytes),0) + (w.target.product ? PRODUCT_LIMIT.frame : BUDGET.resultBytes) <= PRODUCT_LIMIT.inFlight) { const wake = w.wake; w.wake = undefined; wake?.(); }
   }
   private protectedFiles() {
     const files = new Set<string>();
@@ -350,12 +363,20 @@ export class AnalysisScheduler {
       for (const file of w.writing ?? []) files.add(file);
       if (!w.consumers.size) continue;
       for (const ref of w.pending) {
-        files.add(this.store.chunkFile(ref.id));
+        files.add(this.outputFile(w,ref.id));
         files.add(this.store.streamPageFile(w.id, Math.floor((ref.cursor - 1) / 32)));
       }
-      for (const chunk of w.chunks) files.add(this.store.chunkFile(chunk));
+      for (const chunk of w.chunks) files.add(this.outputFile(w,chunk));
     }
     return files;
+  }
+  private outputFile(work:Work,id:string) { return work.target.product ? this.store.productFile(id) : this.store.chunkFile(id); }
+  private pictureChunk(work:Work,picture:import('../../src/bitstream-analysis/contract.ts').SourcePictureKey) {
+    if (work.target.product) {
+      const member = work.target.product === 'summary' ? {...picture,au:Math.floor(picture.au/32)*32} : picture;
+      return createHash('sha256').update(productKey(member,work.buildId,work.target.indexIdentity ?? null,work.target.product)).digest('hex');
+    }
+    return createHash('sha256').update(JSON.stringify([work.target.sourceVersion,...(work.target.indexIdentity?[work.target.indexIdentity]:[]),pictureId(picture),ANALYSIS_RECIPE,ANALYZER_VERSION,work.buildId])).digest('hex');
   }
   release(id: string, owner?: string) {
     const c = this.consumers.get(id);
@@ -446,22 +467,22 @@ export class AnalysisScheduler {
           }, 30000);
         };
         armTimer();
-        const acknowledge = (value: unknown) => {
+        const acknowledge = (value: unknown, transfer:ArrayBuffer[] = []) => {
           if (work.state !== 'running' || !work.consumers.size) return;
           try {
-            worker.postMessage(value);
+            worker.postMessage(value,transfer);
           } catch (error) { reject(error); }
         };
         worker.on("message", async (m) => {
+          if(m.type==='counters'){work.counters=m.counters;work.seq++;return;}
+          if(m.type==='plan'){try{if(!('mode' in work.target))throw Error('Unexpected demand plan');validateDemandPlan(m.plan,work.target);work.plan=m.plan;work.seq++;}catch(error){reject(error);}return;}
           if (m.type === 'cache') {
             try {
               if (work.state !== 'running' || !work.consumers.size ||
                   m.picture?.sourceVersion !== work.target.sourceVersion)
                 throw new AnalysisFailure('cancelled', 'Analysis demand expired');
-              const id = createHash('sha256').update(JSON.stringify([
-                work.target.sourceVersion, pictureId(m.picture), ANALYSIS_RECIPE, ANALYZER_VERSION, work.buildId,
-              ])).digest('hex');
-              acknowledge({ type: 'cache', result: await this.store.get(id) });
+              const id = this.pictureChunk(work,m.picture);
+              const result=await this.store.getOutput(id,m.picture.au);acknowledge({ type: 'cache', result },result && isProduct(result)&&result.product==='blocks'?[result.payload]:[]);
             } catch (error) { reject(error); }
             return;
           }
@@ -477,11 +498,13 @@ export class AnalysisScheduler {
             return;
           }
           if (m.type === "chunk") {
+            if(m.counters)work.counters=m.counters;
             try {
               if (work.state !== "running" || !work.consumers.size)
                 throw new Error("Analysis demand expired");
-              const result: AnalysisResult = m.result;
-              validateResult(result);
+              const result: AnalysisOutput = m.result;
+              validateOutput(result);
+              if (isProduct(result) ? result.product !== work.target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(work.target.indexIdentity)) : work.target.product !== undefined) throw new Error('Worker product identity mismatch');
               if (
                 result.picture.sourceVersion !== work.target.sourceVersion ||
                 result.buildId !== work.buildId
@@ -512,13 +535,14 @@ export class AnalysisScheduler {
                 // Unsupported summaries are transient lease-scoped control data,
                 // never committed as exact chunks or complete range coverage.
                 if (
-                  result.blocks.length ||
+                  (!isProduct(result) && result.blocks.length) ||
                   JSON.stringify(result).length > 16384
                 )
                   throw new AnalysisFailure(
                     "resource-limit",
                     "Unsupported summary budget exceeded",
                   );
+                if(isProduct(result)&&result.product==='blocks'&&(result.validatedBlockCount!==0||result.payload.byteLength!==0))throw Error('Unsupported inline products must have empty records');
                 work.unsupportedResult = result;
                 const reason = new AnalysisFailure(
                   result.reasonCodes?.[0] ?? "incomplete-reference-state",
@@ -529,20 +553,9 @@ export class AnalysisScheduler {
                 work.seq++;
                 throw reason;
               }
-              const chunk =
-                "startUs" in work.target || "mode" in work.target
-                  ? createHash("sha256")
-                      .update(
-                        JSON.stringify([
-                          result.picture.sourceVersion,
-                          pictureId(result.picture),
-                          ANALYSIS_RECIPE,
-                          ANALYZER_VERSION,
-                          work.buildId,
-                        ]),
-                      )
-                      .digest("hex")
-                  : work.id;
+              const chunk = 'startUs' in work.target || 'mode' in work.target ? this.pictureChunk(work,result.picture) : work.id;
+              const resultBytes = isProduct(result) ? (result.product === 'blocks' ? result.payload.byteLength : 0) + Buffer.byteLength(JSON.stringify(isProduct(result) && result.product === 'blocks' ? {...result,payload:undefined} : result)) + 40 : Math.min(BUDGET.resultBytes,result.blocks.length*128+metadataBudgetBytes(metadata(result))+64);
+              if (resultBytes > (isProduct(result) ? PRODUCT_LIMIT.frame : BUDGET.resultBytes)) throw new AnalysisFailure('resource-limit','Analysis frame budget exceeded');
               if (!("mode" in work.target) && work.chunks.length >= 32)
                 throw new AnalysisFailure(
                   "resource-limit",
@@ -550,26 +563,26 @@ export class AnalysisScheduler {
                 );
               if ('mode' in work.target) {
                 if (!result.gop) throw new Error('Missing stream GOP');
-                const ref: StreamChunkRef = { id: chunk, cursor: work.published + 1, gop: result.gop };
-                work.writing = new Set([this.store.chunkFile(chunk),
+                const ref: StreamChunkRef = { id: chunk, cursor: work.published + 1, gop: result.gop, picture:result.picture, au:result.picture.au, bytes:resultBytes, ...(isProduct(result)?{product:result.product,encoding:result.encoding}:{}) };
+                work.writing = new Set([this.outputFile(work,chunk),
                   this.store.streamPageFile(work.id, Math.floor(work.published / 32))]);
                 const protectedFiles = this.protectedFiles();
-                await this.store.put(chunk, result, protectedFiles);
+                if(!m.cacheHit || !await this.store.getOutput(chunk,result.picture.au)){const written=await this.store.putOutput(chunk, result, protectedFiles);if(typeof written==='number')ref.bytes=written;}
                 if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
-                protectedFiles.add(this.store.chunkFile(chunk));
+                protectedFiles.add(this.outputFile(work,chunk));
                 const page = Math.floor(work.published / 32);
                 if (!(work.published % 32)) work.page = [];
                 work.page.push(ref);
                 await this.store.putStreamPage(work.id, page, work.page, protectedFiles);
                 work.published++; work.pending.push(ref); work.seq++; work.writing = undefined;
-                if (work.pending.length >= 32) {
+                if (work.pending.length >= 32 || work.pending.reduce((sum,ref)=>sum+(ref.bytes ?? BUDGET.resultBytes),0) + (work.target.product ? PRODUCT_LIMIT.frame : BUDGET.resultBytes) > PRODUCT_LIMIT.inFlight) {
                   clearTimeout(timer); // Consumer wait is governed by leases, not decoder stall time.
                   await new Promise<void>(resolve => { work.wake = resolve; });
                 }
                 if (work.state !== 'running' || !work.consumers.size) throw new AnalysisFailure('cancelled', 'Analysis demand expired');
               } else {
-                work.writing = new Set([this.store.chunkFile(chunk)]);
-                await this.store.put(chunk, result);
+                work.writing = new Set([this.outputFile(work,chunk)]);
+                if(!m.cacheHit || !await this.store.getOutput(chunk,result.picture.au))await this.store.putOutput(chunk, result);
                 work.chunks.push(chunk); work.seq++; work.writing = undefined;
               }
               if ('mode' in work.target) armTimer();

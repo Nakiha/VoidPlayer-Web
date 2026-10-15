@@ -364,7 +364,10 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
           assert.equal(state.state, "unsupported", JSON.stringify(state));
           assert.equal(state.reason?.kind, "unsupported");
           assert.deepEqual(state.result?.reasonCodes, local.reasonCodes);
-          assert.equal(state.result?.blocks.length, 0);
+          assert.equal((state.result && "blocks" in state.result ? state.result.blocks.length : 0), 0);
+          const productRequest=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),product:'blocks'},'owner');
+          const productState=JSON.parse(JSON.stringify(await wait(scheduler,productRequest.requestId,'owner')));
+          assert.equal(productState.result.product,'blocks');assert.equal(productState.result.validatedBlockCount,0);assert.equal(productState.result.payload,null);assert.equal(productState.result.emptyPayload,true);scheduler.release(productRequest.requestId,'owner');
           assert.equal(state.chunks.length, 0);
           assert.equal(
             state.resultUrl,
@@ -836,4 +839,103 @@ test('large library FLV viewport reuses the shared index and decodes only inters
     assert.equal(state.progress?.waitingForIndex, false);
     assert.equal(state.progress?.indexComplete, true);
   } finally { await scheduler.close(); await f.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+type ReadableStreamSnapshot = { state?: string; cursor: number; published?: number; received: number; counters?: unknown; progress?: unknown };
+/** Correctness waits follow consumed/readable products, not seq/counter heartbeats.
+ * Ten seconds without readable progress still fails; total execution is bounded.
+ * Neither limit is a throughput acceptance threshold for a particular machine. */
+function readableStreamWait(phase: string, initialReceived = 0, now = () => performance.now(), emit = (value: unknown) => console.log(JSON.stringify(value))) {
+  const started = now(); let lastProgress = started, lastCursor = 0, lastReceived = initialReceived, oldLimitLogged = false;
+  let last: ReadableStreamSnapshot = { cursor: 0, received: initialReceived }, polls = 0;
+  const detail = () => ({ phase, elapsedMs: now() - started, polls, lastProgressAgeMs: now() - lastProgress, ...last });
+  return {
+    observe(snapshot: ReadableStreamSnapshot) {
+      polls++; last = snapshot;
+      const at = now(), diagnostic = JSON.stringify(detail());
+      assert.ok(at - started <= 120_000, `Stream correctness total deadline exceeded: ${diagnostic}`);
+      assert.ok(at - lastProgress <= 10_000, `Stream has no readable progress: ${diagnostic}`);
+      assert.ok(snapshot.cursor >= lastCursor && snapshot.received >= lastReceived, `Stream readable progress regressed: ${diagnostic}`);
+      if (snapshot.cursor > lastCursor || snapshot.received > lastReceived) lastProgress = at;
+      lastCursor = snapshot.cursor; lastReceived = snapshot.received;
+      if (phase === 'resume' && !oldLimitLogged && (polls >= 2000 || at - started >= 10_000)) {
+        oldLimitLogged = true; emit({ event: 'stream-test-old-poll-limit', ...detail() });
+      }
+    },
+    done() { const summary = detail(); emit({ event: 'stream-test-phase-complete', ...summary }); return summary; },
+  };
+}
+
+test('readable stream deadline permits slow advancing work but rejects idle heartbeats and unbounded total work', () => {
+  let at = 0; const events: unknown[] = [], progressing = readableStreamWait('resume', 0, () => at, value => events.push(value));
+  for (let au = 1; au <= 13; au++) { at += 9000; progressing.observe({ state: 'running', cursor: au, published: au, received: au }); }
+  assert.equal(progressing.done().elapsedMs, 117000, 'continued readable progress may cross the former overall ten-second poll cap');
+  assert.equal(events.filter(value => (value as {event:string}).event === 'stream-test-old-poll-limit').length, 1);
+  at += 9000; assert.throws(() => progressing.observe({ cursor: 14, published: 14, received: 14 }), /total deadline/);
+  at = 0; const idle = readableStreamWait('idle', 30, () => at, () => {});
+  at = 5000; idle.observe({ state: 'running', cursor: 0, published: 32, received: 30, counters: { feed: 1 } });
+  at = 10001; assert.throws(() => idle.observe({ state: 'running', cursor: 0, published: 64, received: 30, counters: { feed: 100 } }), /no readable progress.*"cursor":0.*"published":64.*"received":30.*"feed":100/);
+});
+
+test('summary pages resume without duplicate writes; warm work has zero decode and metadata stays independent of blocks',async()=>{
+ const {encodeProduct}=await import('../../src/bitstream-analysis/products.ts');
+ const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ const sourceVersion=`${f.entry.id}@${f.entry.version}`,request={mode:'stream' as const,product:'summary' as const,sourceVersion,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts' as const}};
+ const writes=new Map<number,number>(),put=scheduler.store.putOutput.bind(scheduler.store);scheduler.store.putOutput=(id,value,protectedFiles)=>{writes.set(value.picture.au,(writes.get(value.picture.au)??0)+1);return put(id,value,protectedFiles);};
+ const received=new Set<number>();let bytes=0;
+ const snapshot=(state:Awaited<ReturnType<AnalysisScheduler['streamStatus']>>,cursor:number,count:number):ReadableStreamSnapshot=>({state:state?.state,cursor,published:state?.published,received:count,counters:state?.counters,progress:state?.progress});
+ try{
+  const first=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');let cursor=0;
+  const firstWait=readableStreamWait('first-30');
+  while(received.size<30){const state=await scheduler.streamStatus(first.requestId,'owner',cursor);assert.ok(state);assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));for(const ref of state.chunks){if(received.size===30)break;const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.ok(!received.has(value.picture.au));received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;cursor=ref.cursor;}firstWait.observe(snapshot(state,cursor,received.size));await new Promise(r=>setTimeout(r,5));}
+  firstWait.done();assert.equal(scheduler.release(first.requestId,'owner'),true);assert.equal(scheduler.status(first.requestId,'owner'),null,'cancelled consumer lease is released');
+  const resumed=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let final;const resumeWait=readableStreamWait('resume',received.size);
+  for(;;){
+   const state=await scheduler.streamStatus(resumed.requestId,'owner',cursor);assert.ok(state);assert.ok(state.chunks.length<=32);
+   for(const ref of state.chunks){if(!received.has(ref.au!)){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;}cursor=ref.cursor;}
+   resumeWait.observe(snapshot(state,cursor,received.size));
+   if(state.state==='complete'&&cursor===state.published){final=state;resumeWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));
+  }
+  assert.ok(final);assert.equal(received.size,180);assert.ok(bytes<=512*1024);assert.equal(writes.size,180);assert.ok([...writes.values()].every(n=>n===1),'committed summaries are never written twice on resume');assert.ok(final.counters!.cacheHit>=30);assert.equal(final.counters!.uniqueDelivered,180);scheduler.release(resumed.requestId,'owner');
+  const warm=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let complete;const warmReceived=new Set<number>(),warmWait=readableStreamWait('warm');
+  for(;;){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.equal(value.picture.au,ref.au);assert.ok(!warmReceived.has(value.picture.au));warmReceived.add(value.picture.au);cursor=ref.cursor;}warmWait.observe(snapshot(state,cursor,warmReceived.size));if(state.state==='complete'&&cursor===180){complete=state;warmWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
+  assert.equal(warmReceived.size,180);assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
+ }finally{await scheduler.close();await f.close();}
+});
+
+test('large legacy chunks stop below 32 at the cumulative byte reservation and last consumer releases the worker',async()=>{
+ const {PRODUCT_LIMIT}=await import('../../src/bitstream-analysis/products.ts');const {BUDGET}=await import('../../src/bitstream-analysis/contract.ts');const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ try{const request=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:`${f.entry.id}@${f.entry.version}`,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts'}},'slow');let stable=0,previous=-1,status;
+  for(let i=0;i<500;i++){status=await scheduler.streamStatus(request.requestId,'slow',0);assert.ok(status);assert.ok(['queued','running'].includes(status.state),JSON.stringify(status));stable=status.published===previous?stable+1:0;previous=status.published!;if(stable>=8&&status.published!>0)break;await new Promise(r=>setTimeout(r,25));}
+  assert.ok(status&&status.published!>0&&status.published!<32);assert.ok(status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)<=PRODUCT_LIMIT.inFlight && status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight);scheduler.release(request.requestId,'slow');await scheduler.close();assert.equal(scheduler.resources().running,0);
+ }finally{await scheduler.close();await f.close();}
+});
+
+test('explicit legacy index namespace rejects old valid records and preserves current single/stream retry hits',async()=>{
+ const media=await mkdtemp(join(tmpdir(),'vp-legacy-index-'));(await import('node:child_process')).execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=64x64:rate=5:duration=1','-an','-c:v','libx264','-g','5','-bf','0',join(media,'namespace.flv')]);
+ const f=await fixture(media,'namespace.flv'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));
+ const {FLV_MEDIA_INDEX_IDENTITY:identity}=await import('../../src/media-index-identity.ts');
+ try{
+  const old=await scheduler.submit(f.entry.id,f.entry.version!,target(f.entry),'owner'),oldState=await wait(scheduler,old.requestId,'owner');assert.equal(oldState.state,'complete');const oldId=oldState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];const valid=await scheduler.store.get(oldId);assert.ok(valid,'old implicit namespace is a valid checksummed full result');
+  const next=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(next.cacheHit,false,'explicit index must not authorize the old valid namespace');const nextState=await wait(scheduler,next.requestId,'owner');assert.equal(nextState.state,'complete');const nextId=nextState.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];assert.notEqual(nextId,oldId);
+  const retry=await scheduler.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner');assert.equal(retry.cacheHit,true);
+  const restarted=new AnalysisScheduler(f.library,coreDir,join(f.folder,'legacy-index-namespace'));try{assert.equal((await restarted.submit(f.entry.id,f.entry.version!,{...target(f.entry),indexIdentity:identity},'owner')).cacheHit,true,'current explicit namespace survives scheduler restart');}finally{await restarted.close();}
+  const keys=scheduler as unknown as {pictureChunk:(work:{target:{sourceVersion:string;indexIdentity:typeof identity};buildId:string},picture:NonNullable<typeof valid>['picture'])=>string};
+  const a=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:identity},buildId:valid.buildId},valid.picture),b=keys.pictureChunk({target:{sourceVersion:valid.picture.sourceVersion,indexIdentity:{kind:'ffmpeg',streamKey:'video:0',schemaVersion:(await import('../../src/ffmpeg-index-cache.ts')).FFMPEG_INDEX_SCHEMA,indexerBuild:'a'.repeat(40)}},buildId:valid.buildId},valid.picture);assert.equal(a,nextId);assert.notEqual(a,b);assert.equal(await scheduler.store.get(b),null);
+  const stream=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:valid.picture.sourceVersion,indexIdentity:identity,firstPtsUs:0,durationUs:10000000,window:{startUs:0,endUs:1000,axis:'pts'}},'owner');let cursor=0,seen=false;
+  for(let i=0;i<1000;i++){const status=await scheduler.streamStatus(stream.requestId,'owner',cursor);assert.ok(status);for(const ref of status.chunks){assert.notEqual(ref.id,oldId);if(ref.au===0){assert.equal(ref.id,nextId);seen=true;}cursor=ref.cursor;}if(status.state==='complete'&&cursor===status.published)break;assert.ok(!['error','limited','cancelled'].includes(status.state),JSON.stringify(status));await new Promise(r=>setTimeout(r,5));}assert.ok(seen);
+ }finally{await scheduler.close();await f.close();await rm(media,{recursive:true,force:true});}
+});
+
+test('canonical blocks single and stream reuse one record across restart without a decoder',async()=>{
+ const {mkdir}=await import('node:fs/promises');const media=await mkdtemp(join(tmpdir(),'vp-blocks-canonical-'));
+ (await import('node:child_process')).execFileSync('ffmpeg',['-y','-v','error','-f','lavfi','-i','testsrc2=size=64x64:rate=1:duration=1','-an','-c:v','libx264','-g','1','-bf','0',join(media,'one.mp4')]);
+ const f=await fixture(media,'one.mp4'),manifestOnly=join(f.folder,'manifest-only');await mkdir(manifestOnly);await copyFile(join(coreDir,'manifest.json'),join(manifestOnly,'manifest.json'));
+ try{for(const order of ['single-first','stream-first']){
+  const directory=join(f.folder,order),single={...target(f.entry),product:'blocks' as const},stream={mode:'stream' as const,product:'blocks' as const,sourceVersion:single.sourceVersion,firstPtsUs:0,durationUs:1000000};let scheduler=new AnalysisScheduler(f.library,coreDir,directory),id='';
+  const readStream=async()=>{const request=await scheduler.submit(f.entry.id,f.entry.version!,stream,'owner');for(let i=0;i<500;i++){const state=await scheduler.streamStatus(request.requestId,'owner',0);assert.ok(state);if(state.chunks.length){assert.equal(state.chunks.length,1);const ref=state.chunks[0];assert.ok(await scheduler.store.getOutput(ref.id));assert.equal(state.counters?.init??0,0);assert.equal(state.counters?.feed??0,0);return ref.id;}assert.ok(!['error','limited'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,10));}throw Error('no cached stream');};
+  if(order==='single-first'){const request=await scheduler.submit(f.entry.id,f.entry.version!,single,'owner');const state=await wait(scheduler,request.requestId,'owner');assert.equal(state.state,'complete',state.error??'');id=state.resultUrl!.match(/chunks\/([a-f0-9]{64})/)![1];await scheduler.close();scheduler=new AnalysisScheduler(f.library,manifestOnly,directory);assert.equal(await readStream(),id);}
+  else{const request=await scheduler.submit(f.entry.id,f.entry.version!,stream,'owner');for(let i=0;i<500;i++){const state=await scheduler.streamStatus(request.requestId,'owner',0);assert.ok(state);if(state.chunks.length){id=state.chunks[0].id;break;}assert.ok(!['error','limited'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,10));}assert.ok(id);await scheduler.close();scheduler=new AnalysisScheduler(f.library,manifestOnly,directory);const cached=await scheduler.submit(f.entry.id,f.entry.version!,single,'owner');assert.equal(cached.cacheHit,true);const state=await wait(scheduler,cached.requestId,'owner');assert.ok(state.resultUrl!.includes(id));assert.equal(state.counters?.init??0,0);assert.equal(state.counters?.feed??0,0);}
+  await scheduler.close();
+ }}finally{await f.close();await rm(media,{recursive:true,force:true});}
 });

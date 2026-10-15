@@ -332,17 +332,17 @@ export class ReviewSession {
   resumeBitstreamAnalysis(slot: Slot, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']) {
     slotValue(slot);
     if (this.getBitstreamAnalysisState(slot).state !== 'paused') throw new AnalysisFailure('invalid-request', 'Analysis is not paused');
-    return this.requestBitstreamStream(slot, undefined, window ?? this.getBitstreamAnalysisState(slot).stream?.window);
+    return this.requestBitstreamStream(slot, undefined, window ?? this.getBitstreamAnalysisState(slot).stream?.window,'explicit',this.getBitstreamAnalysisState(slot).stream?.product);
   }
   requestBitstreamViewport(slot: Slot, window: NonNullable<import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']>) {
-    return this.requestBitstreamStream(slot, undefined, window, 'automatic');
+    return this.requestBitstreamStream(slot, undefined, window, 'automatic', 'summary');
   }
-  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit') {
+  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit', product?:'summary'|'blocks') {
     const track = this.tracks.get(slot);
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
       totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
-      return service.requestStream(track!.source, { mode: 'stream', sourceVersion,
+      return service.requestStream(track!.source, { mode: 'stream', product, sourceVersion,
         firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs), ...(window ? { window } : {}) }, slot, taskSignal);
     }, intent);
     if (this.tracks.get(slot) === track && !window) {

@@ -891,7 +891,8 @@ try {
       export {AnalysisFailure} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/failure.ts'))};
       export {installBitstreamControls} from ${JSON.stringify(path.join(root,'src/ui/bitstream-controls.ts'))};
       export {installAnalysisPanel} from ${JSON.stringify(path.join(root,'src/ui/analysis-panel.ts'))};
-      export {rgbaDescription} from ${JSON.stringify(path.join(root,'src/frame-description.ts'))};`);
+      export {rgbaDescription} from ${JSON.stringify(path.join(root,'src/frame-description.ts'))};
+      export {packLegacy,summaryOf} from ${JSON.stringify(path.join(root,'src/bitstream-analysis/products.ts'))};`);
     const fixture=await buildFixture({configFile:false,logLevel:'silent',build:{write:false,minify:false,
       lib:{entry,formats:['iife'],name:'RecoveryFixture'},rolldownOptions:{output:{codeSplitting:false}}}});
     const script=[fixture].flat().flatMap(output=>output.output).find(output=>output.type==='chunk').code;
@@ -899,10 +900,11 @@ try {
       `<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8">${sheets.map(href=>`<link rel="stylesheet" href="${href}">`).join('')}</head><body>${markup}</body></html>`}));
     await page.goto(`${base}/recovery-fixture`); await page.addScriptTag({content:script});
     await page.evaluate(async()=>{
-      const {ReviewSession,BitstreamAnalysisService,AnalysisFailure,installBitstreamControls,installAnalysisPanel,rgbaDescription}=RecoveryFixture;
+      const {ReviewSession,BitstreamAnalysisService,AnalysisFailure,installBitstreamControls,installAnalysisPanel,rgbaDescription,packLegacy,summaryOf}=RecoveryFixture;
+      const manifest=await fetch(new URL('/vendor/voidplayer-analysis/manifest.json',location.href)).then(r=>r.json()),buildId=manifest.buildId??manifest.revision;
       const sourceVersion='recovery-source';
       window.recovery={streams:0,pictures:0,failure:'error',commit:0};
-      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId:'fixture',recipe:'blocks-basic-v2',
+      const result=au=>({schema:1,codec:'h264',analyzerVersion:'0.1.0',buildId,recipe:'blocks-basic-v2',
         picture:{sourceVersion,stream:'video',configuration:0,au,picture:0,layer:0,field:'frame'},sourcePtsUs:100+au*100,
         width:16,height:16,confidence:'exact',reasons:[],capabilities:{blocks:'ready',qp:'ready',modes:'ready',motion:'unsupported'},
         qp:{component:'luma',bitDepth:8,weighting:'pixel-area',mean:23},blocks:[{x:0,y:0,width:16,height:16,qp:23,mode:'intra'}],
@@ -912,9 +914,9 @@ try {
         recovery.streams++; (recovery.windows??=[]).push(_target.window); fail();
         if(recovery.hold)await new Promise((resolve,reject)=>{recovery.release=resolve;_signal.addEventListener('abort',()=>reject(_signal.reason),{once:true});});
         progress({pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true});
-        for(let au=0;au<3;au++)consume(result(au));
+        for(let au=0;au<3;au++){const r=result(au),hit=_target.product==='summary'?this.diagrams.getSummary(r.picture,buildId,_target.indexIdentity??null):_target.product==='blocks'?this.cache.getProduct(r.picture,buildId,_target.indexIdentity??null):this.cache.getMatching(r.picture,buildId,_target.indexIdentity??null);consume(hit??(_target.product==='summary'?summaryOf(r,_target.indexIdentity??null):_target.product==='blocks'?packLegacy(r,_target.indexIdentity??null):r),!!hit);}
       };
-      BitstreamAnalysisService.prototype.local=async function(_file,target){recovery.pictures++;(recovery.targets??=[]).push(target.picture.au);fail();return result(target.picture.au);};
+      BitstreamAnalysisService.prototype.local=async function(_file,target){recovery.pictures++;(recovery.targets??=[]).push(target.picture.au);fail();return packLegacy(result(target.picture.au),target.indexIdentity??null);};
       const session=new ReviewSession((_slot,frame)=>{frame.presentedCommit=++recovery.commit;});
       recovery.session=session;
       // Exercise production lazy construction; only backend methods are mocked.

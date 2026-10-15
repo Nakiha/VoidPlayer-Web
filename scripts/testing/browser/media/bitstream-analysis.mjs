@@ -95,6 +95,7 @@ execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi
   '-x264-params', 'scenecut=0:open-gop=0', path.join(limitsDir, 'incremental.mp4')]);
 // MP4 descriptions now use a complete sample-table adapter. FLV retains
 // asynchronous playback indexing and an independent append-only analysis cursor.
+for(const name of ['stream.mp4','incremental.mp4','stream-2.mp4'])await copyFile(path.join(limitsDir,name),path.join(limitsDir,'queue-'+name));
 for(const action of ['continue','cancel'])execFileSync('ffmpeg',['-y','-v','error','-i',path.join(limitsDir,'incremental.mp4'),'-an','-c:v','copy','-f','flv',path.join(limitsDir,`incremental-${action}.flv`)]);
 await withBrowserFixture(
   {
@@ -207,6 +208,11 @@ await withBrowserFixture(
           assert.equal((await call('get_bitstream_analysis_state', {slot})).cacheHit, true);
           assert.ok(result.metrics.startAu >= 90, 'rear picture starts at its verified GOP anchor');
           assert.ok(result.metrics.packets < 60, 'rear picture does not decode the whole file');
+          await hideOverlay();
+          const startRequests=requests.length;
+          const shown=await page.evaluate(async slot=>{const start=performance.now();document.querySelector(`#bitstream-tracks [data-slot="${slot}"]`).click();await new Promise(resolve=>{const check=()=>{const c=document.getElementById(`bitstream-overlay-${slot}`);if(c&&!c.hidden&&c.getBoundingClientRect().width>0)resolve();else requestAnimationFrame(check);};requestAnimationFrame(check);});const c=document.getElementById(`bitstream-overlay-${slot}`);return {visibleAtAnimationFrameMs:performance.now()-start,metrics:c.analysisMetrics};},slot);
+          rows.push({kind:'overlay-cache-display',input,slot,...shown,newRequests:requests.length-startRequests});
+          console.log('overlay-cache-display',JSON.stringify(rows.at(-1)));
           await hideOverlay();
         }
         await call('seek_review', { ptsUs: 1_000_000 });
@@ -496,6 +502,7 @@ await withBrowserFixture(
       }
       assert.deepEqual(errors,[]);
       await page.screenshot({path:artifact('stable-chart-mount.png')});
+      await writeFile(artifact('overlay-cache-timings.json'),JSON.stringify(rows,null,2));
       console.log(overlayOnly ? `PASS ${engine}: local/library dual-track overlay toolbar, shared opacity, hover details, peer avoidance and closed-toolbar frame updates` : `PASS ${engine}: five chart toggles, paired/all views, local/library dual tracks, fixed time axis during scrolling, minimum/maximum panel heights and narrow/wide first-paint stability`);
       return;
     }
@@ -1168,9 +1175,12 @@ await withBrowserFixture(
       await call('seek_review', { ptsUs: playback.positionUs });
       await page.screenshot({ path: artifact(`whole-stream-${input}.png`) });
       const cached = await call('request_bitstream_analysis', { slot: 'A' });
-      assert.ok(cached.gop); assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true);
+      assert.ok(cached.blocks.length > 0);
+      assert.equal((await call('get_bitstream_analysis_state')).cacheHit, false, 'summary-only charts do not claim exact blocks are cached');
+      await call('request_bitstream_analysis', { slot: 'A' });
+      assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true, 'a second exact request reuses the independent block product');
       const cacheStart = requests.length;
-      await call('request_bitstream_stream', { slot: 'A' });
+      await call('request_bitstream_stream', { slot: 'A', product:'summary' });
       const restored = await call('get_bitstream_analysis_state', { slot: 'A' });
       assert.equal(restored.state, 'ready'); assert.equal(restored.stream.pictures, 120);
       const { revision: beforeRevision, ...beforeChart } = configQuery;
@@ -1183,11 +1193,11 @@ await withBrowserFixture(
       let release;
       const gate = new Promise(r => { release = r; });
       // Cached local streams still read the manifest to verify build identity.
-      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/chunks/**';
+      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/capabilities*';
       await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
       const requested = page.waitForRequest(pattern, { timeout: 30000 });
       try {
-        await requestInspection(page, 'A');
+        await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_stream').execute({slot:'A',product:'summary'}).catch(()=>{}); });
         await requested;
         assert.equal(await page.locator('.analysis-track-control[data-slot="A"]').getAttribute('data-state'), 'pending');
         assert.equal(await page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-ring').count(), 1, 'active inspection uses a circular progress indicator');
@@ -1215,7 +1225,7 @@ await withBrowserFixture(
       for (const input of ['local-file','library']) {
         if ((await call('get_review_session')).tracks.length) await selectDiagrams(page, 'overview');
         for (const slot of ['A','B','C']) await call('remove_review_track',{slot});
-        for (const [slot, name] of [['A','stream.mp4'],['B','incremental.mp4'],['C','stream-2.mp4']]) {
+        for (const [slot, name] of [['A','queue-stream.mp4'],['B','queue-incremental.mp4'],['C','queue-stream-2.mp4']]) {
           if (input === 'local-file') await page.locator(`#file-${slot}`).setInputFiles(path.join(limitsDir,name));
           else await call('load_library_item',{slot,id:library.entries.find(e=>e.name===name).id});
           await page.waitForFunction(slot=>{const s=window.voidPlayer.getState();return !s.busy&&s.tracks.some(t=>t.slot===slot&&t.frame&&!t.failure);},slot);
@@ -2079,10 +2089,11 @@ await withBrowserFixture(
       await call('set_review_color_mode', { mode: 'browser' });
       gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.flv`).id;
       releaseIndexGate = false; heldBatches = 0;
-      if (await page.locator('#analysis-panel').isVisible()) await page.locator('[data-seg="full"]').click();
       await call('load_library_item', { slot: 'A', id: gatedId });
       await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(t => t.slot === 'A' && !t.failure));
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
+      await selectDiagrams(page,'overview');
+      await page.locator('[data-seg="full"]').click();
       await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'building');
       assert.equal((await call('get_analysis_capabilities'))[0].capability.indexState, 'building');
       await selectDiagrams(page,'nalu-size');

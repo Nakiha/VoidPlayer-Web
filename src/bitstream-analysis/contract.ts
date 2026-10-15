@@ -49,6 +49,7 @@ export interface AnalysisGop {
   anchor: 'unknown' | 'closed' | 'dependent';
 }
 export interface AnalysisStreamTarget {
+  product?: "summary" | "blocks";
   mode: 'stream';
   indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
@@ -60,12 +61,18 @@ export function validateStream(target: AnalysisStreamTarget) {
   if (!target || target.mode !== 'stream') throw new AnalysisFailure('invalid-request', 'Invalid stream request');
   validateTarget({ sourceVersion: target.sourceVersion, sourcePtsUs: target.firstPtsUs, normalizedMediaUs: 0 });
   validateIndexIdentity(target.indexIdentity);
+  validateProductRequest(target.product);
   if (!Number.isSafeInteger(target.durationUs) || target.durationUs <= 0)
     throw new AnalysisFailure('invalid-request', 'Invalid stream duration');
   if (target.window && (![target.window.startUs, target.window.endUs, target.window.endUs - target.window.startUs].every(Number.isSafeInteger) || target.window.endUs <= target.window.startUs || !['pts', 'dts'].includes(target.window.axis)))
     throw new AnalysisFailure('invalid-request', 'Invalid analysis viewport');
 }
+export interface AnalysisSourceLayout {
+  provenance:'configuration-sps-v1';configuration:number;codedWidth:number;codedHeight:number;visibleRect:{x:number;y:number;width:number;height:number};
+}
 export interface AnalysisResult {
+  /** Parsed from this configuration SPS, independent of browser plane allocation. */
+  sourceLayout?:AnalysisSourceLayout;
   containerHeader?: import("./diagrams.ts").ContainerHeader;
   nalus?: import("./diagrams.ts").NaluRecord[];
   references?: import("./diagrams.ts").PictureReferences;
@@ -112,6 +119,7 @@ export type DeepReadonly<T> = T extends object
   : T;
 export type ReadonlyAnalysisResult = DeepReadonly<AnalysisResult>;
 export interface AnalysisTarget {
+  product?: "summary" | "blocks";
   indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
   sourcePtsUs: number;
@@ -119,6 +127,7 @@ export interface AnalysisTarget {
   picture?: SourcePictureKey;
 }
 export interface AnalysisRangeTarget {
+  product?: "summary" | "blocks";
   indexIdentity?: import('../media-index-identity.ts').MediaIndexIdentity;
   sourceVersion: string;
   firstPtsUs: number;
@@ -127,6 +136,8 @@ export interface AnalysisRangeTarget {
 }
 export function validateRange(target: AnalysisRangeTarget) {
   validateIndexIdentity(target?.indexIdentity);
+  validateProductRequest(target?.product);
+  if(target?.product !== undefined)throw new AnalysisFailure("invalid-request","Explicit analysis products require a stream or exact-picture request");
   if (
     !target ||
     typeof target.sourceVersion !== "string" ||
@@ -169,7 +180,12 @@ export function pictureId(key: SourcePictureKey): string {
     key.field,
   ]);
 }
+export function validateProductRequest(product: unknown) {
+  if (product !== undefined && product !== "summary" && product !== "blocks") throw new AnalysisFailure("invalid-request", "Unknown analysis product");
+}
 export function validateTarget(target: AnalysisTarget): void {
+  validateProductRequest(target?.product);
+  if(target?.product === "summary")throw new AnalysisFailure("invalid-request","Summary requires an explicit stream request");
   if (
     !target ||
     typeof target.sourceVersion !== "string" ||
@@ -199,7 +215,7 @@ export function validateTarget(target: AnalysisTarget): void {
 }
 /** Validate before renderer/cache use, including count, geometry and overlap.
  * 4px grid is an explicit MVP admission limit, not a guessed completion flag. */
-export function validateResult(result: AnalysisResult): void {
+export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
   if (
     !result ||
     result.schema !== 1 ||
@@ -226,6 +242,10 @@ export function validateResult(result: AnalysisResult): void {
     normalizedMediaUs: 0,
     picture: result.picture,
   });
+  if(result.sourceLayout) {
+    const l=result.sourceLayout,v=l.visibleRect;
+    if(l.provenance!=='configuration-sps-v1'||!['h264','hevc'].includes(result.codec)||l.configuration!==result.picture.configuration||l.codedWidth!==result.width||l.codedHeight!==result.height||!v||![v.x,v.y,v.width,v.height].every(Number.isSafeInteger)||v.x<0||v.y<0||v.width<=0||v.height<=0||v.x+v.width>l.codedWidth||v.y+v.height>l.codedHeight)throw Error('Invalid analysis SPS layout');
+  }
   if (result.gop) {
     const g = result.gop;
     if (![g.startAu, g.endAu, g.configuration].every(Number.isSafeInteger) ||
@@ -237,6 +257,19 @@ export function validateResult(result: AnalysisResult): void {
   if (result.containerHeader) validateContainerHeader(result.codec, result.containerHeader);
   if (result.nalus) validateDiagram(result as import("./diagrams.ts").DiagramPicture);
   else if (result.references) throw new Error("References require NAL metadata");
+  if (![result.width, result.height].every(n => Number.isInteger(n) && n > 0)) throw new Error("Invalid analysis output geometry");
+  if (result.width > 4096 || result.height > 2304)
+    throw new AnalysisFailure("resource-limit", "Invalid analysis geometry");
+  if (!result.capabilities || !['ready', 'unsupported'].includes(result.capabilities.blocks) ||
+      !['ready', 'unsupported'].includes(result.capabilities.qp) || !['ready', 'unsupported'].includes(result.capabilities.modes) ||
+      result.capabilities.motion !== 'unsupported' || !result.qp || result.qp.component !== 'luma' || result.qp.weighting !== 'pixel-area' ||
+      !Number.isInteger(result.qp.bitDepth) || (result.qp.bitDepth < 8 && !(result.confidence === "partial" && result.qp.bitDepth === 0 && result.qp.mean === null)) || result.qp.bitDepth > 16 ||
+      (result.qp.mean !== null && (!Number.isFinite(result.qp.mean) || result.qp.mean < 0 || result.qp.mean > (result.codec === 'vvc' ? 63 : 51))) ||
+      (result.capabilities.qp !== 'ready' && result.qp.mean !== null)) throw new Error('Invalid analysis capabilities/QP');
+  if (!result.metrics || Object.values(result.metrics).some(n => !Number.isFinite(n) || n < 0)) throw new Error('Invalid analysis metrics');
+}
+export function validateResult(result: AnalysisResult): void {
+  validateMetadata(result);
   const { width: w, height: h, blocks } = result;
   if (
     ![w, h].every((n) => Number.isInteger(n) && n > 0) ||
@@ -259,7 +292,7 @@ export function validateResult(result: AnalysisResult): void {
       "Incomplete picture",
     );
   const cells = new Uint8Array((w * h) / 16);
-  let area = 0;
+  let area = 0, weightedQp=0;
   for (const b of blocks) {
     if (
       ![b.x, b.y, b.width, b.height].every(
@@ -279,6 +312,8 @@ export function validateResult(result: AnalysisResult): void {
     )
       throw new Error(`Invalid analysis block ${JSON.stringify(b)}`);
     area += b.width * b.height;
+    if(result.capabilities.qp==='ready' && b.qp===null)throw Error("Unknown block QP cannot be ready");
+    weightedQp+=(b.qp ?? 0)*b.width*b.height;
     for (let y = b.y / 4; y < (b.y + b.height) / 4; y++)
       for (let x = b.x / 4; x < (b.x + b.width) / 4; x++) {
         const i = y * (w / 4) + x;
@@ -295,6 +330,7 @@ export function validateResult(result: AnalysisResult): void {
       "unsupported-picture-layout",
       "Incomplete block coverage",
     );
+  if(result.capabilities.qp==='ready' && result.qp.mean!==weightedQp/area)throw Error("Mean QP does not match block evidence");
 }
 
 function validateIndexIdentity(identity?: import('../media-index-identity.ts').MediaIndexIdentity) {
@@ -304,4 +340,12 @@ function validateIndexIdentity(identity?: import('../media-index-identity.ts').M
       schema: String(id.schemaVersion), indexer: id.indexerBuild})); }
     catch { throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity'); }
   }
+}
+
+/** Match coordinates using exact SPS crop evidence, never size rounding. */
+export function matchesAnalysisLayout(result:Pick<AnalysisResult,'width'|'height'|'sourceLayout'|'picture'>,token:PresentedFrameToken) {
+  const g=token.geometry;if(!g)return false;
+  if(result.width===g.codedWidth&&result.height===g.codedHeight)return true;
+  const l=result.sourceLayout,v=g.visibleRect;
+  return !!l&&l.provenance==='configuration-sps-v1'&&l.configuration===result.picture.configuration&&l.codedWidth===result.width&&l.codedHeight===result.height&&v.x===l.visibleRect.x&&v.y===l.visibleRect.y&&v.width===l.visibleRect.width&&v.height===l.visibleRect.height&&Number.isSafeInteger(g.codedWidth)&&Number.isSafeInteger(g.codedHeight)&&g.codedWidth>=v.x+v.width&&g.codedHeight>=v.y+v.height;
 }

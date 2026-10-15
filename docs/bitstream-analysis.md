@@ -35,7 +35,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 
 定位器只读取有界容器元数据和必要 NAL 首部，FLV 复用现有共享扫描器。闭合 IDR 的语法检查与容器 key 标记同时成立才能起步；CRA、recovery 和未知 open-GOP 不按安全起点处理。每个区间保留一个 decoder，逐 picture 取结果并等待 consumer ACK 后才继续。找不到预算内的安全起点或块覆盖不完整会明确失败/降级；跨配置区间在各自经过验证的安全锚重建参考状态，播放不受影响。
 
-本地 File 由独立 browser worker / RangeReader 分块读，文件不上传。媒体库由独立服务端 worker 本地读盘；浏览器只取 JSON chunks，不加载分析 WASM，也不会在服务端失败时隐式下载远程文件分析。二者使用相同输入适配、核心和协议。Worker 终止是同步 WASM 取消的硬兜底；正常循环在每次 feed/step/take 前检查取消。
+本地 File 由独立 browser worker / RangeReader 分块读，文件不上传。媒体库由独立服务端 worker 本地读盘；浏览器按产品取摘要或紧凑二进制块，旧入口继续取 JSON chunks，不加载分析 WASM，也不会在服务端失败时隐式下载远程文件分析。二者使用相同输入适配、核心和协议。Worker 终止是同步 WASM 取消的硬兜底；正常循环在每次 feed/step/take 前检查取消。
 
 ## 服务、缓存与资源预算
 
@@ -56,7 +56,7 @@ Field picture、palette 的使用、损坏/concealment、不完整覆盖和非 4
 | WASM heap | 初始 64 MiB，最大 512 MiB；stack 4 MiB |
 | 单 picture 结果 / 出站 chunk | 8 MiB，按每条 128B + header 的保守 JSON 上界在 JS records 分配前检查；每 consumer 一块 ACK 背压 |
 | HTTP 结果传输 | 同时 2 个，额外读请求有界等待；不限制 worker 运行路数 |
-| 本地结果缓存 | JSON 计量 32 MiB LRU，会话结束回收，无持久化 |
+| 本地结果缓存 | 私有紧凑块与只读访问器的逻辑计量 32 MiB LRU，会话结束回收，无持久化 |
 | 服务端缓存 | 128 MiB LRU，最多 1024 文件；含 manifest |
 | 遮罩 | 最大 8192 边长、32M 像素；缩小跳过 <2 CSS px 的边界线 |
 
@@ -127,7 +127,7 @@ GOP 按源包表的 AU/解码 ordinal 与配置段划分；容器 key 标记仅�
 
 只有下一个 key / 配置边界或明确索引 EOF 才封口当前 GOP；未封口的尾部不发布结果，不把当前已索引长度写成最终 endAu。HEVC 等距 POC 时间恢复在封口 GOP 内完成后才发布身份。分析赶上索引时 UI 显示「等待索引 · 已检查 N 帧」，保持同一 decoder / 参考状态；后续增量到达继续。取消只释放分析 worker 与订阅，不取消共享索引构建。索引错误、重建/缓存 epoch 改变或版本失效终止任务，不宣布全片完成。
 
-媒体库依然只在服务端独立 worker 运行，多个不同任务可同时推进。任务结果引用按每页最多 32 条、每页最多 16 KiB 的带校验分页记录原子提交；状态通过 `?after=cursor` 有界读取，客户端只确认已消费引用，不保存全片 seen 集合。每个 consumer 有独立游标与租约，最多 32 块未消费结果，慢 consumer 使生产暂停，失联按租约释放。分析执行使用 30 秒无进展预算；索引等待另有 120 秒连续 AU 前缀无进展预算并向客户端更新等待状态，等 consumer 的时间由租约约束，不把长片总时长限制为 30 秒。服务端 128 MiB / 1024 文件 LRU 配额继续生效；被淘汰的结果不承诺仍有完整缓存覆盖。重启保留已提交 picture，但不恢复 decoder 内存，也不自动恢复整片任务。
+媒体库依然只在服务端独立 worker 运行，多个不同任务可同时推进。任务结果引用按每页最多 32 条、每页最多 64 KiB 的带校验分页记录原子提交；状态通过 `?after=cursor` 有界读取，客户端只确认已消费引用，不保存全片 seen 集合。每个 consumer 有独立游标与租约，最多 32 块未消费结果，慢 consumer 使生产暂停，失联按租约释放。分析执行使用 30 秒无进展预算；索引等待另有 120 秒连续 AU 前缀无进展预算并向客户端更新等待状态，等 consumer 的时间由租约约束，不把长片总时长限制为 30 秒。服务端 128 MiB / 1024 文件 LRU 配额继续生效；被淘汰的结果不承诺仍有完整缓存覆盖。重启保留已提交 picture，但不恢复 decoder 内存，也不自动恢复整片任务。
 
 整片模式仍限制最多 250000 条源包元数据，单次读取 32 MiB、单包 8 MiB，连续没有输出的推进最多 300 包 / 32 MiB；不再把累计全片读取量限制为短区间的 64 MiB。进度按已交付帧数 / 总帧数计算，索引未结束不能显示 100%；完成必须核验索引 EOF、全部 AU 已唯一交付，实际执行解码时还须完成 decoder drain，不能仅用最大 PTS 或读到的文件位置宣布完成。单帧、区间请求原有预算保持不变。
 
@@ -162,6 +162,49 @@ NALU 图在第 0 帧前一个帧间隔处保留标记为 −1 的虚拟容器配
 
 ## 可见区间与暂停
 
-图表首次打开时默认展示前 10 秒（短片展示到结尾）；工作区恢复优先采用保存的区间。下方时间条保持整个片源的长度，左右指针标出并可拖动图表可见区间，不增加面板宽度。图表深层分析只请求与当前 PTS/DTS 可见区间相交的完整 GOP；范围变化后取消旧请求并复用已缓存的逐帧结果，参考依赖需要时仍会从安全锚点预读。区间完成不标记为整片完成，Agent 的整片分析请求仍可独立使用。
+图表首次打开时默认展示前 10 秒（短片展示到结尾）；工作区恢复优先采用保存的区间。下方时间条保持整个片源的长度，左右指针标出并可拖动图表可见区间，不增加面板宽度。图表深层分析只请求与当前 PTS/DTS 可见区间相交的完整 GOP；按可靠包表规范化 GOP 集合；同一集合内移动只更新展示窗口，实际缺失集合变化时再取消或补算，参考依赖需要时仍会从安全锚点预读。区间完成不标记为整片完成，Agent 的整片分析请求仍可独立使用。
 
-每轨运行中的进度圆环在悬浮或键盘聚焦时显示暂停按钮，暂停后显示继续按钮，沿用播放控件的动画图标。暂停释放 Worker 和解码器，保留已确认进度及逐帧缓存；继续时按当前可见区间重建解码状态，必要的参考帧重放不会使已确认进度倒退。UI 与 Agent 的暂停/继续均经过会话 facade。
+每轨运行中的进度圆环在悬浮或键盘聚焦时显示暂停按钮，暂停后显示继续按钮，沿用播放控件的动画图标。暂停释放 Worker 和解码器，保留已确认进度及逐帧缓存；继续时按当前可见区间重建解码状态，按实际可读摘要的 AU 集合恢复进度，必要的参考重建单独计数；驱逐后的历史进度不冒充可复用数据。UI 与 Agent 的暂停/继续均经过会话 facade。
+
+
+## 分析产品 v1（#99）
+
+QP / NAL / 参考图视口显式请求 `summary`。普通码率、帧大小仍只用索引。`request_bitstream_stream` 默认保持原来的 full-result 行为，可显式传 `product: summary|blocks` 及 `window`；旧单帧 Agent API 仍返回完整 `AnalysisResult`，内部通过紧凑块适配成独立对象。summary 只允许 stream，单帧显式产品只允许 blocks；range 只支持原来的 legacy 结果，其他组合在准入时返回 invalid-request。
+
+summary 与 blocks 是独立判别联合，不使用空 blocks 数组冒充完整结果。两者均携带原 metadata、sourceVersion / stream / configuration / AU / picture / layer / field、core buildId、recipe / analyzer、产品 schema / encoding 与索引版本。隐式 MP4 输入也明确使用 `mp4-analysis / mp4-input-v1` 身份；其他容器保留现有索引身份，不改变扫描器或索引证明。generation 和 request sequence 由会话及独立 worker 接收闭包检查；旧 generation 的回调不能授权缓存或显示。
+
+summary 的 exact 表示 producer 完成了完整几何/覆盖校验，并不表示消费者持有块。面积加权 luma QP、null / unsupported、NAL/config、POC、帧类型和 active-list 候选边保持原语义；motion 仍 unsupported。`DiagramStore` 是逐帧摘要唯一拥有者，原有粗桶可在 raw 记录淘汰后继续显示，但 detailMissing 与实际可读摘要独立。完整摘要被驱逐就必须按需补算；块 LRU 驱逐不会使已保留摘要失效。同 source 的 build / index / stream epoch 变化会清除旧 raw / bins / seen 和精确块；暖复用先重新读取当前 manifest 或受源版本校验的服务端 capabilities。
+
+blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 为 null）、uint8 mode、零 reserved。producer 直接遍历 WASM 记录完成范围、模式、QP、重叠和完整覆盖校验，summary 不构造全帧块对象数组。需要 blocks 时在 take/grow 前复制至独立 buffer；只转移这个 buffer，绝不转移 WASM heap。缓存通过私有字段拥有 payload；只读稀疏数组访问器逐块生成独立冻结记录，旧公开 API 返回独立对象数组。相同私有拥有者内的验证证明用不可伪造的模块私有 symbol 传递，不信任 serialized validated 标记。
+
+产品二进制响应以固定 VAP1 magic、uint32 header 长度、UTF-8 JSON header、可选块 payload 和 SHA-256 组成；checksum 覆盖 magic 到 payload 的全部内容。保留旧 JSON 缓存入口，不把旧 JSON 识别为新 summary。读取使用 fd.stat 和小型格式前缀，在 body 分配前选择限额；长度、count、版本、checksum 和几何均在使用前验证。响应逐段读取，Content-Length 超限、短读、长读和未知格式明确失败，不引入压缩解压路径。
+
+| 新产品边界 | 硬上限 |
+| --- | --- |
+| metadata | 1 MiB；在 JSON 分配前计算 UTF-8/转义和结构预算，保留原 4096 NAL 准入能力 |
+| 单产品 wire frame | 3 MiB；块数仍为 131072，分配 payload 前检查 count / stride / 长度 |
+| 服务端摘要页 | 32 个 AU / 1 MiB；按完整身份及 AU/32 分页，成员缺洞明确，页 key 与全部成员 namespace 一致 |
+| stream 引用页 | 32 项 / 64 KiB；包含产品、编码、AU 及成员身份 |
+| 每 work 未确认结果 | 同时不超过 32 项与 32 MiB；ACK 前还预留下一帧最坏 3 MiB 产品 / 8 MiB legacy，生产中帧包含在预算内 |
+| HTTP 结果读取 | 2 个并发 slot；每响应最多 3 MiB 产品 / 8 MiB legacy，读/编码结束且响应完成或断开后才释放 |
+| 会话存储 | 原有 blocks 32 MiB 与摘要 32 MiB，逻辑计量包含 payload、metadata 和只读 facade 估算；不增加第三份逐帧缓存 |
+| 服务端存储 | 原有共享 128 MiB / 1024 文件；摘要页、块、引用页及 manifest 共同计费，活跃 lease 保护未确认文件 |
+| 合并计划 | 最多 8 个 source epoch；每计划最多 2048 GOP / 8192 个所选 AU 时钟 / 256 KiB，超限不启用合并，仍走可靠原路径 |
+
+这些是格式、队列和逻辑存储准入，不是 RSS 或所有瞬时拷贝之和的承诺。metadata / frame 的限额大于早期原型草稿，目的是容纳旧的极端合法 NAL metadata；没有调高本地或服务端缓存来换取命中率。摘要页原子替换并校验所有成员，精确块单独有界保存；不能仅凭 processed 位图授权 raw 查询或遮罩。
+
+暂停终止 worker / decoder / reader / lease。恢复允许从闭合 anchor 重建参考链，但同消费者已持有摘要只收到小型 coverage 通知，不重复交付或 put 产品；进度按 AU 集合去重。cache reply 与 coverage 之间若发生淘汰，会回传仍独立拥有的合法摘要修复；服务端同样在发布引用前重验或重写失读产品，不能发布悬空覆盖。同 GOP 需求依据可靠包表的精确所选时钟和其他 GOP 的排除边界合并，不以 PTS 邻近猜测 AU。同集合中移动、后续 chunk、完成和暂停恢复都保留最新显示窗口。已暂停的用户任务不会自动继续。遮罩只读当前身份匹配的 blocks，检查 presented picture / PTS / coded geometry；缺块时不能用 summary 显示。暂停帧的精确需求可优先于自动 summary 任务，播放期间仍 cache-only。
+
+计数区分 init / open / feed / step / decodedAU、preroll、products、cacheHit、uniqueDelivered 和 readBytes；core 调用时间为 inclusive，不代表独立像素重建成本。payloadBytes 是实际发送产品内容的 UTF-8 metadata + owned payload，coverageBytes 单列小型通知，均不包括结构化克隆封装或 telemetry；legacy IPC 字节不可可靠直接观察，记 null，避免额外全量 JSON 序列化污染。HTTP wire 内容由浏览器 Content-Length 独立计量。逐 chunk 快照是截至最后确认 chunk 的观测下界；硬终止前未完成调用不可测。heap / Node RSS 只在明确采样点记录，不用累计 payload 或额度冒充峰值。
+
+CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消合同；不使用指定 Mac 的 15% 冷态或 0.5s / 1s 暖态绝对时限。性能验收另用同一 M5 / 32 GiB、同一 Chromium、干净 d8f69d1 baseline 与产品构建的至少五组 AB/BA：新 profile、新 worker 和空分析缓存，索引状态单列，OS 页缓存不清；原始顺序、内容字节、首结果、CPU/RSS/heap 采样及范围全部保留。面板关闭的 facade 测量和实际图表/遮罩 UI 回归分开报告。core pin、播放路径、容器扫描和 alpha.4 发布状态保持不变。
+
+产品 schema 为 2（key 与服务端产品文件同步隔离旧 schema）；LE12 编码和 VAP1 外层 framing 不变。H264/HEVC 可附加 `sourceLayout`，只从当前 configuration 的 SPS 解析 coded 和精确 visibleRect，记录 configuration-sps-v1 provenance。metadata/header/预算与 checksum 一并验证该证明。遮罩允许浏览器 plane padding 或预裁剪，但必须 coded 完全相等，或 result coded 与 SPS 完全相等且 presented visibleRect 与 SPS 完全相等、plane 完整包含可见域；未知配置不能用尺寸取整猜测。旧 legacy 元数据仍可读，缺该证明且几何不匹配的旧 blocks 不授权遮罩或精确请求暖命中。
+
+32 MiB 是每个 work 的未确认 descriptor 内容字节与下一帧最大预留的双重背压：初始下一帧 <=3 MiB（legacy8 MiB），每次 ACK 前检查 pending+next；暂停/终止前不发下一次 producer ACK。3 MiB/8 MiB 分配准入在 runner 构造 payload/legacy块对象数组之前，legacy额外按实际bounded metadata保守预算。并发默认8、最大32，因此32×N MiB仅是逻辑未确认引用上界（256/1024 MiB），并非RAM；共享128 MiB store会在保护文件无法驱逐时明确拒绝新写，重复引用不等于重复文件。实际每worker同一时刻最多一份输出（产品3 MiB/legacy8 MiB准入），另计最多两个HTTP读取slot、受限编码/解析临时拷贝和独立512 MiB WASM heap上限；不宣称全局32 MiB或RSS总上界。
+
+所有stream产品（summary、blocks和默认legacy full）均绑定本次独立读取的当前build；worker plan/cache/coverage、remote status和最终产品必须与它一致。完整stream恢复也只从当前实际owned blocks播种，旧AU仅发coverage，不重复chunk或cache.put；块被逐出则允许从仍拥有的已校验输出修复。legacy owner保留当前index namespace，不能以summary可读性替代完整产品。
+
+Legacy JSON 的显式外部 indexIdentity 同时进入 single work key 和逐帧 chunk key；合法但没有当前显式index证明的旧namespace记录不得复用。隐式MP4 v1分支保持原tuple和hash不变，旧wire仍返回完整blocks。定向回归预置真实FLV旧namespace有效记录，确认显式请求cache miss、当前namespace单帧/stream共用、重试及scheduler重启命中，并确认不同显式index生成不同key。
+
+同源多轨 fork 共享一个有界 namespace 与单调 admission ticket。只有独立 manifest/capability 预检可以切换 build/index；不同 namespace 的迟到旧 ticket、旧 plan 和旧结果在 cache、摘要与覆盖写入前失败。同 namespace 并发不会互相取消。显式 blocks 单帧若带可信 picture，使用与 stream 相同的 schema/encoding/index 产品 key；单帧文件不必伪造 GOP，stream 由已验证的 cursor descriptor 补充当前 GOP。PTS-only 请求及隐式 legacy MP4 旧 key 保留既有语义。

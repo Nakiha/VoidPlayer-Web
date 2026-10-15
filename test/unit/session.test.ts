@@ -1245,6 +1245,7 @@ test('HDR output changes share the session transaction, export conditions and ro
 test('removing or replacing a streaming source terminates its independent worker without changing playback', async () => {
   const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
   const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const previousFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'fixture'}));
   try {
     for (const action of ['remove', 'replace']) {
       const started = deferred<{ terminated: number }>();
@@ -1274,6 +1275,7 @@ test('removing or replacing a streaming source terminates its independent worker
       } finally { await session.dispose(); }
     }
   } finally {
+    globalThis.fetch=previousFetch;
     if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
     if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
   }
@@ -1282,6 +1284,7 @@ test('removing or replacing a streaming source terminates its independent worker
 test('analysis admission defaults to two tracks; limits drain, queued cancellation and source replacement remain isolated', async () => {
   const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
   const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const previousFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'fixture'}));
   const workers: { terminated: number }[] = [];
   class FakeWorker {
     terminated = 0;
@@ -1336,6 +1339,7 @@ test('analysis admission defaults to two tracks; limits drain, queued cancellati
     assert.equal(workers[3].terminated, 1);
   } finally {
     await session.dispose();
+    globalThis.fetch=previousFetch;
     if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
     if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
   }

@@ -1,3 +1,8 @@
+import {analysisIndexIdentity} from './products.ts';
+import type {ProductIndexIdentity} from './products.ts';
+import { summaryOf, validateProduct, productKey } from './products.ts';
+import type { AnalysisSummary, AnalysisOutput } from './products.ts';
+import type { MediaIndexIdentity } from '../media-index-identity.ts';
 import { isAnnexB, nalRanges } from '../nal-framing.ts';
 import type { AnalysisAxis } from '../analysis/types.ts';
 import type { AnalysisResult, SourcePictureKey } from './contract.ts';
@@ -173,10 +178,11 @@ function mergeBucket(target: DiagramBucket, input: DiagramBucket) {
   for (const type of ['I', 'P', 'B'] as const) target.frames[type] += input.frames[type];
   for (let i = 0; i < 64; i++) { target.naluBytes[i] += input.naluBytes[i]; target.naluCounts[i] += input.naluCounts[i]; }
 }
+function diagramProjection(value:DiagramPicture):DiagramPicture { return {picture:value.picture,sourcePtsUs:value.sourcePtsUs,sourceDtsUs:value.sourceDtsUs,codec:value.codec,gop:value.gop,qpMean:value.qpMean,nalus:value.nalus,references:value.references,...('referenceLayer' in value?{referenceLayer:value.referenceLayer}:{})}; }
 /** Retain lightweight chart records independently of the block LRU. Entries
  * are source/config/AU owned; bounded queries never clone a whole film. */
 export class DiagramStore {
-  private sources = new Map<string, Map<number, { value: DiagramPicture; bytes: number; id: string }>>();
+  private sources = new Map<string, Map<number, { value: DiagramPicture & Partial<AnalysisSummary>; bytes: number; id: string }>>();
   private fifo = new Map<string, { source: string; au: number; bytes: number }>();
   private bytes = 0;
   private maxBytes: number;
@@ -196,13 +202,34 @@ export class DiagramStore {
     }
     this.layersDirty.delete(source);
   }
-  put(result: AnalysisResult) {
+  summaryAt(source:string,au:number) { const value=this.sources.get(source)?.get(au)?.value; if(value?.product!=='summary')return null;const {qpMean,referenceLayer,...summary}=value;return structuredClone(summary) as AnalysisSummary; }
+  getSummary(picture: SourcePictureKey, buildId: string, indexIdentity: ProductIndexIdentity | null) {
+    const entry = this.sources.get(picture.sourceVersion)?.get(picture.au);
+    if (!entry || entry.value.product !== 'summary' || entry.id !== productKey(picture,buildId,indexIdentity,'summary')) return null;
+    const {qpMean, referenceLayer, ...value} = entry.value;
+    return structuredClone(value) as AnalysisSummary;
+  }
+  put(result: AnalysisResult) { this.putSummary(summaryOf(result)); }
+  private identities = new Map<string,string>();
+  putSummary(result: AnalysisSummary) {
+    validateProduct(result);
+    const sourceKey = result.picture.sourceVersion;
+    const identity = JSON.stringify([result.buildId,result.recipe,result.analyzerVersion,result.indexIdentity,result.picture.stream,result.productSchema,result.encoding]);
+    const oldIdentity = this.identities.get(sourceKey);
+    if (oldIdentity && oldIdentity !== identity) {
+      for (const entry of this.sources.get(sourceKey)?.values() ?? []) { this.bytes -= entry.bytes; this.fifo.delete(entry.id); }
+      this.sources.delete(sourceKey); this.summaries.delete(sourceKey); this.bounds.delete(sourceKey); this.layersDirty.delete(sourceKey);
+    }
+    if(!this.identities.has(sourceKey) && this.identities.size>=8){const oldSource=this.identities.keys().next().value!;for(const entry of this.sources.get(oldSource)?.values() ?? []){this.bytes-=entry.bytes;this.fifo.delete(entry.id);}this.sources.delete(oldSource);this.summaries.delete(oldSource);this.bounds.delete(oldSource);this.layersDirty.delete(oldSource);this.identities.delete(oldSource);}
+    this.identities.set(sourceKey,identity);
     if (!result.nalus) return;
     validateDiagram(result as DiagramPicture);
     if (result.containerHeader) validateContainerHeader(result.codec, result.containerHeader);
-    const value: DiagramPicture = structuredClone({ picture: result.picture, sourcePtsUs: result.sourcePtsUs, sourceDtsUs: result.sourceDtsUs, codec: result.codec, gop: result.gop, qpMean: result.confidence === 'exact' && result.capabilities.qp === 'ready' ? result.qp.mean : null, nalus: result.nalus, references: result.references });
+    const prior=this.sources.get(sourceKey)?.get(result.picture.au);
+    const preservedGop=!result.gop && prior?.id===productKey(result.picture,result.buildId,result.indexIdentity,'summary') ? prior.value.gop : undefined;
+    const value = structuredClone({ ...result, ...(preservedGop?{gop:preservedGop}:{}), qpMean: result.confidence === 'exact' && result.capabilities.qp === 'ready' ? result.qp.mean : null }) as DiagramPicture & AnalysisSummary;
     // Reserve space for derived layout metadata without retaining another source-sized map.
-    const source = value.picture.sourceVersion, au = value.picture.au, id = pictureId(value.picture), bytes = JSON.stringify(value).length * 2 + 256;
+    const source = value.picture.sourceVersion, au = value.picture.au, id = productKey(value.picture,result.buildId,result.indexIdentity,'summary'), bytes = JSON.stringify(value).length * 2 + 256;
     let entries = this.sources.get(source);
     this.summarize(value);
     if (result.containerHeader) { this.summaries.get(source)?.containerHeaders.set(result.picture.configuration, structuredClone(result.containerHeader)); }
@@ -270,6 +297,7 @@ export class DiagramStore {
     }
   }
   queryChart(source: string, startUs: number, endUs: number, pixelWidth = 512, axis: AnalysisAxis = 'pts') {
+    this.ensureLayers(source);
     const sourceSummary = this.summaries.get(source), summary = sourceSummary?.axes[axis];
     const base = { revision: this.revision, count: summary?.count ?? 0, codec: sourceSummary?.codec ?? null,
       containerHeaders: [...(sourceSummary?.containerHeaders ?? [])].sort(([a], [b]) => a - b).map(([configuration, header]) => ({ configuration, ...structuredClone(header) })),
@@ -292,7 +320,7 @@ export class DiagramStore {
         const key = Math.floor(time / summary.width); coverage.set(key, (coverage.get(key) ?? 0) + 1);
         if (time >= startUs && time < endUs) {
           rawCount++; bytes += entry.bytes;
-          if (rawCount <= 256 && bytes <= 2 * 1024 * 1024) base.pictures.push(entry.value);
+          if (rawCount <= 256 && bytes <= 2 * 1024 * 1024) base.pictures.push(diagramProjection(entry.value));
         }
       }
       const complete = bins.every(b => coverage.get(Math.floor(b.startUs / summary.width)) === b.pictures);
@@ -337,10 +365,10 @@ export class DiagramStore {
     this.bounds.set(source, { min, max });
     const start = Math.max(0, startAu ?? anchor?.gop?.startAu ?? Math.max(min, (anchor?.picture.au ?? min) - 16));
     const pictures: DiagramPicture[] = []; let queryBytes = anchor ? entries.get(anchor.picture.au)?.bytes ?? 0 : 0;
-    for (let au = start; au < start + Math.max(1, Math.min(256, limit)); au++) { const entry = entries.get(au); if (entry) { if (pictures.length && queryBytes + entry.bytes > 2 * 1024 * 1024) break; queryBytes += entry.bytes; pictures.push(entry.value); } }
-    return structuredClone({ revision: this.revision, count: entries.size, startAu: min, endAu: max + 1, pictures, anchor: anchor ?? null });
+    for (let au = start; au < start + Math.max(1, Math.min(256, limit)); au++) { const entry = entries.get(au); if (entry) { if (pictures.length && queryBytes + entry.bytes > 2 * 1024 * 1024) break; queryBytes += entry.bytes; pictures.push(diagramProjection(entry.value)); } }
+    return structuredClone({ revision: this.revision, count: entries.size, startAu: min, endAu: max + 1, pictures, anchor: anchor ? diagramProjection(anchor) : null });
   }
-  clear() { this.summaries.clear(); this.sources.clear(); this.bounds.clear(); this.layersDirty.clear(); this.fifo.clear(); this.bytes = 0; this.revision++; }
+  clear() { this.identities.clear(); this.summaries.clear(); this.sources.clear(); this.bounds.clear(); this.layersDirty.clear(); this.fifo.clear(); this.bytes = 0; this.revision++; }
 }
 const names: Record<string, Record<number, string>> = {
   h264: { 1: 'SLICE', 5: 'IDR', 6: 'SEI', 7: 'SPS', 8: 'PPS', 9: 'AUD', 10: 'EOS', 11: 'EOB', 12: 'FILLER' },

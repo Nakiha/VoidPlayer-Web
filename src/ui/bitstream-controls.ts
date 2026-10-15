@@ -92,7 +92,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   function automatic(slot: Slot, entry: Entry) {
     if (!entry.enabled || lastState.busy || lastState.playing || cached(slot,entry)) return;
     const state = session.getBitstreamAnalysisState(slot);
-    if (state.state === 'pending' || state.state === 'paused' || state.state === 'unsupported' || entry.request) return;
+    if ((state.state === 'pending' && state.stream?.product !== 'summary') || state.state === 'paused' || state.state === 'unsupported' || entry.request) return;
     // The picture provider plans bounded preroll from a verified closed anchor.
     // Opening an overlay must never turn a paused-frame inspection into a full scan.
     const key = inspectionKey(session.getPresentedFrame(slot));
@@ -101,7 +101,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
       queueMicrotask(() => {
         if (!entry.enabled || entries.get(slot) !== entry) return;
         if (lastState.busy || lastState.playing || inspectionKey(session.getPresentedFrame(slot)) !== key ||
-            session.getBitstreamAnalysisState(slot).state === 'pending') {
+            (session.getBitstreamAnalysisState(slot).state === 'pending' && session.getBitstreamAnalysisState(slot).stream?.product !== 'summary')) {
           if (entry.requestedKey === key) entry.requestedKey = undefined;
           return;
         }
@@ -127,8 +127,7 @@ export function installBitstreamControls(session: ReviewSession, canvases: Recor
   }
   function cached(slot: Slot, entry: Entry) {
     const token = session.getPresentedFrame(slot);
-    return session.cachedBitstreamAnalysis(slot, token ?? undefined)
-      ?? (tokenKey(token) === entry.resultKey ? entry.result : undefined);
+    return session.cachedBitstreamAnalysis(slot, token ?? undefined);
   }
   async function ensureOverlay(slot: Slot, entry: Entry) {
     if (entry.overlay) return;

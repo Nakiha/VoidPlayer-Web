@@ -758,7 +758,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const slot = chip.dataset.slot as Slot, ui = inspectionUi(slot);
       chip.dataset.state = ui.state;
       let retry = retryButtons.get(slot);
-      if (!retry) { retry = analysisRetryButton(slot, () => act(() => session.requestBitstreamStream(slot, undefined, visibleAnalysisWindow(slot)), 'ui.retry-analysis', { slot })); retry.button.id = `analysis-retry-${slot}`; retryButtons.set(slot, retry); }
+      if (!retry) { retry = analysisRetryButton(slot, () => act(() => session.requestBitstreamStream(slot, undefined, visibleAnalysisWindow(slot), 'explicit', 'summary'), 'ui.retry-analysis', { slot })); retry.button.id = `analysis-retry-${slot}`; retryButtons.set(slot, retry); }
       if (retry.button.parentElement !== chip) chip.append(retry.button);
       retry.update(session.getBitstreamAnalysisState(slot));
       const button = chip.querySelector<HTMLButtonElement>('.analysis-chip')!;

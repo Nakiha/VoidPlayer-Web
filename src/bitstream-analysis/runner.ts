@@ -1,3 +1,9 @@
+import {avcGeometry} from '../avc-geometry.ts';
+import {hevcGeometry} from '../hevc-geometry.ts';
+import { makeDemandPlan } from './demand.ts';
+import type { DemandPlan } from './demand.ts';
+import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, readBlock, writeBlock, metadata, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
+import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, AnalysisBlocks, FrameMetadata } from './products.ts';
 import {isAnnexB} from '../nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
 import { readNalus, readContainerHeader } from "./diagrams.ts";
@@ -6,6 +12,7 @@ import {
   ANALYZER_VERSION,
   BUDGET,
   validateResult,
+  validateMetadata,
   validateTarget,
   validateRange,
   validateStream,
@@ -25,7 +32,7 @@ import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
-export async function analyzePicture(
+async function runPicture(
   reader: AnalysisReader,
   target: AnalysisTarget,
   core: any,
@@ -38,21 +45,21 @@ export async function analyzePicture(
     desiredAus?: ReadonlySet<number>;
     viewport?: boolean;
     endSourcePtsUs?: number;
-    onResult?: (result: AnalysisResult) => Promise<void>;
+    onResult?: (result: AnalysisOutput) => Promise<void>;
     stream?: AnalysisStreamTarget;
     onProgress?: (progress: StreamProgress) => Promise<void>;
-    cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>;
+    cached?: (picture: SourcePictureKey) => Promise<AnalysisOutput | null>;
   } = {},
-): Promise<AnalysisResult> {
-  validateTarget(target);
+): Promise<AnalysisOutput> {
+  validateTarget(options.stream || options.viewport || options.desiredAus ? {...target,product:undefined} : target);
   const started = performance.now(),
     input = options.input ?? (await openAnalysisInput(reader, signal, !!options.stream, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity}));
   let opened = false;
   try {
     const firstPacket=input.packets[0];
-    const cachedAnchor=(hit: AnalysisResult | null | undefined, packet: typeof firstPacket) =>
+    const cachedAnchor=(hit: AnalysisOutput | null | undefined, packet: typeof firstPacket) =>
       !!hit && input.codec==='h264' && isAnnexB(input.configurations[packet.configuration]) &&
-      reusableResult(hit,input.codec,buildId,input.picture(packet,target.sourceVersion),packet.pts) &&
+      reusableResult(hit,input.codec,buildId,input.picture(packet,target.sourceVersion),packet.pts,target) &&
       hit.gop?.anchor==='closed' && hit.gop.startAu===packet.au && hit.gop.configuration===packet.configuration &&
       !!hit.containerHeader && !!hit.references && hit.nalus?.filter(n=>n.type===1 || n.type===5).length===1 && hit.nalus.some(n=>n.type===5);
     const firstHit=options.stream && options.cached ? await options.cached(input.picture(firstPacket,target.sourceVersion)) : null;
@@ -85,6 +92,7 @@ export async function analyzePicture(
       throw new AnalysisFailure('ambiguous-picture-identity', 'Duplicate picture timestamps');
     let configuration = plan.target.configuration;
     let description = input.configurations[configuration];
+    const sourceLayouts=new Map<number,ReturnType<typeof avcGeometry>|ReturnType<typeof hevcGeometry>>();
     const containerHeaders = new Map<number, ReturnType<typeof readContainerHeader>>();
     let pointer = 0;
     const open = async () => {
@@ -142,14 +150,14 @@ export async function analyzePicture(
       sinceOutputBytes = 0,
       outputPictures = 0;
     const nalus = new Map<number, import("./diagrams.ts").NaluRecord[]>();
-    let last: AnalysisResult | undefined;
+    let last: AnalysisOutput | undefined;
     const progress = async (complete = false) => {
       if (!options.stream) return;
       await options.onProgress?.({ pictures: outputPictures, totalPictures: input.totalPackets, indexComplete: input.indexComplete, waitingForIndex: false,
         checkedUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : Math.min(options.stream.durationUs - 1, (input.totalPackets ? Math.floor(options.stream.durationUs * outputPictures / input.totalPackets) : 0)),
         totalUs: complete ? Math.max(options.stream.durationUs, input.sourceEndUs - options.stream.firstPtsUs) : options.stream.durationUs, gopStartAu: last?.gop?.startAu });
     };
-    const publish = async (result: AnalysisResult) => {
+    const publish = async (result: AnalysisOutput) => {
       if (seen) seen.add(result.picture.au);
       outputPictures++;
       last = result;
@@ -183,7 +191,7 @@ export async function analyzePicture(
         const packet = input.packets[au], picture = input.picture(packet, target.sourceVersion);
         const hit = await options.cached(picture);
         signal.throwIfAborted();
-        if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts) && hit.nalus && hit.containerHeader && hit.references) {
+        if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts, target) && hit.nalus && hit.containerHeader && hit.references) {
           if (!seen!.has(au)) await publish({ ...hit, gop: { ...group } });
         } else complete = false;
       }
@@ -199,7 +207,7 @@ export async function analyzePicture(
       return group.endAu;
     };
     await progress();
-    const take = (): AnalysisResult | null => {
+    const take = (): AnalysisOutput | null => {
       const au = core._vpa_ordinal(),
         n = core._vpa_count(),
         bytes = n * 12;
@@ -208,13 +216,13 @@ export async function analyzePicture(
         n < 0 ||
         n > BUDGET.blocks ||
         bytes > BUDGET.resultBytes ||
-        n * 128 + 4096 > BUDGET.resultBytes
+        (!target.product && n * 128 + 4096 > BUDGET.resultBytes)
       )
         throw new AnalysisFailure(
           "resource-limit",
           "Analysis output budget exceeded",
         );
-      let result: AnalysisResult | null = null;
+      let result: AnalysisOutput | null = null;
       if (options.stream || desired.has(au)) {
         if (!Number.isSafeInteger(au) || au < 0 || au >= input.packets.length || decoded?.has(au))
           throw new Error('Invalid or duplicate analyzer AU');
@@ -232,28 +240,17 @@ export async function analyzePicture(
           height = core._vpa_height();
         if (ptr < 0 || ptr + bytes > core.HEAPU8.length)
           throw new Error("Invalid analysis output pointer");
-        const view = new DataView(core.HEAPU8.buffer, ptr, bytes),
-          blocks: AnalysisBlock[] = [];
-        let sum = 0,
-          area = 0;
-        if (!invalid)
-          for (let i = 0; i < n; i++) {
-            const at = i * 12,
-              block = {
-                x: view.getUint16(at, true),
-                y: view.getUint16(at + 2, true),
-                width: view.getUint16(at + 4, true),
-                height: view.getUint16(at + 6, true),
-                qp: depth === 8 ? view.getInt16(at + 8, true) : null,
-                mode: ({ 1: "intra", 2: "inter", 3: "skip" } as const)[
-                  view.getUint8(at + 10) as 1 | 2 | 3
-                ],
-              };
-            blocks.push(block);
-            sum += (block.qp ?? 0) * block.width * block.height;
-            area += block.width * block.height;
-          }
-        result = {
+        const view = new DataView(core.HEAPU8.buffer, ptr, bytes);
+        const blockAt = (i: number): AnalysisBlock => ({
+          x: view.getUint16(i*12, true), y: view.getUint16(i*12+2, true),
+          width: view.getUint16(i*12+4, true), height: view.getUint16(i*12+6, true),
+          qp: depth === 8 ? view.getInt16(i*12+8,true) : null,
+          mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(i*12+10) as 1|2|3],
+        });
+        if(!sourceLayouts.has(selected.configuration))sourceLayouts.set(selected.configuration,input.codec==='h264'?avcGeometry(input.configurations[selected.configuration]):input.codec==='hevc'?hevcGeometry(input.configurations[selected.configuration]):null);
+        const layout=sourceLayouts.get(selected.configuration);
+        let frame: FrameMetadata = {
+          ...(layout&&layout.codedWidth===width&&layout.codedHeight===height?{sourceLayout:{provenance:'configuration-sps-v1' as const,configuration:selected.configuration,codedWidth:layout.codedWidth,codedHeight:layout.codedHeight,visibleRect:{x:layout.x,y:layout.y,width:layout.width,height:layout.height}}}:{}),
           schema: 1,
           nalus: nalus.get(au),
           containerHeader: containerHeaders.get(selected.configuration),
@@ -293,9 +290,8 @@ export async function analyzePicture(
             component: "luma",
             bitDepth: depth,
             weighting: "pixel-area",
-            mean: area && depth === 8 ? sum / area : null,
+            mean: null,
           },
-          blocks,
           metrics: {
             startAu: plan.start,
             packets: count,
@@ -305,30 +301,27 @@ export async function analyzePicture(
             heapBytes: core.HEAPU8.length,
           },
         };
-        if (result.sourcePtsUs !== selected.pts)
-          throw new Error("Analyzer output timestamp mismatch");
-        try {
-          validateResult(result);
-        } catch (error) {
-          if (
-            !(error instanceof AnalysisFailure) ||
-            error.code !== "unsupported-picture-layout"
-          )
-            throw error;
-          result = {
-            ...result,
-            confidence: "partial",
-            reasons: [error instanceof Error ? error.message : String(error)],
-            reasonCodes: ["unsupported-picture-layout"],
-            blocks: [],
-            capabilities: {
-              blocks: "unsupported",
-              qp: "unsupported",
-              modes: "unsupported",
-              motion: "unsupported",
-            },
-          };
+        if (frame.sourcePtsUs !== selected.pts) throw new Error('Analyzer output timestamp mismatch');
+        let blockCount = invalid ? 0 : n;
+        try { frame.qp.mean=validateRecords(frame, blockCount, blockAt); }
+        catch (error) {
+          if (!(error instanceof AnalysisFailure) || error.code !== 'unsupported-picture-layout') throw error;
+          frame = { ...frame, confidence: 'partial', reasons: [error.message], reasonCodes: ['unsupported-picture-layout'],
+            qp: {...frame.qp, mean: null}, capabilities: {blocks:'unsupported',qp:'unsupported',modes:'unsupported',motion:'unsupported'} };
+          blockCount = 0;
         }
+        if (target.product) {
+          const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:PRODUCT_SCHEMA, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
+          if (target.product === 'summary') { result = summary; validateOutput(result); }
+          else {
+            if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
+            const payload = new ArrayBuffer(blockCount*12), packed = new DataView(payload);
+            for(let i=0;i<blockCount;i++) writeBlock(packed,i,blockAt(i));
+            result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};
+            // Producer already checked geometry directly in the WASM view.
+          }
+        } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
+
       }
       nalus.delete(au);
       if (core._vpa_take(BUDGET.resultBytes) < 0)
@@ -484,10 +477,10 @@ export async function analyzePicture(
   }
 }
 
-function reusableResult(hit: AnalysisResult, codec: AnalysisResult['codec'], buildId: string, picture: SourcePictureKey, pts: number): boolean {
+function reusableResult(hit: AnalysisOutput, codec: AnalysisResult['codec'], buildId: string, picture: SourcePictureKey, pts: number, target: Pick<AnalysisTarget,'product'|'indexIdentity'>): boolean {
   try {
-    validateResult(hit);
-    return hit.confidence === 'exact' && hit.codec === codec && hit.buildId === buildId &&
+    validateOutput(hit);
+    return (isProduct(hit) ? hit.product === target.product && JSON.stringify(hit.indexIdentity) === JSON.stringify(analysisIndexIdentity(target.indexIdentity)) : target.product === undefined) && hit.confidence === 'exact' && hit.codec === codec && hit.buildId === buildId &&
       hit.recipe === ANALYSIS_RECIPE && hit.analyzerVersion === ANALYZER_VERSION &&
       pictureId(hit.picture) === pictureId(picture) && hit.sourcePtsUs === pts &&
       hit.capabilities.blocks === 'ready' && hit.capabilities.modes === 'ready';
@@ -496,14 +489,14 @@ function reusableResult(hit: AnalysisResult, codec: AnalysisResult['codec'], bui
 
 /** One bounded decoder session publishes picture chunks incrementally. The
  * consumer callback is awaited before production advances (backpressure). */
-export async function analyzeRange(
+async function runRange(
   reader: AnalysisReader,
   target: AnalysisRangeTarget,
   core: any,
   buildId: string,
   signal: AbortSignal,
-  onResult: (result: AnalysisResult) => Promise<void>,
-  cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
+  onResult: (result: AnalysisOutput) => Promise<void>,
+  cached?: (picture: SourcePictureKey) => Promise<AnalysisOutput | null>,
 ) {
   validateRange(target);
   if(typeof core==='function') {
@@ -515,7 +508,7 @@ export async function analyzeRange(
   const input = await openAnalysisInput(reader, signal, false, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
   let first: number;
   const missing = new Set<number>();
-  let lastCached: AnalysisResult | undefined;
+  let lastCached: AnalysisOutput | undefined;
   try {
     const matches = input.packets
       .filter(
@@ -541,7 +534,7 @@ export async function analyzeRange(
       const picture = input.picture(packet, target.sourceVersion);
       const hit = await cached?.(picture);
       signal.throwIfAborted();
-      const reusable = hit && reusableResult(hit, input.codec, buildId, picture, packet.pts);
+      const reusable = hit && reusableResult(hit, input.codec, buildId, picture, packet.pts, target);
       if (hit && reusable) { await onResult(hit); signal.throwIfAborted(); lastCached = hit; }
       else { if (!missing.size) first = packet.pts; missing.add(packet.au); }
     }
@@ -570,7 +563,7 @@ export async function analyzeRange(
     }
     for (const aus of segments) {
       const packet = input.packets[aus[0]];
-      last = await analyzePicture(reader, { sourceVersion: target.sourceVersion,
+      last = await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
         sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) },
         core, buildId, signal, { input, keepInput: true, desiredAus: new Set(aus), onResult });
     }
@@ -581,12 +574,13 @@ export async function analyzeRange(
 
 /** Reconstruct coverage from validated picture chunks; skip only cache-covered
  * groups with a verified safe continuation. Misses retain continuous decode. */
-export async function analyzeStream(
+async function runStream(
   reader: AnalysisReader, target: AnalysisStreamTarget, core: any, buildId: string,
-  signal: AbortSignal, onResult: (result: AnalysisResult) => Promise<void>,
+  signal: AbortSignal, onResult: (result: AnalysisOutput) => Promise<void>,
   onProgress: (progress: StreamProgress) => Promise<void>,
   frontier?: () => Promise<AnalysisIndexFrontier>,
-  cached?: (picture: SourcePictureKey) => Promise<AnalysisResult | null>,
+  cached?: (picture: SourcePictureKey) => Promise<AnalysisOutput | null>,
+  onPlan?: (plan:DemandPlan)=>void,
 ) {
   validateStream(target);
   if (target.window) {
@@ -616,11 +610,12 @@ export async function analyzeStream(
     if (typeof core === 'function') { const factory = core; let instance: Promise<any> | undefined; core = () => instance ??= Promise.resolve().then(factory); }
     const input = await openAnalysisInput(reader, signal, false, { sourceVersion: target.sourceVersion, indexIdentity: target.indexIdentity });
     try {
+      const demandPlan=makeDemandPlan(input.packets,target,buildId); if(demandPlan)onPlan?.(demandPlan);
       const groups = viewportAnalysisGops(input.packets, target.firstPtsUs, target.window);
       const totalPictures = groups.reduce((count, group) => count + group.endAu - group.startAu, 0);
       if (!totalPictures || totalPictures > 250000) throw new AnalysisFailure('resource-limit', 'Empty or oversized analysis viewport');
       const totalUs = target.window.endUs - target.window.startUs;
-      let pictures = 0, last: AnalysisResult | undefined;
+      let pictures = 0, last: AnalysisOutput | undefined;
       const progress = () => onProgress({ pictures, totalPictures, totalUs, checkedUs: pictures === totalPictures ? totalUs : Math.min(totalUs - 1, Math.floor(totalUs * pictures / totalPictures)), indexComplete: true, waitingForIndex: false });
       await progress();
       for (const group of groups) {
@@ -628,7 +623,7 @@ export async function analyzeStream(
         if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
         const evidence = inspectPacketPicture(input.codec, input.configurations[group.configuration], await input.readUnit(first));
         group.anchor = evidence.closedRandomAccess ? 'closed' : 'dependent';
-        const publish = async (result: AnalysisResult) => {
+        const publish = async (result: AnalysisOutput) => {
           last = { ...result, gop: { ...group } };
           await onResult(last); signal.throwIfAborted(); pictures++; await progress();
         };
@@ -636,12 +631,12 @@ export async function analyzeStream(
         for (let au = group.startAu; au < group.endAu; au++) {
           signal.throwIfAborted();
           const packet = input.packets[au], picture = input.picture(packet, target.sourceVersion), hit = await cached?.(picture);
-          if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts)) await publish(hit);
+          if (hit && reusableResult(hit, input.codec, buildId, picture, packet.pts, target)) await publish(hit);
           else missing.add(au);
         }
         if (missing.size) {
           const packet = input.packets[missing.values().next().value!];
-          await analyzePicture(reader, { sourceVersion: target.sourceVersion, sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
+          await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion, sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
             { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish });
         }
       }
@@ -654,7 +649,18 @@ export async function analyzeStream(
   const input = await openAnalysisInput(reader, signal, true, {  sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity,frontier,
     waiting: async waitingForIndex => { await report({ ...latest, waitingForIndex }); } });
   const first = input.packets[0];
-  return analyzePicture(reader, { sourceVersion: target.sourceVersion,
+  return runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
     sourcePtsUs: first.pts, normalizedMediaUs: Math.max(0, first.pts - target.firstPtsUs) },
     core, buildId, signal, { input, sequential: true, stream: target, onResult, onProgress: report, cached });
 }
+
+// Legacy defaults remain source-compatible. Products are explicit opt-in.
+export function analyzePicture(reader: AnalysisReader, target: AnalysisTarget & {product:'blocks'}, core:any, buildId:string, signal:AbortSignal): Promise<AnalysisProduct>;
+export function analyzePicture(reader: AnalysisReader, target: AnalysisTarget & {product?:undefined}, core:any, buildId:string, signal:AbortSignal, options?: Parameters<typeof runPicture>[5]): Promise<AnalysisResult>;
+export function analyzePicture(...args: Parameters<typeof runPicture>) { return runPicture(...args); }
+export function analyzeRange(reader:AnalysisReader,target:AnalysisRangeTarget & {product?:undefined},core:any,buildId:string,signal:AbortSignal,onResult:(result:AnalysisResult)=>Promise<void>,cached?:(picture:SourcePictureKey)=>Promise<AnalysisResult|null>):Promise<AnalysisResult>;
+export function analyzeRange(reader:AnalysisReader,target:AnalysisRangeTarget,core:any,buildId:string,signal:AbortSignal,onResult:(result:AnalysisOutput)=>Promise<void>,cached?:(picture:SourcePictureKey)=>Promise<AnalysisOutput|null>):Promise<AnalysisOutput>;
+export function analyzeRange(...args:any[]) { return runRange(...args as Parameters<typeof runRange>); }
+export function analyzeStream(reader:AnalysisReader,target:AnalysisStreamTarget & {product?:undefined},core:any,buildId:string,signal:AbortSignal,onResult:(result:AnalysisResult)=>Promise<void>,onProgress:(progress:StreamProgress)=>Promise<void>,frontier?:()=>Promise<AnalysisIndexFrontier>,cached?:(picture:SourcePictureKey)=>Promise<AnalysisResult|null>,onPlan?:(plan:DemandPlan)=>void):Promise<AnalysisResult>;
+export function analyzeStream(reader:AnalysisReader,target:AnalysisStreamTarget,core:any,buildId:string,signal:AbortSignal,onResult:(result:AnalysisOutput)=>Promise<void>,onProgress:(progress:StreamProgress)=>Promise<void>,frontier?:()=>Promise<AnalysisIndexFrontier>,cached?:(picture:SourcePictureKey)=>Promise<AnalysisOutput|null>,onPlan?:(plan:DemandPlan)=>void):Promise<AnalysisOutput>;
+export function analyzeStream(...args:any[]) { return runStream(...args as Parameters<typeof runStream>); }
