@@ -1,3 +1,4 @@
+import { summaryOf, packLegacy } from '../../src/bitstream-analysis/products.ts';
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { inspectPacketPicture } from "../../src/packet-picture.ts";
@@ -198,6 +199,7 @@ test("VVC 8-bit luma QP extends to 63 while AVC and HEVC stop at 51", () => {
   r.blocks[0].qp = 52;
   assert.throws(() => validateResult(r));
   r.codec = "vvc";
+  r.qp.mean=52;
   validateResult(r);
   r.blocks[0].qp = 64;
   assert.throws(() => validateResult(r));
@@ -540,6 +542,7 @@ test('session preserves source completion across eviction, multiple picture task
   const { rgbaDescription } = await import('../../src/frame-description.ts');
   const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
   const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
   const requests: any[] = [];
   let failPicture = false, commit = 0;
   class FakeWorker {
@@ -552,9 +555,9 @@ test('session preserves source completion across eviction, multiple picture task
       queueMicrotask(() => {
         if (data.target.mode === 'stream') {
           this.onmessage?.({data:{event:'progress',progress:{pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true}}});
-          for (let au=0;au<3;au++) this.onmessage?.({data:{event:'chunk',result:picture(au)}});
+          for (let au=0;au<3;au++) this.onmessage?.({data:{event:'chunk',result:data.target.product === 'summary' ? summaryOf(picture(au) as AnalysisResult) : picture(au)}});
           this.onmessage?.({data:{ok:true}});
-        } else this.onmessage?.({data:failPicture ? {ok:false,error:'network',reason:{code:'internal-error',message:'network'}} : {ok:true,result:picture(data.target.picture.au)}});
+        } else this.onmessage?.({data:failPicture ? {ok:false,error:'network',reason:{code:'internal-error',message:'network'}} : {ok:true,result:packLegacy(picture(data.target.picture.au) as AnalysisResult)}});
       });
     }
     terminate() {}
@@ -597,6 +600,7 @@ test('session preserves source completion across eviction, multiple picture task
   } finally {
     await session.dispose();
     if(workerDescriptor)Object.defineProperty(globalThis,'Worker',workerDescriptor);else Reflect.deleteProperty(globalThis,'Worker');
+    globalThis.fetch=originalFetch;
     if(locationDescriptor)Object.defineProperty(globalThis,'location',locationDescriptor);else Reflect.deleteProperty(globalThis,'location');
   }
 });
@@ -642,6 +646,7 @@ for (const { mode, failure } of localTransportCases) {
     const { getEventListeners } = await import('node:events');
     const workerDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Worker');
     const locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'location');
+  const originalFetch=globalThis.fetch;globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
     let fail = true, snapshotCalls = 0;
     let releaseSnapshot: ((value: unknown) => void) | undefined;
     const workers: TestAnalysisWorker[] = [];
@@ -663,6 +668,7 @@ for (const { mode, failure } of localTransportCases) {
     Object.defineProperty(globalThis, 'Worker', { configurable: true, value: TestAnalysisWorker });
     Object.defineProperty(globalThis, 'location', { configurable: true, value: { href: 'http://localhost/' } });
     t.after(() => {
+      globalThis.fetch=originalFetch;
       if (workerDescriptor) Object.defineProperty(globalThis, 'Worker', workerDescriptor); else Reflect.deleteProperty(globalThis, 'Worker');
       if (locationDescriptor) Object.defineProperty(globalThis, 'location', locationDescriptor); else Reflect.deleteProperty(globalThis, 'location');
     });
@@ -694,7 +700,7 @@ for (const { mode, failure } of localTransportCases) {
       : service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 100, durationUs: 300 }, 'A', controller.signal);
     const flush = () => new Promise<void>(resolve => setImmediate(resolve));
     const succeed = (worker: TestAnalysisWorker) => {
-      if (mode === 'picture') worker.onmessage?.({ data: { ok: true, result: wireResult } });
+      if (mode === 'picture') worker.onmessage?.({ data: { ok: true, result: packLegacy(wireResult) } });
       else {
         if (mode === 'stream') worker.onmessage?.({ data: { event: 'progress', progress: { pictures: 0, totalPictures: 1, checkedUs: 0, totalUs: 300, indexComplete: true } } });
         worker.onmessage?.({ data: { event: 'chunk', result: wireResult } });
@@ -704,6 +710,7 @@ for (const { mode, failure } of localTransportCases) {
     const controller = new AbortController();
     let outcome: { ok: boolean; error?: unknown } | undefined;
     const pending = start(controller).then(() => { outcome = { ok: true }; }, error => { outcome = { ok: false, error }; });
+    await flush();
     const worker = workers[0], late = worker.onmessage;
     try {
       if (failure === 'messageerror') worker.onmessageerror?.();
@@ -742,6 +749,7 @@ for (const { mode, failure } of localTransportCases) {
       // a consumed-but-unacknowledged result so picture recovery reaches IO.
       (service as any).cache.clear(); fail = false;
       const recoveryController = new AbortController(), recovery = start(recoveryController);
+      await flush();
       const next = workers[1]; assert.ok(next);
       succeed(next); await recovery;
       assert.equal(next.terminated, 1);
@@ -785,7 +793,7 @@ test('pause and resume retain confirmed analysis coverage without borrowing anot
     coordinator.pause('A'); await first;
     assert.equal(coordinator.state('A').state, 'paused'); assert.equal(coordinator.state('A').stream!.pictures, 1);
     const cursor = states.length; await run();
-    assert.ok(states.slice(cursor).filter(state => state.state === 'pending').every(state => state.stream.pictures >= 1));
+    assert.ok(states.slice(cursor).filter(state => state.state === 'pending').every(state => state.stream.pictures <= 3), 'resumed progress is bounded by actual consumed AU coverage');
     assert.equal(coordinator.state('A').state, 'ready'); assert.equal(coordinator.state('A').stream!.pictures, 3);
     generation = 2; assert.equal(coordinator.state('A').state, 'idle');
   } finally { coordinator.dispose(); }

@@ -1,3 +1,4 @@
+import { isProduct, encodeProduct } from '../../src/bitstream-analysis/products.ts';
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RouteContext } from "../routes/context.ts";
 import { sendJson } from "../http-utils.ts";
@@ -74,6 +75,10 @@ export async function handleAnalysisRoutes(
     }
     if (media![2] === "capabilities" && req.method === "GET") {
       sendJson(res, 200, {
+        buildId:await scheduler.buildIdentity(),
+        productSchema:1,
+        products:{stream:["legacy","summary","blocks"],picture:["legacy","blocks"],range:["legacy"]},
+        encodings:["summary-json-v1","blocks-le12-v1"],
         schema: 1,
         analyzerVersion: ANALYZER_VERSION,
         recipe: ANALYSIS_RECIPE,
@@ -99,10 +104,13 @@ export async function handleAnalysisRoutes(
       try { release = await scheduler.waitForResultRead(controller.signal); }
       finally { res.off('close', abort); }
       if (res.destroyed) { release(); return true; }
-      res.once("finish", release);
-      res.once("close", release);
-
-      const result = await scheduler.store.get(media![3]);
+      let producing=true,responseDone=false;
+      const ended=()=>{responseDone=true;if(!producing)release();};
+      res.once("finish",ended);res.once("close",ended);
+      try {
+      const auText=url.searchParams.get('au');
+      if (auText !== null && !/^(0|[1-9][0-9]{0,6})$/.test(auText)) throw new AnalysisFailure('invalid-request','Invalid analysis member');
+      const result = await scheduler.store.getOutput(media![3],auText === null ? undefined : Number(auText));
       if (
         !result ||
         result.picture.sourceVersion !== `${media![1]}@${version}`
@@ -110,14 +118,15 @@ export async function handleAnalysisRoutes(
         sendJson(res, 404, { error: "Analysis chunk unavailable" });
         return true;
       }
-      const bytes = Buffer.from(JSON.stringify(result));
+      const bytes = isProduct(result) ? await encodeProduct(result) : Buffer.from(JSON.stringify(result));
       res.writeHead(200, {
-        "content-type": "application/json",
+        "content-type": isProduct(result) ? "application/vnd.voidplayer.analysis-v1" : "application/json",
         "content-length": bytes.length,
         "cache-control": "private, no-store",
       });
       res.end(bytes);
       return true;
+      } finally {producing=false;if(responseDone||res.destroyed)release();}
     }
     if (media![2] === "requests" && req.method === "POST") {
       const length = Number(req.headers["content-length"]);

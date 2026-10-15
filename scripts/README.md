@@ -35,3 +35,10 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 码流遮罩真实几何回归：`node scripts/testing/browser/media/bitstream-geometry.mjs webkit`（或 `chromium`），生成独占的裁剪/SAR/旋转 MP4，验证实际视频、遮罩像素、命中、分屏截图及 RGBA 回退。已登记在 `browser` 和 `ci-analysis-browser`，需要 ffmpeg/libx264。
 
 码流分析持续争用：`node scripts/bench-analysis-sustained.mjs webkit`，需已构建网页、两种 core、QA 视频和可见桌面。默认运行至少 120 秒，8 路实际消费独立媒体库流，中途持久化 8→4→8 并发设置；旁路运行原 4×3×8 秒播放基准和 seek/Range 探测，阈值不变。`ANALYSIS_STRESS_MS` 可设为 120000–600000。报告保存在 `.run/browser-fixtures/analysis-sustained-webkit/`，包括逐秒 CPU/RSS/每路消费数、Range/seek 分位数、逻辑 I/O、取消延迟及原始播放数据。已登记为 `perf-analysis-sustained`；测量范围由机器和素材限定，不能推断任意并发或硬件的性能。
+
+分析产品 #99 的 Mac 配对入口：先从干净 baseline / candidate 独立 worktree 运行
+`node scripts/tools/perf/analysis-products-build.mjs /path/to/baseline /path/to/candidate`，
+再运行 `node scripts/tools/perf/analysis-products-pair.mjs --baseline /path/to/baseline --candidate /path/to/candidate --pairs 5 --output /path/to/evidence`。
+两个构建只添加相同的 session 访问句柄，不插入逐帧序列化；fixture 自建随机端口、临时数据库、独立 Chromium profile 并清理。
+`LIFECYCLE=1 VARIANTS=implementation` 测暂停/恢复及精确块；`EXACT=1` 测相同预置状态下的精确块 API。
+这些是指定 Mac 的人工性能验收，不把其绝对时限纳入共享 CI；回归测试另在统一 manifest 注册。

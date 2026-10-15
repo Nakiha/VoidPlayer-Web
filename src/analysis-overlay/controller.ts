@@ -52,6 +52,7 @@ export function createAnalysisOverlay(
       !result ||
       !token?.picture ||
       result.confidence !== "exact" ||
+      result.sourcePtsUs !== token.sourcePtsUs || result.width !== token.geometry.codedWidth || result.height !== token.geometry.codedHeight ||
       pictureId(result.picture) !== pictureId(token.picture)
     ) {
       clear();
@@ -162,13 +163,9 @@ export function createAnalysisOverlay(
       clear();
       token = next;
     }
-    if (!result) {
-      const hit = session.cachedBitstreamAnalysis(slot);
-      if (hit) {
-        result = hit;
-        draw();
-      }
-    }
+    const hit=session.cachedBitstreamAnalysis(slot,next ?? undefined);
+    if(!hit)clear();else if(result!==hit){result=hit;draw();}
+
   });
   return {
     setResult(value: ReadonlyAnalysisResult) {
@@ -181,7 +178,7 @@ export function createAnalysisOverlay(
         pictureId(current.picture) !== pictureId(value.picture)
       )
         return;
-      result = session.cachedBitstreamAnalysis(slot, current) ?? value;
+      result = session.cachedBitstreamAnalysis(slot, current);
       draw();
     },
     setMode(value: typeof mode) {

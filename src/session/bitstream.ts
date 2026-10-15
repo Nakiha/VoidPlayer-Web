@@ -14,7 +14,7 @@ interface AnalysisHost {
   subscribeInvalidation(listener: () => void): () => void;
   changed(): void;
 }
-type AnalysisTask = { intent: 'explicit' | 'automatic'; settled: Promise<void>; generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState; retainedStream?: DeepAnalysisState['stream'] };
+type AnalysisTask = { intent: 'explicit' | 'automatic'; settled: Promise<void>; generation: number; controller?: AbortController; service?: BitstreamAnalysisService; state?: DeepAnalysisState; retainedStream?: DeepAnalysisState['stream']; result?:Promise<unknown> };
 type AnalysisQueries = Pick<BitstreamAnalysisService, 'queryDiagrams' | 'chartBounds' | 'queryChart' | 'cached'>;
 
 /** Owns admission, per-track task cancellation and completion; never frames. */
@@ -57,6 +57,10 @@ export class BitstreamSessionCoordinator {
       if (this.automatic.get(slot) !== demand || this.state(slot).state === 'paused')
         throw new AnalysisFailure('cancelled', 'Automatic viewport superseded');
     }
+    const matching=this.tasks.get(slot);
+    if(intent==='automatic' && initial.stream?.window && matching?.controller && matching.intent==='automatic' && matching.generation===track.generation && matching.service?.sameDemand(initial.stream.window) && matching.result) {
+      matching.service.displayWindow(initial.stream.window); return await matching.result as T;
+    }
     const previous = this.state(slot);
     const retainedStream = initial.stream && previous.state === 'paused' && JSON.stringify(initial.stream.window) === JSON.stringify(previous.stream?.window) ? previous.stream : undefined;
     this.cancel(slot, true, true);
@@ -64,6 +68,7 @@ export class BitstreamSessionCoordinator {
     let settle!: () => void;
     const settled = new Promise<void>(resolve => { settle = resolve; });
     const task: AnalysisTask = { intent, settled, generation: track.generation, controller, retainedStream, state: { ...initial, ...(retainedStream ? { stream: retainedStream } : {}), queued: true } };
+    let resultResolve!:(value:unknown)=>void,resultReject!:(error:unknown)=>void;task.result=new Promise((resolve,reject)=>{resultResolve=resolve;resultReject=reject;});void task.result.catch(()=>{});
     this.tasks.set(slot, task); this.lastSlot = slot;
     const abort = () => controller.abort(signal?.reason);
     signal?.addEventListener('abort', abort, { once: true });
@@ -83,8 +88,9 @@ export class BitstreamSessionCoordinator {
       task.service = root.fork(() => this.host.changed());
       // From here the track service publishes its own running/terminal state.
       task.state = undefined;
-      return await run(task.service, controller.signal);
+      const value=await run(task.service, controller.signal); resultResolve(value);return value;
     } catch (error) {
+      resultReject(error);
       if (task.state?.state !== 'paused' && (!task.service || task.service.state.state === 'idle')) {
         const reason = failureInfo(controller.signal.aborted ? controller.signal.reason : error);
         task.state = { ...initial, state: reason.kind, reason, message: reason.message };
@@ -104,9 +110,7 @@ export class BitstreamSessionCoordinator {
     const task = selected === undefined ? undefined : this.tasks.get(selected);
     const completion = selected === undefined ? undefined : this.completed.get(selected);
     const state = task && (slot === undefined || task.generation === generation) ? task.state ?? task.service?.state ?? { state: 'idle' as const } : { state: 'idle' as const };
-    // Reopening a continuous decoder may replay its reference prefix. Those
-    // pictures are already cached; retain confirmed coverage while it catches up.
-    const stream = state.stream && task?.retainedStream && state.stream.pictures < task.retainedStream.pictures ? task.retainedStream : state.stream;
+    const stream = state.stream;
     return structuredClone({ ...state, ...(stream ? { stream } : {}), ...(completion && completion.generation === generation ? { completedStream: completion.progress } : {}) });
   }
 

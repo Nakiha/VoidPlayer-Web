@@ -364,7 +364,7 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
           assert.equal(state.state, "unsupported", JSON.stringify(state));
           assert.equal(state.reason?.kind, "unsupported");
           assert.deepEqual(state.result?.reasonCodes, local.reasonCodes);
-          assert.equal(state.result?.blocks.length, 0);
+          assert.equal((state.result && "blocks" in state.result ? state.result.blocks.length : 0), 0);
           assert.equal(state.chunks.length, 0);
           assert.equal(
             state.resultUrl,
@@ -836,4 +836,35 @@ test('large library FLV viewport reuses the shared index and decodes only inters
     assert.equal(state.progress?.waitingForIndex, false);
     assert.equal(state.progress?.indexComplete, true);
   } finally { await scheduler.close(); await f.close(); await rm(root, { recursive: true, force: true }); }
+});
+
+test('summary pages resume without duplicate writes; warm work has zero decode and metadata stays independent of blocks',async()=>{
+ const {encodeProduct}=await import('../../src/bitstream-analysis/products.ts');
+ const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ const sourceVersion=`${f.entry.id}@${f.entry.version}`,request={mode:'stream' as const,product:'summary' as const,sourceVersion,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts' as const}};
+ const writes=new Map<number,number>(),put=scheduler.store.putOutput.bind(scheduler.store);scheduler.store.putOutput=(id,value,protectedFiles)=>{writes.set(value.picture.au,(writes.get(value.picture.au)??0)+1);return put(id,value,protectedFiles);};
+ const received=new Set<number>();let bytes=0;
+ try{
+  const first=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');let cursor=0;
+  while(received.size<30){const state=await scheduler.streamStatus(first.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){if(received.size===30)break;const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.ok(!received.has(value.picture.au));received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;cursor=ref.cursor;}await new Promise(r=>setTimeout(r,5));}
+  scheduler.release(first.requestId,'owner');
+  const resumed=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let final;
+  for(let poll=0;poll<2000;poll++){
+   const state=await scheduler.streamStatus(resumed.requestId,'owner',cursor);assert.ok(state);assert.ok(state.chunks.length<=32);
+   for(const ref of state.chunks){if(!received.has(ref.au!)){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;}cursor=ref.cursor;}
+   if(state.state==='complete'&&cursor===state.published){final=state;break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));
+  }
+  assert.ok(final);assert.equal(received.size,180);assert.ok(bytes<=512*1024);assert.equal(writes.size,180);assert.ok([...writes.values()].every(n=>n===1),'committed summaries are never written twice on resume');assert.ok(final.counters!.cacheHit>=30);assert.equal(final.counters!.uniqueDelivered,180);scheduler.release(resumed.requestId,'owner');
+  const warm=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let complete;
+  for(let poll=0;poll<2000;poll++){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks)cursor=ref.cursor;if(state.state==='complete'&&cursor===180){complete=state;break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
+  assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
+ }finally{await scheduler.close();await f.close();}
+});
+
+test('large legacy chunks stop below 32 at the cumulative byte reservation and last consumer releases the worker',async()=>{
+ const {PRODUCT_LIMIT}=await import('../../src/bitstream-analysis/products.ts');const {BUDGET}=await import('../../src/bitstream-analysis/contract.ts');const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
+ try{const request=await scheduler.submit(f.entry.id,f.entry.version!,{mode:'stream',sourceVersion:`${f.entry.id}@${f.entry.version}`,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts'}},'slow');let stable=0,previous=-1,status;
+  for(let i=0;i<500;i++){status=await scheduler.streamStatus(request.requestId,'slow',0);assert.ok(status);assert.ok(['queued','running'].includes(status.state),JSON.stringify(status));stable=status.published===previous?stable+1:0;previous=status.published!;if(stable>=8&&status.published!>0)break;await new Promise(r=>setTimeout(r,25));}
+  assert.ok(status&&status.published!>0&&status.published!<32);assert.ok(status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)<=PRODUCT_LIMIT.inFlight && status.chunks.reduce((n,ref)=>n+(ref.bytes??0),0)+BUDGET.resultBytes>PRODUCT_LIMIT.inFlight);scheduler.release(request.requestId,'slow');await scheduler.close();assert.equal(scheduler.resources().running,0);
+ }finally{await scheduler.close();await f.close();}
 });
