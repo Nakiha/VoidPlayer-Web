@@ -30,3 +30,5 @@ const openRaw=await readFile(path.join(out,'open.hevc')),openPackets=JSON.parse(
 if(!second)throw Error('CRA fixture needs second key AU');const parameters=new Map();for(const n of nalRanges('hevc',Buffer.from([0,0,0,1]),openRaw)){const t=openRaw[n.offset]>>1&63;if(t>=32&&t<=34&&!parameters.has(t))parameters.set(t,Buffer.concat([Buffer.from([0,0,0,1]),openRaw.subarray(n.offset,n.offset+n.size)]));}
 await writeFile(path.join(out,'missing-anchor.hevc'),Buffer.concat([...parameters.values(),openRaw.subarray(Number(second.pos))]));
 execFileSync('ffmpeg',['-v','error','-fflags','+genpts','-r','24','-f','hevc','-i',path.join(out,'missing-anchor.hevc'),'-c','copy','-tag:v','hev1','-y',path.join(out,'missing-anchor.mp4')]);
+
+execFileSync('ffmpeg',['-v','error','-f','lavfi','-i','testsrc2=size=320x192:rate=24','-frames:v','48','-c:v','libx264','-pix_fmt','yuv420p','-x264-params','threads=1:keyint=24:min-keyint=24:scenecut=0:open-gop=0:bframes=2:slices=2','-y',path.join(out,'h264.mp4')]);

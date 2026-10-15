@@ -78,3 +78,13 @@ test('a one-picture legacy range and a viewport with one missing blocks picture 
  const legacyCounters=emptyCounters();await analyzePicture(reader(data),{sourceVersion:target.sourceVersion,sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-firstPtsUs},async()=>countCore(await create(),legacyCounters),manifest.buildId,new AbortController().signal);
  assert.equal(legacyCounters.fastOpen,0);assert.equal(legacyCounters.fullOpen,1);assert.equal(legacyCounters.stagedBytesPeak,0);
 });
+
+test('H264 retains incremental GOP summaries, exact QP/refs and cache-only reuse',async()=>{
+ const data=await readFile('fixtures/analysis-execution/h264.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs,packet=input.packets[12],picture=input.picture(packet,'h264');input.close();
+ const target={mode:'stream' as const,product:'summary' as const,sourceVersion:'h264',firstPtsUs,durationUs,window:{startUs:100000,endUs:300000,axis:'pts' as const}},cache=new Map<number,AnalysisOutput>(),counters=emptyCounters();let firstDecoded=0;
+ await analyzeStream(reader(data),target,async()=>countCore(await create(),counters),manifest.buildId,new AbortController().signal,async r=>{if(!cache.size)firstDecoded=counters.decodedAU;cache.set(r.picture.au,r);},async()=>{});
+ assert.equal(cache.size,24);assert.ok(firstDecoded<counters.decodedAU);assert.equal(counters.fullOpen,1);assert.equal(counters.fastOpen,0);assert.equal(counters.fallback,0);assert.equal(counters.stagedBytesPeak,0);
+ await analyzeStream(reader(data),target,()=>{throw Error('warm H264 GOP initialized decoder');},manifest.buildId,new AbortController().signal,async()=>{},async()=>{},undefined,async p=>cache.get(p.au)??null);
+ const exactCounters=emptyCounters(),result=await analyzePicture(reader(data),{product:'blocks',sourceVersion:'h264',sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-firstPtsUs,picture},async()=>countCore(await create(),exactCounters),manifest.buildId,new AbortController().signal);
+ assert.equal(result.product,'blocks');assert.equal(result.confidence,'exact');assert.equal(result.capabilities.qp,'ready');assert.equal(result.qp.bitDepth,8);assert.equal(result.qp.mean,cache.get(12)!.qp.mean);assert.deepEqual(result.references,cache.get(12)!.references);assert.equal(result.picture.au,12);assert.equal(exactCounters.fullOpen,1);assert.equal(exactCounters.fastOpen,0);assert.equal(exactCounters.fallback,0);assert.equal(exactCounters.stagedBytesPeak,0);
+});

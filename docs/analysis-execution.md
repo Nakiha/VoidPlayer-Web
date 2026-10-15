@@ -53,3 +53,9 @@ pin. This local Web branch intentionally does not change the tracked release pin
 Execution media tests explicitly report a skip for the extension-only cases when
 CI still supplies the old pinned Core; local candidate validation must run them
 without skips before the dependency/pin advances.
+
+H264 remains an incremental analysis path. The independent Core uses FFmpeg's
+existing loop-filter discard policy because its macroblock hook already omits
+pixel reconstruction. It is not an HEVC private transaction and still reports
+fullOpen with no staged owners or fallback. QP/mode/reference semantics, full-GOP
+cache identities, error handling and playback remain unchanged.
