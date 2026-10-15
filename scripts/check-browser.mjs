@@ -522,6 +522,68 @@ try {
     }
   });
 
+  await check('toast entrance animates and respects reduced motion', async page => {
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(() => {
+      window.toastFrames=[];
+      const observe=new MutationObserver(records=>{
+        const toast=records.flatMap(record=>[...record.addedNodes]).find(node=>node instanceof HTMLElement && node.classList.contains('toast-warning'));
+        if(!toast)return;
+        observe.disconnect();
+        const sample=()=>{
+          window.toastFrames.push({opacity:+getComputedStyle(toast).opacity, animations:toast.getAnimations().map(animation=>animation.animationName)});
+          if(window.toastFrames.length<20)requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      observe.observe(document.body,{subtree:true,childList:true});
+      void window.voidPlayer.loadFile('A',new File(['invalid'],'animated-toast.flv')).catch(()=>{});
+    });
+    await page.waitForFunction(()=>window.toastFrames.length===20);
+    const frames=await page.evaluate(()=>window.toastFrames);
+    assert.ok(frames.some(frame=>frame.animations.includes('toast-appear') && frame.opacity>0 && frame.opacity<1),'entrance paints intermediate opacity');
+    assert.equal(frames.at(-1).opacity,1);
+    const warning=page.locator('.toast-warning');
+    assert.equal(await warning.evaluate(el=>el.classList.contains('toast-enter')),false,'finished entrance cleans its animation class');
+    await warning.locator('.toast-close').click(); await warning.waitFor({state:'detached'});
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(()=>window.voidPlayer.loadFile('A',new File(['invalid'],'reduced-toast.flv')).catch(()=>{}));
+    await warning.waitFor({state:'visible'});
+    assert.deepEqual(await warning.evaluate(el=>({opacity:getComputedStyle(el).opacity,animations:el.getAnimations().length,enter:el.classList.contains('toast-enter')})),{opacity:'1',animations:0,enter:false});
+  });
+
+  await check('analysis pause and repeated resume do not emit warning toasts', async page => {
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(tool=>tool.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    let release; const gate=new Promise(resolve=>{release=resolve;});
+    const pattern='**/api/bitstream-analysis/requests/*';
+    await page.route(pattern,async route=>{
+      if(route.request().method()==='GET')await gate;
+      await route.continue().catch(()=>{});
+    });
+    try {
+      await page.evaluate(()=>{
+        window.pauseWarnings=[];
+        new MutationObserver(records=>{
+          for(const node of records.flatMap(record=>[...record.addedNodes]))if(node instanceof HTMLElement && node.classList.contains('toast-warning'))window.pauseWarnings.push(node.textContent);
+        }).observe(document.body,{subtree:true,childList:true});
+      });
+      await page.locator('#toggle-analysis').click();
+      await page.locator('#analysis-diagrams [data-value=nalu-size]').click();
+      const action=page.locator('#analysis-status-items .analysis-progress-action[data-slot=A]');
+      for(let cycle=0;cycle<3;cycle++) {
+        await page.waitForFunction(()=>window.voidPlayer.tools.find(tool=>tool.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='pending');
+        await action.click();
+        await page.waitForFunction(()=>window.voidPlayer.tools.find(tool=>tool.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='paused');
+        await settle(page);
+        assert.deepEqual(await page.evaluate(()=>window.pauseWarnings),[],'intentional cancellation never flashes a warning');
+        if(cycle<2)await action.click();
+      }
+      assert.equal(await page.locator('.toast-warning').count(),0);
+      await page.screenshot({path:path.join(screenshots,`${browserName}-analysis-pause-without-warning.png`)});
+    } finally {release(); await page.unroute(pattern);}
+  });
+
   await check('warning toasts remain above settings and clickable before and after modal opens', async page => {
     const triggerWarning = () => page.evaluate(() => window.voidPlayer.loadFile('A', new File(['invalid'], 'broken.flv')).catch(() => {}));
     const warning = page.locator('.toast-warning');
