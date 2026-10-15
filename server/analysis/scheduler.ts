@@ -311,7 +311,7 @@ export class AnalysisScheduler {
       seq: w.seq,
       error: w.error,
       reason: w.reason,
-      ...(w.unsupportedResult ? { result: w.unsupportedResult } : {}),
+      ...(w.unsupportedResult ? { result: isProduct(w.unsupportedResult)&&w.unsupportedResult.product==='blocks' ? {...w.unsupportedResult,payload:null,emptyPayload:true} : w.unsupportedResult } : {}),
       leaseMs: this.leaseMs,
       ...('mode' in w.target ? { published: w.published, progress: w.progress } : {}),
       chunks: w.chunks.map((id) => ({
@@ -540,6 +540,7 @@ export class AnalysisScheduler {
                     "resource-limit",
                     "Unsupported summary budget exceeded",
                   );
+                if(isProduct(result)&&result.product==='blocks'&&(result.validatedBlockCount!==0||result.payload.byteLength!==0))throw Error('Unsupported inline products must have empty records');
                 work.unsupportedResult = result;
                 const reason = new AnalysisFailure(
                   result.reasonCodes?.[0] ?? "incomplete-reference-state",

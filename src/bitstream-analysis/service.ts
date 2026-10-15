@@ -670,7 +670,14 @@ export class BitstreamAnalysisService {
         if (this.state.queued !== (state.state === 'queued')) {
           this.state = { ...this.state, queued: state.state === 'queued' }; this.changed();
         }
-        if (state.state === "unsupported" && state.result) return state.result;
+        if (state.state === "unsupported" && state.result) {
+          const value=state.result;
+          if(target.product==='blocks') {
+            if(value.product!=='blocks'||value.confidence!=='partial'||value.validatedBlockCount!==0||value.payload!==null||value.emptyPayload!==true)throw Error('Invalid unsupported product framing');
+            const {emptyPayload,...product}=value;return {...product,payload:new ArrayBuffer(0)};
+          }
+          return value;
+        }
         if (
           ["error", "cancelled", "limited", "unsupported"].includes(state.state)
         )
