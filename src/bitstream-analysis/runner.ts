@@ -1,3 +1,6 @@
+import { executionPolicy, hasExecutionExtension, executeAnalysisAttempt } from './execution.ts';
+import type { ExecutionPolicy } from './execution.ts';
+import { EXECUTION_EVENT } from './execution-error.ts';
 import {avcGeometry} from '../avc-geometry.ts';
 import {hevcGeometry} from '../hevc-geometry.ts';
 import { makeDemandPlan } from './demand.ts';
@@ -32,7 +35,7 @@ import type { AnalysisReader } from "./input.ts";
 import { AnalysisFailure, coreFailure } from "./failure.ts";
 import { groupAnalysisGops, gopForAu, viewportAnalysisGops } from './stream.ts';
 import type { AnalysisIndexFrontier, StreamProgress } from './stream.ts';
-async function runPicture(
+async function runPictureAttempt(
   reader: AnalysisReader,
   target: AnalysisTarget,
   core: any,
@@ -49,6 +52,12 @@ async function runPicture(
     stream?: AnalysisStreamTarget;
     onProgress?: (progress: StreamProgress) => Promise<void>;
     cached?: (picture: SourcePictureKey) => Promise<AnalysisOutput | null>;
+    executionMode?: 0 | 1;
+    executionPolicy?: ExecutionPolicy;
+    onExecution?: (fast: boolean) => void;
+    planned?: Awaited<ReturnType<Awaited<ReturnType<typeof openAnalysisInput>>['plan']>>;
+    decodeEnd?: number;
+    reserve?: (au: number, cost: () => number) => void;
   } = {},
 ): Promise<AnalysisOutput> {
   validateTarget(options.stream || options.viewport || options.desiredAus ? {...target,product:undefined} : target);
@@ -68,7 +77,7 @@ async function runPicture(
     // It may seed a cache-only TS stream without instantiating demux/decoder.
     const plan = cachedAnchor(firstHit,firstPacket)
       ? {start:0,target:firstPacket,identity:input.picture(firstPacket,target.sourceVersion)}
-      : await input.plan(target);
+      : options.planned ? { ...options.planned } : await input.plan(target);
     if (options.sequential) plan.start = 0;
     let groups = options.stream ? groupAnalysisGops(input.packets.slice(0, input.sealedEnd)) : [];
     const extend = async (cursor: number) => {
@@ -99,6 +108,9 @@ async function runPicture(
       if (typeof core === 'function') core = await core();
       signal.throwIfAborted();
       validateAnalysisCore(core);
+      const execution = hasExecutionExtension(core);
+      if (execution && core._vpa_execution_mode(options.executionMode ?? 0) !== 0)
+        throw new AnalysisFailure('internal-error', 'Analysis execution mode rejected');
       if (!containerHeaders.has(configuration)) containerHeaders.set(configuration, readContainerHeader(input.codec, description));
       pointer = core._malloc(description.length);
       if (!pointer)
@@ -115,6 +127,9 @@ async function runPicture(
         );
         if (ret < 0) throw coreFailure(ret, "Analysis open failed");
         opened = true;
+        const path = execution ? core._vpa_execution_path() : 0;
+        if (path !== 0 && path !== 1) throw new AnalysisFailure('internal-error', 'Invalid analysis execution path');
+        options.onExecution?.(path === 1);
       } finally {
         core._free(pointer);
       }
@@ -312,6 +327,7 @@ async function runPicture(
         }
         if (target.product) {
           const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:PRODUCT_SCHEMA, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
+          options.reserve?.(au, () => metadataBudgetBytes(summary) + 40 + (target.product === 'blocks' ? blockCount * 12 : 0));
           if (target.product === 'summary') { result = summary; validateOutput(result); }
           else {
             if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
@@ -320,7 +336,7 @@ async function runPicture(
             result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};
             // Producer already checked geometry directly in the WASM view.
           }
-        } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
+        } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');options.reserve?.(au, () => metadataBudgetBytes(frame) + 40 + blockCount * 128);result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
 
       }
       nalus.delete(au);
@@ -411,7 +427,7 @@ async function runPicture(
         drained = true; skipAfterDrain = skip;
         continue;
       }
-      const packet = input.packets[cursor];
+      const packet = options.decodeEnd !== undefined && cursor >= options.decodeEnd ? undefined : input.packets[cursor];
       if (!packet || packet.configuration !== configuration || (packet.discontinuity && cursor !== plan.start)) {
         if (drained)
           throw new AnalysisFailure(
@@ -477,6 +493,48 @@ async function runPicture(
   }
 }
 
+/** Only an explicit single-picture blocks request may use a private fast attempt.
+ * Summary, range, legacy and viewport work keeps incremental full publication,
+ * even when only one cache miss remains in a selected GOP.
+ * A late pixel requirement discards their owners and opens a new full decoder
+ * at the very same syntax-proven anchor. The input/index identities never change.
+ * Open/dependent or unsealed work keeps the original continuous full path. */
+async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promise<AnalysisOutput> {
+  const [reader, target, factory, buildId, signal, options = {}] = args;
+  if (target.product !== 'blocks' || options.stream || options.viewport ||
+      options.desiredAus || options.endSourcePtsUs !== undefined)
+    return runPictureAttempt(reader,target,factory,buildId,signal,{...options,executionMode:0});
+  const input = options.input ?? await openAnalysisInput(reader, signal, false,
+    {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
+  try {
+    const planned = await input.plan(target);
+    const policy = options.executionPolicy ?? executionPolicy();
+    let core = factory, fast = false, decodeEnd: number | undefined;
+    if (input.codec === 'hevc' && input.indexComplete && !policy.full) {
+      const group = gopForAu(groupAnalysisGops(input.packets), planned.target.au);
+      // Do not start a no-pixels DPB from a container-key/open-GOP guess.
+      const bounded = planned.start === group.startAu;
+      if (bounded) {
+        const anchor = input.packets[planned.start];
+        if (anchor.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit','Analysis anchor budget exceeded');
+        const proof = inspectPacketPicture(input.codec,input.configurations[anchor.configuration],await input.readUnit(anchor));
+        if (proof.singlePicture && proof.closedRandomAccess) {
+          if (typeof core === 'function') core = await core();
+          signal.throwIfAborted();
+          fast = hasExecutionExtension(core);
+          if (fast) decodeEnd = group.endAu;
+        }
+      }
+    }
+    let actual = typeof core === 'function' ? undefined : core;
+    const instance = typeof core === 'function' ? async () => actual = await core() : core;
+    return await executeAnalysisAttempt({fast,policy,signal,publish:options.onResult,
+      event: (event,bytes) => { if(typeof actual?.[EXECUTION_EVENT] === 'function')actual[EXECUTION_EVENT](event,bytes); },
+      attempt: (executionMode,publish,onExecution,reserve) => runPictureAttempt(reader,target,instance,buildId,signal,
+        {...options,input,planned,decodeEnd,keepInput:true,executionMode,onResult:publish,onExecution,reserve})});
+  } finally { if (!options.keepInput) input.close(); }
+}
+
 function reusableResult(hit: AnalysisOutput, codec: AnalysisResult['codec'], buildId: string, picture: SourcePictureKey, pts: number, target: Pick<AnalysisTarget,'product'|'indexIdentity'>): boolean {
   try {
     validateOutput(hit);
@@ -503,6 +561,7 @@ async function runRange(
     const factory=core;let instance:Promise<any> | undefined;
     core=()=>instance ??= Promise.resolve().then(factory);
   }
+  const execution = executionPolicy();
   // Reuse this independent metadata plan across all picture chunks; the
   // decoder session owns its reader and closes it on success or failure.
   const input = await openAnalysisInput(reader, signal, false, {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
@@ -565,7 +624,7 @@ async function runRange(
       const packet = input.packets[aus[0]];
       last = await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion,
         sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) },
-        core, buildId, signal, { input, keepInput: true, desiredAus: new Set(aus), onResult });
+        core, buildId, signal, { input, keepInput: true, desiredAus: new Set(aus), onResult, executionPolicy:execution });
     }
     return last!;
   } finally { input.close(); }
@@ -618,6 +677,7 @@ async function runStream(
       let pictures = 0, last: AnalysisOutput | undefined;
       const progress = () => onProgress({ pictures, totalPictures, totalUs, checkedUs: pictures === totalPictures ? totalUs : Math.min(totalUs - 1, Math.floor(totalUs * pictures / totalPictures)), indexComplete: true, waitingForIndex: false });
       await progress();
+      const execution = executionPolicy();
       for (const group of groups) {
         const first = input.packets[group.startAu];
         if (first.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit', 'Analysis packet budget exceeded');
@@ -637,7 +697,7 @@ async function runStream(
         if (missing.size) {
           const packet = input.packets[missing.values().next().value!];
           await runPicture(reader, { product: target.product, indexIdentity: target.indexIdentity, sourceVersion: target.sourceVersion, sourcePtsUs: packet.pts, normalizedMediaUs: Math.max(0, packet.pts - target.firstPtsUs) }, core, buildId, signal,
-            { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish });
+            { input, keepInput: true, viewport: true, desiredAus: missing, onResult: publish, executionPolicy:execution });
         }
       }
       if (pictures !== totalPictures) throw new AnalysisFailure('incomplete-reference-state', 'Incomplete viewport GOP coverage');
