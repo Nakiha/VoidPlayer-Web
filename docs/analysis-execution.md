@@ -47,12 +47,14 @@ on pause, so that experiment is not the product policy. Exact analysis only
 stages its requested picture, after its own packet/suffix SEI processing
 and necessary reference/reorder work; it does not validate unseen future AUs.
 
-The upstream Core source is stacked on unmerged sorter PR9. Publishing requires
-the FFmpeg analysis change, then its exact Core pin/artifact, then the Web analysis
-pin. This local Web branch intentionally does not change the tracked release pin.
-Execution media tests explicitly report a skip for the extension-only cases when
-CI still supplies the old pinned Core; local candidate validation must run them
-without skips before the dependency/pin advances.
+The sorter dependency (Core PR9), FFmpeg analysis change (FFmpeg PR1) and Core
+execution change (Core PR10) have merged into their analysis target branches.
+The Web analysis lock pins tested Core source
+`7331ad4ef11af8b7e30e1e5db1ee1b55a38c1681` and FFmpeg source
+`653cf4becc91425be3021a3f0347f6cdd3fd14ec`; both exact commits remain in the merged
+history. The clean exact-source CI artifact enables both HEVC pruning and H264
+loop-filter discard. Execution media tests must run without extension-only skips
+against this pinned artifact. Older cores remain supported through full execution.
 
 H264 remains an incremental analysis path. The independent Core uses FFmpeg's
 existing loop-filter discard policy because its macroblock hook already omits
