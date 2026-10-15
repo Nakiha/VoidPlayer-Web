@@ -1,4 +1,5 @@
 import { MediaOpenError } from "../media-errors.ts";
+import { RETRY_FULL } from './execution-error.ts';
 export const ANALYSIS_REASON_CODES = [
   "unsupported-container",
   "unsupported-codec",
@@ -63,7 +64,12 @@ export function failureInfo(error: unknown): AnalysisFailureInfo {
   ).info;
 }
 /** Error numbers are from the pinned Emscripten libc, not host errno values. */
+export class RetryFullAnalysis extends AnalysisFailure {
+  readonly reason: 'decoder-requires-pixels' | 'transaction-capacity';
+  constructor(reason: 'decoder-requires-pixels' | 'transaction-capacity') { super('internal-error', reason); this.reason = reason; }
+}
 export function coreFailure(ret: number, operation: string): AnalysisFailure {
+  if (ret === RETRY_FULL) return new RetryFullAnalysis('decoder-requires-pixels');
   return new AnalysisFailure(
     ret === -48 ? "resource-limit" : "incomplete-reference-state",
     `${operation} (${ret})`,
