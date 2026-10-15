@@ -254,3 +254,12 @@ test('shared stream forks cannot reauthorize late old summaries or manifests ove
  const pending=a.requestStream(source,target,'A');const check=late==='same-build'?pending:assert.rejects(pending,/namespace superseded/);await ready;await b.requestStream(source,target,'B');release();await check;assert.equal((root as any).diagrams.summaryAt('local:uuid',4)?.buildId,'new');assert.equal((root as any).diagrams.summaryAt('local:uuid',3)?.buildId,late==='same-build'?'new':undefined);root.dispose();
  }}finally{globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
 });
+
+
+test('evicted shared namespace cannot be revived by a late picture or plan',async t=>{
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');const saved={fetch:globalThis.fetch,location:Object.getOwnPropertyDescriptor(globalThis,'location')};Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
+ const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,r=result(),token={picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}} as any;
+ try{t.mock.method(service as any,'local',async()=>{(service as any).contexts.clear();return packLegacy(r);});await assert.rejects(service.request(source,token),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal(service.cached(token),null);
+ const target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};(service as any).streamBuild={sequence:(service as any).sequence,buildId:'test'};const plan=makeDemandPlan([{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}],target,'test');assert.throws(()=>(service as any).acceptPlan(plan,target),/namespace superseded/);assert.equal((service as any).contexts.size,0);assert.equal((service as any).plans.size,0);
+ }finally{service.dispose();globalThis.fetch=saved.fetch;if(saved.location)Object.defineProperty(globalThis,'location',saved.location);else Reflect.deleteProperty(globalThis,'location');}
+});

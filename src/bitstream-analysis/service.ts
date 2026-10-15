@@ -121,6 +121,7 @@ export class BitstreamAnalysisService {
   private context(source:string,buildId:string,indexIdentity:ProductIndexIdentity|null,ticket?:number) {
     indexIdentity=analysisIndexIdentity(indexIdentity);
     const old=this.contexts.get(source);
+    if(ticket===undefined && !old)throw new AnalysisFailure('source-changed','Analysis namespace superseded');
     if(old && (old.buildId!==buildId || JSON.stringify(old.indexIdentity)!==JSON.stringify(indexIdentity))){if(ticket===undefined||ticket<old.ticket)throw new AnalysisFailure('source-changed','Analysis namespace superseded');this.cache.invalidateSource(source);}else if(old){old.ticket=Math.max(old.ticket,ticket??old.ticket);return;}
     this.contexts.delete(source);while(this.contexts.size>=8){const stale=this.contexts.keys().next().value!;this.cache.invalidateSource(stale);this.contexts.delete(stale);}this.contexts.set(source,{buildId,indexIdentity,ticket:ticket??++this.admission.next});
   }
@@ -251,7 +252,7 @@ export class BitstreamAnalysisService {
     signal?.addEventListener("abort", abort, { once: true });
     if (signal?.aborted) abort();
     this.cancelActive = () => controller.abort();
-    const seq = ++this.sequence;
+    const seq = ++this.sequence,rangeAdmissionTicket=++this.admission.next;
     this.state = { state: "pending" };
     this.changed();
     let pictures = 0;
@@ -265,7 +266,8 @@ export class BitstreamAnalysisService {
         result.sourcePtsUs >= target.firstPtsUs + target.endUs
       )
         throw new Error("Analysis range identity mismatch");
-      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:target.indexIdentity ?? null);
+      if(seq!==this.sequence)throw new AnalysisFailure('cancelled','Analysis range superseded');
+      this.context(result.picture.sourceVersion,result.buildId,target.indexIdentity ?? null,rangeAdmissionTicket);
       if (!isSummary(result)) this.cache.put(result,target.indexIdentity ?? null); this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
       pictures++;
       this.changed();
