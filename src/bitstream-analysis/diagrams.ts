@@ -225,7 +225,9 @@ export class DiagramStore {
     if (!result.nalus) return;
     validateDiagram(result as DiagramPicture);
     if (result.containerHeader) validateContainerHeader(result.codec, result.containerHeader);
-    const value = structuredClone({ ...result, qpMean: result.confidence === 'exact' && result.capabilities.qp === 'ready' ? result.qp.mean : null }) as DiagramPicture & AnalysisSummary;
+    const prior=this.sources.get(sourceKey)?.get(result.picture.au);
+    const preservedGop=!result.gop && prior?.id===productKey(result.picture,result.buildId,result.indexIdentity,'summary') ? prior.value.gop : undefined;
+    const value = structuredClone({ ...result, ...(preservedGop?{gop:preservedGop}:{}), qpMean: result.confidence === 'exact' && result.capabilities.qp === 'ready' ? result.qp.mean : null }) as DiagramPicture & AnalysisSummary;
     // Reserve space for derived layout metadata without retaining another source-sized map.
     const source = value.picture.sourceVersion, au = value.picture.au, id = productKey(value.picture,result.buildId,result.indexIdentity,'summary'), bytes = JSON.stringify(value).length * 2 + 256;
     let entries = this.sources.get(source);

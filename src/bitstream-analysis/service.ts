@@ -131,9 +131,11 @@ export class BitstreamAnalysisService {
     signal?.throwIfAborted();
     this.cancel();
     const preparationSequence=this.sequence;
+    this.state={state:'pending'};this.changed();
     const identityUrl=source.info.source?new URL(source.info.source.url,location.href):new URL(coreAssetUrl('/vendor/voidplayer-analysis/manifest.json',location.href));if(source.info.source)identityUrl.pathname+='/bitstream-analysis/capabilities';
     const identityResponse=await fetch(identityUrl,{signal,cache:'no-store'});if(!identityResponse.ok)throw new AnalysisFailure('source-changed','Analysis identity unavailable');const identityManifest=await identityResponse.json();const expectedBuild=identityManifest.buildId ?? identityManifest.revision;
     if(typeof expectedBuild!=='string'||!expectedBuild||expectedBuild.length>128)throw Error('Invalid current analysis build identity');
+    if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');signal?.throwIfAborted();
     this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
     const cached=this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
@@ -302,6 +304,7 @@ export class BitstreamAnalysisService {
     signal?.throwIfAborted();
     this.cancel();
     const preparationSequence=this.sequence;
+    this.state={state:'pending'};this.changed();
     const plan=this.plans.get(target.sourceVersion);
     let expectedBuild:string|undefined;
     if(plan && target.product==='summary') {
@@ -310,6 +313,7 @@ export class BitstreamAnalysisService {
       const response=await fetch(url,{signal,cache:'no-store'});if(!response.ok)throw new AnalysisFailure('source-changed','Analysis build identity unavailable');
       const capability=await response.json();expectedBuild=capability.buildId ?? capability.revision;
       if(typeof expectedBuild!=='string'||!expectedBuild||expectedBuild.length>128)throw Error('Invalid current analysis build identity');
+      if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');signal?.throwIfAborted();
       this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
       if(expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
     }

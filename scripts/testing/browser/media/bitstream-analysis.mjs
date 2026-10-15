@@ -1168,9 +1168,12 @@ await withBrowserFixture(
       await call('seek_review', { ptsUs: playback.positionUs });
       await page.screenshot({ path: artifact(`whole-stream-${input}.png`) });
       const cached = await call('request_bitstream_analysis', { slot: 'A' });
-      assert.ok(cached.gop); assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true);
+      assert.ok(cached.blocks.length > 0);
+      assert.equal((await call('get_bitstream_analysis_state')).cacheHit, false, 'summary-only charts do not claim exact blocks are cached');
+      await call('request_bitstream_analysis', { slot: 'A' });
+      assert.equal((await call('get_bitstream_analysis_state')).cacheHit, true, 'a second exact request reuses the independent block product');
       const cacheStart = requests.length;
-      await call('request_bitstream_stream', { slot: 'A' });
+      await call('request_bitstream_stream', { slot: 'A', product:'summary' });
       const restored = await call('get_bitstream_analysis_state', { slot: 'A' });
       assert.equal(restored.state, 'ready'); assert.equal(restored.stream.pictures, 120);
       const { revision: beforeRevision, ...beforeChart } = configQuery;
@@ -1183,11 +1186,11 @@ await withBrowserFixture(
       let release;
       const gate = new Promise(r => { release = r; });
       // Cached local streams still read the manifest to verify build identity.
-      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/chunks/**';
+      const pattern = input === 'local-file' ? '**/vendor/voidplayer-analysis/manifest.json*' : '**/bitstream-analysis/capabilities*';
       await page.route(pattern, async route => { await gate; await route.continue().catch(() => {}); });
       const requested = page.waitForRequest(pattern, { timeout: 30000 });
       try {
-        await requestInspection(page, 'A');
+        await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_stream').execute({slot:'A',product:'summary'}).catch(()=>{}); });
         await requested;
         assert.equal(await page.locator('.analysis-track-control[data-slot="A"]').getAttribute('data-state'), 'pending');
         assert.equal(await page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-ring').count(), 1, 'active inspection uses a circular progress indicator');

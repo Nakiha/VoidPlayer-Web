@@ -174,7 +174,11 @@ test('exact request rejects cross-product, index and build payloads before cache
   await assert.rejects(service.request(source,token(next)),/identity mismatch/);assert.equal(service.cached(token(next)),null);
   if(mode==='old-build-after-epoch')assert.equal(service.cached(token(original)),null);
   service.dispose();
- }}finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
+ }
+ const service=new BitstreamAnalysisService(()=>{}),r={...result(),buildId:'replacement'};let release!:(value:Response)=>void,calls=0;
+ globalThis.fetch=async()=>++calls===1?await new Promise<Response>(resolve=>{release=resolve;}):new Response(JSON.stringify({buildId:'replacement'}));
+ const late=service.request(source,token(r));const rejected=assert.rejects(late,/superseded/);outgoing=packLegacy(r);await service.request(source,token(r));assert.ok(service.cached(token(r)));release(new Response(JSON.stringify({buildId:'old'})));await rejected;assert.ok(service.cached(token(r)),'late old manifest cannot invalidate current blocks');service.dispose();
+ }finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
 });
 
 test('maximum admitted NAL metadata fits products, oversized metadata/pages fail before body allocation',async()=>{
@@ -192,3 +196,5 @@ test('valid binary header with low length byte 123 cannot be mistaken for a JSON
   assert.ok(found);const store=new AnalysisStore(folder),id='e'.repeat(64);await store.putOutput(id,found);const bytes=await readFile(store.productFile(id));assert.equal(bytes[4],123);assert.deepEqual(await store.getOutput(id),found);
  }finally{await rm(folder,{recursive:true,force:true});}
 });
+
+test('single-picture summary preserves same-identity verified stream GOP',()=>{const store=new DiagramStore(),r=result();r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:30,configuration:0,anchor:'closed'};store.put(r);const single={...r};delete single.gop;store.put(single);assert.deepEqual(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,r.gop);store.put({...single,buildId:'new'});assert.equal(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,undefined);});
