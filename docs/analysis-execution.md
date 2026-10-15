@@ -14,7 +14,12 @@ requests also keep full, incremental publication, even with one cache miss left 
 a GOP. This preserves summary first-result latency and pause/resume work while
 retaining the measured precise-frame benefit. The new Core extension's existing
 FFmpeg VPS/SPS/PPS parser decides whether the
-configuration really permits Main8 pruning. Main10/PCM/TQB/extensions stay full.
+configuration really permits Main8 or strictly 10-bit Main10 pruning. PCM/TQB/
+extensions stay full. Main10 retains `unsupported-qp-depth`, unsupported QP
+capability, null block QP and null mean. Existing exact block/mode/reference
+semantics do not imply accurate Main10 QP; the clipped unsigned callback cannot
+represent its signed range. This is an execution optimization, with no ABI or
+result-capability extension.
 
 Fast picture owners are private in the worker. Before allocating a block payload
 or legacy block array, the producer reserves metadata+payload ownership under the

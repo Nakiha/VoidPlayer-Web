@@ -8,13 +8,20 @@ import {analyzePicture,analyzeRange,analyzeStream} from '../../src/bitstream-ana
 import {openAnalysisInput} from '../../src/bitstream-analysis/input.ts';
 import {countCore,emptyCounters} from '../../src/bitstream-analysis/counters.ts';
 import {RETRY_FULL} from '../../src/bitstream-analysis/execution-error.ts';
+import {isProduct,readBlock} from '../../src/bitstream-analysis/products.ts';
 import type {AnalysisOutput} from '../../src/bitstream-analysis/products.ts';
 const manifest=JSON.parse(await readFile('public/vendor/voidplayer-analysis/manifest.json','utf8'));
 const create=(await import(pathToFileURL(path.resolve('public/vendor/voidplayer-analysis/voidplayer-analysis.js')).href)).default;
 const probe=await create(),extension=typeof probe._vpa_execution_abi==='function'&&probe._vpa_execution_abi()===1;probe._vpa_close();
 const reader=(data:Uint8Array)=>({size:data.length,async read(at:number,n:number){assert.ok(at>=0&&n>=0&&at+n<=data.length);return data.slice(at,at+n);},close(){}});
 const canonical=(r:AnalysisOutput)=>{const {metrics,...rest}=r;return rest;};
-for(const name of ['normal','late-hash','late-grain','late-pps','main10','open-gop'] as const)
+const assertMain10=(r:AnalysisOutput)=>{
+ assert.equal(r.qp.bitDepth,10);assert.equal(r.capabilities.qp,'unsupported');assert.equal(r.qp.mean,null);assert.deepEqual(r.reasonCodes,['unsupported-qp-depth']);
+ assert.equal(r.confidence,'exact');assert.equal(r.capabilities.blocks,'ready');assert.equal(r.capabilities.modes,'ready');assert.equal(r.capabilities.motion,'unsupported');
+ if(isProduct(r)){if(r.product==='blocks'){const view=new DataView(r.payload);for(let i=0;i<r.validatedBlockCount;i++)assert.equal(readBlock(view,i).qp,null);}}
+ else assert.ok(r.blocks.length>0&&r.blocks.every(b=>b.qp===null));
+};
+for(const name of ['normal','late-hash','late-grain','late-pps','main10','main10-late-hash','main10-late-grain','main10-late-pps','open-gop'] as const)
 test(`HEVC summary ${name}: full incremental publication and same cached source identity`,async()=>{
  const data=await readFile(`fixtures/analysis-execution/${name}.mp4`),input=await openAnalysisInput(reader(data),new AbortController().signal),firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;
  const target={mode:'stream' as const,product:'summary' as const,sourceVersion:name,firstPtsUs,durationUs,window:{startUs:name==='open-gop'?1200000:100000,endUs:name==='open-gop'?1400000:300000,axis:'pts' as const}},cache=new Map<number,AnalysisOutput>();input.close();let expected:AnalysisOutput[]|undefined;
@@ -23,7 +30,7 @@ test(`HEVC summary ${name}: full incremental publication and same cached source 
   const factory=async()=>{const c=await create();if(full&&extension){const mode=c._vpa_execution_mode.bind(c);c._vpa_execution_mode=()=>mode(0);}
    for(const name of ['_vpa_feed','_vpa_feed_known','_vpa_step']){const call=c[name].bind(c);c[name]=(...args:any[])=>{const ret=call(...args);if(ret===RETRY_FULL)retry.push({reason:c._vpa_execution_reason(),visible:outputs.length});return ret;};}return countCore(c,counters);
   };
-  await analyzeStream(reader(data),target,factory,manifest.buildId,new AbortController().signal,async r=>{if(!outputs.length)firstDecoded=counters.decodedAU;outputs.push(r);if(!full)cache.set(r.picture.au,structuredClone(r));},async()=>{});
+  await analyzeStream(reader(data),target,factory,manifest.buildId,new AbortController().signal,async r=>{if(!outputs.length)firstDecoded=counters.decodedAU;if(name.startsWith('main10'))assertMain10(r);outputs.push(r);if(!full)cache.set(r.picture.au,structuredClone(r));},async()=>{});
   if(full)expected=outputs;else{
    assert.ok(isDeepStrictEqual(outputs.map(canonical),expected!.map(canonical)),'all semantic fields and source/GOP identities');
    assert.equal(counters.fallback,0);assert.equal(counters.fastOpen,0);assert.equal(counters.stagedBytesPeak,0);
@@ -44,15 +51,16 @@ test('missing closed anchor is unsupported before allocating a decoder',async()=
  const data=await readFile('fixtures/analysis-execution/missing-anchor.mp4'),input=await openAnalysisInput(reader(data),new AbortController().signal),firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  await assert.rejects(analyzeStream(reader(data),{mode:'stream',product:'summary',sourceVersion:'missing-anchor',firstPtsUs,durationUs,window:{startUs:100000,endUs:300000,axis:'pts'}},()=>{throw Error('unsafe anchor allocated decoder');},manifest.buildId,new AbortController().signal,async()=>{throw Error('unsafe exact result escaped');},async()=>{}),error=>error instanceof Error&&'code' in error&&error.code==='no-safe-anchor-within-budget');
 });
-for(const [name,reason,fastOpen] of [['normal',null,1],['late-hash',4,1],['late-grain',3,1],['late-pps',2,1],['main10',null,0],['open-gop',null,0]] as const)
+for(const [name,reason,fastOpen] of [['normal',null,1],['late-hash',4,1],['late-grain',3,1],['late-pps',2,1],['main10',null,1],['main10-late-hash',4,1],['main10-late-grain',3,1],['main10-late-pps',2,1],['open-gop',null,0]] as const)
 test(`HEVC precise blocks ${name}: same reference preroll and winning target`,{skip:!extension?'requires upstream execution ABI1; older pinned core remains full':false},async()=>{
  const data=await readFile(`fixtures/analysis-execution/${name}.mp4`),input=await openAnalysisInput(reader(data),new AbortController().signal),packet=input.packets[name==='open-gop'?36:12],picture=input.picture(packet,'exact-'+name),target={product:'blocks' as const,sourceVersion:'exact-'+name,sourcePtsUs:packet.pts,normalizedMediaUs:packet.pts-Math.min(...input.packets.map(p=>p.pts)),picture};input.close();let expected:AnalysisOutput|undefined,feeds=0;
- for(const full of [true,false]){const counters=emptyCounters(),retries:{reason:number;visible:number}[]=[],factory=async()=>{const c=await create(),mode=c._vpa_execution_mode.bind(c);if(full)c._vpa_execution_mode=()=>mode(0);
-  for(const method of ['_vpa_feed','_vpa_feed_known','_vpa_step']){const call=c[method].bind(c);c[method]=(...args:any[])=>{const value=call(...args);if(value===RETRY_FULL)retries.push({reason:c._vpa_execution_reason(),visible:0});return value;};}return countCore(c,counters);};
+ for(const full of [true,false]){const counters=emptyCounters(),retries:number[]=[],factory=async()=>{const c=await create(),mode=c._vpa_execution_mode.bind(c);if(full)c._vpa_execution_mode=()=>mode(0);
+  for(const method of ['_vpa_feed','_vpa_feed_known','_vpa_step']){const call=c[method].bind(c);c[method]=(...args:any[])=>{const value=call(...args);if(value===RETRY_FULL)retries.push(c._vpa_execution_reason());return value;};}return countCore(c,counters);};
   const result=await analyzePicture(reader(data),target,factory,manifest.buildId,new AbortController().signal);
+  if(name.startsWith('main10'))assertMain10(result);
   if(full){expected=result;feeds=counters.feed;}else{assert.ok(isDeepStrictEqual(canonical(result),canonical(expected!)),'complete target semantics including blocks, references and source identity');
    assert.equal(counters.fastOpen,fastOpen);assert.equal(counters.fallback,reason===null?0:1);assert.equal(counters.open,reason===null?1:2);assert.equal(counters.products,0,'publication belongs to the caller');assert.ok(counters.stagedBytesPeak<=32*1024*1024);assert.equal(result.picture.au,packet.au);
-   if(reason===null){assert.equal(counters.feed,feeds);assert.ok(feeds>1);assert.deepEqual(retries,[]);}else{assert.ok(counters.feed>feeds);assert.deepEqual(retries,[{reason,visible:0}]);}
+   if(reason===null){assert.equal(counters.feed,feeds);assert.ok(feeds>1);assert.deepEqual(retries,[]);}else{assert.ok(counters.feed>feeds);assert.deepEqual(retries,[reason]);}
   }
  }
 });
