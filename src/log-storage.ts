@@ -1,6 +1,7 @@
 import { buildInfo } from './build-info.ts';
 import { contextLog, log, sessionLog, logSummary } from './log.ts';
 import type { LogDocument, LogStorage, LogSummary } from './log.ts';
+import { supportsFileHandles } from './file-handles.ts';
 
 export const LOG_RETENTION = { sessions: 3, days: 7 };
 export function retainLogs<T extends Pick<LogDocument, 'sessionId' | 'startedAt' | 'updatedAt'>>(documents: T[], current: T, now = Date.now()) {
@@ -75,6 +76,7 @@ export function environmentInfo() {
     build: buildInfo ?? 'test',
     userAgent: navigator.userAgent, language: navigator.language,
     secureContext: globalThis.isSecureContext, webCodecs: typeof VideoDecoder !== 'undefined',
+    persistentLocalFiles: supportsFileHandles(),
     hardwareConcurrency: navigator.hardwareConcurrency, devicePixelRatio: globalThis.devicePixelRatio,
     colorGamut: matchMedia('(color-gamut: p3)').matches ? 'p3-or-better' : 'srgb',
     page: location.origin + location.pathname,

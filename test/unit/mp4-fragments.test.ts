@@ -4,16 +4,16 @@ import { readMp4Configurations } from '../../src/mp4-config.ts';
 const u32 = (...values: number[]) => { const b = Buffer.alloc(values.length * 4); values.forEach((n, i) => b.writeUInt32BE(n >>> 0, i * 4)); return b; };
 const u64 = (n: bigint) => { const b = Buffer.alloc(8); b.writeBigUInt64BE(n); return b; };
 const box = (type: string, ...parts: Uint8Array[]) => { const b = Buffer.concat(parts); return Buffer.concat([u32(b.length + 8), Buffer.from(type), b]); };
-function init(extraSamples = 0, descriptions = 1) {
+function init(extraSamples = 0, descriptions = 1, terminator: Uint8Array = new Uint8Array(0)) {
   const visual=Buffer.alloc(78);visual.writeUInt16BE(16,24);visual.writeUInt16BE(16,26);
-  const sample = box('hvc1', visual, box('hvcC', Buffer.from([1])));
+  const sample = box('hvc1', visual, box('hvcC', Buffer.from([1])), terminator);
   const track = box('trak', box('tkhd', u32(0, 0, 0, 1)), box('mdia', box('hdlr', u32(0, 0), Buffer.from('vide')),
     box('minf', box('stbl', box('stsd', u32(0, descriptions), ...Array(descriptions).fill(sample)), box('stsz', u32(0, 0, extraSamples))))));
   return box('moov', track, box('mvex', box('trex', u32(0, 1, 1, 10, 3, 0x10000))));
 }
 const read = (bytes: Uint8Array, limit = 20) => readMp4Configurations({ size: bytes.length, async read(o: number, n: number) { return bytes.subarray(o, o + n); } } as any, 1, limit, true);
-function fixture(options: { base?: bigint; implicit?: boolean; before?: boolean; missingTfdt?: boolean; version?: number; ticks?: bigint; nextTicks?: bigint; description?: number; duration?: number; count?: number; ctoVersion?: number; cto?: number; overlap?: boolean; mixed?: boolean; configs?: number; audio?: boolean; trexOnly?: boolean } = {}) {
-  const initial = init(options.mixed ? 1 : 0, options.configs ?? 1), media = box('mdat', Buffer.alloc(6));
+function fixture(options: { base?: bigint; implicit?: boolean; before?: boolean; missingTfdt?: boolean; version?: number; ticks?: bigint; nextTicks?: bigint; description?: number; duration?: number; count?: number; ctoVersion?: number; cto?: number; overlap?: boolean; mixed?: boolean; configs?: number; audio?: boolean; trexOnly?: boolean; terminator?: Uint8Array } = {}) {
+  const initial = init(options.mixed ? 1 : 0, options.configs ?? 1, options.terminator), media = box('mdat', Buffer.alloc(6));
   const make = (first: boolean) => {
     const tfhd = box('tfhd', u32((options.implicit ? 0 : options.base !== undefined ? 1 : 0x20000) | (options.trexOnly ? 0 : 2 | 8 | 16 | 32), 1),
       ...(options.base === undefined ? [] : [u64(options.base)]), ...(options.trexOnly ? [] : [u32(options.description ?? 1, options.duration ?? 11, 3, 0)]));
@@ -88,4 +88,16 @@ test('fragment packet locators validate moof offsets but never assign discontinu
   validateFragmentPacket(config, 0, packet, 1000);
   assert.throws(() => validateFragmentPacket(config, 0, { ...packet, sequenceNumber: 0 }, 1000), /mapping/);
   assert.throws(() => validateFragmentPacket(config, 0, { ...packet, timestamp: Number.MAX_SAFE_INTEGER }, 1), /mapping/);
+});
+
+test('QuickTime video extensions accept only the exact four-byte zero terminator', async () => {
+  const clean = await read(fixture());
+  const terminated = await read(fixture({ terminator: Buffer.alloc(4) }));
+  assert.deepEqual(terminated.descriptions, clean.descriptions);
+  assert.deepEqual(terminated.sampleSizes, clean.sampleSizes);
+  for (const tail of [Buffer.alloc(3), Buffer.alloc(5), Buffer.from([0, 0, 0, 1])])
+    await assert.rejects(read(fixture({ terminator: tail })), /box.*截断/);
+  // A short child outside a video description is still corruption.
+  const bad = Buffer.concat([init(), Buffer.alloc(4)]);
+  await assert.rejects(read(bad), /box.*截断/);
 });

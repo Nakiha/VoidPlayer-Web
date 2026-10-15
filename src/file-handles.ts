@@ -1,5 +1,6 @@
 import { sourceKey } from './ui/source-catalog.ts';
 import { matchMediaIdentity } from './media-identity.ts';
+import type { LocalAccessProblem } from './source-access.ts';
 
 /** Persistent local-file access via File System Access handles.
  *
@@ -10,7 +11,7 @@ import { matchMediaIdentity } from './media-identity.ts';
  * API keep the file-picker fallback; the real path stays unobtainable by
  * design in every API, so history rows never display or copy paths.
  */
-export type HandleProblem = 'unavailable' | 'denied' | 'stale';
+export type HandleProblem = LocalAccessProblem;
 export class FileHandleError extends Error {
   readonly kind: HandleProblem;
   constructor(kind: HandleProblem, message: string) { super(message); this.kind = kind; }
@@ -94,10 +95,12 @@ export function indexedDBHandleStore(): HandleStore {
 }
 
 /** Reopen a stored handle inside a user gesture. Throws FileHandleError:
- * 'unavailable' (no record / dead API), 'denied' (grant refused), 'stale'
+ * 'unsupported' (no persistent browser access), 'unavailable' (no record), 'denied' (grant refused), 'stale'
  * (file moved, renamed, replaced, or handle invalid — the record is deleted).
  * A bare lastModified drift refreshes the stored fingerprint instead. */
-export async function restoreHandleFile(key: string, store: HandleStore = indexedDBHandleStore(), allowPrompt = true): Promise<File> {
+export async function restoreHandleFile(key: string, store?: HandleStore, allowPrompt = true): Promise<File> {
+  if (!store && !supportsFileHandles()) throw new FileHandleError('unsupported', '当前浏览器不支持持久访问本地文件。');
+  store ??= indexedDBHandleStore();
   const record = await store.get(key).catch(() => undefined);
   if (!record?.handle) throw new FileHandleError('unavailable', '没有可恢复的本地文件句柄。');
   const handle = record.handle;
@@ -147,10 +150,10 @@ export type PickedVideo = { file: File; handle: FsFileHandle };
 const VIDEO_TYPES = [{ description: '视频', accept: { 'video/*': ['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.ts', '.m2ts', '.mpg', '.mpeg', '.avi', '.flv'] } }];
 
 /** System picker returning usable Files plus persistable handles.
- * Returns null when the user cancels; throws FileHandleError('unavailable')
+ * Returns null when the user cancels; throws FileHandleError('unsupported')
  * where the API is missing. Must run inside a user gesture. */
 export async function pickVideoFiles(multiple: boolean): Promise<PickedVideo[] | null> {
-  if (!supportsFileHandles()) throw new FileHandleError('unavailable', '当前浏览器不支持系统文件选择器。');
+  if (!supportsFileHandles()) throw new FileHandleError('unsupported', '当前浏览器不支持持久访问本地文件。');
   try {
     const picker = (window as unknown as FsPickerWindow).showOpenFilePicker!;
     const handles = await picker({ multiple, types: VIDEO_TYPES });

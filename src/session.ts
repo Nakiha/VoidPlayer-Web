@@ -290,9 +290,9 @@ export class ReviewSession {
   getBitstreamAnalysisConcurrency() { return this.bitstream.concurrency; }
   setBitstreamAnalysisConcurrency(value: number) { this.bitstream.setConcurrency(value); }
   private async runBitstreamTask<T>(slot: Slot, signal: AbortSignal | undefined,
-    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>): Promise<T> {
+    initial: DeepAnalysisState, run: (service: BitstreamAnalysisService, signal: AbortSignal) => Promise<T>, intent: 'explicit' | 'automatic' = 'explicit'): Promise<T> {
     slotValue(slot);
-    return this.bitstream.run(slot, signal, initial, run);
+    return this.bitstream.run(slot, signal, initial, run, intent);
   }
   constructor(draw: (slot: Slot, frame: DecodedFrame) => void) {
     this.draw=(slot,frame)=>{
@@ -328,15 +328,24 @@ export class ReviewSession {
     if (slot !== undefined) slotValue(slot);
     this.bitstream.cancel(slot);
   }
-  async requestBitstreamStream(slot: Slot, signal?: AbortSignal) {
+  pauseBitstreamAnalysis(slot: Slot) { slotValue(slot); this.bitstream.pause(slot); }
+  resumeBitstreamAnalysis(slot: Slot, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']) {
+    slotValue(slot);
+    if (this.getBitstreamAnalysisState(slot).state !== 'paused') throw new AnalysisFailure('invalid-request', 'Analysis is not paused');
+    return this.requestBitstreamStream(slot, undefined, window ?? this.getBitstreamAnalysisState(slot).stream?.window);
+  }
+  requestBitstreamViewport(slot: Slot, window: NonNullable<import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window']>) {
+    return this.requestBitstreamStream(slot, undefined, window, 'automatic');
+  }
+  async requestBitstreamStream(slot: Slot, signal?: AbortSignal, window?: import('./bitstream-analysis/contract.ts').AnalysisStreamTarget['window'], intent: 'explicit' | 'automatic' = 'explicit') {
     const track = this.tracks.get(slot);
     const progress = await this.runBitstreamTask(slot, signal, { state: 'pending', stream: { slot, checkedUs: 0,
-      totalUs: Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0 } }, (service, taskSignal) => {
+      totalUs: window ? window.endUs - window.startUs : Math.ceil(track?.source.info.durationUs ?? 0), pictures: 0, totalPictures: 0, ...(window ? { window } : {}) } }, (service, taskSignal) => {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
       return service.requestStream(track!.source, { mode: 'stream', sourceVersion,
-        firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs) }, slot, taskSignal);
-    });
-    if (this.tracks.get(slot) === track) {
+        firstPtsUs: track!.source.info.firstPtsUs, durationUs: Math.ceil(track!.source.info.durationUs), ...(window ? { window } : {}) }, slot, taskSignal);
+    }, intent);
+    if (this.tracks.get(slot) === track && !window) {
       const sourceVersion = track!.source.info.source ? `${track!.source.info.source.id}@${referenceVersion(track!.source.info.source.url)}` : track!.source.info.id;
       this.bitstream.complete(slot, track!.sourceGen, { slot, sourceVersion, ...progress });
     }
@@ -404,7 +413,7 @@ export class ReviewSession {
     if (this.audioSlot && (this.tracks.get(this.audioSlot)?.source !== this.audioSource || this.tracks.get(this.audioSlot)?.failure)) {
       this.audioSlot = null; this.audioSource = undefined; this.audioOutput.select();
     }
-    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,syncState:t.syncState})) };
+    const state = { busy: this.busy, playing: this.playing, error: this.error, mediaLoad: this.mediaLoad, tracks: [...this.tracks].map(([slot,t])=>({slot,...t.source.info,offsetUs:t.offsetUs,failure:t.failure,pendingRelink:!!t.pendingRelink,syncState:t.syncState})) };
     const signature = JSON.stringify(state);
     if (signature !== this.lastTransition) {
       log.info('session', '状态变化', { before: this.lastTransition ? JSON.parse(this.lastTransition) : null, after: state, positionUs: this.positionUs });
@@ -1354,6 +1363,7 @@ export class ReviewSession {
           } catch (error) {
             source?.dispose();
             if (!options.allowUnavailable || signal.aborted || !current()) throw error;
+            log.warn('session', '工作区片源恢复失败，保留轨道待重新关联', { slot: track.slot, name: info.name, sourceKind: info.source ? 'library' : 'local', sourceId: info.source?.id, reason: (error as { kind?: string })?.kind, httpStatus: (error as { status?: number })?.status, error: errorText(error), pendingRelink: true });
             next.set(track.slot, { source: unavailableSource(info), frame: null, offsetUs: track.offsetUs, visible: track.visible, sourceGen: ++this.nextSourceGen,
               pendingRelink: true, failure: { message: `待重新关联：${errorText(error)}`, positionUs: document.positionUs } });
           }

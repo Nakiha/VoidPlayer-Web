@@ -14,6 +14,7 @@ type Loader = () => Promise<{ installAnalysisPanel: typeof installAnalysisPanel 
 export function installLazyAnalysisPanel(session: ReviewSession, act: Action, hooks: AnalysisHooks,
   load: Loader = () => import('../analysis-panel.ts')) {
   let panel: Panel | undefined, loading: Promise<void> | undefined, open = hooks.isOpen();
+  let restored = false;
   const preferences = loadAnalysisPreferences();
   let snapshot: AnalysisViewState = { ...preferences, view: null, follow: false, numAxis: preferences.axis };
   const known = new Set<string>();
@@ -31,7 +32,7 @@ export function installLazyAnalysisPanel(session: ReviewSession, act: Action, ho
       // on a later explicit open, when it has a useful subscription lifetime.
       if (!open) return;
       panel = module.installAnalysisPanel(session, act, hooks);
-      reconcile(); panel.restoreAnalysisState(snapshot); panel.setOpen(open);
+      reconcile(); if (restored) panel.restoreAnalysisState(snapshot); panel.setOpen(open);
     }).finally(() => { loading = undefined; });
     return loading;
   }
@@ -46,6 +47,7 @@ export function installLazyAnalysisPanel(session: ReviewSession, act: Action, ho
     refreshTarget: () => panel?.refreshTarget(),
     getAnalysisState() { if (panel) return panel.getAnalysisState(); reconcile(); return structuredClone(snapshot); },
     restoreAnalysisState(state: AnalysisViewState) {
+      restored = true;
       snapshot = { ...structuredClone(state), numAxis: state.axis, follow: false };
       known.clear();
       for (const track of session.getAnalysisCapabilities()) known.add(`${track.slot}|${track.mediaId}`);

@@ -522,6 +522,68 @@ try {
     }
   });
 
+  await check('toast entrance animates and respects reduced motion', async page => {
+    await page.emulateMedia({reducedMotion:'no-preference'});
+    await page.evaluate(() => {
+      window.toastFrames=[];
+      const observe=new MutationObserver(records=>{
+        const toast=records.flatMap(record=>[...record.addedNodes]).find(node=>node instanceof HTMLElement && node.classList.contains('toast-warning'));
+        if(!toast)return;
+        observe.disconnect();
+        const sample=()=>{
+          window.toastFrames.push({opacity:+getComputedStyle(toast).opacity, animations:toast.getAnimations().map(animation=>animation.animationName)});
+          if(window.toastFrames.length<20)requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      observe.observe(document.body,{subtree:true,childList:true});
+      void window.voidPlayer.loadFile('A',new File(['invalid'],'animated-toast.flv')).catch(()=>{});
+    });
+    await page.waitForFunction(()=>window.toastFrames.length===20);
+    const frames=await page.evaluate(()=>window.toastFrames);
+    assert.ok(frames.some(frame=>frame.animations.includes('toast-appear') && frame.opacity>0 && frame.opacity<1),'entrance paints intermediate opacity');
+    assert.equal(frames.at(-1).opacity,1);
+    const warning=page.locator('.toast-warning');
+    assert.equal(await warning.evaluate(el=>el.classList.contains('toast-enter')),false,'finished entrance cleans its animation class');
+    await warning.locator('.toast-close').click(); await warning.waitFor({state:'detached'});
+    await page.emulateMedia({reducedMotion:'reduce'});
+    await page.evaluate(()=>window.voidPlayer.loadFile('A',new File(['invalid'],'reduced-toast.flv')).catch(()=>{}));
+    await warning.waitFor({state:'visible'});
+    assert.deepEqual(await warning.evaluate(el=>({opacity:getComputedStyle(el).opacity,animations:el.getAnimations().length,enter:el.classList.contains('toast-enter')})),{opacity:'1',animations:0,enter:false});
+  });
+
+  await check('analysis pause and repeated resume do not emit warning toasts', async page => {
+    const media=listing.entries.find(entry=>entry.name==='ci_h264_smoke.mp4');
+    await page.evaluate(id=>window.voidPlayer.tools.find(tool=>tool.name==='load_library_item').execute({id,slot:'A'}),media.id);
+    let release; const gate=new Promise(resolve=>{release=resolve;});
+    const pattern='**/api/bitstream-analysis/requests/*';
+    await page.route(pattern,async route=>{
+      if(route.request().method()==='GET')await gate;
+      await route.continue().catch(()=>{});
+    });
+    try {
+      await page.evaluate(()=>{
+        window.pauseWarnings=[];
+        new MutationObserver(records=>{
+          for(const node of records.flatMap(record=>[...record.addedNodes]))if(node instanceof HTMLElement && node.classList.contains('toast-warning'))window.pauseWarnings.push(node.textContent);
+        }).observe(document.body,{subtree:true,childList:true});
+      });
+      await page.locator('#toggle-analysis').click();
+      await page.locator('#analysis-diagrams [data-value=nalu-size]').click();
+      const action=page.locator('#analysis-status-items .analysis-progress-action[data-slot=A]');
+      for(let cycle=0;cycle<3;cycle++) {
+        await page.waitForFunction(()=>window.voidPlayer.tools.find(tool=>tool.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='pending');
+        await action.click();
+        await page.waitForFunction(()=>window.voidPlayer.tools.find(tool=>tool.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='paused');
+        await settle(page);
+        assert.deepEqual(await page.evaluate(()=>window.pauseWarnings),[],'intentional cancellation never flashes a warning');
+        if(cycle<2)await action.click();
+      }
+      assert.equal(await page.locator('.toast-warning').count(),0);
+      await page.screenshot({path:path.join(screenshots,`${browserName}-analysis-pause-without-warning.png`)});
+    } finally {release(); await page.unroute(pattern);}
+  });
+
   await check('warning toasts remain above settings and clickable before and after modal opens', async page => {
     const triggerWarning = () => page.evaluate(() => window.voidPlayer.loadFile('A', new File(['invalid'], 'broken.flv')).catch(() => {}));
     const warning = page.locator('.toast-warning');
@@ -847,7 +909,8 @@ try {
         metrics:{startAu:0,packets:au+1,bytesRead:100,elapsedMs:1,recordBytes:12,heapBytes:67108864},gop:{startAu:0,endAu:3,configuration:0,anchor:'closed'}});
       const fail=()=>{if(recovery.failure==='error')throw Error('Temporary network error');if(recovery.failure==='unsupported')throw new AnalysisFailure('unsupported-codec','Unsupported codec');};
       BitstreamAnalysisService.prototype.localRange=async function(_file,_target,_signal,consume,progress){
-        recovery.streams++; fail();
+        recovery.streams++; (recovery.windows??=[]).push(_target.window); fail();
+        if(recovery.hold)await new Promise((resolve,reject)=>{recovery.release=resolve;_signal.addEventListener('abort',()=>reject(_signal.reason),{once:true});});
         progress({pictures:0,totalPictures:3,checkedUs:0,totalUs:300,indexComplete:true});
         for(let au=0;au<3;au++)consume(result(au));
       };
@@ -860,12 +923,12 @@ try {
       if(session.getBitstreamAnalysisState('A').state!=='idle'||recovery.root!==undefined)throw Error('Recovery fixture must begin with the real idle coordinator');
       document.getElementById('analysis-panel').replaceChildren();document.getElementById('analysis-panel').hidden=false;
       const life=new AbortController();
-      const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'});
+      const chart=installAnalysisPanel(session,async run=>{await run();},{signal:life.signal,isOpen:()=>false,selectedSlot:()=> 'A'}); recovery.chart=chart;
       const canvases=Object.fromEntries(['A','B','C','D','E','F','G','H'].map(slot=>[slot,document.getElementById(`canvas-${slot}`)]));
       const overlay=installBitstreamControls(session,canvases,{selected:()=> 'A'});
       const offOverlay=session.subscribe(()=>overlay.render(session.getState()));
       recovery.dispose=async()=>{offOverlay();life.abort();overlay.dispose();await session.dispose();};
-      const source={info:{id:sourceVersion,name:'recovery.mp4',container:'isobmff',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:300},bitstreamFile:new Blob(['fixture']),
+      const source={info:{id:sourceVersion,name:'recovery.mp4',container:'isobmff',size:1,lastModified:0,codec:'h264',decoder:'webcodecs',width:16,height:16,firstPtsUs:100,durationUs:30_000_000},bitstreamFile:new Blob(['fixture']),
         async frameAt(time){const au=Math.min(2,Math.floor(time/100));return {kind:'video-sample',ptsUs:au*100,sourcePtsUs:100+au*100,durationUs:100,description:rgbaDescription(16,16),width:16,height:16,byteSize:1024,sourcePicture:result(au).picture,close(){}};},
         async framesAfter(){return[];},async *framesFrom(){},dispose(){}};
       await session.load('A',async()=>source);
@@ -888,8 +951,10 @@ try {
     await page.locator('#analysis-retry-A').waitFor({state:'visible'});
     await page.evaluate(()=>{recovery.failure='';});
     await page.locator('#analysis-retry-A').click();
-    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').completedStream?.pictures===3);
-    assert.equal(await page.evaluate(()=>recovery.streams),2,'chart retry explicitly restarts the stream');
+    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').state==='ready' && recovery.session.getBitstreamAnalysisState('A').stream?.pictures===3);
+    assert.equal(await page.evaluate(()=>recovery.streams),2,'chart retry explicitly restarts the visible region');
+    assert.deepEqual(await page.evaluate(()=>recovery.windows.at(-1)), {startUs:0,endUs:10_000_000,axis:'pts'});
+    assert.equal(await page.evaluate(()=>recovery.session.getBitstreamAnalysisState('A').completedStream),undefined,'visible coverage is not whole-source completion');
     assert.equal(await page.locator('#analysis-retry-A').isVisible(),false);
     for(const time of [100,200]){
       await page.evaluate(async time=>{recovery.root.cache.clear();await recovery.session.seek(time);},time);
@@ -900,7 +965,7 @@ try {
     assert.equal(await page.evaluate(()=>recovery.streams),2,'picture replenishment does not restart whole-stream analysis');
     await page.evaluate(async()=>{recovery.failure='error';recovery.root.cache.clear();await recovery.session.seek(0);});
     await page.locator('#bitstream-retry-A').waitFor({state:'visible'});
-    assert.equal(await page.evaluate(()=>recovery.session.getBitstreamAnalysisState('A').completedStream.pictures),3);
+    assert.equal(await page.evaluate(()=>recovery.session.getBitstreamAnalysisState('A').completedStream),undefined);
     await page.evaluate(()=>{recovery.failure='';});await page.locator('#bitstream-retry-A').click();
     await page.waitForFunction(()=>recovery.session.cachedBitstreamAnalysis('A')?.picture.au===0 && recovery.session.getBitstreamAnalysisState('A').state==='ready');
     assert.equal(await page.evaluate(()=>recovery.pictures),6,'overlay retry recovers the failed picture');
@@ -910,6 +975,37 @@ try {
     const attempts=await page.evaluate(()=>recovery.streams);
     await page.locator('#bitstream-close').click();await page.locator('#toggle-analysis-overlay').click();await settle(page);
     assert.equal(await page.evaluate(()=>recovery.streams),attempts,'unsupported capability is never retried automatically');
+    const handles=page.locator('.analysis-window-handle');
+    assert.equal(await handles.count(),2);
+    assert.equal(await handles.nth(1).getAttribute('aria-valuenow'),'10000000','fresh view shows the first ten seconds');
+    await page.evaluate(()=>{const saved=recovery.chart.getAnalysisState();recovery.chart.restoreAnalysisState({...saved,view:{start:15_000_000,end:20_000_000}});});
+    await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='20000000');
+    await handles.nth(1).press('ArrowLeft');
+    await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='19900000');
+    const pointer=await handles.nth(1).boundingBox();
+    await page.mouse.move(pointer.x+pointer.width/2,pointer.y+pointer.height/2);
+    await page.mouse.down(); await page.mouse.move(pointer.x-20,pointer.y+pointer.height/2); await page.mouse.up();
+    await page.waitForFunction(()=>+document.querySelector('[data-edge=end]').getAttribute('aria-valuenow')<19900000);
+    await page.evaluate(()=>{const saved=recovery.chart.getAnalysisState();recovery.chart.restoreAnalysisState({...saved,view:{start:15_000_000,end:19_900_000}});});
+    await page.waitForFunction(()=>document.querySelector('[data-edge=end]')?.getAttribute('aria-valuenow')==='19900000');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'range controls add no page width');
+    await page.evaluate(()=>{recovery.failure='';recovery.hold=true;recovery.pending=recovery.session.requestBitstreamStream('A',undefined,{startUs:15_000_000,endUs:19_900_000,axis:'pts'}).catch(()=>{});});
+    const action=page.locator('#analysis-status-items .analysis-progress-action');
+    await action.waitFor({state:'visible'});
+    const centers=await action.evaluate(el=>{const b=el.getBoundingClientRect(),ring=el.querySelector('.analysis-track-progress').getBoundingClientRect();return {dx:ring.x+ring.width/2-b.x-b.width/2,dy:ring.y+ring.height/2-b.y-b.height/2};});
+    assert.ok(Math.abs(centers.dx)<1 && Math.abs(centers.dy)<1,'progress ring is centered');
+    await action.hover();
+    assert.equal(await action.getAttribute('aria-label'),'暂停分析轨道 A');
+    const pauseGlyph=await action.locator('[data-icon=playback]').innerHTML();
+    await action.click();
+    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').state==='paused');
+    assert.equal(await action.getAttribute('aria-label'),'继续分析轨道 A');
+    assert.notEqual(await action.locator('[data-icon=playback]').innerHTML(),pauseGlyph,'pause and play reuse the animated playback icon');
+    await page.screenshot({path:path.join(screenshots,`${browserName}-analysis-paused-range.png`)});
+    await page.evaluate(()=>{recovery.hold=false;});
+    await action.click();
+    await page.waitForFunction(()=>recovery.session.getBitstreamAnalysisState('A').state==='ready');
+    assert.deepEqual(await page.evaluate(()=>recovery.windows.at(-1)),{startUs:15_000_000,endUs:19_900_000,axis:'pts'},'resume uses the restored and edited visible window');
     await page.evaluate(()=>recovery.dispose());
   });
 
@@ -1309,6 +1405,92 @@ try {
     await page.waitForFunction(() => document.querySelectorAll('#start-library-list .start-recent-row').length === 2);
     const rows = await page.locator('#start-library-list .start-recent-row').allTextContents();
     assert.ok(entries.every(entry => rows.some(text => text.includes(entry.root))));
+  });
+  await check('recent history isolates disconnected library roots and migrates resolved legacy references', async page => {
+    const original = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    const foreignId = 'f'.repeat(24), foreignRoot = 'another-service-root';
+    const history = [{ ...original, libraryId: original.id },
+      { name: 'foreign.mp4', size: 10, lastModified: 1, libraryId: foreignId, libraryRootId: foreignRoot },
+      { name: 'legacy-missing.mp4', size: 10, lastModified: 1, libraryId: 'e'.repeat(24) },
+      { name: 'my-local.mp4', size: 10, lastModified: 1 }];
+    let foreignRequests = 0;
+    page.on('request', request => { if (request.url().includes(foreignId)) foreignRequests++; });
+    await page.addInitScript(history => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(history)), history);
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    await page.waitForFunction(() => document.querySelectorAll('.start-recent-row').length === 2);
+    const rows = await page.locator('.start-recent-row').allTextContents();
+    assert.ok(rows.some(text => text.includes(original.name)) && rows.some(text => text.includes('my-local.mp4')));
+    assert.equal(foreignRequests, 0, 'other libraries are not queried against this service');
+    await page.waitForFunction(() => JSON.parse(localStorage.getItem('voidplayer.sources.v1')).some(item => item.libraryRootId && item.name === 'ci_h264_smoke.mp4'));
+    const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('voidplayer.sources.v1')));
+    assert.equal(saved.find(item => item.libraryId === original.id).libraryRootId, original.rootId);
+    assert.ok(saved.some(item => item.libraryId === foreignId), 'disconnected history is retained for its own library');
+    await page.locator('#toggle-sources').click();
+    await page.locator('#library-root').click();
+    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    assert.equal(await page.locator('#source-list .source-row').count(), 2, 'both history views use the same library scope');
+  });
+
+  await check('unresolved library history keeps its origin and shares failure messages across entry points', async page => {
+    const original = listing.entries.find(entry => entry.name === 'ci_h264_smoke.mp4');
+    const missingId = '0'.repeat(24);
+    const history = [{ ...original, libraryId: missingId, libraryRootId: original.rootId, name: 'missing-reference.mp4' }, { ...original, libraryId: original.id, version: '0'.repeat(24) }];
+    await page.addInitScript(history => localStorage.setItem('voidplayer.sources.v1', JSON.stringify(history)), history);
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    const missing = page.locator('.start-recent-row').filter({ hasText: 'missing-reference.mp4' });
+    await page.waitForFunction(() => document.querySelector('.start-recent-row')?.dataset.tooltip?.includes('已失效'));
+    assert.match(await missing.textContent(), /媒体库.*引用不可用/);
+    assert.doesNotMatch(await missing.textContent(), /本地文件/);
+    await missing.click();
+    const message = '媒体库引用「missing-reference.mp4」已失效或文件已移除，请在媒体库中重新选择。';
+    await page.locator('.toast').filter({ hasText: message }).waitFor();
+    await page.locator('#library-root').click();
+    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    const panel = page.locator('#source-list .source-row').filter({ hasText: 'missing-reference.mp4' });
+    await panel.getByRole('button', { name: '检查媒体引用', exact: true }).click();
+    assert.equal(await page.locator('.toast').filter({ hasText: message }).count(), 2, 'both entry points report the same failure');
+    assert.match(await panel.textContent(), /媒体库引用不可用/);
+    assert.doesNotMatch(await panel.textContent(), /本机|本地文件/);
+    assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0);
+    const changed = page.locator('.start-recent-row').filter({ hasText: 'ci_h264_smoke.mp4' });
+    await changed.click();
+    await page.locator('.toast').filter({ hasText: '与保存的版本不一致' }).waitFor();
+    await page.route(`**/api/media/${missingId}/metadata`, route => route.fulfill({ status: 503, body: '{}' }));
+    await panel.getByRole('button', { name: '检查媒体引用', exact: true }).click();
+    await page.waitForFunction(() => document.querySelector('.start-recent-row')?.dataset.tooltip?.includes('检查服务连接'));
+    await missing.click();
+    await page.locator('.toast').filter({ hasText: '无法确认媒体库引用「missing-reference.mp4」' }).waitFor();
+    const logs = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_review_logs').execute({ limit: 2000 }));
+    assert.ok(logs.events.some(event => event.data?.reason === 'missing'));
+    assert.ok(logs.events.some(event => event.data?.reason === 'unavailable'));
+    await page.screenshot({ path: path.join(screenshots, 'source-reference-unavailable.png') });
+  });
+
+  await check('unsupported local history requires selection from either entry point and creates no empty track', async page => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, 'showOpenFilePicker', { value: undefined, configurable: true });
+      localStorage.setItem('voidplayer.sources.v1', JSON.stringify([{ name: 'local-history.mp4', size: 100, lastModified: 1 }]));
+    });
+    await page.reload(); await page.waitForFunction(() => window.voidPlayer);
+    const row = page.locator('.start-recent-row').filter({ hasText: 'local-history.mp4' });
+    assert.match(await row.textContent(), /本地文件.*需重新选择/);
+    let chooser = page.waitForEvent('filechooser');
+    await row.click(); await chooser;
+    const notice = page.locator('.toast').filter({ hasText: '当前浏览器不支持保存本地文件访问权限' });
+    await notice.waitFor();
+    assert.match(await notice.textContent(), /刷新后仍需重新选择/);
+    await page.locator('#toggle-sources').click();
+    await page.locator('#library-root').click();
+    await page.locator('#library-root-menu').getByRole('menuitemradio', { name: '最近使用', exact: true }).click();
+    chooser = page.waitForEvent('filechooser');
+    await page.locator('#source-list').getByRole('button', { name: '重新选择 local-history.mp4', exact: true }).click();
+    await chooser;
+    assert.equal(await notice.count(), 2);
+    assert.equal((await page.evaluate(() => window.voidPlayer.getState())).tracks.length, 0);
+    const logs = await page.evaluate(() => window.voidPlayer.tools.find(tool => tool.name === 'get_review_logs').execute({ limit: 2000 }));
+    assert.ok(logs.events.some(event => event.msg === '会话启动' && event.data.persistentLocalFiles === false));
+    assert.ok(logs.events.some(event => event.data?.reason === 'unsupported'));
+    await page.screenshot({ path: path.join(screenshots, 'local-history-unsupported.png') });
   });
   await check('canvas grid repaints for system theme changes without geometry changes', async page => {
     const id=listing.entries.find(e=>e.name==='ci_h264_smoke.mp4').id;

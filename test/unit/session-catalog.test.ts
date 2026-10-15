@@ -68,3 +68,23 @@ test('relink accepts a modified-time change but still rejects size or name misma
     assert.equal(restored.getState().tracks[0].id, 'clip');
   } finally { await source.dispose(); await restored.dispose(); }
 });
+
+test('partial workspace restoration logs the full unavailable source reason without losing marks', async () => {
+  const { getLogEvents } = await import('../../src/log.ts');
+  const source = new ReviewSession(() => {}), restored = new ReviewSession(() => {});
+  try {
+    await source.load('A', async () => media('clip').source);
+    source.addMark({ slot: 'A', text: 'preserve' });
+    const document = source.exportWorkspace('http://localhost/');
+    const cursor = getLogEvents({ limit: 2000 }).lastSeq;
+    await restored.restoreWorkspace(document, async () => { throw new Error('persistent local file access is unsupported'); }, { allowUnavailable: true });
+    const state = restored.getState();
+    assert.equal(state.tracks[0].pendingRelink, true);
+    assert.equal(state.tracks[0].frame, null);
+    assert.deepEqual(state.marks, document.marks);
+    const failure = getLogEvents({ sinceSeq: cursor, limit: 2000 }).events.find(event => event.msg === '工作区片源恢复失败，保留轨道待重新关联');
+    assert.equal(failure?.level, 'warn');
+    assert.equal((failure?.data as { error: string }).error, 'persistent local file access is unsupported');
+    assert.equal((failure?.data as { sourceKind: string }).sourceKind, 'local');
+  } finally { await source.dispose(); await restored.dispose(); }
+});

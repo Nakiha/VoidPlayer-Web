@@ -123,7 +123,11 @@ export function installWorkspaceRecovery(session: ReviewSession, options: {
         recovery.replaceChildren(recoveryCard(checkpoint.document, async () => {
           try {
             const ok = await options.restore(checkpoint.document);
-            if (ok) { active = true; clearRecovery(); schedule(); options.toasts.show(() => t(msg('recovery.restored', '工作区已恢复。'))); }
+            if (ok) {
+              active = true; clearRecovery(); schedule();
+              const missing = session.getState().tracks.filter(track => track.pendingRelink).length;
+              options.toasts.show(() => missing ? t(msg('recovery.restoredWithMissing', '工作区布局和标注已恢复，{n} 个片源尚未打开。'), { n: missing }) : t(msg('recovery.restored', '工作区已恢复。')), { kind: missing ? 'warning' : 'info' });
+            }
           } catch (error) { options.toasts.show(String(error), { kind: 'error' }); }
         },cardLife.signal));
         recovery.hidden = false;

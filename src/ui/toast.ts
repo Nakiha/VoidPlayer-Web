@@ -67,6 +67,7 @@ export function installToasts(signal?: AbortSignal) {
     el.dataset.leaving = '';
     clearTimeout(timer);
     const ms = exitDuration(stack);
+    el.classList.remove('toast-enter');
     el.classList.add('toast-leaving');
     if (!ms) { remove(el); return; }
     setTimeout(() => remove(el), ms);
@@ -104,10 +105,17 @@ export function installToasts(signal?: AbortSignal) {
     close.innerHTML = icon('close');
     close.onclick = () => dismiss(el, timer);
     el.append(close);
-    // Fast enter: mount hidden, then release in the next frame.
+    const entered = (event: AnimationEvent) => {
+      if (event.target !== el || event.animationName !== 'toast-appear') return;
+      el.classList.remove('toast-enter');
+      el.removeEventListener('animationend', entered); el.removeEventListener('animationcancel', entered);
+    };
+    el.addEventListener('animationend', entered);
+    el.addEventListener('animationcancel', entered);
+    // A keyframe entrance also runs when the popover becomes visible in WebKit.
     stack.append(el);
     raise();
-    requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('toast-enter')));
+    if (reducedMotion()) el.classList.remove('toast-enter');
     let timer: ReturnType<typeof setTimeout> | undefined;
     if (duration > 0) {
       timer = setTimeout(() => dismiss(el, timer), duration);

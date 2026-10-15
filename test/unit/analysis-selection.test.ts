@@ -72,15 +72,15 @@ function deferred<T>() {
 }
 function lazyFixture() {
   const lifetime = new AbortController(), errors: unknown[] = [], mounts: AnalysisViewState[] = [];
-  let loads = 0, mountedState: AnalysisViewState | undefined;
+  let loads = 0, installed = 0, mountedState: AnalysisViewState | undefined;
   const entries = [entry('A'), entry('B')];
   const session = { getAnalysisCapabilities: () => entries } as unknown as ReviewSession;
-  const module = { installAnalysisPanel: () => ({ setOpen() {}, refreshTarget() {}, getAnalysisState: () => structuredClone(mountedState!),
-    restoreAnalysisState: (state: AnalysisViewState) => { mountedState = structuredClone(state); mounts.push(mountedState); } }) };
+  const module = { installAnalysisPanel: () => { installed++; return ({ setOpen() {}, refreshTarget() {}, getAnalysisState: () => structuredClone(mountedState!),
+    restoreAnalysisState: (state: AnalysisViewState) => { mountedState = structuredClone(state); mounts.push(mountedState); } }); } };
   const pending = deferred<typeof module>();
   const lazy = installLazyAnalysisPanel(session, async action => { try { await action(); } catch (error) { errors.push(error); } },
     { signal: lifetime.signal, isOpen: () => false }, () => { loads++; return pending.promise; });
-  return { lazy, pending, module, lifetime, mounts, errors, entries, loads: () => loads };
+  return { lazy, pending, module, lifetime, mounts, errors, entries, loads: () => loads, installed: () => installed };
 }
 
 test('unloaded analysis preserves workspace preferences and applies the latest restore during import', async () => {
@@ -102,7 +102,7 @@ test('closing or disposing during analysis import does not mount stale UI and a 
   const f = lazyFixture(); f.lazy.setOpen(true); const ready = f.lazy.ready(); f.lazy.setOpen(false);
   f.pending.resolve(f.module); await ready;
   assert.equal(f.mounts.length, 0);
-  f.lazy.setOpen(true); await f.lazy.ready(); assert.equal(f.mounts.length, 1);
+  f.lazy.setOpen(true); await f.lazy.ready(); assert.equal(f.installed(), 1); assert.equal(f.mounts.length, 0, 'a fresh panel chooses its own initial viewport');
   const disposed = lazyFixture(); disposed.lazy.setOpen(true); disposed.lifetime.abort();
   disposed.pending.resolve(disposed.module); await disposed.lazy.ready(); assert.equal(disposed.mounts.length, 0);
   const failed = lazyFixture(); failed.lazy.setOpen(true); failed.pending.reject(new Error('chunk failed'));

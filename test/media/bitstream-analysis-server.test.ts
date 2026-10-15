@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm, readFile, symlink, access } from "node:fs/promises";
+import { mkdtemp, rm, readFile, symlink, access, copyFile, open } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { execFile } from "node:child_process";
@@ -417,6 +417,41 @@ test("legal interlaced and high-depth inputs report the same capability reasons 
   }
 });
 
+test('server viewport requests keep different windows separate and publish only their intersecting GOP', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const media = await mkdtemp(join(tmpdir(), 'vp-viewport-stream-')), name = 'viewport.mp4';
+  execFileSync('ffmpeg', ['-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'testsrc2=size=128x64:rate=30:duration=4', '-an', '-c:v', 'libx264', '-g', '30', '-bf', '2',
+    '-x264-params', 'scenecut=0:open-gop=0', join(media, name)]);
+  const f = await fixture(media, name), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  const target = { mode: 'stream' as const, sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 0, durationUs: 4000000 };
+  try {
+    const requests = await Promise.all([100000, 2100000].map(startUs => scheduler.submit(f.entry.id, f.entry.version!,
+      { ...target, window: { startUs, endUs: startUs + 100000, axis: 'pts' } }, String(startUs))));
+    for (let i = 0; i < requests.length; i++) {
+      const owner = String(i ? 2100000 : 100000), aus = new Set<number>();
+      let cursor = 0;
+      for (let n = 0; ; n++) {
+        assert.ok(n < 500, 'viewport request completes');
+        const state = await scheduler.streamStatus(requests[i].requestId, owner, cursor);
+        assert.ok(state && ['running', 'queued', 'complete'].includes(state.state), JSON.stringify(state));
+        for (const ref of state.chunks) {
+          const result = await scheduler.store.get(ref.id);
+          assert.ok(result && result.gop);
+          aus.add(result.picture.au); cursor = ref.cursor;
+          assert.equal(result.gop.startAu, i ? 60 : 0);
+        }
+        if (state.state === 'complete' && cursor === state.published) {
+          assert.equal(state.progress!.totalPictures, 30); break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      assert.deepEqual([...aus].sort((a, b) => a - b), Array.from({ length: 30 }, (_, n) => n + (i ? 60 : 0)));
+      scheduler.release(requests[i].requestId, owner);
+    }
+  } finally { await scheduler.close(); await f.close(); await rm(media, { recursive: true, force: true }); }
+});
+
 test('continuous server stream pages GOP chunks, backpressures each consumer and keeps committed cache on cancellation', async () => {
   const { execFileSync } = await import('node:child_process');
   const media = await mkdtemp(join(tmpdir(), 'vp-gop-stream-'));
@@ -778,3 +813,27 @@ for (const failure of ['messageerror', 'ack-post', 'cancelled-ack'] as const) {
     }
   });
 }
+
+
+test('large library FLV viewport reuses the shared index and decodes only intersecting GOPs', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'vp-large-flv-'));
+  // Valid padding tags grow the container beyond 64 MiB without adding pictures.
+  await copyFile('fixtures/flv-analysis/legacy-h264.flv', join(root, 'large.flv'));
+  const file = await open(join(root, 'large.flv'), 'a');
+  const padding = Buffer.alloc(1024 * 1024 + 15); padding[0] = 18;
+  padding.writeUIntBE(1024 * 1024, 1, 3); padding.writeUInt32BE(1024 * 1024 + 11, padding.length - 4);
+  try { for (let i = 0; i < 65; i++) await file.write(padding); } finally { await file.close(); }
+  const f = await fixture(root, 'large.flv'), scheduler = new AnalysisScheduler(f.library, coreDir, join(f.folder, 'analysis'));
+  try {
+    const demand = await scheduler.submit(f.entry.id, f.entry.version!, {
+      mode: 'stream', sourceVersion: `${f.entry.id}@${f.entry.version}`, firstPtsUs: 2000000, durationUs: 10000000,
+      indexIdentity: (await import('../../src/media-index-identity.ts')).FLV_MEDIA_INDEX_IDENTITY,
+      window: { startUs: 4000000, endUs: 4100000, axis: 'pts' },
+    }, 'viewport');
+    const state = await wait(scheduler, demand.requestId, 'viewport');
+    assert.equal(state.state, 'complete', state.error ?? '');
+    assert.ok(state.published! > 0 && state.published! < 100, 'viewport never decodes the full 600-picture film');
+    assert.equal(state.progress?.waitingForIndex, false);
+    assert.equal(state.progress?.indexComplete, true);
+  } finally { await scheduler.close(); await f.close(); await rm(root, { recursive: true, force: true }); }
+});

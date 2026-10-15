@@ -73,3 +73,10 @@ test('平移钳制在两端，不丢区间宽度', () => {
   assert.deepEqual(panTimeRange(0, 2_000_000, -5_000_000, domain), { start: 0, end: 2_000_000 });
   assert.deepEqual(panTimeRange(8_000_000, 10_000_000, 5_000_000, domain), { start: 8_000_000, end: 10_000_000 });
 });
+
+
+test('overview zoom anchors to the displayed full-domain time after prior zoom', async () => {
+  const { zoomOverviewRange } = await import('../../src/analysis/projection.ts');
+  const next = zoomOverviewRange({ start: 200, end: 400 }, { start: 0, end: 1000 }, 0.75, 0.5, 10);
+  assert.deepEqual(next, { start: 700, end: 800 });
+});

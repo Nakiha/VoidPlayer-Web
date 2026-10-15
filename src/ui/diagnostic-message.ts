@@ -3,7 +3,9 @@ import { msg, t } from '../i18n.ts';
 /** Translate actionable errors at the UI edge, and retain original stage/reason. */
 export function diagnosticMessage(raw: string, diagnostic?: MediaDiagnostic) {
   if(!diagnostic)return raw;
-  const summary = diagnostic.code === 'reference-hdr-unsupported'
+  const summary = diagnostic.code === 'wasm-core-incompatible'
+    ? t(msg('error.wasmCoreIncompatible', '软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。'))
+    : diagnostic.code === 'reference-hdr-unsupported'
     ? t(msg('error.referenceHdr', '此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。'))
     : t(msg('error.referenceFormat', '自有色彩不支持此像素格式或颜色信息。请切换为浏览器色彩后重试。'));
   return t(msg('error.diagnostic', '{summary}\n[{code} / {stage}] {reason}'), {summary,code:diagnostic.code,stage:diagnostic.stage,reason:raw});

@@ -1519,6 +1519,10 @@
     "source": "其他类型",
     "translation": "Other types"
   },
+  "analysis.pauseTrack": {
+    "source": "暂停分析轨道 {slot}",
+    "translation": "Pause analysis for track {slot}"
+  },
   "analysis.peakSeekFailed": {
     "source": "轨道 {slot}：峰值样本定位失败。",
     "translation": "Track {slot}: peak sample seek failed."
@@ -1590,6 +1594,10 @@
     "source": "帧参考",
     "translation": "Frame references"
   },
+  "analysis.resumeTrack": {
+    "source": "继续分析轨道 {slot}",
+    "translation": "Resume analysis for track {slot}"
+  },
   "analysis.retryTrack": {
     "source": "重新分析轨道 {slot}",
     "translation": "Retry analysis for track {slot}"
@@ -1641,6 +1649,10 @@
   "analysis.streamNotStarted": {
     "source": "{slot} 尚未检查",
     "translation": "{slot} has not been checked"
+  },
+  "analysis.streamPaused": {
+    "source": "已暂停",
+    "translation": "Paused"
   },
   "analysis.streamProgress": {
     "source": "{slot} {percent}% · {count} 帧",
@@ -1710,6 +1722,14 @@
   "analysis.untimedPackets": {
     "source": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。",
     "translation": "Track {slot}: {count} packets have no timestamp ({bytes} bytes) and cannot be included in timeline bitrate."
+  },
+  "analysis.visibleEnd": {
+    "source": "图表可见区间终点",
+    "translation": "Visible chart range end"
+  },
+  "analysis.visibleStart": {
+    "source": "图表可见区间起点",
+    "translation": "Visible chart range start"
   },
   "annotation.framePreview": {
     "source": "标注画面",
@@ -2326,6 +2346,10 @@
     "source": "此 HDR 视频未提供可核对的高位深平面。请切换为浏览器色彩后重试。",
     "translation": "Managed color needs verifiable high-depth HDR planes. Switch to browser color and retry.",
     "needsReview": false
+  },
+  "error.wasmCoreIncompatible": {
+    "source": "软件解码器资源与播放器版本不匹配，请更新解码器资源并刷新页面后重试。",
+    "translation": "Software decoder assets do not match this player version. Update the decoder assets, refresh the page, and try again."
   },
   "identity.chooseExisting": {
     "source": "选择已有用户",
@@ -3089,6 +3113,10 @@
     "source": "工作区已恢复。",
     "translation": "Workspace restored."
   },
+  "recovery.restoredWithMissing": {
+    "source": "工作区布局和标注已恢复，{n} 个片源尚未打开。",
+    "translation": "Workspace layout and annotations restored; {n} sources have not been opened."
+  },
   "recovery.saveFailed": {
     "source": "工作区本机自动恢复保存失败，请导出文件或显式保存到服务器。",
     "translation": "Local recovery saving failed. Export a file or save explicitly to the server."
@@ -3805,6 +3833,26 @@
     "source": "画面缩放",
     "translation": "Zoom"
   },
+  "sourceAccess.libraryChanged": {
+    "source": "媒体库文件「{name}」与保存的版本不一致，请重新选择并检查标注。",
+    "translation": "Library file “{name}” no longer matches the saved version. Select it again and review the annotations."
+  },
+  "sourceAccess.libraryMissing": {
+    "source": "媒体库引用「{name}」已失效或文件已移除，请在媒体库中重新选择。",
+    "translation": "The library reference for “{name}” has expired or the file was removed. Select it again in the library."
+  },
+  "sourceAccess.libraryUnavailable": {
+    "source": "无法确认媒体库引用「{name}」，请检查服务连接后重试。",
+    "translation": "Cannot verify the library reference for “{name}”. Check the service connection and try again."
+  },
+  "sourceAccess.localStale": {
+    "source": "本地文件「{name}」已变化或不可用，请重新选择并检查标注。",
+    "translation": "Local file “{name}” has changed or is unavailable. Select it again and review the annotations."
+  },
+  "sourceAccess.localUnsupported": {
+    "source": "当前浏览器不支持保存本地文件访问权限，无法直接恢复「{name}」。请重新选择文件；刷新后仍需重新选择。",
+    "translation": "This browser cannot retain access to local files, so “{name}” cannot be reopened directly. Select the file again; you will need to reselect it after refreshing."
+  },
   "sourceActions.connected": {
     "source": "媒体服务已连接",
     "translation": "Media service connected"
@@ -3889,10 +3937,6 @@
     "source": "检查媒体引用",
     "translation": "Check the media reference"
   },
-  "sources.contentChanged": {
-    "source": "内容已改变或不可用，请在媒体库中重新选择",
-    "translation": "The content changed or is unavailable. Pick it again in the library"
-  },
   "sources.currentIdentityPrefix": {
     "source": "当前身份 · ",
     "translation": "Current identity · "
@@ -3924,6 +3968,14 @@
   "sources.lastOpened": {
     "source": " · 上次打开 {date}",
     "translation": " · last opened {date}"
+  },
+  "sources.libraryReference": {
+    "source": "媒体库引用",
+    "translation": "Library reference"
+  },
+  "sources.libraryReferenceUnavailable": {
+    "source": "媒体库引用不可用",
+    "translation": "Library reference unavailable"
   },
   "sources.loadFailedWith": {
     "source": "载入失败：{reason}",
@@ -3977,6 +4029,10 @@
     "source": "打开：{name}",
     "translation": "Open: {name}"
   },
+  "sources.referenceNeedsReselect": {
+    "source": " · 引用不可用，需重新选择",
+    "translation": " · Reference unavailable; select again"
+  },
   "sources.removeFromView": {
     "source": "从视图移除",
     "translation": "Remove from view"
@@ -4012,10 +4068,6 @@
   "sources.showingFirstFrame": {
     "source": "正在显示首帧",
     "translation": "Showing the first frame"
-  },
-  "sources.staleLibraryToast": {
-    "source": "媒体库中的文件已变化，请在片源中重新选择",
-    "translation": "The file in the library changed. Pick it again in sources"
   },
   "sources.startMetaLibrary": {
     "source": "媒体库",
@@ -4430,10 +4482,6 @@
   "transfer.nameMismatch": {
     "source": "文件名 {expected} → {actual}",
     "translation": "Filename {expected} → {actual}"
-  },
-  "transfer.notAuthorized": {
-    "source": "本地文件尚未授权，请重新选择。",
-    "translation": "Local file not authorized yet. Pick it again."
   },
   "transfer.openWorkspace": {
     "source": "打开工作区",

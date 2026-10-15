@@ -7,4 +7,6 @@ export function validateAnalysisCore(core: Record<string, any>) {
   if (typeof core._vpa_abi !== 'function' || core._vpa_abi() !== 1 ||
       REFERENCE_EXPORTS.some(name => typeof core[name] !== 'function') || core._vpa_reference_abi() !== 1)
     throw new AnalysisFailure('internal-error', 'Analysis core ABI mismatch: block ABI 1 and reference ABI 1 are required');
+  if (typeof core._vpa_feed_known !== 'function')
+    throw new AnalysisFailure('internal-error', 'Analysis core ABI mismatch: known timestamp feed is required; update analysis assets to match the player build');
 }

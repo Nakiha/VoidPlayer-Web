@@ -193,7 +193,7 @@ export async function wasmFlvDecoder(index: PacketConfiguration, glueURL: string
       checkedHeap(heap(), extra, description.length, '写入配置头').set(description, extra);
       let status:number;
       if(next.codecParameters){
-        if(typeof core._vp_packet_open_config!=='function'||core._vp_packet_config_bytes?.()!==40)throw new MediaOpenError('decode','WASM packet configuration ABI unavailable');
+        if(typeof core._vp_packet_open_config!=='function'||core._vp_packet_config_bytes?.()!==40)throw new MediaOpenError('decode','WASM packet configuration ABI unavailable: decoder assets must match the player build','wasm-core-incompatible');
         const ptr=core._malloc(40);if(!ptr)throw new MediaOpenError('resource','Cannot allocate packet parameters');
         const p=next.codecParameters;
         try{const view=new DataView(heap().buffer);[1,40,p.width,p.height,p.sarNum,p.sarDen,p.colorPrimaries,p.colorTransfer,p.colorSpace,p.colorRange].forEach((v,i)=>view.setInt32(ptr+i*4,v,true));

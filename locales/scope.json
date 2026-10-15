@@ -86,6 +86,7 @@
     "src/ui/settings.ts",
     "src/ui/shell.ts",
     "src/ui/shortcuts.ts",
+    "src/ui/source-access-message.ts",
     "src/ui/source-actions.ts",
     "src/ui/source-activity.ts",
     "src/ui/source-catalog.ts",

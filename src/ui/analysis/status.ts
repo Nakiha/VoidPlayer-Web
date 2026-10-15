@@ -7,12 +7,14 @@ import type { AnalysisQueryTrack } from './queries.ts';
 import type { AnalysisAction } from './shared.ts';
 import { analysisTrackBadge } from './card.ts';
 import { progressRingMarkup } from '../progress-ring.ts';
+import { playbackIcon } from '../playback-icon.ts';
 
 /** Frame-number UI owns its pending ranks, editing and invalidation. */
 export function installAnalysisStatus(options: {
   session: ReviewSession; act: AnalysisAction; signal: AbortSignal; prefs: AnalysisPreferences;
   statusEl: HTMLElement; itemsEl: HTMLElement; live: HTMLElement;
   tracks(): readonly (AnalysisQueryTrack & { name: string })[]; colors(): ReadonlyMap<Slot, string>;
+  resume?(slot: Slot): Promise<unknown>;
 }) {
   const { session, act, signal, prefs, statusEl, itemsEl, live } = options;
   // ---- 右侧状态区：当前上屏帧 PTS + 双帧号（展示序 / 解码序） ----
@@ -94,7 +96,14 @@ export function installAnalysisStatus(options: {
         const progress = document.createElement('span'); progress.className = 'analysis-track-progress';
         progress.setAttribute('role', 'progressbar'); progress.setAttribute('aria-valuemin', '0'); progress.setAttribute('aria-valuemax', '100');
         progress.innerHTML = progressRingMarkup;
-        toggle.append(badge, progress); control.append(toggle); wrap.append(control, num);
+        const action = document.createElement('button'); action.type = 'button'; action.className = 'analysis-progress-action'; action.dataset.slot = entry.slot;
+        const glyph = document.createElement('span'); glyph.className = 'analysis-progress-glyph'; glyph.innerHTML = playbackIcon();
+        action.append(progress, glyph);
+        action.onclick = () => {
+          if (session.getBitstreamAnalysisState(entry.slot).state === 'paused') void act(() => options.resume?.(entry.slot) ?? session.resumeBitstreamAnalysis(entry.slot), 'analysis.resume', { slot: entry.slot });
+          else void act(() => session.pauseBitstreamAnalysis(entry.slot), 'analysis.pause', { slot: entry.slot });
+        };
+        toggle.append(badge); control.append(toggle, action); wrap.append(control, num);
         item = { wrap, badge, control, toggle, num };
         statusItems.set(entry.slot, item);
       }

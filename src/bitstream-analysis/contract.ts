@@ -54,6 +54,7 @@ export interface AnalysisStreamTarget {
   sourceVersion: string;
   firstPtsUs: number;
   durationUs: number;
+  window?: { startUs: number; endUs: number; axis: 'pts' | 'dts' };
 }
 export function validateStream(target: AnalysisStreamTarget) {
   if (!target || target.mode !== 'stream') throw new AnalysisFailure('invalid-request', 'Invalid stream request');
@@ -61,6 +62,8 @@ export function validateStream(target: AnalysisStreamTarget) {
   validateIndexIdentity(target.indexIdentity);
   if (!Number.isSafeInteger(target.durationUs) || target.durationUs <= 0)
     throw new AnalysisFailure('invalid-request', 'Invalid stream duration');
+  if (target.window && (![target.window.startUs, target.window.endUs, target.window.endUs - target.window.startUs].every(Number.isSafeInteger) || target.window.endUs <= target.window.startUs || !['pts', 'dts'].includes(target.window.axis)))
+    throw new AnalysisFailure('invalid-request', 'Invalid analysis viewport');
 }
 export interface AnalysisResult {
   containerHeader?: import("./diagrams.ts").ContainerHeader;

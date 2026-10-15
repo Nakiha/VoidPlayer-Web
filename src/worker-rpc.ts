@@ -101,7 +101,7 @@ export class WorkerRpc<C extends CommandsShape<C> = FfmpegCommands> {
       this.pending.delete(id);
       if (ok) entry.resolve(payload);
       else {
-        const failure = data.stage ? new MediaOpenError(data.stage, data.error ?? '解码器错误') : new Error(data.error ?? 'WASM 解码器错误');
+        const failure = data.stage ? new MediaOpenError(data.stage, data.error ?? '解码器错误', data.code) : new Error(data.error ?? 'WASM 解码器错误');
         if (data.stack) failure.stack += `\nWorker: ${data.stack}`;
         contextLog().warn('media', '解码 worker 请求失败', {workerId:this.workerId,requestId:id,recentRequests:this.requests,error:failure});
         entry.reject(failure);

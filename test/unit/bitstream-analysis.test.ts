@@ -511,6 +511,8 @@ test('required reference ABI rejects old or incomplete cores before analysis', a
   const { validateAnalysisCore, REFERENCE_EXPORTS } = await import('../../src/bitstream-analysis/core-abi.ts');
   const current = Object.fromEntries(REFERENCE_EXPORTS.map(name => [name, () => name === '_vpa_reference_abi' ? 1 : 0]));
   current._vpa_abi = () => 1;
+  assert.throws(() => validateAnalysisCore(current), /known timestamp feed/);
+  current._vpa_feed_known = () => 0;
   assert.doesNotThrow(() => validateAnalysisCore(current));
   assert.throws(() => validateAnalysisCore({ _vpa_abi: () => 1 }), /reference ABI 1/);
   for (const name of REFERENCE_EXPORTS) {
@@ -750,3 +752,100 @@ for (const { mode, failure } of localTransportCases) {
     }
   });
 }
+
+test('viewport analysis selects intersecting GOPs using the requested PTS or DTS axis', async () => {
+  const { viewportAnalysisGops } = await import('../../src/bitstream-analysis/stream.ts');
+  const packets = Array.from({ length: 6 }, (_, au) => ({ au, pts: 100 + au * 10, dts: 90 + au * 10, configuration: 0, key: au % 2 === 0 })) as any;
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'pts' }).map(group => [group.startAu, group.endAu]), [[2, 4]]);
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 25, endUs: 35, axis: 'dts' }).map(group => [group.startAu, group.endAu]), [[4, 6]]);
+  assert.deepEqual(viewportAnalysisGops(packets, 100, { startUs: 20, endUs: 40, axis: 'pts' }).map(group => [group.startAu, group.endAu]), [[2, 4]]);
+});
+
+test('pause and resume retain confirmed analysis coverage without borrowing another source generation', async t => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const { BitstreamAnalysisService } = await import('../../src/bitstream-analysis/service.ts');
+  const { AnalysisFailure } = await import('../../src/bitstream-analysis/failure.ts');
+  let runs = 0, reached!: () => void, generation = 1;
+  const pending = new Promise<void>(resolve => { reached = resolve; }), states: any[] = [];
+  const instance = {};
+  const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation, available: true }), subscribeInvalidation: () => () => {}, changed: () => { states.push(coordinator.state('A')); } });
+  t.mock.method(BitstreamAnalysisService.prototype as any, 'localRange', async (_file: unknown, _target: unknown, signal: AbortSignal, consume: (r: AnalysisResult) => void, progress: (p: unknown) => void) => {
+    const first = ++runs === 1;
+    progress({ pictures: 0, totalPictures: 3, checkedUs: 0, totalUs: 300, indexComplete: true });
+    for (let au = 0; au < 3; au++) {
+      const r = result(); r.picture.au = au; r.sourcePtsUs = au * 100; r.gop = { startAu: 0, endAu: 3, configuration: 0, anchor: 'closed' }; consume(r);
+      if (first && au === 0) { reached(); await new Promise((_, reject) => signal.addEventListener('abort', () => reject(new AnalysisFailure('cancelled', 'paused')), { once: true })); }
+    }
+  });
+  const source = { info: {}, bitstreamFile: new Blob() } as any;
+  const window = { startUs: 0, endUs: 300, axis: 'pts' as const };
+  const run = () => coordinator.run('A', undefined, { state: 'pending', stream: { slot: 'A', checkedUs: 0, totalUs: 300, pictures: 0, totalPictures: 3, window } }, (service, signal) => service.requestStream(source, { mode: 'stream', sourceVersion: 'local:uuid', firstPtsUs: 0, durationUs: 300, window }, 'A', signal));
+  try {
+    const first = run().catch(() => {}); await pending;
+    coordinator.pause('A'); await first;
+    assert.equal(coordinator.state('A').state, 'paused'); assert.equal(coordinator.state('A').stream!.pictures, 1);
+    const cursor = states.length; await run();
+    assert.ok(states.slice(cursor).filter(state => state.state === 'pending').every(state => state.stream.pictures >= 1));
+    assert.equal(coordinator.state('A').state, 'ready'); assert.equal(coordinator.state('A').stream!.pictures, 3);
+    generation = 2; assert.equal(coordinator.state('A').state, 'idle');
+  } finally { coordinator.dispose(); }
+});
+
+
+test('automatic viewports preserve explicit work and coalesce to the latest window', async () => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const instance = {}, executed: number[] = [];
+  const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  let release!: () => void, started!: () => void, explicitSignal!: AbortSignal;
+  const gate = new Promise<void>(r => { release = r; }), ready = new Promise<void>(r => { started = r; });
+  const initial = { state: 'pending' as const };
+  try {
+    const explicit = coordinator.run('A', undefined, initial, async (_service, signal) => { explicitSignal = signal; started(); await gate; });
+    await ready;
+    const first = coordinator.run('A', undefined, initial, async () => { executed.push(1); }, 'automatic').catch(() => {});
+    const last = coordinator.run('A', undefined, initial, async () => { executed.push(2); }, 'automatic');
+    await new Promise(r => setImmediate(r));
+    assert.equal(explicitSignal.aborted, false, 'automatic demand must not cancel explicit work');
+    assert.deepEqual(executed, [], 'automatic work waits for explicit completion');
+    release(); await Promise.all([explicit, first, last]);
+    assert.deepEqual(executed, [2], 'latest window executes after explicit completion');
+  } finally { release(); coordinator.dispose(); }
+});
+
+test('viewport reports index waiting before opening bounded metadata and cancels cleanly', async () => {
+  const { analyzeStream } = await import('../../src/bitstream-analysis/runner.ts');
+  const controller = new AbortController(); let reads = 0, waiting = false;
+  await assert.rejects(analyzeStream({ size: 100_000_000, async read() { reads++; throw new Error('metadata read before frontier'); }, close() {} },
+    { mode: 'stream', sourceVersion: 'viewport', firstPtsUs: 0, durationUs: 1000, window: { startUs: 0, endUs: 100, axis: 'pts' } },
+    () => assert.fail('waiting never loads core'), 'test', controller.signal, async () => assert.fail('no output before index'),
+    async p => { if (p.waitingForIndex) { waiting = true; controller.abort(); } }, async () => ({ packets: 32, complete: false })), { name: 'AbortError' });
+  assert.equal(waiting, true); assert.equal(reads, 0);
+});
+
+
+test('queued automatic work cannot cross a source generation or restart after cancellation', async () => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const instance = {}; let generation = 1;
+  const coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  let release!: () => void, started!: () => void;
+  const gate = new Promise<void>(r => { release = r; }), ready = new Promise<void>(r => { started = r; });
+  try {
+    const explicit = coordinator.run('A', undefined, {state:'pending'}, async () => { started(); await gate; }); await ready;
+    const automatic = coordinator.run('A', undefined, {state:'pending'}, async () => assert.fail('stale window must not run'), 'automatic');
+    const rejected = assert.rejects(automatic, /source changed/);
+    generation++; release(); await explicit; await rejected;
+  } finally { release(); coordinator.dispose(); }
+});
+
+test('a newer automatic window cancels active automatic work', async () => {
+  const { BitstreamSessionCoordinator } = await import('../../src/session/bitstream.ts');
+  const instance = {}, coordinator = new BitstreamSessionCoordinator({ track: () => ({ instance, generation: 1, available: true }), subscribeInvalidation: () => () => {}, changed() {} });
+  let started!: () => void, oldSignal!: AbortSignal;
+  const ready = new Promise<void>(r => { started = r; });
+  try {
+    const first = coordinator.run('A', undefined, {state:'pending'}, async (_service, signal) => { oldSignal = signal; started(); await new Promise((_, reject) => signal.addEventListener('abort', () => reject(signal.reason), {once:true})); }, 'automatic').catch(() => {});
+    await ready;
+    let ran = false; await coordinator.run('A', undefined, {state:'pending'}, async () => { ran = true; }, 'automatic');
+    await first; assert.equal(oldSignal.aborted, true); assert.equal(ran, true);
+  } finally { coordinator.dispose(); }
+});

@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { analyzePicture } from "../../src/bitstream-analysis/runner.ts";
 import { openAnalysisInput } from "../../src/bitstream-analysis/input.ts";
+import { viewportAnalysisGops } from "../../src/bitstream-analysis/stream.ts";
 const fixtures = JSON.parse(
   await readFile(
     new URL(
@@ -39,6 +40,33 @@ async function core() {
   );
   return module.default();
 }
+for (const fixture of fixtures)
+  test(`viewport ${fixture.codec} analyzes only intersecting GOPs and reuses cached pictures`, async () => {
+    const { analyzeStream } = await import("../../src/bitstream-analysis/runner.ts");
+    const input = await openAnalysisInput(await reader(fixture.file), new AbortController().signal);
+    const firstPtsUs = Math.min(...input.packets.map(packet => packet.pts));
+    const packet = input.packets[Math.min(100, input.packets.length - 1)];
+    const window = { startUs: packet.pts - firstPtsUs, endUs: packet.pts - firstPtsUs + 1, axis: 'pts' as const };
+    const groups = viewportAnalysisGops(input.packets, firstPtsUs, window);
+    const expected = groups.flatMap(group => Array.from({ length: group.endAu - group.startAu }, (_, n) => group.startAu + n));
+    const durationUs = Math.max(...input.packets.map(packet => packet.pts)) - firstPtsUs + 100000;
+    input.close();
+    assert.ok(expected.length > 1 && expected.length < input.packets.length);
+    const target = { mode: 'stream' as const, sourceVersion: fixture.sha256, firstPtsUs, durationUs, window };
+    const results = new Map<number, any>(), module = await core(), progress: any[] = [];
+    await analyzeStream(await reader(fixture.file), target, module, 'test', new AbortController().signal,
+      async result => { assert.ok(!results.has(result.picture.au)); results.set(result.picture.au, result); },
+      async value => { progress.push(value); });
+    assert.deepEqual([...results.keys()].sort((a, b) => a - b), expected);
+    assert.equal(progress.at(-1).pictures, expected.length);
+    assert.equal(progress.at(-1).checkedUs, 1);
+    assert.equal(module._vpa_record_bytes(), 0);
+    const replay: number[] = [];
+    await analyzeStream(await reader(fixture.file), target, () => { throw Error('A cached viewport must not allocate a decoder'); }, 'test', new AbortController().signal,
+      async result => { replay.push(result.picture.au); assert.deepEqual(result.blocks, results.get(result.picture.au).blocks); },
+      async () => {}, undefined, async picture => results.get(picture.au) ?? null);
+    assert.deepEqual(replay, expected);
+  });
 for (const fixture of fixtures)
   test(`real ${fixture.codec} output matches independently frozen native records`, async () => {
     assert.equal(

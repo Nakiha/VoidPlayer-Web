@@ -26,6 +26,7 @@ import { installHeaderActions } from './ui/header-actions.ts';
 import { SLOTS } from './model.ts';
 import { installTooltips } from './ui/tooltips.ts';
 import { installToasts } from './ui/toast.ts';
+import { AnalysisFailure } from './bitstream-analysis/failure.ts';
 import { createTrackToasts } from './ui/track-toasts.ts';
 import { installBrandEffects } from './ui/brand-effects.ts';
 import { animatePlaybackIcon } from './ui/playback-icon.ts';
@@ -193,6 +194,7 @@ function showWarning(message: string, diagnostic: MediaDiagnostic | undefined = 
   });
 }
 function showError(error: unknown) {
+  if (error instanceof AnalysisFailure && error.code === 'cancelled' || error instanceof Error && error.name === 'AbortError') return;
   session.captureDiagnostics('ui-error', error);
   showWarning(error instanceof Error ? error.message : String(error), mediaDiagnostic(error));
 }

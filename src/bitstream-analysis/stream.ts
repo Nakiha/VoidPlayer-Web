@@ -29,6 +29,17 @@ export function groupAnalysisGops(packets: readonly AnalysisPacket[]) {
   return groups;
 }
 
+/** Select complete decode-order GOPs intersecting the visible chart clock. */
+export function viewportAnalysisGops(packets: readonly AnalysisPacket[], firstPtsUs: number, window: { startUs: number; endUs: number; axis: 'pts' | 'dts' }) {
+  const groups = groupAnalysisGops(packets);
+  const selected = new Set<number>();
+  for (const packet of packets) {
+    const time = window.axis === 'dts' ? packet.dts : packet.pts;
+    if (time != null && time - firstPtsUs >= window.startUs && time - firstPtsUs < window.endUs) selected.add(gopForAu(groups, packet.au).startAu);
+  }
+  return groups.filter(group => selected.has(group.startAu));
+}
+
 export function gopForAu(groups: readonly AnalysisGop[], au: number): AnalysisGop {
   let lo = 0, hi = groups.length;
   while (lo + 1 < hi) {
