@@ -493,27 +493,27 @@ async function runPictureAttempt(
   }
 }
 
-/** Fast attempts are private until all requested pictures have been decoded.
+/** Only an explicit single-picture blocks request may use a private fast attempt.
+ * Summary, range, legacy and viewport work keeps incremental full publication,
+ * even when only one cache miss remains in a selected GOP.
  * A late pixel requirement discards their owners and opens a new full decoder
  * at the very same syntax-proven anchor. The input/index identities never change.
  * Open/dependent or unsealed work keeps the original continuous full path. */
 async function runPicture(...args: Parameters<typeof runPictureAttempt>): Promise<AnalysisOutput> {
   const [reader, target, factory, buildId, signal, options = {}] = args;
-  if (options.stream) return runPictureAttempt(...args);
+  if (target.product !== 'blocks' || options.stream || options.viewport ||
+      options.desiredAus || options.endSourcePtsUs !== undefined)
+    return runPictureAttempt(reader,target,factory,buildId,signal,{...options,executionMode:0});
   const input = options.input ?? await openAnalysisInput(reader, signal, false,
     {sourceVersion:target.sourceVersion,indexIdentity:target.indexIdentity});
   try {
     const planned = await input.plan(target);
-    const requested = options.desiredAus ?? new Set(input.packets.filter(packet => options.endSourcePtsUs === undefined ? packet.au === planned.target.au : packet.pts >= target.sourcePtsUs && packet.pts < options.endSourcePtsUs).map(packet => packet.au));
     const policy = options.executionPolicy ?? executionPolicy();
     let core = factory, fast = false, decodeEnd: number | undefined;
     if (input.codec === 'hevc' && input.indexComplete && !policy.full) {
       const group = gopForAu(groupAnalysisGops(input.packets), planned.target.au);
       // Do not start a no-pixels DPB from a container-key/open-GOP guess.
-      const bounded = planned.start === group.startAu &&
-        [...requested].every(au => au >= group.startAu && au < group.endAu) &&
-        (target.product === 'summary' || requested.size <= Math.floor(PRODUCT_LIMIT.inFlight /
-          (target.product === 'blocks' ? PRODUCT_LIMIT.frame : BUDGET.resultBytes)));
+      const bounded = planned.start === group.startAu;
       if (bounded) {
         const anchor = input.packets[planned.start];
         if (anchor.size > BUDGET.packetBytes) throw new AnalysisFailure('resource-limit','Analysis anchor budget exceeded');

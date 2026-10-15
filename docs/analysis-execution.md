@@ -6,11 +6,14 @@ The semantic `blocks-basic-v2` recipe, EXACT rules, GOP/picture/index identities
 resource limits and playback paths remain unchanged. Exact Core buildId/WASM
 digest separates artifact caches; full and fast outputs must be equivalent.
 
-Only a complete index and syntax-proven closed anchor admit fast execution.
+Only an explicit single-picture `blocks` request with a complete index and
+syntax-proven closed anchor admits fast execution.
 `input.plan` supplies the actual reference preroll; dependent/open or incremental
-full-film work stays on the original full path. Large block/legacy streams select
-full before starting. Eligible summary work and bounded exact results may use the
-new Core extension, whose existing FFmpeg VPS/SPS/PPS parser decides whether the
+full-film work stays on the original full path. Summary, range, viewport and legacy
+requests also keep full, incremental publication, even with one cache miss left in
+a GOP. This preserves summary first-result latency and pause/resume work while
+retaining the measured precise-frame benefit. The new Core extension's existing
+FFmpeg VPS/SPS/PPS parser decides whether the
 configuration really permits Main8 pruning. Main10/PCM/TQB/extensions stay full.
 
 Fast picture owners are private in the worker. Before allocating a block payload
@@ -34,9 +37,9 @@ start another generation. A cancelled commit may retain its already committed
 exact pictures, which the existing cache/resume protocol can safely reuse.
 Consequently the external worker/HTTP protocol needs no rollback/generation change.
 
-This choice delays the first publication of a cold summary GOP until commit;
-measure first-result latency separately from total completion. Exact analysis
-only stages its requested picture, after its own packet/suffix SEI processing
+Staging a cold summary GOP delayed the first publication and wasted decoded work
+on pause, so that experiment is not the product policy. Exact analysis only
+stages its requested picture, after its own packet/suffix SEI processing
 and necessary reference/reorder work; it does not validate unseen future AUs.
 
 The upstream Core source is stacked on unmerged sorter PR9. Publishing requires
