@@ -42,3 +42,5 @@ Vite 与独立程序共用 `release-version.mjs` 的版本规则。标签构建�
 两个构建只添加相同的 session 访问句柄，不插入逐帧序列化；fixture 自建随机端口、临时数据库、独立 Chromium profile 并清理。
 `LIFECYCLE=1 VARIANTS=implementation` 测暂停/恢复及精确块；`EXACT=1` 测相同预置状态下的精确块 API。
 这些是指定 Mac 的人工性能验收，不把其绝对时限纳入共享 CI；回归测试另在统一 manifest 注册。
+
+`analysis-products-pair.mjs` accepts `PRODUCT=summary|blocks|legacy`, `LIFECYCLE=1` / `PAUSE_ONLY=1`, `FULL_STREAM=1`, and `TRACE_PUTS=1` for actual 30-AU pause/resume coverage and per-AU consumer/server put evidence. Default five-pair summary measurements do not enable put tracing.
