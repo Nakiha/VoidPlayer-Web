@@ -841,26 +841,65 @@ test('large library FLV viewport reuses the shared index and decodes only inters
   } finally { await scheduler.close(); await f.close(); await rm(root, { recursive: true, force: true }); }
 });
 
+type ReadableStreamSnapshot = { state?: string; cursor: number; published?: number; received: number; counters?: unknown; progress?: unknown };
+/** Correctness waits follow consumed/readable products, not seq/counter heartbeats.
+ * Ten seconds without readable progress still fails; total execution is bounded.
+ * Neither limit is a throughput acceptance threshold for a particular machine. */
+function readableStreamWait(phase: string, initialReceived = 0, now = () => performance.now(), emit = (value: unknown) => console.log(JSON.stringify(value))) {
+  const started = now(); let lastProgress = started, lastCursor = 0, lastReceived = initialReceived, oldLimitLogged = false;
+  let last: ReadableStreamSnapshot = { cursor: 0, received: initialReceived }, polls = 0;
+  const detail = () => ({ phase, elapsedMs: now() - started, polls, lastProgressAgeMs: now() - lastProgress, ...last });
+  return {
+    observe(snapshot: ReadableStreamSnapshot) {
+      polls++; last = snapshot;
+      const at = now(), diagnostic = JSON.stringify(detail());
+      assert.ok(at - started <= 120_000, `Stream correctness total deadline exceeded: ${diagnostic}`);
+      assert.ok(at - lastProgress <= 10_000, `Stream has no readable progress: ${diagnostic}`);
+      assert.ok(snapshot.cursor >= lastCursor && snapshot.received >= lastReceived, `Stream readable progress regressed: ${diagnostic}`);
+      if (snapshot.cursor > lastCursor || snapshot.received > lastReceived) lastProgress = at;
+      lastCursor = snapshot.cursor; lastReceived = snapshot.received;
+      if (phase === 'resume' && !oldLimitLogged && (polls >= 2000 || at - started >= 10_000)) {
+        oldLimitLogged = true; emit({ event: 'stream-test-old-poll-limit', ...detail() });
+      }
+    },
+    done() { const summary = detail(); emit({ event: 'stream-test-phase-complete', ...summary }); return summary; },
+  };
+}
+
+test('readable stream deadline permits slow advancing work but rejects idle heartbeats and unbounded total work', () => {
+  let at = 0; const events: unknown[] = [], progressing = readableStreamWait('resume', 0, () => at, value => events.push(value));
+  for (let au = 1; au <= 13; au++) { at += 9000; progressing.observe({ state: 'running', cursor: au, published: au, received: au }); }
+  assert.equal(progressing.done().elapsedMs, 117000, 'continued readable progress may cross the former overall ten-second poll cap');
+  assert.equal(events.filter(value => (value as {event:string}).event === 'stream-test-old-poll-limit').length, 1);
+  at += 9000; assert.throws(() => progressing.observe({ cursor: 14, published: 14, received: 14 }), /total deadline/);
+  at = 0; const idle = readableStreamWait('idle', 30, () => at, () => {});
+  at = 5000; idle.observe({ state: 'running', cursor: 0, published: 32, received: 30, counters: { feed: 1 } });
+  at = 10001; assert.throws(() => idle.observe({ state: 'running', cursor: 0, published: 64, received: 30, counters: { feed: 100 } }), /no readable progress.*"cursor":0.*"published":64.*"received":30.*"feed":100/);
+});
+
 test('summary pages resume without duplicate writes; warm work has zero decode and metadata stays independent of blocks',async()=>{
  const {encodeProduct}=await import('../../src/bitstream-analysis/products.ts');
  const f=await fixture(resolve('fixtures/video'),'mhw_hevc_fullrange_bt709_3s.mp4'),scheduler=new AnalysisScheduler(f.library,coreDir,join(f.folder,'analysis'));
  const sourceVersion=`${f.entry.id}@${f.entry.version}`,request={mode:'stream' as const,product:'summary' as const,sourceVersion,firstPtsUs:0,durationUs:3000000,window:{startUs:500000,endUs:700000,axis:'pts' as const}};
  const writes=new Map<number,number>(),put=scheduler.store.putOutput.bind(scheduler.store);scheduler.store.putOutput=(id,value,protectedFiles)=>{writes.set(value.picture.au,(writes.get(value.picture.au)??0)+1);return put(id,value,protectedFiles);};
  const received=new Set<number>();let bytes=0;
+ const snapshot=(state:Awaited<ReturnType<AnalysisScheduler['streamStatus']>>,cursor:number,count:number):ReadableStreamSnapshot=>({state:state?.state,cursor,published:state?.published,received:count,counters:state?.counters,progress:state?.progress});
  try{
   const first=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');let cursor=0;
-  while(received.size<30){const state=await scheduler.streamStatus(first.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){if(received.size===30)break;const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.ok(!received.has(value.picture.au));received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;cursor=ref.cursor;}await new Promise(r=>setTimeout(r,5));}
-  scheduler.release(first.requestId,'owner');
-  const resumed=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let final;
-  for(let poll=0;poll<2000;poll++){
+  const firstWait=readableStreamWait('first-30');
+  while(received.size<30){const state=await scheduler.streamStatus(first.requestId,'owner',cursor);assert.ok(state);assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));for(const ref of state.chunks){if(received.size===30)break;const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.ok(!received.has(value.picture.au));received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;cursor=ref.cursor;}firstWait.observe(snapshot(state,cursor,received.size));await new Promise(r=>setTimeout(r,5));}
+  firstWait.done();assert.equal(scheduler.release(first.requestId,'owner'),true);assert.equal(scheduler.status(first.requestId,'owner'),null,'cancelled consumer lease is released');
+  const resumed=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let final;const resumeWait=readableStreamWait('resume',received.size);
+  for(;;){
    const state=await scheduler.streamStatus(resumed.requestId,'owner',cursor);assert.ok(state);assert.ok(state.chunks.length<=32);
    for(const ref of state.chunks){if(!received.has(ref.au!)){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');received.add(value.picture.au);bytes+=(await encodeProduct(value)).length;}cursor=ref.cursor;}
-   if(state.state==='complete'&&cursor===state.published){final=state;break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));
+   resumeWait.observe(snapshot(state,cursor,received.size));
+   if(state.state==='complete'&&cursor===state.published){final=state;resumeWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));
   }
   assert.ok(final);assert.equal(received.size,180);assert.ok(bytes<=512*1024);assert.equal(writes.size,180);assert.ok([...writes.values()].every(n=>n===1),'committed summaries are never written twice on resume');assert.ok(final.counters!.cacheHit>=30);assert.equal(final.counters!.uniqueDelivered,180);scheduler.release(resumed.requestId,'owner');
-  const warm=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let complete;
-  for(let poll=0;poll<2000;poll++){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks)cursor=ref.cursor;if(state.state==='complete'&&cursor===180){complete=state;break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
-  assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
+  const warm=await scheduler.submit(f.entry.id,f.entry.version!,request,'owner');cursor=0;let complete;const warmReceived=new Set<number>(),warmWait=readableStreamWait('warm');
+  for(;;){const state=await scheduler.streamStatus(warm.requestId,'owner',cursor);assert.ok(state);for(const ref of state.chunks){const value=await scheduler.store.getOutput(ref.id,ref.au);assert.ok(value&&'product' in value&&value.product==='summary');assert.equal(value.picture.au,ref.au);assert.ok(!warmReceived.has(value.picture.au));warmReceived.add(value.picture.au);cursor=ref.cursor;}warmWait.observe(snapshot(state,cursor,warmReceived.size));if(state.state==='complete'&&cursor===180){complete=state;warmWait.done();break;}assert.ok(['running','queued','complete'].includes(state.state),JSON.stringify(state));await new Promise(r=>setTimeout(r,5));}
+  assert.equal(warmReceived.size,180);assert.ok(complete);for(const name of ['init','open','feed','step','decodedAU'] as const)assert.equal(complete.counters![name],0);assert.ok([...writes.values()].every(n=>n===1));scheduler.release(warm.requestId,'owner');
  }finally{await scheduler.close();await f.close();}
 });
 
