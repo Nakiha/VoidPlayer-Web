@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AnalysisResult } from '../../src/bitstream-analysis/contract.ts';
-import { OwnedBlocks, packLegacy, summaryOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../src/bitstream-analysis/products.ts';
+import { OwnedBlocks, packLegacy, summaryOf, legacyOf, encodeProduct, decodeProduct, validateProduct, PRODUCT_LIMIT } from '../../src/bitstream-analysis/products.ts';
 import { DiagramStore } from '../../src/bitstream-analysis/diagrams.ts';
 const result = (): AnalysisResult => ({
   schema: 1,
@@ -121,7 +121,7 @@ test('service warms explicit summaries without workers, preserves exact blocks, 
   const plan=makeDemandPlan([{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}],data.target,build);this.onmessage?.({data:{event:'plan',plan}});this.onmessage?.({data:{event:'chunk',result:summaryOf(frame)}});this.onmessage?.({data:{event:'progress',progress:{pictures:1,totalPictures:1,checkedUs:100,totalUs:100,indexComplete:true}}});this.onmessage?.({data:{ok:true}});
  }else this.onmessage?.({data:{ok:true,result:packLegacy(frame)}});});}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:build}),{headers:{'content-type':'application/json'}});
- const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,token={picture:r.picture,sourcePtsUs:100,normalizedMediaUs:0} as any,target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};
+ const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,token={picture:r.picture,sourcePtsUs:100,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}} as any,target={mode:'stream' as const,product:'summary' as const,sourceVersion:r.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};
  try{
   const exact=await service.request(source,token);assert.deepEqual(exact.blocks,r.blocks);assert.ok(service.cached(token));const first=created;
   await service.request(source,token);assert.equal(created,first,'same precise frame reuses private packed blocks');
@@ -166,7 +166,7 @@ test('exact request rejects cross-product, index and build payloads before cache
  const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let outgoing:any,expected='test';
  class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;terminate(){}postMessage(data:any){if(data.target)queueMicrotask(()=>this.onmessage?.({data:{ok:true,result:outgoing}}));}}
  Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:expected}));
- const source={info:{},bitstreamFile:new Blob(['x'])} as any,token=(r:AnalysisResult)=>({picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0}) as any;
+ const source={info:{},bitstreamFile:new Blob(['x'])} as any,token=(r:AnalysisResult)=>({picture:r.picture,sourcePtsUs:r.sourcePtsUs,normalizedMediaUs:0,geometry:{codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}}}) as any;
  try{for(const mode of ['legacy','summary','index','build','old-build-after-epoch']){
   const service=new BitstreamAnalysisService(()=>{}),original=result();expected='test';outgoing=packLegacy(original);await service.request(source,token(original));assert.ok(service.cached(token(original)));
   const next={...original,picture:{...original.picture,au:4}};outgoing=mode==='legacy'?next:mode==='summary'?summaryOf(next):packLegacy(next);
@@ -199,3 +199,34 @@ test('valid binary header with low length byte 123 cannot be mistaken for a JSON
 });
 
 test('single-picture summary preserves same-identity verified stream GOP',()=>{const store=new DiagramStore(),r=result();r.nalus=[{offset:0,size:1,type:5,temporalId:0,layer:0}];r.gop={startAu:0,endAu:30,configuration:0,anchor:'closed'};store.put(r);const single={...r};delete single.gop;store.put(single);assert.deepEqual(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,r.gop);store.put({...single,buildId:'new'});assert.equal(store.summaryAt(r.picture.sourceVersion,r.picture.au)?.gop,undefined);});
+
+test('SPS layout proves exact crop across plane padding; unknown/malformed layouts fail closed',async()=>{
+ const {matchesAnalysisLayout}=await import('../../src/bitstream-analysis/contract.ts');const r=result(),token={geometry:{codedWidth:16,codedHeight:18,visibleRect:{x:0,y:0,width:16,height:16}}} as import('../../src/bitstream-analysis/contract.ts').PresentedFrameToken;
+ assert.equal(matchesAnalysisLayout(r,token),false);r.sourceLayout={provenance:'configuration-sps-v1',configuration:0,codedWidth:16,codedHeight:16,visibleRect:{x:0,y:0,width:16,height:16}};assert.equal(matchesAnalysisLayout(r,token),true);
+ const packed=packLegacy(r);assert.deepEqual((await decodeProduct(await encodeProduct(packed))).sourceLayout,r.sourceLayout);assert.deepEqual(legacyOf(packed).sourceLayout,r.sourceLayout);
+ assert.equal(matchesAnalysisLayout(r,{...token,geometry:{...token.geometry,visibleRect:{x:0,y:1,width:16,height:15}}}),false);
+ assert.throws(()=>validateProduct({...packed,sourceLayout:{...r.sourceLayout!,provenance:'guessed'}} as unknown as typeof packed));assert.throws(()=>validateProduct({...packed,productSchema:1} as unknown as typeof packed));assert.throws(()=>validateProduct({...packed,sourceLayout:{...r.sourceLayout!,configuration:1}}));
+});
+
+test('stream rejects wrong build products and plans before raw/cache coverage, including retained plans',async()=>{
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');const {makeDemandPlan}=await import('../../src/bitstream-analysis/demand.ts');
+ const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};let mode='valid';
+ const frame={...result(),picture:{...result().picture,au:0},nalus:[{offset:0,size:1,type:5,temporalId:0,layer:0}],gop:{startAu:0,endAu:1,configuration:0,anchor:'closed' as const}};
+ const packets=[{au:0,configuration:0,pts:100,dts:null,offset:0,size:1,key:true}];
+ class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;terminate(){}postMessage(data:any){if(!data.target)return;queueMicrotask(()=>{this.onmessage?.({data:{event:'plan',plan:makeDemandPlan(packets,data.target,mode==='plan'?'wrong':'test')}});const r={...frame,buildId:mode==='result'?'wrong':'test'};this.onmessage?.({data:{event:'chunk',result:data.target.product==='summary'?summaryOf(r):data.target.product==='blocks'?packLegacy(r):r}});this.onmessage?.({data:{event:'progress',progress:{pictures:1,totalPictures:1,checkedUs:100,totalUs:100,indexComplete:true}}});this.onmessage?.({data:{ok:true}});});}}
+ Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
+ try{for(const product of [undefined,'summary','blocks'] as const)for(const bad of ['plan','result','retained']){const service=new BitstreamAnalysisService(()=>{}),source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:frame.picture.sourceVersion,firstPtsUs:100,durationUs:100,window:{startUs:0,endUs:100,axis:'pts' as const}};if(bad==='retained'){mode='valid';await service.requestStream(source,target,'A');(service as unknown as {diagrams:DiagramStore}).diagrams.clear();}mode=bad==='plan'?'plan':'result';const cache=(service as unknown as {cache:import('../../src/bitstream-analysis/cache.ts').AnalysisCache}).cache;let puts=0;const put=cache.put.bind(cache);cache.put=(...args)=>{puts++;put(...args);};await assert.rejects(service.requestStream(source,target,'A'),/build identity mismatch/);assert.equal(puts,0);assert.equal(service.state.state,'error');assert.equal((service as unknown as {diagrams:DiagramStore}).diagrams.queryChart(frame.picture.sourceVersion,0,1000).count,0);service.dispose();}}
+ finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
+});
+
+test('full legacy and blocks streams pause at 30 and resume by readable coverage without duplicate delivery or put',async()=>{
+ const {BitstreamAnalysisService}=await import('../../src/bitstream-analysis/service.ts');
+ const previous={Worker:Object.getOwnPropertyDescriptor(globalThis,'Worker'),location:Object.getOwnPropertyDescriptor(globalThis,'location'),fetch:globalThis.fetch};
+ try{for(const product of [undefined,'blocks'] as const){let created=0,terminated=0,reached!:()=>void;const paused=new Promise<void>(r=>{reached=r;}),fresh:number[]=[],covered:number[]=[];
+ const frame=(au:number)=>({...result(),picture:{...result().picture,au},sourcePtsUs:100+au*100,gop:{startAu:0,endAu:60,configuration:0,anchor:'closed' as const}});
+ class WorkerMock{onmessage?:({data}:{data:any})=>void;onerror:any;onmessageerror:any;id=++created;au=0;stopped=false;owned:any;terminate(){this.stopped=true;terminated++;}emit(data:any){if(!this.stopped)queueMicrotask(()=>{if(!this.stopped)this.onmessage?.({data});});}next(){if(this.au===60){this.emit({ok:true});return;}this.emit({event:'cache',picture:frame(this.au).picture,buildId:'test'});}postMessage(data:any){if(data.target){this.next();return;}if(data.event==='cache'){this.owned=data.result;if(data.result){covered.push(this.au);this.emit({event:'coverage',picture:frame(this.au).picture,buildId:'test',gop:frame(this.au).gop,product});}else{fresh.push(this.au);this.emit({event:'chunk',result:product==='blocks'?packLegacy(frame(this.au)):frame(this.au)});}return;}if(data.ok){this.emit({event:'progress',progress:{pictures:this.au+1,totalPictures:60,checkedUs:(this.au+1)*100,totalUs:6000,indexComplete:true}});this.au++;if(this.id===1&&this.au===30){reached();return;}this.next();}}}
+ Object.defineProperty(globalThis,'Worker',{configurable:true,value:WorkerMock});Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));
+ const service=new BitstreamAnalysisService(()=>{}),cache=(service as unknown as {cache:import('../../src/bitstream-analysis/cache.ts').AnalysisCache}).cache,puts:number[]=[],put=cache.put.bind(cache);cache.put=(...args)=>{puts.push(args[0].picture.au);put(...args);};const source={info:{},bitstreamFile:new Blob(['x'])} as any,target={mode:'stream' as const,product,sourceVersion:result().picture.sourceVersion,firstPtsUs:100,durationUs:6000};
+ const controller=new AbortController(),first=service.requestStream(source,target,'A',controller.signal);const cancelled=assert.rejects(first);await paused;controller.abort();await cancelled;assert.equal(puts.length,30);const complete=await service.requestStream(source,target,'A');assert.equal(complete.pictures,60);assert.deepEqual(fresh,Array.from({length:60},(_,i)=>i));assert.deepEqual(covered,Array.from({length:30},(_,i)=>i));assert.deepEqual(puts,fresh);assert.equal(new Set(puts).size,60);assert.equal(terminated,2);service.dispose();}}
+ finally{globalThis.fetch=previous.fetch;for(const key of ['Worker','location'] as const){if(previous[key])Object.defineProperty(globalThis,key,previous[key]!);else Reflect.deleteProperty(globalThis,key);}}
+});

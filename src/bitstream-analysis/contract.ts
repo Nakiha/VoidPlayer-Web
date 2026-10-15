@@ -67,7 +67,12 @@ export function validateStream(target: AnalysisStreamTarget) {
   if (target.window && (![target.window.startUs, target.window.endUs, target.window.endUs - target.window.startUs].every(Number.isSafeInteger) || target.window.endUs <= target.window.startUs || !['pts', 'dts'].includes(target.window.axis)))
     throw new AnalysisFailure('invalid-request', 'Invalid analysis viewport');
 }
+export interface AnalysisSourceLayout {
+  provenance:'configuration-sps-v1';configuration:number;codedWidth:number;codedHeight:number;visibleRect:{x:number;y:number;width:number;height:number};
+}
 export interface AnalysisResult {
+  /** Parsed from this configuration SPS, independent of browser plane allocation. */
+  sourceLayout?:AnalysisSourceLayout;
   containerHeader?: import("./diagrams.ts").ContainerHeader;
   nalus?: import("./diagrams.ts").NaluRecord[];
   references?: import("./diagrams.ts").PictureReferences;
@@ -237,6 +242,10 @@ export function validateMetadata(result: Omit<AnalysisResult, "blocks">): void {
     normalizedMediaUs: 0,
     picture: result.picture,
   });
+  if(result.sourceLayout) {
+    const l=result.sourceLayout,v=l.visibleRect;
+    if(l.provenance!=='configuration-sps-v1'||!['h264','hevc'].includes(result.codec)||l.configuration!==result.picture.configuration||l.codedWidth!==result.width||l.codedHeight!==result.height||!v||![v.x,v.y,v.width,v.height].every(Number.isSafeInteger)||v.x<0||v.y<0||v.width<=0||v.height<=0||v.x+v.width>l.codedWidth||v.y+v.height>l.codedHeight)throw Error('Invalid analysis SPS layout');
+  }
   if (result.gop) {
     const g = result.gop;
     if (![g.startAu, g.endAu, g.configuration].every(Number.isSafeInteger) ||
@@ -331,4 +340,12 @@ function validateIndexIdentity(identity?: import('../media-index-identity.ts').M
       schema: String(id.schemaVersion), indexer: id.indexerBuild})); }
     catch { throw new AnalysisFailure('invalid-request', 'Invalid analysis index identity'); }
   }
+}
+
+/** Match coordinates using exact SPS crop evidence, never size rounding. */
+export function matchesAnalysisLayout(result:Pick<AnalysisResult,'width'|'height'|'sourceLayout'|'picture'>,token:PresentedFrameToken) {
+  const g=token.geometry;if(!g)return false;
+  if(result.width===g.codedWidth&&result.height===g.codedHeight)return true;
+  const l=result.sourceLayout,v=g.visibleRect;
+  return !!l&&l.provenance==='configuration-sps-v1'&&l.configuration===result.picture.configuration&&l.codedWidth===result.width&&l.codedHeight===result.height&&v.x===l.visibleRect.x&&v.y===l.visibleRect.y&&v.width===l.visibleRect.width&&v.height===l.visibleRect.height&&Number.isSafeInteger(g.codedWidth)&&Number.isSafeInteger(g.codedHeight)&&g.codedWidth>=v.x+v.width&&g.codedHeight>=v.y+v.height;
 }

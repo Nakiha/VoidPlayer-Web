@@ -214,7 +214,7 @@ export class DiagramStore {
   putSummary(result: AnalysisSummary) {
     validateProduct(result);
     const sourceKey = result.picture.sourceVersion;
-    const identity = JSON.stringify([result.buildId,result.recipe,result.analyzerVersion,result.indexIdentity,result.picture.stream]);
+    const identity = JSON.stringify([result.buildId,result.recipe,result.analyzerVersion,result.indexIdentity,result.picture.stream,result.productSchema,result.encoding]);
     const oldIdentity = this.identities.get(sourceKey);
     if (oldIdentity && oldIdentity !== identity) {
       for (const entry of this.sources.get(sourceKey)?.values() ?? []) { this.bytes -= entry.bytes; this.fifo.delete(entry.id); }

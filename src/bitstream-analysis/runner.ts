@@ -1,6 +1,8 @@
+import {avcGeometry} from '../avc-geometry.ts';
+import {hevcGeometry} from '../hevc-geometry.ts';
 import { makeDemandPlan } from './demand.ts';
 import type { DemandPlan } from './demand.ts';
-import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, readBlock, writeBlock, metadata, PRODUCT_LIMIT } from './products.ts';
+import { analysisIndexIdentity, isProduct, validateOutput, validateRecords, readBlock, writeBlock, metadata, PRODUCT_LIMIT, PRODUCT_SCHEMA, metadataBudgetBytes } from './products.ts';
 import type { AnalysisOutput, AnalysisProduct, AnalysisSummary, AnalysisBlocks, FrameMetadata } from './products.ts';
 import {isAnnexB} from '../nal-framing.ts';
 import { validateAnalysisCore } from './core-abi.ts';
@@ -90,6 +92,7 @@ async function runPicture(
       throw new AnalysisFailure('ambiguous-picture-identity', 'Duplicate picture timestamps');
     let configuration = plan.target.configuration;
     let description = input.configurations[configuration];
+    const sourceLayouts=new Map<number,ReturnType<typeof avcGeometry>|ReturnType<typeof hevcGeometry>>();
     const containerHeaders = new Map<number, ReturnType<typeof readContainerHeader>>();
     let pointer = 0;
     const open = async () => {
@@ -244,7 +247,10 @@ async function runPicture(
           qp: depth === 8 ? view.getInt16(i*12+8,true) : null,
           mode: ({1:'intra',2:'inter',3:'skip'} as const)[view.getUint8(i*12+10) as 1|2|3],
         });
+        if(!sourceLayouts.has(selected.configuration))sourceLayouts.set(selected.configuration,input.codec==='h264'?avcGeometry(input.configurations[selected.configuration]):input.codec==='hevc'?hevcGeometry(input.configurations[selected.configuration]):null);
+        const layout=sourceLayouts.get(selected.configuration);
         let frame: FrameMetadata = {
+          ...(layout&&layout.codedWidth===width&&layout.codedHeight===height?{sourceLayout:{provenance:'configuration-sps-v1' as const,configuration:selected.configuration,codedWidth:layout.codedWidth,codedHeight:layout.codedHeight,visibleRect:{x:layout.x,y:layout.y,width:layout.width,height:layout.height}}}:{}),
           schema: 1,
           nalus: nalus.get(au),
           containerHeader: containerHeaders.get(selected.configuration),
@@ -305,7 +311,7 @@ async function runPicture(
           blockCount = 0;
         }
         if (target.product) {
-          const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:1, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
+          const summary: AnalysisSummary = { ...frame, product:'summary', productSchema:PRODUCT_SCHEMA, encoding:'summary-json-v1', indexIdentity:analysisIndexIdentity(target.indexIdentity), validatedBlockCount:blockCount };
           if (target.product === 'summary') { result = summary; validateOutput(result); }
           else {
             if (blockCount*12 + PRODUCT_LIMIT.metadata > PRODUCT_LIMIT.frame) throw new AnalysisFailure('resource-limit','Packed analysis allocation budget exceeded');
@@ -314,7 +320,7 @@ async function runPicture(
             result = {...summary,product:'blocks',encoding:'blocks-le12-v1',payload};
             // Producer already checked geometry directly in the WASM view.
           }
-        } else { result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
+        } else { if(blockCount*128+metadataBudgetBytes(frame)>BUDGET.resultBytes)throw new AnalysisFailure('resource-limit','Legacy analysis allocation budget exceeded');result = {...frame,blocks:Array.from({length:blockCount},(_,i)=>blockAt(i))}; validateMetadata(result); }
 
       }
       nalus.delete(au);

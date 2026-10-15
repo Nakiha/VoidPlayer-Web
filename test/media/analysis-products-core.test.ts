@@ -17,6 +17,7 @@ test(`products ${name}: exact fields, summary queries, warm zero decoder`,async(
  const input=await openAnalysisInput(await reader(name),new AbortController().signal), firstPtsUs=Math.min(...input.packets.map(p=>p.pts)),durationUs=input.sourceEndUs-firstPtsUs;input.close();
  const target={mode:'stream' as const,sourceVersion:name,firstPtsUs,durationUs,window:{startUs,endUs,axis:'pts' as const}},oracle=new Map<number,AnalysisBlocks>(),original=new DiagramStore(),projected=new DiagramStore();
  await analyzeStream(await reader(name),target,factory,manifest.buildId,new AbortController().signal,async result=>{oracle.set(result.picture.au,packLegacy(result));original.put(result);},async()=>{});
+ if(name.startsWith('h264_'))assert.deepEqual(oracle.values().next().value!.sourceLayout,{provenance:'configuration-sps-v1',configuration:0,codedWidth:1920,codedHeight:1088,visibleRect:{x:0,y:0,width:1920,height:1080}});
  let bytes=0,products=0;
  await analyzeStream(await reader(name),{...target,product:'summary'},factory,manifest.buildId,new AbortController().signal,async(result:AnalysisOutput)=>{
   assert.ok('product' in result && result.product==='summary');validateProduct(result);assert.deepEqual(canonical(result),canonical(summaryOf(oracle.get(result.picture.au)!)));projected.putSummary(result);bytes+=Buffer.byteLength(JSON.stringify(result));products++;

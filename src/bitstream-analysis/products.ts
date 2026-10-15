@@ -8,11 +8,11 @@ import { AnalysisFailure } from './failure.ts';
 export const MP4_ANALYSIS_INDEX = Object.freeze({kind:'mp4-analysis' as const,streamKey:'video:0',schemaVersion:1,indexerBuild:'mp4-input-v1'});
 export type ProductIndexIdentity = MediaIndexIdentity | typeof MP4_ANALYSIS_INDEX;
 export const analysisIndexIdentity = (identity?:ProductIndexIdentity|null):ProductIndexIdentity => identity ?? MP4_ANALYSIS_INDEX;
-export const PRODUCT_SCHEMA = 1;
+export const PRODUCT_SCHEMA = 2;
 export const PRODUCT_LIMIT = Object.freeze({ metadata: 1024 * 1024, page: 1024 * 1024, frame: 3 * 1024 * 1024, inFlight: 32 * 1024 * 1024, pageItems: 32 });
 export type FrameMetadata = Omit<AnalysisResult, 'blocks'>;
 interface ProductMetadata extends FrameMetadata {
-  productSchema: 1;
+  productSchema: 2;
   indexIdentity: ProductIndexIdentity;
   validatedBlockCount: number;
   encoding: 'summary-json-v1' | 'blocks-le12-v1';
@@ -31,8 +31,8 @@ export function productKey(picture: SourcePictureKey, buildId: string, indexIden
   return JSON.stringify([pictureId(picture), buildId, ANALYSIS_RECIPE, ANALYZER_VERSION, PRODUCT_SCHEMA, product, product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1', analysisIndexIdentity(indexIdentity)]);
 }
 export function summaryOf(value: AnalysisOutput, indexIdentity: ProductIndexIdentity | null = null): AnalysisSummary {
-  if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: 1, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };
-  return { ...metadata(value), product: 'summary', productSchema: 1, encoding: 'summary-json-v1', indexIdentity:analysisIndexIdentity(indexIdentity), validatedBlockCount: value.blocks.length };
+  if (isProduct(value)) return { ...metadata(value), product: 'summary', productSchema: 2, encoding: 'summary-json-v1', indexIdentity: value.indexIdentity, validatedBlockCount: value.validatedBlockCount };
+  return { ...metadata(value), product: 'summary', productSchema: 2, encoding: 'summary-json-v1', indexIdentity:analysisIndexIdentity(indexIdentity), validatedBlockCount: value.blocks.length };
 }
 const modes = [undefined, 'intra', 'inter', 'skip'] as const;
 export function readBlock(view: DataView, i: number): AnalysisBlock {
@@ -75,7 +75,7 @@ export function metadataBudgetBytes(value:unknown) {
 }
 export function validateProduct(value: AnalysisProduct) {
   metadataBudgetBytes(value);
-  if (!value || value.productSchema !== 1 || !['summary','blocks'].includes(value.product) || value.encoding !== (value.product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1') || 'blocks' in value) throw new Error('Invalid analysis product');
+  if (!value || value.productSchema !== PRODUCT_SCHEMA || !['summary','blocks'].includes(value.product) || value.encoding !== (value.product === 'summary' ? 'summary-json-v1' : 'blocks-le12-v1') || 'blocks' in value) throw new Error('Invalid analysis product');
   validateMetadata(value);
   if (value.confidence==='exact' && (value.reasons.length || value.capabilities.blocks!=='ready' || value.capabilities.modes!=='ready' || (value.capabilities.qp==='ready' && (value.qp.bitDepth!==8||value.qp.mean===null))))throw Error('Invalid exact product quality');
   if (!Number.isSafeInteger(value.validatedBlockCount) || value.validatedBlockCount < 0 || value.validatedBlockCount > BUDGET.blocks || (value.confidence === 'exact' && !value.validatedBlockCount)) throw new Error('Invalid validated block count');
@@ -113,7 +113,7 @@ const OWNED_VALIDATION=Symbol("private validated block ownership");
 export class OwnedBlocks {
   #value: AnalysisBlocks;
   constructor(value: AnalysisBlocks, proof?:typeof OWNED_VALIDATION) { if(proof!==OWNED_VALIDATION)validateProduct(value); this.#value = structuredClone(value); }
-  static fromLegacy(value:AnalysisResult) {validateResult(value);return new OwnedBlocks(packValidatedLegacy(value,null),OWNED_VALIDATION);}
+  static fromLegacy(value:AnalysisResult,indexIdentity:ProductIndexIdentity|null=null) {validateResult(value);return new OwnedBlocks(packValidatedLegacy(value,indexIdentity),OWNED_VALIDATION);}
   get byteLength() { return this.#value.payload.byteLength + JSON.stringify(metadata(this.#value)).length * 2; }
   copy() { return structuredClone(this.#value); }
   view(): import('./contract.ts').ReadonlyAnalysisResult {

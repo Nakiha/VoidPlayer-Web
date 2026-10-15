@@ -13,6 +13,7 @@ import { AnalysisCache } from "./cache.ts";
 import {
   BUDGET,
   pictureId,
+  matchesAnalysisLayout,
   validateResult,
   validateMetadata,
   validateTarget,
@@ -62,10 +63,11 @@ export class BitstreamAnalysisService {
   private counters=emptyCounters();
   private validateReception(result:AnalysisOutput) {if(isSummary(result))validateOutput(result);else validateMetadata(result);}
   private plans = new Map<string,DemandPlan>();
+  private streamBuild?:{sequence:number;buildId:string};
   private activeDemand?: {target:AnalysisStreamTarget; plan:DemandPlan};
   sameDemand(window:NonNullable<AnalysisStreamTarget['window']>) { const active=this.activeDemand; if(active){try{validateStream({...active.target,window});}catch{return false;}} return !!active?.target.window && demandKey(active.plan,window) !== null && demandKey(active.plan,window) === demandKey(active.plan,active.target.window); }
   displayWindow(window:NonNullable<AnalysisStreamTarget['window']>) { this.displayDemandWindow=window;if(this.state.stream){this.state={...this.state,stream:{...this.state.stream,window}};this.changed();} }
-  private acceptPlan(plan:DemandPlan,target:AnalysisRangeTarget|AnalysisStreamTarget) { if(!('mode' in target))throw Error('Unexpected demand plan'); validateDemandPlan(plan,target);this.plans.delete(target.sourceVersion);while(this.plans.size>=8)this.plans.delete(this.plans.keys().next().value!);this.plans.set(target.sourceVersion,plan);this.activeDemand={target,plan}; }
+  private acceptPlan(plan:DemandPlan,target:AnalysisRangeTarget|AnalysisStreamTarget) { if(!('mode' in target))throw Error('Unexpected demand plan'); validateDemandPlan(plan,target);if(this.streamBuild?.sequence!==this.sequence||plan.buildId!==this.streamBuild.buildId)throw Error('Demand plan build identity mismatch');this.plans.delete(target.sourceVersion);while(this.plans.size>=8)this.plans.delete(this.plans.keys().next().value!);this.plans.set(target.sourceVersion,plan);this.activeDemand={target,plan}; }
   private cancelActive?: () => void;
   private sequence = 0;
   state: DeepAnalysisState = { state: "idle" };
@@ -123,7 +125,7 @@ export class BitstreamAnalysisService {
   }
   cached(token: PresentedFrameToken) {
     const context=token.picture?this.contexts.get(token.picture.sourceVersion):undefined;
-    return token.picture && context ? this.cache.peekProduct(token.picture,context.buildId,context.indexIdentity) : null;
+    const hit=token.picture&&context?this.cache.peekProduct(token.picture,context.buildId,context.indexIdentity):null;return hit&&matchesAnalysisLayout(hit,token)?hit:null;
   }
   async request(
     source: MediaSource,
@@ -149,11 +151,12 @@ export class BitstreamAnalysisService {
     const preparationSequence=this.sequence;
     this.state={state:'pending'};this.changed();
     const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
+    if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');if(signal?.aborted)this.fail(new AnalysisFailure('cancelled','Analysis cancelled'));
     this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
     const cached=this.cache.getMatching(token.picture,expectedBuild,target.indexIdentity ?? null);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure("cancelled","Analysis preparation superseded");
     signal?.throwIfAborted();
-    if (cached) {
+    if (cached && matchesAnalysisLayout(cached,token)) {
       this.state = {
         state: "ready",
         cacheHit: true, counters:{...emptyCounters(),cacheHit:1,uniqueDelivered:1},
@@ -192,8 +195,9 @@ export class BitstreamAnalysisService {
         result.sourcePtsUs !== token.sourcePtsUs
       )
         throw new Error("Analysis result identity mismatch");
-      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:null);
-      if (!isSummary(result)) this.cache.put(result); this.diagrams.putSummary(summaryOf(result));
+      if(!matchesAnalysisLayout(result,token))throw new AnalysisFailure('unsupported-picture-layout','Analysis coded layout does not match the presented crop');
+      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:target.indexIdentity ?? null);
+      if (!isSummary(result)) this.cache.put(result,target.indexIdentity ?? null); this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
       if (seq === this.sequence) {
         this.state = {
           state: result.confidence === "exact" ? "ready" : "unsupported",
@@ -259,8 +263,8 @@ export class BitstreamAnalysisService {
         result.sourcePtsUs >= target.firstPtsUs + target.endUs
       )
         throw new Error("Analysis range identity mismatch");
-      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:null);
-      if (!isSummary(result)) this.cache.put(result); this.diagrams.putSummary(summaryOf(result));
+      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:target.indexIdentity ?? null);
+      if (!isSummary(result)) this.cache.put(result,target.indexIdentity ?? null); this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
       pictures++;
       this.changed();
       if (result.confidence !== "exact")
@@ -319,12 +323,10 @@ export class BitstreamAnalysisService {
     const preparationSequence=this.sequence;
     this.state={state:'pending',stream:{slot,product:target.product,checkedUs:0,totalUs:target.window?target.window.endUs-target.window.startUs:target.durationUs,pictures:0,totalPictures:0,...(target.window?{window:target.window}:{})}};this.changed();
     const plan=this.plans.get(target.sourceVersion);
-    let expectedBuild:string|undefined;
-    if(plan && target.product==='summary') {
-      expectedBuild=await this.currentBuild(source,preparationSequence,signal);
-      this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
-      if(expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
-    }
+    const expectedBuild=await this.currentBuild(source,preparationSequence,signal);
+    if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');if(signal?.aborted)this.fail(new AnalysisFailure('cancelled','Analysis cancelled'));
+    this.context(target.sourceVersion,expectedBuild,target.indexIdentity ?? null);
+    if(plan&&expectedBuild!==plan.buildId)this.plans.delete(target.sourceVersion);
     if(preparationSequence!==this.sequence)throw new AnalysisFailure('cancelled','Analysis preparation superseded');
     signal?.throwIfAborted();
     if(target.product==='summary' && target.window && plan && expectedBuild===plan.buildId && JSON.stringify(analysisIndexIdentity(plan.indexIdentity))===JSON.stringify(analysisIndexIdentity(target.indexIdentity)) && plan.firstPtsUs===target.firstPtsUs) {
@@ -345,6 +347,7 @@ export class BitstreamAnalysisService {
     signal?.addEventListener('abort', abort, { once: true });
     if (signal?.aborted) abort();
     this.cancelActive = () => controller.abort();
+    this.streamBuild={sequence:seq,buildId:expectedBuild};
     let progress: StreamProgress = { checkedUs: 0, totalUs: target.window ? target.window.endUs - target.window.startUs : target.durationUs, pictures: 0, totalPictures: 0 };
     const update = () => {
       controller.signal.throwIfAborted();
@@ -359,18 +362,29 @@ export class BitstreamAnalysisService {
         if(retained && retained.confidence==='exact' && retained.buildId===expectedBuild && JSON.stringify(retained.indexIdentity)===JSON.stringify(analysisIndexIdentity(target.indexIdentity)) && retained.picture.configuration===group.configuration)delivered.add(au);
       }
     }
+    if(target.product!=='summary') {
+      const groups=target.window&&retainedPlan&&expectedBuild===retainedPlan.buildId?demandKey(retainedPlan,target.window):null;
+      for(const entry of this.cache.readablePictures(target.sourceVersion,expectedBuild,target.indexIdentity ?? null)) {
+        if(!target.window ? entry.sourcePtsUs>=target.firstPtsUs&&entry.sourcePtsUs<target.firstPtsUs+target.durationUs : groups&&retainedPlan!.groups.some(g=>JSON.parse(groups).includes(g.startAu)&&entry.picture.au>=g.startAu&&entry.picture.au<g.endAu&&entry.picture.configuration===g.configuration))delivered.add(entry.picture.au);
+      }
+    }
     let consumed = delivered.size;progress={...progress,pictures:consumed};update();
     const consume = (result: AnalysisOutput, coverage=false) => {
       controller.signal.throwIfAborted(); this.validateReception(result);
+      if(result.buildId!==expectedBuild)throw Error('Stream build identity mismatch');
       if ((isProduct(result) ? result.product !== target.product || JSON.stringify(result.indexIdentity) !== JSON.stringify(analysisIndexIdentity(target.indexIdentity)) : target.product !== undefined)) throw new Error('Stream product identity mismatch');
       if (seq !== this.sequence || result.picture.sourceVersion !== target.sourceVersion || !result.gop)
         throw new Error('Stream result identity mismatch');
       if (result.confidence !== 'exact') throw new AnalysisFailure(result.reasonCodes?.[0] ?? 'incomplete-reference-state', result.reasons.join('; '));
-      if (delivered.has(result.picture.au)) {if(coverage)return;if(isSummary(result)&&!this.diagrams.getSummary(result.picture,result.buildId,result.indexIdentity)){this.diagrams.putSummary(result);return;}throw new Error('Duplicate stream AU');}
+      if (delivered.has(result.picture.au)) {
+        if(coverage)return;
+        if(isSummary(result)?!this.diagrams.getSummary(result.picture,result.buildId,result.indexIdentity):!this.cache.getProduct(result.picture,result.buildId,target.indexIdentity ?? null)) {if(isSummary(result))this.diagrams.putSummary(result);else this.cache.put(result,target.indexIdentity ?? null);return;}
+        throw new Error('Duplicate stream AU');
+      }
       delivered.add(result.picture.au);
-      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:null);
-      if (!isSummary(result)) this.cache.put(result);
-      if (!this.diagrams.getSummary(result.picture,result.buildId,isProduct(result) ? result.indexIdentity : null)) this.diagrams.putSummary(summaryOf(result));
+      this.context(result.picture.sourceVersion,result.buildId,isProduct(result)?result.indexIdentity:target.indexIdentity ?? null);
+      if (!coverage&&!isSummary(result)) this.cache.put(result,target.indexIdentity ?? null);
+      if (!this.diagrams.getSummary(result.picture,result.buildId,isProduct(result) ? result.indexIdentity : target.indexIdentity ?? null)) this.diagrams.putSummary(summaryOf(result,target.indexIdentity ?? null));
       consumed++;
       progress = { ...progress, pictures: consumed, gopStartAu: result.gop.startAu }; update();
     };
@@ -448,16 +462,17 @@ export class BitstreamAnalysisService {
           timer = setTimeout(() => done(new AnalysisFailure('resource-limit', 'Analysis stream stalled')), 30000);
         }
         if(data.event==='counters'){this.counters=data.counters;} else if (data.event === 'plan') { try { this.acceptPlan(data.plan,target); } catch(error){done(error);} } else if(data.event === 'coverage') {
-          try { const hit = this.diagrams.getSummary(data.picture,data.buildId,target.indexIdentity ?? null); if(!hit){worker.postMessage({event:'coverage-miss',picture:data.picture});return;}consume(hit,true);worker.postMessage({ok:true}); }catch(error){done(error);}
+          try { if('mode' in target&&data.buildId!==this.streamBuild?.buildId)throw Error('Stream coverage build identity mismatch');const hit=target.product==='summary'?this.diagrams.getSummary(data.picture,data.buildId,target.indexIdentity ?? null):target.product==='blocks'?this.cache.getProduct(data.picture,data.buildId,target.indexIdentity ?? null):this.cache.getMatching(data.picture,data.buildId,target.indexIdentity ?? null); if(!hit){worker.postMessage({event:'coverage-miss',picture:data.picture});return;}consume({...hit,...(data.gop?{gop:data.gop}:{})},true);worker.postMessage({ok:true}); }catch(error){done(error);}
         } else if (data.event === 'snapshot') {
           try {
             void snapshot!().then(index => { if (!settled) worker.postMessage({ event: 'snapshot', index }); }).catch(done);
           } catch (error) { done(error); }
         } else if (data.event === 'cache') {
           try {
+            if('mode' in target&&data.buildId!==this.streamBuild?.buildId)throw Error('Stream cache build identity mismatch');
             const hit = data.picture?.sourceVersion !== target.sourceVersion ? null : target.product === 'summary'
               ? this.diagrams.getSummary(data.picture,data.buildId,target.indexIdentity ?? null) : target.product === 'blocks'
-              ? this.cache.getProduct(data.picture,data.buildId,target.indexIdentity ?? null) : this.cache.get(data.picture);
+              ? this.cache.getProduct(data.picture,data.buildId,target.indexIdentity ?? null) : this.cache.getMatching(data.picture,data.buildId,target.indexIdentity ?? null);
             worker.postMessage({ event: 'cache', result: hit }, hit && isProduct(hit) && hit.product==='blocks' ? [hit.payload] : []);
           } catch (error) { done(error); }
         } else if (data.event === 'index') {
@@ -524,8 +539,10 @@ export class BitstreamAnalysisService {
         if (!response.ok)
           throw new AnalysisFailure("cancelled", "Analysis lease expired");
         const state = await response.json();
+        signal.throwIfAborted();
         budget.observe(state);
         if(state.counters)this.counters=state.counters;
+        if(stream&&state.buildId!==this.streamBuild?.buildId)throw Error('Stream status build identity mismatch');
         if (state.plan) this.acceptPlan(state.plan,target);
         if (state.progress) onProgress?.(state.progress);
         if (this.state.queued !== (state.state === 'queued')) {
@@ -537,9 +554,9 @@ export class BitstreamAnalysisService {
           if (stream) {
             if (chunk.cursor !== cursor + 1) throw new Error('Invalid stream cursor');
           } else if (seen.has(chunk.id)) continue;
-          if(target.product==='summary' && chunk.product==='summary' && chunk.encoding==='summary-json-v1' && chunk.picture?.au===chunk.au && chunk.picture.sourceVersion===target.sourceVersion && typeof state.buildId==='string') {
-            const hit=this.diagrams.getSummary(chunk.picture,state.buildId,target.indexIdentity ?? null);
-            if(hit){consume(hit,true);cursor=chunk.cursor;budget.progress();continue;}
+          if(stream && chunk.picture && chunk.picture.au===chunk.au && chunk.picture.sourceVersion===target.sourceVersion && chunk.product===target.product && typeof state.buildId==='string') {
+            const hit=target.product==='summary'?this.diagrams.getSummary(chunk.picture,state.buildId,target.indexIdentity ?? null):target.product==='blocks'?this.cache.getProduct(chunk.picture,state.buildId,target.indexIdentity ?? null):this.cache.getMatching(chunk.picture,state.buildId,target.indexIdentity ?? null);
+            if(hit){consume({...hit,...(chunk.gop?{gop:chunk.gop}:{})},true);cursor=chunk.cursor;budget.progress();continue;}
           }
           const url = new URL(chunk.url, base);
           if (url.origin !== base.origin)
@@ -665,6 +682,7 @@ export class BitstreamAnalysisService {
             `Analysis status failed (${response.status})`,
           );
         const state = await response.json();
+        signal.throwIfAborted();
         if(state.counters)this.counters=state.counters;
         budget.observe(state);
         if (this.state.queued !== (state.state === 'queued')) {

@@ -198,3 +198,9 @@ blocks 使用 12-byte LE 记录：四个 uint16 几何值、int16 QP（-32768 �
 计数区分 init / open / feed / step / decodedAU、preroll、products、cacheHit、uniqueDelivered 和 readBytes；core 调用时间为 inclusive，不代表独立像素重建成本。payloadBytes 是实际发送产品内容的 UTF-8 metadata + owned payload，coverageBytes 单列小型通知，均不包括结构化克隆封装或 telemetry；legacy IPC 字节不可可靠直接观察，记 null，避免额外全量 JSON 序列化污染。HTTP wire 内容由浏览器 Content-Length 独立计量。逐 chunk 快照是截至最后确认 chunk 的观测下界；硬终止前未完成调用不可测。heap / Node RSS 只在明确采样点记录，不用累计 payload 或额度冒充峰值。
 
 CI 运行字段/图表等价、零新增解码计数、预算、损坏和取消合同；不使用指定 Mac 的 15% 冷态或 0.5s / 1s 暖态绝对时限。性能验收另用同一 M5 / 32 GiB、同一 Chromium、干净 d8f69d1 baseline 与产品构建的至少五组 AB/BA：新 profile、新 worker 和空分析缓存，索引状态单列，OS 页缓存不清；原始顺序、内容字节、首结果、CPU/RSS/heap 采样及范围全部保留。面板关闭的 facade 测量和实际图表/遮罩 UI 回归分开报告。core pin、播放路径、容器扫描和 alpha.4 发布状态保持不变。
+
+产品 schema 为 2（key 与服务端产品文件同步隔离旧 schema）；LE12 编码和 VAP1 外层 framing 不变。H264/HEVC 可附加 `sourceLayout`，只从当前 configuration 的 SPS 解析 coded 和精确 visibleRect，记录 configuration-sps-v1 provenance。metadata/header/预算与 checksum 一并验证该证明。遮罩允许浏览器 plane padding 或预裁剪，但必须 coded 完全相等，或 result coded 与 SPS 完全相等且 presented visibleRect 与 SPS 完全相等、plane 完整包含可见域；未知配置不能用尺寸取整猜测。旧 legacy 元数据仍可读，缺该证明且几何不匹配的旧 blocks 不授权遮罩或精确请求暖命中。
+
+32 MiB 是每个 work 的未确认 descriptor 内容字节与下一帧最大预留的双重背压：初始下一帧 <=3 MiB（legacy8 MiB），每次 ACK 前检查 pending+next；暂停/终止前不发下一次 producer ACK。3 MiB/8 MiB 分配准入在 runner 构造 payload/legacy块对象数组之前，legacy额外按实际bounded metadata保守预算。并发默认8、最大32，因此32×N MiB仅是逻辑未确认引用上界（256/1024 MiB），并非RAM；共享128 MiB store会在保护文件无法驱逐时明确拒绝新写，重复引用不等于重复文件。实际每worker同一时刻最多一份输出（产品3 MiB/legacy8 MiB准入），另计最多两个HTTP读取slot、受限编码/解析临时拷贝和独立512 MiB WASM heap上限；不宣称全局32 MiB或RSS总上界。
+
+所有stream产品（summary、blocks和默认legacy full）均绑定本次独立读取的当前build；worker plan/cache/coverage、remote status和最终产品必须与它一致。完整stream恢复也只从当前实际owned blocks播种，旧AU仅发coverage，不重复chunk或cache.put；块被逐出则允许从仍拥有的已校验输出修复。legacy owner保留当前index namespace，不能以summary可读性替代完整产品。

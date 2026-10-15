@@ -1,6 +1,10 @@
 import { summaryOf, packLegacy } from '../../src/bitstream-analysis/products.ts';
-import { test } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
+// Local service fixtures use the same independently fetched current manifest.
+let fixtureLocation:PropertyDescriptor|undefined,fixtureFetch:typeof fetch;
+beforeEach(()=>{fixtureLocation=Object.getOwnPropertyDescriptor(globalThis,'location');fixtureFetch=globalThis.fetch;Object.defineProperty(globalThis,'location',{configurable:true,value:{href:'http://localhost/'}});globalThis.fetch=async()=>new Response(JSON.stringify({buildId:'test'}));});
+afterEach(()=>{globalThis.fetch=fixtureFetch;if(fixtureLocation)Object.defineProperty(globalThis,'location',fixtureLocation);else Reflect.deleteProperty(globalThis,'location');});
 import { inspectPacketPicture } from "../../src/packet-picture.ts";
 import {
   pictureId,

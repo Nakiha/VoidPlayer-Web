@@ -1,4 +1,4 @@
-import { isProduct, encodeProduct } from '../../src/bitstream-analysis/products.ts';
+import { isProduct, encodeProduct, PRODUCT_SCHEMA } from '../../src/bitstream-analysis/products.ts';
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { RouteContext } from "../routes/context.ts";
 import { sendJson } from "../http-utils.ts";
@@ -76,7 +76,7 @@ export async function handleAnalysisRoutes(
     if (media![2] === "capabilities" && req.method === "GET") {
       sendJson(res, 200, {
         buildId:await scheduler.buildIdentity(),
-        productSchema:1,
+        productSchema:PRODUCT_SCHEMA,
         products:{stream:["legacy","summary","blocks"],picture:["legacy","blocks"],range:["legacy"]},
         encodings:["summary-json-v1","blocks-le12-v1"],
         schema: 1,

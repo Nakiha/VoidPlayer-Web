@@ -1,5 +1,5 @@
 import { emptyCounters, countCore, countProduct } from './counters.ts';
-import { isProduct } from './products.ts';
+import { analysisIndexIdentity, isProduct } from './products.ts';
 import type { AnalysisOutput } from './products.ts';
 import { coreAssetUrl } from '../core-url.ts';
 import { validateAnalysisCore } from './core-abi.ts';
@@ -52,7 +52,7 @@ scope.onmessage = async ({ data }) => {
     if (data.target.mode === 'stream' || 'startUs' in data.target) {
       const publish = async (result: AnalysisOutput) => {
         const hit=cachedResults.has(JSON.stringify([result.picture,result.buildId]));
-        const coverage=hit && isProduct(result) && result.product==='summary' ? {event:'coverage',picture:result.picture,buildId:result.buildId,indexIdentity:result.indexIdentity} : undefined;
+        const coverage=hit&&data.target.mode==='stream' ? {event:'coverage',picture:result.picture,buildId:result.buildId,gop:result.gop,product:data.target.product,indexIdentity:analysisIndexIdentity(data.target.indexIdentity)} : undefined;
         countProduct(result,hit,counters,coverage);delivered.add(result.picture.au);counters.uniqueDelivered=delivered.size;
         scope.postMessage({...(coverage ?? {event:'chunk',result}),counters:{...counters}}, !coverage && isProduct(result) && result.product==='blocks' ? [result.payload] : []);
         const accepted=await new Promise<boolean>(resolve => { acknowledgement = resolve; });

@@ -2089,10 +2089,11 @@ await withBrowserFixture(
       await call('set_review_color_mode', { mode: 'browser' });
       gatedId = library.entries.find(e => e.name === `incremental-${cancel ? 'cancel' : 'continue'}.flv`).id;
       releaseIndexGate = false; heldBatches = 0;
-      if (await page.locator('#analysis-panel').isVisible()) await page.locator('[data-seg="full"]').click();
       await call('load_library_item', { slot: 'A', id: gatedId });
       await page.waitForFunction(() => window.voidPlayer.getState().tracks.some(t => t.slot === 'A' && !t.failure));
       if (!await page.locator('#analysis-panel').isVisible()) await page.locator('#toggle-analysis').click();
+      await selectDiagrams(page,'overview');
+      await page.locator('[data-seg="full"]').click();
       await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'building');
       assert.equal((await call('get_analysis_capabilities'))[0].capability.indexState, 'building');
       await selectDiagrams(page,'nalu-size');

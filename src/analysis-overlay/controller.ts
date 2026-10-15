@@ -1,4 +1,4 @@
-import { pictureId } from "../bitstream-analysis/contract.ts";
+import { pictureId, matchesAnalysisLayout } from "../bitstream-analysis/contract.ts";
 import type {
   ReadonlyAnalysisResult,
   PresentedFrameToken,
@@ -9,11 +9,6 @@ import { presentationRect } from "../presentation-surface.ts";
 import type { PresentationGeometry } from "../presentation-surface.ts";
 import type { ReviewSession } from "../session.ts";
 import type { Slot } from "../model.ts";
-/** Browser plane padding may exceed the exact uncropped coded picture domain. */
-export function matchesOverlayLayout(result:{width:number;height:number},token:PresentedFrameToken) {
-  const g=token.geometry,v=g.visibleRect;
-  return result.width===g.codedWidth && result.height===g.codedHeight || v.x===0 && v.y===0 && result.width===v.width && result.height===v.height;
-}
 export function createAnalysisOverlay(
   session: ReviewSession,
   slot: Slot,
@@ -57,7 +52,7 @@ export function createAnalysisOverlay(
       !result ||
       !token?.picture ||
       result.confidence !== "exact" ||
-      result.sourcePtsUs !== token.sourcePtsUs || !matchesOverlayLayout(result,token) ||
+      result.sourcePtsUs !== token.sourcePtsUs || !matchesAnalysisLayout(result,token) ||
       pictureId(result.picture) !== pictureId(token.picture)
     ) {
       clear();
