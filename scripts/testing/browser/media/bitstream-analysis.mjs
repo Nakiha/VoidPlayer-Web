@@ -202,12 +202,16 @@ await withBrowserFixture(
         const zoomIn=page.locator('#analysis-zoom-in'),zoomOut=page.locator('#analysis-zoom-out'),full=page.locator('[data-seg="full"]');
         assert.equal(await zoomIn.locator('svg').count(),1);assert.equal(await zoomOut.locator('svg').count(),1);assert.equal(await full.locator('svg').count(),1);
         assert.equal(await page.locator('#analysis-current').count(),0);
+        for (const [button,label] of [[zoomIn,'放大'],[full,'全时段']]) {
+          await button.hover(); await page.waitForFunction(text=>{const e=document.querySelector('#control-tooltip');return !e.hidden&&e.textContent===text;},label);
+        }
         const navigationPlacement=await page.locator('.analysis-range-navigation').evaluate(e=>({top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom,header:document.querySelector('.analysis-head').getBoundingClientRect().bottom,charts:document.querySelector('.analysis-charts').getBoundingClientRect().top}));
         assert.ok(navigationPlacement.top>=navigationPlacement.header&&navigationPlacement.bottom<=navigationPlacement.charts,'range controls sit between toolbar and charts');
         await call('seek_review',{ptsUs:2_500_000});
         const beforeZoom=await page.locator('#analysis-shared-axis').evaluate(c=>({start:+c.dataset.viewStart,end:+c.dataset.viewEnd}));
         const beforePosition=(await call('get_review_session')).positionUs;
         await zoomIn.click();
+        await zoomOut.hover(); await page.waitForFunction(()=>{const e=document.querySelector('#control-tooltip');return !e.hidden&&e.textContent==='缩小';});
         await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span/2)<=2;},beforeZoom.end-beforeZoom.start);
         const zoomed=await page.locator('#analysis-shared-axis').evaluate(c=>({start:+c.dataset.viewStart,end:+c.dataset.viewEnd}));
         const originalFraction=(beforePosition-beforeZoom.start)/(beforeZoom.end-beforeZoom.start);
@@ -278,6 +282,44 @@ await withBrowserFixture(
         assert.equal(await page.locator('.analysis-range-hover').isHidden(),true,'leaving the rail removes the hover triangle');
         assert.equal(await page.locator('#analysis-range-time-hover').isHidden(),true,'leaving the rail removes only the hover time');
         assert.equal((await call('get_review_session')).positionUs,hoveredPosition,'hover does not seek');
+        // Cached viewport work must not make the completed track pill pulse.
+        await selectDiagrams(page,['bitrate','size','nalu-size']);
+        await page.waitForFunction(()=>window.voidPlayer.tools.find(t=>t.name==='get_bitstream_analysis_state').execute({slot:'A'}).state==='ready');
+        const progressAction=page.locator('.analysis-track-control[data-slot="A"] .analysis-progress-action');
+        await page.waitForFunction(()=>document.querySelector('.analysis-progress-action').getBoundingClientRect().width===0);
+        await page.evaluate(()=>{
+          window.__progressWidths=[];window.__sampleProgress=true;
+          const sample=()=>{window.__progressWidths.push(document.querySelector('.analysis-progress-action').getBoundingClientRect().width);if(window.__sampleProgress)requestAnimationFrame(sample);};sample();
+        });
+        await zoomIn.click();await zoomOut.click();
+        await start.press('ArrowRight');
+        await band.press('ArrowRight');await band.press('ArrowLeft');
+        await selectDiagrams(page,['bitrate','size','references']);await selectDiagrams(page,['bitrate','size','nalu-size']);
+        await page.setViewportSize({width:1200,height:720});
+        await call('seek_review',{ptsUs:350000});
+        await page.waitForTimeout(350);
+        const widths=await page.evaluate(()=>{window.__sampleProgress=false;return window.__progressWidths;});
+        assert.ok(widths.every(w=>w<.5),'cached zoom, range resize/pan, diagrams, viewport resize and seek never expand the progress action');
+        // Hold real task preparation long enough to see expansion, then verify
+        // completion contracts through intermediate widths, retaining the node.
+        let release;const gate=new Promise(resolve=>{release=resolve;});
+        const pattern=input==='local-file'?'**/vendor/voidplayer-analysis/manifest.json*':'**/bitstream-analysis/capabilities*';
+        await page.route(pattern,async route=>{await gate;await route.continue().catch(()=>{});});
+        const requested=page.waitForRequest(pattern);
+        try {
+          await page.evaluate(()=>{void window.voidPlayer.tools.find(t=>t.name==='request_bitstream_stream').execute({slot:'A',product:'summary',window:{startUs:0,endUs:500000,axis:'pts'}}).catch(()=>{});});
+          await requested;
+          await page.waitForFunction(()=>document.querySelector('.analysis-progress-action').getBoundingClientRect().width>25);
+          await progressAction.evaluate(e=>{window.__retainedProgressAction=e;});
+          const shrinking=page.evaluate(()=>new Promise(resolve=>{
+            const widths=[];const sample=()=>{const e=document.querySelector('.analysis-progress-action'),w=e.getBoundingClientRect().width;widths.push(w);if(w===0)resolve({widths,retained:e===window.__retainedProgressAction});else requestAnimationFrame(sample);};sample();
+          }));
+          release();
+          const completion=await shrinking;
+          assert.equal(completion.retained,true,'completion retains the animated action node');
+          assert.ok(completion.widths.some(w=>w>0&&w<25),'completion shrinks smoothly through intermediate widths');
+          assert.equal(await progressAction.isVisible(),false,'completed progress action is hidden after its animation');
+        } finally {release();await page.unroute(pattern);}
       }
       assert.deepEqual(errors,[]);console.log(`PASS ${engine}: local/library chart axis, full-clip position, seek, narrow-window pan and edge resize`);return;
     }

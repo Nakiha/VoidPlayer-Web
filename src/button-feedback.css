@@ -1,5 +1,5 @@
 /* Apply to the resting state too, so release fades back just like press. */
-button, .connection-status {
+button:not(.analysis-progress-action), .connection-status {
   transition: background-color 240ms ease, color 240ms ease !important;
 }
 
@@ -23,7 +23,7 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button, .connection-status { transition: none !important; }
+  button:not(.analysis-progress-action), .connection-status { transition: none !important; }
 }
 :focus-visible { outline: none; }
 

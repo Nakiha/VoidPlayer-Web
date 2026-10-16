@@ -878,7 +878,10 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       const action = chip.querySelector<HTMLButtonElement>('.analysis-progress-action')!;
       const state = session.getBitstreamAnalysisState(slot), paused = state.state === 'paused';
       action.disabled = !(state.stream && (ui.pending || paused));
-      action.hidden = action.disabled;
+      // Keep the action mounted so completion can animate its width. A short
+      // cache lookup must finish before the delayed progress reveal begins.
+      chip.dataset.progress = String(!action.disabled);
+      action.setAttribute('aria-hidden', String(action.disabled));
       action.setAttribute('aria-label', t(paused ? msg('analysis.resumeTrack', '继续分析轨道 {slot}') : msg('analysis.pauseTrack', '暂停分析轨道 {slot}'), { slot }));
       action.setAttribute('aria-description', ui.status); action.title = `${action.getAttribute('aria-label')} · ${ui.status}`;
       const playing = String(!paused);
@@ -1561,6 +1564,7 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
     $<HTMLElement>('#analysis-diagrams').setAttribute('aria-label', t(msg('analysis.diagrams','分析图示')));
     refreshDiagram(); if (!signal.aborted) localize(); }, signal);
 
+  localizeChrome();
   refreshTools();
   onSession(); refreshDiagram();
   render();

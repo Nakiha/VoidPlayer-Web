@@ -467,8 +467,10 @@
 .analysis-card .analysis-card-track-badge { width:20px; height:20px; min-height:20px; font:600 12px/1 var(--font-ui); vertical-align:middle; }
 
 /* The progress circle becomes the shared animated pause/play glyph on hover. */
-.analysis-progress-action { position:relative; border:0; border-radius:0; background:transparent; color:var(--accent); padding:0; width:26px; min-height:28px; display:inline-flex; align-items:center; justify-content:center; flex:none; }
-.analysis-progress-action .analysis-track-progress { width:26px; opacity:1; justify-content:center; transition:opacity .18s ease; }
+.analysis-track-control .analysis-progress-action { position:relative; border:0; border-radius:0; background:transparent; color:var(--accent); padding:0; width:0; min-height:28px; display:inline-flex; align-items:center; justify-content:center; flex:none; overflow:hidden; opacity:0; visibility:hidden; transition:width .24s cubic-bezier(.22,1,.36,1),opacity .18s ease,visibility 0s linear .24s; }
+.analysis-track-control[data-progress="true"] .analysis-progress-action { width:26px; opacity:1; visibility:visible; transition-delay:.15s; }
+.analysis-track-control[data-state="paused"] .analysis-progress-action { transition-delay:0s; }
+.analysis-progress-action .analysis-track-progress { width:100%; opacity:1; justify-content:center; transition:opacity .18s ease; }
 .analysis-progress-glyph { position:absolute; inset:0; display:grid; place-items:center; opacity:0; transition:opacity .18s ease; pointer-events:none; }
 .analysis-progress-glyph .icon { width:18px; height:18px; }
 .analysis-progress-action:is(:hover,:focus-visible) .analysis-track-progress,
@@ -476,7 +478,7 @@
 .analysis-progress-action:is(:hover,:focus-visible) .analysis-progress-glyph,
 .analysis-track-control[data-state="paused"] .analysis-progress-glyph { opacity:1; }
 @media (hover:none) { .analysis-progress-action .analysis-track-progress { opacity:0; } .analysis-progress-glyph { opacity:1; } }
-@media (prefers-reduced-motion:reduce) { .analysis-progress-glyph,.analysis-progress-action .analysis-track-progress { transition:none; } }
+@media (prefers-reduced-motion:reduce) { .analysis-track-control .analysis-progress-action { transition:width 0s,opacity 0s,visibility 0s; } .analysis-track-control[data-progress="true"] .analysis-progress-action { transition-delay:.15s; } .analysis-progress-glyph,.analysis-progress-action .analysis-track-progress { transition:none; } }
 
 /* Independent cards move as a complete stack; only an oversized stack scrolls. */
 .analysis-individual-layer { inset: 8px 0; }
