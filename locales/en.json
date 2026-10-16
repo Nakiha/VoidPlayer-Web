@@ -1292,10 +1292,6 @@
     "source": "{start}–{end} · {count} 帧 · {values}",
     "translation": "{start}–{end} · {count} frames · {values}"
   },
-  "analysis.diagramCurrent": {
-    "source": "当前帧",
-    "translation": "Current frame"
-  },
   "analysis.diagramDetailEvicted": {
     "source": "当前范围保留了汇总；重新检查可恢复逐帧细节。",
     "translation": "This range retains summaries; check again to restore per-frame details."
@@ -1397,9 +1393,13 @@
     "source": "完整范围",
     "translation": "Full range"
   },
-  "analysis.fullRangeTitle": {
-    "source": "双击图也可恢复完整范围",
-    "translation": "Double-click the plot to restore the full range too"
+  "analysis.fullTimeRange": {
+    "source": "全时段",
+    "translation": "Full duration"
+  },
+  "analysis.fullTimelinePosition": {
+    "source": "全片播放位置",
+    "translation": "Full-clip playback position"
   },
   "analysis.hideTrack": {
     "source": "隐藏轨道 {slot}",
@@ -1519,6 +1519,10 @@
     "source": "其他类型",
     "translation": "Other types"
   },
+  "analysis.panVisibleRange": {
+    "source": "平移图表可见区间",
+    "translation": "Pan the visible chart range"
+  },
   "analysis.pauseTrack": {
     "source": "暂停分析轨道 {slot}",
     "translation": "Pause analysis for track {slot}"
@@ -1569,6 +1573,10 @@
   "analysis.queryFailed": {
     "source": "轨道 {slot} 查询失败：{error}",
     "translation": "Track {slot} query failed: {error}"
+  },
+  "analysis.rangeNavigator": {
+    "source": "区间",
+    "translation": "Range"
   },
   "analysis.referenceCanvas": {
     "source": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。",
@@ -1730,6 +1738,14 @@
   "analysis.visibleStart": {
     "source": "图表可见区间起点",
     "translation": "Visible chart range start"
+  },
+  "analysis.zoomIn": {
+    "source": "放大",
+    "translation": "Zoom in"
+  },
+  "analysis.zoomOut": {
+    "source": "缩小",
+    "translation": "Zoom out"
   },
   "annotation.framePreview": {
     "source": "标注画面",

@@ -6,7 +6,7 @@ import type { GroupSampleRef, TimeGroup } from '../../analysis/grouping.ts';
 import { coarsenBucketsShared, estimateBaseBucketWidth, isBucketGridCompatible, planSharedCoarseWidth } from '../../analysis/inspection.ts';
 import { canLayoutRaw, layoutMergedBuckets, layoutMergedSamples, chartBarWidth } from '../analysis-geometry.ts';
 import type { AnalysisGlyph, BucketGlyph, SampleGlyph } from '../analysis-geometry.ts';
-import { computeLayout, desiredHeight } from '../analysis-canvas.ts';
+import { computeLayout, desiredHeight, plotGeometry } from '../analysis-canvas.ts';
 import type { CanvasColors, CanvasModel, CanvasTrack } from '../analysis-canvas.ts';
 import type { AnalysisPreferences } from './preferences.ts';
 
@@ -22,7 +22,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
   const inView = (t: number) => t >= range.start && t <= range.end;
   // 图宽来自绘图区实际宽度（画布全宽）；x 换算、查询、命中统一用它。
   const merged = prefs.layoutMode === 'merged';
-  const plotW = Math.max(1, width - 46);
+  const { gutter, plotW } = plotGeometry(width);
   // LOD：每个样本至少容纳 1px 柱 + 1px 间隔；柱宽按时间轴比例连续计算。
   // 逐样本可用当且仅当全部选中轨都有完整 raw；否则用共享桶，仍保持合并。
   // 计数只看视口内（查询含预取 margin，视口外不参与），放大后可从桶切回 raw。
@@ -67,7 +67,7 @@ export function buildAnalysisModel({ sel, results, prefs, range, width, availabl
   const lanesForCap = Math.max(1, merged ? sel.length : 1);
   const useRaw = allRaw && totalRawInView > 0
     && !shouldBucketize(totalRawInView, plotW, 2)
-    && canLayoutRaw(preGroups, range.start, Math.max(range.start + 1, range.end), 46, plotW, lanesForCap);
+    && canLayoutRaw(preGroups, range.start, Math.max(range.start + 1, range.end), gutter, plotW, lanesForCap);
   const canvasTracks: CanvasTrack[] = [];
   // 纵轴按视口内数据取最大（查询含预取 margin，视口外峰值不参与），
   // 同一指标跨轨共用零起点和纵轴范围。

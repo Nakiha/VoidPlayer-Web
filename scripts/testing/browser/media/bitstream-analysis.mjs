@@ -20,6 +20,19 @@ async function selectDiagrams(page, choice) {
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
 }
 
+// Seed a one-second inspection window using the shared axis gesture. The old
+// current-frame button is replaced by independent zoom in/out controls.
+async function inspectCurrentWindow(page) {
+  await page.locator('#analysis-shared-axis').evaluate(c => {
+    const d=c.dataset, bounds=c.getBoundingClientRect(), span=+d.viewEnd-+d.viewStart;
+    const position=window.voidPlayer.getState().positionUs;
+    const fraction=Math.max(0,Math.min(1,(position-+d.domainStart)/(+d.domainEnd-+d.domainStart)));
+    const event=new WheelEvent('wheel',{ctrlKey:true,deltaY:280*Math.log(1_000_000/span),clientX:bounds.left+ +d.plotLeft+fraction*(+d.plotRight-+d.plotLeft),bubbles:true,cancelable:true});
+    c.dispatchEvent(event);
+  });
+  await page.waitForFunction(()=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-1_000_000)<=2;});
+}
+
 // Backend lifecycle cases remain explicit through the same session facade.
 async function requestInspection(page, slot) {
   await page.evaluate(slot => { void window.voidPlayer.tools.find(t => t.name === 'request_bitstream_stream').execute({slot}).catch(() => {}); }, slot);
@@ -32,6 +45,7 @@ const matrix = JSON.parse(
   ),
 );
 const engine = process.argv[2] ?? "webkit";
+const navigationOnly = process.argv.includes('--navigation-only');
 const overlayOnly = process.argv.includes('--overlay-only');
 const layoutOnly = overlayOnly || process.argv.includes('--layout-only');
 const diagramsOnly = process.argv.includes('--diagrams-only');
@@ -45,7 +59,7 @@ assert.ok(matrixRows.length, 'Matrix filter matches a fixture');
 assert.ok(!matrixPart || matrixOnly, 'Matrix partition requires --matrix-only');
 assert.ok(!desktopPerformance || engine==='chromium' && matrixOnly && matrixPart==='ts', 'Desktop performance is an explicit Chromium TS matrix check');
 const matrixCase = `bitstream-analysis-matrix${matrixPart ? '-' + matrixPart : ''}`;
-assert.ok([layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
+assert.ok([navigationOnly, layoutOnly, diagramsOnly, incrementalOnly, matrixOnly].filter(Boolean).length <= 1, 'Choose only one analysis case mode');
 let gatedId, releaseIndexGate = true, heldBatches = 0;
 const indexGateWaiters=new Set();
 const releaseGate=()=>{releaseIndexGate=true;for(const resolve of indexGateWaiters)resolve();indexGateWaiters.clear();};
@@ -53,7 +67,7 @@ const limitsDir = path.join(
   repositoryRoot,
   ".run",
   "analysis-limit-fixtures",
-  layoutOnly ? `${engine}-layout` : matrixOnly ? `${engine}-matrix${matrixPart ? '-' + matrixPart : ''}` : diagramsOnly ? `${engine}-diagrams` : incrementalOnly ? `${engine}-index` : engine,
+  navigationOnly ? `${engine}-navigation` : layoutOnly ? `${engine}-layout` : matrixOnly ? `${engine}-matrix${matrixPart ? '-' + matrixPart : ''}` : diagramsOnly ? `${engine}-diagrams` : incrementalOnly ? `${engine}-index` : engine,
 );
 await mkdir(limitsDir, { recursive: true });
 for (const depth of [8, 10])
@@ -99,7 +113,7 @@ for(const name of ['stream.mp4','incremental.mp4','stream-2.mp4'])await copyFile
 for(const action of ['continue','cancel'])execFileSync('ffmpeg',['-y','-v','error','-i',path.join(limitsDir,'incremental.mp4'),'-an','-c:v','copy','-f','flv',path.join(limitsDir,`incremental-${action}.flv`)]);
 await withBrowserFixture(
   {
-    caseName: layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase+(desktopPerformance?'-desktop':'') : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
+    caseName: navigationOnly ? 'bitstream-analysis-navigation' : layoutOnly ? 'bitstream-analysis-layout' : matrixOnly ? matrixCase+(desktopPerformance?'-desktop':'') : diagramsOnly ? 'bitstream-analysis-diagrams' : incrementalOnly ? "bitstream-analysis-index" : "bitstream-analysis",
     roots: [path.join(repositoryRoot, "fixtures/video"), path.join(repositoryRoot, "fixtures/flv-analysis"), path.join(repositoryRoot, "fixtures/fmp4-analysis"), path.join(repositoryRoot, "fixtures/ts-analysis"), limitsDir],
     engine,
     ...(desktopPerformance?{launchOptions:{headless:false}}:{}),
@@ -178,6 +192,95 @@ await withBrowserFixture(
         );
       });
     const library = await call("list_library");
+    if (navigationOnly) {
+      await page.setViewportSize({width:1280,height:720});
+      for (const input of ['local-file','library']) {
+        if ((await call('get_review_session')).tracks.length) await call('remove_review_track',{slot:'A'});
+        if (input==='local-file') await page.locator('#file-A').setInputFiles(path.join(limitsDir,'incremental.mp4'));
+        else await call('load_library_item',{slot:'A',id:library.entries.find(e=>e.name==='incremental.mp4').id});
+        await stable(); await selectDiagrams(page,'overview');
+        const zoomIn=page.locator('#analysis-zoom-in'),zoomOut=page.locator('#analysis-zoom-out'),full=page.locator('[data-seg="full"]');
+        assert.equal(await zoomIn.locator('svg').count(),1);assert.equal(await zoomOut.locator('svg').count(),1);assert.equal(await full.locator('svg').count(),1);
+        assert.equal(await page.locator('#analysis-current').count(),0);
+        const navigationPlacement=await page.locator('.analysis-range-navigation').evaluate(e=>({top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom,header:document.querySelector('.analysis-head').getBoundingClientRect().bottom,charts:document.querySelector('.analysis-charts').getBoundingClientRect().top}));
+        assert.ok(navigationPlacement.top>=navigationPlacement.header&&navigationPlacement.bottom<=navigationPlacement.charts,'range controls sit between toolbar and charts');
+        await call('seek_review',{ptsUs:2_500_000});
+        const beforeZoom=await page.locator('#analysis-shared-axis').evaluate(c=>({start:+c.dataset.viewStart,end:+c.dataset.viewEnd}));
+        const beforePosition=(await call('get_review_session')).positionUs;
+        await zoomIn.click();
+        await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span/2)<=2;},beforeZoom.end-beforeZoom.start);
+        const zoomed=await page.locator('#analysis-shared-axis').evaluate(c=>({start:+c.dataset.viewStart,end:+c.dataset.viewEnd}));
+        const originalFraction=(beforePosition-beforeZoom.start)/(beforeZoom.end-beforeZoom.start);
+        assert.ok(Math.abs((beforePosition-zoomed.start)/(zoomed.end-zoomed.start)-originalFraction)<.001,'zoom in keeps an in-range playhead at its relative chart position');
+        await zoomOut.click();
+        await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span)<=2||(d.viewStart===d.domainStart&&d.viewEnd===d.domainEnd);},beforeZoom.end-beforeZoom.start);
+        await full.click();
+        assert.equal((await call('get_review_session')).positionUs,beforePosition,'zoom and full-duration buttons never seek');
+        const start=page.locator('.analysis-window-handle.start'),end=page.locator('.analysis-window-handle.end');
+        await page.waitForFunction(()=>+document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuenow')===0);
+        await end.press('Home'); for(let i=0;i<4;i++)await end.press('ArrowRight');
+        await page.waitForFunction(()=>+document.querySelector('.analysis-window-handle.end').getAttribute('aria-valuenow')===410_000);
+        await page.waitForFunction(()=>{
+          const chart=document.querySelector('#analysis-canvas').dataset,axis=document.querySelector('#analysis-shared-axis').dataset;
+          return chart.axisStart===axis.axisStart&&chart.axisEnd===axis.axisEnd;
+        });
+        const navigation=page.locator('#analysis-range-axis'),bounds=await navigation.boundingBox();
+        const domain=await navigation.evaluate(e=>({start:+e.dataset.domainStart,end:+e.dataset.domainEnd}));
+        const target=7_000_000,x=bounds.x+46+(target-domain.start)/(domain.end-domain.start)*(bounds.width-46-16);
+        const view=(await call('export_workspace')).layout.analysisView.view;
+        await page.mouse.click(x,bounds.y+3);
+        await page.waitForFunction(t=>Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,target);
+        assert.deepEqual((await call('export_workspace')).layout.analysisView.view,view,'rail seek keeps the chart viewport');
+        assert.equal(await page.locator('.analysis-range-playhead').isVisible(),true,'current position remains visible outside the zoomed range');
+        const position=(await call('get_review_session')).positionUs;
+        const beforeOutsideZoom=(await call('export_workspace')).layout.analysisView.view;
+        await zoomIn.click();
+        await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span/2)<=2;},beforeOutsideZoom.end-beforeOutsideZoom.start);
+        const outsideZoom=(await call('export_workspace')).layout.analysisView.view;
+        assert.ok(Math.abs(outsideZoom.start+outsideZoom.end-beforeOutsideZoom.start-beforeOutsideZoom.end)<=2,'zoom uses the viewport centre when the playhead is outside');
+        await zoomOut.click();
+        await page.waitForFunction(span=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-span)<=2;},beforeOutsideZoom.end-beforeOutsideZoom.start);
+        const band=page.locator('.analysis-window-band'),box=await band.boundingBox();
+        assert.ok(box.width<64,'fixture exercises a narrow window');
+        assert.equal(await page.evaluate(({x,y})=>document.elementFromPoint(x,y)?.classList.contains('analysis-window-band'),{x:box.x+box.width/2,y:box.y+1}),true,'narrow window centre belongs to pan, not an edge handle');
+        await page.mouse.move(box.x+box.width/2,box.y+1);await page.mouse.down();
+        await page.mouse.move(box.x+box.width/2+20,box.y+1,{steps:5});await page.mouse.up();
+        await page.waitForFunction(s=>+document.querySelector('#analysis-shared-axis').dataset.axisStart!==s,view.start);
+        assert.equal((await call('get_review_session')).positionUs,position,'window pan does not seek');
+        const moved=(await call('export_workspace')).layout.analysisView.view;
+        assert.equal(moved.end-moved.start,view.end-view.start,'window pan preserves zoom');
+        await start.hover();assert.equal(await page.locator('#analysis-window-preview').count(),0,'range navigation has no hover time bubble');
+        assert.equal(await page.locator('.analysis-range-time').count(),4,'range times include a separate hover readout');
+        assert.equal(await navigation.getAttribute('data-time-axis'),'false','range rail has no absolute tick labels');
+        assert.equal(await start.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
+        await start.press('ArrowRight');
+        await page.waitForFunction(s=>+document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuenow')>s,moved.start);
+        assert.equal((await call('get_review_session')).positionUs,position,'edge resize does not seek');
+        await call('seek_review',{ptsUs:+await start.getAttribute('aria-valuenow')});
+        for(const width of [360,1280]) {
+          await page.setViewportSize({width,height:720});
+          await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+          const railBox=await navigation.boundingBox();
+          await page.mouse.move(railBox.x+46+(railBox.width-62)*.5,railBox.y+3);
+          assert.equal(await page.locator('.analysis-range-hover').isVisible(),true,'hover adds a separate triangle on the rail');
+          assert.equal(await page.locator('#analysis-range-time-hover').isVisible(),true,'hover time appears below the rail');
+          const fills=await page.locator('.analysis-range-time.current, .analysis-range-time.hover').evaluateAll(es=>es.map(e=>getComputedStyle(e).backgroundColor));
+          assert.notEqual(fills[0],fills[1],'current and hover times have different emphasis');
+          const times=await page.locator('.analysis-range-time').evaluateAll(es=>es.filter(e=>!e.hidden).map(e=>({text:e.textContent,left:e.getBoundingClientRect().left,right:e.getBoundingClientRect().right,top:e.getBoundingClientRect().top,bottom:e.getBoundingClientRect().bottom})).sort((a,b)=>a.left-b.left));
+          assert.equal(times.length,4);
+          assert.ok(times.every(e=>e.left>=0&&e.right<=width),`permanent range times stay on screen at ${width}px`);
+          for(let i=1;i<times.length;i++) assert.ok(times[i].left>=times[i-1].right+6||times[i].top>=times[i-1].bottom||times[i-1].top>=times[i].bottom,'coincident start/current and close end times do not overlap');
+          assert.equal(await page.locator('#analysis-range-time-start').textContent(),await start.getAttribute('aria-valuetext'));
+        }
+        await page.screenshot({path:artifact(`navigation-${input}.png`)});
+        const hoveredPosition=(await call('get_review_session')).positionUs;
+        await page.mouse.move(1,1);
+        assert.equal(await page.locator('.analysis-range-hover').isHidden(),true,'leaving the rail removes the hover triangle');
+        assert.equal(await page.locator('#analysis-range-time-hover').isHidden(),true,'leaving the rail removes only the hover time');
+        assert.equal((await call('get_review_session')).positionUs,hoveredPosition,'hover does not seek');
+      }
+      assert.deepEqual(errors,[]);console.log(`PASS ${engine}: local/library chart axis, full-clip position, seek, narrow-window pan and edge resize`);return;
+    }
     if (layoutOnly) {
       for (const input of ['local-file', 'library']) {
         console.log(`${engine}: overlay and opt-in analysis ${input}`);
@@ -409,7 +512,7 @@ await withBrowserFixture(
           await pps.dispatchEvent('contextmenu'); await pps.dispatchEvent('click');
           await expectFilter(type);
         }
-        await page.locator('#analysis-current').click();
+        await inspectCurrentWindow(page);
         for (const viewport of [{width:821,height:786},{width:1280,height:720}]) {
           await page.setViewportSize(viewport);
           for (const bound of ['Home','End']) {
@@ -470,7 +573,7 @@ await withBrowserFixture(
                   return {visible:!host.hidden,height:fixed.height,bottom:fixed.bottom,panelBottom:panel.bottom,top:fixed.top,chartsBottom:area.bottom,range:[axis.dataset.viewStart,axis.dataset.viewEnd],domain:[axis.dataset.axisStart,axis.dataset.axisEnd],right:axis.getBoundingClientRect().left+Number(axis.dataset.plotRight),
                     plots:[...document.querySelectorAll('#analysis-canvas,.bitstream-diagrams canvas')].filter(c=>!c.hidden && c.getClientRects().length).map(c=>({inline:c.dataset.timeAxis,range:[c.dataset.axisStart,c.dataset.axisEnd],right:c.getBoundingClientRect().left+Number(c.dataset.plotRight)}))};
                 });
-                assert.ok(axis.visible && axis.height===22 && Math.abs(axis.bottom-axis.panelBottom)<=1 && Math.abs(axis.top-axis.chartsBottom)<=1,`${selected}: time axis remains outside the scroll area at the panel bottom`);
+                assert.ok(axis.visible && axis.height===22 && Math.abs(axis.bottom-axis.panelBottom)<=1 && Math.abs(axis.top-axis.chartsBottom)<=1,`${selected}: chart time axis remains outside the scroll area at the panel bottom`);
                 assert.ok(axis.plots.length && axis.plots.every(c=>c.inline==='false' && Math.abs(c.right-axis.right)<1 && JSON.stringify(c.range)===JSON.stringify(axis.range)),`${selected}: all plots use one fixed time axis and range`);
                 assert.ok(+axis.domain[0] <= +axis.range[0] && +axis.domain[1] >= +axis.range[1], 'fixed progress bar covers the whole source and contains the visible chart window');
                 // The complete plots belong to the outer scroller; the overview never clips its last row.
@@ -1073,7 +1176,7 @@ await withBrowserFixture(
         const wheel = async (deltaY, ctrlKey = true, deltaMode = 0) => {
           const prevented = await chart.evaluate((c, args) => {
             const rect = c.getBoundingClientRect();
-            const event = new WheelEvent('wheel', { ...args, clientX: rect.left + 46 + (rect.width - 46) * .3,
+            const event = new WheelEvent('wheel', { ...args, clientX: rect.left + 46 + (rect.width - 46 - 16) * .3,
               clientY: rect.top + rect.height / 2, bubbles: true, cancelable: true });
             c.dispatchEvent(event); return event.defaultPrevented;
           }, { deltaY, ctrlKey, deltaMode });
@@ -1083,7 +1186,7 @@ await withBrowserFixture(
         const gesture = async (type, scale) => {
           const prevented = await chart.evaluate((c, args) => {
             const rect = c.getBoundingClientRect(), event = new Event(args.type, { bubbles: true, cancelable: true });
-            Object.assign(event, { scale: args.scale, clientX: rect.left + 46 + (rect.width - 46) * .3 });
+            Object.assign(event, { scale: args.scale, clientX: rect.left + 46 + (rect.width - 46 - 16) * .3 });
             c.dispatchEvent(event); return event.defaultPrevented;
           }, { type, scale });
           assert.equal(prevented, true);
@@ -1118,7 +1221,7 @@ await withBrowserFixture(
             return data.pictures.reduce((best, p) => !best || Math.abs(p.sourcePtsUs - target) < Math.abs(best.sourcePtsUs - target) ? p : best, null).picture.au;
           });
           const rect = await chart.boundingBox();
-          await page.mouse.move(rect.x + 46 + (rect.width - 46) * .5, rect.y + rect.height / 2);
+          await page.mouse.move(rect.x + 46 + (rect.width - 46 - 16) * .5, rect.y + rect.height / 2);
           await page.waitForFunction(au => document.querySelector('.bitstream-diagram-detail').textContent.startsWith(`AU ${au} ·`), targetAu);
         }
         if (diagram === 'references' && input === 'library') await page.screenshot({ path: artifact('diagram-references-zoomed.png') });
@@ -1322,7 +1425,7 @@ await withBrowserFixture(
         await page.waitForFunction(mode => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.diagram === mode && +c.dataset.totalPictures === 300 && c.dataset.aggregated === 'true'; }, diagram);
         assert.ok(+await chart.getAttribute('data-axis-start') < 0, 'full range leaves space before the first frame'); assert.equal(+await chart.getAttribute('data-axis-end'), 10_000_000);
         assert.equal(await page.locator('.bitstream-diagram-navigation [data-page]').count(), 0);
-        await chart.evaluate(c => { const r = c.getBoundingClientRect(); c.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(4), clientX: r.left + 46 + (r.width - 46) / 2, bubbles: true, cancelable: true })); });
+        await chart.evaluate(c => { const r = c.getBoundingClientRect(); c.dispatchEvent(new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(4), clientX: r.left + 46 + (r.width - 46 - 16) / 2, bubbles: true, cancelable: true })); });
         await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && +c.dataset.pictures > 60 && +c.dataset.pictures <= 80; });
         const local = await chart.evaluate(c => window.voidPlayer.tools.find(t => t.name === 'query_bitstream_chart').execute({ slot: 'A', startUs: +c.dataset.axisStart, endUs: +c.dataset.axisEnd }));
         assert.ok(local.pictures.every(p => p.sourcePtsUs >= local.startUs && p.sourcePtsUs < local.endUs));
@@ -1333,8 +1436,8 @@ await withBrowserFixture(
         assert.deepEqual(await page.evaluate(() => ({ positionUs: window.voidPlayer.getState().positionUs, playing: window.voidPlayer.getState().playing })), playback, 'whole-film overview and detail zoom never seek');
       }
       assert.ok(requests.slice(requestsBefore).filter(r => r.method === 'POST' && /bitstream-analysis\/requests/.test(r.url)).every(r => r.target?.mode==='stream' && r.target.window), 'viewport navigation only requests visible GOPs');
-      await page.locator('#analysis-current').click();
-      await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && +c.dataset.axisEnd - +c.dataset.axisStart === 1_000_000; });
+      await inspectCurrentWindow(page);
+      await page.waitForFunction(() => { const c = document.querySelector('.bitstream-diagrams canvas'); return c.dataset.aggregated === 'false' && Math.abs(+c.dataset.axisEnd - +c.dataset.axisStart - 1_000_000) <= 2; });
       assert.equal(await page.evaluate(() => window.voidPlayer.getState().positionUs), playback.positionUs);
       const chart = page.locator('.bitstream-diagrams canvas');
       const viewport = () => chart.evaluate(c => ({ start: +c.dataset.viewStart, end: +c.dataset.viewEnd, axisStart: +c.dataset.axisStart, axisEnd: +c.dataset.axisEnd }));
@@ -1393,8 +1496,8 @@ await withBrowserFixture(
       await page.waitForFunction(() => { const c = document.querySelector('#analysis-canvas'); return +c.dataset.axisStart < 0 && +c.dataset.axisEnd === 10_000_000; });
       await choose('references');
       assert.ok(+await chart.getAttribute('data-axis-start') < 0, 'full range leaves space before the first frame'); assert.equal(+await chart.getAttribute('data-axis-end'), 10_000_000);
-      await page.locator('#analysis-current').click();
-      await page.waitForFunction(() => +document.querySelector('.bitstream-diagrams canvas').dataset.axisEnd - +document.querySelector('.bitstream-diagrams canvas').dataset.axisStart === 1_000_000);
+      await inspectCurrentWindow(page);
+      await page.waitForFunction(() => Math.abs(+document.querySelector('.bitstream-diagrams canvas').dataset.axisEnd - +document.querySelector('.bitstream-diagrams canvas').dataset.axisStart - 1_000_000) <= 2);
       const currentRange = await axis(chart);
       await call('set_review_track_offset', { slot: 'A', offsetUs: 2_000_000 });
       await choose('overview');
@@ -1453,7 +1556,7 @@ await withBrowserFixture(
         const target = page.locator(`#${id}`); await target.scrollIntoViewIfNeeded();
         const rect = await target.boundingBox();
         const geometry = await target.evaluate(c => {
-          const d = c.dataset, span = +d.axisEnd-+d.axisStart, plot = c.clientWidth-46;
+          const d = c.dataset, span = +d.axisEnd-+d.axisStart, plot = c.clientWidth-46 - 16;
           return { zero:46-+d.axisStart/span*plot, cell:33333/span*plot, radius:+d.nodeRadius||0 };
         });
         const y = id === 'bitstream-diagram-references' ? rect.y+rect.height-geometry.radius-6 : rect.y+rect.height*.7;
@@ -1501,7 +1604,7 @@ await withBrowserFixture(
       const hoverTarget = page.locator('#bitstream-diagram-nalu-size');
       const hoverBounds = await hoverTarget.boundingBox();
       for (const fraction of [.2, .98]) {
-        const lineX = hoverBounds.x + 46 + (hoverBounds.width - 46) * fraction;
+        const lineX = hoverBounds.x + 46 + (hoverBounds.width - 46 - 16) * fraction;
         await page.mouse.move(lineX, hoverBounds.y + hoverBounds.height / 2);
         await page.locator('.analysis-view-card[data-diagram="references"]').waitFor({ state: 'visible' });
         const cards = page.locator('.analysis-view-card:visible');
@@ -1511,7 +1614,7 @@ await withBrowserFixture(
           const r = element.getBoundingClientRect();
           const graph = document.querySelector(element.dataset.diagram === 'overview' ? '#analysis-canvas' : element.dataset.diagram === 'nalu' ? '#bitstream-diagram-nalu-size' : '#bitstream-diagram-references');
           const owner = graph.getBoundingClientRect(), range = graph.dataset;
-          const lineX = owner.left + 46 + (+(range.hoverCursorTime || range.hoverTime) - +range.axisStart) / (+range.axisEnd - +range.axisStart) * (owner.width - 46);
+          const lineX = owner.left + 46 + (+(range.hoverCursorTime || range.hoverTime) - +range.axisStart) / (+range.axisEnd - +range.axisStart) * (owner.width - 46 - 16);
           return { x:r.x, y:r.y, width:r.width, height:r.height, time:element.dataset.hoverTime, side:element.dataset.side, diagram:element.dataset.diagram, lineX };
         }));
         assert.ok(boxes.every(box => box.time && box.time === boxes[0].time), 'per-view cards inspect the same time');
@@ -1539,7 +1642,7 @@ await withBrowserFixture(
         const bounds = await graph.boundingBox();
         const group = mode === 'overview' ? 'overview' : mode === 'references' ? 'references' : 'nalu';
         const floating = page.locator(`.analysis-view-card[data-diagram="${group}"]`);
-        const x = bounds.x + 46 + (bounds.width - 46) * .5;
+        const x = bounds.x + 46 + (bounds.width - 46 - 16) * .5;
         const centers = [];
         for (const fraction of [.4, .55]) {
           // Pointer coordinates are integer CSS pixels in WebKit.
@@ -1554,7 +1657,7 @@ await withBrowserFixture(
         assert.ok(Math.abs(centers[1] - centers[0] - bounds.height * .15) <= 2, `${mode}: card follows mouse Y without snapping to a frame`);
         // Keeping Y unchanged while selecting another frame preserves its centre.
         const y = Math.round(bounds.y + bounds.height * .55);
-        await page.mouse.move(x + (bounds.width - 46) * .2, y);
+        await page.mouse.move(x + (bounds.width - 46 - 16) * .2, y);
         await page.waitForFunction(({ group, y }) => {
           const r = document.querySelector(`.analysis-view-card[data-diagram="${group}"]`).getBoundingClientRect();
           return Math.abs(r.top + r.height / 2 - y) <= 1;
@@ -1617,23 +1720,23 @@ await withBrowserFixture(
         const target = page.locator(`#bitstream-diagram-${mode}`); await target.scrollIntoViewIfNeeded();
         const rect = await target.boundingBox();
         const axis = await target.evaluate(c => ({ start:+c.dataset.axisStart, end:+c.dataset.axisEnd }));
-        const y = rect.y + rect.height / 2, tolerance = (axis.end - axis.start) / (rect.width - 46) + 2;
+        const y = rect.y + rect.height / 2, tolerance = (axis.end - axis.start) / (rect.width - 46 - 16) + 2;
         // Start outside the cards: teleporting onto a previous scrollable tooltip
         // would exercise tooltip scrolling instead of this chart's pointer input.
         await page.mouse.move(4, 4);
-        await page.mouse.move(rect.x + 46 + (rect.width - 46) * .3, y);
+        await page.mouse.move(rect.x + 46 + (rect.width - 46 - 16) * .3, y);
         await page.waitForFunction(({ id, time, tolerance }) => {
           const c = document.getElementById(id); return !!c.dataset.hoverAu && Math.abs(+c.dataset.hoverCursorTime - time) < tolerance;
         }, { id:`bitstream-diagram-${mode}`, time:axis.start + (axis.end - axis.start) * .3, tolerance });
         const hit = await target.evaluate(c => ({ time:+c.dataset.hoverTime, au:c.dataset.hoverAu }));
-        const hitX = rect.x + 46 + (hit.time - axis.start) / (axis.end - axis.start) * (rect.width - 46);
+        const hitX = rect.x + 46 + (hit.time - axis.start) / (axis.end - axis.start) * (rect.width - 46 - 16);
         const snapshots = [];
         for (const dx of [2, 6]) {
           const x = hitX + dx;
           // Traverse continuously: a teleport beyond the card gap can land
           // directly on its scrollable surface instead of the chart below it.
           await page.mouse.move(x, y, { steps: 8 });
-          const expectedCursor = axis.start + (x - rect.x - 46) / (rect.width - 46) * (axis.end - axis.start);
+          const expectedCursor = axis.start + (x - rect.x - 46) / (rect.width - 46 - 16) * (axis.end - axis.start);
           // WebKit rounds dispatched mouse coordinates to CSS pixels.
           await page.waitForFunction(({ id, time, tolerance }) => Math.abs(+document.getElementById(id).dataset.hoverCursorTime - time) < tolerance, { id:`bitstream-diagram-${mode}`, time:expectedCursor, tolerance });
           const lines = await page.locator('#analysis-canvas, .bitstream-diagrams canvas').evaluateAll(cs => cs.map(c => +c.dataset.hoverCursorTime));
@@ -1661,7 +1764,7 @@ await withBrowserFixture(
         await page.locator('#settings-close').click();
         await page.waitForFunction(() => !document.querySelector('#settings').open && document.activeElement === document.querySelector('#settings-open'));
         const target = page.locator('#bitstream-diagram-nalu-size'), rect = await target.boundingBox();
-        await page.mouse.move(rect.x + 46 + (rect.width - 46) * .3, rect.y + rect.height / 2);
+        await page.mouse.move(rect.x + 46 + (rect.width - 46 - 16) * .3, rect.y + rect.height / 2);
         await page.waitForFunction(() => !!document.getElementById('bitstream-diagram-nalu-size').dataset.hoverAu);
         await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         const outlines = await page.locator('#analysis-overlay, .bitstream-diagrams canvas').evaluateAll(canvases => canvases.map(canvas => {
@@ -1729,7 +1832,7 @@ await withBrowserFixture(
         const target = page.locator(mode === 'bitrate' || mode === 'size' ? '#analysis-canvas' : `#bitstream-diagram-${mode}`);
         await target.waitFor({ state: 'visible' });
         const rect = await target.boundingBox();
-        await page.mouse.move(rect.x + 46 + (rect.width - 46) * .35, rect.y + rect.height / 2);
+        await page.mouse.move(rect.x + 46 + (rect.width - 46 - 16) * .35, rect.y + rect.height / 2);
         const single = page.locator('.analysis-view-card:visible');
         await single.waitFor({ state: 'visible' });
         assert.equal(await single.count(), 1, 'a single selected row still shows one group card');
@@ -1793,9 +1896,9 @@ await withBrowserFixture(
         assert.ok(rightCard.x - leftCard.x > anchor.width * .2, 'combined details follow the hover line horizontally');
         assert.equal(rightCard.y, leftCard.y, 'hovering keeps the card beneath the panel');
         const visibleAxis = await target.evaluate(c => ({ start:+c.dataset.axisStart, end:+c.dataset.axisEnd }));
-        const firstMediaFraction = Math.max(.01, -visibleAxis.start / (visibleAxis.end-visibleAxis.start) + 2/(anchor.width-46));
+        const firstMediaFraction = Math.max(.01, -visibleAxis.start / (visibleAxis.end-visibleAxis.start) + 2/(anchor.width-46 - 16));
         for (const fraction of [firstMediaFraction, .99]) {
-          await page.mouse.move(anchor.x + 46 + (anchor.width - 46) * fraction, anchor.y + anchor.height / 2);
+          await page.mouse.move(anchor.x + 46 + (anchor.width - 46 - 16) * fraction, anchor.y + anchor.height / 2);
           const edgeCard = await card.boundingBox();
           assert.ok(edgeCard.x >= 8 && edgeCard.x + edgeCard.width <= viewport.width - 7, 'following card remains within both screen edges');
         }
@@ -1861,6 +1964,37 @@ await withBrowserFixture(
       assert.ok(compactGeometry.every(c => Math.abs(c.left - compactGeometry[0].left) <= 1 && Math.abs(c.right - compactGeometry[0].right) <= 1), 'every chart shares the overview plot boundaries');
       const sharedAxis = page.locator('#analysis-shared-axis');
       assert.equal(await sharedAxis.isVisible(), true);
+      const rangeStart = page.locator('.analysis-window-handle.start');
+      const rangePreview = page.locator('#analysis-range-time-start');
+      await rangeStart.hover();
+      assert.equal(await rangePreview.isVisible(), true, 'range start time remains visible');
+      assert.equal(await rangePreview.textContent(), await rangeStart.getAttribute('aria-valuetext'));
+      assert.equal(await rangeStart.evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)', 'hover leaves the invisible hit area transparent');
+      assert.notEqual(await rangeStart.evaluate(e => getComputedStyle(e, '::before').transform), 'none', 'hover enlarges the visible bar itself');
+      assert.ok(Number(await rangeStart.getAttribute('aria-valuenow')) >= 0, 'PTS range handle excludes decorative negative-time padding');
+      const handleBounds = await rangeStart.boundingBox();
+      assert.ok(handleBounds.width >= 32 && handleBounds.height >= 28, 'small visible handle retains a larger hit area');
+      const initialRangeStart = await rangeStart.getAttribute('aria-valuenow');
+      await page.mouse.move(handleBounds.x + handleBounds.width - 3, handleBounds.y + handleBounds.height / 2);
+      await page.mouse.down();
+      assert.equal(await rangeStart.getAttribute('data-dragging'), 'true', 'press in the outer hit area visibly captures the handle');
+      await page.mouse.move(handleBounds.x + handleBounds.width - 3, handleBounds.y + handleBounds.height / 2);
+      assert.equal(await rangeStart.getAttribute('aria-valuenow'), initialRangeStart, 'grabbing the outer hit area does not jump the range');
+      await page.mouse.up();
+      assert.equal(await rangeStart.getAttribute('data-dragging'), null);
+      await rangeStart.focus();
+      await page.mouse.move(0, 0);
+      assert.equal(await rangePreview.isVisible(), true, 'keyboard focus retains the permanent range time');
+      await rangeStart.press('ArrowRight');
+      await page.waitForFunction(() => document.querySelector('#analysis-range-time-start').textContent === document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuetext'));
+      await rangeStart.press('Home');
+      await page.waitForFunction(() => {
+        const axis = document.querySelector('#analysis-shared-axis').dataset, chart = document.querySelector('#analysis-canvas').dataset;
+        return axis.axisStart === chart.axisStart && axis.axisEnd === chart.axisEnd && +document.querySelector('.analysis-window-handle.start').getAttribute('aria-valuenow') === 0;
+      });
+      await rangeStart.evaluate(e => e.blur());
+      assert.equal(await rangePreview.isVisible(), true, 'range time remains visible after leaving and blurring');
+      assert.equal(await page.locator('#analysis-window-preview').count(),0,'hover time bubbles are removed');
       const sharedAxisGeometry = await sharedAxis.evaluate(c => {
         const r = c.getBoundingClientRect(), charts = document.querySelector('.analysis-charts').getBoundingClientRect();
         return { left: r.left + +c.dataset.plotLeft, right: r.left + +c.dataset.plotRight, height: r.height, belowCharts: r.top >= charts.bottom - 1, start: c.dataset.viewStart, end: c.dataset.viewEnd };
@@ -1872,7 +2006,7 @@ await withBrowserFixture(
       assert.equal(sharedAxisGeometry.end, await page.locator('#analysis-canvas').getAttribute('data-axis-end'));
       await sharedAxis.evaluate(c => {
         const r = c.getBoundingClientRect();
-        const event = new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(2), clientX: r.left + 46 + (r.width - 46) / 2, bubbles: true, cancelable: true });
+        const event = new WheelEvent('wheel', { ctrlKey: true, deltaY: -280 * Math.log(2), clientX: r.left + 46 + (r.width - 46 - 16) / 2, bubbles: true, cancelable: true });
         c.dispatchEvent(event);
         if (!event.defaultPrevented) throw new Error('shared axis must own pinch input');
       });
@@ -1883,6 +2017,30 @@ await withBrowserFixture(
       const axisZoom = (await call('export_workspace')).layout.analysisView.view;
       assert.ok(Math.abs(axisZoom.end - axisZoom.start - (+sharedAxisGeometry.end - +sharedAxisGeometry.start) / 2) <= 2, 'pinching the shared axis zooms all plots together');
       assert.equal((await call('get_review_session')).positionUs, inspectionPosition, 'shared axis navigation does not seek playback');
+      const navigator = page.locator('#analysis-range-axis');
+      assert.equal(await navigator.isVisible(), true, 'full-clip navigation is separate from the chart axis');
+      const axisDomains = await page.evaluate(() => {
+        const chart = document.querySelector('#analysis-shared-axis').dataset, full = document.querySelector('#analysis-range-axis').dataset;
+        return { chart:[+chart.axisStart,+chart.axisEnd], view:[+chart.viewStart,+chart.viewEnd], full:[+full.domainStart,+full.domainEnd] };
+      });
+      assert.deepEqual(axisDomains.chart, axisDomains.view, 'visible time labels match the zoomed chart window');
+      assert.ok(axisDomains.full[1]-axisDomains.full[0] > axisDomains.chart[1]-axisDomains.chart[0], 'full-clip navigator retains its independent absolute scale');
+      const navBox = await navigator.boundingBox();
+      const targetTime = Math.round((axisDomains.full[1]-Math.max(0,axisDomains.full[0]))*.7);
+      const targetX = navBox.x + 46 + (targetTime-axisDomains.full[0])/(axisDomains.full[1]-axisDomains.full[0])*(navBox.width-46-16);
+      const viewBeforeSeek = (await call('export_workspace')).layout.analysisView.view;
+      await page.mouse.click(targetX, navBox.y+3);
+      await page.waitForFunction(t => Math.abs(window.voidPlayer.getState().positionUs-t)<100_000,targetTime);
+      assert.deepEqual((await call('export_workspace')).layout.analysisView.view,viewBeforeSeek,'clicking the full-clip rail seeks without changing the chart window');
+      await page.waitForFunction(() => +document.querySelector('.analysis-range-playhead').dataset.positionUs===window.voidPlayer.getState().positionUs);
+      const band = await page.locator('.analysis-window-band').boundingBox();
+      assert.equal(await page.evaluate(({ x, y }) => document.elementFromPoint(x,y)?.classList.contains('analysis-window-band'),{x:band.x+band.width/2,y:band.y+1}),true,'the middle of a narrow selection remains available for panning');
+      const positionBeforePan = (await call('get_review_session')).positionUs;
+      await page.mouse.move(band.x+band.width/2,band.y+1); await page.mouse.down();
+      await page.mouse.move(band.x+band.width/2+20,band.y+1); await page.mouse.up();
+      await page.waitForFunction(start=>+document.querySelector('#analysis-shared-axis').dataset.axisStart!==start,viewBeforeSeek.start);
+      assert.equal((await call('get_review_session')).positionUs,positionBeforePan,'dragging the selected window pans the charts without seeking playback');
+      await call('seek_review',{ptsUs:inspectionPosition});
       multiple.layout.analysisView.view = axisZoom;
       if (input === 'library') await page.screenshot({ path: artifact('multiple-compact-charts.png') });
       // At the minimum panel height, readable minima take priority over fitting.
@@ -1897,6 +2055,7 @@ await withBrowserFixture(
         const style = getComputedStyle(panel), minimum = +document.querySelector('#analysis-resize').getAttribute('aria-valuemin');
         const available = minimum - document.querySelector('.analysis-head').getBoundingClientRect().height
           - document.querySelector('.analysis-shared-axis').getBoundingClientRect().height
+          - document.querySelector('.analysis-range-navigation').getBoundingClientRect().height - 16
           - parseFloat(style.borderTopWidth) - parseFloat(style.borderBottomWidth);
         const rowHeights=JSON.parse(document.querySelector('#analysis-canvas').dataset.rowHeights);
         return { available, overviewMinimum:rowHeights.length*Math.max(36,available)+document.querySelector('#analysis-load-metrics').getBoundingClientRect().height, height: charts.clientHeight, overview: document.querySelector('.analysis-overview').getBoundingClientRect().height,
@@ -1977,7 +2136,7 @@ await withBrowserFixture(
       await call('set_review_track_offset', { slot:'B', offsetUs:100_000 });
       await call('seek_review', { ptsUs:500_000 });
       await selectDiagrams(page, ['size','nalu-size','nalu-types','references']);
-      await page.locator('#analysis-current').click();
+      await inspectCurrentWindow(page);
       await page.waitForFunction(() => {
         const charts=[...document.querySelectorAll('.bitstream-diagrams canvas')], shared=document.querySelector('#analysis-shared-axis').dataset;
         return charts.length===6 && +shared.viewStart<500_000 && +shared.viewEnd>500_000 && charts.every(c=>c.dataset.aggregated==='false' && c.dataset.axisStart===shared.viewStart && c.dataset.axisEnd===shared.viewEnd);
@@ -2119,7 +2278,7 @@ await withBrowserFixture(
         await call('pause_bitstream_analysis', {slot:'A'});
         const paused = await call('get_bitstream_analysis_state', {slot:'A'});
         assert.equal(paused.state, 'paused'); assert.equal(paused.stream.window, undefined, 'full-film pause keeps full-film scope');
-        await page.locator('#analysis-current').click();
+        await inspectCurrentWindow(page);
         assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).state, 'paused', 'window navigation cannot restart paused work');
         await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='resume_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
         await page.waitForFunction(() => {
@@ -2140,7 +2299,7 @@ await withBrowserFixture(
       }
       await page.waitForFunction(() => window.voidPlayer.tools.find(t => t.name === 'get_analysis_capabilities').execute({})[0]?.capability.indexState === 'complete');
       if (cancel) {
-        await page.locator('#analysis-current').click();
+        await inspectCurrentWindow(page);
         await page.waitForFunction(() => {
           const state = window.voidPlayer.tools.find(t => t.name === 'get_bitstream_analysis_state').execute({slot:'A'});
           return state.state === 'ready' && state.stream?.window && state.stream.pictures > 0 && state.stream.pictures < 300 && state.stream.indexComplete && !state.stream.waitingForIndex;

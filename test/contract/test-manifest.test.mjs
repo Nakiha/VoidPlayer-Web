@@ -147,7 +147,11 @@ test('identity source checks require no downloaded core, media or browser build'
 test('analysis matrix, streaming diagrams and incremental indexing are independently required in CI with unchanged case budgets', () => {
   for (const engine of ['chromium', 'webkit']) {
     const cases = selectCases({ suite: 'ci-analysis-browser', engine, platform: 'linux' }).selected;
-    const parts = cases.filter(row => row.script === 'scripts/check-bitstream-analysis-browser.mjs' && !row.command.includes('--layout-only'));
+    const parts = cases.filter(row => row.script === 'scripts/check-bitstream-analysis-browser.mjs' && !row.command.includes('--layout-only') && !row.command.includes('--navigation-only'));
+    if (engine === 'webkit') {
+      const navigation = cases.find(row => row.command.includes('--navigation-only'));
+      assert.ok(navigation?.required && navigation.timeoutMs === 120000 && navigation.suites.includes('ci-analysis-ui'));
+    }
     assert.equal(parts.length, 7);
     assert.deepEqual(parts.map(row => row.command.at(-1)).sort(), ['--diagrams-only', '--incremental-only', '--matrix-part=flv-enhanced', '--matrix-part=flv-legacy', '--matrix-part=fmp4', '--matrix-part=mp4', '--matrix-part=ts']);
     const matrix = JSON.parse(readFileSync(new URL('../../scripts/bitstream-analysis-matrix.json', import.meta.url), 'utf8'));

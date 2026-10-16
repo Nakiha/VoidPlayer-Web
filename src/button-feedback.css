@@ -9,7 +9,7 @@ button[role=tab] { transition: none !important; }
 
 /* Press feedback takes precedence over component hover/selected fills, including
    primary buttons whose light text would be unreadable on a pale background. */
-button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(.remove-track),
+button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#settings-close):not(.remove-track):not(.analysis-window-handle),
 .connection-status:active {
   background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
   color: var(--text) !important;
@@ -30,7 +30,7 @@ button:active:not(:disabled):not([aria-disabled=true]):not([role=tab]):not(#sett
 /* Keyboard navigation shares the press material without adding an outer ring.
    A shortcut after a pointer click can match native focus-visible, so require
    explicit navigation as well. DOM focus and selected fills remain intact. */
-:root[data-keyboard-navigation] :where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true])) {
+:root[data-keyboard-navigation] :where(button, a[href], summary, input, textarea, select, #analysis-canvas):focus-visible:where(:not(:disabled):not([aria-disabled=true]):not(.analysis-window-handle)) {
   background: color-mix(in srgb, var(--accent) 22%, var(--surface-panel)) !important;
   color: var(--text) !important;
 }

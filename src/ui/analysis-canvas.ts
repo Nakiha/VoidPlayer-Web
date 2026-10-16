@@ -55,10 +55,11 @@ export interface CanvasGeom {
 
 export const AXIS_H = 22;
 const GUTTER = 46;
+const RIGHT_PADDING = 16;
 /** 纯视图几何（无数据也可定位）：hover/框选/滚轮在首帧数据到达前即可用。 */
 export function plotGeometry(widthCss: number): { gutter: number; plotW: number; width: number } {
   const width = Math.max(1, Math.floor(widthCss));
-  return { gutter: GUTTER, plotW: Math.max(1, width - GUTTER), width };
+  return { gutter: GUTTER, plotW: Math.max(1, width - GUTTER - RIGHT_PADDING), width };
 }
 
 export function computeLayout(model: CanvasModel): CanvasGeom {
@@ -81,7 +82,7 @@ export function computeLayout(model: CanvasModel): CanvasGeom {
       : { kind: 'size', slot: model.tracks[i]?.slot, y: bitrateH + i * perRow, h: perRow });
   }
   return {
-    gutter: GUTTER, plotW: Math.max(1, model.width - GUTTER),
+    ...plotGeometry(model.width),
     bitrate: model.showBitrate ? { y: 0, h: bitrateH } : null,
     sizeRows, axisY, axisH,
   };
@@ -191,7 +192,7 @@ export function drawAnalysis(ctx: CanvasRenderingContext2D, model: CanvasModel):
     const {y,h}=geom.bitrate, max=model.qpMax ?? 51;
     const together=model.loadMetrics.includes('bitrate');
     ctx.fillStyle=model.colors.axisText; ctx.textAlign=together?'right':'left';
-    const labelX=together?model.width-4:4;
+    const labelX=together?geom.gutter+geom.plotW-4:4;
     ctx.fillText(`QP ${max}`,labelX,y+10); ctx.fillText('0',labelX,y+h-10); ctx.textAlign='left';
     ctx.save(); ctx.setLineDash([4,3]);
     for (const track of model.tracks) {

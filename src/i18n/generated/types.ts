@@ -323,7 +323,6 @@ export interface Sources {
   "analysis.decodeBitrateWindowHint": "码率：按解码时间窗口统计压缩样本负载，不表示网络吞吐。";
   "analysis.decodingTime": "解码时间 DTS";
   "analysis.diagramBucketDetail": "{start}–{end} · {count} 帧 · {values}";
-  "analysis.diagramCurrent": "当前帧";
   "analysis.diagramDetailEvicted": "当前范围保留了汇总；重新检查可恢复逐帧细节。";
   "analysis.diagramNoTrack": "先载入一条视频轨道。";
   "analysis.diagramReferencesUnsupported": "这些帧没有可用的参考记录。需要支持参考列表的分析内核。";
@@ -349,7 +348,8 @@ export interface Sources {
   "analysis.frameTitleRankPending": " · 帧号 —（{note}）";
   "analysis.frameTitleSourcePts": " · 源 PTS {sourcePtsUs} µs";
   "analysis.fullRange": "完整范围";
-  "analysis.fullRangeTitle": "双击图也可恢复完整范围";
+  "analysis.fullTimeRange": "全时段";
+  "analysis.fullTimelinePosition": "全片播放位置";
   "analysis.hideTrack": "隐藏轨道 {slot}";
   "analysis.hoverDetailMissing": "此时间没有逐帧检查记录。";
   "analysis.indexFailed": "轨道 {slot} 索引失败：{error}";
@@ -379,6 +379,7 @@ export interface Sources {
   "analysis.noSampleAtTime": "轨道 {slot} 在该时间无可定位样本。";
   "analysis.noVideoYet": "尚未载入视频";
   "analysis.otherNaluTypes": "其他类型";
+  "analysis.panVisibleRange": "平移图表可见区间";
   "analysis.pauseTrack": "暂停分析轨道 {slot}";
   "analysis.peakSeekFailed": "轨道 {slot}：峰值样本定位失败。";
   "analysis.pinnedSuffix": " · 已固定";
@@ -391,6 +392,7 @@ export interface Sources {
   "analysis.qpPending": "QP 分析中…";
   "analysis.qpUnavailable": "QP 暂无可用结果";
   "analysis.queryFailed": "轨道 {slot} 查询失败：{error}";
+  "analysis.rangeNavigator": "区间";
   "analysis.referenceCanvas": "帧参考关系图。横轴为整片时间；总览显示帧类型分布，放大后显示参考金字塔和连线。方向键选择，回车查看。";
   "analysis.referenceLegend": "L0 实线 · L1 长虚线 · 点线指向视图外参考帧；活动参考列表不表示每个块都使用该参考帧。";
   "analysis.referenceMissing": "参考记录不可用";
@@ -431,6 +433,8 @@ export interface Sources {
   "analysis.untimedPackets": "轨道 {slot}：{count} 个包缺少时间戳（{bytes} 字节），无法计入时间轴码率。";
   "analysis.visibleEnd": "图表可见区间终点";
   "analysis.visibleStart": "图表可见区间起点";
+  "analysis.zoomIn": "放大";
+  "analysis.zoomOut": "缩小";
   "annotation.framePreview": "标注画面";
   "appearance.amber": "琥珀";
   "appearance.baseBlush": "浅玫瑰";
@@ -1455,7 +1459,6 @@ export interface MessageParameters {
   "analysis.decodeBitrateWindowHint": {  };
   "analysis.decodingTime": {  };
   "analysis.diagramBucketDetail": { "count": string | number; "end": string | number; "start": string | number; "values": string | number };
-  "analysis.diagramCurrent": {  };
   "analysis.diagramDetailEvicted": {  };
   "analysis.diagramNoTrack": {  };
   "analysis.diagramReferencesUnsupported": {  };
@@ -1481,7 +1484,8 @@ export interface MessageParameters {
   "analysis.frameTitleRankPending": { "note": string | number };
   "analysis.frameTitleSourcePts": { "sourcePtsUs": string | number };
   "analysis.fullRange": {  };
-  "analysis.fullRangeTitle": {  };
+  "analysis.fullTimeRange": {  };
+  "analysis.fullTimelinePosition": {  };
   "analysis.hideTrack": { "slot": string | number };
   "analysis.hoverDetailMissing": {  };
   "analysis.indexFailed": { "error": string | number; "slot": string | number };
@@ -1511,6 +1515,7 @@ export interface MessageParameters {
   "analysis.noSampleAtTime": { "slot": string | number };
   "analysis.noVideoYet": {  };
   "analysis.otherNaluTypes": {  };
+  "analysis.panVisibleRange": {  };
   "analysis.pauseTrack": { "slot": string | number };
   "analysis.peakSeekFailed": { "slot": string | number };
   "analysis.pinnedSuffix": {  };
@@ -1523,6 +1528,7 @@ export interface MessageParameters {
   "analysis.qpPending": {  };
   "analysis.qpUnavailable": {  };
   "analysis.queryFailed": { "error": string | number; "slot": string | number };
+  "analysis.rangeNavigator": {  };
   "analysis.referenceCanvas": {  };
   "analysis.referenceLegend": {  };
   "analysis.referenceMissing": {  };
@@ -1563,6 +1569,8 @@ export interface MessageParameters {
   "analysis.untimedPackets": { "bytes": string | number; "count": string | number; "slot": string | number };
   "analysis.visibleEnd": {  };
   "analysis.visibleStart": {  };
+  "analysis.zoomIn": {  };
+  "analysis.zoomOut": {  };
   "annotation.framePreview": {  };
   "appearance.amber": {  };
   "appearance.baseBlush": {  };
