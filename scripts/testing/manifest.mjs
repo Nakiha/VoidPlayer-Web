@@ -39,6 +39,8 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
       }
     }
     if (typeof row.required !== 'boolean') fail(`${row.id}: missing required flag`);
+    if (row.layer !== undefined && !['logic', 'contract', 'integration', 'media-integration', 'browser-interaction', 'browser-system'].includes(row.layer)) fail(`${row.id}: unknown verification layer`);
+    if (row.responsibility !== undefined && (typeof row.responsibility !== 'string' || !row.responsibility.trim())) fail(`${row.id}: empty verification responsibility`);
     if (!kinds.has(row.kind)) fail(`${row.id}: unknown kind`);
     if (row.kind !== 'regression' && (!row.restrictions?.length || row.required)) fail(`${row.id}: tool exception needs a reason and required=false`);
     for (const suite of row.suites) if (!manifest.suites.includes(suite)) fail(`${row.id}: unknown suite ${suite}`);
@@ -86,6 +88,15 @@ export function validateManifest(manifest = testManifest, root = repositoryRoot)
     if(recipe.environmentEngine&&recipe.environmentEngine.name!=='IDENTITY_BROWSER')fail(`${name}: unknown engine environment`);
     if(recipe.matrixArguments&&JSON.stringify(recipe.matrixArguments)!=='["engine","input"]')fail(`${name}: unknown matrix arguments`);
     if(recipe.archiveInput&&(recipe.archiveInput.fixture!=='release-package'||recipe.archiveInput.position!==0||!Array.isArray(recipe.archiveInput.ignoreArgs)||recipe.archiveInput.ignoreArgs.some(arg=>typeof arg!=='string')||recipe.archiveInput.defaultToken!==undefined&&recipe.archiveInput.defaultToken!=='-'))fail(`${name}: invalid archive input policy`);
+  }
+  // Local `unit` remains complete. CI runs each Node case once across its
+  // early source partition and media-dependent partition, on every platform.
+  for (const row of manifest.cases.filter(row => row.suites.includes('unit'))) {
+    const owners = ['source', 'ci-node-media'].filter(suite => row.suites.includes(suite));
+    if (owners.length !== 1) fail(`${row.id}: unit case needs exactly one Node CI partition`);
+  }
+  for (const row of manifest.cases.filter(row => row.suites.includes('ci-node-media'))) {
+    if (!row.suites.includes('unit')) fail(`${row.id}: media CI partition must belong to unit`);
   }
   function inspect(directory, category) {
     for (const entry of readdirSync(path.join(root, directory), { withFileTypes: true })) {

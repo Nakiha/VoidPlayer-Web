@@ -8,12 +8,14 @@ export { parseOptions } from './testing/options.mjs';
 import { prepareBuild } from './testing/build.mjs';
 import { createFixturePrerequisites } from './testing/fixtures.mjs';
 import { runBrowserRegressions } from './run-browser-regressions.mjs';
+import { describeTestPlan } from './testing/execution-plan.mjs';
 
 export async function runTestSuite(selection, { root = repositoryRoot, directory, prepared = false, output = process.stdout, signal, build = prepareBuild, fixtures = testManifest.fixtures } = {}) {
   if (!selection.selected.length) throw new Error('No applicable cases selected; inspect --list and exclusions');
   directory = path.resolve(directory ?? path.join(root, '.run/test-suites/selected'));
   await mkdir(directory, { recursive: true });
   await writeFile(path.join(directory, 'selection.json'), JSON.stringify(selection, null, 2) + '\n');
+  await writeFile(path.join(directory, 'plan.json'), JSON.stringify(describeTestPlan(selection), null, 2) + '\n');
   let buildFailure;
   if (selection.selected.some(row => row.build)) {
     try { await build({ root, directory, prepared, output, signal }); }
@@ -58,7 +60,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.ar
     else if (options.prepare) await prepareBuild({ root: repositoryRoot, directory: path.join(repositoryRoot, '.run/test-suites/preparation'), signal: controller.signal });
     else {
       const selection = selectCases(options);
-      if (options.list) console.log(JSON.stringify(selection, null, 2));
+      if (options.plan) console.log(JSON.stringify(describeTestPlan(selection), null, 2));
+      else if (options.list) console.log(JSON.stringify(selection, null, 2));
       else {
         const report = await runTestSuite(selection, { ...options, signal: controller.signal, directory: options.directory ?? path.join(repositoryRoot, '.run/test-suites', options.alias?.replaceAll(':', '-') ?? options.suite ?? 'selected') });
         console.log(`Required checks ${report.passed ? 'passed' : 'failed'}; ${report.results.filter(row => row.status === 'passed').length}/${report.expectedCount} cases passed`);

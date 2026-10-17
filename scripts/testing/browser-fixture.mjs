@@ -57,7 +57,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     steps.unshift([name, () => cleanup(name, close)]);
   };
   const artifact = name => path.join(directory, path.basename(name));
-  const operation = async (name, run, details) => {
+  const operation = async (name, run, details, budget = phaseTimeoutMs) => {
     if (closing || controller.signal.aborted) throw controller.signal.reason ?? new Error('Fixture already closing');
     const previousPhase = phase;
     phase = name;
@@ -65,7 +65,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     remember(phases, entry);
     let result;
     try {
-      result = await withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), phaseTimeoutMs, { caseName, engine, phase });
+      result = await withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), budget, { caseName, engine, phase });
       entry.status = 'passed';
     } catch (error) {
       entry.status = 'failed'; entry.error = error.message;
@@ -121,6 +121,9 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
         return value;
       },
       signal: controller.signal, phase: operation, checkpoint, defer,
+      // Long behavior groups keep their inner operation deadlines and the
+      // existing whole-case watchdog; naming a group must not impose 30s.
+      stage: (name, run, details) => operation(name, run, details, timeoutMs),
       ready: () => operation('ready', async () => {
         await page.goto(service.url);
         await page.waitForFunction(() => window.voidPlayer?.tools, null, { timeout: phaseTimeoutMs });

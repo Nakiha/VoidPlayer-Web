@@ -22,6 +22,13 @@ test('normal fixture completion isolates data and closes every resource in rever
   assert.equal(await withBrowserFixture(options,async fixture=>{await fixture.ready();return 'done';}),'done');
   assert.deepEqual(events,['page','context','browser','server','temp']);await assert.rejects(access(getTemp()));
 }));
+test('named behavior stages retain the case watchdog instead of imposing the short operation deadline', async () => scenario(async ({ options, directory }) => {
+  await withBrowserFixture({ ...options, phaseTimeoutMs: 5 }, fixture => fixture.stage('long-behavior', () => new Promise(resolve => setTimeout(resolve, 20))));
+  await assert.rejects(withBrowserFixture({ ...options, timeoutMs: 40 }, fixture => fixture.stage('blocked-behavior', () => new Promise(() => {}))), /blocked-behavior timed out after 40 ms/);
+  const report = JSON.parse(await readFile(path.join(directory, 'fixture-test-failure.json'), 'utf8'));
+  assert.equal(report.phase, 'blocked-behavior');
+  assert.ok(report.phases.some(step => step.name === 'blocked-behavior'));
+}));
 test('failure phases retain immutable baselines and completed steps without replacing the original error', async () => scenario(async ({ options, directory }) => {
   const baseline = { view: { start: 0, end: 40000 } }, primary = new Error('wrong zoom');
   await assert.rejects(withBrowserFixture(options, async fixture => {
