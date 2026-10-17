@@ -1200,7 +1200,9 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
       rangeAxisCtx.lineTo(xFor(window.startUs + track.offsetUs + (window.endUs - window.startUs) * stream.checkedUs / stream.totalUs), 3); rangeAxisCtx.stroke();
     }
     rangeAxisCtx.globalAlpha = 1;
-    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0,xFor(selectionEnd)-xFor(selectionStart))/4)}px`);
+    // 窄选区下把手必须让出 band 中点：每侧至少留 3px 可抓取，
+    // 否则 32px 的把手会盖住中点，窄选区将无法拖拽平移（弱命中精度也吃掉余量）。
+    rangeNavigation.style.setProperty('--range-handle-inset', `${Math.min(8, Math.max(0, (xFor(selectionEnd) - xFor(selectionStart)) / 2 - 3))}px`);
     rangeBand.style.left = `${xFor(selectionStart)}px`; rangeBand.style.width = `${Math.max(0, xFor(selectionEnd) - xFor(selectionStart))}px`;
     for (const handle of rangeHandles) {
       const value = handle.dataset.edge === 'start' ? selectionStart : selectionEnd;
@@ -1221,7 +1223,13 @@ export function installAnalysisPanel(session: ReviewSession, act: Action, hooks:
 
   function qpChart(slot: Slot) {
     const range=viewRange();
-    return session.queryBitstreamChart(slot,range.start,range.end,Math.max(32,Math.min(4096,plotWidthCss())),prefs.axis);
+    // 多轨不等长时共享视图可能超出短片域：与图查询保持同一契约，
+    // 空交集返回 null（调用方均已处理），而不是抛出未捕获异常。
+    const domain=session.bitstreamChartDomain(slot,prefs.axis);
+    if(!domain)return null;
+    const start=Math.max(domain.start,range.start),end=Math.min(domain.end,range.end);
+    if(end<=start)return null;
+    return session.queryBitstreamChart(slot,start,end,Math.max(32,Math.min(4096,plotWidthCss())),prefs.axis);
   }
   function qpAt(slot: Slot,time: number): number|null {
     const data=qpChart(slot); if(!data)return null;

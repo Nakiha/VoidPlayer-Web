@@ -2480,7 +2480,7 @@
     "locations": [
       "src/ui/analysis-panel.ts:85",
       "src/ui/analysis-panel.ts:416",
-      "src/ui/analysis-panel.ts:1748"
+      "src/ui/analysis-panel.ts:1756"
     ]
   },
   "analysis.dtsOrder": {
@@ -2511,21 +2511,21 @@
     "source": "已全部隐藏，请在工具条中选择要对比的轨道。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1288"
+      "src/ui/analysis-panel.ts:1296"
     ]
   },
   "analysis.emptyNoVideo": {
     "source": "尚未载入视频。载入后可在此检查码率与帧大小走向。",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1287"
+      "src/ui/analysis-panel.ts:1295"
     ]
   },
   "analysis.emptyQuerying": {
     "source": "正在查询统计…",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1289"
+      "src/ui/analysis-panel.ts:1297"
     ]
   },
   "analysis.enterFrameNumber": {
@@ -2684,7 +2684,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1268"
+      "src/ui/analysis-panel.ts:1276"
     ]
   },
   "analysis.indexNotReady": {
@@ -2965,14 +2965,14 @@
     "source": "QP 分析中…",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1252"
+      "src/ui/analysis-panel.ts:1260"
     ]
   },
   "analysis.qpUnavailable": {
     "source": "QP 暂无可用结果",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1252"
+      "src/ui/analysis-panel.ts:1260"
     ]
   },
   "analysis.queryFailed": {
@@ -2982,7 +2982,7 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1273"
+      "src/ui/analysis-panel.ts:1281"
     ]
   },
   "analysis.rangeEnd": {
@@ -3307,14 +3307,14 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1271"
+      "src/ui/analysis-panel.ts:1279"
     ]
   },
   "analysis.unknownError": {
     "source": "未知错误",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1269"
+      "src/ui/analysis-panel.ts:1277"
     ]
   },
   "analysis.untimedPackets": {
@@ -3325,21 +3325,21 @@
       "slot": "string | number"
     },
     "locations": [
-      "src/ui/analysis-panel.ts:1275"
+      "src/ui/analysis-panel.ts:1283"
     ]
   },
   "analysis.visibleEnd": {
     "source": "图表可见区间终点",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1208"
+      "src/ui/analysis-panel.ts:1210"
     ]
   },
   "analysis.visibleStart": {
     "source": "图表可见区间起点",
     "params": {},
     "locations": [
-      "src/ui/analysis-panel.ts:1208"
+      "src/ui/analysis-panel.ts:1210"
     ]
   },
   "analysis.zoomIn": {

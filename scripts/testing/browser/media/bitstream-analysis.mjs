@@ -27,15 +27,18 @@ async function openRangeEditor(page) {
 
 // Seed a one-second inspection window using the shared axis gesture. The old
 // current-frame button is replaced by independent zoom in/out controls.
-async function inspectCurrentWindow(page) {
-  await page.locator('#analysis-shared-axis').evaluate(c => {
-    const d=c.dataset, bounds=c.getBoundingClientRect(), span=+d.viewEnd-+d.viewStart;
+// A gated (partial-index) domain may be shorter than a second: callers can
+// pass the achievable span so the gesture is still exercised (clamped) instead
+// of demanding an impossible window.
+async function inspectCurrentWindow(page, span = 1_000_000) {
+  await page.locator('#analysis-shared-axis').evaluate((c, targetSpan) => {
+    const d=c.dataset, bounds=c.getBoundingClientRect(), viewSpan=+d.viewEnd-+d.viewStart;
     const position=window.voidPlayer.getState().positionUs;
     const fraction=Math.max(0,Math.min(1,(position-+d.domainStart)/(+d.domainEnd-+d.domainStart)));
-    const event=new WheelEvent('wheel',{ctrlKey:true,deltaY:280*Math.log(1_000_000/span),clientX:bounds.left+ +d.plotLeft+fraction*(+d.plotRight-+d.plotLeft),bubbles:true,cancelable:true});
+    const event=new WheelEvent('wheel',{ctrlKey:true,deltaY:280*Math.log(targetSpan/viewSpan),clientX:bounds.left+ +d.plotLeft+fraction*(+d.plotRight-+d.plotLeft),bubbles:true,cancelable:true});
     c.dispatchEvent(event);
-  });
-  await page.waitForFunction(()=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-1_000_000)<=2;});
+  }, span);
+  await page.waitForFunction(expectSpan=>{const d=document.querySelector('#analysis-shared-axis').dataset;return Math.abs(+d.viewEnd-+d.viewStart-expectSpan)<=2;}, span);
 }
 
 // Backend lifecycle cases remain explicit through the same session facade.
@@ -2198,7 +2201,10 @@ await withBrowserFixture(
       await page.waitForFunction(start=>+document.querySelector('#analysis-shared-axis').dataset.axisStart!==start,viewBeforeSeek.start);
       assert.equal((await call('get_review_session')).positionUs,positionBeforePan,'dragging the selected window pans the charts without seeking playback');
       await call('seek_review',{ptsUs:inspectionPosition});
-      multiple.layout.analysisView.view = axisZoom;
+      // The band drag above intentionally panned the charts: re-baseline here so
+      // the wheel check below tests vertical scrolling, not the earlier pan.
+      // (axisZoom predates the pan since 68031e7 and can never match again.)
+      multiple.layout.analysisView.view = (await call('export_workspace')).layout.analysisView.view;
       if (input === 'library') await page.screenshot({ path: artifact('multiple-compact-charts.png') });
       // At the minimum panel height, readable minima take priority over fitting.
       await page.getByRole('separator', { name: '调整码流分析高度', exact: true }).press('Home');
@@ -2434,7 +2440,11 @@ await withBrowserFixture(
         await call('pause_bitstream_analysis', {slot:'A'});
         const paused = await call('get_bitstream_analysis_state', {slot:'A'});
         assert.equal(paused.state, 'paused'); assert.equal(paused.stream.window, undefined, 'full-film pause keeps full-film scope');
-        await inspectCurrentWindow(page);
+        // The held prefix may cover less than a second (gated frontier is
+        // frozen): navigate within the known domain. The gesture must still
+        // take effect without restarting paused work.
+        const gatedSpan = await page.evaluate(() => { const d = document.querySelector('#analysis-shared-axis').dataset; return Math.min(1_000_000, +d.viewEnd - +d.viewStart); });
+        await inspectCurrentWindow(page, gatedSpan);
         assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).state, 'paused', 'window navigation cannot restart paused work');
         await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='resume_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
         await page.waitForFunction(() => {
