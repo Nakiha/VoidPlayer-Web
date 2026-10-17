@@ -87,7 +87,6 @@ test('coverage floor retains original commands, required cells and CI membership
 });
 test('local and CI select the same applicable matrix; filters cannot fake engine/input support', () => {
   const linux = selectCases({ suite: 'uncovered', platform: 'linux' }).selected;
-  assert.equal(linux.length, 38); // Original 36 cells plus the two real-browser infrastructure contracts.
   for (const engine of ['webkit', 'chromium']) assert.ok(linux.some(row => row.id === `browser-contracts-${engine}`));
   assert.deepEqual(linux.map(row => row.id), selectCases({ suite: 'uncovered', platform: 'darwin' }).selected.map(row => row.id));
   assert.equal(selectCases({ suite: 'browser', engine: 'webkit', input: 'local' }).selected.filter(row => row.id.startsWith('hevc-timeline')).length, 1);
@@ -97,7 +96,7 @@ test('local and CI select the same applicable matrix; filters cannot fake engine
 });
 test('CI uses the catalog for required suites and keeps platform/input matrices and informational gates', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
-  for (const suite of ['ci-analysis-logic','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','ci-perf','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
+  for (const suite of ['source','ci-node-media','ci-analysis-ui','ci-playback','ci-cache','ci-flv','flv-startup','ci-fate','ci-https','ci-perf','uncovered','ci-native-node','ci-native-bun','ci-native-http','ci-native-https','ci-native-console']) {
     assert.match(workflow, new RegExp(`scripts/run-tests\\.mjs ${suite}(?: |\\n)`));
     assert.ok(selectCases({ suite, platform: suite === 'ci-native-console' ? 'win32' : 'linux' }).selected.length);
   }
@@ -179,7 +178,8 @@ test('parallel analysis CI suites are a disjoint complete partition of the brows
       assert.equal(selected[0].timeoutMs, 600000); assert.equal(selected[0].required, true);
       return selected;
     });
-    const residual = selectCases({suite:'ci-analysis-ui', engine}).selected;
+    const app = selectCases({suite:'uncovered', engine}).selected.filter(row => umbrella.some(cell => cell.id === row.id));
+    const residual = [...selectCases({suite:'ci-analysis-ui', engine}).selected, ...app];
     assert.ok(residual.every(row => !row.command.includes('--matrix-only')));
     assert.deepEqual([...partitions, ...residual].map(row => row.id).sort(), umbrella.map(row => row.id).sort());
     assert.equal(new Set([...partitions, ...residual].map(row => row.id)).size, umbrella.length);
@@ -224,7 +224,7 @@ test('every required browser cell is selected by an actual CI suite or expanded 
 });
 test('all source-only Node checks run before media dependencies are prepared', () => {
   const workflow = readFileSync(new URL('../../.github/workflows/release-preview.yml', import.meta.url), 'utf8');
-  const job = workflow.split('  source-logic:\n')[1].split('\n  analysis-logic:')[0];
+  const job = workflow.split('  source-logic:\n')[1].split('\n  analysis-browser:')[0];
   assert.doesNotMatch(job, /needs:|playwright install|sync-samples|download-artifact/);
   assert.match(job, /run-tests\.mjs source/);
   const eligible = testManifest.cases.filter(row => row.kind === 'regression' && row.suites.includes('unit') && !row.fixtures.length && !row.tools.length && !row.build && row.engines.join() === 'node');

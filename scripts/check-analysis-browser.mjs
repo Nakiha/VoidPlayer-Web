@@ -7,6 +7,8 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import path from 'node:path';
+import { settleAppearance } from './testing/browser-contracts.mjs';
+import { snapshotBuild } from './testing/build.mjs';
 import { chromium, webkit } from 'playwright';
 import { createMediaServer } from '../server/app.ts';
 
@@ -50,8 +52,9 @@ async function saveDiagnostics(activePage, name, extra = {}) {
   } catch { /* 诊断落盘本身不得掩盖原始失败 */ }
 }
 try {
+  const staticDir = await snapshotBuild(join(root, 'dist'), join(temp, 'static'));
   server = createMediaServer({
-    roots: [join(root, 'fixtures/video')], staticDir: join(root, 'dist'), onLog() {},
+    roots: [join(root, 'fixtures/video')], staticDir, onLog() {},
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const base = `http://127.0.0.1:${server.address().port}`;
@@ -570,6 +573,9 @@ try {
     if (wrapped) wrapWidth = width; else inlineWidth = width;
   }
   await page.setViewportSize({width:wrapWidth, height:800});
+  // The final resize must settle before measuring playback invariance. The
+  // first synchronous sample otherwise includes the previous header row count.
+  await settleAppearance(page);
   await page.evaluate(() => {
     window.frameNumberLayouts = [];
     window.frameNumberButtons = [...document.querySelectorAll('#analysis-status-items .st-num')];
