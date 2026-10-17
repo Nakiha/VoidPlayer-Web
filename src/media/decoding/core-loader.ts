@@ -9,4 +9,3 @@ export async function loadCore(glueURL: string, binary?: Uint8Array) {
   }
   return instantiateCore(mod.default, binary);
 }
-

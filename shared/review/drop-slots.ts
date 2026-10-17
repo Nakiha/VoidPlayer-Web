@@ -6,4 +6,3 @@ export function dropSlots(count: number, loaded: Slot[], target?: Slot): Slot[] 
   const candidates = [...(target ? [target] : []), ...SLOTS.filter(slot => !loaded.includes(slot)), ...SLOTS];
   return [...new Set(candidates)].slice(0, count);
 }
-

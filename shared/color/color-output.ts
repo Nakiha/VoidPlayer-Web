@@ -13,4 +13,3 @@ export function validateColorOutput(value: ColorOutput) {
   validateHdrPreviewPolicy(value.preview);
 }
 export function setColorOutput(value: ColorOutput) { validateColorOutput(value); current = structuredClone(value); }
-

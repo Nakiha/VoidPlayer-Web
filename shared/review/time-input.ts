@@ -10,4 +10,3 @@ export function parseTimeInput(text:string, unit:'s'|'ms'='s', signed=false) {
   if(!Number.isSafeInteger(us)) throw new Error('时间超出可用范围。');
   return us;
 }
-

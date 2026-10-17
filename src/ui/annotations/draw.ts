@@ -18,4 +18,3 @@ export function drawAnnotations(ctx: CanvasRenderingContext2D, drawings: Drawing
   }
   ctx.restore();
 }
-

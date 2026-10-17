@@ -59,4 +59,3 @@ export function verifyHevcFrame(frame: VideoFrame, geometry: HevcGeometry, diagn
     spsVisible: [expected.x, expected.y, expected.width, expected.height] });
   return corrected;
 }
-
