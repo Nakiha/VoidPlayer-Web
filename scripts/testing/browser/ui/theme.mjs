@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
+import { waitForDialogClosed, settleAppearance as waitForAppearance } from '../../browser-contracts.mjs';
 const name=process.argv[2]??'webkit';
-await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewport:{width:1280,height:900},deviceScaleFactor:2,colorScheme:'light'} }, async ({ page, context, newContext, url, ready, artifact }) => {
+await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewport:{width:1280,height:900},deviceScaleFactor:2,colorScheme:'light'} }, async ({ page, context, newContext, url, ready, artifact, phase, checkpoint }) => {
  const errors=[];
  page.on('pageerror',e=>errors.push(e.message));
  const base=url;
@@ -9,13 +10,8 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  // bootstrap.ts 以动态 import 加载 main.ts，window.voidPlayer 不再同步可得。
  await page.waitForFunction(()=>window.voidPlayer?.tools,null,{timeout:30000});
  const theme=()=>page.locator('html').getAttribute('data-theme');
- const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));};
- const settleAppearance=()=>page.evaluate(async () => {
-  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-  const transitions=document.getAnimations().filter(animation=>Number.isFinite(animation.effect?.getComputedTiming().endTime));
-  await Promise.all(transitions.map(animation=>animation.finished.catch(()=>{})));
-  await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
- });
+ const choose=async value=>{await page.locator('#settings-open').click();await page.locator(`[data-theme-choice=${value}]`).click();await page.locator('#settings-close').click();await waitForDialogClosed(page);};
+ const settleAppearance=()=>phase('settle-appearance',()=>waitForAppearance(page));
  const call=(name,args={})=>page.evaluate(({name,args})=>window.voidPlayer.tools.find(t=>t.name===name).execute(args),{name,args});
  assert.equal(await theme(),'light');
  await page.emulateMedia({colorScheme:'dark'});await page.waitForFunction(()=>document.documentElement.dataset.theme==='dark');
@@ -41,6 +37,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await page.waitForTimeout(220);await page.locator('#mark-close').click();await page.locator('#toggle-marks').click();
  const evidence=()=>page.evaluate(()=>({state:window.voidPlayer.getState(),pixels:window.voidPlayer.captureFrame('A').toDataURL(),shape:document.querySelector('.mark-symbol').dataset.markShape,stage:document.querySelector('#stage-A').getBoundingClientRect().toJSON()}));
  const before=await evidence();
+ checkpoint('theme-invariance-baseline', { state: before.state, shape: before.shape, stage: before.stage });
  const lightMark=await page.locator('.track-marker .mark-symbol').first().evaluate(e=>getComputedStyle(e).color);
  await choose('dark');assert.equal(await theme(),'dark');
  await settleAppearance();
@@ -118,7 +115,7 @@ await withBrowserFixture({ caseName: 'theme', engine: name, pageOptions: {viewpo
  await page.setViewportSize({width:390,height:700});await page.locator('#settings').screenshot({path:artifact(`voidplayer-accent-mobile-${name}.png`)});
  assert.equal(await page.locator('#settings-pane-appearance').evaluate(e=>e.scrollWidth>e.clientWidth),false);
  await page.setViewportSize({width:1280,height:900});
- await page.locator('#settings-close').click();await page.waitForFunction(()=>!document.querySelector('#settings').open && document.activeElement===document.querySelector('#settings-open'));
+ await page.locator('#settings-close').click();await waitForDialogClosed(page);
  const peer=await context.newPage();await peer.goto(base);assert.equal(await peer.locator('html').getAttribute('data-theme'),'dark');
  await choose('system');await page.waitForFunction(()=>localStorage.getItem('voidplayer.theme')===null);
  await peer.waitForFunction(()=>document.querySelector('[data-theme-choice=system]').getAttribute('aria-checked')==='true');

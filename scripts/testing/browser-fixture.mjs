@@ -14,7 +14,11 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
 }, body) {
   if (!['chromium', 'webkit'].includes(engine)) throw new Error(`Unknown browser engine: ${engine}`);
   await mkdir(directory, { recursive: true });
-  const steps = [], cleanupErrors = [];
+  const steps = [], cleanupErrors = [], phases = [], checkpoints = [];
+  const startedAt = Date.now();
+  const remember = (list, entry) => { list.push(entry); if (list.length > 50) list.shift(); };
+  const checkpoint = (name, details) => remember(checkpoints, { name, elapsedMs: Date.now() - startedAt, details: structuredClone(details) });
+  const failureDetails = () => ({ phases: structuredClone(phases), checkpoints: structuredClone(checkpoints) });
   const reportCleanup = (message, error) => {
     cleanupErrors.push({ message, error: error.message });
     console.error(message, error);
@@ -53,11 +57,20 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
     steps.unshift([name, () => cleanup(name, close)]);
   };
   const artifact = name => path.join(directory, path.basename(name));
-  const operation = async (name, run) => {
+  const operation = async (name, run, details) => {
     if (closing || controller.signal.aborted) throw controller.signal.reason ?? new Error('Fixture already closing');
     const previousPhase = phase;
     phase = name;
-    const result = await withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), phaseTimeoutMs, { caseName, engine, phase });
+    const entry = { name, elapsedMs: Date.now() - startedAt, status: 'running', details: structuredClone(details) };
+    remember(phases, entry);
+    let result;
+    try {
+      result = await withinBrowserPhase(() => Promise.race([Promise.resolve().then(run), stopped]), phaseTimeoutMs, { caseName, engine, phase });
+      entry.status = 'passed';
+    } catch (error) {
+      entry.status = 'failed'; entry.error = error.message;
+      throw error;
+    } finally { entry.durationMs = Date.now() - startedAt - entry.elapsedMs; }
     // A completed ready/load phase must not label a later assertion failure.
     if (phase === name) phase = previousPhase;
     return result;
@@ -107,7 +120,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
         phase = previousPhase;
         return value;
       },
-      signal: controller.signal, phase: operation, defer,
+      signal: controller.signal, phase: operation, checkpoint, defer,
       ready: () => operation('ready', async () => {
         await page.goto(service.url);
         await page.waitForFunction(() => window.voidPlayer?.tools, null, { timeout: phaseTimeoutMs });
@@ -121,7 +134,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
   catch (error) {
     failure = { error };
     closing = true;
-    try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase }, error, evidence }); }
+    try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase }, error, evidence, extra: failureDetails() }); }
     catch (cause) { console.error(`${caseName}: failure evidence could not be saved`, cause); }
   } finally {
     closing = true; clearTimeout(timer); controller.signal.removeEventListener('abort', onAbort); signal?.removeEventListener('abort', abort);
@@ -129,7 +142,7 @@ export async function withBrowserFixture({ caseName, engine = 'webkit', pageOpti
       await cleanupResources(steps, failure, reportCleanup);
     } catch (error) {
       if (!failure) {
-        try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase: 'cleanup' }, error, evidence }); }
+        try { await saveBrowserFailure({ page, directory, name: caseName, context: { caseName, engine, phase: 'cleanup' }, error, evidence, extra: failureDetails() }); }
         catch (cause) { console.error(`${caseName}: cleanup evidence could not be saved`, cause); }
       }
       throw error;

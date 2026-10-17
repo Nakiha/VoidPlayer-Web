@@ -167,7 +167,7 @@ await withBrowserFixture(
       return { server, close, url: `http://127.0.0.1:${server.address().port}/` };
     } },
   },
-  async ({ page, ready, artifact }) => {
+  async ({ page, ready, artifact, phase, checkpoint }) => {
     const errors = [],
       requests = [],
       rows = [];
@@ -2231,10 +2231,11 @@ await withBrowserFixture(
       const scrollBox = await page.locator('#analysis-canvas').boundingBox();
       const visibleCharts = await page.locator('.analysis-charts').boundingBox();
       const startScroll = await page.locator('.analysis-charts').evaluate(el => el.scrollTop);
+      checkpoint('vertical-scroll-baseline', { input, view: multiple.layout.analysisView.view, startScroll, fixedAxis });
       const visibleTop = Math.max(scrollBox.y, visibleCharts.y), visibleBottom = Math.min(scrollBox.y + scrollBox.height, visibleCharts.y + visibleCharts.height);
       await page.mouse.move(scrollBox.x + scrollBox.width / 2, (visibleTop + visibleBottom) / 2);
       await page.mouse.wheel(0, 160);
-      await page.waitForFunction(before => document.querySelector('.analysis-charts').scrollTop > before, startScroll);
+      await phase('analysis-vertical-scroll', () => page.waitForFunction(before => document.querySelector('.analysis-charts').scrollTop > before, startScroll));
       assert.deepEqual((await call('export_workspace')).layout.analysisView.view, multiple.layout.analysisView.view, 'vertical scrolling does not pan time');
       assert.deepEqual(await sharedAxis.boundingBox(), fixedAxis, 'shared axis stays visible while charts scroll');
       const previousViewport = page.viewportSize();
@@ -2446,7 +2447,8 @@ await withBrowserFixture(
         const previousSpan = await page.evaluate(() => { const d = document.querySelector('#analysis-shared-axis').dataset; return +d.viewEnd - +d.viewStart; });
         const gatedSpan = Math.min(1_000_000, Math.max(10_000, previousSpan / 2));
         assert.ok(gatedSpan < previousSpan, 'the gated prefix allows a real zoom gesture');
-        await inspectCurrentWindow(page, gatedSpan);
+        checkpoint('paused-gated-zoom', { previousSpan, gatedSpan, heldBatches, paused });
+        await phase('paused-gated-zoom', () => inspectCurrentWindow(page, gatedSpan));
         assert.equal((await call('get_bitstream_analysis_state', {slot:'A'})).state, 'paused', 'window navigation cannot restart paused work');
         await page.evaluate(() => { void window.voidPlayer.tools.find(t=>t.name==='resume_bitstream_analysis').execute({slot:'A'}).catch(()=>{}); });
         await page.waitForFunction(() => {

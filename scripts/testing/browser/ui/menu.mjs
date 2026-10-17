@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { withBrowserFixture } from '../../browser-fixture.mjs';
+import { waitForDialogClosed, settleAppearance } from '../../browser-contracts.mjs';
 const name = process.argv[2] ?? 'webkit';
-await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact }) => {
+await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 } }, async ({ page, ready, artifact, phase, checkpoint }) => {
   const errors = []; page.on('pageerror', e => errors.push(e.message)); page.on('dialog', d => d.accept());
   await page.addInitScript(()=>localStorage.setItem('voidplayer.annotation.recent-colors','["#123456"]'));
   await ready();
@@ -78,9 +79,7 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   assert.equal(await page.evaluate(()=>window.voidPlayer.getViewport().zoom),1,'icon presets still reset zoom and pan');
   assert.equal(await page.locator('#more-actions').count(),0);
   await page.locator('#settings-open').click();assert.equal(await page.locator('#settings').evaluate(e=>e.open),true);await page.keyboard.press('Escape');
-  // settings.ts 的 dismiss() 要等退场动画结束才 dialog.close()，期间 dialog[open] 仍在；
-  // main.ts 的键盘处理器遇到打开的 dialog 会直接返回，'n' 会被吞掉。等它真正关闭。
-  await page.locator('#settings').evaluate(e=>e.open?new Promise(resolve=>e.addEventListener('close',()=>resolve(),{once:true})):undefined);
+  await phase('settings-dismiss', () => waitForDialogClosed(page));
   await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); }); await page.keyboard.press('n'); await page.locator('[data-drawing-tool=rect]').click();
   assert.equal(await page.locator('#annotation-toolbar').evaluate(e=>getComputedStyle(e).padding),'4px','compact wrapper preserves button targets');
   await page.mouse.move(280,240); await page.mouse.down(); await page.mouse.move(500,420,{steps:8}); await page.mouse.up();
@@ -153,7 +152,10 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   await page.locator('#header-more-A').waitFor({state:'visible'});
   await toggle('header-more-A','header-actions-A');
   await page.setViewportSize({width:1280,height:800});
-  await page.emulateMedia({contrast:'more'});
+  await phase('high-contrast-appearance', async () => {
+    await page.emulateMedia({contrast:'more'});
+    await settleAppearance(page);
+  });
   await page.locator('#pixel-size').click();
   for (const selector of ['.transport','.card-heading','#pixel-size-menu']) {
     assert.equal(await page.locator(selector).first().evaluate(e=>getComputedStyle(e).backdropFilter || getComputedStyle(e).webkitBackdropFilter),'none','high contrast disables blur');
@@ -166,10 +168,12 @@ await withBrowserFixture({ caseName: 'menu', engine: name, pageOptions: { viewpo
   const inputProbe = await page.evaluateHandle(() => {
     const input = document.createElement('input');
     input.setAttribute('aria-label', 'High contrast input probe');
+    input.dataset.testProbe = 'high-contrast-input';
     document.body.append(input);
     return input;
   });
-  await page.waitForFunction(input => getComputedStyle(input).backgroundColor === 'rgb(37, 41, 50)', inputProbe);
+  checkpoint('high-contrast-tokens', { expectedInput: 'rgb(37, 41, 50)', expectedText: 'rgb(228, 231, 237)' });
+  await phase('high-contrast-input-fill', () => page.waitForFunction(input => getComputedStyle(input).backgroundColor === 'rgb(37, 41, 50)', inputProbe));
   assert.equal(await inputProbe.evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(37, 41, 50)');
   await inputProbe.evaluate(e => e.remove());
   await inputProbe.dispose();

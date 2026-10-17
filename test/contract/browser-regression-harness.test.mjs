@@ -199,3 +199,36 @@ test('a fixture or browser launch failure still persists a scene without a page'
     assert.equal(report.pageUnavailable, true); assert.equal(report.phase, 'browser-launch'); assert.equal(report.error.message, 'launch failed');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
+
+test('network evidence is bounded while totals and pending counts survive eviction', () => {
+  const page = new EventEmitter(), evidence = recordBrowserEvidence(page), requests = [];
+  for (let i = 0; i < 150; i++) {
+    const request = { headers: () => ({ range: 'bytes=0-99' }), url: () => `http://localhost/api/media/${i}`, method: () => 'GET', failure: () => ({ errorText: 'aborted' }) };
+    requests.push(request); page.emit('request', request);
+    page.emit('pageerror', new Error(`failure-${i}`));
+  }
+  page.emit('requestfinished', requests[0]);
+  page.emit('requestfailed', requests[1]);
+  // Duplicate terminal events must not decrement pending twice.
+  page.emit('requestfinished', requests[1]);
+  const report = evidence();
+  assert.equal(report.rangeRequests.total, 150); assert.equal(report.rangeRequests.pending, 148);
+  assert.equal(report.apiRequests.total, 150); assert.equal(report.apiRequests.pending, 148);
+  assert.equal(report.rangeRequests.recent.length, 100); assert.equal(report.pageErrors.length, 100);
+  assert.equal(report.failedRequests[0].error, 'aborted');
+  page.emit('requestfinished', requests[149]);
+  assert.equal(report.apiRequests.pending, 148, 'a saved snapshot does not mutate with later events');
+});
+
+test('non-Range API failures and failed static assets appear in evidence without request bodies', () => {
+  const page = new EventEmitter(), evidence = recordBrowserEvidence(page);
+  const api = { headers: () => ({}), url: () => 'http://localhost/api/workspaces', method: () => 'POST' };
+  const asset = { headers: () => ({}), url: () => 'http://localhost/assets/app.js', method: () => 'GET', failure: () => ({ errorText: 'connection reset' }) };
+  page.emit('request', api); page.emit('response', { request: () => api, status: () => 409, headers: () => ({}) }); page.emit('requestfinished', api);
+  page.emit('request', asset); page.emit('requestfailed', asset);
+  const report = evidence();
+  assert.equal(report.apiRequests.total, 1); assert.equal(report.apiRequests.pending, 0);
+  assert.equal(report.rangeRequests.total, 0);
+  assert.deepEqual(report.failedRequests.map(row => row.status ?? row.error), [409, 'connection reset']);
+  assert.equal('body' in report.apiRequests.recent[0], false);
+});
